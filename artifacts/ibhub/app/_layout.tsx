@@ -41,6 +41,7 @@ function RootLayoutNav() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(auth)" redirect />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="create-post" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
       <Stack.Screen name="search" options={{ animation: "slide_from_bottom" }} />

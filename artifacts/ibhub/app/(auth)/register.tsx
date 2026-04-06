@@ -265,6 +265,8 @@ export default function RegisterScreen() {
       setLoading(false);
       if (err) {
         setError(err);
+      } else {
+        router.replace("/(tabs)" as any);
       }
     }
   };

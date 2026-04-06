@@ -110,9 +110,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       options: { data: { full_name: fullName } },
     });
     if (error) return { error: error.message };
-    // Auto sign-in immediately — skip email confirmation
+
+    // Auto sign-in immediately — bypass email confirmation
     if (data.user) {
-      await supabase.auth.signInWithPassword({ email, password });
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) {
+        // Email confirmation required on the Supabase project settings
+        return { error: "Conta criada! Verifique seu e-mail para confirmar o cadastro antes de entrar." };
+      }
     }
     return { error: null };
   };
