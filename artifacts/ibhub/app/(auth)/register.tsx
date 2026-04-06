@@ -1,10 +1,12 @@
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Alert,
+  FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -20,16 +22,39 @@ import { useAuth } from "@/context/AuthContext";
 
 const TOTAL_STEPS = 3;
 
+interface Country {
+  flag: string;
+  name: string;
+  ddi: string;
+  placeholder: string;
+}
+
+const COUNTRIES: Country[] = [
+  { flag: "🇧🇷", name: "Brasil", ddi: "+55", placeholder: "(11) 99999-9999" },
+  { flag: "🇺🇸", name: "Estados Unidos", ddi: "+1", placeholder: "(555) 000-0000" },
+  { flag: "🇵🇹", name: "Portugal", ddi: "+351", placeholder: "912 345 678" },
+  { flag: "🇦🇷", name: "Argentina", ddi: "+54", placeholder: "11 1234-5678" },
+  { flag: "🇨🇱", name: "Chile", ddi: "+56", placeholder: "9 1234 5678" },
+  { flag: "🇺🇾", name: "Uruguai", ddi: "+598", placeholder: "9123 4567" },
+  { flag: "🇵🇾", name: "Paraguai", ddi: "+595", placeholder: "981 234 567" },
+  { flag: "🇧🇴", name: "Bolívia", ddi: "+591", placeholder: "7123 4567" },
+  { flag: "🇵🇪", name: "Peru", ddi: "+51", placeholder: "912 345 678" },
+  { flag: "🇨🇴", name: "Colômbia", ddi: "+57", placeholder: "312 345 6789" },
+  { flag: "🇲🇽", name: "México", ddi: "+52", placeholder: "55 1234 5678" },
+  { flag: "🇪🇸", name: "Espanha", ddi: "+34", placeholder: "612 345 678" },
+  { flag: "🇫🇷", name: "França", ddi: "+33", placeholder: "06 12 34 56 78" },
+  { flag: "🇮🇹", name: "Itália", ddi: "+39", placeholder: "312 345 6789" },
+  { flag: "🇩🇪", name: "Alemanha", ddi: "+49", placeholder: "1512 3456789" },
+  { flag: "🇬🇧", name: "Reino Unido", ddi: "+44", placeholder: "7911 123456" },
+  { flag: "🇨🇳", name: "China", ddi: "+86", placeholder: "138 0013 8000" },
+  { flag: "🇯🇵", name: "Japão", ddi: "+81", placeholder: "90-1234-5678" },
+  { flag: "🇦🇺", name: "Austrália", ddi: "+61", placeholder: "0412 345 678" },
+  { flag: "🇿🇦", name: "África do Sul", ddi: "+27", placeholder: "71 234 5678" },
+];
+
 const AREAS = [
-  "Sommelier",
-  "Comprador",
-  "Importador",
-  "Produtor",
-  "Enólogo",
-  "Consultor",
-  "Investidor",
-  "Entusiasta",
-  "Outros",
+  "Sommelier", "Comprador", "Importador", "Produtor",
+  "Enólogo", "Consultor", "Investidor", "Entusiasta", "Outros",
 ];
 
 const PLANS = [
@@ -55,12 +80,7 @@ const PLANS = [
     price: "R$ 499/mês",
     subtitle: "Business completo",
     popular: false,
-    features: [
-      "Tudo do Básico",
-      "Inteligência de mercado",
-      "Vagas de emprego",
-      "Suporte prioritário",
-    ],
+    features: ["Tudo do Básico", "Inteligência de mercado", "Vagas de emprego", "Suporte prioritário"],
   },
 ];
 
@@ -76,6 +96,9 @@ export default function RegisterScreen() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES[0]);
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [countrySearch, setCountrySearch] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -90,6 +113,18 @@ export default function RegisterScreen() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const filteredCountries = useMemo(
+    () =>
+      countrySearch.trim()
+        ? COUNTRIES.filter(
+            (c) =>
+              c.name.toLowerCase().includes(countrySearch.toLowerCase()) ||
+              c.ddi.includes(countrySearch)
+          )
+        : COUNTRIES,
+    [countrySearch]
+  );
 
   const pickAvatar = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -108,11 +143,8 @@ export default function RegisterScreen() {
   };
 
   const goBack = () => {
-    if (step === 1) {
-      router.back();
-    } else {
-      setStep((s) => s - 1);
-    }
+    if (step === 1) router.back();
+    else setStep((s) => s - 1);
   };
 
   const validateStep1 = (): string | null => {
@@ -159,7 +191,7 @@ export default function RegisterScreen() {
   const topPad = Platform.OS === "web" ? 0 : insets.top;
 
   return (
-    <View style={[styles.root, { backgroundColor: "#0d1b2a" }]}>
+    <View style={[styles.root]}>
       <View style={[styles.headerBar, { paddingTop: topPad + 12 }]}>
         <TouchableOpacity onPress={goBack} style={styles.backBtn}>
           <Feather name="arrow-left" size={22} color="#f5f0e8" />
@@ -180,10 +212,7 @@ export default function RegisterScreen() {
         ))}
       </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <ScrollView
           contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
@@ -212,37 +241,24 @@ export default function RegisterScreen() {
                 </View>
               </TouchableOpacity>
 
-              <FormField
-                icon="user"
-                value={fullName}
-                onChangeText={setFullName}
-                placeholder="Nome completo"
-              />
-              <FormField
-                icon="at-sign"
-                value={username}
-                onChangeText={setUsername}
-                placeholder="Username"
-                autoCapitalize="none"
-              />
-              <FormField
-                icon="mail"
-                value={email}
-                onChangeText={setEmail}
-                placeholder="E-mail"
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
+              <FormField icon="user" value={fullName} onChangeText={setFullName} placeholder="Nome completo" />
+              <FormField icon="at-sign" value={username} onChangeText={setUsername} placeholder="Username" autoCapitalize="none" />
+              <FormField icon="mail" value={email} onChangeText={setEmail} placeholder="E-mail" keyboardType="email-address" autoCapitalize="none" />
 
               <View style={styles.phoneRow}>
-                <View style={[styles.fieldWrap, styles.countryCode]}>
-                  <Text style={styles.flag}>🇧🇷</Text>
-                  <Text style={styles.countryCodeText}>+55</Text>
-                </View>
+                <TouchableOpacity
+                  style={styles.countryBtn}
+                  onPress={() => { setCountrySearch(""); setShowCountryPicker(true); }}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.countryFlag}>{selectedCountry.flag}</Text>
+                  <Text style={styles.countryDdi}>{selectedCountry.ddi}</Text>
+                  <Feather name="chevron-down" size={14} color="#8fa3b8" />
+                </TouchableOpacity>
                 <View style={[styles.fieldWrap, { flex: 1 }]}>
                   <TextInput
                     style={styles.textInput}
-                    placeholder="(11) 99999-9999"
+                    placeholder={selectedCountry.placeholder}
                     placeholderTextColor="#8fa3b8"
                     value={phone}
                     onChangeText={setPhone}
@@ -304,41 +320,21 @@ export default function RegisterScreen() {
               <Text style={styles.stepSubtitle}>
                 Selecione suas áreas para networking qualificado
               </Text>
-
               <View style={styles.areasGrid}>
                 {AREAS.map((area) => (
                   <TouchableOpacity
                     key={area}
-                    style={[
-                      styles.areaChip,
-                      selectedAreas.includes(area) && styles.areaChipActive,
-                    ]}
+                    style={[styles.areaChip, selectedAreas.includes(area) && styles.areaChipActive]}
                     onPress={() => toggleArea(area)}
                   >
-                    <Text
-                      style={[
-                        styles.areaChipText,
-                        selectedAreas.includes(area) && styles.areaChipTextActive,
-                      ]}
-                    >
+                    <Text style={[styles.areaChipText, selectedAreas.includes(area) && styles.areaChipTextActive]}>
                       {area}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
-
-              <FormField
-                icon={undefined}
-                value={company}
-                onChangeText={setCompany}
-                placeholder="Empresa"
-              />
-              <FormField
-                icon={undefined}
-                value={role}
-                onChangeText={setRole}
-                placeholder="Cargo"
-              />
+              <FormField icon={undefined} value={company} onChangeText={setCompany} placeholder="Empresa" />
+              <FormField icon={undefined} value={role} onChangeText={setRole} placeholder="Cargo" />
             </View>
           )}
 
@@ -348,15 +344,11 @@ export default function RegisterScreen() {
               <Text style={styles.stepSubtitle}>
                 Selecione o plano perfeito para suas necessidades
               </Text>
-
               <View style={styles.plansContainer}>
                 {PLANS.map((plan) => (
                   <TouchableOpacity
                     key={plan.key}
-                    style={[
-                      styles.planCard,
-                      selectedPlan === plan.key && styles.planCardActive,
-                    ]}
+                    style={[styles.planCard, selectedPlan === plan.key && styles.planCardActive]}
                     onPress={() => setSelectedPlan(plan.key)}
                     activeOpacity={0.8}
                   >
@@ -394,15 +386,73 @@ export default function RegisterScreen() {
             disabled={loading}
           >
             <Text style={styles.continueBtnText}>
-              {loading
-                ? "Criando conta..."
-                : step === TOTAL_STEPS
-                ? "Finalizar cadastro"
-                : `Continuar  →`}
+              {loading ? "Criando conta..." : step === TOTAL_STEPS ? "Finalizar cadastro" : "Continuar  →"}
             </Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={showCountryPicker}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowCountryPicker(false)}
+      >
+        <View style={styles.pickerModal}>
+          <View style={styles.pickerHeader}>
+            <Text style={styles.pickerTitle}>Selecionar país</Text>
+            <TouchableOpacity onPress={() => setShowCountryPicker(false)} style={styles.pickerClose}>
+              <Feather name="x" size={22} color="#f5f0e8" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.pickerSearch}>
+            <Feather name="search" size={16} color="#8fa3b8" />
+            <TextInput
+              style={styles.pickerSearchInput}
+              placeholder="Buscar país ou código..."
+              placeholderTextColor="#8fa3b8"
+              value={countrySearch}
+              onChangeText={setCountrySearch}
+              autoFocus
+            />
+            {countrySearch.length > 0 && (
+              <TouchableOpacity onPress={() => setCountrySearch("")}>
+                <Feather name="x" size={16} color="#8fa3b8" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <FlatList
+            data={filteredCountries}
+            keyExtractor={(item) => item.ddi + item.name}
+            renderItem={({ item }) => {
+              const isSelected = item.ddi === selectedCountry.ddi && item.name === selectedCountry.name;
+              return (
+                <TouchableOpacity
+                  style={[styles.pickerRow, isSelected && styles.pickerRowActive]}
+                  onPress={() => {
+                    setSelectedCountry(item);
+                    setPhone("");
+                    setShowCountryPicker(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.pickerFlag}>{item.flag}</Text>
+                  <Text style={styles.pickerCountryName}>{item.name}</Text>
+                  <Text style={styles.pickerDdi}>{item.ddi}</Text>
+                  {isSelected && (
+                    <Feather name="check" size={18} color="#c9a84c" />
+                  )}
+                </TouchableOpacity>
+              );
+            }}
+            ItemSeparatorComponent={() => <View style={styles.pickerSeparator} />}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          />
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -428,7 +478,7 @@ function FormField({
     <View style={styles.fieldWrap}>
       {icon && <Feather name={icon} size={16} color="#8fa3b8" style={styles.fieldIcon} />}
       <TextInput
-        style={[styles.textInput, !icon && { paddingLeft: 0 }]}
+        style={[styles.textInput, !icon && { paddingLeft: 2 }]}
         placeholder={placeholder}
         placeholderTextColor="#8fa3b8"
         value={value}
@@ -442,7 +492,7 @@ function FormField({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: { flex: 1, backgroundColor: "#0d1b2a" },
   headerBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -451,47 +501,16 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   backBtn: { width: 32, height: 32, justifyContent: "center" },
-  headerTitle: {
-    color: "#f5f0e8",
-    fontSize: 17,
-    fontWeight: "700",
-  },
-  progressRow: {
-    flexDirection: "row",
-    gap: 6,
-    paddingHorizontal: 20,
-    marginBottom: 4,
-  },
-  progressBar: {
-    flex: 1,
-    height: 3,
-    borderRadius: 2,
-  },
+  headerTitle: { color: "#f5f0e8", fontSize: 17, fontWeight: "700" },
+  progressRow: { flexDirection: "row", gap: 6, paddingHorizontal: 20, marginBottom: 4 },
+  progressBar: { flex: 1, height: 3, borderRadius: 2 },
   scroll: { paddingHorizontal: 20, paddingTop: 20, gap: 14 },
-  errorBox: {
-    backgroundColor: "rgba(231,76,60,0.15)",
-    padding: 12,
-    borderRadius: 10,
-  },
+  errorBox: { backgroundColor: "rgba(231,76,60,0.15)", padding: 12, borderRadius: 10 },
   errorText: { color: "#e74c3c", fontSize: 13 },
   stepContainer: { gap: 14 },
-  stepTitle: {
-    color: "#f5f0e8",
-    fontSize: 24,
-    fontWeight: "800",
-    letterSpacing: -0.3,
-  },
-  stepSubtitle: {
-    color: "#8fa3b8",
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: -6,
-  },
-  avatarPicker: {
-    alignSelf: "center",
-    position: "relative",
-    marginBottom: 4,
-  },
+  stepTitle: { color: "#f5f0e8", fontSize: 24, fontWeight: "800", letterSpacing: -0.3 },
+  stepSubtitle: { color: "#8fa3b8", fontSize: 14, lineHeight: 20, marginTop: -6 },
+  avatarPicker: { alignSelf: "center", position: "relative", marginBottom: 4 },
   avatarPlaceholder: {
     width: 90,
     height: 90,
@@ -502,11 +521,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarImage: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-  },
+  avatarImage: { width: 90, height: 90, borderRadius: 45 },
   avatarEditBadge: {
     position: "absolute",
     bottom: 2,
@@ -528,7 +543,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     paddingHorizontal: 14,
-    paddingVertical: Platform.OS === "ios" ? 14 : 0,
     minHeight: 52,
   },
   fieldIcon: { marginRight: 10 },
@@ -539,21 +553,21 @@ const styles = StyleSheet.create({
     paddingVertical: Platform.OS === "android" ? 14 : 0,
   },
   phoneRow: { flexDirection: "row", gap: 10 },
-  countryCode: {
-    flex: 0,
+  countryBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
     paddingHorizontal: 12,
+    paddingVertical: 14,
+    minHeight: 52,
   },
-  flag: { fontSize: 18 },
-  countryCodeText: { color: "#f5f0e8", fontSize: 15, fontWeight: "600" },
-  termsRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    marginTop: 4,
-  },
+  countryFlag: { fontSize: 22 },
+  countryDdi: { color: "#f5f0e8", fontSize: 14, fontWeight: "600" },
+  termsRow: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginTop: 4 },
   checkbox: {
     width: 20,
     height: 20,
@@ -565,25 +579,10 @@ const styles = StyleSheet.create({
     marginTop: 1,
     flexShrink: 0,
   },
-  checkboxActive: {
-    backgroundColor: "#c9a84c",
-    borderColor: "#c9a84c",
-  },
-  termsText: {
-    color: "#8fa3b8",
-    fontSize: 13,
-    lineHeight: 19,
-    flex: 1,
-  },
-  termsLink: {
-    color: "#c9a84c",
-    fontWeight: "600",
-  },
-  areasGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
+  checkboxActive: { backgroundColor: "#c9a84c", borderColor: "#c9a84c" },
+  termsText: { color: "#8fa3b8", fontSize: 13, lineHeight: 19, flex: 1 },
+  termsLink: { color: "#c9a84c", fontWeight: "600" },
+  areasGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   areaChip: {
     paddingVertical: 10,
     paddingHorizontal: 16,
@@ -592,19 +591,9 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.2)",
     backgroundColor: "rgba(255,255,255,0.05)",
   },
-  areaChipActive: {
-    borderColor: "#c9a84c",
-    backgroundColor: "rgba(201,168,76,0.12)",
-  },
-  areaChipText: {
-    color: "#8fa3b8",
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  areaChipTextActive: {
-    color: "#c9a84c",
-    fontWeight: "700",
-  },
+  areaChipActive: { borderColor: "#c9a84c", backgroundColor: "rgba(201,168,76,0.12)" },
+  areaChipText: { color: "#8fa3b8", fontSize: 14, fontWeight: "500" },
+  areaChipTextActive: { color: "#c9a84c", fontWeight: "700" },
   plansContainer: { gap: 12 },
   planCard: {
     backgroundColor: "rgba(255,255,255,0.05)",
@@ -615,10 +604,7 @@ const styles = StyleSheet.create({
     gap: 14,
     position: "relative",
   },
-  planCardActive: {
-    borderColor: "#c9a84c",
-    backgroundColor: "rgba(201,168,76,0.06)",
-  },
+  planCardActive: { borderColor: "#c9a84c", backgroundColor: "rgba(201,168,76,0.06)" },
   popularBadge: {
     position: "absolute",
     top: -1,
@@ -629,42 +615,14 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 8,
     borderBottomRightRadius: 8,
   },
-  popularBadgeText: {
-    color: "#0d1b2a",
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-  },
-  planHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  planName: {
-    color: "#f5f0e8",
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  planSubtitle: {
-    color: "#8fa3b8",
-    fontSize: 12,
-    marginTop: 2,
-  },
-  planPrice: {
-    color: "#f5f0e8",
-    fontSize: 16,
-    fontWeight: "800",
-  },
+  popularBadgeText: { color: "#0d1b2a", fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
+  planHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  planName: { color: "#f5f0e8", fontSize: 18, fontWeight: "800" },
+  planSubtitle: { color: "#8fa3b8", fontSize: 12, marginTop: 2 },
+  planPrice: { color: "#f5f0e8", fontSize: 16, fontWeight: "800" },
   planFeatures: { gap: 8 },
-  planFeatureRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  planFeatureText: {
-    color: "#c9d4de",
-    fontSize: 14,
-  },
+  planFeatureRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  planFeatureText: { color: "#c9d4de", fontSize: 14 },
   continueBtn: {
     backgroundColor: "#c9a84c",
     borderRadius: 10,
@@ -672,9 +630,53 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 8,
   },
-  continueBtnText: {
-    color: "#0d1b2a",
-    fontSize: 16,
-    fontWeight: "800",
+  continueBtnText: { color: "#0d1b2a", fontSize: 16, fontWeight: "800" },
+
+  pickerModal: {
+    flex: 1,
+    backgroundColor: "#0d1b2a",
   },
+  pickerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: Platform.OS === "android" ? 20 : 24,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.1)",
+    position: "relative",
+  },
+  pickerTitle: { color: "#f5f0e8", fontSize: 17, fontWeight: "700" },
+  pickerClose: {
+    position: "absolute",
+    right: 20,
+    top: Platform.OS === "android" ? 18 : 22,
+    padding: 4,
+  },
+  pickerSearch: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    margin: 16,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  pickerSearchInput: { flex: 1, color: "#f5f0e8", fontSize: 15 },
+  pickerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    gap: 14,
+  },
+  pickerRowActive: { backgroundColor: "rgba(201,168,76,0.08)" },
+  pickerFlag: { fontSize: 26 },
+  pickerCountryName: { flex: 1, color: "#f5f0e8", fontSize: 15, fontWeight: "500" },
+  pickerDdi: { color: "#8fa3b8", fontSize: 14, fontWeight: "600", marginRight: 4 },
+  pickerSeparator: { height: 1, backgroundColor: "rgba(255,255,255,0.06)", marginHorizontal: 20 },
 });
