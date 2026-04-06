@@ -186,7 +186,7 @@ export default function SettingsScreen() {
 
         {/* Painel Administrativo */}
         <View style={[styles.menuCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-          <TouchableOpacity style={styles.menuRow}>
+          <TouchableOpacity style={styles.menuRow} onPress={() => router.push("/admin" as any)}>
             <View style={[styles.iconWrap, { backgroundColor: colors.background }]}>
               <Feather name="settings" size={16} color={colors.mutedForeground} />
             </View>
