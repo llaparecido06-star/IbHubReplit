@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/context/AuthContext";
 
 export default function LoginScreen() {
@@ -122,7 +122,7 @@ export default function LoginScreen() {
                 <Text style={styles.socialBtnText}>Google</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.socialBtn}>
-                <Text style={styles.appleLogo}></Text>
+                <Ionicons name="logo-apple" size={19} color="#f5f0e8" />
                 <Text style={styles.socialBtnText}>Apple</Text>
               </TouchableOpacity>
             </View>
@@ -200,8 +200,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   socialBtnText: { color: "#f5f0e8", fontSize: 14, fontWeight: "600" },
-  googleG: { color: "#f5f0e8", fontSize: 16, fontWeight: "800" },
-  appleLogo: { color: "#f5f0e8", fontSize: 18 },
+  googleG: { color: "#4285F4", fontSize: 16, fontWeight: "800" },
   footer: {
     flexDirection: "row",
     justifyContent: "center",

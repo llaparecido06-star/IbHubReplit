@@ -61,19 +61,28 @@ function generateMockPost(id: number): Post {
 
   if (id === 1) {
     return {
-      id: `post_${id}`, user_id: author.id, content: "teste",
+      id: `post_${id}`, user_id: author.id,
+      content: "Qual tipo de vinho você prefere para o verão?",
       likes_count: 0, comments_count: 0, shares_count: 0,
       is_liked: false, is_bookmarked: false,
       created_at: date.toISOString(), author,
-      poll: { options: [{ text: "a", votes: 1 }, { text: "b", votes: 1 }], total_votes: 2, closed: true },
+      poll: {
+        options: [
+          { text: "🥂 Espumante fresco", votes: 47 },
+          { text: "🍷 Rosé gelado",      votes: 31 },
+          { text: "🌿 Vinho verde",      votes: 18 },
+          { text: "🍊 Vinho laranja",    votes: 11 },
+        ],
+        total_votes: 107, closed: false,
+      },
     };
   }
   const contents = [
-    "Work time 🖼",
-    "Goes sensacional",
+    "Visita à Vinícola Miolo hoje — safra 2024 promete surpreender! Taninos elegantes e boa acidez nos tintos. Muito otimista com o que está vindo por aí. 🍷",
+    "Degustação sensacional na Serra Gaúcha! Os espumantes Brut Nature da região estão em outro nível. Vale muito conhecer pessoalmente.",
     "Acabei de chegar de uma visita incrível ao Alentejo! Os tintos desta safra prometem muito. 🍷",
     "Resultado da minha degustação: Barolo 2019 absolutamente impecável. 96 pontos.",
-    "Dica do dia: para harmonizar com queijo de cabra, escolha um Sauvignon Blanc fresco.",
+    "Dica do dia: para harmonizar com queijo de cabra, escolha um Sauvignon Blanc fresco e mineral. A acidez do vinho equilibra a gordura do queijo perfeitamente.",
   ];
   return {
     id: `post_${id}`, user_id: author.id, content: contents[id % contents.length],
