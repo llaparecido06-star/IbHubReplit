@@ -42,17 +42,17 @@ const SECTIONS = [
   {
     title: "USUÁRIOS & RECEITA",
     items: [
-      { icon: "users"        as const, label: "CRM Usuários",      route: null },
-      { icon: "credit-card"  as const, label: "Financeiro",        route: null },
-      { icon: "package"      as const, label: "Plan Builder",      route: null },
+      { icon: "users"        as const, label: "CRM Usuários",      route: "/admin/crm" },
+      { icon: "credit-card"  as const, label: "Financeiro",        route: "/admin/financeiro" },
+      { icon: "package"      as const, label: "Plan Builder",      route: "/admin/plan-builder" },
     ],
   },
   {
     title: "SISTEMA",
     items: [
-      { icon: "send"         as const, label: "Comunicação",       route: null },
-      { icon: "user-check"   as const, label: "Admins",            route: null },
-      { icon: "settings"     as const, label: "Configurações",     route: null },
+      { icon: "send"         as const, label: "Comunicação",       route: "/admin/comunicacao" },
+      { icon: "user-check"   as const, label: "Admins",            route: "/admin/admins" },
+      { icon: "settings"     as const, label: "Configurações",     route: "/admin/configuracoes" },
     ],
   },
 ];
