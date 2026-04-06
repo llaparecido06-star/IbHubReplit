@@ -26,6 +26,21 @@ interface Post {
   comments: number;
 }
 
+type StatModal = "seguidores" | "seguindo" | null;
+
+const SEGUIDORES = [
+  { id: "f1", name: "Lucas Lima",      role: "",          initial: "L" },
+  { id: "f2", name: "Felipe Galtaroca", role: "Produtor", initial: "F" },
+  { id: "f3", name: "Julia Benetti",   role: "Outros",    initial: "J" },
+];
+
+const SEGUINDO = [
+  { id: "g1", name: "Lucas Lima",    role: "",           initial: "L" },
+  { id: "g2", name: "João Oliveira", role: "Importador", initial: "J" },
+  { id: "g3", name: "Brenda Lima",   role: "Outros",     initial: "B" },
+  { id: "g4", name: "Julia Benetti", role: "Outros",     initial: "J" },
+];
+
 const MOCK_POSTS: Post[] = [
   { id: "p1", content: "Nova certificação conquistada! Acabei de passar no exame WSET Diploma. Foram 2 anos intensos de estudo, mas valeu cada momento. Nunca parem de estudar! 🎓🍷", date: "02/03/2026", likes: 0, comments: 0 },
   { id: "p2", content: "Harmonização do dia: Pinot Noir da Borgonha com risoto de cogumelos trufados. A delicadeza do vinho complementa perfeitamente os sabores terrosos do prato. Chef kiss! 🧑‍🍳", date: "01/03/2026", likes: 0, comments: 0 },
@@ -48,6 +63,7 @@ export default function ProfileScreen() {
   const [showPostMenu, setShowPostMenu] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [posts, setPosts] = useState<Post[]>(MOCK_POSTS);
+  const [statModal, setStatModal] = useState<StatModal>(null);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
@@ -104,16 +120,16 @@ export default function ProfileScreen() {
         {/* Stats */}
         <View style={[styles.statsRow, { borderColor: colors.border }]}>
           {[
-            { label: "Publicações", value: posts.length },
-            { label: "Seguidores",  value: profile?.followers_count  ?? 3 },
-            { label: "Seguindo",    value: profile?.following_count  ?? 4 },
-            { label: "Conexões",    value: profile?.connections_count ?? 0 },
+            { label: "Publicações", value: posts.length,                      onPress: undefined },
+            { label: "Seguidores",  value: profile?.followers_count  ?? 3,    onPress: () => setStatModal("seguidores") },
+            { label: "Seguindo",    value: profile?.following_count  ?? 4,    onPress: () => setStatModal("seguindo") },
+            { label: "Conexões",    value: profile?.connections_count ?? 0,   onPress: () => router.push("/conexoes" as any) },
           ].map((s, i, arr) => (
             <React.Fragment key={s.label}>
-              <View style={styles.stat}>
+              <TouchableOpacity style={styles.stat} onPress={s.onPress} disabled={!s.onPress}>
                 <Text style={[styles.statNum, { color: colors.navy }]}>{s.value}</Text>
                 <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>{s.label}</Text>
-              </View>
+              </TouchableOpacity>
               {i < arr.length - 1 && <View style={[styles.statDivider, { backgroundColor: colors.border }]} />}
             </React.Fragment>
           ))}
@@ -364,6 +380,40 @@ export default function ProfileScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      {/* ── Seguidores / Seguindo modal ── */}
+      <Modal
+        visible={statModal !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setStatModal(null)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setStatModal(null)}>
+          <View style={[styles.statSheet, { backgroundColor: "#fff" }]}>
+            <View style={styles.statSheetHeader}>
+              <Text style={[styles.statSheetTitle, { color: colors.navy }]}>
+                {statModal === "seguidores" ? "Seguidores" : "Seguindo"}
+              </Text>
+              <TouchableOpacity onPress={() => setStatModal(null)}>
+                <Feather name="x" size={20} color={colors.navy} />
+              </TouchableOpacity>
+            </View>
+            {(statModal === "seguidores" ? SEGUIDORES : SEGUINDO).map((person) => (
+              <View key={person.id} style={[styles.statPersonRow, { borderBottomColor: colors.border }]}>
+                <View style={[styles.statPersonAvatar, { backgroundColor: colors.navy }]}>
+                  <Text style={[styles.statPersonInitial, { color: colors.gold }]}>{person.initial}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.statPersonName, { color: colors.navy }]}>{person.name}</Text>
+                  {person.role ? (
+                    <Text style={[styles.statPersonRole, { color: colors.mutedForeground }]}>{person.role}</Text>
+                  ) : null}
+                </View>
+              </View>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }
@@ -446,4 +496,12 @@ const styles = StyleSheet.create({
   menuItem: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
   menuItemText: { fontSize: 14, fontWeight: "500" },
   menuDiv: { height: 1, marginHorizontal: 0 },
+  statSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 32 },
+  statSheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 18 },
+  statSheetTitle: { fontSize: 17, fontWeight: "700" },
+  statPersonRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1 },
+  statPersonAvatar: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
+  statPersonInitial: { fontSize: 18, fontWeight: "800" },
+  statPersonName: { fontSize: 15, fontWeight: "600" },
+  statPersonRole: { fontSize: 13, marginTop: 1 },
 });
