@@ -83,8 +83,12 @@ export default function SettingsScreen() {
       ],
     },
     {
+      title: "SUPORTE & LEGAL",
       rows: [
-        { icon: "log-out",  label: "Sair da conta",         sub: "",                               onPress: handleSignOut, danger: true },
+        { icon: "file-text", label: "Termos de Uso",         sub: "Termos e condições",             onPress: () => {} },
+        { icon: "file-text", label: "Política de Privacidade", sub: "Como usamos seus dados",       onPress: () => {} },
+        { icon: "mail",      label: "Fale Conosco",           sub: "Suporte e feedback",             onPress: () => {} },
+        { icon: "alert-circle", label: "Reportar Bug",        sub: "Nos ajude a melhorar",           onPress: () => {} },
       ],
     },
   ];
@@ -167,18 +171,44 @@ export default function SettingsScreen() {
                   onPress={row.onPress}
                 >
                   <View style={[styles.iconWrap, { backgroundColor: colors.background }]}>
-                    <Feather name={row.icon} size={16} color={row.danger ? "#dc2626" : colors.mutedForeground} />
+                    <Feather name={row.icon} size={16} color={colors.mutedForeground} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.rowLabel, { color: row.danger ? "#dc2626" : colors.navy }]}>{row.label}</Text>
+                    <Text style={[styles.rowLabel, { color: colors.navy }]}>{row.label}</Text>
                     {row.sub ? <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>{row.sub}</Text> : null}
                   </View>
-                  <Feather name="chevron-right" size={18} color={row.danger ? "#dc262660" : colors.mutedForeground} />
+                  <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
                 </TouchableOpacity>
               ))}
             </View>
           </View>
         ))}
+
+        {/* Painel Administrativo */}
+        <View style={[styles.menuCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+          <TouchableOpacity style={styles.menuRow}>
+            <View style={[styles.iconWrap, { backgroundColor: colors.background }]}>
+              <Feather name="settings" size={16} color={colors.mutedForeground} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, { color: colors.navy }]}>Painel Administrativo</Text>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>Gerenciar plataforma</Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Sair da conta */}
+        <TouchableOpacity
+          style={[styles.signOutBtn, { borderColor: "#dc2626" }]}
+          onPress={handleSignOut}
+        >
+          <Feather name="log-out" size={16} color="#dc2626" />
+          <Text style={[styles.signOutText, { color: "#dc2626" }]}>Sair da conta</Text>
+        </TouchableOpacity>
+
+        {/* Footer */}
+        <Text style={[styles.footer, { color: colors.mutedForeground }]}>ibhub v1.0 · © 2026</Text>
       </ScrollView>
     </View>
   );
@@ -204,4 +234,7 @@ const styles = StyleSheet.create({
   iconWrap:    { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   rowLabel:    { fontSize: 15, fontWeight: "600" },
   rowSub:      { fontSize: 12, marginTop: 1 },
+  signOutBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, borderRadius: 12, borderWidth: 1.5 },
+  signOutText: { fontSize: 15, fontWeight: "700" },
+  footer:      { textAlign: "center", fontSize: 12, paddingBottom: 8 },
 });
