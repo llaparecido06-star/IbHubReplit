@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/"
+title = "ibhub — Rede do Vinho"
+version = "1.0.0"
+id = "artifacts/ibhub"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/" ]
+localPort = 23965
+
+[services.development]
+run = "pnpm --filter @workspace/ibhub run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/ibhub", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/ibhub", "run", "serve" ]
+
+[services.env]
+PORT = "23965"
+BASE_PATH = "/"

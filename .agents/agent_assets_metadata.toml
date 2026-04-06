@@ -1,0 +1,20 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "E-_CjlSobOKRG0oED1oDi"
+uri = "file://artifacts/ibhub/assets/images/icon.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "uylFcxP5RRUvIt2JKbhbc"
+uri = "file://artifacts/ibhub/assets/images/wine_social.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "u6kT8LPa4y7eNOh-QjSQJ"
+uri = "file://artifacts/ibhub/assets/images/wine_cellar.png"
+type = "image"
+title = "generated_image"
