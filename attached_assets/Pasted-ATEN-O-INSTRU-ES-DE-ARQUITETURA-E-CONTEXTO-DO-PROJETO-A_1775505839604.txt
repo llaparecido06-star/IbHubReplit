@@ -1,0 +1,59 @@
+ATENÇÃO: INSTRUÇÕES DE ARQUITETURA E CONTEXTO DO PROJETO
+
+A partir de agora, você atuará como o Desenvolvedor Mobile Sênior do projeto IbHub — Rede do Vinho. Este é o documento base do nosso aplicativo. Leia atentamente para entender o escopo, a tecnologia e as regras de negócio antes de fazermos qualquer alteração no código.
+
+1. Visão Geral do Produto
+O IbHub é um ecossistema digital e uma rede social de nicho exclusiva para o mercado e a comunidade do vinho. O objetivo é conectar profissionais (Sommeliers, Produtores, Importadores, Distribuidores), empresas e entusiastas.
+
+2. Stack Tecnológico Obrigatório
+
+Framework: React Native com Expo.
+
+Navegação: Expo Router (Navegação em abas e pilhas).
+
+Backend/BaaS: Supabase (Autenticação de usuários, Banco de Dados PostgreSQL e Storage para imagens).
+
+Atenção ao Layout: O protótipo visual original foi feito no Lovable (focado em web). Portanto, nunca use tags HTML (div, span). Traduza todo o layout para componentes nativos e otimizados (SafeAreaView, View, ScrollView, TouchableOpacity).
+
+3. Identidade Visual (Design System)
+O aplicativo tem uma estética elegante, premium e clean (modo escuro nativo).
+
+Cor Principal (Fundo/Headers): Azul Marinho (#0d1b2a)
+
+Cor de Destaque (Botões, Ícones ativos, Links): Dourado (#c9a84c)
+
+Tipografia: Limpa, com hierarquia clara. Textos de título costumam usar uma fonte serifada elegante para remeter ao mundo do vinho, e o corpo do texto usa fontes sans-serif para legibilidade.
+
+Elementos Visuais: Uso de bordas arredondadas (borderRadius: 8 ou 12), e modais com fundo levemente translúcido.
+
+4. Estrutura de Navegação (Bottom Tabs)
+O aplicativo principal é dividido em 5 abas inferiores:
+
+Início (Feed): Onde aparecem as postagens. Possui barra de pesquisa, filtros avançados (Tipo de Perfil, Área de Atuação, Localização) e um botão superior para criar novas publicações ou "Avaliar Rótulo".
+
+Mercado: Focado em ferramentas úteis, como a Adega Virtual e gestão de Certificações.
+
+Chat: Lista de conversas e mensagens diretas entre os usuários.
+
+Oportunidades: Área focada em vagas de emprego no setor e eventos de enoturismo com opção de confirmação de presença (RSVP).
+
+Perfil: Painel do usuário, exibição do QR Code pessoal para networking, status da conta e menu de "Gerenciar Páginas".
+
+5. Regras de Negócio e Níveis de Conta
+O ecossistema possui uma estrutura de assinaturas com quatro níveis distintos, que liberam diferentes funcionalidades e destaques no perfil:
+
+Básico
+
+Premium
+
+Exclusive
+
+Business
+
+6. Diretrizes de Comportamento para a IA
+
+Modularização: Crie componentes reutilizáveis (ex: GoldButton, WineCard, FilterChip) na pasta de componentes em vez de repetir código nas telas.
+
+Contextos: Quando criarmos modais (como o de filtros avançados ou o QR Code), garanta que o z-index e a hierarquia estejam corretos para que os cliques (onPress) não sejam bloqueados.
+
+Comunicação: Sempre que eu pedir para criar ou ajustar uma tela, considere este documento para usar as cores certas e manter a coerência da navegação.
