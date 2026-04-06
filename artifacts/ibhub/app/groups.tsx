@@ -1,162 +1,255 @@
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-  FlatList,
+  Alert,
   Platform,
-  Pressable,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { Avatar } from "@/components/ui/Avatar";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
 import { useColors } from "@/hooks/useColors";
+
+type AccessType = "aberto" | "fechado" | "restrito";
 
 interface Group {
   id: string;
   name: string;
-  description: string;
-  type: "aberto" | "fechado" | "restrito";
-  members: number;
-  is_member: boolean;
   category: string;
+  access: AccessType;
+  members: number;
+  description: string;
+  is_owner?: boolean;
+  is_member: boolean;
 }
 
-const MOCK_GROUPS: Group[] = [
-  { id: "g1", name: "Sommeliers Brasil", description: "Comunidade dos profissionais de serviço de vinho do Brasil", type: "aberto", members: 3240, is_member: true, category: "Profissional" },
-  { id: "g2", name: "WSET Students Network", description: "Suporte e networking para estudantes WSET no Brasil", type: "fechado", members: 892, is_member: true, category: "Educação" },
-  { id: "g3", name: "Investidores em Vinhos Finos", description: "Grupo exclusivo para quem investe em vinhos como ativo", type: "restrito", members: 156, is_member: false, category: "Investimento" },
-  { id: "g4", name: "Enoturismo & Viagens de Vinho", description: "Compartilhe experiências e dicas de viagens enológicas", type: "aberto", members: 2100, is_member: false, category: "Turismo" },
-  { id: "g5", name: "Natural Wine Club Brasil", description: "Vinhos biodinâmicos, orgânicos e naturais", type: "aberto", members: 780, is_member: false, category: "Estilo" },
-  { id: "g6", name: "Produtores do Sul do Brasil", description: "Serra Gaúcha, Santa Catarina e Paraná: a nova fronteira", type: "fechado", members: 340, is_member: false, category: "Produção" },
+const MY_GROUPS: Group[] = [
+  { id: "g1", name: "Enoturismo", category: "Enoturismo", access: "aberto",  members: 2,   description: "Turismo e experiências no mundo do vinho", is_owner: false, is_member: true },
+  { id: "g2", name: "Teste 2",    category: "Importação", access: "fechado", members: 1,   description: "fejifejn", is_owner: true, is_member: true },
 ];
+
+const EXPLORE_GROUPS: Group[] = [
+  { id: "g3", name: "Sommeliers Brasil",   category: "Sommelier",  access: "aberto", members: 1240, description: "Comunidade nacional de sommeliers certificados e em formação.", is_member: false },
+  { id: "g4", name: "Exportadores do Sul", category: "Exportação", access: "aberto", members: 340,  description: "Profissionais de exportação de vinhos do Sul do Brasil.", is_member: false },
+  { id: "g5", name: "Vinhos Naturais BR",  category: "Produção",   access: "aberto", members: 580,  description: "Produtores e entusiastas de vinhos naturais e biodinâmicos.", is_member: false },
+];
+
+const CATEGORIES = ["Todos", "Exportação", "Sommelier", "Produção", "Importação", "Enoturismo", "Marketing", "Outros"];
+
+const ACCESS_ICON: Record<AccessType, any> = { aberto: "globe", fechado: "lock", restrito: "shield" };
+const ACCESS_LABEL: Record<AccessType, string> = { aberto: "Aberto", fechado: "Fechado", restrito: "Restrito" };
 
 export default function GroupsScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [groups, setGroups] = useState(MOCK_GROUPS);
-  const [filter, setFilter] = useState("todos");
+  const [search, setSearch]     = useState("");
+  const [category, setCategory] = useState("Todos");
+  const [myGroups, setMyGroups] = useState(MY_GROUPS);
 
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
+  const topPad    = Platform.OS === "web" ? 0 : insets.top;
+  const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
-  const FILTERS = ["todos", "meus", "aberto", "fechado"];
-
-  const filtered = groups.filter((g) => {
-    if (filter === "meus") return g.is_member;
-    if (filter === "aberto") return g.type === "aberto";
-    if (filter === "fechado") return g.type === "fechado";
+  const filter = (g: Group) => {
+    if (category !== "Todos" && g.category !== category) return false;
+    if (search && !g.name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
-  });
-
-  const toggleMembership = (id: string) => {
-    setGroups((prev) => prev.map((g) => g.id === id ? { ...g, is_member: !g.is_member, members: g.is_member ? g.members - 1 : g.members + 1 } : g));
   };
 
-  const typeVariants: Record<string, any> = {
-    aberto: "success",
-    fechado: "default",
-    restrito: "wine",
+  const filteredMine    = myGroups.filter(filter);
+  const filteredExplore = EXPLORE_GROUPS.filter(filter);
+
+  const handleLeave = (id: string) => {
+    Alert.alert("Sair do grupo", "Tem certeza que deseja sair?", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Sair", style: "destructive", onPress: () => setMyGroups((g) => g.filter((gr) => gr.id !== id)) },
+    ]);
   };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <Pressable onPress={() => router.back()}>
-          <Feather name="arrow-left" size={24} color={colors.foreground} />
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Grupos</Text>
-        <TouchableOpacity>
-          <Feather name="plus" size={24} color={colors.foreground} />
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
+          <Feather name="arrow-left" size={22} color={colors.navy} />
+          <Text style={[styles.headerTitle, { color: colors.navy }]}>Grupos</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.newBtn, { backgroundColor: colors.gold }]}
+          onPress={() => router.push("/new-group" as any)}
+        >
+          <Feather name="plus" size={15} color="#fff" />
+          <Text style={styles.newBtnText}>Novo</Text>
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        horizontal
-        data={FILTERS}
-        keyExtractor={(f) => f}
-        renderItem={({ item: f }) => (
-          <Pressable
-            style={[styles.filterBtn, { backgroundColor: filter === f ? colors.navy : colors.secondary, borderRadius: 20 }]}
-            onPress={() => setFilter(f)}
-          >
-            <Text style={{ color: filter === f ? colors.gold : colors.foreground, fontSize: 13, fontWeight: "700" }}>
-              {f.charAt(0).toUpperCase() + f.slice(1)}
-            </Text>
-          </Pressable>
-        )}
-        style={{ maxHeight: 52, borderBottomWidth: 1, borderBottomColor: colors.border }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 10, gap: 8 }}
-        showsHorizontalScrollIndicator={false}
-      />
+      <ScrollView contentContainerStyle={{ paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
+        {/* Search */}
+        <View style={[styles.searchWrap, { backgroundColor: "#fff" }]}>
+          <View style={[styles.searchBar, { backgroundColor: colors.background }]}>
+            <Feather name="search" size={15} color={colors.mutedForeground} />
+            <TextInput
+              style={[styles.searchInput, { color: colors.foreground }]}
+              placeholder="Buscar grupos..."
+              placeholderTextColor={colors.mutedForeground}
+              value={search}
+              onChangeText={setSearch}
+            />
+          </View>
+        </View>
 
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={[styles.groupCard, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
-            <View style={styles.groupHeader}>
-              <View style={[styles.groupIcon, { backgroundColor: colors.navyMid }]}>
-                <Feather name="users" size={22} color={colors.gold} />
-              </View>
-              <View style={styles.groupInfo}>
-                <Text style={[styles.groupName, { color: colors.foreground }]} numberOfLines={1}>
-                  {item.name}
-                </Text>
-                <View style={styles.groupMeta}>
-                  <Badge label={item.type} variant={typeVariants[item.type] ?? "default"} size="sm" />
-                  <Text style={[styles.memberCount, { color: colors.mutedForeground }]}>
-                    {item.members.toLocaleString()} membros
+        {/* Category chips */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          {CATEGORIES.map((cat) => (
+            <TouchableOpacity
+              key={cat}
+              style={[styles.chip, { backgroundColor: category === cat ? colors.gold : colors.background }]}
+              onPress={() => setCategory(cat)}
+            >
+              <Text style={[styles.chipText, { color: category === cat ? "#fff" : colors.mutedForeground }]}>
+                {cat}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* MEUS GRUPOS */}
+        {filteredMine.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>MEUS GRUPOS</Text>
+            {filteredMine.map((g) => <GroupCard key={g.id} group={g} colors={colors} router={router} onLeave={handleLeave} />)}
+          </View>
+        )}
+
+        {/* EXPLORAR */}
+        {filteredExplore.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>EXPLORAR</Text>
+            {filteredExplore.map((g) => (
+              <View key={g.id} style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                <View style={styles.cardTop}>
+                  <View style={styles.cardMeta}>
+                    <Text style={[styles.cardName, { color: colors.navy }]}>{g.name}</Text>
+                    <View style={[styles.chip2, { backgroundColor: colors.background }]}>
+                      <Text style={[styles.chip2Text, { color: colors.mutedForeground }]}>{g.category}</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.joinBtn, { backgroundColor: colors.gold }]}
+                    onPress={() => Alert.alert("Participando!", "Você entrou no grupo.")}
+                  >
+                    <Text style={styles.joinBtnText}>Participar</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={[styles.cardDesc, { color: colors.mutedForeground }]}>{g.description}</Text>
+                <View style={styles.cardMembers}>
+                  <Feather name="users" size={13} color={colors.mutedForeground} />
+                  <Text style={[styles.cardMembersText, { color: colors.mutedForeground }]}>
+                    {g.members.toLocaleString("pt-BR")} membros
                   </Text>
                 </View>
               </View>
-              <Badge label={item.category} variant="gold" size="sm" />
-            </View>
-            <Text style={[styles.description, { color: colors.mutedForeground }]} numberOfLines={2}>
-              {item.description}
-            </Text>
-            <Button
-              title={item.is_member ? "Participando" : item.type === "restrito" ? "Solicitar acesso" : "Participar"}
-              onPress={() => toggleMembership(item.id)}
-              variant={item.is_member ? "outline" : "gold"}
-              size="sm"
-              style={{ alignSelf: "flex-start", marginTop: 4 }}
-            />
+            ))}
           </View>
         )}
-        contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: bottomPad + 40 }}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
+
+        {filteredMine.length === 0 && filteredExplore.length === 0 && (
           <View style={styles.empty}>
-            <Feather name="users" size={40} color={colors.mutedForeground} />
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              Nenhum grupo encontrado
-            </Text>
+            <Feather name="users" size={36} color={colors.mutedForeground} />
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhum grupo encontrado</Text>
           </View>
-        }
-      />
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+function GroupCard({ group: g, colors, router, onLeave }: any) {
+  return (
+    <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
+      <View style={styles.cardTop}>
+        <View style={styles.cardMeta}>
+          <Text style={[styles.cardName, { color: colors.navy }]}>{g.name}</Text>
+          <View style={styles.cardChips}>
+            <View style={[styles.chip2, { backgroundColor: colors.background }]}>
+              <Text style={[styles.chip2Text, { color: colors.mutedForeground }]}>{g.category}</Text>
+            </View>
+            <View style={[styles.chip2, { backgroundColor: colors.background }]}>
+              <Feather name={ACCESS_ICON[g.access as "aberto"]} size={11} color={colors.mutedForeground} />
+              <Text style={[styles.chip2Text, { color: colors.mutedForeground }]}>{ACCESS_LABEL[g.access as "aberto"]}</Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.cardActions}>
+          <TouchableOpacity
+            style={[styles.openChatBtn, { backgroundColor: colors.gold }]}
+            onPress={() => router.push(`/group-chat/${g.id}`)}
+          >
+            <Text style={styles.openChatText}>Abrir Chat</Text>
+          </TouchableOpacity>
+          {g.is_owner && (
+            <TouchableOpacity
+              style={[styles.manageBtn, { borderColor: colors.border }]}
+              onPress={() => router.push(`/group-settings/${g.id}`)}
+            >
+              <Text style={[styles.manageBtnText, { color: colors.navy }]}>Gerenciar</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.leaveRow} onPress={() => onLeave(g.id)}>
+            <Feather name="log-out" size={13} color={colors.mutedForeground} />
+            <Text style={[styles.leaveText, { color: colors.mutedForeground }]}>Sair</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+      <Text style={[styles.cardDesc, { color: colors.mutedForeground }]}>{g.description}</Text>
+      <View style={styles.cardMembers}>
+        <Feather name="users" size={13} color={colors.mutedForeground} />
+        <Text style={[styles.cardMembersText, { color: colors.mutedForeground }]}>
+          {g.members} {g.members === 1 ? "membro" : "membros"}
+        </Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 10, borderBottomWidth: 1 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
+  backRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   headerTitle: { fontSize: 22, fontWeight: "800" },
-  filterBtn: { paddingVertical: 7, paddingHorizontal: 16 },
-  groupCard: { borderWidth: 1, padding: 16, gap: 10 },
-  groupHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  groupIcon: { width: 48, height: 48, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  groupInfo: { flex: 1, gap: 4 },
-  groupName: { fontSize: 15, fontWeight: "700" },
-  groupMeta: { flexDirection: "row", alignItems: "center", gap: 8 },
-  memberCount: { fontSize: 12 },
-  description: { fontSize: 13, lineHeight: 19 },
-  empty: { alignItems: "center", justifyContent: "center", paddingTop: 60, gap: 12 },
+  newBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  newBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  searchWrap: { padding: 12 },
+  searchBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10 },
+  searchInput: { flex: 1, fontSize: 14 },
+  chips: { paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
+  chip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  chipText: { fontSize: 13, fontWeight: "600" },
+  section: { paddingHorizontal: 16, paddingTop: 14, gap: 10 },
+  sectionLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 1 },
+  card: { borderRadius: 12, borderWidth: 1, padding: 14, gap: 10 },
+  cardTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
+  cardMeta: { flex: 1, gap: 6 },
+  cardName: { fontSize: 16, fontWeight: "700" },
+  cardChips: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
+  chip2: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  chip2Text: { fontSize: 12 },
+  cardActions: { alignItems: "flex-end", gap: 6 },
+  openChatBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
+  openChatText: { color: "#fff", fontSize: 13, fontWeight: "700" },
+  joinBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
+  joinBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
+  manageBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, borderWidth: 1 },
+  manageBtnText: { fontSize: 13, fontWeight: "600" },
+  leaveRow: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4 },
+  leaveText: { fontSize: 13 },
+  cardDesc: { fontSize: 13, lineHeight: 18 },
+  cardMembers: { flexDirection: "row", alignItems: "center", gap: 5 },
+  cardMembersText: { fontSize: 12 },
+  empty: { alignItems: "center", paddingTop: 60, gap: 12 },
   emptyText: { fontSize: 15 },
 });
