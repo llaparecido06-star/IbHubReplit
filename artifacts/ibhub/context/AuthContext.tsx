@@ -105,12 +105,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { full_name: fullName } },
     });
-    return { error: error?.message ?? null };
+    if (error) return { error: error.message };
+    // Auto sign-in immediately — skip email confirmation
+    if (data.user) {
+      await supabase.auth.signInWithPassword({ email, password });
+    }
+    return { error: null };
   };
 
   const signOut = async () => {

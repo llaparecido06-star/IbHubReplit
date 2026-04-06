@@ -1,8 +1,9 @@
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   KeyboardAvoidingView,
@@ -19,6 +20,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/context/AuthContext";
 
 const TOTAL_STEPS = 3;
 
@@ -30,26 +32,26 @@ interface Country {
 }
 
 const COUNTRIES: Country[] = [
-  { flag: "🇧🇷", name: "Brasil", ddi: "+55", placeholder: "(11) 99999-9999" },
-  { flag: "🇺🇸", name: "Estados Unidos", ddi: "+1", placeholder: "(555) 000-0000" },
-  { flag: "🇵🇹", name: "Portugal", ddi: "+351", placeholder: "912 345 678" },
-  { flag: "🇦🇷", name: "Argentina", ddi: "+54", placeholder: "11 1234-5678" },
-  { flag: "🇨🇱", name: "Chile", ddi: "+56", placeholder: "9 1234 5678" },
-  { flag: "🇺🇾", name: "Uruguai", ddi: "+598", placeholder: "9123 4567" },
-  { flag: "🇵🇾", name: "Paraguai", ddi: "+595", placeholder: "981 234 567" },
-  { flag: "🇧🇴", name: "Bolívia", ddi: "+591", placeholder: "7123 4567" },
-  { flag: "🇵🇪", name: "Peru", ddi: "+51", placeholder: "912 345 678" },
-  { flag: "🇨🇴", name: "Colômbia", ddi: "+57", placeholder: "312 345 6789" },
-  { flag: "🇲🇽", name: "México", ddi: "+52", placeholder: "55 1234 5678" },
-  { flag: "🇪🇸", name: "Espanha", ddi: "+34", placeholder: "612 345 678" },
-  { flag: "🇫🇷", name: "França", ddi: "+33", placeholder: "06 12 34 56 78" },
-  { flag: "🇮🇹", name: "Itália", ddi: "+39", placeholder: "312 345 6789" },
-  { flag: "🇩🇪", name: "Alemanha", ddi: "+49", placeholder: "1512 3456789" },
-  { flag: "🇬🇧", name: "Reino Unido", ddi: "+44", placeholder: "7911 123456" },
-  { flag: "🇨🇳", name: "China", ddi: "+86", placeholder: "138 0013 8000" },
-  { flag: "🇯🇵", name: "Japão", ddi: "+81", placeholder: "90-1234-5678" },
-  { flag: "🇦🇺", name: "Austrália", ddi: "+61", placeholder: "0412 345 678" },
-  { flag: "🇿🇦", name: "África do Sul", ddi: "+27", placeholder: "71 234 5678" },
+  { flag: "🇧🇷", name: "Brasil",          ddi: "+55",  placeholder: "(11) 99999-9999" },
+  { flag: "🇺🇸", name: "Estados Unidos",  ddi: "+1",   placeholder: "(555) 000-0000" },
+  { flag: "🇵🇹", name: "Portugal",        ddi: "+351", placeholder: "912 345 678" },
+  { flag: "🇦🇷", name: "Argentina",       ddi: "+54",  placeholder: "11 1234-5678" },
+  { flag: "🇨🇱", name: "Chile",           ddi: "+56",  placeholder: "9 1234 5678" },
+  { flag: "🇺🇾", name: "Uruguai",         ddi: "+598", placeholder: "9123 4567" },
+  { flag: "🇵🇾", name: "Paraguai",        ddi: "+595", placeholder: "981 234 567" },
+  { flag: "🇧🇴", name: "Bolívia",         ddi: "+591", placeholder: "7123 4567" },
+  { flag: "🇵🇪", name: "Peru",            ddi: "+51",  placeholder: "912 345 678" },
+  { flag: "🇨🇴", name: "Colômbia",        ddi: "+57",  placeholder: "312 345 6789" },
+  { flag: "🇲🇽", name: "México",          ddi: "+52",  placeholder: "55 1234 5678" },
+  { flag: "🇪🇸", name: "Espanha",         ddi: "+34",  placeholder: "612 345 678" },
+  { flag: "🇫🇷", name: "França",          ddi: "+33",  placeholder: "06 12 34 56 78" },
+  { flag: "🇮🇹", name: "Itália",          ddi: "+39",  placeholder: "312 345 6789" },
+  { flag: "🇩🇪", name: "Alemanha",        ddi: "+49",  placeholder: "1512 3456789" },
+  { flag: "🇬🇧", name: "Reino Unido",     ddi: "+44",  placeholder: "7911 123456" },
+  { flag: "🇨🇳", name: "China",           ddi: "+86",  placeholder: "138 0013 8000" },
+  { flag: "🇯🇵", name: "Japão",           ddi: "+81",  placeholder: "90-1234-5678" },
+  { flag: "🇦🇺", name: "Austrália",       ddi: "+61",  placeholder: "0412 345 678" },
+  { flag: "🇿🇦", name: "África do Sul",   ddi: "+27",  placeholder: "71 234 5678" },
 ];
 
 const AREAS = [
@@ -84,6 +86,35 @@ const PLANS = [
   },
 ];
 
+type ValidationState = "idle" | "checking" | "available" | "taken" | "invalid";
+
+function ValidationIcon({ state }: { state: ValidationState }) {
+  if (state === "checking")
+    return <ActivityIndicator size="small" color="#8fa3b8" style={{ marginLeft: 4 }} />;
+  if (state === "available")
+    return <Feather name="check-circle" size={18} color="#2ecc71" style={{ marginLeft: 4 }} />;
+  if (state === "taken" || state === "invalid")
+    return <Feather name="x-circle" size={18} color="#e74c3c" style={{ marginLeft: 4 }} />;
+  return null;
+}
+
+function validationHint(field: "username" | "email", state: ValidationState): string | null {
+  if (field === "username") {
+    if (state === "available") return "Username disponível";
+    if (state === "taken") return "Username já está em uso";
+    if (state === "invalid") return "Apenas letras, números e _ (mín. 3 chars)";
+  }
+  if (field === "email") {
+    if (state === "available") return "E-mail disponível";
+    if (state === "taken") return "Este e-mail já está cadastrado";
+    if (state === "invalid") return "Formato de e-mail inválido";
+  }
+  return null;
+}
+
+const USERNAME_RE = /^[a-zA-Z0-9_]{3,}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function RegisterScreen() {
   const router = useRouter();
   const { signUp } = useAuth();
@@ -105,14 +136,65 @@ export default function RegisterScreen() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
 
+  const [usernameState, setUsernameState] = useState<ValidationState>("idle");
+  const [emailState, setEmailState] = useState<ValidationState>("idle");
+
   const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
   const [company, setCompany] = useState("");
   const [role, setRole] = useState("");
 
   const [selectedPlan, setSelectedPlan] = useState("gratuito");
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const usernameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const emailTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const checkUsername = useCallback(async (value: string) => {
+    if (!value) { setUsernameState("idle"); return; }
+    if (!USERNAME_RE.test(value)) { setUsernameState("invalid"); return; }
+    setUsernameState("checking");
+    try {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("username", value.toLowerCase())
+        .maybeSingle();
+      setUsernameState(data ? "taken" : "available");
+    } catch {
+      setUsernameState("idle");
+    }
+  }, []);
+
+  const checkEmail = useCallback(async (value: string) => {
+    if (!value) { setEmailState("idle"); return; }
+    if (!EMAIL_RE.test(value)) { setEmailState("invalid"); return; }
+    setEmailState("checking");
+    try {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("email", value.toLowerCase())
+        .maybeSingle();
+      setEmailState(data ? "taken" : "available");
+    } catch {
+      setEmailState("available");
+    }
+  }, []);
+
+  const onUsernameChange = (val: string) => {
+    setUsername(val);
+    setUsernameState(val ? "checking" : "idle");
+    if (usernameTimer.current) clearTimeout(usernameTimer.current);
+    usernameTimer.current = setTimeout(() => checkUsername(val.trim()), 600);
+  };
+
+  const onEmailChange = (val: string) => {
+    setEmail(val);
+    setEmailState(val ? "checking" : "idle");
+    if (emailTimer.current) clearTimeout(emailTimer.current);
+    emailTimer.current = setTimeout(() => checkEmail(val.trim()), 600);
+  };
 
   const filteredCountries = useMemo(
     () =>
@@ -136,11 +218,10 @@ export default function RegisterScreen() {
     if (!result.canceled) setAvatarUri(result.assets[0].uri);
   };
 
-  const toggleArea = (area: string) => {
+  const toggleArea = (area: string) =>
     setSelectedAreas((prev) =>
       prev.includes(area) ? prev.filter((a) => a !== area) : [...prev, area]
     );
-  };
 
   const goBack = () => {
     if (step === 1) router.back();
@@ -150,8 +231,14 @@ export default function RegisterScreen() {
   const validateStep1 = (): string | null => {
     if (!fullName.trim()) return "Informe seu nome completo";
     if (!username.trim()) return "Informe um username";
-    if (!email.trim() || !email.includes("@")) return "Informe um email válido";
-    if (!password || password.length < 6) return "A senha deve ter ao menos 6 caracteres";
+    if (usernameState === "invalid") return "Username inválido (mín. 3 chars, sem espaços)";
+    if (usernameState === "taken") return "Esse username já está em uso";
+    if (usernameState === "checking") return "Aguarde a verificação do username";
+    if (!email.trim()) return "Informe um e-mail";
+    if (emailState === "invalid") return "Formato de e-mail inválido";
+    if (emailState === "taken") return "Esse e-mail já está cadastrado";
+    if (emailState === "checking") return "Aguarde a verificação do e-mail";
+    if (!password) return "Informe uma senha";
     if (password !== confirmPassword) return "As senhas não coincidem";
     if (!termsAccepted) return "Aceite os Termos de Uso para continuar";
     return null;
@@ -178,12 +265,6 @@ export default function RegisterScreen() {
       setLoading(false);
       if (err) {
         setError(err);
-      } else {
-        Alert.alert(
-          "Conta criada!",
-          "Verifique seu email para ativar a conta.",
-          [{ text: "OK", onPress: () => router.replace("/(auth)/login" as any) }]
-        );
       }
     }
   };
@@ -191,7 +272,7 @@ export default function RegisterScreen() {
   const topPad = Platform.OS === "web" ? 0 : insets.top;
 
   return (
-    <View style={[styles.root]}>
+    <View style={styles.root}>
       <View style={[styles.headerBar, { paddingTop: topPad + 12 }]}>
         <TouchableOpacity onPress={goBack} style={styles.backBtn}>
           <Feather name="arrow-left" size={22} color="#f5f0e8" />
@@ -242,8 +323,55 @@ export default function RegisterScreen() {
               </TouchableOpacity>
 
               <FormField icon="user" value={fullName} onChangeText={setFullName} placeholder="Nome completo" />
-              <FormField icon="at-sign" value={username} onChangeText={setUsername} placeholder="Username" autoCapitalize="none" />
-              <FormField icon="mail" value={email} onChangeText={setEmail} placeholder="E-mail" keyboardType="email-address" autoCapitalize="none" />
+
+              <View>
+                <View style={styles.fieldWrap}>
+                  <Feather name="at-sign" size={16} color="#8fa3b8" style={styles.fieldIcon} />
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Username"
+                    placeholderTextColor="#8fa3b8"
+                    value={username}
+                    onChangeText={onUsernameChange}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <ValidationIcon state={usernameState} />
+                </View>
+                {validationHint("username", usernameState) && (
+                  <Text style={[
+                    styles.fieldHint,
+                    usernameState === "available" ? styles.hintSuccess : styles.hintError,
+                  ]}>
+                    {validationHint("username", usernameState)}
+                  </Text>
+                )}
+              </View>
+
+              <View>
+                <View style={styles.fieldWrap}>
+                  <Feather name="mail" size={16} color="#8fa3b8" style={styles.fieldIcon} />
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="E-mail"
+                    placeholderTextColor="#8fa3b8"
+                    value={email}
+                    onChangeText={onEmailChange}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <ValidationIcon state={emailState} />
+                </View>
+                {validationHint("email", emailState) && (
+                  <Text style={[
+                    styles.fieldHint,
+                    emailState === "available" ? styles.hintSuccess : styles.hintError,
+                  ]}>
+                    {validationHint("email", emailState)}
+                  </Text>
+                )}
+              </View>
 
               <View style={styles.phoneRow}>
                 <TouchableOpacity
@@ -360,7 +488,7 @@ export default function RegisterScreen() {
                     <View style={styles.planHeader}>
                       <View>
                         <Text style={styles.planName}>{plan.name}</Text>
-                        <Text style={styles.planSubtitle}>{plan.subtitle}</Text>
+                        <Text style={styles.planSubtitle2}>{plan.subtitle}</Text>
                       </View>
                       <Text style={[styles.planPrice, plan.key === "gratuito" && { color: "#c9a84c" }]}>
                         {plan.price}
@@ -385,9 +513,13 @@ export default function RegisterScreen() {
             onPress={nextStep}
             disabled={loading}
           >
-            <Text style={styles.continueBtnText}>
-              {loading ? "Criando conta..." : step === TOTAL_STEPS ? "Finalizar cadastro" : "Continuar  →"}
-            </Text>
+            {loading ? (
+              <ActivityIndicator color="#0d1b2a" />
+            ) : (
+              <Text style={styles.continueBtnText}>
+                {step === TOTAL_STEPS ? "Finalizar cadastro" : "Continuar  →"}
+              </Text>
+            )}
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -427,7 +559,7 @@ export default function RegisterScreen() {
             data={filteredCountries}
             keyExtractor={(item) => item.ddi + item.name}
             renderItem={({ item }) => {
-              const isSelected = item.ddi === selectedCountry.ddi && item.name === selectedCountry.name;
+              const isSelected = item.name === selectedCountry.name;
               return (
                 <TouchableOpacity
                   style={[styles.pickerRow, isSelected && styles.pickerRowActive]}
@@ -441,9 +573,7 @@ export default function RegisterScreen() {
                   <Text style={styles.pickerFlag}>{item.flag}</Text>
                   <Text style={styles.pickerCountryName}>{item.name}</Text>
                   <Text style={styles.pickerDdi}>{item.ddi}</Text>
-                  {isSelected && (
-                    <Feather name="check" size={18} color="#c9a84c" />
-                  )}
+                  {isSelected && <Feather name="check" size={18} color="#c9a84c" />}
                 </TouchableOpacity>
               );
             }}
@@ -512,82 +642,58 @@ const styles = StyleSheet.create({
   stepSubtitle: { color: "#8fa3b8", fontSize: 14, lineHeight: 20, marginTop: -6 },
   avatarPicker: { alignSelf: "center", position: "relative", marginBottom: 4 },
   avatarPlaceholder: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    width: 90, height: 90, borderRadius: 45,
     backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
+    borderWidth: 2, borderColor: "rgba(255,255,255,0.15)",
+    alignItems: "center", justifyContent: "center",
   },
   avatarImage: { width: 90, height: 90, borderRadius: 45 },
   avatarEditBadge: {
-    position: "absolute",
-    bottom: 2,
-    right: 2,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    position: "absolute", bottom: 2, right: 2,
+    width: 28, height: 28, borderRadius: 14,
     backgroundColor: "#c9a84c",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "#0d1b2a",
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 2, borderColor: "#0d1b2a",
   },
   fieldWrap: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: "row", alignItems: "center",
     backgroundColor: "rgba(255,255,255,0.06)",
-    borderRadius: 10,
-    borderWidth: 1,
+    borderRadius: 10, borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
-    paddingHorizontal: 14,
-    minHeight: 52,
+    paddingHorizontal: 14, minHeight: 52,
   },
   fieldIcon: { marginRight: 10 },
   textInput: {
-    flex: 1,
-    color: "#f5f0e8",
-    fontSize: 15,
+    flex: 1, color: "#f5f0e8", fontSize: 15,
     paddingVertical: Platform.OS === "android" ? 14 : 0,
   },
+  fieldHint: { fontSize: 12, marginTop: 5, marginLeft: 4 },
+  hintSuccess: { color: "#2ecc71" },
+  hintError: { color: "#e74c3c" },
   phoneRow: { flexDirection: "row", gap: 10 },
   countryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
+    flexDirection: "row", alignItems: "center", gap: 6,
     backgroundColor: "rgba(255,255,255,0.06)",
-    borderRadius: 10,
-    borderWidth: 1,
+    borderRadius: 10, borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-    minHeight: 52,
+    paddingHorizontal: 12, paddingVertical: 14, minHeight: 52,
   },
   countryFlag: { fontSize: 22 },
   countryDdi: { color: "#f5f0e8", fontSize: 14, fontWeight: "600" },
   termsRow: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginTop: 4 },
   checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 5,
-    borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.3)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 1,
-    flexShrink: 0,
+    width: 20, height: 20, borderRadius: 5,
+    borderWidth: 1.5, borderColor: "rgba(255,255,255,0.3)",
+    alignItems: "center", justifyContent: "center",
+    marginTop: 1, flexShrink: 0,
   },
   checkboxActive: { backgroundColor: "#c9a84c", borderColor: "#c9a84c" },
   termsText: { color: "#8fa3b8", fontSize: 13, lineHeight: 19, flex: 1 },
   termsLink: { color: "#c9a84c", fontWeight: "600" },
   areasGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   areaChip: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
+    paddingVertical: 10, paddingHorizontal: 16,
+    borderRadius: 8, borderWidth: 1,
     borderColor: "rgba(255,255,255,0.2)",
     backgroundColor: "rgba(255,255,255,0.05)",
   },
@@ -597,82 +703,54 @@ const styles = StyleSheet.create({
   plansContainer: { gap: 12 },
   planCard: {
     backgroundColor: "rgba(255,255,255,0.05)",
-    borderRadius: 14,
-    borderWidth: 1.5,
+    borderRadius: 14, borderWidth: 1.5,
     borderColor: "rgba(255,255,255,0.12)",
-    padding: 18,
-    gap: 14,
-    position: "relative",
+    padding: 18, gap: 14, position: "relative",
   },
   planCardActive: { borderColor: "#c9a84c", backgroundColor: "rgba(201,168,76,0.06)" },
   popularBadge: {
-    position: "absolute",
-    top: -1,
-    right: 14,
+    position: "absolute", top: -1, right: 14,
     backgroundColor: "#c9a84c",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderBottomLeftRadius: 8, borderBottomRightRadius: 8,
   },
   popularBadgeText: { color: "#0d1b2a", fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
   planHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   planName: { color: "#f5f0e8", fontSize: 18, fontWeight: "800" },
-  planSubtitle: { color: "#8fa3b8", fontSize: 12, marginTop: 2 },
+  planSubtitle2: { color: "#8fa3b8", fontSize: 12, marginTop: 2 },
   planPrice: { color: "#f5f0e8", fontSize: 16, fontWeight: "800" },
   planFeatures: { gap: 8 },
   planFeatureRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   planFeatureText: { color: "#c9d4de", fontSize: 14 },
   continueBtn: {
-    backgroundColor: "#c9a84c",
-    borderRadius: 10,
-    paddingVertical: 17,
-    alignItems: "center",
-    marginTop: 8,
+    backgroundColor: "#c9a84c", borderRadius: 10,
+    paddingVertical: 17, alignItems: "center", marginTop: 8,
   },
   continueBtnText: { color: "#0d1b2a", fontSize: 16, fontWeight: "800" },
-
-  pickerModal: {
-    flex: 1,
-    backgroundColor: "#0d1b2a",
-  },
+  pickerModal: { flex: 1, backgroundColor: "#0d1b2a" },
   pickerHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
     paddingTop: Platform.OS === "android" ? 20 : 24,
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.1)",
+    paddingHorizontal: 20, paddingBottom: 16,
+    borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.1)",
     position: "relative",
   },
   pickerTitle: { color: "#f5f0e8", fontSize: 17, fontWeight: "700" },
   pickerClose: {
-    position: "absolute",
-    right: 20,
-    top: Platform.OS === "android" ? 18 : 22,
-    padding: 4,
+    position: "absolute", right: 20,
+    top: Platform.OS === "android" ? 18 : 22, padding: 4,
   },
   pickerSearch: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    margin: 16,
-    backgroundColor: "rgba(255,255,255,0.07)",
-    borderRadius: 10,
-    borderWidth: 1,
+    flexDirection: "row", alignItems: "center", gap: 10,
+    margin: 16, backgroundColor: "rgba(255,255,255,0.07)",
+    borderRadius: 10, borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
-    paddingHorizontal: 14,
-    paddingVertical: 11,
+    paddingHorizontal: 14, paddingVertical: 11,
   },
   pickerSearchInput: { flex: 1, color: "#f5f0e8", fontSize: 15 },
   pickerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    gap: 14,
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 20, paddingVertical: 15, gap: 14,
   },
   pickerRowActive: { backgroundColor: "rgba(201,168,76,0.08)" },
   pickerFlag: { fontSize: 26 },
