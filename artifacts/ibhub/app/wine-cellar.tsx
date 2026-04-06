@@ -1,8 +1,7 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
-  FlatList,
+  Alert,
   Modal,
   Platform,
   Pressable,
@@ -15,197 +14,315 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import { useColors } from "@/hooks/useColors";
 
-interface WineEntry {
+type WineStatus = "adega" | "consumido" | "presenteado" | "wishlist";
+type FilterKey  = "todos" | WineStatus;
+
+interface Wine {
   id: string;
   name: string;
-  producer: string;
+  producer?: string;
   vintage?: string;
   region?: string;
-  varietal?: string;
-  quantity: number;
-  purchase_price?: number;
-  rating?: number;
+  country?: string;
+  grape?: string;
+  qty: number;
+  price?: string;
+  buyDate?: string;
+  drinkBy?: string;
+  storage?: string;
   notes?: string;
-  added_at: string;
+  rating: number;
+  status: WineStatus;
+  private: boolean;
 }
 
-const STORAGE_KEY = "ibhub_wine_cellar";
+const FILTER_OPTIONS: { key: FilterKey; label: string }[] = [
+  { key: "todos",       label: "Todos" },
+  { key: "adega",       label: "Na Adega" },
+  { key: "consumido",   label: "Consumido" },
+  { key: "presenteado", label: "Presenteado" },
+];
 
-const WINE_TYPES = ["Tinto", "Branco", "Rosé", "Espumante", "Sobremesa", "Outro"];
+const STATUS_OPTIONS: { key: WineStatus; label: string }[] = [
+  { key: "adega",       label: "Na Adega" },
+  { key: "consumido",   label: "Consumido" },
+  { key: "presenteado", label: "Presenteado" },
+  { key: "wishlist",    label: "Wishlist" },
+];
+
+function StarRating({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const colors = useColors();
+  return (
+    <View style={{ flexDirection: "row", gap: 4 }}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <TouchableOpacity key={star} onPress={() => onChange(star)}>
+          <Feather name="star" size={22} color={star <= value ? colors.gold : colors.border} />
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
 
 export default function WineCellarScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [wines, setWines] = useState<WineEntry[]>([]);
-  const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState<Partial<WineEntry>>({ quantity: 1 });
-  const [filter, setFilter] = useState("todos");
 
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const [wines, setWines]       = useState<Wine[]>([]);
+  const [filter, setFilter]     = useState<FilterKey>("todos");
+  const [search, setSearch]     = useState("");
+  const [showForm, setShowForm] = useState(false);
 
-  useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((val) => {
-      if (val) setWines(JSON.parse(val));
-    });
-  }, []);
+  // Form state
+  const [wName, setWName]       = useState("");
+  const [wProducer, setWProducer] = useState("");
+  const [wVintage, setWVintage] = useState("");
+  const [wRegion, setWRegion]   = useState("");
+  const [wCountry, setWCountry] = useState("");
+  const [wGrape, setWGrape]     = useState("");
+  const [wQty, setWQty]         = useState("1");
+  const [wPrice, setWPrice]     = useState("");
+  const [wBuyDate, setWBuyDate] = useState("");
+  const [wDrinkBy, setWDrinkBy] = useState("");
+  const [wStorage, setWStorage] = useState("");
+  const [wNotes, setWNotes]     = useState("");
+  const [wRating, setWRating]   = useState(0);
+  const [wStatus, setWStatus]   = useState<WineStatus>("adega");
+  const [wPrivate, setWPrivate] = useState(true);
 
-  const saveWines = async (updated: WineEntry[]) => {
-    setWines(updated);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  const topPad    = Platform.OS === "web" ? 0 : insets.top;
+  const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
+
+  const resetForm = () => {
+    setWName(""); setWProducer(""); setWVintage(""); setWRegion(""); setWCountry("");
+    setWGrape(""); setWQty("1"); setWPrice(""); setWBuyDate(""); setWDrinkBy("");
+    setWStorage(""); setWNotes(""); setWRating(0); setWStatus("adega"); setWPrivate(true);
   };
 
-  const addWine = async () => {
-    if (!form.name || !form.producer) return;
-    const newWine: WineEntry = {
-      id: Date.now().toString(),
-      name: form.name ?? "",
-      producer: form.producer ?? "",
-      vintage: form.vintage,
-      region: form.region,
-      varietal: form.varietal,
-      quantity: form.quantity ?? 1,
-      purchase_price: form.purchase_price,
-      rating: form.rating,
-      notes: form.notes,
-      added_at: new Date().toISOString(),
+  const handleAdd = () => {
+    if (!wName.trim()) { Alert.alert("Atenção", "Informe o nome do vinho."); return; }
+    const wine: Wine = {
+      id: Date.now().toString(), name: wName.trim(), producer: wProducer || undefined,
+      vintage: wVintage || undefined, region: wRegion || undefined, country: wCountry || undefined,
+      grape: wGrape || undefined, qty: parseInt(wQty) || 1, price: wPrice || undefined,
+      buyDate: wBuyDate || undefined, drinkBy: wDrinkBy || undefined, storage: wStorage || undefined,
+      notes: wNotes || undefined, rating: wRating, status: wStatus, private: wPrivate,
     };
-    await saveWines([newWine, ...wines]);
-    setShowModal(false);
-    setForm({ quantity: 1 });
+    setWines((prev) => [wine, ...prev]);
+    resetForm();
+    setShowForm(false);
   };
 
-  const totalBottles = wines.reduce((sum, w) => sum + w.quantity, 0);
+  const filtered = wines.filter((w) => {
+    if (filter !== "todos" && w.status !== filter) return false;
+    if (search && !w.name.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
 
-  const filtered = filter === "todos" ? wines : wines.filter((w) =>
-    w.varietal?.toLowerCase().includes(filter.toLowerCase()) ||
-    w.region?.toLowerCase().includes(filter.toLowerCase())
-  );
+  const counts = {
+    adega: wines.filter((w) => w.status === "adega").length,
+    consumido: wines.filter((w) => w.status === "consumido").length,
+    wishlist: wines.filter((w) => w.status === "wishlist").length,
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.navy }]}>
-        <Pressable onPress={() => router.back()}>
-          <Feather name="arrow-left" size={24} color={colors.gold} />
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.gold }]}>Adega Pessoal</Text>
-        <TouchableOpacity onPress={() => setShowModal(true)}>
-          <Feather name="plus" size={24} color={colors.gold} />
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
+          <Feather name="arrow-left" size={22} color={colors.navy} />
+          <View>
+            <Text style={[styles.headerTitle, { color: colors.navy }]}>Adega</Text>
+            <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>Gerencie sua adega pessoal</Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.addBtn, { backgroundColor: colors.gold }]}
+          onPress={() => setShowForm(true)}
+        >
+          <Feather name="plus" size={15} color="#fff" />
+          <Text style={styles.addBtnText}>Adicionar</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={[styles.statsBar, { backgroundColor: colors.navyLight }]}>
-        <View style={styles.stat}>
-          <Text style={[styles.statNum, { color: colors.gold }]}>{wines.length}</Text>
-          <Text style={[styles.statLabel, { color: colors.gold + "aa" }]}>Rótulos</Text>
-        </View>
-        <View style={[styles.statDivider, { backgroundColor: colors.gold + "44" }]} />
-        <View style={styles.stat}>
-          <Text style={[styles.statNum, { color: colors.gold }]}>{totalBottles}</Text>
-          <Text style={[styles.statLabel, { color: colors.gold + "aa" }]}>Garrafas</Text>
-        </View>
-        <View style={[styles.statDivider, { backgroundColor: colors.gold + "44" }]} />
-        <View style={styles.stat}>
-          <Text style={[styles.statNum, { color: colors.gold }]}>
-            {wines.filter((w) => w.rating && w.rating >= 90).length}
-          </Text>
-          <Text style={[styles.statLabel, { color: colors.gold + "aa" }]}>90+ pts</Text>
-        </View>
-      </View>
-
-      {wines.length === 0 ? (
-        <View style={styles.empty}>
-          <Feather name="package" size={48} color={colors.mutedForeground} />
-          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Adega vazia</Text>
-          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-            Adicione seus vinhos para acompanhar sua coleção
-          </Text>
-          <Button title="Adicionar vinho" onPress={() => setShowModal(true)} variant="gold" />
-        </View>
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <View style={[styles.wineCard, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
-              <View style={[styles.wineTypeBar, { backgroundColor: colors.wine }]} />
-              <View style={styles.wineInfo}>
-                <View style={styles.wineHeader}>
-                  <Text style={[styles.wineName, { color: colors.foreground }]} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  {item.vintage && (
-                    <Text style={[styles.wineVintage, { color: colors.gold }]}>{item.vintage}</Text>
-                  )}
-                </View>
-                <Text style={[styles.wineProducer, { color: colors.mutedForeground }]}>
-                  {item.producer}
-                </Text>
-                {item.region && (
-                  <Text style={[styles.wineRegion, { color: colors.mutedForeground }]}>
-                    {item.region}
-                  </Text>
-                )}
-                <View style={styles.wineFooter}>
-                  <View style={[styles.qty, { backgroundColor: colors.secondary }]}>
-                    <Feather name="package" size={12} color={colors.mutedForeground} />
-                    <Text style={{ color: colors.foreground, fontSize: 12, fontWeight: "700" }}>
-                      {item.quantity}x
-                    </Text>
-                  </View>
-                  {item.rating && (
-                    <View style={[styles.rating, { backgroundColor: colors.gold + "20" }]}>
-                      <Feather name="star" size={12} color={colors.gold} />
-                      <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "700" }}>
-                        {item.rating} pts
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              </View>
+      <ScrollView contentContainerStyle={{ paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
+        {/* KPI cards */}
+        <View style={styles.kpiRow}>
+          {[
+            { icon: "wind", label: "Na Adega",   val: counts.adega,    color: colors.gold },
+            { icon: "coffee", label: "Consumidos", val: counts.consumido, color: colors.mutedForeground },
+            { icon: "star",   label: "Wishlist",   val: counts.wishlist,  color: "#f59e0b" },
+          ].map((k) => (
+            <View key={k.label} style={[styles.kpiCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+              <Feather name={k.icon as any} size={22} color={k.color} />
+              <Text style={[styles.kpiNum, { color: colors.navy }]}>{k.val}</Text>
+              <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>{k.label}</Text>
             </View>
-          )}
-          contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 100 }}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+          ))}
+        </View>
 
-      <Modal visible={showModal} animationType="slide" presentationStyle="pageSheet">
-        <View style={[styles.modal, { backgroundColor: colors.background }]}>
-          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-            <TouchableOpacity onPress={() => setShowModal(false)}>
-              <Text style={{ color: colors.mutedForeground, fontSize: 15 }}>Cancelar</Text>
+        {/* Search */}
+        <View style={styles.searchWrap}>
+          <View style={[styles.searchBar, { backgroundColor: "#fff", borderColor: colors.border }]}>
+            <Feather name="search" size={15} color={colors.mutedForeground} />
+            <TextInput
+              style={[styles.searchInput, { color: colors.foreground }]}
+              placeholder="Buscar vinhos..."
+              placeholderTextColor={colors.mutedForeground}
+              value={search}
+              onChangeText={setSearch}
+            />
+          </View>
+        </View>
+
+        {/* Filter chips */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          {FILTER_OPTIONS.map((f) => (
+            <TouchableOpacity
+              key={f.key}
+              style={[styles.chip, { backgroundColor: filter === f.key ? colors.gold : "#fff", borderColor: filter === f.key ? colors.gold : colors.border }]}
+              onPress={() => setFilter(f.key)}
+            >
+              <Text style={[styles.chipText, { color: filter === f.key ? "#fff" : colors.mutedForeground }]}>{f.label}</Text>
             </TouchableOpacity>
-            <Text style={[styles.modalTitle, { color: colors.foreground }]}>Adicionar Vinho</Text>
-            <TouchableOpacity onPress={addWine}>
-              <Text style={{ color: colors.gold, fontSize: 15, fontWeight: "700" }}>Salvar</Text>
+          ))}
+        </ScrollView>
+
+        {/* Wine list */}
+        {filtered.length === 0 ? (
+          <View style={styles.empty}>
+            <Feather name="wind" size={40} color={colors.border} />
+            <Text style={[styles.emptyTitle, { color: colors.mutedForeground }]}>Sua adega está vazia</Text>
+            <TouchableOpacity
+              style={[styles.emptyBtn, { backgroundColor: colors.gold }]}
+              onPress={() => setShowForm(true)}
+            >
+              <Feather name="plus" size={16} color="#fff" />
+              <Text style={styles.emptyBtnText}>Adicionar primeiro vinho</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView style={styles.modalBody} keyboardShouldPersistTaps="handled">
-            <Input label="Nome do vinho *" value={form.name ?? ""} onChangeText={(v) => setForm({ ...form, name: v })} placeholder="Ex: Château Margaux" />
-            <Input label="Produtor *" value={form.producer ?? ""} onChangeText={(v) => setForm({ ...form, producer: v })} placeholder="Ex: Domaine Leflaive" containerStyle={{ marginTop: 14 }} />
-            <Input label="Safra" value={form.vintage ?? ""} onChangeText={(v) => setForm({ ...form, vintage: v })} placeholder="Ex: 2019" keyboardType="numeric" containerStyle={{ marginTop: 14 }} />
-            <Input label="Região" value={form.region ?? ""} onChangeText={(v) => setForm({ ...form, region: v })} placeholder="Ex: Bordeaux" containerStyle={{ marginTop: 14 }} />
-            <Input label="Uvas" value={form.varietal ?? ""} onChangeText={(v) => setForm({ ...form, varietal: v })} placeholder="Ex: Cabernet Sauvignon" containerStyle={{ marginTop: 14 }} />
-            <Input label="Quantidade" value={String(form.quantity ?? 1)} onChangeText={(v) => setForm({ ...form, quantity: parseInt(v) || 1 })} keyboardType="numeric" containerStyle={{ marginTop: 14 }} />
-            <Input label="Avaliação (0-100)" value={form.rating ? String(form.rating) : ""} onChangeText={(v) => setForm({ ...form, rating: parseInt(v) || undefined })} keyboardType="numeric" containerStyle={{ marginTop: 14 }} />
-            <View style={{ marginTop: 14 }}>
-              <Text style={{ color: colors.mutedForeground, fontSize: 13, fontWeight: "600", marginBottom: 6 }}>Notas de degustação</Text>
-              <TextInput
-                style={[styles.textarea, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground, borderRadius: colors.radius }]}
-                multiline
-                numberOfLines={4}
-                placeholder="Suas impressões sobre o vinho..."
-                placeholderTextColor={colors.mutedForeground}
-                value={form.notes ?? ""}
-                onChangeText={(v) => setForm({ ...form, notes: v })}
-              />
+        ) : (
+          <View style={{ padding: 16, gap: 10 }}>
+            {filtered.map((wine) => (
+              <View key={wine.id} style={[styles.wineCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                <View style={styles.wineCardTop}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.wineName, { color: colors.navy }]}>{wine.name}</Text>
+                    {wine.producer && <Text style={[styles.wineSub, { color: colors.mutedForeground }]}>{wine.producer}{wine.vintage ? ` · ${wine.vintage}` : ""}</Text>}
+                  </View>
+                  <View style={[styles.statusBadge, { backgroundColor: colors.gold + "18" }]}>
+                    <Text style={[styles.statusBadgeText, { color: colors.gold }]}>
+                      {STATUS_OPTIONS.find((s) => s.key === wine.status)?.label}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.wineMeta}>
+                  {wine.region && <Text style={[styles.wineMetaText, { color: colors.mutedForeground }]}>{wine.region}</Text>}
+                  <Text style={[styles.wineMetaText, { color: colors.mutedForeground }]}>{wine.qty}x</Text>
+                  {wine.price && <Text style={[styles.wineMetaText, { color: colors.gold }]}>{wine.price}</Text>}
+                </View>
+                {wine.rating > 0 && (
+                  <View style={{ flexDirection: "row", gap: 2 }}>
+                    {[1,2,3,4,5].map((s) => (
+                      <Feather key={s} name="star" size={12} color={s <= wine.rating ? colors.gold : colors.border} />
+                    ))}
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Add Wine form modal */}
+      <Modal visible={showForm} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowForm(false)}>
+        <View style={[styles.formContainer, { backgroundColor: colors.background }]}>
+          <View style={[styles.formHeader, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+            <Text style={[styles.formTitle, { color: colors.navy }]}>Adicionar Vinho</Text>
+            <TouchableOpacity onPress={() => setShowForm(false)}>
+              <Feather name="x" size={22} color={colors.navy} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={styles.formScroll} showsVerticalScrollIndicator={false}>
+            <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+              placeholder="Nome do vinho *" placeholderTextColor={colors.mutedForeground} value={wName} onChangeText={setWName} />
+            <View style={styles.fRow}>
+              <TextInput style={[styles.fInput, styles.fHalf, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+                placeholder="Produtor" placeholderTextColor={colors.mutedForeground} value={wProducer} onChangeText={setWProducer} />
+              <TextInput style={[styles.fInput, styles.fHalf, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+                placeholder="Safra" placeholderTextColor={colors.mutedForeground} value={wVintage} onChangeText={setWVintage} keyboardType="numeric" />
             </View>
-            <View style={{ height: 40 }} />
+            <View style={styles.fRow}>
+              <TextInput style={[styles.fInput, styles.fHalf, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+                placeholder="Região" placeholderTextColor={colors.mutedForeground} value={wRegion} onChangeText={setWRegion} />
+              <TextInput style={[styles.fInput, styles.fHalf, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+                placeholder="País" placeholderTextColor={colors.mutedForeground} value={wCountry} onChangeText={setWCountry} />
+            </View>
+            <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+              placeholder="Uva/Casta" placeholderTextColor={colors.mutedForeground} value={wGrape} onChangeText={setWGrape} />
+            <View style={styles.fRow}>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={[styles.fLabel, { color: colors.mutedForeground }]}>Quantidade</Text>
+                <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+                  value={wQty} onChangeText={setWQty} keyboardType="numeric" />
+              </View>
+              <TextInput style={[styles.fInput, styles.fHalf, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground, alignSelf: "flex-end" }]}
+                placeholder="Preço de compra" placeholderTextColor={colors.mutedForeground} value={wPrice} onChangeText={setWPrice} keyboardType="decimal-pad" />
+            </View>
+            <View style={styles.fRow}>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={[styles.fLabel, { color: colors.mutedForeground }]}>Data de compra</Text>
+                <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+                  placeholder="dd/mm/aaaa" placeholderTextColor={colors.mutedForeground} value={wBuyDate} onChangeText={setWBuyDate} />
+              </View>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={[styles.fLabel, { color: colors.mutedForeground }]}>Beber até</Text>
+                <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+                  placeholder="dd/mm/aaaa" placeholderTextColor={colors.mutedForeground} value={wDrinkBy} onChangeText={setWDrinkBy} />
+              </View>
+            </View>
+            <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+              placeholder="Local de armazenamento" placeholderTextColor={colors.mutedForeground} value={wStorage} onChangeText={setWStorage} />
+            <TextInput style={[styles.fInput, styles.fTextarea, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+              placeholder="Notas de degustação" placeholderTextColor={colors.mutedForeground} value={wNotes} onChangeText={setWNotes} multiline textAlignVertical="top" />
+            {/* Rating */}
+            <View style={{ gap: 6 }}>
+              <Text style={[styles.fLabel, { color: colors.foreground }]}>Avaliação:</Text>
+              <StarRating value={wRating} onChange={setWRating} />
+            </View>
+            {/* Status */}
+            <View style={{ gap: 6 }}>
+              <Text style={[styles.fLabel, { color: colors.foreground }]}>Status:</Text>
+              <View style={styles.statusChips}>
+                {STATUS_OPTIONS.map((s) => (
+                  <TouchableOpacity
+                    key={s.key}
+                    style={[styles.statusChip, { backgroundColor: wStatus === s.key ? colors.gold : "#fff", borderColor: wStatus === s.key ? colors.gold : colors.border }]}
+                    onPress={() => setWStatus(s.key)}
+                  >
+                    <Text style={[styles.statusChipText, { color: wStatus === s.key ? "#fff" : colors.foreground }]}>{s.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            {/* Privacy / Photo */}
+            <TouchableOpacity style={styles.toggleRow} onPress={() => setWPrivate(!wPrivate)}>
+              <Feather name={wPrivate ? "eye-off" : "eye"} size={16} color={colors.mutedForeground} />
+              <Text style={[styles.toggleText, { color: colors.foreground }]}>
+                {wPrivate ? "Apenas para você" : "Visível para conexões"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.toggleRow}>
+              <Feather name="image" size={16} color={colors.mutedForeground} />
+              <Text style={[styles.toggleText, { color: colors.foreground }]}>Adicionar foto</Text>
+            </TouchableOpacity>
+            {/* Save button */}
+            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.gold }]} onPress={handleAdd}>
+              <Feather name="check" size={18} color="#fff" />
+              <Text style={styles.saveBtnText}>Salvar Vinho</Text>
+            </TouchableOpacity>
           </ScrollView>
         </View>
       </Modal>
@@ -215,30 +332,48 @@ export default function WineCellarScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14 },
-  headerTitle: { fontSize: 18, fontWeight: "800" },
-  statsBar: { flexDirection: "row", padding: 20 },
-  stat: { flex: 1, alignItems: "center", gap: 2 },
-  statNum: { fontSize: 24, fontWeight: "900" },
-  statLabel: { fontSize: 12, fontWeight: "600" },
-  statDivider: { width: 1 },
-  empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingHorizontal: 40 },
-  emptyTitle: { fontSize: 20, fontWeight: "800" },
-  emptyText: { textAlign: "center", fontSize: 15 },
-  wineCard: { flexDirection: "row", overflow: "hidden", borderWidth: 1 },
-  wineTypeBar: { width: 5 },
-  wineInfo: { flex: 1, padding: 14, gap: 4 },
-  wineHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  wineName: { fontSize: 16, fontWeight: "700", flex: 1 },
-  wineVintage: { fontSize: 14, fontWeight: "700" },
-  wineProducer: { fontSize: 13 },
-  wineRegion: { fontSize: 12 },
-  wineFooter: { flexDirection: "row", gap: 8, marginTop: 4 },
-  qty: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  rating: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  modal: { flex: 1 },
-  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, borderBottomWidth: 1 },
-  modalTitle: { fontSize: 17, fontWeight: "700" },
-  modalBody: { padding: 16 },
-  textarea: { borderWidth: 1.5, padding: 12, fontSize: 15, minHeight: 100, textAlignVertical: "top" },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
+  backRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  headerTitle: { fontSize: 22, fontWeight: "800" },
+  headerSub: { fontSize: 12, marginTop: 1 },
+  addBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20 },
+  addBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  kpiRow: { flexDirection: "row", gap: 10, padding: 16 },
+  kpiCard: { flex: 1, alignItems: "center", gap: 4, padding: 14, borderRadius: 12, borderWidth: 1 },
+  kpiNum: { fontSize: 22, fontWeight: "800" },
+  kpiLabel: { fontSize: 11, textAlign: "center" },
+  searchWrap: { paddingHorizontal: 16, paddingBottom: 8 },
+  searchBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
+  searchInput: { flex: 1, fontSize: 14 },
+  chips: { paddingHorizontal: 16, gap: 8, paddingBottom: 12 },
+  chip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  chipText: { fontSize: 13, fontWeight: "600" },
+  empty: { alignItems: "center", gap: 14, paddingTop: 60, paddingHorizontal: 40 },
+  emptyTitle: { fontSize: 15, textAlign: "center" },
+  emptyBtn: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 30 },
+  emptyBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  wineCard: { borderRadius: 12, borderWidth: 1, padding: 14, gap: 6 },
+  wineCardTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  wineName: { fontSize: 15, fontWeight: "700" },
+  wineSub: { fontSize: 12, marginTop: 2 },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  statusBadgeText: { fontSize: 11, fontWeight: "600" },
+  wineMeta: { flexDirection: "row", gap: 12 },
+  wineMetaText: { fontSize: 12 },
+  formContainer: { flex: 1 },
+  formHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1 },
+  formTitle: { fontSize: 18, fontWeight: "700" },
+  formScroll: { padding: 16, gap: 12 },
+  fInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 },
+  fHalf: { flex: 1 },
+  fRow: { flexDirection: "row", gap: 10 },
+  fLabel: { fontSize: 12 },
+  fTextarea: { height: 80, textAlignVertical: "top" },
+  statusChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  statusChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  statusChipText: { fontSize: 13, fontWeight: "500" },
+  toggleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  toggleText: { fontSize: 14 },
+  saveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 15, borderRadius: 10, marginTop: 8 },
+  saveBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
 });
