@@ -3,10 +3,8 @@ import React, { useState } from "react";
 import {
   Alert,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -16,125 +14,166 @@ import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
-interface SettingRow {
-  label: string;
+const LANGUAGES = [
+  { code: "BR", label: "Português (BR)" },
+  { code: "US", label: "English" },
+  { code: "ES", label: "Español" },
+];
+
+interface MenuRow {
   icon: keyof typeof Feather.glyphMap;
-  type: "arrow" | "toggle" | "danger";
-  value?: boolean;
-  onToggle?: (v: boolean) => void;
-  onPress?: () => void;
+  label: string;
+  sub?: string;
+  onPress: () => void;
+  danger?: boolean;
 }
 
 export default function SettingsScreen() {
-  const colors = useColors();
-  const router = useRouter();
-  const { signOut, user } = useAuth();
-  const insets = useSafeAreaInsets();
+  const colors  = useColors();
+  const router  = useRouter();
+  const { profile, signOut } = useAuth();
+  const insets  = useSafeAreaInsets();
 
-  const [notifications, setNotifications] = useState(true);
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [pushNotifications, setPushNotifications] = useState(true);
-  const [privateAccount, setPrivateAccount] = useState(false);
-  const [showCellar, setShowCellar] = useState(true);
+  const [langOpen, setLangOpen]         = useState(false);
+  const [selectedLang, setSelectedLang] = useState("BR");
 
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
+  const topPad    = Platform.OS === "web" ? 0 : insets.top;
+  const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
-  const SECTIONS: { title: string; items: SettingRow[] }[] = [
+  const currentLang = LANGUAGES.find((l) => l.code === selectedLang)!;
+
+  const handleSignOut = () => {
+    Alert.alert("Sair", "Deseja realmente sair da sua conta?", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Sair", style: "destructive", onPress: signOut },
+    ]);
+  };
+
+  const name      = profile?.full_name ?? "Maria Santos";
+  const planLabel = "Plano Gratuito";
+  const initial   = name.charAt(0).toUpperCase();
+
+  const sections: { title?: string; rows: MenuRow[] }[] = [
     {
-      title: "Conta",
-      items: [
-        { label: "Editar perfil", icon: "user", type: "arrow", onPress: () => router.push("/edit-profile" as any) },
-        { label: "Alterar senha", icon: "lock", type: "arrow", onPress: () => {} },
-        { label: "Email: " + (user?.email ?? ""), icon: "mail", type: "arrow", onPress: () => {} },
+      title: "CONTA",
+      rows: [
+        { icon: "edit-2",  label: "Editar Perfil",        sub: "Alterar informações pessoais",  onPress: () => router.push("/edit-profile" as any) },
+        { icon: "bar-chart-2", label: "Analytics",         sub: "Estatísticas do seu perfil",    onPress: () => router.push("/analytics" as any) },
+        { icon: "shield",  label: "Certificações",         sub: "Certificações",                 onPress: () => router.push("/certifications" as any) },
       ],
     },
     {
-      title: "Notificações",
-      items: [
-        { label: "Notificações no app", icon: "bell", type: "toggle", value: notifications, onToggle: setNotifications },
-        { label: "Push notifications", icon: "smartphone", type: "toggle", value: pushNotifications, onToggle: setPushNotifications },
-        { label: "Notificações por email", icon: "mail", type: "toggle", value: emailNotifications, onToggle: setEmailNotifications },
+      title: "CONTEÚDO",
+      rows: [
+        { icon: "bookmark", label: "Publicações Salvas",   sub: "Suas publicações favoritas",    onPress: () => router.push("/salvos" as any) },
       ],
     },
     {
-      title: "Privacidade",
-      items: [
-        { label: "Perfil privado", icon: "eye-off", type: "toggle", value: privateAccount, onToggle: setPrivateAccount },
-        { label: "Mostrar adega pessoal", icon: "package", type: "toggle", value: showCellar, onToggle: setShowCellar },
-        { label: "Usuários bloqueados", icon: "slash", type: "arrow", onPress: () => {} },
+      title: "PREFERÊNCIAS",
+      rows: [
+        { icon: "bell",     label: "Notificações",         sub: "Gerenciar notificações",         onPress: () => router.push("/notification-settings" as any) },
+        { icon: "lock",     label: "Privacidade e Segurança", sub: "Visibilidade e senha",        onPress: () => router.push("/privacy-security" as any) },
+        { icon: "slash",    label: "Usuários Bloqueados",   sub: "Gerenciar bloqueios",            onPress: () => router.push("/blocked-users" as any) },
       ],
     },
     {
-      title: "Assinatura",
-      items: [
-        { label: "Gerenciar plano", icon: "star", type: "arrow", onPress: () => {} },
-        { label: "Faturamento", icon: "credit-card", type: "arrow", onPress: () => {} },
+      title: "ASSINATURA",
+      rows: [
+        { icon: "star",     label: "Assinatura",            sub: "Gerencie seu plano",             onPress: () => router.push("/subscription" as any) },
       ],
     },
     {
-      title: "Sobre",
-      items: [
-        { label: "Termos de uso", icon: "file-text", type: "arrow", onPress: () => {} },
-        { label: "Política de privacidade", icon: "shield", type: "arrow", onPress: () => {} },
-        { label: "Versão 1.0.0", icon: "info", type: "arrow", onPress: () => {} },
-      ],
-    },
-    {
-      title: "Conta",
-      items: [
-        { label: "Sair da conta", icon: "log-out", type: "danger", onPress: signOut },
-        { label: "Excluir conta", icon: "trash-2", type: "danger", onPress: () => {} },
+      rows: [
+        { icon: "log-out",  label: "Sair da conta",         sub: "",                               onPress: handleSignOut, danger: true },
       ],
     },
   ];
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <Pressable onPress={() => router.back()}>
-          <Feather name="arrow-left" size={24} color={colors.foreground} />
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Configurações</Text>
-        <View style={{ width: 24 }} />
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Feather name="arrow-left" size={22} color={colors.navy} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.navy }]}>Configurações</Text>
+        <View style={{ width: 22 }} />
       </View>
 
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: bottomPad + 24 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {SECTIONS.map((section, si) => (
-          <View key={si} style={styles.sectionBlock}>
-            <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>{section.title}</Text>
-            <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
-              {section.items.map((item, ii) => (
+      <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
+        {/* User card */}
+        <View style={[styles.userCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+          <View style={[styles.userAvatar, { backgroundColor: colors.navy }]}>
+            <Text style={[styles.userInitial, { color: colors.gold }]}>{initial}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.userName, { color: colors.navy }]}>{name}</Text>
+            <Text style={[styles.userPlan, { color: colors.mutedForeground }]}>{planLabel}</Text>
+          </View>
+        </View>
+
+        {/* Language picker */}
+        <View style={[styles.menuCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+          <TouchableOpacity style={styles.langRow} onPress={() => setLangOpen(!langOpen)}>
+            <View style={[styles.iconWrap, { backgroundColor: colors.background }]}>
+              <Feather name="globe" size={16} color={colors.mutedForeground} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, { color: colors.navy }]}>Idioma</Text>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
+                {currentLang.code} {currentLang.label}
+              </Text>
+            </View>
+            <Feather name={langOpen ? "chevron-down" : "chevron-right"} size={18} color={colors.mutedForeground} />
+          </TouchableOpacity>
+          {langOpen && (
+            <View style={[styles.langDropdown, { borderTopColor: colors.border }]}>
+              {LANGUAGES.map((lang) => (
                 <TouchableOpacity
-                  key={ii}
+                  key={lang.code}
                   style={[
-                    styles.row,
+                    styles.langOption,
                     { borderBottomColor: colors.border },
-                    ii === section.items.length - 1 && { borderBottomWidth: 0 },
+                    selectedLang === lang.code && { backgroundColor: colors.gold + "12" },
                   ]}
-                  onPress={item.type !== "toggle" ? item.onPress : undefined}
-                  activeOpacity={item.type === "toggle" ? 1 : 0.7}
+                  onPress={() => { setSelectedLang(lang.code); setLangOpen(false); }}
                 >
-                  <View style={[styles.iconWrap, { backgroundColor: item.type === "danger" ? colors.destructive + "15" : colors.gold + "15" }]}>
-                    <Feather name={item.icon} size={16} color={item.type === "danger" ? colors.destructive : colors.gold} />
-                  </View>
-                  <Text style={[styles.rowLabel, { color: item.type === "danger" ? colors.destructive : colors.foreground }]}>
-                    {item.label}
+                  <Text style={[styles.langCode, { color: selectedLang === lang.code ? colors.gold : colors.mutedForeground }]}>
+                    {lang.code}
                   </Text>
-                  {item.type === "toggle" && (
-                    <Switch
-                      value={item.value}
-                      onValueChange={item.onToggle}
-                      trackColor={{ false: colors.border, true: colors.gold }}
-                      thumbColor="#ffffff"
-                    />
-                  )}
-                  {item.type === "arrow" && (
-                    <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
-                  )}
+                  <Text style={[styles.langLabel, { color: selectedLang === lang.code ? colors.gold : colors.foreground }]}>
+                    {lang.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* Sections */}
+        {sections.map((section, si) => (
+          <View key={si}>
+            {section.title && (
+              <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>{section.title}</Text>
+            )}
+            <View style={[styles.menuCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+              {section.rows.map((row, ri) => (
+                <TouchableOpacity
+                  key={row.label}
+                  style={[
+                    styles.menuRow,
+                    ri < section.rows.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border },
+                  ]}
+                  onPress={row.onPress}
+                >
+                  <View style={[styles.iconWrap, { backgroundColor: colors.background }]}>
+                    <Feather name={row.icon} size={16} color={row.danger ? "#dc2626" : colors.mutedForeground} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.rowLabel, { color: row.danger ? "#dc2626" : colors.navy }]}>{row.label}</Text>
+                    {row.sub ? <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>{row.sub}</Text> : null}
+                  </View>
+                  <Feather name="chevron-right" size={18} color={row.danger ? "#dc262660" : colors.mutedForeground} />
                 </TouchableOpacity>
               ))}
             </View>
@@ -146,13 +185,23 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 10, borderBottomWidth: 1 },
-  headerTitle: { fontSize: 18, fontWeight: "800" },
-  sectionBlock: { marginTop: 20, paddingHorizontal: 16 },
-  sectionTitle: { fontSize: 12, fontWeight: "700", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8 },
-  sectionCard: { borderWidth: 1, overflow: "hidden" },
-  row: { flexDirection: "row", alignItems: "center", padding: 14, gap: 12, borderBottomWidth: 1 },
-  iconWrap: { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  rowLabel: { flex: 1, fontSize: 15 },
+  container:   { flex: 1 },
+  header:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
+  headerTitle: { fontSize: 20, fontWeight: "700" },
+  userCard:    { flexDirection: "row", alignItems: "center", gap: 14, borderRadius: 12, borderWidth: 1, padding: 16 },
+  userAvatar:  { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
+  userInitial: { fontSize: 20, fontWeight: "800" },
+  userName:    { fontSize: 16, fontWeight: "700" },
+  userPlan:    { fontSize: 13, marginTop: 2 },
+  menuCard:    { borderRadius: 12, borderWidth: 1, overflow: "hidden" },
+  langRow:     { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
+  langDropdown:{ borderTopWidth: 1 },
+  langOption:  { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: 1 },
+  langCode:    { fontSize: 13, fontWeight: "700", width: 24 },
+  langLabel:   { fontSize: 14 },
+  sectionTitle:{ fontSize: 12, fontWeight: "700", letterSpacing: 0.8, paddingHorizontal: 2, marginBottom: 8, marginTop: 8 },
+  menuRow:     { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
+  iconWrap:    { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  rowLabel:    { fontSize: 15, fontWeight: "600" },
+  rowSub:      { fontSize: 12, marginTop: 1 },
 });
