@@ -84,9 +84,10 @@ export function PostCard({ post, onLike, onBookmark, onComment }: PostCardProps)
 
   const author = post.author;
   const planColors: Record<string, string> = {
-    executivo: colors.gold,
-    basico: colors.navyMid,
-    gratuito: colors.mutedForeground,
+    business:  colors.gold,
+    exclusive: "#8e44ad",
+    premium:   colors.navyMid,
+    basico:    colors.mutedForeground,
   };
 
   return (
@@ -102,7 +103,7 @@ export function PostCard({ post, onLike, onBookmark, onComment }: PostCardProps)
               <Text style={[styles.authorName, { color: colors.foreground }]}>
                 {author?.full_name ?? "Usuário"}
               </Text>
-              {author?.plan && author.plan !== "gratuito" && (
+              {author?.plan && author.plan !== "basico" && (
                 <View style={[styles.planDot, { backgroundColor: planColors[author.plan] ?? colors.gold }]} />
               )}
             </View>

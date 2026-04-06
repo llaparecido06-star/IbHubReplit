@@ -63,10 +63,10 @@ Rede social de nicho para o mercado do vinho. Conecta profissionais (Sommeliers,
 
 ## Níveis de Conta (Assinaturas)
 
-1. **Básico** — acesso fundamental
-2. **Premium** — recursos intermediários
-3. **Exclusive** — recursos avançados
-4. **Business** — foco em empresas e páginas
+1. **Básico** — acesso fundamental, GRÁTIS
+2. **Premium** — R$ 149/mês, conexões ilimitadas + dados de mercado
+3. **Exclusive** — R$ 299/mês, inteligência de mercado + apresentações + destaque no feed
+4. **Business** — R$ 499/mês, página empresarial + vagas + suporte prioritário
 
 ## Componentes Reutilizáveis (padrão)
 
@@ -85,8 +85,13 @@ Criar na pasta `components/` em vez de repetir código:
 - `constants/colors.ts` — paleta de cores (dark theme)
 - `hooks/useColors.ts` — hook de cores (atualmente forçado para light — ver pendências)
 
-## Pendências / Inconsistências Conhecidas
+## Aba Mercado — Detalhes
 
-- `useColors.ts` está forçando **light theme**, mas o documento de arquitetura define **dark mode**. Aguardando confirmação do usuário sobre qual tema aplicar às telas principais.
-- Aba **Mercado** atualmente exibe conteúdo de marketplace (vinhos à venda). Deve ser convertida para **Adega Virtual + Certificações**.
-- Níveis de conta no código usam `gratuito/basico/executivo`. Devem ser atualizados para `basico/premium/exclusive/business`.
+- **Visão Geral**: KPIs por período (Último Mês / Trimestre YTD / Último Ano), gráfico de área Exportações vs Importações, gráfico de barras Produção Nacional, Tendências, Regiões Produtoras, Variedades em Destaque
+- **Apresentações**: catálogo de PDFs/PPTs subidos por admin. Estado vazio por padrão. Admin path: `/admin/presentations` (a implementar)
+- Dados de mercado são mock — integração real via Supabase a implementar
+
+## Componentes de Gráficos (react-native-svg)
+
+- `AreaChart` — embutido em `network.tsx`, exportações (gold) vs importações (vermelho)
+- `BarChart` — embutido em `network.tsx`, produção trimestral (gold)

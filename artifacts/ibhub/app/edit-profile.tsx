@@ -114,7 +114,7 @@ export default function EditProfileScreen() {
           <View style={styles.planRow}>
             <View style={[styles.planBadge, { backgroundColor: colors.gold }]}>
               <Text style={{ color: colors.navy, fontWeight: "800", fontSize: 12 }}>
-                {(profile?.plan ?? "gratuito").toUpperCase()}
+                {(profile?.plan ?? "basico").toUpperCase()}
               </Text>
             </View>
             <TouchableOpacity>

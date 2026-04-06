@@ -61,28 +61,36 @@ const AREAS = [
 
 const PLANS = [
   {
-    key: "gratuito",
-    name: "Gratuito",
+    key: "basico",
+    name: "Básico",
     price: "GRÁTIS",
     subtitle: "Para iniciantes",
     popular: false,
     features: ["Perfil básico", "Feed de publicações", "5 conexões/mês"],
   },
   {
-    key: "basico",
-    name: "Básico",
+    key: "premium",
+    name: "Premium",
     price: "R$ 149/mês",
     subtitle: "Para profissionais",
     popular: true,
-    features: ["Tudo do Gratuito", "Conexões ilimitadas", "Marketplace", "Dados de mercado"],
+    features: ["Tudo do Básico", "Conexões ilimitadas", "Mercado", "Dados de mercado"],
   },
   {
-    key: "executivo",
-    name: "Executivo",
-    price: "R$ 499/mês",
-    subtitle: "Business completo",
+    key: "exclusive",
+    name: "Exclusive",
+    price: "R$ 299/mês",
+    subtitle: "Para especialistas",
     popular: false,
-    features: ["Tudo do Básico", "Inteligência de mercado", "Vagas de emprego", "Suporte prioritário"],
+    features: ["Tudo do Premium", "Inteligência de mercado", "Apresentações exclusivas", "Destaque no feed"],
+  },
+  {
+    key: "business",
+    name: "Business",
+    price: "R$ 499/mês",
+    subtitle: "Para empresas",
+    popular: false,
+    features: ["Tudo do Exclusive", "Página empresarial", "Vagas de emprego", "Suporte prioritário"],
   },
 ];
 
@@ -143,7 +151,7 @@ export default function RegisterScreen() {
   const [company, setCompany] = useState("");
   const [role, setRole] = useState("");
 
-  const [selectedPlan, setSelectedPlan] = useState("gratuito");
+  const [selectedPlan, setSelectedPlan] = useState("basico");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -492,7 +500,7 @@ export default function RegisterScreen() {
                         <Text style={styles.planName}>{plan.name}</Text>
                         <Text style={styles.planSubtitle2}>{plan.subtitle}</Text>
                       </View>
-                      <Text style={[styles.planPrice, plan.key === "gratuito" && { color: "#c9a84c" }]}>
+                      <Text style={[styles.planPrice, plan.key === "basico" && { color: "#c9a84c" }]}>
                         {plan.price}
                       </Text>
                     </View>

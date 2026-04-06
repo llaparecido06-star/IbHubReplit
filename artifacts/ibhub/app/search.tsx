@@ -28,9 +28,9 @@ const TRENDING_HASHTAGS = [
 ];
 
 const MOCK_USERS: UserSummary[] = [
-  { id: "u1", full_name: "Isabela Mondavi", headline: "Enóloga | Vinhedo Santa Clara", plan: "executivo" },
+  { id: "u1", full_name: "Isabela Mondavi", headline: "Enóloga | Vinhedo Santa Clara", plan: "business" },
   { id: "u2", full_name: "Rafael Borges", headline: "Importador de Vinhos Europeus", plan: "basico" },
-  { id: "u3", full_name: "Carolina Stein", headline: "Sommelier | Hotel Grand Plaza", plan: "executivo" },
+  { id: "u3", full_name: "Carolina Stein", headline: "Sommelier | Hotel Grand Plaza", plan: "business" },
 ];
 
 type SearchTab = "tudo" | "pessoas" | "hashtags" | "grupos";

@@ -23,7 +23,7 @@ const MOCK_USER = {
   headline: "Enóloga | Vinhedo Santa Clara | WSET Level 4",
   bio: "Apaixonada por vinhos do Novo Mundo e pelos clássicos europeus. 15 anos de experiência em enologia e produção. Consultora para restaurantes e adegas privadas.",
   location: "Serra Gaúcha, RS",
-  plan: "executivo",
+  plan: "business",
   followers_count: 1240,
   following_count: 386,
   connections_count: 892,
@@ -60,7 +60,7 @@ export default function PublicProfileScreen() {
           <View style={[styles.avatarBorder, { borderColor: colors.card }]}>
             <Avatar name={user.full_name} size={80} />
           </View>
-          {user.plan !== "gratuito" && (
+          {user.plan !== "basico" && (
             <View style={[styles.planBadge, { backgroundColor: colors.gold }]}>
               <Text style={{ color: colors.navy, fontSize: 11, fontWeight: "700" }}>
                 {user.plan.toUpperCase()}

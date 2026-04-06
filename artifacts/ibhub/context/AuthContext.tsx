@@ -26,7 +26,7 @@ interface Profile {
   bio: string | null;
   headline: string | null;
   location: string | null;
-  plan: "gratuito" | "basico" | "executivo";
+  plan: "basico" | "premium" | "exclusive" | "business";
   certifications: string[];
   areas_of_expertise: string[];
   followers_count: number;

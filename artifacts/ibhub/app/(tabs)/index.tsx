@@ -24,10 +24,10 @@ const STORAGE_KEY = "ibhub_feed_posts_v2";
 
 function generateMockPost(id: number): Post {
   const authors = [
-    { id: "u1", full_name: "Maria Silva",  username: "mariasilva",  headline: "Sommelier WSET Level 3", plan: "executivo" },
-    { id: "u2", full_name: "João Costa",   username: "joaocosta",   headline: "Enólogo | Quinta da Serra", plan: "basico" },
-    { id: "u3", full_name: "Ana Ferreira", username: "anaferreira", headline: "Wine Educator | CMS Certified", plan: "executivo" },
-    { id: "u4", full_name: "Pedro Lima",   username: "pedrolima",   headline: "Importador | Vinhos Finos", plan: "gratuito" },
+    { id: "u1", full_name: "Maria Silva",  username: "mariasilva",  headline: "Sommelier WSET Level 3", plan: "business" },
+    { id: "u2", full_name: "João Costa",   username: "joaocosta",   headline: "Enólogo | Quinta da Serra", plan: "premium" },
+    { id: "u3", full_name: "Ana Ferreira", username: "anaferreira", headline: "Wine Educator | CMS Certified", plan: "exclusive" },
+    { id: "u4", full_name: "Pedro Lima",   username: "pedrolima",   headline: "Importador | Vinhos Finos", plan: "basico" },
   ];
   const contents = [
     "Acabei de chegar de uma visita incrível ao Alentejo! Os tintos desta safra prometem muito. Quem mais tem acompanhado a evolução dos vinhos da região? 🍷",
