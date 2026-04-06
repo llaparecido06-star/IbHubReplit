@@ -1,13 +1,6 @@
-import { useColorScheme } from "react-native";
-
 import colors from "@/constants/colors";
 
+// The app always uses the light theme (per design specification)
 export function useColors() {
-  const scheme = useColorScheme();
-  const isDark = scheme === "dark";
-  const palette =
-    isDark && "dark" in colors
-      ? (colors as Record<string, typeof colors.light>).dark
-      : colors.light;
-  return { ...palette, radius: colors.radius, isDark };
+  return { ...colors.light, radius: colors.radius, isDark: false };
 }

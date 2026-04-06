@@ -1,151 +1,152 @@
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-  FlatList,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { Avatar } from "@/components/ui/Avatar";
 import { useColors } from "@/hooks/useColors";
 
-interface NotificationItem {
-  id: string;
-  type: "like" | "comment" | "follow" | "connection" | "mention" | "event";
-  actor_name: string;
-  actor_avatar?: string;
-  content: string;
-  time: string;
-  read: boolean;
-}
+type OporTab = "market" | "vagas" | "eventos";
 
-const MOCK_NOTIFICATIONS: NotificationItem[] = [
-  { id: "n1", type: "like", actor_name: "Isabela Mondavi", content: "curtiu sua publicação sobre Alentejo", time: "5m", read: false },
-  { id: "n2", type: "comment", actor_name: "Rafael Borges", content: "comentou: \"Ótima análise! Concordo sobre os taninos\"", time: "23m", read: false },
-  { id: "n3", type: "connection", actor_name: "Carolina Stein", content: "aceitou sua solicitação de conexão", time: "1h", read: false },
-  { id: "n4", type: "follow", actor_name: "Marco Tulio Alves", content: "começou a seguir você", time: "2h", read: true },
-  { id: "n5", type: "mention", actor_name: "Fernanda Castro", content: "mencionou você em uma publicação", time: "5h", read: true },
-  { id: "n6", type: "event", actor_name: "Clube do Vinho SP", content: "convidou você para: Degustação Exclusiva Bordeaux", time: "1d", read: true },
-  { id: "n7", type: "like", actor_name: "Pedro Lima", content: "curtiu seu comentário sobre WSET", time: "2d", read: true },
-  { id: "n8", type: "connection", actor_name: "Ana Ferreira", content: "enviou uma solicitação de conexão", time: "3d", read: true },
+const MOCK_MARKET = [
+  { id: "m1", title: "Lote Exclusivo — Petrus 2015", seller: "Vinicard Leilões", price: "R$ 4.200", tag: "Bordeaux" },
+  { id: "m2", title: "Caixa 6 garrafas — Sassicaia 2018", seller: "Importadora Alma", price: "R$ 3.800", tag: "Itália" },
+  { id: "m3", title: "Penfolds Grange 2019", seller: "Wine & Co", price: "R$ 2.950", tag: "Austrália" },
 ];
 
-const NOTIFICATION_ICONS: Record<string, { name: any; color: string }> = {
-  like: { name: "heart", color: "#c0392b" },
-  comment: { name: "message-circle", color: "#2980b9" },
-  follow: { name: "user-plus", color: "#27ae60" },
-  connection: { name: "users", color: "#8e44ad" },
-  mention: { name: "at-sign", color: "#e67e22" },
-  event: { name: "calendar", color: "#c9a84c" },
-};
+const MOCK_VAGAS = [
+  { id: "v1", title: "Sommelier Sênior", company: "Restaurant Fasano", location: "São Paulo, SP", type: "CLT" },
+  { id: "v2", title: "Wine Educator", company: "SENAC", location: "Remoto", type: "PJ" },
+  { id: "v3", title: "Buyer — Vinhos", company: "Pão de Açúcar", location: "São Paulo, SP", type: "CLT" },
+];
 
-export default function NotificationsScreen() {
+const MOCK_EVENTOS = [
+  { id: "e1", title: "Degustação Exclusiva Bordeaux", organizer: "Clube do Vinho SP", date: "Sex, 18 Abr", location: "São Paulo" },
+  { id: "e2", title: "World Wine Day Brasil", organizer: "IBRAVIN", date: "Dom, 25 Mai", location: "Bento Gonçalves" },
+  { id: "e3", title: "Curso WSET Level 2 Intensivo", organizer: "Wine & Spirit Education", date: "Seg, 5 Mai", location: "Online" },
+];
+
+export default function OportunidadesScreen() {
   const colors = useColors();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
-  const [tab, setTab] = useState<"tudo" | "conexoes" | "interacoes">("tudo");
+  const [tab, setTab] = useState<OporTab>("market");
+  const [search, setSearch] = useState("");
 
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const bottomPad = Platform.OS === "web" ? 84 + 34 : 84 + insets.bottom;
+  const topPad = Platform.OS === "web" ? 0 : insets.top;
+  const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
 
-  const markAllRead = () => {
-    setNotifications((ns) => ns.map((n) => ({ ...n, read: true })));
-  };
-
-  const filtered = notifications.filter((n) => {
-    if (tab === "conexoes") return ["follow", "connection"].includes(n.type);
-    if (tab === "interacoes") return ["like", "comment", "mention"].includes(n.type);
-    return true;
-  });
-
-  const unread = notifications.filter((n) => !n.read).length;
+  const tabOptions: { key: OporTab; label: string; icon: any }[] = [
+    { key: "market",  label: "Market",   icon: "shopping-bag" },
+    { key: "vagas",   label: "Vagas",    icon: "briefcase" },
+    { key: "eventos", label: "Eventos",  icon: "calendar" },
+  ];
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <View style={styles.headerLeft}>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>Notificações</Text>
-          {unread > 0 && (
-            <View style={[styles.badge, { backgroundColor: colors.gold }]}>
-              <Text style={{ color: colors.navy, fontSize: 11, fontWeight: "700" }}>{unread}</Text>
-            </View>
-          )}
-        </View>
-        {unread > 0 && (
-          <TouchableOpacity onPress={markAllRead}>
-            <Text style={[styles.markRead, { color: colors.gold }]}>Marcar todas</Text>
-          </TouchableOpacity>
-        )}
+      <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+        <Text style={[styles.headerTitle, { color: colors.navy }]}>Oportunidades</Text>
       </View>
 
-      <View style={[styles.tabs, { borderBottomColor: colors.border }]}>
-        {([
-          { key: "tudo", label: "Tudo" },
-          { key: "conexoes", label: "Conexões" },
-          { key: "interacoes", label: "Interações" },
-        ] as const).map((t) => (
-          <Pressable
+      {/* Search */}
+      <View style={[styles.searchWrap, { backgroundColor: "#fff" }]}>
+        <View style={[styles.searchBar, { backgroundColor: colors.background }]}>
+          <Feather name="search" size={16} color={colors.mutedForeground} />
+          <TextInput
+            style={[styles.searchInput, { color: colors.foreground }]}
+            placeholder="Buscar..."
+            placeholderTextColor={colors.mutedForeground}
+            value={search}
+            onChangeText={setSearch}
+          />
+        </View>
+      </View>
+
+      {/* Tabs */}
+      <View style={[styles.tabRow, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+        {tabOptions.map((t) => (
+          <TouchableOpacity
             key={t.key}
-            style={[styles.tab, tab === t.key && [styles.activeTab, { borderBottomColor: colors.gold }]]}
+            style={[styles.tabBtn, tab === t.key && [styles.tabBtnActive, { backgroundColor: colors.gold }]]}
             onPress={() => setTab(t.key)}
           >
-            <Text style={[styles.tabText, { color: tab === t.key ? colors.gold : colors.mutedForeground }]}>
+            <Feather name={t.icon} size={14} color={tab === t.key ? "#fff" : colors.mutedForeground} />
+            <Text style={[styles.tabBtnText, { color: tab === t.key ? "#fff" : colors.mutedForeground }]}>
               {t.label}
             </Text>
-          </Pressable>
+          </TouchableOpacity>
         ))}
       </View>
 
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => {
-          const icon = NOTIFICATION_ICONS[item.type] ?? { name: "bell", color: colors.gold };
-          return (
-            <Pressable
-              style={[
-                styles.notifRow,
-                { borderBottomColor: colors.border },
-                !item.read && { backgroundColor: colors.gold + "08" },
-              ]}
-              onPress={() => setNotifications((ns) => ns.map((n) => n.id === item.id ? { ...n, read: true } : n))}
-            >
-              <View style={styles.avatarWrapper}>
-                <Avatar name={item.actor_name} size={46} />
-                <View style={[styles.typeIcon, { backgroundColor: icon.color }]}>
-                  <Feather name={icon.name} size={11} color="#ffffff" />
-                </View>
+      {/* Criar button */}
+      <View style={[styles.criarWrap, { backgroundColor: "#fff" }]}>
+        <TouchableOpacity style={[styles.criarBtn, { backgroundColor: colors.gold }]}>
+          <Feather name="plus" size={18} color="#fff" />
+          <Text style={styles.criarBtnText}>Criar</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView contentContainerStyle={{ paddingBottom: bottomPad, gap: 10, padding: 16 }} showsVerticalScrollIndicator={false}>
+        {tab === "market" && MOCK_MARKET.map((item) => (
+          <TouchableOpacity key={item.id} style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
+            <View style={[styles.cardTag, { backgroundColor: colors.gold + "18" }]}>
+              <Text style={[styles.cardTagText, { color: colors.gold }]}>{item.tag}</Text>
+            </View>
+            <Text style={[styles.cardTitle, { color: colors.navy }]}>{item.title}</Text>
+            <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>{item.seller}</Text>
+            <Text style={[styles.cardPrice, { color: colors.gold }]}>{item.price}</Text>
+          </TouchableOpacity>
+        ))}
+
+        {tab === "vagas" && MOCK_VAGAS.map((item) => (
+          <TouchableOpacity key={item.id} style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
+            <View style={styles.cardHeader}>
+              <Text style={[styles.cardTitle, { color: colors.navy }]}>{item.title}</Text>
+              <View style={[styles.typePill, { backgroundColor: colors.background }]}>
+                <Text style={[styles.typePillText, { color: colors.navy }]}>{item.type}</Text>
               </View>
-              <View style={styles.notifBody}>
-                <Text style={[styles.notifText, { color: colors.foreground }]} numberOfLines={2}>
-                  <Text style={{ fontWeight: "700" }}>{item.actor_name}</Text>
-                  {" "}{item.content}
-                </Text>
-                <Text style={[styles.notifTime, { color: colors.mutedForeground }]}>
-                  {item.time}
-                </Text>
-              </View>
-              {!item.read && (
-                <View style={[styles.unreadDot, { backgroundColor: colors.gold }]} />
-              )}
-            </Pressable>
-          );
-        }}
-        contentContainerStyle={{ paddingBottom: bottomPad }}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
+            </View>
+            <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>{item.company}</Text>
+            <View style={styles.cardLocation}>
+              <Feather name="map-pin" size={12} color={colors.mutedForeground} />
+              <Text style={[styles.cardLocationText, { color: colors.mutedForeground }]}>{item.location}</Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+
+        {tab === "eventos" && MOCK_EVENTOS.map((item) => (
+          <TouchableOpacity key={item.id} style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
+            <View style={[styles.dateChip, { backgroundColor: colors.gold }]}>
+              <Text style={styles.dateChipText}>{item.date}</Text>
+            </View>
+            <Text style={[styles.cardTitle, { color: colors.navy }]}>{item.title}</Text>
+            <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>{item.organizer}</Text>
+            <View style={styles.cardLocation}>
+              <Feather name="map-pin" size={12} color={colors.mutedForeground} />
+              <Text style={[styles.cardLocationText, { color: colors.mutedForeground }]}>{item.location}</Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+
+        {((tab === "market" && MOCK_MARKET.length === 0) ||
+          (tab === "vagas" && MOCK_VAGAS.length === 0) ||
+          (tab === "eventos" && MOCK_EVENTOS.length === 0)) && (
           <View style={styles.empty}>
-            <Feather name="bell" size={40} color={colors.mutedForeground} />
+            <Feather name="inbox" size={36} color={colors.mutedForeground} />
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              Nenhuma notificação
+              Nenhuma oportunidade encontrada.
             </Text>
           </View>
-        }
-      />
+        )}
+      </ScrollView>
     </View>
   );
 }
@@ -153,44 +154,47 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 10,
+    paddingHorizontal: 16, paddingBottom: 14,
     borderBottomWidth: 1,
   },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
-  headerTitle: { fontSize: 24, fontWeight: "800" },
-  badge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
-  markRead: { fontSize: 13, fontWeight: "600" },
-  tabs: { flexDirection: "row", borderBottomWidth: 1 },
-  tab: { flex: 1, alignItems: "center", paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: "transparent" },
-  activeTab: {},
-  tabText: { fontSize: 13, fontWeight: "700" },
-  notifRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
+  headerTitle: { fontSize: 26, fontWeight: "800" },
+  searchWrap: { padding: 12 },
+  searchBar: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10,
+  },
+  searchInput: { flex: 1, fontSize: 14 },
+  tabRow: {
+    flexDirection: "row", gap: 8, padding: 12,
     borderBottomWidth: 1,
   },
-  avatarWrapper: { position: "relative" },
-  typeIcon: {
-    position: "absolute",
-    bottom: -2,
-    right: -2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
+  tabBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
   },
-  notifBody: { flex: 1 },
-  notifText: { fontSize: 14, lineHeight: 20 },
-  notifTime: { fontSize: 12, marginTop: 3 },
-  unreadDot: { width: 8, height: 8, borderRadius: 4 },
+  tabBtnActive: {},
+  tabBtnText: { fontSize: 14, fontWeight: "600" },
+  criarWrap: { padding: 12 },
+  criarBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, paddingVertical: 14, borderRadius: 10,
+  },
+  criarBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+  card: {
+    borderRadius: 12, borderWidth: 1, padding: 16, gap: 8,
+  },
+  cardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  cardTag: { alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  cardTagText: { fontSize: 12, fontWeight: "700" },
+  cardTitle: { fontSize: 16, fontWeight: "700", lineHeight: 22 },
+  cardSub: { fontSize: 14 },
+  cardPrice: { fontSize: 18, fontWeight: "800" },
+  cardLocation: { flexDirection: "row", alignItems: "center", gap: 4 },
+  cardLocationText: { fontSize: 13 },
+  typePill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  typePillText: { fontSize: 12, fontWeight: "600" },
+  dateChip: { alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  dateChipText: { color: "#fff", fontSize: 12, fontWeight: "700" },
   empty: { alignItems: "center", justifyContent: "center", paddingTop: 60, gap: 12 },
   emptyText: { fontSize: 15 },
 });

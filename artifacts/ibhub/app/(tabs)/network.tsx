@@ -86,22 +86,22 @@ export default function NetworkScreen() {
   const insets = useSafeAreaInsets();
   const [section, setSection] = useState("pessoas");
 
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const bottomPad = Platform.OS === "web" ? 84 + 34 : 84 + insets.bottom;
+  const topPad = Platform.OS === "web" ? 0 : insets.top;
+  const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Rede</Text>
+      <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+        <Text style={[styles.headerTitle, { color: colors.navy }]}>Mercado</Text>
         <TouchableOpacity onPress={() => router.push("/search" as any)}>
-          <Feather name="search" size={22} color={colors.foreground} />
+          <Feather name="search" size={22} color={colors.navy} />
         </TouchableOpacity>
       </View>
 
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={[styles.sectionBar, { borderBottomColor: colors.border, backgroundColor: colors.background }]}
+        style={[styles.sectionBar, { borderBottomColor: colors.border, backgroundColor: "#fff" }]}
         contentContainerStyle={styles.sectionBarContent}
       >
         {SECTIONS.map((s) => (
@@ -109,13 +109,13 @@ export default function NetworkScreen() {
             key={s.key}
             style={[
               styles.sectionBtn,
-              section === s.key && { backgroundColor: colors.navy },
+              { backgroundColor: section === s.key ? colors.gold : colors.background },
             ]}
             onPress={() => setSection(s.key)}
           >
             <Text style={[
               styles.sectionBtnText,
-              { color: section === s.key ? colors.gold : colors.foreground },
+              { color: section === s.key ? "#fff" : colors.mutedForeground },
             ]}>
               {s.label}
             </Text>

@@ -1,9 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
@@ -15,20 +16,18 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Post, PostCard } from "@/components/feed/PostCard";
-import { StoryBar } from "@/components/feed/StoryBar";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { supabase } from "@/context/AuthContext";
 
-const STORAGE_KEY = "ibhub_feed_posts";
+const STORAGE_KEY = "ibhub_feed_posts_v2";
 
 function generateMockPost(id: number): Post {
   const authors = [
-    { id: "u1", full_name: "Maria Silva", username: "mariasilva", headline: "Sommelier WSET Level 3 | Consulta", plan: "executivo" },
-    { id: "u2", full_name: "João Costa", username: "joaocosta", headline: "Enólogo | Quinta da Serra", plan: "basico" },
+    { id: "u1", full_name: "Maria Silva",  username: "mariasilva",  headline: "Sommelier WSET Level 3", plan: "executivo" },
+    { id: "u2", full_name: "João Costa",   username: "joaocosta",   headline: "Enólogo | Quinta da Serra", plan: "basico" },
     { id: "u3", full_name: "Ana Ferreira", username: "anaferreira", headline: "Wine Educator | CMS Certified", plan: "executivo" },
-    { id: "u4", full_name: "Pedro Lima", username: "pedrolima", headline: "Importador | Vinhos Finos Ltda", plan: "gratuito" },
+    { id: "u4", full_name: "Pedro Lima",   username: "pedrolima",   headline: "Importador | Vinhos Finos", plan: "gratuito" },
   ];
   const contents = [
     "Acabei de chegar de uma visita incrível ao Alentejo! Os tintos desta safra prometem muito. Quem mais tem acompanhado a evolução dos vinhos da região? 🍷",
@@ -48,7 +47,6 @@ function generateMockPost(id: number): Post {
   const content = contents[id % contents.length];
   const tags = hashtags[id % hashtags.length];
   const date = new Date(Date.now() - id * 3600000 * 2);
-
   return {
     id: `post_${id}`,
     user_id: author.id,
@@ -74,17 +72,14 @@ export default function FeedScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<"para_voce" | "seguindo">("para_voce");
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
 
   const loadPosts = useCallback(async () => {
     try {
       const cached = await AsyncStorage.getItem(STORAGE_KEY);
-      if (cached) {
-        setPosts(JSON.parse(cached));
-        setLoading(false);
-        return;
-      }
+      if (cached) { setPosts(JSON.parse(cached)); setLoading(false); return; }
     } catch {}
-
     const mockPosts = Array.from({ length: 10 }, (_, i) => generateMockPost(i));
     setPosts(mockPosts);
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(mockPosts));
@@ -99,53 +94,78 @@ export default function FeedScreen() {
     setRefreshing(false);
   }, []);
 
-  useEffect(() => {
-    loadPosts();
-  }, [loadPosts]);
+  useEffect(() => { loadPosts(); }, [loadPosts]);
 
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const topPad = Platform.OS === "web" ? 0 : insets.top;
+  const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
+
+  const firstName = profile?.full_name?.split(" ")[0] ?? "você";
 
   const renderHeader = () => (
     <>
-      <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <View style={styles.headerLeft}>
-          <View style={[styles.logoMark, { backgroundColor: colors.navy }]}>
-            <Text style={{ color: colors.gold, fontSize: 14, fontWeight: "900" }}>IB</Text>
-          </View>
-          <Text style={[styles.headerBrand, { color: colors.navy }]}>ibhub</Text>
-        </View>
-        <View style={styles.headerRight}>
+      {/* ── Top Header ── */}
+      <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => setShowAccountMenu(true)} activeOpacity={0.8}>
+          <Text style={styles.brandText}>
+            <Text style={{ color: colors.navy }}>ib</Text>
+            <Text style={{ color: colors.gold }}>hub</Text>
+          </Text>
+        </TouchableOpacity>
+
+        <View style={styles.headerActions}>
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.push("/search" as any)}>
-            <Feather name="search" size={22} color={colors.foreground} />
+            <Feather name="search" size={22} color={colors.navy} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push("/create-post" as any)}>
-            <Feather name="edit-3" size={22} color={colors.foreground} />
+          <TouchableOpacity style={styles.iconBtn}>
+            <Feather name="grid" size={22} color={colors.navy} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconBtn}>
+            <Feather name="bell" size={22} color={colors.navy} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.plusBtn}
+            onPress={() => setShowCreateMenu(true)}
+            activeOpacity={0.8}
+          >
+            <Feather name="plus" size={20} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowAccountMenu(true)}>
+            <View style={styles.avatarChevron}>
+              <Avatar uri={profile?.avatar_url} name={profile?.full_name} size={34} />
+              <Feather name="chevron-down" size={14} color={colors.mutedForeground} />
+            </View>
           </TouchableOpacity>
         </View>
       </View>
 
-      <View style={[styles.tabs, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+      {/* ── Greeting ── */}
+      <View style={[styles.greeting, { backgroundColor: "#fff" }]}>
+        <Text style={[styles.greetingTitle, { color: colors.navy }]}>Olá, {firstName}</Text>
+        <Text style={[styles.greetingSub, { color: colors.mutedForeground }]}>Veja as últimas atualizações</Text>
+      </View>
+
+      {/* ── Feed Tabs ── */}
+      <View style={[styles.feedTabs, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         {(["para_voce", "seguindo"] as const).map((tab) => (
           <Pressable
             key={tab}
-            style={[styles.tab, activeTab === tab && [styles.activeTab, { borderBottomColor: colors.gold }]]}
+            style={[styles.feedTab, activeTab === tab && [styles.feedTabActive, { borderBottomColor: colors.gold }]]}
             onPress={() => setActiveTab(tab)}
           >
-            <Text style={[styles.tabText, { color: activeTab === tab ? colors.gold : colors.mutedForeground }]}>
+            <Text style={[styles.feedTabText, { color: activeTab === tab ? colors.gold : colors.mutedForeground }]}>
               {tab === "para_voce" ? "Para você" : "Seguindo"}
             </Text>
           </Pressable>
         ))}
       </View>
 
-      <StoryBar />
-
+      {/* ── Compose bar ── */}
       <TouchableOpacity
-        style={[styles.createPostBar, { backgroundColor: colors.card, borderColor: colors.border }]}
+        style={[styles.composeBar, { backgroundColor: "#fff", borderColor: colors.border }]}
         onPress={() => router.push("/create-post" as any)}
       >
-        <Avatar uri={profile?.avatar_url} name={profile?.full_name} size={38} />
-        <Text style={[styles.createPostPlaceholder, { color: colors.mutedForeground }]}>
+        <Avatar uri={profile?.avatar_url} name={profile?.full_name} size={36} />
+        <Text style={[styles.composePlaceholder, { color: colors.mutedForeground }]}>
           Compartilhe algo sobre vinho...
         </Text>
         <Feather name="image" size={20} color={colors.mutedForeground} />
@@ -155,13 +175,11 @@ export default function FeedScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.loading, { backgroundColor: colors.background }]}>
+      <View style={[styles.loadingView, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.gold} />
       </View>
     );
   }
-
-  const bottomPad = Platform.OS === "web" ? 84 + 34 : 84 + insets.bottom;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -178,23 +196,74 @@ export default function FeedScreen() {
         )}
         ListHeaderComponent={renderHeader}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.gold}
-            colors={[colors.gold]}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} colors={[colors.gold]} />
         }
         contentContainerStyle={{ paddingBottom: bottomPad }}
         showsVerticalScrollIndicator={false}
       />
+
+      {/* Create Menu Modal */}
+      <Modal visible={showCreateMenu} transparent animationType="fade" onRequestClose={() => setShowCreateMenu(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowCreateMenu(false)}>
+          <View style={[styles.createMenu, { backgroundColor: "#fff", shadowColor: colors.navy }]}>
+            <TouchableOpacity
+              style={styles.createMenuItem}
+              onPress={() => { setShowCreateMenu(false); router.push("/create-post" as any); }}
+            >
+              <View style={[styles.createMenuIcon, { backgroundColor: colors.background }]}>
+                <Feather name="file-text" size={20} color={colors.navy} />
+              </View>
+              <View>
+                <Text style={[styles.createMenuTitle, { color: colors.navy }]}>Publicação</Text>
+                <Text style={[styles.createMenuSub, { color: colors.mutedForeground }]}>Texto, foto ou vídeo</Text>
+              </View>
+            </TouchableOpacity>
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+            <TouchableOpacity style={styles.createMenuItem} onPress={() => setShowCreateMenu(false)}>
+              <View style={[styles.createMenuIcon, { backgroundColor: colors.background }]}>
+                <Feather name="tag" size={20} color={colors.gold} />
+              </View>
+              <View>
+                <Text style={[styles.createMenuTitle, { color: colors.navy }]}>Avaliar Rótulo</Text>
+                <Text style={[styles.createMenuSub, { color: colors.mutedForeground }]}>Ficha técnica de vinho</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Account Menu Modal */}
+      <Modal visible={showAccountMenu} transparent animationType="fade" onRequestClose={() => setShowAccountMenu(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowAccountMenu(false)}>
+          <View style={[styles.accountMenu, { backgroundColor: "#fff", shadowColor: colors.navy }]}>
+            <View style={styles.accountMenuItem}>
+              <Avatar uri={profile?.avatar_url} name={profile?.full_name} size={40} />
+              <View>
+                <Text style={[styles.accountName, { color: colors.navy }]}>
+                  {profile?.full_name ?? "Meu Perfil"}
+                </Text>
+                <Text style={[styles.accountSub, { color: colors.mutedForeground }]}>Conta pessoal</Text>
+              </View>
+              <View style={[styles.onlineDot, { backgroundColor: "#22c55e" }]} />
+            </View>
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+            <TouchableOpacity
+              style={styles.accountMenuItem}
+              onPress={() => { setShowAccountMenu(false); }}
+            >
+              <Feather name="briefcase" size={20} color={colors.gold} />
+              <Text style={[styles.accountMenuLabel, { color: colors.gold }]}>Gerenciar Páginas</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  loading: { flex: 1, alignItems: "center", justifyContent: "center" },
+  loadingView: { flex: 1, alignItems: "center", justifyContent: "center" },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -203,38 +272,69 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     borderBottomWidth: 1,
   },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
-  logoMark: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+  brandText: { fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 4 },
+  iconBtn: { padding: 6 },
+  plusBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#c9a84c",
     alignItems: "center",
     justifyContent: "center",
+    marginHorizontal: 2,
   },
-  headerBrand: { fontSize: 20, fontWeight: "900", letterSpacing: -0.5 },
-  headerRight: { flexDirection: "row", gap: 8 },
-  iconBtn: { padding: 6 },
-  tabs: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-  },
-  tab: {
+  avatarChevron: { flexDirection: "row", alignItems: "center", gap: 2, paddingLeft: 4 },
+  greeting: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10 },
+  greetingTitle: { fontSize: 22, fontWeight: "800" },
+  greetingSub: { fontSize: 14, marginTop: 2 },
+  feedTabs: { flexDirection: "row", borderBottomWidth: 1 },
+  feedTab: {
     flex: 1,
     alignItems: "center",
     paddingVertical: 12,
     borderBottomWidth: 2,
     borderBottomColor: "transparent",
   },
-  activeTab: {},
-  tabText: { fontSize: 14, fontWeight: "700" },
-  createPostBar: {
+  feedTabActive: {},
+  feedTabText: { fontSize: 14, fontWeight: "700" },
+  composeBar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 10,
     margin: 12,
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
   },
-  createPostPlaceholder: { flex: 1, fontSize: 14 },
+  composePlaceholder: { flex: 1, fontSize: 14 },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "flex-start", alignItems: "flex-end", paddingTop: 100, paddingRight: 16 },
+  createMenu: {
+    width: 240,
+    borderRadius: 14,
+    overflow: "hidden",
+    shadowOpacity: 0.12,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  createMenuItem: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 16, paddingVertical: 14 },
+  createMenuIcon: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  createMenuTitle: { fontSize: 15, fontWeight: "700" },
+  createMenuSub: { fontSize: 12, marginTop: 2 },
+  menuDivider: { height: 1, marginHorizontal: 16 },
+  accountMenu: {
+    width: 260,
+    borderRadius: 14,
+    overflow: "hidden",
+    shadowOpacity: 0.12,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  accountMenuItem: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
+  accountName: { fontSize: 15, fontWeight: "700" },
+  accountSub: { fontSize: 12 },
+  accountMenuLabel: { fontSize: 15, fontWeight: "600" },
+  onlineDot: { width: 10, height: 10, borderRadius: 5, marginLeft: "auto" },
 });
