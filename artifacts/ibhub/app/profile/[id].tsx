@@ -38,6 +38,7 @@ export default function PublicProfileScreen() {
 
   const [userProfile, setUserProfile] = useState<typeof FALLBACK_USER>(FALLBACK_USER);
   const [userPosts, setUserPosts] = useState<Post[]>([]);
+  const [wineEntries, setWineEntries] = useState<API.WineEntry[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<"none" | "pending" | "connected">("none");
   const [loading, setLoading] = useState(true);
@@ -48,17 +49,20 @@ export default function PublicProfileScreen() {
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    const [realProfile, followStatus, connStatus, posts] = await Promise.all([
+    const isOwn = currentUser?.id === id;
+    const [realProfile, followStatus, connStatus, posts, wines] = await Promise.all([
       API.fetchPublicProfile(id),
       currentUser?.id ? API.checkIsFollowing(id, currentUser.id) : Promise.resolve(false),
       currentUser?.id ? API.checkConnectionStatus(id, currentUser.id) : Promise.resolve("none" as const),
       currentUser?.id ? API.fetchProfilePosts(id, currentUser.id) : Promise.resolve([]),
+      isOwn ? API.fetchWineCellar(id) : API.fetchPublicWineCellar(id),
     ]);
 
     if (realProfile) setUserProfile({ ...FALLBACK_USER, ...realProfile });
     setIsFollowing(followStatus);
     setConnectionStatus(connStatus);
     setUserPosts(posts);
+    setWineEntries(wines);
     setLoading(false);
   }, [id, currentUser?.id]);
 
@@ -331,12 +335,69 @@ export default function PublicProfileScreen() {
         )}
 
         {/* ── Adega / Portfólio ── */}
-        {tab === "adega" && (
+        {tab === "adega" && !isCompany && (
+          <View style={{ paddingBottom: 40 }}>
+            {/* Own profile: management CTA */}
+            {isOwnProfile && (
+              <TouchableOpacity
+                style={[styles.cellarsBtn, { backgroundColor: colors.gold }]}
+                onPress={() => router.push("/wine-cellar" as any)}
+              >
+                <Feather name="plus" size={16} color="#fff" />
+                <Text style={styles.cellarsBtnText}>Gerenciar minha adega</Text>
+              </TouchableOpacity>
+            )}
+
+            {wineEntries.length === 0 ? (
+              <View style={styles.empty}>
+                <Feather name="package" size={40} color={colors.mutedForeground} />
+                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+                  {isOwnProfile ? "Sua adega está vazia" : "Nenhum vinho público"}
+                </Text>
+              </View>
+            ) : (
+              <View style={{ padding: 16, gap: 10 }}>
+                {wineEntries.map((w) => (
+                  <View key={w.id} style={[styles.wineCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.wineName, { color: colors.foreground }]}>{w.name}</Text>
+                        {w.producer && (
+                          <Text style={[styles.wineSub, { color: colors.mutedForeground }]}>
+                            {w.producer}{w.vintage ? ` · ${w.vintage}` : ""}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={[styles.statusBadge, { backgroundColor: colors.gold + "18" }]}>
+                        <Text style={[styles.statusBadgeText, { color: colors.gold }]}>
+                          {w.status === "adega" ? "Na Adega"
+                            : w.status === "consumido" ? "Consumido"
+                            : w.status === "presenteado" ? "Presenteado"
+                            : "Wishlist"}
+                        </Text>
+                      </View>
+                    </View>
+                    {w.region && (
+                      <Text style={[styles.wineSub, { color: colors.mutedForeground }]}>{w.region}{w.country ? `, ${w.country}` : ""}</Text>
+                    )}
+                    {w.rating > 0 && (
+                      <View style={{ flexDirection: "row", gap: 2, marginTop: 2 }}>
+                        {[1,2,3,4,5].map((s) => (
+                          <Feather key={s} name="star" size={12} color={s <= w.rating ? colors.gold : colors.border} />
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
+        {tab === "adega" && isCompany && (
           <View style={styles.empty}>
-            <Feather name={isCompany ? "briefcase" : "package"} size={40} color={colors.mutedForeground} />
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              {isCompany ? "Portfólio ainda vazio" : "Adega ainda vazia"}
-            </Text>
+            <Feather name="briefcase" size={40} color={colors.mutedForeground} />
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Portfólio ainda vazio</Text>
           </View>
         )}
       </ScrollView>
@@ -377,4 +438,11 @@ const styles = StyleSheet.create({
   tabText:      { fontSize: 14, fontWeight: "700" },
   empty:        { alignItems: "center", justifyContent: "center", paddingTop: 60, gap: 12 },
   emptyText:    { fontSize: 15 },
+  cellarsBtn:   { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, margin: 16, paddingVertical: 13, borderRadius: 12 },
+  cellarsBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  wineCard:     { borderRadius: 12, borderWidth: 1, padding: 14, gap: 6 },
+  wineName:     { fontSize: 15, fontWeight: "700" },
+  wineSub:      { fontSize: 12, marginTop: 2 },
+  statusBadge:  { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  statusBadgeText: { fontSize: 11, fontWeight: "600" },
 });

@@ -1,10 +1,10 @@
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Modal,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,28 +15,11 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/context/AuthContext";
+import * as API from "@/services/api";
 
 type WineStatus = "adega" | "consumido" | "presenteado" | "wishlist";
 type FilterKey  = "todos" | WineStatus;
-
-interface Wine {
-  id: string;
-  name: string;
-  producer?: string;
-  vintage?: string;
-  region?: string;
-  country?: string;
-  grape?: string;
-  qty: number;
-  price?: string;
-  buyDate?: string;
-  drinkBy?: string;
-  storage?: string;
-  notes?: string;
-  rating: number;
-  status: WineStatus;
-  private: boolean;
-}
 
 const FILTER_OPTIONS: { key: FilterKey; label: string }[] = [
   { key: "todos",       label: "Todos" },
@@ -66,34 +49,47 @@ function StarRating({ value, onChange }: { value: number; onChange: (v: number) 
 }
 
 export default function WineCellarScreen() {
-  const colors = useColors();
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const colors  = useColors();
+  const router  = useRouter();
+  const insets  = useSafeAreaInsets();
+  const { user } = useAuth();
 
-  const [wines, setWines]       = useState<Wine[]>([]);
-  const [filter, setFilter]     = useState<FilterKey>("todos");
-  const [search, setSearch]     = useState("");
-  const [showForm, setShowForm] = useState(false);
+  const [wines, setWines]           = useState<API.WineEntry[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
+  const [saving, setSaving]         = useState(false);
+  const [filter, setFilter]         = useState<FilterKey>("todos");
+  const [search, setSearch]         = useState("");
+  const [showForm, setShowForm]     = useState(false);
 
   // Form state
-  const [wName, setWName]       = useState("");
-  const [wProducer, setWProducer] = useState("");
-  const [wVintage, setWVintage] = useState("");
-  const [wRegion, setWRegion]   = useState("");
-  const [wCountry, setWCountry] = useState("");
-  const [wGrape, setWGrape]     = useState("");
-  const [wQty, setWQty]         = useState("1");
-  const [wPrice, setWPrice]     = useState("");
-  const [wBuyDate, setWBuyDate] = useState("");
-  const [wDrinkBy, setWDrinkBy] = useState("");
-  const [wStorage, setWStorage] = useState("");
-  const [wNotes, setWNotes]     = useState("");
-  const [wRating, setWRating]   = useState(0);
-  const [wStatus, setWStatus]   = useState<WineStatus>("adega");
-  const [wPrivate, setWPrivate] = useState(true);
+  const [wName, setWName]           = useState("");
+  const [wProducer, setWProducer]   = useState("");
+  const [wVintage, setWVintage]     = useState("");
+  const [wRegion, setWRegion]       = useState("");
+  const [wCountry, setWCountry]     = useState("");
+  const [wGrape, setWGrape]         = useState("");
+  const [wQty, setWQty]             = useState("1");
+  const [wPrice, setWPrice]         = useState("");
+  const [wBuyDate, setWBuyDate]     = useState("");
+  const [wDrinkBy, setWDrinkBy]     = useState("");
+  const [wStorage, setWStorage]     = useState("");
+  const [wNotes, setWNotes]         = useState("");
+  const [wRating, setWRating]       = useState(0);
+  const [wStatus, setWStatus]       = useState<WineStatus>("adega");
+  const [wPrivate, setWPrivate]     = useState(true);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
+
+  const load = useCallback(async () => {
+    if (!user?.id) return;
+    setLoadingData(true);
+    const data = await API.fetchWineCellar(user.id);
+    setWines(data);
+    setLoadingData(false);
+  }, [user?.id]);
+
+  useEffect(() => { load(); }, [load]);
 
   const resetForm = () => {
     setWName(""); setWProducer(""); setWVintage(""); setWRegion(""); setWCountry("");
@@ -101,18 +97,54 @@ export default function WineCellarScreen() {
     setWStorage(""); setWNotes(""); setWRating(0); setWStatus("adega"); setWPrivate(true);
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!wName.trim()) { Alert.alert("Atenção", "Informe o nome do vinho."); return; }
-    const wine: Wine = {
-      id: Date.now().toString(), name: wName.trim(), producer: wProducer || undefined,
-      vintage: wVintage || undefined, region: wRegion || undefined, country: wCountry || undefined,
-      grape: wGrape || undefined, qty: parseInt(wQty) || 1, price: wPrice || undefined,
-      buyDate: wBuyDate || undefined, drinkBy: wDrinkBy || undefined, storage: wStorage || undefined,
-      notes: wNotes || undefined, rating: wRating, status: wStatus, private: wPrivate,
-    };
-    setWines((prev) => [wine, ...prev]);
-    resetForm();
-    setShowForm(false);
+    if (!user?.id) return;
+    setSaving(true);
+    const entry = await API.addWineEntry({
+      user_id: user.id,
+      name: wName.trim(),
+      producer: wProducer || null,
+      vintage: wVintage || null,
+      region: wRegion || null,
+      country: wCountry || null,
+      grape: wGrape || null,
+      qty: parseInt(wQty) || 1,
+      price: wPrice ? parseFloat(wPrice.replace(",", ".")) : null,
+      buy_date: wBuyDate || null,
+      drink_by: wDrinkBy || null,
+      storage: wStorage || null,
+      notes: wNotes || null,
+      rating: wRating,
+      status: wStatus,
+      is_private: wPrivate,
+    });
+    setSaving(false);
+    if (entry) {
+      setWines((prev) => [entry, ...prev]);
+      resetForm();
+      setShowForm(false);
+    } else {
+      Alert.alert("Erro", "Não foi possível salvar o vinho. Tente novamente.");
+    }
+  };
+
+  const handleDelete = (id: string, name: string) => {
+    Alert.alert(
+      "Remover vinho",
+      `Remover "${name}" da adega?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Remover",
+          style: "destructive",
+          onPress: async () => {
+            const ok = await API.deleteWineEntry(id);
+            if (ok) setWines((prev) => prev.filter((w) => w.id !== id));
+          },
+        },
+      ]
+    );
   };
 
   const filtered = wines.filter((w) => {
@@ -122,10 +154,18 @@ export default function WineCellarScreen() {
   });
 
   const counts = {
-    adega: wines.filter((w) => w.status === "adega").length,
+    adega:    wines.filter((w) => w.status === "adega").length,
     consumido: wines.filter((w) => w.status === "consumido").length,
     wishlist: wines.filter((w) => w.status === "wishlist").length,
   };
+
+  if (loadingData) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator size="large" color={colors.gold} />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -217,11 +257,15 @@ export default function WineCellarScreen() {
                       {STATUS_OPTIONS.find((s) => s.key === wine.status)?.label}
                     </Text>
                   </View>
+                  <TouchableOpacity onPress={() => handleDelete(wine.id, wine.name)} style={{ padding: 4, marginLeft: 4 }}>
+                    <Feather name="trash-2" size={15} color={colors.mutedForeground} />
+                  </TouchableOpacity>
                 </View>
                 <View style={styles.wineMeta}>
                   {wine.region && <Text style={[styles.wineMetaText, { color: colors.mutedForeground }]}>{wine.region}</Text>}
                   <Text style={[styles.wineMetaText, { color: colors.mutedForeground }]}>{wine.qty}x</Text>
-                  {wine.price && <Text style={[styles.wineMetaText, { color: colors.gold }]}>{wine.price}</Text>}
+                  {wine.price != null && <Text style={[styles.wineMetaText, { color: colors.gold }]}>R$ {Number(wine.price).toFixed(2)}</Text>}
+                  {wine.is_private && <Feather name="eye-off" size={12} color={colors.mutedForeground} />}
                 </View>
                 {wine.rating > 0 && (
                   <View style={{ flexDirection: "row", gap: 2 }}>
@@ -307,21 +351,25 @@ export default function WineCellarScreen() {
                 ))}
               </View>
             </View>
-            {/* Privacy / Photo */}
+            {/* Privacy */}
             <TouchableOpacity style={styles.toggleRow} onPress={() => setWPrivate(!wPrivate)}>
               <Feather name={wPrivate ? "eye-off" : "eye"} size={16} color={colors.mutedForeground} />
               <Text style={[styles.toggleText, { color: colors.foreground }]}>
                 {wPrivate ? "Apenas para você" : "Visível para conexões"}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.toggleRow}>
-              <Feather name="image" size={16} color={colors.mutedForeground} />
-              <Text style={[styles.toggleText, { color: colors.foreground }]}>Adicionar foto</Text>
-            </TouchableOpacity>
             {/* Save button */}
-            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.gold }]} onPress={handleAdd}>
-              <Feather name="check" size={18} color="#fff" />
-              <Text style={styles.saveBtnText}>Salvar Vinho</Text>
+            <TouchableOpacity
+              style={[styles.saveBtn, { backgroundColor: colors.gold }, saving && { opacity: 0.6 }]}
+              onPress={handleAdd}
+              disabled={saving}
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Feather name="check" size={18} color="#fff" />
+              )}
+              <Text style={styles.saveBtnText}>{saving ? "Salvando..." : "Salvar Vinho"}</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>

@@ -42,16 +42,6 @@ const SENSORY_TAGS = [
   "Doce","Seco","Especiado","Herbáceo","Tostado","Amanteigado",
 ];
 
-const SUGGESTIONS = [
-  { id: "u1", initial: "L", name: "Lucas Lima",       role: "Produtor",    status: "Pendente"   },
-  { id: "u2", initial: "J", name: "João Oliveira",    role: "Importador",  status: "Pendente"   },
-  { id: "u3", initial: "F", name: "Felipe Galtaroca", role: "Ceo",         status: "Pendente"   },
-  { id: "u4", initial: "B", name: "Brenda Lima",      role: "Sommelier",   status: "Conectar"   },
-];
-
-const COMPANY_PAGES = [
-  { id: "c1", initial: "I", name: "Ideal.BI", role: "Consultoria" },
-];
 
 function generateMockPost(id: number): Post {
   const authors = [
@@ -140,7 +130,8 @@ export default function FeedScreen() {
   const [showAccountMenu, setShowAccountMenu]       = useState(false);
 
   // Company mode
-  const [activeCompany, setActiveCompany]           = useState<typeof COMPANY_PAGES[0] | null>(null);
+  const [companyPages, setCompanyPages]             = useState<API.CompanyPage[]>([]);
+  const [activeCompany, setActiveCompany]           = useState<API.CompanyPage | null>(null);
 
   // Create post state
   const [postMode, setPostMode]                     = useState<"text" | "poll">("text");
@@ -209,6 +200,14 @@ export default function FeedScreen() {
   }, [user?.id, profile?.areas_of_expertise]);
 
   useEffect(() => { loadSuggestions(); }, [loadSuggestions]);
+
+  const loadCompanyPages = useCallback(async () => {
+    if (!user?.id) return;
+    const pages = await API.fetchUserCompanyPages(user.id);
+    setCompanyPages(pages);
+  }, [user?.id]);
+
+  useEffect(() => { loadCompanyPages(); }, [loadCompanyPages]);
 
   const handleConnect = useCallback(async (targetId: string) => {
     if (!user?.id || connectingId) return;
@@ -293,7 +292,18 @@ export default function FeedScreen() {
     };
     setPosts(prev => [tempPost, ...prev]);
 
-    const saved = await API.createPost({ user_id: user.id, content: content.trim(), poll: pollData });
+    // Upload image to Supabase Storage before saving
+    let uploadedImageUrl: string | null = null;
+    if (postImageUri) {
+      uploadedImageUrl = await API.uploadPostImage(postImageUri, user.id);
+    }
+
+    const saved = await API.createPost({
+      user_id: user.id,
+      content: content.trim(),
+      poll: pollData,
+      image_url: uploadedImageUrl,
+    });
     if (saved) {
       setPosts(prev => prev.map(p => p.id === tempPost.id ? saved : p));
     }
@@ -383,7 +393,7 @@ export default function FeedScreen() {
             <View style={styles.avatarChevron}>
               {activeCompany ? (
                 <View style={[styles.companyAvatar, { backgroundColor: colors.navy }]}>
-                  <Text style={[styles.companyAvatarText, { color: colors.gold }]}>{activeCompany.initial}</Text>
+                  <Text style={[styles.companyAvatarText, { color: colors.gold }]}>{activeCompany.name[0]?.toUpperCase() ?? "E"}</Text>
                 </View>
               ) : (
                 <Avatar uri={profile?.avatar_url} name={profile?.full_name} size={34} />
@@ -891,24 +901,40 @@ export default function FeedScreen() {
             {/* Company pages */}
             <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
             <Text style={[styles.pagesHeader, { color: colors.mutedForeground }]}>PÁGINAS EMPRESARIAIS</Text>
-            {COMPANY_PAGES.map((page) => (
-              <TouchableOpacity
-                key={page.id}
-                style={[styles.accountRow, activeCompany?.id === page.id && { backgroundColor: colors.background }]}
-                onPress={() => { setActiveCompany(page); setShowAccountMenu(false); }}
-              >
-                <View style={[styles.companyAvatarLg, { backgroundColor: colors.navyMid }]}>
-                  <Text style={[styles.companyAvatarTextLg, { color: colors.gold }]}>{page.initial}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.accountName, { color: colors.navy }]}>{page.name}</Text>
-                  <Text style={[styles.accountSub, { color: colors.mutedForeground }]}>{page.role}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+            {companyPages.length === 0 ? (
+              <View style={{ paddingHorizontal: 16, paddingVertical: 10 }}>
+                <Text style={{ color: colors.mutedForeground, fontSize: 13 }}>Nenhuma página criada</Text>
+              </View>
+            ) : (
+              companyPages.map((page) => (
+                <TouchableOpacity
+                  key={page.id}
+                  style={[styles.accountRow, activeCompany?.id === page.id && { backgroundColor: colors.background }]}
+                  onPress={() => { setActiveCompany(page); setShowAccountMenu(false); }}
+                >
+                  {page.avatar_url ? (
+                    <Avatar uri={page.avatar_url} name={page.name} size={40} />
+                  ) : (
+                    <View style={[styles.companyAvatarLg, { backgroundColor: colors.navyMid }]}>
+                      <Text style={[styles.companyAvatarTextLg, { color: colors.gold }]}>{page.name[0]?.toUpperCase() ?? "E"}</Text>
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.accountName, { color: colors.navy }]}>{page.name}</Text>
+                    <Text style={[styles.accountSub, { color: colors.mutedForeground }]}>{page.industry ?? "Página empresarial"}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
 
             <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-            <TouchableOpacity style={styles.accountRow} onPress={() => setShowAccountMenu(false)}>
+            <TouchableOpacity
+              style={styles.accountRow}
+              onPress={() => {
+                setShowAccountMenu(false);
+                router.push("/manage-business-page" as any);
+              }}
+            >
               <Feather name="briefcase" size={20} color={colors.gold} />
               <Text style={[styles.managePages, { color: colors.gold }]}>Gerenciar Páginas</Text>
             </TouchableOpacity>

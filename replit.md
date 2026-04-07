@@ -85,6 +85,21 @@ Criar na pasta `components/` em vez de repetir código:
 - `constants/colors.ts` — paleta de cores (dark theme)
 - `hooks/useColors.ts` — hook de cores (atualmente forçado para light — ver pendências)
 
+## Banco de Dados — Migrações
+
+| Arquivo | Descrição |
+|---|---|
+| `supabase/schema.sql` | Schema principal (profiles, posts, likes, comments, follows, connections, notifications, stories, conversations, messages, reports) |
+| `supabase/migrations_user_blocks_post_hidden.sql` | Tabelas user_blocks + post_hidden |
+| `supabase/migrations_v2.sql` | **v2**: comment_likes, wine_cellar, company_pages + company_page_admins, storage bucket post-images, triggers de followers/connections_count, colunas position/company/areas/profile_type no profiles |
+
+**Status das features (post v2):**
+- Upload de imagem: `uploadPostImage()` → bucket `post-images` no Supabase Storage
+- Contadores: triggers em `follows` e `connections` mantêm `followers_count`, `following_count`, `connections_count` no `profiles`
+- Adega: tabela `wine_cellar` + tela `/wine-cellar` conectada ao Supabase
+- Páginas Empresariais: tabela `company_pages` + `fetchUserCompanyPages()` — "Gerenciar Páginas" navega para `/manage-business-page`
+- Comment likes: tabela `comment_likes` criada
+
 ## Aba Mercado — Detalhes
 
 - **Visão Geral**: KPIs por período (Último Mês / Trimestre YTD / Último Ano), gráfico de área Exportações vs Importações, gráfico de barras Produção Nacional, Tendências, Regiões Produtoras, Variedades em Destaque

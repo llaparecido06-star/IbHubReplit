@@ -116,9 +116,33 @@ export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
   }
 }
 
+export async function uploadPostImage(imageUri: string, userId: string): Promise<string | null> {
+  try {
+    const ext = imageUri.split(".").pop()?.split("?")[0]?.toLowerCase() ?? "jpg";
+    const mime = ext === "png" ? "image/png" : ext === "gif" ? "image/gif" : ext === "webp" ? "image/webp" : "image/jpeg";
+    const filename = `${userId}/${Date.now()}.${ext}`;
+
+    const response = await fetch(imageUri);
+    const blob = await response.blob();
+
+    const { data, error } = await supabase.storage
+      .from("post-images")
+      .upload(filename, blob, { contentType: mime, upsert: false });
+
+    if (error) { console.error("uploadPostImage storage error:", error); return null; }
+
+    const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(data.path);
+    return urlData.publicUrl ?? null;
+  } catch (e) {
+    console.error("uploadPostImage:", e);
+    return null;
+  }
+}
+
 export async function createPost(params: {
   user_id: string;
   content: string;
+  image_url?: string | null;
   poll?: { options: { text: string; votes: number }[]; total_votes: number; closed: boolean };
   hashtags?: string[];
 }): Promise<Post | null> {
@@ -1027,5 +1051,159 @@ export async function getOrCreateDirectConversation(userId1: string, userId2: st
   } catch (e) {
     console.error("getOrCreateDirectConversation:", e);
     return null;
+  }
+}
+
+// ─── COMPANY PAGES ────────────────────────────────────────────────────────────
+
+export interface CompanyPage {
+  id: string;
+  owner_id: string;
+  name: string;
+  username: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  website: string | null;
+  industry: string | null;
+  location: string | null;
+  plan: string;
+  created_at: string;
+}
+
+export async function fetchUserCompanyPages(userId: string): Promise<CompanyPage[]> {
+  try {
+    const { data, error } = await supabase
+      .from("company_pages")
+      .select("*")
+      .eq("owner_id", userId)
+      .order("created_at", { ascending: true });
+
+    if (error) { console.error("fetchUserCompanyPages:", error); return []; }
+    return (data ?? []) as CompanyPage[];
+  } catch (e) {
+    console.error("fetchUserCompanyPages:", e);
+    return [];
+  }
+}
+
+export async function createCompanyPage(params: {
+  owner_id: string;
+  name: string;
+  username?: string;
+  bio?: string;
+  website?: string;
+  industry?: string;
+  location?: string;
+}): Promise<CompanyPage | null> {
+  try {
+    const { data, error } = await supabase
+      .from("company_pages")
+      .insert(params)
+      .select()
+      .single();
+    if (error) { console.error("createCompanyPage:", error); return null; }
+    return data as CompanyPage;
+  } catch (e) {
+    console.error("createCompanyPage:", e);
+    return null;
+  }
+}
+
+// ─── WINE CELLAR ─────────────────────────────────────────────────────────────
+
+export interface WineEntry {
+  id: string;
+  user_id: string;
+  name: string;
+  producer?: string | null;
+  vintage?: string | null;
+  region?: string | null;
+  country?: string | null;
+  grape?: string | null;
+  qty: number;
+  price?: number | null;
+  buy_date?: string | null;
+  drink_by?: string | null;
+  storage?: string | null;
+  notes?: string | null;
+  rating: number;
+  status: "adega" | "consumido" | "presenteado" | "wishlist";
+  is_private: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function fetchWineCellar(userId: string): Promise<WineEntry[]> {
+  try {
+    const { data, error } = await supabase
+      .from("wine_cellar")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+
+    if (error) { console.error("fetchWineCellar:", error); return []; }
+    return (data ?? []) as WineEntry[];
+  } catch (e) {
+    console.error("fetchWineCellar:", e);
+    return [];
+  }
+}
+
+export async function fetchPublicWineCellar(userId: string): Promise<WineEntry[]> {
+  try {
+    const { data, error } = await supabase
+      .from("wine_cellar")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("is_private", false)
+      .order("created_at", { ascending: false });
+
+    if (error) { console.error("fetchPublicWineCellar:", error); return []; }
+    return (data ?? []) as WineEntry[];
+  } catch (e) {
+    console.error("fetchPublicWineCellar:", e);
+    return [];
+  }
+}
+
+export async function addWineEntry(params: Omit<WineEntry, "id" | "created_at" | "updated_at">): Promise<WineEntry | null> {
+  try {
+    const { data, error } = await supabase
+      .from("wine_cellar")
+      .insert(params)
+      .select()
+      .single();
+    if (error) { console.error("addWineEntry:", error); return null; }
+    return data as WineEntry;
+  } catch (e) {
+    console.error("addWineEntry:", e);
+    return null;
+  }
+}
+
+export async function updateWineEntry(id: string, changes: Partial<Omit<WineEntry, "id" | "user_id" | "created_at">>): Promise<WineEntry | null> {
+  try {
+    const { data, error } = await supabase
+      .from("wine_cellar")
+      .update(changes)
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) { console.error("updateWineEntry:", error); return null; }
+    return data as WineEntry;
+  } catch (e) {
+    console.error("updateWineEntry:", e);
+    return null;
+  }
+}
+
+export async function deleteWineEntry(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("wine_cellar").delete().eq("id", id);
+    if (error) { console.error("deleteWineEntry:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("deleteWineEntry:", e);
+    return false;
   }
 }
