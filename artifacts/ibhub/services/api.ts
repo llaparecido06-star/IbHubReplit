@@ -1339,3 +1339,73 @@ export async function deleteWineEntry(id: string): Promise<boolean> {
     return false;
   }
 }
+
+// ─── MARKET OVERVIEW ─────────────────────────────────────────────────────────
+
+export interface MarketKPI {
+  label: string;
+  value: string;
+  period: string;
+  change: number;
+  icon: string;
+}
+
+export interface MarketChartArea {
+  exports: number[];
+  imports: number[];
+  labels: string[];
+  yLabels: string[];
+}
+
+export interface MarketChartBar {
+  values: number[];
+  labels: string[];
+}
+
+export interface MarketTendencia {
+  title: string;
+  desc: string;
+  change: number;
+  pos: boolean;
+}
+
+export interface MarketRegiao {
+  rank: number;
+  name: string;
+  volume: string;
+  pct: number;
+}
+
+export interface MarketVariedade {
+  name: string;
+  volume: string;
+  change: number;
+}
+
+export interface MarketOverview {
+  period: "mes" | "trimestre" | "ano";
+  kpis: MarketKPI[];
+  chart_area: MarketChartArea;
+  chart_bar: MarketChartBar;
+  tendencias: MarketTendencia[];
+  regioes: MarketRegiao[];
+  variedades: MarketVariedade[];
+  updated_at: string;
+}
+
+export async function fetchMarketOverview(
+  period: "mes" | "trimestre" | "ano",
+): Promise<MarketOverview | null> {
+  try {
+    const { data, error } = await supabase
+      .from("market_overview")
+      .select("*")
+      .eq("period", period)
+      .single();
+    if (error || !data) return null;
+    return data as MarketOverview;
+  } catch (e) {
+    console.error("fetchMarketOverview:", e);
+    return null;
+  }
+}
