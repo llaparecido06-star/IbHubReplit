@@ -19,7 +19,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import Svg, { Rect } from "react-native-svg";
 import { Post, PostCard } from "@/components/feed/PostCard";
 import { Avatar } from "@/components/ui/Avatar";
@@ -143,7 +143,11 @@ function StarRating({ value, onChange }: { value: number; onChange: (v: number) 
     <View style={{ flexDirection: "row", gap: 4, alignItems: "center" }}>
       {[1,2,3,4,5].map((star) => (
         <TouchableOpacity key={star} onPress={() => onChange(star)}>
-          <Feather name="star" size={28} color={star <= value ? colors.gold : colors.border} fill={star <= value ? colors.gold : "none"} />
+          <MaterialCommunityIcons
+            name={star <= value ? "star" : "star-outline"}
+            size={30}
+            color={star <= value ? colors.gold : colors.border}
+          />
         </TouchableOpacity>
       ))}
       <Text style={{ fontSize: 16, fontWeight: "700", color: "#0d1b2a", marginLeft: 6 }}>{value}/5</Text>
@@ -431,6 +435,7 @@ export default function FeedScreen() {
         renderItem={({ item }) => (
           <PostCard
             post={item}
+            currentUserId={user?.id}
             onLike={(id) => {
               const post = posts.find(p => p.id === id);
               if (!post || !user?.id) return;
