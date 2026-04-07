@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -32,6 +32,8 @@ import {
   fetchBookmarkedPosts,
   fetchWineCellar,
   sendConnectionRequest,
+  toggleLike,
+  toggleBookmark,
 } from "@/services/api";
 import { Post } from "@/components/feed/PostCard";
 import EmpresaDashboard from "@/components/EmpresaDashboard";
@@ -61,19 +63,15 @@ export default function ProfileScreen() {
   const [loadingData,    setLoadingData]    = useState(true);
   const [refreshing,     setRefreshing]     = useState(false);
 
+  const isCompany = profile?.profile_type === "empresa";
+  const name      = profile?.full_name ?? profile?.username ?? "Usuário";
+  const username  = profile?.username  ?? "";
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
 
-  if (profile?.profile_type === "empresa") {
-    return <EmpresaDashboard />;
-  }
-
-  const name     = profile?.full_name ?? profile?.username ?? "Usuário";
-  const username = profile?.username  ?? "";
-  const initial  = name.charAt(0).toUpperCase();
-
+  // ── All hooks must run before any conditional return ──────────────────────
   const loadData = useCallback(async () => {
-    if (!user?.id) return;
+    if (!user?.id || isCompany) return;
     const areas = profile?.areas_of_expertise ?? [];
     const [p, saved, wines, fr, fg, sg, cp] = await Promise.all([
       fetchUserPosts(user.id, user.id),
@@ -93,9 +91,10 @@ export default function ProfileScreen() {
     setCompanyPages(cp);
     setLoadingData(false);
     setRefreshing(false);
-  }, [user?.id]);
+  }, [user?.id, isCompany]);
 
   useEffect(() => { loadData(); }, [loadData]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   const onRefresh = () => { setRefreshing(true); loadData(); };
 
@@ -145,10 +144,57 @@ export default function ProfileScreen() {
     setConnectingId(null);
   };
 
+  const handleLikePost = async (post: Post) => {
+    if (!user?.id) return;
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === post.id
+          ? { ...p, is_liked: !p.is_liked, likes_count: p.is_liked ? p.likes_count - 1 : p.likes_count + 1 }
+          : p
+      )
+    );
+    await toggleLike(post.id, user.id, post.is_liked ?? false);
+  };
+
+  const handleBookmarkPost = async (post: Post) => {
+    if (!user?.id) return;
+    const wasBookmarked = post.is_bookmarked ?? false;
+    setPosts((prev) =>
+      prev.map((p) => p.id === post.id ? { ...p, is_bookmarked: !wasBookmarked } : p)
+    );
+    if (wasBookmarked) {
+      setSavedPosts((prev) => prev.filter((p) => p.id !== post.id));
+    }
+    await toggleBookmark(post.id, user.id, wasBookmarked);
+  };
+
   const wineInCellar = wineEntries.filter((w) => w.status === "adega").length;
   const wineTotal    = wineEntries.length;
 
+  if (isCompany) {
+    return (
+      <>
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: "Empresa",
+            tabBarIcon: ({ color }) => <Feather name="briefcase" size={22} color={color} />,
+          }}
+        />
+        <EmpresaDashboard />
+      </>
+    );
+  }
+
   return (
+    <>
+    <Tabs.Screen
+      name="profile"
+      options={{
+        title: "Meu Perfil",
+        tabBarIcon: ({ color }) => <Feather name="user" size={22} color={color} />,
+      }}
+    />
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={{ paddingBottom: bottomPad }}
@@ -167,6 +213,13 @@ export default function ProfileScreen() {
         {/* Avatar row */}
         <View style={styles.avatarRow}>
           <Avatar uri={profile?.avatar_url} name={name} size={84} />
+          <TouchableOpacity
+            style={[styles.editBtn, { borderColor: colors.border }]}
+            onPress={() => router.push("/edit-profile" as any)}
+          >
+            <Feather name="edit-2" size={14} color={colors.navy} />
+            <Text style={[styles.editBtnText, { color: colors.navy }]}>Editar perfil</Text>
+          </TouchableOpacity>
         </View>
 
         <Text style={[styles.name, { color: colors.navy }]}>{name}</Text>
@@ -383,17 +436,17 @@ export default function ProfileScreen() {
                 </View>
                 <Text style={[styles.postContent, { color: colors.foreground }]}>{post.content}</Text>
                 <View style={[styles.postActions, { borderTopColor: colors.border }]}>
-                  <View style={styles.postActionBtn}>
+                  <TouchableOpacity style={styles.postActionBtn} onPress={() => handleLikePost(post)}>
                     <Feather name="heart" size={18} color={post.is_liked ? "#e11d48" : colors.mutedForeground} />
-                    <Text style={[styles.postActionText, { color: colors.mutedForeground }]}>{post.likes_count}</Text>
-                  </View>
+                    <Text style={[styles.postActionText, { color: post.is_liked ? "#e11d48" : colors.mutedForeground }]}>{post.likes_count}</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity style={styles.postActionBtn} onPress={() => setShowComments(post.id)}>
                     <Feather name="message-circle" size={18} color={colors.mutedForeground} />
                     <Text style={[styles.postActionText, { color: colors.mutedForeground }]}>{post.comments_count}</Text>
                   </TouchableOpacity>
-                  <View style={styles.postActionBtn}>
+                  <TouchableOpacity style={styles.postActionBtn} onPress={() => handleBookmarkPost(post)}>
                     <Feather name="bookmark" size={18} color={post.is_bookmarked ? colors.gold : colors.mutedForeground} />
-                  </View>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.postActionBtn, { marginLeft: "auto" as any }]}
                     onPress={() => router.push(`/post/${post.id}` as any)}
@@ -622,6 +675,7 @@ export default function ProfileScreen() {
         </Pressable>
       </Modal>
     </ScrollView>
+    </>
   );
 }
 
@@ -630,7 +684,9 @@ const styles = StyleSheet.create({
   cover:              { height: 130, justifyContent: "flex-end", paddingHorizontal: 16, paddingBottom: 12, alignItems: "flex-end" },
   settingsBtn:        { padding: 4 },
   profileCard:        { padding: 16, gap: 10 },
-  avatarRow:          { marginTop: -48, marginBottom: 4 },
+  avatarRow:          { marginTop: -48, marginBottom: 4, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
+  editBtn:            { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  editBtnText:        { fontSize: 13, fontWeight: "600" },
   name:               { fontSize: 24, fontWeight: "800" },
   username:           { fontSize: 14, marginTop: -4 },
   statsRow:           { flexDirection: "row", alignItems: "center", paddingVertical: 14, borderTopWidth: 1, borderBottomWidth: 1, marginVertical: 4 },

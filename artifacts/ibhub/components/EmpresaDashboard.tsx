@@ -114,7 +114,7 @@ export default function EmpresaDashboard() {
           <Avatar uri={profile?.avatar_url} name={name} size={84} />
           <TouchableOpacity
             style={[styles.editBtn, { borderColor: colors.border }]}
-            onPress={() => router.push("/settings" as any)}
+            onPress={() => router.push("/edit-profile" as any)}
           >
             <Feather name="edit-2" size={14} color={colors.navy} />
             <Text style={[styles.editBtnText, { color: colors.navy }]}>Editar perfil</Text>
