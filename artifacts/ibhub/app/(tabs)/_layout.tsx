@@ -25,12 +25,13 @@ export default function TabLayout() {
           shadowOpacity: 0.06,
           shadowOffset: { width: 0, height: -2 },
           shadowRadius: 8,
-          height: Platform.OS === "web" ? 64 : 60,
+          height: Platform.select({ ios: 60, android: 64, web: 64 }),
+          paddingBottom: Platform.select({ ios: 0, android: 8, web: 0 }),
+          paddingTop: Platform.select({ ios: 6, android: 6, web: 4 }),
         },
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: "600",
-          marginBottom: Platform.OS === "ios" ? 0 : 4,
         },
       }}
     >

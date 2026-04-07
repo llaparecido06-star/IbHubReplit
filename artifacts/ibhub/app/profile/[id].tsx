@@ -144,20 +144,19 @@ export default function PublicProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* ── Floating back button — always on top ── */}
-      <TouchableOpacity
-        style={[styles.backBtn, { top: topPad + 8, backgroundColor: colors.navy + "cc" }]}
-        onPress={() => router.back()}
-      >
-        <Feather name="arrow-left" size={20} color={colors.gold} />
-      </TouchableOpacity>
-
       <ScrollView
         contentContainerStyle={{ paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Cover banner */}
-        <View style={[styles.cover, { backgroundColor: colors.navy }]} />
+        {/* ── Cover with back button ── */}
+        <View style={[styles.cover, { backgroundColor: colors.navyLight ?? colors.navy, paddingTop: topPad }]}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => router.back()}
+          >
+            <Feather name="arrow-left" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
 
         {/* ── Profile header ── */}
         <View style={[styles.profileSection, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
@@ -407,12 +406,12 @@ export default function PublicProfileScreen() {
 
 const styles = StyleSheet.create({
   container:    { flex: 1 },
+  cover:        { minHeight: 110, justifyContent: "flex-start", paddingHorizontal: 12, paddingBottom: 10 },
   backBtn:      {
-    position: "absolute", left: 16, zIndex: 100,
-    width: 36, height: 36, borderRadius: 18,
+    width: 36, height: 36, borderRadius: 18, marginTop: 8,
     alignItems: "center", justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.18)",
   },
-  cover:        { height: 110 },
   profileSection: { paddingHorizontal: 16, paddingBottom: 16, gap: 8, borderBottomWidth: 1 },
   avatarRow:    { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", marginTop: -44 },
   avatarBorder: { borderRadius: 46, borderWidth: 3, overflow: "hidden", width: 90, height: 90 },
