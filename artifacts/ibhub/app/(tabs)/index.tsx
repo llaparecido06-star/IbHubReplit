@@ -30,6 +30,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
+import type { SuggestedProfile } from "@/services/api";
 
 const STORAGE_KEY = "ibhub_feed_posts_v3";
 const MAX_CHARS = 350;
@@ -127,6 +128,10 @@ export default function FeedScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Connection suggestions
+  const [suggestions, setSuggestions] = useState<SuggestedProfile[]>([]);
+  const [connectingId, setConnectingId] = useState<string | null>(null);
+
   // Modals
   const [showCreateMenu, setShowCreateMenu]         = useState(false);
   const [showCreatePost, setShowCreatePost]         = useState(false);
@@ -195,6 +200,26 @@ export default function FeedScreen() {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(mockPosts));
     setLoading(false);
   }, [user?.id, sortByRelevance]);
+
+  const loadSuggestions = useCallback(async () => {
+    if (!user?.id) return;
+    const areas = profile?.areas_of_expertise ?? [];
+    const data = await API.fetchSuggestedConnections(user.id, areas, 10);
+    setSuggestions(data);
+  }, [user?.id, profile?.areas_of_expertise]);
+
+  useEffect(() => { loadSuggestions(); }, [loadSuggestions]);
+
+  const handleConnect = useCallback(async (targetId: string) => {
+    if (!user?.id || connectingId) return;
+    setConnectingId(targetId);
+    // Optimistic update
+    setSuggestions(prev => prev.map(s =>
+      s.id === targetId ? { ...s, connection_status: "pending" } : s
+    ));
+    await API.sendConnectionRequest(targetId, user.id);
+    setConnectingId(null);
+  }, [user?.id, connectingId]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -379,24 +404,71 @@ export default function FeedScreen() {
       </View>
 
       {/* Sugestões */}
-      <View style={[styles.suggestSection, { backgroundColor: "#fff" }]}>
-        <Text style={[styles.suggestTitle, { color: colors.navy }]}>Sugestões para você</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestScroll}>
-          {SUGGESTIONS.map((s) => (
-            <View key={s.id} style={[styles.suggestCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-              <View style={[styles.suggestAvatar, { backgroundColor: colors.navy }]}>
-                <Text style={[styles.suggestInitial, { color: colors.gold }]}>{s.initial}</Text>
-              </View>
-              <Text style={[styles.suggestName, { color: colors.navy }]} numberOfLines={1}>{s.name}</Text>
-              {s.role !== s.name && <Text style={[styles.suggestRole, { color: colors.mutedForeground }]} numberOfLines={1}>{s.role}</Text>}
-              <TouchableOpacity style={[styles.suggestBtn, { borderColor: colors.border }]}>
-                <Feather name="clock" size={11} color={colors.mutedForeground} />
-                <Text style={[styles.suggestBtnText, { color: colors.mutedForeground }]}>{s.status}</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </ScrollView>
-      </View>
+      {suggestions.length > 0 && (
+        <View style={[styles.suggestSection, { backgroundColor: "#fff" }]}>
+          <View style={styles.suggestHeader}>
+            <Text style={[styles.suggestTitle, { color: colors.navy }]}>Pessoas que você pode conhecer</Text>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestScroll}>
+            {suggestions.map((s) => {
+              const isPending   = s.connection_status === "pending";
+              const isConnected = s.connection_status === "connected";
+              const isLoading   = connectingId === s.id;
+              return (
+                <View key={s.id} style={[styles.suggestCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                  {/* Avatar */}
+                  <TouchableOpacity onPress={() => router.push(`/profile/${s.id}` as any)}>
+                    <Avatar uri={s.avatar_url} name={s.full_name ?? "?"} size={52} />
+                  </TouchableOpacity>
+
+                  {/* Match badge */}
+                  {s.match_score > 0 && (
+                    <View style={[styles.matchBadge, { backgroundColor: colors.gold + "18" }]}>
+                      <Feather name="zap" size={10} color={colors.gold} />
+                      <Text style={[styles.matchBadgeText, { color: colors.gold }]}>{s.match_score} área{s.match_score > 1 ? "s" : ""} em comum</Text>
+                    </View>
+                  )}
+
+                  {/* Name — tappable */}
+                  <TouchableOpacity onPress={() => router.push(`/profile/${s.id}` as any)}>
+                    <Text style={[styles.suggestName, { color: colors.navy }]} numberOfLines={1}>
+                      {s.full_name ?? s.username ?? "Usuário"}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {s.headline ? (
+                    <Text style={[styles.suggestRole, { color: colors.mutedForeground }]} numberOfLines={2}>{s.headline}</Text>
+                  ) : null}
+
+                  {/* Connect button */}
+                  {isConnected ? (
+                    <View style={[styles.suggestBtnFilled, { backgroundColor: colors.navy + "14" }]}>
+                      <Feather name="check" size={12} color={colors.navy} />
+                      <Text style={[styles.suggestBtnFilledText, { color: colors.navy }]}>Conectado</Text>
+                    </View>
+                  ) : isPending ? (
+                    <View style={[styles.suggestBtnFilled, { backgroundColor: colors.border }]}>
+                      <Feather name="clock" size={12} color={colors.mutedForeground} />
+                      <Text style={[styles.suggestBtnFilledText, { color: colors.mutedForeground }]}>Enviado</Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.suggestBtnFilled, { backgroundColor: colors.navy }, isLoading && { opacity: 0.6 }]}
+                      onPress={() => handleConnect(s.id)}
+                      disabled={!!connectingId}
+                    >
+                      <Feather name="user-plus" size={12} color="#fff" />
+                      <Text style={[styles.suggestBtnFilledText, { color: "#fff" }]}>
+                        {isLoading ? "..." : "Conectar"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Scroll indicator bar */}
       <View style={[styles.scrollBar, { backgroundColor: colors.border }]}>
@@ -857,16 +929,17 @@ const styles = StyleSheet.create({
   greeting:           { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 },
   greetingTitle:      { fontSize: 22, fontWeight: "800" },
   greetingSub:        { fontSize: 14, marginTop: 2 },
-  suggestSection:     { paddingTop: 10, paddingBottom: 12 },
-  suggestTitle:       { paddingHorizontal: 16, fontSize: 15, fontWeight: "700", marginBottom: 10 },
-  suggestScroll:      { paddingHorizontal: 16, gap: 10 },
-  suggestCard:        { width: 110, borderRadius: 12, borderWidth: 1, padding: 12, alignItems: "center", gap: 5 },
-  suggestAvatar:      { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center" },
-  suggestInitial:     { fontSize: 20, fontWeight: "800" },
-  suggestName:        { fontSize: 12, fontWeight: "700", textAlign: "center" },
-  suggestRole:        { fontSize: 10, textAlign: "center" },
-  suggestBtn:         { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginTop: 2 },
-  suggestBtnText:     { fontSize: 10 },
+  suggestSection:      { paddingTop: 12, paddingBottom: 14 },
+  suggestHeader:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, marginBottom: 12 },
+  suggestTitle:        { fontSize: 14, fontWeight: "800" },
+  suggestScroll:       { paddingHorizontal: 16, gap: 10 },
+  suggestCard:         { width: 128, borderRadius: 14, borderWidth: 1, padding: 12, alignItems: "center", gap: 6 },
+  suggestName:         { fontSize: 12.5, fontWeight: "700", textAlign: "center" },
+  suggestRole:         { fontSize: 10.5, textAlign: "center", lineHeight: 14 },
+  matchBadge:          { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
+  matchBadgeText:      { fontSize: 9.5, fontWeight: "700" },
+  suggestBtnFilled:    { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20, marginTop: 2 },
+  suggestBtnFilledText:{ fontSize: 11, fontWeight: "700" },
   scrollBar:          { height: 3, marginHorizontal: 16, borderRadius: 2, marginBottom: 8 },
   scrollBarInner:     { height: 3, width: "40%", borderRadius: 2 },
   menuOverlay:        { flex: 1, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "flex-start", alignItems: "flex-end", paddingTop: 100, paddingRight: 16 },

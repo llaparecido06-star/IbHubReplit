@@ -20,14 +20,18 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 
 interface Profile {
   id: string;
+  user_id: string | null;
   full_name: string | null;
   username: string | null;
   avatar_url: string | null;
   bio: string | null;
   headline: string | null;
+  position: string | null;
+  company: string | null;
   location: string | null;
-  plan: "basico" | "premium" | "exclusive" | "business";
+  plan: string;
   certifications: string[];
+  areas: string[];
   areas_of_expertise: string[];
   followers_count: number;
   following_count: number;
@@ -60,10 +64,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
-        .eq("id", userId)
-        .single();
+        .or(`id.eq.${userId},user_id.eq.${userId}`)
+        .maybeSingle();
       if (!error && data) {
-        setProfile(data as Profile);
+        const d = data as any;
+        // Normalise field names so the rest of the app works
+        const headline =
+          d.headline ??
+          ([d.position, d.company].filter(Boolean).join(" · ") || null);
+        const areas_of_expertise: string[] =
+          Array.isArray(d.areas_of_expertise) ? d.areas_of_expertise :
+          Array.isArray(d.areas) ? d.areas : [];
+        setProfile({ ...d, headline, areas_of_expertise } as Profile);
       }
     } catch {}
   }, []);

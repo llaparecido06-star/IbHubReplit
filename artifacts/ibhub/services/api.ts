@@ -66,6 +66,20 @@ export interface AppConversation {
 
 // ─── POSTS ───────────────────────────────────────────────────────────────────
 
+// Helper: normalise the `author` object returned by Supabase embedded selects
+// (profiles table uses `position` + `company`, not `headline`)
+function normaliseAuthor(author: any): any {
+  if (!author) return author;
+  const headline =
+    author.headline ??
+    ([author.position, author.company].filter(Boolean).join(" · ") || null);
+  return { ...author, headline };
+}
+
+// Common embedded author select string (uses real column names)
+const AUTHOR_SELECT = "id, full_name, username, avatar_url, position, company, plan";
+const COMMENT_AUTHOR_SELECT = "id, full_name, avatar_url, position, company";
+
 export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
   try {
     const { data, error } = await supabase
@@ -73,7 +87,7 @@ export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
       .select(`
         id, user_id, content, image_url, likes_count, comments_count, shares_count,
         hashtags, poll, created_at,
-        author:profiles!posts_user_id_fkey(id, full_name, username, avatar_url, headline, plan)
+        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT})
       `)
       .order("created_at", { ascending: false })
       .limit(30);
@@ -92,6 +106,7 @@ export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
 
     return data.map((post: any) => ({
       ...post,
+      author: normaliseAuthor(post.author),
       is_liked: likedIds.has(post.id),
       is_bookmarked: bookmarkedIds.has(post.id),
     }));
@@ -114,12 +129,12 @@ export async function createPost(params: {
       .select(`
         id, user_id, content, image_url, likes_count, comments_count, shares_count,
         hashtags, poll, created_at,
-        author:profiles!posts_user_id_fkey(id, full_name, username, avatar_url, headline, plan)
+        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT})
       `)
       .single();
 
     if (error) { console.error("createPost:", error); return null; }
-    return { ...data, is_liked: false, is_bookmarked: false } as Post;
+    return { ...data, author: normaliseAuthor((data as any).author), is_liked: false, is_bookmarked: false } as Post;
   } catch (e) {
     console.error("createPost:", e);
     return null;
@@ -133,21 +148,22 @@ export async function fetchPostById(postId: string, currentUserId?: string): Pro
       .select(`
         id, user_id, content, image_url, likes_count, comments_count, shares_count,
         hashtags, poll, created_at,
-        author:profiles!posts_user_id_fkey(id, full_name, username, avatar_url, headline, plan)
+        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT})
       `)
       .eq("id", postId)
       .single();
 
     if (error || !data) return null;
+    const post = { ...data, author: normaliseAuthor((data as any).author) } as any;
 
     if (currentUserId) {
       const [l, b] = await Promise.all([
         supabase.from("likes").select("id").match({ post_id: postId, user_id: currentUserId }).maybeSingle(),
         supabase.from("bookmarks").select("id").match({ post_id: postId, user_id: currentUserId }).maybeSingle(),
       ]);
-      return { ...data, is_liked: !!l.data, is_bookmarked: !!b.data } as Post;
+      return { ...post, is_liked: !!l.data, is_bookmarked: !!b.data } as Post;
     }
-    return data as Post;
+    return post as Post;
   } catch (e) {
     console.error("fetchPostById:", e);
     return null;
@@ -186,13 +202,13 @@ export async function fetchComments(postId: string): Promise<AppComment[]> {
       .from("comments")
       .select(`
         id, post_id, user_id, content, created_at,
-        author:profiles!comments_user_id_fkey(id, full_name, avatar_url, headline)
+        author:profiles!comments_user_id_fkey(${COMMENT_AUTHOR_SELECT})
       `)
       .eq("post_id", postId)
       .order("created_at", { ascending: true });
 
     if (error || !data) return [];
-    return data as AppComment[];
+    return (data as any[]).map(c => ({ ...c, author: normaliseAuthor(c.author) })) as AppComment[];
   } catch (e) {
     console.error("fetchComments:", e);
     return [];
@@ -210,7 +226,7 @@ export async function addComment(
       .insert({ post_id: postId, user_id: userId, content })
       .select(`
         id, post_id, user_id, content, created_at,
-        author:profiles!comments_user_id_fkey(id, full_name, avatar_url, headline)
+        author:profiles!comments_user_id_fkey(${COMMENT_AUTHOR_SELECT})
       `)
       .single();
 
@@ -225,10 +241,87 @@ export async function addComment(
       });
     }
 
-    return data as AppComment;
+    return { ...(data as any), author: normaliseAuthor((data as any)?.author) } as AppComment;
   } catch (e) {
     console.error("addComment:", e);
     return null;
+  }
+}
+
+// ─── SUGGESTED CONNECTIONS ─────────────────────────────────────────────────────
+
+export interface SuggestedProfile {
+  id: string;
+  full_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+  headline: string | null;
+  plan: string;
+  areas: string[];
+  connection_status: "none" | "pending" | "connected";
+  match_score: number;
+}
+
+export async function fetchSuggestedConnections(
+  currentUserId: string,
+  userAreas: string[],
+  limit = 10,
+): Promise<SuggestedProfile[]> {
+  try {
+    // 1. Get IDs already connected or pending (by profile id or user_id)
+    const { data: conns } = await supabase
+      .from("connections")
+      .select("requester_id, receiver_id, status")
+      .or(`requester_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`);
+
+    const excludedIds = new Set<string>([currentUserId]);
+    const statusMap = new Map<string, "pending" | "connected">();
+
+    (conns ?? []).forEach((c: any) => {
+      const otherId = c.requester_id === currentUserId ? c.receiver_id : c.requester_id;
+      excludedIds.add(otherId);
+      statusMap.set(otherId, c.status === "accepted" ? "connected" : "pending");
+    });
+
+    // 2. Fetch candidate profiles — use real column names
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, user_id, full_name, username, avatar_url, position, company, plan, areas")
+      .limit(80);
+
+    if (!profiles) return [];
+
+    const lowerUserAreas = userAreas.map(a => a.toLowerCase());
+
+    // 3. Score and rank
+    const scored = (profiles as any[])
+      .filter((p: any) => !excludedIds.has(p.id) && p.id !== currentUserId && p.user_id !== currentUserId)
+      .map((p: any) => {
+        const pAreas: string[] = Array.isArray(p.areas) ? p.areas : [];
+        const match_score = pAreas.filter(a => lowerUserAreas.includes(a.toLowerCase())).length;
+        const headline = [p.position, p.company].filter(Boolean).join(" · ") || null;
+        return {
+          id: p.id,
+          full_name: p.full_name,
+          username: p.username,
+          avatar_url: p.avatar_url,
+          headline,
+          plan: p.plan ?? "gratuito",
+          areas: pAreas,
+          connection_status: statusMap.get(p.id) ?? "none",
+          match_score,
+        } as SuggestedProfile;
+      })
+      .sort((a, b) => {
+        if (b.match_score !== a.match_score) return b.match_score - a.match_score;
+        const planOrder: Record<string, number> = { exclusive: 3, business: 2, premium: 1, basico: 0, gratuito: 0 };
+        return (planOrder[b.plan] ?? 0) - (planOrder[a.plan] ?? 0);
+      });
+
+    return scored.slice(0, limit);
+  } catch (e) {
+    console.error("fetchSuggestedConnections:", e);
+    return [];
   }
 }
 
@@ -346,8 +439,19 @@ export async function getUnreadNotifCount(userId: string): Promise<number> {
 
 export async function fetchPublicProfile(userId: string) {
   try {
-    const { data } = await supabase.from("profiles").select("*").eq("id", userId).single();
-    return data ?? null;
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .or(`id.eq.${userId},user_id.eq.${userId}`)
+      .maybeSingle();
+    if (!data) return null;
+    const d = data as any;
+    // Normalise to the names the rest of the app expects
+    const headline = d.headline ?? ([d.position, d.company].filter(Boolean).join(" · ") || null);
+    const areas_of_expertise: string[] =
+      Array.isArray(d.areas_of_expertise) ? d.areas_of_expertise :
+      Array.isArray(d.areas) ? d.areas : [];
+    return { ...d, headline, areas_of_expertise };
   } catch { return null; }
 }
 
@@ -358,7 +462,7 @@ export async function fetchProfilePosts(userId: string, currentUserId: string): 
       .select(`
         id, user_id, content, image_url, likes_count, comments_count, shares_count,
         hashtags, poll, created_at,
-        author:profiles!posts_user_id_fkey(id, full_name, username, avatar_url, headline, plan)
+        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT})
       `)
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
@@ -374,7 +478,10 @@ export async function fetchProfilePosts(userId: string, currentUserId: string): 
     const likedIds = new Set((likedRes.data ?? []).map((l: any) => l.post_id));
     const bookmarkedIds = new Set((bookmarkRes.data ?? []).map((b: any) => b.post_id));
     return data.map((post: any) => ({
-      ...post, is_liked: likedIds.has(post.id), is_bookmarked: bookmarkedIds.has(post.id),
+      ...post,
+      author: normaliseAuthor(post.author),
+      is_liked: likedIds.has(post.id),
+      is_bookmarked: bookmarkedIds.has(post.id),
     }));
   } catch (e) {
     console.error("fetchProfilePosts:", e);
@@ -610,12 +717,15 @@ export async function searchProfiles(
   try {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, full_name, username, avatar_url, headline")
+      .select("id, full_name, username, avatar_url, position, company")
       .neq("id", currentUserId)
       .or(`full_name.ilike.%${query}%,username.ilike.%${query}%`)
       .limit(limit);
     if (error || !data) return [];
-    return data;
+    return (data as any[]).map(p => ({
+      ...p,
+      headline: [p.position, p.company].filter(Boolean).join(" · ") || null,
+    }));
   } catch { return []; }
 }
 
