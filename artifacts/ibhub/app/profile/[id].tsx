@@ -24,7 +24,8 @@ const FALLBACK_USER = {
   id: "", full_name: "Usuário", username: "usuario",
   headline: "", bio: "", location: "",
   avatar_url: null as string | null,
-  plan: "basico", followers_count: 0, following_count: 0, connections_count: 0,
+  plan: "gratuito", profile_type: "pessoa",
+  followers_count: 0, following_count: 0, connections_count: 0,
   areas_of_expertise: [] as string[], certifications: [] as string[],
 };
 
@@ -40,7 +41,7 @@ export default function PublicProfileScreen() {
   const [isFollowing, setIsFollowing] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<"none" | "pending" | "connected">("none");
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"posts" | "sobre" | "vinho">("sobre");
+  const [tab, setTab] = useState<"posts" | "adega">("posts");
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -99,8 +100,10 @@ export default function PublicProfileScreen() {
     API.toggleBookmark(postId, currentUser.id, post.is_bookmarked ?? false);
   };
 
+  const isCompany = (userProfile as any).profile_type === "empresa";
   const connectLabel = connectionStatus === "connected" ? "Conectado" : connectionStatus === "pending" ? "Pendente" : "Conectar";
   const isOwnProfile = currentUser?.id === id;
+  const tab2Label = isCompany ? "Portfólio" : "Adega";
 
   if (loading) {
     return (
@@ -111,200 +114,198 @@ export default function PublicProfileScreen() {
   }
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={{ paddingBottom: 40 }}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Cover */}
-      <View style={[styles.cover, { backgroundColor: colors.navy, paddingTop: topPad + 8 }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Feather name="arrow-left" size={24} color={colors.gold} />
-        </TouchableOpacity>
-      </View>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* ── Floating back button — always on top ── */}
+      <TouchableOpacity
+        style={[styles.backBtn, { top: topPad + 8, backgroundColor: colors.navy + "cc" }]}
+        onPress={() => router.back()}
+      >
+        <Feather name="arrow-left" size={20} color={colors.gold} />
+      </TouchableOpacity>
 
-      {/* Profile card */}
-      <View style={[styles.profileSection, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <View style={styles.avatarRow}>
-          <View style={[styles.avatarBorder, { borderColor: colors.card }]}>
-            <Avatar uri={userProfile.avatar_url} name={userProfile.full_name} size={80} />
-          </View>
-          {userProfile.plan !== "basico" && (
-            <View style={[styles.planBadge, { backgroundColor: colors.gold }]}>
-              <Text style={{ color: colors.navy, fontSize: 11, fontWeight: "700" }}>
-                {(userProfile.plan ?? "").toUpperCase()}
-              </Text>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Cover banner */}
+        <View style={[styles.cover, { backgroundColor: colors.navy }]} />
+
+        {/* ── Profile header ── */}
+        <View style={[styles.profileSection, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+
+          {/* Avatar + plan badge */}
+          <View style={styles.avatarRow}>
+            <View style={[styles.avatarBorder, { borderColor: colors.card }]}>
+              <Avatar uri={userProfile.avatar_url} name={userProfile.full_name} size={84} />
             </View>
+            {userProfile.plan && !["gratuito", "basico"].includes(userProfile.plan) && (
+              <View style={[styles.planBadge, { backgroundColor: colors.gold }]}>
+                <Text style={{ color: colors.navy, fontSize: 10, fontWeight: "800", letterSpacing: 0.5 }}>
+                  {userProfile.plan.toUpperCase()}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Nome */}
+          <Text style={[styles.name, { color: colors.foreground }]}>{userProfile.full_name}</Text>
+
+          {/* @username */}
+          {!!userProfile.username && (
+            <Text style={[styles.username, { color: colors.mutedForeground }]}>@{userProfile.username}</Text>
           )}
-        </View>
 
-        <Text style={[styles.name, { color: colors.foreground }]}>{userProfile.full_name}</Text>
-        {!!userProfile.headline && (
-          <Text style={[styles.headline, { color: colors.mutedForeground }]}>{userProfile.headline}</Text>
-        )}
-        {!!userProfile.location && (
-          <View style={styles.location}>
-            <Feather name="map-pin" size={12} color={colors.mutedForeground} />
-            <Text style={[styles.locationText, { color: colors.mutedForeground }]}>{userProfile.location}</Text>
-          </View>
-        )}
-
-        <View style={styles.statsRow}>
-          <View style={styles.stat}>
-            <Text style={[styles.statNum, { color: colors.foreground }]}>{userProfile.connections_count}</Text>
-            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Conexões</Text>
-          </View>
-          <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-          <View style={styles.stat}>
-            <Text style={[styles.statNum, { color: colors.foreground }]}>{userProfile.followers_count}</Text>
-            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Seguidores</Text>
-          </View>
-          <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-          <View style={styles.stat}>
-            <Text style={[styles.statNum, { color: colors.foreground }]}>{userProfile.following_count}</Text>
-            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Seguindo</Text>
-          </View>
-        </View>
-
-        {!isOwnProfile && (
-          <View style={styles.actionRow}>
-            <Button
-              title={connectLabel}
-              onPress={handleConnect}
-              variant={connectionStatus !== "none" ? "outline" : "gold"}
-              size="sm"
-              style={{ flex: 1 }}
-            />
-            <Button
-              title={isFollowing ? "Seguindo" : "Seguir"}
-              onPress={handleFollow}
-              variant={isFollowing ? "outline" : "primary"}
-              size="sm"
-              style={{ flex: 1 }}
-            />
-            <TouchableOpacity
-              style={[styles.messageBtn, { borderColor: colors.border }]}
-              onPress={handleMessage}
-            >
-              <Feather name="message-circle" size={20} color={colors.foreground} />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {(userProfile.areas_of_expertise ?? []).length > 0 && (
-          <View style={styles.tags}>
-            {(userProfile.areas_of_expertise ?? []).map((area) => (
-              <Badge key={area} label={area} variant="gold" />
-            ))}
-          </View>
-        )}
-      </View>
-
-      {/* Tabs */}
-      <View style={[styles.tabRow, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
-        {(["sobre", "posts", "vinho"] as const).map((t) => (
-          <Pressable
-            key={t}
-            style={[styles.tab, tab === t && [styles.activeTab, { borderBottomColor: colors.gold }]]}
-            onPress={() => setTab(t)}
-          >
-            <Text style={[styles.tabText, { color: tab === t ? colors.gold : colors.mutedForeground }]}>
-              {t === "posts" ? "Posts" : t === "vinho" ? "Vinho" : "Sobre"}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      {/* Sobre */}
-      {tab === "sobre" && (
-        <View style={styles.aboutSection}>
+          {/* Sobre / bio — imediatamente abaixo do username */}
           {!!userProfile.bio && (
-            <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.infoTitle, { color: colors.foreground }]}>Bio</Text>
-              <Text style={[styles.infoText, { color: colors.mutedForeground }]}>{userProfile.bio}</Text>
+            <Text style={[styles.bio, { color: colors.foreground }]}>{userProfile.bio}</Text>
+          )}
+
+          {/* Cargo · Empresa */}
+          {!!userProfile.headline && (
+            <Text style={[styles.headline, { color: colors.mutedForeground }]}>{userProfile.headline}</Text>
+          )}
+
+          {/* Localização */}
+          {!!(userProfile as any).location && (
+            <View style={styles.locationRow}>
+              <Feather name="map-pin" size={12} color={colors.mutedForeground} />
+              <Text style={[styles.locationText, { color: colors.mutedForeground }]}>{(userProfile as any).location}</Text>
             </View>
           )}
-          {(userProfile.certifications ?? []).length > 0 && (
-            <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.infoTitle, { color: colors.foreground }]}>Certificações</Text>
-              {(userProfile.certifications ?? []).map((cert) => (
-                <View key={cert} style={styles.certItem}>
-                  <Feather name="award" size={14} color={colors.gold} />
-                  <Text style={[styles.certText, { color: colors.foreground }]}>{cert}</Text>
-                </View>
+
+          {/* Stats */}
+          <View style={[styles.statsRow, { borderColor: colors.border }]}>
+            <View style={styles.stat}>
+              <Text style={[styles.statNum, { color: colors.foreground }]}>{userProfile.connections_count}</Text>
+              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Conexões</Text>
+            </View>
+            <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.stat}>
+              <Text style={[styles.statNum, { color: colors.foreground }]}>{userProfile.followers_count}</Text>
+              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Seguidores</Text>
+            </View>
+            <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.stat}>
+              <Text style={[styles.statNum, { color: colors.foreground }]}>{userProfile.following_count}</Text>
+              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Seguindo</Text>
+            </View>
+          </View>
+
+          {/* Action buttons */}
+          {!isOwnProfile && (
+            <View style={styles.actionRow}>
+              <Button
+                title={connectLabel}
+                onPress={handleConnect}
+                variant={connectionStatus !== "none" ? "outline" : "gold"}
+                size="sm"
+                style={{ flex: 1 }}
+              />
+              <Button
+                title={isFollowing ? "Seguindo" : "Seguir"}
+                onPress={handleFollow}
+                variant={isFollowing ? "outline" : "primary"}
+                size="sm"
+                style={{ flex: 1 }}
+              />
+              <TouchableOpacity
+                style={[styles.messageBtn, { borderColor: colors.border }]}
+                onPress={handleMessage}
+              >
+                <Feather name="message-circle" size={20} color={colors.foreground} />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Áreas de atuação */}
+          {(userProfile.areas_of_expertise ?? []).length > 0 && (
+            <View style={styles.tags}>
+              {(userProfile.areas_of_expertise ?? []).map((area) => (
+                <Badge key={area} label={area} variant="gold" />
               ))}
             </View>
           )}
-          {!userProfile.bio && (userProfile.certifications ?? []).length === 0 && (
+        </View>
+
+        {/* ── Tabs — apenas 2 ── */}
+        <View style={[styles.tabRow, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
+          {(["posts", "adega"] as const).map((t) => (
+            <Pressable
+              key={t}
+              style={[styles.tab, tab === t && [styles.activeTab, { borderBottomColor: colors.gold }]]}
+              onPress={() => setTab(t)}
+            >
+              <Text style={[styles.tabText, { color: tab === t ? colors.gold : colors.mutedForeground }]}>
+                {t === "posts" ? "Posts" : tab2Label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* ── Posts ── */}
+        {tab === "posts" && (
+          userPosts.length === 0 ? (
             <View style={styles.empty}>
-              <Feather name="user" size={36} color={colors.mutedForeground} />
-              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Perfil ainda sem informações</Text>
+              <Feather name="grid" size={40} color={colors.mutedForeground} />
+              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhuma publicação ainda</Text>
             </View>
-          )}
-        </View>
-      )}
+          ) : (
+            userPosts.map(post => (
+              <PostCard
+                key={post.id}
+                post={post}
+                onLike={handleLike}
+                onBookmark={handleBookmark}
+                onComment={(pid) => router.push(`/post/${pid}` as any)}
+              />
+            ))
+          )
+        )}
 
-      {/* Posts */}
-      {tab === "posts" && (
-        userPosts.length === 0 ? (
+        {/* ── Adega / Portfólio ── */}
+        {tab === "adega" && (
           <View style={styles.empty}>
-            <Feather name="grid" size={40} color={colors.mutedForeground} />
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhuma publicação ainda</Text>
+            <Feather name={isCompany ? "briefcase" : "package"} size={40} color={colors.mutedForeground} />
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+              {isCompany ? "Portfólio ainda vazio" : "Adega ainda vazia"}
+            </Text>
           </View>
-        ) : (
-          userPosts.map(post => (
-            <PostCard
-              key={post.id}
-              post={post}
-              onLike={handleLike}
-              onBookmark={handleBookmark}
-              onComment={(pid) => router.push(`/post/${pid}` as any)}
-            />
-          ))
-        )
-      )}
-
-      {/* Vinho */}
-      {tab === "vinho" && (
-        <View style={styles.empty}>
-          <Feather name="package" size={40} color={colors.mutedForeground} />
-          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Adega privada</Text>
-        </View>
-      )}
-    </ScrollView>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  cover: { height: 100, justifyContent: "flex-start", paddingHorizontal: 16 },
-  backBtn: { alignSelf: "flex-start", padding: 4 },
-  profileSection: { padding: 16, gap: 10, borderBottomWidth: 1 },
-  avatarRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", marginTop: -40 },
-  avatarBorder: { width: 86, height: 86, borderRadius: 43, borderWidth: 3, overflow: "hidden" },
-  planBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-  name: { fontSize: 22, fontWeight: "800", marginTop: 4 },
-  headline: { fontSize: 14 },
-  location: { flexDirection: "row", alignItems: "center", gap: 4 },
+  container:    { flex: 1 },
+  backBtn:      {
+    position: "absolute", left: 16, zIndex: 100,
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: "center", justifyContent: "center",
+  },
+  cover:        { height: 110 },
+  profileSection: { paddingHorizontal: 16, paddingBottom: 16, gap: 8, borderBottomWidth: 1 },
+  avatarRow:    { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", marginTop: -44 },
+  avatarBorder: { borderRadius: 46, borderWidth: 3, overflow: "hidden", width: 90, height: 90 },
+  planBadge:    { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, marginBottom: 4 },
+  name:         { fontSize: 22, fontWeight: "800", marginTop: 8 },
+  username:     { fontSize: 14, fontWeight: "500", marginTop: -2 },
+  bio:          { fontSize: 14, lineHeight: 21, marginTop: 4 },
+  headline:     { fontSize: 13 },
+  locationRow:  { flexDirection: "row", alignItems: "center", gap: 4 },
   locationText: { fontSize: 13 },
-  statsRow: { flexDirection: "row", alignItems: "center", marginVertical: 8 },
-  stat: { flex: 1, alignItems: "center", gap: 2 },
-  statNum: { fontSize: 20, fontWeight: "800" },
-  statLabel: { fontSize: 11, fontWeight: "500" },
-  statDivider: { width: 1, height: 32 },
-  actionRow: { flexDirection: "row", gap: 10, alignItems: "center" },
-  messageBtn: { width: 40, height: 40, borderRadius: 10, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
-  tags: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
-  tabRow: { flexDirection: "row", borderBottomWidth: 1 },
-  tab: { flex: 1, alignItems: "center", paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: "transparent" },
-  activeTab: {},
-  tabText: { fontSize: 14, fontWeight: "700" },
-  aboutSection: { padding: 16, gap: 12 },
-  infoCard: { padding: 16, borderRadius: 12, borderWidth: 1, gap: 10 },
-  infoTitle: { fontSize: 15, fontWeight: "800" },
-  infoText: { fontSize: 14, lineHeight: 21 },
-  certItem: { flexDirection: "row", alignItems: "center", gap: 8 },
-  certText: { fontSize: 14 },
-  empty: { alignItems: "center", justifyContent: "center", paddingTop: 60, gap: 12 },
-  emptyText: { fontSize: 15 },
+  statsRow:     { flexDirection: "row", alignItems: "center", marginTop: 6, paddingTop: 12, borderTopWidth: 1 },
+  stat:         { flex: 1, alignItems: "center", gap: 2 },
+  statNum:      { fontSize: 20, fontWeight: "800" },
+  statLabel:    { fontSize: 11, fontWeight: "500" },
+  statDivider:  { width: 1, height: 32 },
+  actionRow:    { flexDirection: "row", gap: 10, alignItems: "center" },
+  messageBtn:   { width: 40, height: 40, borderRadius: 10, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+  tags:         { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  tabRow:       { flexDirection: "row", borderBottomWidth: 1 },
+  tab:          { flex: 1, alignItems: "center", paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: "transparent" },
+  activeTab:    {},
+  tabText:      { fontSize: 14, fontWeight: "700" },
+  empty:        { alignItems: "center", justifyContent: "center", paddingTop: 60, gap: 12 },
+  emptyText:    { fontSize: 15 },
 });
