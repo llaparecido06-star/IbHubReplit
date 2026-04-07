@@ -64,6 +64,7 @@ export default function PublicProfileScreen() {
 
   useEffect(() => { load(); }, [load]);
 
+  // ── Follow ──────────────────────────────────────────────────────────────────
   const handleFollow = async () => {
     if (!currentUser?.id || !id) return;
     const next = !isFollowing;
@@ -72,14 +73,32 @@ export default function PublicProfileScreen() {
     await API.toggleFollow(id, currentUser.id, isFollowing);
   };
 
+  // ── Connect — also auto-follows ────────────────────────────────────────────
   const handleConnect = async () => {
     if (!currentUser?.id || !id || connectionStatus !== "none") return;
     setConnectionStatus("pending");
+    // Auto-follow when requesting connection
+    if (!isFollowing) {
+      setIsFollowing(true);
+      setUserProfile(p => ({ ...p, followers_count: p.followers_count + 1 }));
+      await API.toggleFollow(id, currentUser.id, false);
+    }
     await API.sendConnectionRequest(id, currentUser.id);
   };
 
+  // ── Message ─────────────────────────────────────────────────────────────────
+  // Person:  connected → direct chat | following-only → pending request
+  // Company: always available
+  const canMessage =
+    isCompany
+      ? true
+      : connectionStatus === "connected" || isFollowing;
+
+  const messagePending =
+    !isCompany && connectionStatus !== "connected" && isFollowing;
+
   const handleMessage = async () => {
-    if (!currentUser?.id || !id) return;
+    if (!currentUser?.id || !id || !canMessage) return;
     const conversationId = await API.getOrCreateDirectConversation(currentUser.id, id);
     if (conversationId) router.push(`/chat/${conversationId}` as any);
   };
@@ -101,9 +120,15 @@ export default function PublicProfileScreen() {
   };
 
   const isCompany = (userProfile as any).profile_type === "empresa";
-  const connectLabel = connectionStatus === "connected" ? "Conectado" : connectionStatus === "pending" ? "Pendente" : "Conectar";
   const isOwnProfile = currentUser?.id === id;
   const tab2Label = isCompany ? "Portfólio" : "Adega";
+
+  // Connection button label + disabled state
+  const connectLabel =
+    connectionStatus === "connected" ? "Conectado"
+    : connectionStatus === "pending" ? "Pendente"
+    : "Conectar";
+  const connectDisabled = connectionStatus !== "none";
 
   if (loading) {
     return (
@@ -191,29 +216,72 @@ export default function PublicProfileScreen() {
             </View>
           </View>
 
-          {/* Action buttons */}
+          {/* ── Action buttons ── */}
           {!isOwnProfile && (
             <View style={styles.actionRow}>
-              <Button
-                title={connectLabel}
-                onPress={handleConnect}
-                variant={connectionStatus !== "none" ? "outline" : "gold"}
-                size="sm"
-                style={{ flex: 1 }}
-              />
-              <Button
-                title={isFollowing ? "Seguindo" : "Seguir"}
-                onPress={handleFollow}
-                variant={isFollowing ? "outline" : "primary"}
-                size="sm"
-                style={{ flex: 1 }}
-              />
-              <TouchableOpacity
-                style={[styles.messageBtn, { borderColor: colors.border }]}
-                onPress={handleMessage}
-              >
-                <Feather name="message-circle" size={20} color={colors.foreground} />
-              </TouchableOpacity>
+              {isCompany ? (
+                /* ── Empresa: só Seguir + Chat sempre disponível ── */
+                <>
+                  <Button
+                    title={isFollowing ? "Seguindo" : "Seguir"}
+                    onPress={handleFollow}
+                    variant={isFollowing ? "outline" : "primary"}
+                    size="sm"
+                    style={{ flex: 1 }}
+                  />
+                  <TouchableOpacity
+                    style={[styles.messageBtn, { borderColor: colors.border }]}
+                    onPress={handleMessage}
+                  >
+                    <Feather name="message-circle" size={20} color={colors.foreground} />
+                  </TouchableOpacity>
+                </>
+              ) : (
+                /* ── Pessoa: Conectar + Seguir + Chat condicional ── */
+                <>
+                  {/* Conectar — visível enquanto não conectado */}
+                  {connectionStatus !== "connected" && (
+                    <Button
+                      title={connectLabel}
+                      onPress={handleConnect}
+                      variant={connectDisabled ? "outline" : "gold"}
+                      size="sm"
+                      style={{ flex: 1 }}
+                      disabled={connectDisabled}
+                    />
+                  )}
+
+                  {/* Seguir — independente de conexão */}
+                  <Button
+                    title={isFollowing ? "Seguindo" : "Seguir"}
+                    onPress={handleFollow}
+                    variant={isFollowing ? "outline" : "primary"}
+                    size="sm"
+                    style={{ flex: 1 }}
+                  />
+
+                  {/* Chat — só aparece se seguindo ou conectado */}
+                  {canMessage && (
+                    <TouchableOpacity
+                      style={[
+                        styles.messageBtn,
+                        { borderColor: messagePending ? colors.gold : colors.border },
+                      ]}
+                      onPress={handleMessage}
+                    >
+                      <Feather
+                        name="message-circle"
+                        size={20}
+                        color={messagePending ? colors.gold : colors.foreground}
+                      />
+                      {/* Ícone de "pendente" quando seguindo mas não conectado */}
+                      {messagePending && (
+                        <View style={[styles.pendingDot, { backgroundColor: colors.gold }]} />
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
             </View>
           )}
 
@@ -301,6 +369,7 @@ const styles = StyleSheet.create({
   statDivider:  { width: 1, height: 32 },
   actionRow:    { flexDirection: "row", gap: 10, alignItems: "center" },
   messageBtn:   { width: 40, height: 40, borderRadius: 10, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+  pendingDot:   { position: "absolute", top: 6, right: 6, width: 8, height: 8, borderRadius: 4 },
   tags:         { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   tabRow:       { flexDirection: "row", borderBottomWidth: 1 },
   tab:          { flex: 1, alignItems: "center", paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: "transparent" },
