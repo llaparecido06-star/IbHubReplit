@@ -21,11 +21,11 @@ export default function LoginScreen() {
   const { signIn } = useAuth();
   const insets = useSafeAreaInsets();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail]             = useState("");
+  const [password, setPassword]       = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState<string | null>(null);
 
   const handleLogin = async () => {
     if (!email || !password) { setError("Preencha todos os campos"); return; }
@@ -38,73 +38,80 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.root}>
-      <Image
-        source={require("@/assets/images/wine_social.png")}
-        style={StyleSheet.absoluteFillObject}
-        contentFit="cover"
-      />
-      <View style={[StyleSheet.absoluteFillObject, styles.overlay]} />
+      {/* Decorative top band */}
+      <View style={styles.topBand} />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <ScrollView
           contentContainerStyle={[
             styles.scroll,
-            { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 },
+            { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 40 },
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {/* Logo + tagline */}
           <View style={styles.logoSection}>
             <Image
-              source={require("@/assets/images/logo_dark.png")}
+              source={require("@/assets/images/logo_light.png")}
               style={styles.logoImage}
               contentFit="contain"
             />
-            <Text style={styles.tagline}>REDE PROFISSIONAL DO VINHO</Text>
+            <View style={styles.taglineWrap}>
+              <Text style={styles.tagline}>REDE PROFISSIONAL DO VINHO</Text>
+            </View>
           </View>
 
-          <View style={styles.form}>
+          {/* Card form */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Entrar na sua conta</Text>
+
             {error && (
               <View style={styles.errorBox}>
+                <Feather name="alert-circle" size={14} color="#c0392b" style={{ marginRight: 6 }} />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             )}
 
-            <View style={styles.fieldWrap}>
-              <Feather name="mail" size={17} color="#8fa3b8" style={styles.fieldIcon} />
-              <TextInput
-                style={styles.textInput}
-                placeholder="E-mail"
-                placeholderTextColor="#8fa3b8"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>E-mail</Text>
+              <View style={styles.fieldWrap}>
+                <Feather name="mail" size={16} color="#8fa3b8" style={styles.fieldIcon} />
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="seu@email.com"
+                  placeholderTextColor="#b0bec5"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
             </View>
 
-            <View style={styles.fieldWrap}>
-              <Feather name="lock" size={17} color="#8fa3b8" style={styles.fieldIcon} />
-              <TextInput
-                style={styles.textInput}
-                placeholder="Senha"
-                placeholderTextColor="#8fa3b8"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-              />
-              <TouchableOpacity onPress={() => setShowPassword((v) => !v)} style={styles.eyeBtn}>
-                <Feather name={showPassword ? "eye-off" : "eye"} size={18} color="#8fa3b8" />
-              </TouchableOpacity>
+            <View style={styles.fieldGroup}>
+              <View style={styles.labelRow}>
+                <Text style={styles.fieldLabel}>Senha</Text>
+                <TouchableOpacity onPress={() => router.push("/(auth)/forgot-password" as any)}>
+                  <Text style={styles.forgotText}>Esqueceu?</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.fieldWrap}>
+                <Feather name="lock" size={16} color="#8fa3b8" style={styles.fieldIcon} />
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="••••••••"
+                  placeholderTextColor="#b0bec5"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                />
+                <TouchableOpacity onPress={() => setShowPassword((v) => !v)} style={styles.eyeBtn}>
+                  <Feather name={showPassword ? "eye-off" : "eye"} size={17} color="#8fa3b8" />
+                </TouchableOpacity>
+              </View>
             </View>
-
-            <TouchableOpacity
-              style={styles.forgotRow}
-              onPress={() => router.push("/(auth)/forgot-password" as any)}
-            >
-              <Text style={styles.forgotText}>Esqueceu sua senha?</Text>
-            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.primaryBtn, loading && { opacity: 0.7 }]}
@@ -116,7 +123,7 @@ export default function LoginScreen() {
 
             <View style={styles.dividerRow}>
               <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>ou</Text>
+              <Text style={styles.dividerText}>ou continue com</Text>
               <View style={styles.dividerLine} />
             </View>
 
@@ -125,9 +132,9 @@ export default function LoginScreen() {
                 <Text style={styles.googleG}>G</Text>
                 <Text style={styles.socialBtnText}>Google</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.socialBtn}>
-                <Ionicons name="logo-apple" size={19} color="#f5f0e8" />
-                <Text style={styles.socialBtnText}>Apple</Text>
+              <TouchableOpacity style={[styles.socialBtn, styles.socialBtnApple]}>
+                <Ionicons name="logo-apple" size={18} color="#fff" />
+                <Text style={[styles.socialBtnText, { color: "#fff" }]}>Apple</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -135,7 +142,7 @@ export default function LoginScreen() {
           <View style={styles.footer}>
             <Text style={styles.footerText}>Não tem conta? </Text>
             <Pressable onPress={() => router.push("/(auth)/register" as any)}>
-              <Text style={styles.footerLink}>Cadastrar</Text>
+              <Text style={styles.footerLink}>Criar conta grátis</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -145,72 +152,130 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#0d1b2a" },
-  overlay: { backgroundColor: "rgba(8, 18, 30, 0.72)" },
-  scroll: { paddingHorizontal: 28, flexGrow: 1, justifyContent: "center" },
-  logoSection: { alignItems: "center", marginBottom: 52 },
-  logoImage:   { width: 180, height: 72, marginBottom: 10 },
-  tagline: { fontSize: 11, fontWeight: "700", color: "#c9a84c", letterSpacing: 2.5 },
-  form: { gap: 14 },
-  errorBox: { backgroundColor: "rgba(231,76,60,0.15)", padding: 12, borderRadius: 10 },
-  errorText: { color: "#e74c3c", fontSize: 13 },
+  root: { flex: 1, backgroundColor: "#f4f5f7" },
+
+  /* Thin navy band at the very top — just a tasteful accent */
+  topBand: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 4,
+    backgroundColor: "#c9a84c",
+  },
+
+  scroll: { paddingHorizontal: 24, flexGrow: 1, justifyContent: "center" },
+
+  /* Logo */
+  logoSection: { alignItems: "center", marginBottom: 32 },
+  logoImage:   { width: 160, height: 64 },
+  taglineWrap: {
+    marginTop: 8,
+    backgroundColor: "#0d1b2a",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  tagline: { fontSize: 9.5, fontWeight: "800", color: "#c9a84c", letterSpacing: 2.5 },
+
+  /* Card */
+  card: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 24,
+    gap: 16,
+    shadowColor: "#0d1b2a",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  cardTitle: { fontSize: 18, fontWeight: "800", color: "#0d1b2a", marginBottom: 2 },
+
+  /* Error */
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fdecea",
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#f5c6cb",
+  },
+  errorText: { color: "#c0392b", fontSize: 13, flex: 1 },
+
+  /* Fields */
+  fieldGroup: { gap: 6 },
+  labelRow:   { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  fieldLabel: { fontSize: 13, fontWeight: "700", color: "#0d1b2a" },
+  forgotText: { fontSize: 13, color: "#c9a84c", fontWeight: "600" },
   fieldWrap: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.07)",
+    backgroundColor: "#f4f5f7",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
+    borderColor: "#dde1e7",
     paddingHorizontal: 14,
-    minHeight: 52,
+    minHeight: 50,
   },
   fieldIcon: { marginRight: 10 },
   textInput: {
     flex: 1,
-    color: "#f5f0e8",
+    color: "#0d1b2a",
     fontSize: 15,
-    paddingVertical: Platform.OS === "android" ? 14 : 0,
+    paddingVertical: Platform.OS === "android" ? 12 : 0,
   },
   eyeBtn: { padding: 4 },
-  forgotRow: { alignSelf: "flex-end", marginTop: -4 },
-  forgotText: { color: "#c9a84c", fontSize: 13, fontWeight: "600" },
+
+  /* Primary button */
   primaryBtn: {
     backgroundColor: "#c9a84c",
     borderRadius: 10,
-    paddingVertical: 16,
+    paddingVertical: 15,
     alignItems: "center",
     marginTop: 4,
+    shadowColor: "#c9a84c",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  primaryBtnText: { color: "#0d1b2a", fontSize: 16, fontWeight: "800" },
-  dividerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginVertical: 2,
-  },
-  dividerLine: { flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.14)" },
-  dividerText: { color: "rgba(255,255,255,0.4)", fontSize: 13 },
+  primaryBtnText: { color: "#0d1b2a", fontSize: 15, fontWeight: "800", letterSpacing: 0.3 },
+
+  /* Divider */
+  dividerRow:  { flexDirection: "row", alignItems: "center", gap: 10 },
+  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: "#dde1e7" },
+  dividerText: { color: "#8fa3b8", fontSize: 12, fontWeight: "500" },
+
+  /* Social buttons */
   socialRow: { flexDirection: "row", gap: 12 },
   socialBtn: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.07)",
+    backgroundColor: "#f4f5f7",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    paddingVertical: 14,
+    borderColor: "#dde1e7",
+    paddingVertical: 13,
     gap: 8,
   },
-  socialBtnText: { color: "#f5f0e8", fontSize: 14, fontWeight: "600" },
-  googleG: { color: "#4285F4", fontSize: 16, fontWeight: "800" },
+  socialBtnApple: {
+    backgroundColor: "#0d1b2a",
+    borderColor: "#0d1b2a",
+  },
+  socialBtnText: { color: "#0d1b2a", fontSize: 14, fontWeight: "600" },
+  googleG:       { color: "#4285F4", fontSize: 15, fontWeight: "800" },
+
+  /* Footer */
   footer: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 36,
+    marginTop: 28,
   },
-  footerText: { color: "rgba(255,255,255,0.5)", fontSize: 14 },
-  footerLink: { color: "#c9a84c", fontSize: 14, fontWeight: "800" },
+  footerText: { color: "#8fa3b8", fontSize: 14 },
+  footerLink: { color: "#0d1b2a", fontSize: 14, fontWeight: "800" },
 });
