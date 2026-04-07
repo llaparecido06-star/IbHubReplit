@@ -14,6 +14,16 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/context/AuthContext";
+import { createEvent } from "@/services/api";
+
+function parseDateTime(date: string, time: string): string | null {
+  const parts = date.split("/");
+  if (parts.length !== 3) return null;
+  const [day, month, year] = parts;
+  if (!day || !month || !year || year.length !== 4) return null;
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T${time}:00`;
+}
 
 type EntryType   = "gratuito" | "pago-externo" | "pago-integrado";
 type Visibility  = "publico" | "restrito" | "privado";
@@ -23,6 +33,7 @@ export default function NewEventScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
 
   const [step, setStep] = useState(1);
 
@@ -62,12 +73,33 @@ export default function NewEventScreen() {
   };
 
   const handleCreate = async () => {
+    if (!user?.id) { Alert.alert("Erro", "Você precisa estar logado."); return; }
+    const startIso = parseDateTime(startDate, startTime);
+    if (!startIso) { Alert.alert("Data inválida", "Use o formato DD/MM/AAAA para a data e HH:MM para o horário."); return; }
+    const endIso = endDate && endTime ? parseDateTime(endDate, endTime) : null;
+    const cap = capacity ? parseInt(capacity, 10) : null;
     setCreating(true);
-    await new Promise((r) => setTimeout(r, 900));
+    const result = await createEvent({
+      user_id: user.id,
+      title: title.trim(),
+      description: desc.trim() || null,
+      start_date: startIso,
+      end_date: endIso,
+      location_type: localType,
+      location: localType === "presencial" ? (address.trim() || null) : null,
+      entry_type: entryType,
+      capacity: cap && !isNaN(cap) ? cap : null,
+      visibility,
+      pay_link: entryType !== "gratuito" ? (payLink.trim() || null) : null,
+    });
     setCreating(false);
-    Alert.alert("Evento criado!", `"${title}" está visível na aba Oportunidades > Eventos.`, [
-      { text: "OK", onPress: () => router.back() },
-    ]);
+    if (result) {
+      Alert.alert("Evento criado!", `"${title}" está visível na aba Oportunidades > Eventos.`, [
+        { text: "OK", onPress: () => router.replace(`/event/${result.id}` as any) },
+      ]);
+    } else {
+      Alert.alert("Erro", "Não foi possível criar o evento. Verifique os dados e tente novamente.");
+    }
   };
 
   const ProgressBar = () => (

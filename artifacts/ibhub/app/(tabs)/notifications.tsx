@@ -16,19 +16,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
-import { AppOpportunity, fetchOpportunities } from "@/services/api";
+import { AppEvent, AppOpportunity, fetchEvents, fetchOpportunities } from "@/services/api";
 
 type OporTab = "market" | "vagas" | "eventos";
-
-export interface Evento {
-  id: string; title: string; date: string; time: string;
-  capacity: string; location: string;
-}
-
-const MOCK_EVENTOS: Evento[] = [
-  { id: "e1", title: "Degustação de Vinhos do Vale do São Francisco", date: "16 de mar.", time: "01:27", capacity: "0/30", location: "Enoteca Brasileira, Rua Augusta 1200, São Paulo - SP" },
-  { id: "e2", title: "Masterclass Online: Vinhos de Borgonha",        date: "23 de mar.", time: "01:27", capacity: "0/50", location: "Online" },
-];
 
 export default function OportunidadesScreen() {
   const colors  = useColors();
@@ -40,6 +30,7 @@ export default function OportunidadesScreen() {
   const [search, setSearch] = useState("");
   const [market, setMarket] = useState<AppOpportunity[]>([]);
   const [vagas, setVagas]   = useState<AppOpportunity[]>([]);
+  const [eventos, setEventos] = useState<AppEvent[]>([]);
   const [loading, setLoading]     = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -55,12 +46,14 @@ export default function OportunidadesScreen() {
   ];
 
   const loadData = useCallback(async () => {
-    const [m, v] = await Promise.all([
+    const [m, v, ev] = await Promise.all([
       fetchOpportunities("marketplace", "", user?.id ?? ""),
       fetchOpportunities("vaga",        "", user?.id ?? ""),
+      fetchEvents(),
     ]);
     setMarket(m);
     setVagas(v);
+    setEventos(ev);
     setLoading(false);
     setRefreshing(false);
   }, [user?.id]);
@@ -87,7 +80,7 @@ export default function OportunidadesScreen() {
 
   const filteredMarket  = market.filter((i)  => !search || i.title.toLowerCase().includes(search.toLowerCase()));
   const filteredVagas   = vagas.filter((i)   => !search || i.title.toLowerCase().includes(search.toLowerCase()));
-  const filteredEventos = MOCK_EVENTOS.filter((i) => !search || i.title.toLowerCase().includes(search.toLowerCase()));
+  const filteredEventos = eventos.filter((i) => !search || i.title.toLowerCase().includes(search.toLowerCase()));
 
   const showCriarBtn = tab === "eventos" || isEmpresa;
 
@@ -247,41 +240,59 @@ export default function OportunidadesScreen() {
         ))}
 
         {/* ── Eventos ── */}
-        {tab === "eventos" && filteredEventos.map((item) => (
-          <TouchableOpacity
-            key={item.id}
-            style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}
-            onPress={() => router.push(`/event/${item.id}` as any)}
-            activeOpacity={0.75}
-          >
-            <View style={styles.cardTopRow}>
-              <Text style={[styles.cardTitle, { color: colors.navy, flex: 1 }]} numberOfLines={2}>
-                {item.title}
-              </Text>
-              <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
-            </View>
-            <View style={styles.eventoMeta}>
-              <View style={styles.eventoMetaItem}>
-                <Feather name="calendar" size={13} color={colors.mutedForeground} />
-                <Text style={[styles.eventoMetaText, { color: colors.mutedForeground }]}>{item.date}</Text>
+        {tab === "eventos" && !loading && filteredEventos.map((item) => {
+          const dateStr = new Date(item.start_date).toLocaleDateString("pt-BR", {
+            day: "2-digit", month: "short", year: "numeric",
+          });
+          const timeStr = new Date(item.start_date).toLocaleTimeString("pt-BR", {
+            hour: "2-digit", minute: "2-digit",
+          });
+          const locationStr = item.location_type === "online" ? "🌐 Online" : (item.location ?? "");
+          return (
+            <TouchableOpacity
+              key={item.id}
+              style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}
+              onPress={() => router.push(`/event/${item.id}` as any)}
+              activeOpacity={0.75}
+            >
+              <View style={styles.cardTopRow}>
+                <Text style={[styles.cardTitle, { color: colors.navy, flex: 1 }]} numberOfLines={2}>
+                  {item.title}
+                </Text>
+                <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
               </View>
-              <View style={styles.eventoMetaItem}>
-                <Feather name="clock" size={13} color={colors.mutedForeground} />
-                <Text style={[styles.eventoMetaText, { color: colors.mutedForeground }]}>{item.time}</Text>
+              <View style={styles.eventoMeta}>
+                <View style={styles.eventoMetaItem}>
+                  <Feather name="calendar" size={13} color={colors.mutedForeground} />
+                  <Text style={[styles.eventoMetaText, { color: colors.mutedForeground }]}>{dateStr}</Text>
+                </View>
+                <View style={styles.eventoMetaItem}>
+                  <Feather name="clock" size={13} color={colors.mutedForeground} />
+                  <Text style={[styles.eventoMetaText, { color: colors.mutedForeground }]}>{timeStr}</Text>
+                </View>
+                {item.capacity != null && (
+                  <View style={styles.eventoMetaItem}>
+                    <Feather name="users" size={13} color={colors.mutedForeground} />
+                    <Text style={[styles.eventoMetaText, { color: colors.mutedForeground }]}>{item.capacity} vagas</Text>
+                  </View>
+                )}
               </View>
-              <View style={styles.eventoMetaItem}>
-                <Feather name="users" size={13} color={colors.mutedForeground} />
-                <Text style={[styles.eventoMetaText, { color: colors.mutedForeground }]}>{item.capacity}</Text>
+              {locationStr ? (
+                <View style={styles.eventoMetaItem}>
+                  <Feather name="map-pin" size={13} color={colors.mutedForeground} />
+                  <Text style={[styles.eventoMetaText, { color: colors.mutedForeground }]} numberOfLines={1}>
+                    {locationStr}
+                  </Text>
+                </View>
+              ) : null}
+              <View style={[styles.entryBadge, { backgroundColor: item.entry_type === "gratuito" ? "#dcfce7" : "#fef9c3" }]}>
+                <Text style={[styles.entryBadgeText, { color: item.entry_type === "gratuito" ? "#16a34a" : "#a16207" }]}>
+                  {item.entry_type === "gratuito" ? "Gratuito" : "Pago"}
+                </Text>
               </View>
-            </View>
-            <View style={styles.eventoMetaItem}>
-              <Feather name="map-pin" size={13} color={colors.mutedForeground} />
-              <Text style={[styles.eventoMetaText, { color: colors.mutedForeground }]} numberOfLines={1}>
-                {item.location}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+            </TouchableOpacity>
+          );
+        })}
 
         {/* Empty states */}
         {!loading && tab === "market" && filteredMarket.length === 0 && (
@@ -306,10 +317,13 @@ export default function OportunidadesScreen() {
             ) : null}
           </View>
         )}
-        {tab === "eventos" && filteredEventos.length === 0 && (
+        {!loading && tab === "eventos" && filteredEventos.length === 0 && (
           <View style={styles.empty}>
-            <Feather name="inbox" size={36} color={colors.mutedForeground} />
+            <Feather name="calendar" size={36} color={colors.mutedForeground} />
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhum evento encontrado.</Text>
+            <Text style={[styles.emptyHint, { color: colors.mutedForeground }]}>
+              Crie o primeiro evento da comunidade!
+            </Text>
           </View>
         )}
       </ScrollView>
@@ -349,4 +363,6 @@ const styles = StyleSheet.create({
   empty: { alignItems: "center", paddingTop: 60, gap: 8 },
   emptyText: { fontSize: 15 },
   emptyHint: { fontSize: 13, textAlign: "center", maxWidth: 260 },
+  entryBadge: { alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  entryBadgeText: { fontSize: 11, fontWeight: "600" },
 });

@@ -1,8 +1,10 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Platform,
+  RefreshControl,
   ScrollView,
   Share,
   StyleSheet,
@@ -13,68 +15,145 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Avatar } from "@/components/ui/Avatar";
+import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import {
+  AppEvent,
+  AppEventAttendee,
+  cancelAttendance,
+  checkAttendance,
+  confirmAttendance,
+  fetchEventAttendees,
+  fetchEventById,
+} from "@/services/api";
 
-const EVENTS: Record<string, {
-  title: string; date: string; time: string; endTime: string;
-  location: string; capacity: number; attending: number;
-  description: string; organizer: string;
-}> = {
-  e1: {
-    title: "Degustação de Vinhos do Vale do São Francisco",
-    date: "segunda-feira, 16 de março",
-    time: "01:27",
-    endTime: "04:27",
-    location: "Enoteca Brasileira, Rua Augusta 1200, São Paulo - SP",
-    capacity: 30,
-    attending: 0,
-    description: "Explore os melhores rótulos da região nordestina em uma noite exclusiva com sommelier especializado. Inclui harmonização com queijos artesanais.",
-    organizer: "Lucas Lima",
-  },
-  e2: {
-    title: "Masterclass Online: Vinhos de Borgonha",
-    date: "segunda-feira, 23 de março",
-    time: "01:27",
-    endTime: "03:27",
-    location: "Online",
-    capacity: 50,
-    attending: 0,
-    description: "Mergulhe no universo dos vinhos de Borgonha com um dos maiores especialistas do Brasil. Aula transmitida ao vivo com certificado de participação.",
-    organizer: "Lucas Lima",
-  },
+function fmtDateTime(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleString("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+const entryLabels: Record<string, string> = {
+  "gratuito": "Gratuito",
+  "pago-externo": "Pago (link externo)",
+  "pago-integrado": "Pago",
 };
 
 export default function EventScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const { id } = useLocalSearchParams<{ id: string }>();
 
-  const [confirmed, setConfirmed] = useState(false);
-  const [count, setCount] = useState(0);
+  const [event, setEvent] = useState<AppEvent | null>(null);
+  const [attendees, setAttendees] = useState<AppEventAttendee[]>([]);
+  const [isAttending, setIsAttending] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [rsvpLoading, setRsvpLoading] = useState(false);
+  const [showAllAttendees, setShowAllAttendees] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
-  const event = EVENTS[id] ?? EVENTS.e1;
-  const remaining = event.capacity - count;
+  const loadData = useCallback(async () => {
+    if (!id) return;
+    const [ev, att, attending] = await Promise.all([
+      fetchEventById(id),
+      fetchEventAttendees(id),
+      user?.id ? checkAttendance(id, user.id) : Promise.resolve(false),
+    ]);
+    setEvent(ev);
+    setAttendees(att);
+    setIsAttending(attending);
+    setLoading(false);
+    setRefreshing(false);
+  }, [id, user?.id]);
 
-  const handleConfirm = () => {
-    if (confirmed) {
-      setConfirmed(false);
-      setCount((c) => Math.max(0, c - 1));
-      return;
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const onRefresh = () => { setRefreshing(true); loadData(); };
+
+  const handleRSVP = async () => {
+    if (!user?.id || !event) return;
+    setRsvpLoading(true);
+    if (isAttending) {
+      const ok = await cancelAttendance(event.id, user.id);
+      if (ok) {
+        setIsAttending(false);
+        setAttendees((prev) => prev.filter((a) => a.user_id !== user.id));
+      }
+    } else {
+      if (event.capacity != null && attendees.length >= event.capacity) {
+        Alert.alert("Evento lotado", "Não há mais vagas disponíveis para este evento.");
+        setRsvpLoading(false);
+        return;
+      }
+      const organizerId = event.user_id;
+      const ok = await confirmAttendance(event.id, user.id, organizerId, event.title);
+      if (ok) {
+        setIsAttending(true);
+        Alert.alert("Presença confirmada!", `Você está confirmado para "${event.title}".`);
+        loadData();
+      } else {
+        Alert.alert("Erro", "Não foi possível confirmar presença. Tente novamente.");
+      }
     }
-    setConfirmed(true);
-    setCount((c) => c + 1);
-    Alert.alert("Presença confirmada!", `Você está confirmado para "${event.title}".`);
+    setRsvpLoading(false);
   };
 
   const handleShare = async () => {
+    if (!event) return;
+    const domain = process.env.EXPO_PUBLIC_DOMAIN ?? "ibhub.app";
+    const shareUrl = `https://${domain}/event/${event.id}`;
+    const locationStr = event.location_type === "online" ? "Online" : (event.location ?? "");
     try {
-      await Share.share({ message: `${event.title} — ibhub.app/evento/${id}` });
+      await Share.share({
+        message: `${event.title}\n📅 ${fmtDateTime(event.start_date)}\n📍 ${locationStr}\n\n${shareUrl}`,
+        url: shareUrl,
+        title: event.title,
+      });
     } catch {}
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator color={colors.gold} size="large" />
+      </View>
+    );
+  }
+
+  if (!event) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
+            <Feather name="arrow-left" size={22} color={colors.navy} />
+            <Text style={[styles.headerTitle, { color: colors.navy }]}>Evento</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12 }}>
+          <Feather name="calendar" size={40} color={colors.mutedForeground} />
+          <Text style={[{ color: colors.mutedForeground, fontSize: 16 }]}>Evento não encontrado.</Text>
+        </View>
+      </View>
+    );
+  }
+
+  const remaining = event.capacity != null ? event.capacity - attendees.length : null;
+  const visibleAttendees = showAllAttendees ? attendees : attendees.slice(0, 5);
+  const organizerName = event.organizer?.full_name ?? event.organizer?.username ?? "Organizador";
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -84,73 +163,173 @@ export default function EventScreen() {
           <Feather name="arrow-left" size={22} color={colors.navy} />
           <Text style={[styles.headerTitle, { color: colors.navy }]}>Evento</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={handleShare}>
+        <TouchableOpacity onPress={handleShare} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Feather name="share-2" size={20} color={colors.navy} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
-        {/* Event main info */}
-        <Text style={[styles.eventTitle, { color: colors.navy }]}>{event.title}</Text>
+      <ScrollView
+        contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: bottomPad }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />}
+      >
+        {/* Title + entry badge */}
+        <View style={{ gap: 8 }}>
+          <Text style={[styles.eventTitle, { color: colors.navy }]}>{event.title}</Text>
+          <View style={styles.badgeRow}>
+            <View style={[styles.badge, { backgroundColor: event.entry_type === "gratuito" ? "#dcfce7" : "#fef9c3" }]}>
+              <Text style={[styles.badgeText, { color: event.entry_type === "gratuito" ? "#16a34a" : "#a16207" }]}>
+                {entryLabels[event.entry_type] ?? event.entry_type}
+              </Text>
+            </View>
+            <View style={[styles.badge, { backgroundColor: colors.background }]}>
+              <Text style={[styles.badgeText, { color: colors.mutedForeground }]}>
+                {event.location_type === "online" ? "🌐 Online" : "📍 Presencial"}
+              </Text>
+            </View>
+          </View>
+        </View>
 
+        {/* Meta */}
         <View style={styles.metaList}>
           <View style={styles.metaRow}>
             <Feather name="calendar" size={16} color={colors.mutedForeground} />
-            <Text style={[styles.metaText, { color: colors.foreground }]}>{event.date}</Text>
-          </View>
-          <View style={styles.metaRow}>
-            <Feather name="clock" size={16} color={colors.mutedForeground} />
             <Text style={[styles.metaText, { color: colors.foreground }]}>
-              {event.time} — {event.endTime}
+              {fmtDateTime(event.start_date)}
             </Text>
           </View>
-          <View style={styles.metaRow}>
-            <Feather name="map-pin" size={16} color={colors.mutedForeground} />
-            <Text style={[styles.metaText, { color: colors.foreground }]}>{event.location}</Text>
-          </View>
+          {event.end_date ? (
+            <View style={styles.metaRow}>
+              <Feather name="clock" size={16} color={colors.mutedForeground} />
+              <Text style={[styles.metaText, { color: colors.foreground }]}>
+                Até {fmtTime(event.end_date)}
+              </Text>
+            </View>
+          ) : null}
+          {(event.location || event.location_type === "online") ? (
+            <View style={styles.metaRow}>
+              <Feather name="map-pin" size={16} color={colors.mutedForeground} />
+              <Text style={[styles.metaText, { color: colors.foreground }]}>
+                {event.location_type === "online" ? "Online" : event.location}
+              </Text>
+            </View>
+          ) : null}
+          {event.pay_link ? (
+            <View style={styles.metaRow}>
+              <Feather name="link" size={16} color={colors.gold} />
+              <Text style={[styles.metaText, { color: colors.gold }]} numberOfLines={1}>
+                {event.pay_link}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Confirm button */}
         <TouchableOpacity
           style={[
             styles.confirmBtn,
-            { backgroundColor: confirmed ? "#fff" : colors.gold, borderColor: colors.gold, borderWidth: confirmed ? 2 : 0 },
+            {
+              backgroundColor: isAttending ? "#fff" : colors.gold,
+              borderColor: colors.gold,
+              borderWidth: isAttending ? 2 : 0,
+              opacity: rsvpLoading ? 0.7 : 1,
+            },
           ]}
-          onPress={handleConfirm}
+          onPress={handleRSVP}
+          disabled={rsvpLoading}
         >
-          <Text style={[styles.confirmBtnText, { color: confirmed ? colors.gold : "#fff" }]}>
-            {confirmed ? "Presença confirmada ✓" : "Confirmar Presença"}
-          </Text>
+          {rsvpLoading ? (
+            <ActivityIndicator color={isAttending ? colors.gold : "#fff"} />
+          ) : (
+            <Text style={[styles.confirmBtnText, { color: isAttending ? colors.gold : "#fff" }]}>
+              {isAttending ? "✓ Presença confirmada — Cancelar" : "Confirmar Presença"}
+            </Text>
+          )}
         </TouchableOpacity>
 
         {/* Participants */}
         <View style={[styles.participantsCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-          <View style={styles.participantsRow}>
+          <View style={styles.participantsTopRow}>
             <View style={styles.participantsLeft}>
               <Feather name="users" size={16} color={colors.gold} />
               <Text style={[styles.participantsLabel, { color: colors.navy }]}>
-                Participantes ({count})
+                Participantes ({attendees.length}
+                {event.capacity != null ? `/${event.capacity}` : ""})
               </Text>
             </View>
-            <Text style={[styles.participantsRemaining, { color: colors.mutedForeground }]}>
-              {remaining} vagas restantes
-            </Text>
+            {remaining != null && (
+              <Text style={[styles.participantsRemaining, { color: remaining > 0 ? colors.mutedForeground : "#dc2626" }]}>
+                {remaining > 0 ? `${remaining} vagas` : "Lotado"}
+              </Text>
+            )}
           </View>
+
+          {attendees.length === 0 ? (
+            <Text style={[styles.noAttendees, { color: colors.mutedForeground }]}>
+              Seja o primeiro a confirmar presença!
+            </Text>
+          ) : (
+            <View style={{ gap: 10, marginTop: 10 }}>
+              {visibleAttendees.map((att) => {
+                const name = att.profile?.full_name ?? att.profile?.username ?? "Participante";
+                const sub  = att.profile?.position;
+                return (
+                  <TouchableOpacity
+                    key={att.id}
+                    style={styles.attendeeRow}
+                    onPress={() => router.push(`/profile/${att.user_id}` as any)}
+                    activeOpacity={0.7}
+                  >
+                    <Avatar uri={att.profile?.avatar_url} name={name} size={38} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.attendeeName, { color: colors.navy }]}>{name}</Text>
+                      {sub ? (
+                        <Text style={[styles.attendeeSub, { color: colors.mutedForeground }]}>{sub}</Text>
+                      ) : null}
+                    </View>
+                    {att.status === "confirmed" ? (
+                      <Feather name="check-circle" size={16} color="#16a34a" />
+                    ) : null}
+                  </TouchableOpacity>
+                );
+              })}
+              {attendees.length > 5 && (
+                <TouchableOpacity onPress={() => setShowAllAttendees((v) => !v)} style={styles.showMoreBtn}>
+                  <Text style={[styles.showMoreText, { color: colors.gold }]}>
+                    {showAllAttendees ? "Ver menos" : `Ver todos (${attendees.length})`}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </View>
 
         {/* About */}
-        <View style={[styles.aboutCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-          <Text style={[styles.aboutTitle, { color: colors.navy }]}>Sobre o Evento</Text>
-          <Text style={[styles.aboutText, { color: colors.foreground }]}>{event.description}</Text>
-        </View>
+        {event.description ? (
+          <View style={[styles.aboutCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+            <Text style={[styles.aboutTitle, { color: colors.navy }]}>Sobre o Evento</Text>
+            <Text style={[styles.aboutText, { color: colors.foreground }]}>{event.description}</Text>
+          </View>
+        ) : null}
 
         {/* Organizer */}
         <View style={styles.organizerRow}>
           <Text style={[styles.organizerLabel, { color: colors.mutedForeground }]}>Organizado por</Text>
-          <View style={styles.organizerInfo}>
-            <Avatar name={event.organizer} size={32} />
-            <Text style={[styles.organizerName, { color: colors.navy }]}>{event.organizer}</Text>
-          </View>
+          <TouchableOpacity
+            style={styles.organizerInfo}
+            onPress={() => router.push(`/profile/${event.user_id}` as any)}
+            activeOpacity={0.7}
+          >
+            <Avatar uri={event.organizer?.avatar_url} name={organizerName} size={36} />
+            <View>
+              <Text style={[styles.organizerName, { color: colors.navy }]}>{organizerName}</Text>
+              {event.organizer?.username ? (
+                <Text style={[styles.organizerHandle, { color: colors.mutedForeground }]}>
+                  @{event.organizer.username}
+                </Text>
+              ) : null}
+            </View>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </View>
@@ -166,16 +345,25 @@ const styles = StyleSheet.create({
   backRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   headerTitle: { fontSize: 20, fontWeight: "700" },
   eventTitle: { fontSize: 22, fontWeight: "800", lineHeight: 30 },
+  badgeRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  badgeText: { fontSize: 12, fontWeight: "600" },
   metaList: { gap: 10 },
   metaRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   metaText: { fontSize: 14, lineHeight: 20, flex: 1 },
   confirmBtn: { paddingVertical: 16, borderRadius: 10, alignItems: "center" },
   confirmBtnText: { fontSize: 16, fontWeight: "700" },
   participantsCard: { borderRadius: 12, borderWidth: 1, padding: 16 },
-  participantsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  participantsTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   participantsLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
   participantsLabel: { fontSize: 15, fontWeight: "600" },
   participantsRemaining: { fontSize: 13 },
+  noAttendees: { fontSize: 13, marginTop: 10, textAlign: "center" },
+  attendeeRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  attendeeName: { fontSize: 14, fontWeight: "600" },
+  attendeeSub: { fontSize: 12, marginTop: 1 },
+  showMoreBtn: { paddingVertical: 4, alignItems: "center" },
+  showMoreText: { fontSize: 14, fontWeight: "600" },
   aboutCard: { borderRadius: 12, borderWidth: 1, padding: 16, gap: 10 },
   aboutTitle: { fontSize: 15, fontWeight: "700" },
   aboutText: { fontSize: 14, lineHeight: 20 },
@@ -183,4 +371,5 @@ const styles = StyleSheet.create({
   organizerLabel: { fontSize: 13 },
   organizerInfo: { flexDirection: "row", alignItems: "center", gap: 10 },
   organizerName: { fontSize: 15, fontWeight: "600" },
+  organizerHandle: { fontSize: 12, marginTop: 1 },
 });

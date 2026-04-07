@@ -1856,3 +1856,183 @@ export async function fetchApplicationsForMyOpportunities(
     return [];
   }
 }
+
+// ── Events ────────────────────────────────────────────────────────────────────
+export interface AppEvent {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string | null;
+  start_date: string;
+  end_date: string | null;
+  location_type: "presencial" | "online" | string;
+  location: string | null;
+  entry_type: "gratuito" | "pago-externo" | "pago-integrado" | string;
+  capacity: number | null;
+  visibility: string | null;
+  is_active: boolean | null;
+  pay_link: string | null;
+  created_at: string;
+  organizer?: {
+    id: string;
+    full_name: string | null;
+    avatar_url: string | null;
+    username: string | null;
+  } | null;
+  attendees_count?: number;
+}
+
+export interface AppEventAttendee {
+  id: string;
+  event_id: string;
+  user_id: string;
+  status: string | null;
+  created_at: string;
+  profile?: {
+    id: string;
+    full_name: string | null;
+    avatar_url: string | null;
+    username: string | null;
+    position: string | null;
+  } | null;
+}
+
+export async function fetchEvents(search = ""): Promise<AppEvent[]> {
+  try {
+    let q = supabase
+      .from("events")
+      .select(`
+        id, user_id, title, description, start_date, end_date,
+        location_type, location, entry_type, capacity, visibility, is_active, pay_link, created_at,
+        organizer:profiles!events_user_id_fkey(id, full_name, avatar_url, username)
+      `)
+      .eq("is_active", true)
+      .order("start_date", { ascending: true });
+    if (search) q = q.ilike("title", `%${search}%`);
+    const { data, error } = await q;
+    if (error) { console.error("fetchEvents:", error); return []; }
+    return (data ?? []) as any[];
+  } catch (e) {
+    console.error("fetchEvents:", e);
+    return [];
+  }
+}
+
+export async function fetchEventById(id: string): Promise<AppEvent | null> {
+  try {
+    const { data, error } = await supabase
+      .from("events")
+      .select(`
+        id, user_id, title, description, start_date, end_date,
+        location_type, location, entry_type, capacity, visibility, is_active, pay_link, created_at,
+        organizer:profiles!events_user_id_fkey(id, full_name, avatar_url, username)
+      `)
+      .eq("id", id)
+      .single();
+    if (error) { console.error("fetchEventById:", error); return null; }
+    return data as any;
+  } catch (e) {
+    console.error("fetchEventById:", e);
+    return null;
+  }
+}
+
+export async function createEvent(params: {
+  user_id: string;
+  title: string;
+  description?: string | null;
+  start_date: string;
+  end_date?: string | null;
+  location_type: string;
+  location?: string | null;
+  entry_type: string;
+  capacity?: number | null;
+  visibility?: string;
+  pay_link?: string | null;
+}): Promise<AppEvent | null> {
+  try {
+    const { data, error } = await supabase
+      .from("events")
+      .insert({ ...params, is_active: true })
+      .select()
+      .single();
+    if (error) { console.error("createEvent:", error); return null; }
+    return data as any;
+  } catch (e) {
+    console.error("createEvent:", e);
+    return null;
+  }
+}
+
+export async function fetchEventAttendees(eventId: string): Promise<AppEventAttendee[]> {
+  try {
+    const { data, error } = await supabase
+      .from("event_attendees")
+      .select(`
+        id, event_id, user_id, status, created_at,
+        profile:profiles!event_attendees_user_id_fkey(id, full_name, avatar_url, username, position)
+      `)
+      .eq("event_id", eventId)
+      .order("created_at", { ascending: true });
+    if (error) { console.error("fetchEventAttendees:", error); return []; }
+    return (data ?? []) as any[];
+  } catch (e) {
+    console.error("fetchEventAttendees:", e);
+    return [];
+  }
+}
+
+export async function checkAttendance(eventId: string, userId: string): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from("event_attendees")
+      .select("id")
+      .eq("event_id", eventId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    return !!data;
+  } catch {
+    return false;
+  }
+}
+
+export async function confirmAttendance(
+  eventId: string,
+  userId: string,
+  organizerId: string,
+  eventTitle: string,
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("event_attendees")
+      .upsert({ event_id: eventId, user_id: userId, status: "confirmed" }, { onConflict: "event_id,user_id" });
+    if (error) { console.error("confirmAttendance:", error); return false; }
+    if (organizerId !== userId) {
+      await supabase.from("notifications").insert({
+        user_id: organizerId,
+        actor_id: userId,
+        type: "event_rsvp",
+        message: `confirmou presença no seu evento "${eventTitle}"`,
+      });
+    }
+    return true;
+  } catch (e) {
+    console.error("confirmAttendance:", e);
+    return false;
+  }
+}
+
+export async function cancelAttendance(eventId: string, userId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("event_attendees")
+      .delete()
+      .eq("event_id", eventId)
+      .eq("user_id", userId);
+    if (error) { console.error("cancelAttendance:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("cancelAttendance:", e);
+    return false;
+  }
+}
