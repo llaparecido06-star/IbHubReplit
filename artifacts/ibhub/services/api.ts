@@ -522,6 +522,148 @@ export async function checkConnectionStatus(
   } catch { return "none"; }
 }
 
+export interface ConnectionProfile {
+  connectionId: string;
+  id: string;
+  full_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+  position: string | null;
+  company: string | null;
+  created_at: string;
+}
+
+export async function fetchPendingConnectionsReceived(userId: string): Promise<ConnectionProfile[]> {
+  try {
+    const { data, error } = await supabase
+      .from("connections")
+      .select(`id, created_at, requester:profiles!connections_requester_id_fkey(id, full_name, username, avatar_url, position, company)`)
+      .eq("receiver_id", userId)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false });
+    if (error || !data) return [];
+    return (data as any[]).map((row) => ({
+      connectionId: row.id,
+      id: row.requester.id,
+      full_name: row.requester.full_name,
+      username: row.requester.username,
+      avatar_url: row.requester.avatar_url,
+      position: row.requester.position,
+      company: row.requester.company,
+      created_at: row.created_at,
+    }));
+  } catch (e) { console.error("fetchPendingConnectionsReceived:", e); return []; }
+}
+
+export async function fetchPendingConnectionsSent(userId: string): Promise<ConnectionProfile[]> {
+  try {
+    const { data, error } = await supabase
+      .from("connections")
+      .select(`id, created_at, receiver:profiles!connections_receiver_id_fkey(id, full_name, username, avatar_url, position, company)`)
+      .eq("requester_id", userId)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false });
+    if (error || !data) return [];
+    return (data as any[]).map((row) => ({
+      connectionId: row.id,
+      id: row.receiver.id,
+      full_name: row.receiver.full_name,
+      username: row.receiver.username,
+      avatar_url: row.receiver.avatar_url,
+      position: row.receiver.position,
+      company: row.receiver.company,
+      created_at: row.created_at,
+    }));
+  } catch (e) { console.error("fetchPendingConnectionsSent:", e); return []; }
+}
+
+export async function respondToConnection(
+  connectionId: string,
+  action: "accepted" | "rejected",
+): Promise<boolean> {
+  try {
+    if (action === "rejected") {
+      const { error } = await supabase.from("connections").delete().eq("id", connectionId);
+      return !error;
+    }
+    const { error } = await supabase
+      .from("connections")
+      .update({ status: "accepted" })
+      .eq("id", connectionId);
+    return !error;
+  } catch (e) { console.error("respondToConnection:", e); return false; }
+}
+
+export async function fetchConnectedUsers(userId: string): Promise<ConnectionProfile[]> {
+  try {
+    const [sent, received] = await Promise.all([
+      supabase
+        .from("connections")
+        .select(`id, created_at, receiver:profiles!connections_receiver_id_fkey(id, full_name, username, avatar_url, position, company)`)
+        .eq("requester_id", userId)
+        .eq("status", "accepted"),
+      supabase
+        .from("connections")
+        .select(`id, created_at, requester:profiles!connections_requester_id_fkey(id, full_name, username, avatar_url, position, company)`)
+        .eq("receiver_id", userId)
+        .eq("status", "accepted"),
+    ]);
+    const s: ConnectionProfile[] = ((sent.data ?? []) as any[]).map((row) => ({
+      connectionId: row.id,
+      id: row.receiver.id,
+      full_name: row.receiver.full_name,
+      username: row.receiver.username,
+      avatar_url: row.receiver.avatar_url,
+      position: row.receiver.position,
+      company: row.receiver.company,
+      created_at: row.created_at,
+    }));
+    const r: ConnectionProfile[] = ((received.data ?? []) as any[]).map((row) => ({
+      connectionId: row.id,
+      id: row.requester.id,
+      full_name: row.requester.full_name,
+      username: row.requester.username,
+      avatar_url: row.requester.avatar_url,
+      position: row.requester.position,
+      company: row.requester.company,
+      created_at: row.created_at,
+    }));
+    return [...s, ...r].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  } catch (e) { console.error("fetchConnectedUsers:", e); return []; }
+}
+
+export async function fetchBookmarkedPosts(userId: string): Promise<Post[]> {
+  try {
+    const { data: bookmarks, error } = await supabase
+      .from("bookmarks")
+      .select("post_id")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+    if (error || !bookmarks || bookmarks.length === 0) return [];
+    const postIds = bookmarks.map((b: any) => b.post_id);
+    const { data: rawPosts, error: postsError } = await supabase
+      .from("posts")
+      .select(`id, content, created_at, user_id, likes_count, comments_count,
+        author:profiles!posts_user_id_fkey(id, full_name, username, avatar_url, plan, position, company)`)
+      .in("id", postIds);
+    if (postsError || !rawPosts) return [];
+    const idOrder = new Map(postIds.map((id: string, i: number) => [id, i]));
+    return (rawPosts as any[])
+      .map((p) => ({
+        id: p.id,
+        content: p.content,
+        created_at: p.created_at,
+        user_id: p.user_id,
+        likes_count: p.likes_count ?? 0,
+        comments_count: p.comments_count ?? 0,
+        is_liked: false,
+        is_bookmarked: true,
+        author: normaliseAuthor(p.author),
+      } as Post))
+      .sort((a, b) => (idOrder.get(a.id) ?? 99) - (idOrder.get(b.id) ?? 99));
+  } catch (e) { console.error("fetchBookmarkedPosts:", e); return []; }
+}
+
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
 
 export async function fetchNotifications(userId: string): Promise<AppNotification[]> {

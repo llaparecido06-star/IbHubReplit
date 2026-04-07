@@ -22,13 +22,16 @@ import { useColors } from "@/hooks/useColors";
 import {
   CompanyPage,
   FollowProfile,
+  WineEntry,
   fetchConnectionSuggestions,
   fetchFollowers,
   fetchFollowing,
   fetchUserCompanyPages,
   fetchUserPosts,
-  toggleFollow,
-  checkIsFollowing,
+  fetchBookmarkedPosts,
+  fetchWineCellar,
+  sendConnectionRequest,
+  checkConnectionStatus,
 } from "@/services/api";
 import { Post } from "@/components/feed/PostCard";
 import EmpresaDashboard from "@/components/EmpresaDashboard";
@@ -47,13 +50,16 @@ export default function ProfileScreen() {
   const [commentText,  setCommentText]  = useState("");
   const [statModal,    setStatModal]    = useState<StatModal>(null);
 
-  const [posts,        setPosts]        = useState<Post[]>([]);
-  const [followers,    setFollowers]    = useState<FollowProfile[]>([]);
-  const [following,    setFollowing]    = useState<FollowProfile[]>([]);
-  const [suggestions,  setSuggestions]  = useState<FollowProfile[]>([]);
-  const [companyPages, setCompanyPages] = useState<CompanyPage[]>([]);
-  const [loadingData,  setLoadingData]  = useState(true);
-  const [refreshing,   setRefreshing]   = useState(false);
+  const [posts,          setPosts]          = useState<Post[]>([]);
+  const [savedPosts,     setSavedPosts]     = useState<Post[]>([]);
+  const [wineEntries,    setWineEntries]    = useState<WineEntry[]>([]);
+  const [followers,      setFollowers]      = useState<FollowProfile[]>([]);
+  const [following,      setFollowing]      = useState<FollowProfile[]>([]);
+  const [suggestions,    setSuggestions]    = useState<FollowProfile[]>([]);
+  const [connectedSugg,  setConnectedSugg]  = useState<Set<string>>(new Set());
+  const [companyPages,   setCompanyPages]   = useState<CompanyPage[]>([]);
+  const [loadingData,    setLoadingData]    = useState(true);
+  const [refreshing,     setRefreshing]     = useState(false);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
@@ -68,14 +74,18 @@ export default function ProfileScreen() {
 
   const loadData = useCallback(async () => {
     if (!user?.id) return;
-    const [p, fr, fg, sg, cp] = await Promise.all([
+    const [p, saved, wines, fr, fg, sg, cp] = await Promise.all([
       fetchUserPosts(user.id, user.id),
+      fetchBookmarkedPosts(user.id),
+      fetchWineCellar(user.id),
       fetchFollowers(user.id),
       fetchFollowing(user.id),
       fetchConnectionSuggestions(user.id, 5),
       fetchUserCompanyPages(user.id),
     ]);
     setPosts(p);
+    setSavedPosts(saved);
+    setWineEntries(wines);
     setFollowers(fr);
     setFollowing(fg);
     setSuggestions(sg);
@@ -124,12 +134,19 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleFollowSuggestion = async (targetId: string) => {
+  const handleConnect = async (targetId: string) => {
     if (!user?.id) return;
-    const alreadyFollowing = await checkIsFollowing(targetId, user.id);
-    await toggleFollow(targetId, user.id, alreadyFollowing);
-    setSuggestions((prev) => prev.filter((s) => s.id !== targetId));
+    const status = await checkConnectionStatus(targetId, user.id);
+    if (status !== "none") {
+      setConnectedSugg((prev) => new Set(prev).add(targetId));
+      return;
+    }
+    await sendConnectionRequest(targetId, user.id);
+    setConnectedSugg((prev) => new Set(prev).add(targetId));
   };
+
+  const wineInCellar = wineEntries.filter((w) => w.status === "adega").length;
+  const wineTotal    = wineEntries.length;
 
   return (
     <ScrollView
@@ -158,10 +175,10 @@ export default function ProfileScreen() {
         {/* Stats */}
         <View style={[styles.statsRow, { borderColor: colors.border }]}>
           {[
-            { label: "Publicações", value: posts.length,                           onPress: undefined },
+            { label: "Publicações", value: posts.length,                             onPress: undefined },
             { label: "Seguidores",  value: profile?.followers_count  ?? followers.length,  onPress: () => setStatModal("seguidores") },
             { label: "Seguindo",    value: profile?.following_count  ?? following.length,  onPress: () => setStatModal("seguindo") },
-            { label: "Conexões",    value: profile?.connections_count ?? 0,          onPress: () => router.push("/conexoes" as any) },
+            { label: "Conexões",    value: profile?.connections_count ?? 0,            onPress: () => router.push("/conexoes" as any) },
           ].map((s, i, arr) => (
             <React.Fragment key={s.label}>
               <TouchableOpacity style={styles.stat} onPress={s.onPress} disabled={!s.onPress}>
@@ -212,7 +229,9 @@ export default function ProfileScreen() {
         <View style={styles.actionRow}>
           <TouchableOpacity style={[styles.btnPrimary, { backgroundColor: colors.gold }]} onPress={handleBusinessPage}>
             <Feather name="briefcase" size={15} color="#fff" />
-            <Text style={styles.btnPrimaryText}>Página Empresarial</Text>
+            <Text style={styles.btnPrimaryText}>
+              {companyPages.length === 0 ? "Criar Empresa" : "Página Empresarial"}
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.btnSecondary, { borderColor: colors.border }]}
@@ -223,9 +242,13 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Company pages (real data) */}
+        {/* Company page card */}
         {companyPages.length > 0 ? (
-          <View style={[styles.companyRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
+          <TouchableOpacity
+            style={[styles.companyRow, { backgroundColor: colors.background, borderColor: colors.border }]}
+            onPress={() => router.push(`/manage-business-page?id=${companyPages[0].id}` as any)}
+            activeOpacity={0.75}
+          >
             <View style={[styles.companyLogoMini, { backgroundColor: colors.navy }]}>
               <Text style={[styles.companyLogoText, { color: colors.gold }]}>
                 {companyPages[0].name.charAt(0).toUpperCase()}
@@ -237,18 +260,14 @@ export default function ProfileScreen() {
                 <Text style={[styles.companyCategory, { color: colors.mutedForeground }]}>{companyPages[0].industry}</Text>
               ) : null}
             </View>
-            <TouchableOpacity
-              style={styles.switchBtn}
-              onPress={() => router.push(`/manage-business-page?id=${companyPages[0].id}` as any)}
-            >
-              <Feather name="repeat" size={14} color={colors.gold} />
-              <Text style={[styles.switchText, { color: colors.gold }]}>Gerenciar</Text>
-            </TouchableOpacity>
-          </View>
+            <View style={styles.switchBtn}>
+              <Feather name="chevron-right" size={16} color={colors.gold} />
+            </View>
+          </TouchableOpacity>
         ) : null}
       </View>
 
-      {/* ── Sugestões (real data) ── */}
+      {/* ── Sugestões (Conectar) ── */}
       {suggestions.length > 0 ? (
         <View style={[styles.section, { backgroundColor: "#fff" }]}>
           <Text style={[styles.sectionTitle, { color: colors.navy }]}>Sugestões para você</Text>
@@ -257,25 +276,40 @@ export default function ProfileScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ gap: 12, paddingRight: 16 }}
           >
-            {suggestions.map((s) => (
-              <View key={s.id} style={[styles.suggCard, { borderColor: colors.border }]}>
-                <Avatar uri={s.avatar_url} name={s.full_name ?? s.username ?? "?"} size={52} />
-                <Text style={[styles.suggName, { color: colors.navy }]} numberOfLines={1}>
-                  {s.full_name ?? s.username ?? "Usuário"}
-                </Text>
-                {s.position || s.company ? (
-                  <Text style={[styles.suggRole, { color: colors.mutedForeground }]} numberOfLines={1}>
-                    {s.position ?? s.company}
-                  </Text>
-                ) : null}
-                <TouchableOpacity
-                  style={[styles.suggFollowBtn, { backgroundColor: colors.gold }]}
-                  onPress={() => handleFollowSuggestion(s.id)}
-                >
-                  <Text style={styles.suggFollowText}>Seguir</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
+            {suggestions.map((s) => {
+              const isConnected = connectedSugg.has(s.id);
+              const subline = [s.position, s.company].filter(Boolean).join(" · ");
+              return (
+                <View key={s.id} style={[styles.suggCard, { borderColor: colors.border }]}>
+                  <TouchableOpacity onPress={() => router.push(`/profile/${s.id}` as any)} activeOpacity={0.8}>
+                    <Avatar uri={s.avatar_url} name={s.full_name ?? s.username ?? "?"} size={52} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => router.push(`/profile/${s.id}` as any)} activeOpacity={0.8} style={{ alignItems: "center", gap: 2 }}>
+                    <Text style={[styles.suggName, { color: colors.navy }]} numberOfLines={1}>
+                      {s.full_name ?? s.username ?? "Usuário"}
+                    </Text>
+                    {subline ? (
+                      <Text style={[styles.suggRole, { color: colors.mutedForeground }]} numberOfLines={2}>
+                        {subline}
+                      </Text>
+                    ) : null}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.suggFollowBtn,
+                      { backgroundColor: isConnected ? colors.background : colors.gold, borderColor: colors.border, borderWidth: isConnected ? 1 : 0 },
+                    ]}
+                    onPress={() => !isConnected && handleConnect(s.id)}
+                    disabled={isConnected}
+                  >
+                    <Feather name={isConnected ? "check" : "user-plus"} size={12} color={isConnected ? colors.mutedForeground : "#fff"} />
+                    <Text style={[styles.suggFollowText, { color: isConnected ? colors.mutedForeground : "#fff" }]}>
+                      {isConnected ? "Enviado" : "Conectar"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
           </ScrollView>
         </View>
       ) : null}
@@ -299,7 +333,7 @@ export default function ProfileScreen() {
         ))}
       </View>
 
-      {/* ── FEED (real data) ── */}
+      {/* ── FEED ── */}
       {activeTab === "feed" && (
         <View style={{ gap: 0 }}>
           {loadingData ? (
@@ -358,27 +392,120 @@ export default function ProfileScreen() {
 
       {/* ── SALVOS ── */}
       {activeTab === "salvos" && (
-        <View style={[styles.emptyTab, { backgroundColor: "#fff" }]}>
-          <Feather name="bookmark" size={36} color={colors.mutedForeground} />
-          <Text style={[styles.emptyTabTitle, { color: colors.navy }]}>Suas coleções privadas</Text>
-          <TouchableOpacity style={[styles.emptyTabBtn, { backgroundColor: colors.gold }]}>
-            <Text style={styles.emptyTabBtnText}>Ver Coleções</Text>
-          </TouchableOpacity>
+        <View style={{ gap: 0 }}>
+          {loadingData ? (
+            <ActivityIndicator color={colors.gold} style={{ marginTop: 40 }} />
+          ) : savedPosts.length === 0 ? (
+            <View style={styles.emptyTab}>
+              <Feather name="bookmark" size={32} color={colors.mutedForeground} />
+              <Text style={[styles.emptyTabTitle, { color: colors.navy }]}>Nenhuma publicação salva</Text>
+              <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>
+                Salve posts do feed para ler mais tarde
+              </Text>
+            </View>
+          ) : (
+            savedPosts.map((post) => {
+              const authorName = post.author?.full_name ?? post.author?.username ?? "Usuário";
+              return (
+                <TouchableOpacity
+                  key={post.id}
+                  style={[styles.postCard, { backgroundColor: "#fff", borderBottomColor: colors.border }]}
+                  onPress={() => router.push(`/post/${post.id}` as any)}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.postHeader}>
+                    <Avatar uri={post.author?.avatar_url} name={authorName} size={40} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.postName, { color: colors.navy }]}>{authorName}</Text>
+                      <Text style={[styles.postDate, { color: colors.mutedForeground }]}>
+                        {new Date(post.created_at).toLocaleDateString("pt-BR")}
+                      </Text>
+                    </View>
+                    <Feather name="bookmark" size={16} color={colors.gold} />
+                  </View>
+                  <Text style={[styles.postContent, { color: colors.foreground }]} numberOfLines={4}>{post.content}</Text>
+                  <View style={[styles.postActions, { borderTopColor: colors.border }]}>
+                    <View style={styles.postActionBtn}>
+                      <Feather name="heart" size={16} color={colors.mutedForeground} />
+                      <Text style={[styles.postActionText, { color: colors.mutedForeground }]}>{post.likes_count}</Text>
+                    </View>
+                    <View style={styles.postActionBtn}>
+                      <Feather name="message-circle" size={16} color={colors.mutedForeground} />
+                      <Text style={[styles.postActionText, { color: colors.mutedForeground }]}>{post.comments_count}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
         </View>
       )}
 
       {/* ── ADEGA ── */}
       {activeTab === "adega" && (
-        <View style={[styles.emptyTab, { backgroundColor: "#fff" }]}>
-          <Feather name="wind" size={36} color={colors.mutedForeground} />
-          <Text style={[styles.emptyTabTitle, { color: colors.navy }]}>Gerencie seus vinhos, notas e compartilhe sua coleção</Text>
-          <TouchableOpacity
-            style={[styles.emptyTabBtn, { backgroundColor: colors.gold }]}
-            onPress={() => router.push("/wine-cellar" as any)}
-          >
-            <Feather name="wind" size={16} color="#fff" />
-            <Text style={styles.emptyTabBtnText}>Abrir Adega</Text>
-          </TouchableOpacity>
+        <View style={{ backgroundColor: "#fff" }}>
+          {/* KPI row */}
+          <View style={styles.adegaKpiRow}>
+            {[
+              { label: "Na Adega",   value: wineInCellar,                                          icon: "wind",   color: colors.gold },
+              { label: "Consumidos", value: wineEntries.filter((w) => w.status === "consumido").length, icon: "coffee", color: colors.mutedForeground },
+              { label: "Wishlist",   value: wineEntries.filter((w) => w.status === "wishlist").length,  icon: "star",   color: "#f59e0b" },
+            ].map((k) => (
+              <View key={k.label} style={[styles.adegaKpiCard, { borderColor: colors.border }]}>
+                <Feather name={k.icon as any} size={20} color={k.color} />
+                <Text style={[styles.adegaKpiNum, { color: colors.navy }]}>{k.value}</Text>
+                <Text style={[styles.adegaKpiLabel, { color: colors.mutedForeground }]}>{k.label}</Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Recent wines preview */}
+          {wineEntries.length > 0 ? (
+            <View style={{ paddingHorizontal: 16, paddingBottom: 16, gap: 8 }}>
+              <Text style={[styles.adegaPreviewTitle, { color: colors.navy }]}>Últimos adicionados</Text>
+              {wineEntries.slice(0, 3).map((wine) => (
+                <View key={wine.id} style={[styles.adegaWineRow, { borderColor: colors.border }]}>
+                  <View style={[styles.adegaWineDot, { backgroundColor: colors.gold }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.adegaWineName, { color: colors.navy }]} numberOfLines={1}>{wine.name}</Text>
+                    {wine.producer || wine.vintage ? (
+                      <Text style={[styles.adegaWineSub, { color: colors.mutedForeground }]}>
+                        {[wine.producer, wine.vintage].filter(Boolean).join(" · ")}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text style={[styles.adegaWineQty, { color: colors.mutedForeground }]}>{wine.qty}x</Text>
+                  {wine.is_private ? <Feather name="eye-off" size={12} color={colors.mutedForeground} /> : null}
+                </View>
+              ))}
+              {wineTotal > 3 ? (
+                <Text style={[styles.adegaMoreText, { color: colors.mutedForeground }]}>
+                  + {wineTotal - 3} vinho{wineTotal - 3 !== 1 ? "s" : ""} na adega
+                </Text>
+              ) : null}
+            </View>
+          ) : (
+            <View style={styles.emptyTab}>
+              <Feather name="wind" size={32} color={colors.mutedForeground} />
+              <Text style={[styles.emptyTabTitle, { color: colors.navy }]}>Sua adega está vazia</Text>
+              <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>
+                Adicione vinhos para montar sua coleção
+              </Text>
+            </View>
+          )}
+
+          {/* Open Adega button */}
+          <View style={{ paddingHorizontal: 16, paddingBottom: 20 }}>
+            <TouchableOpacity
+              style={[styles.adegaOpenBtn, { backgroundColor: colors.gold }]}
+              onPress={() => router.push("/wine-cellar" as any)}
+            >
+              <Feather name="wind" size={16} color="#fff" />
+              <Text style={styles.adegaOpenBtnText}>
+                {wineEntries.length === 0 ? "Abrir Adega e Adicionar Vinho" : "Gerenciar Adega"}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -436,7 +563,7 @@ export default function ProfileScreen() {
         </Pressable>
       </Modal>
 
-      {/* ── Seguidores / Seguindo modal (real data) ── */}
+      {/* ── Seguidores / Seguindo modal ── */}
       <Modal visible={statModal !== null} transparent animationType="slide" onRequestClose={() => setStatModal(null)}>
         <Pressable style={styles.modalOverlay} onPress={() => setStatModal(null)}>
           <View style={[styles.statSheet, { backgroundColor: "#fff" }]}>
@@ -517,17 +644,17 @@ const styles = StyleSheet.create({
   switchText:         { fontSize: 13, fontWeight: "600" },
   section:            { paddingHorizontal: 16, paddingVertical: 14, gap: 12, marginTop: 10 },
   sectionTitle:       { fontSize: 16, fontWeight: "800" },
-  suggCard:           { width: 130, alignItems: "center", gap: 6, padding: 12, borderRadius: 12, borderWidth: 1 },
+  suggCard:           { width: 140, alignItems: "center", gap: 6, padding: 12, borderRadius: 12, borderWidth: 1 },
   suggName:           { fontSize: 13, fontWeight: "700", textAlign: "center" },
-  suggRole:           { fontSize: 11, textAlign: "center" },
-  suggFollowBtn:      { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 },
-  suggFollowText:     { color: "#fff", fontSize: 12, fontWeight: "700" },
+  suggRole:           { fontSize: 11, textAlign: "center", lineHeight: 15 },
+  suggFollowBtn:      { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
+  suggFollowText:     { fontSize: 12, fontWeight: "700" },
   tabRow:             { flexDirection: "row", borderBottomWidth: 1, marginTop: 10, backgroundColor: "#fff" },
   tab:                { flex: 1, alignItems: "center", paddingVertical: 14, borderBottomWidth: 2, borderBottomColor: "transparent" },
   tabActive:          {},
   tabText:            { fontSize: 12, fontWeight: "800", letterSpacing: 0.5 },
   emptyTab:           { backgroundColor: "#fff", alignItems: "center", paddingVertical: 48, paddingHorizontal: 32, gap: 12 },
-  emptyTabText:       { fontSize: 14, color: "#888" },
+  emptyTabText:       { fontSize: 13, textAlign: "center" },
   emptyTabTitle:      { fontSize: 15, fontWeight: "600", textAlign: "center", lineHeight: 22 },
   emptyTabBtn:        { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 },
   emptyTabBtnText:    { color: "#fff", fontSize: 14, fontWeight: "700" },
@@ -539,6 +666,19 @@ const styles = StyleSheet.create({
   postActions:        { flexDirection: "row", alignItems: "center", paddingTop: 10, borderTopWidth: 1 },
   postActionBtn:      { flexDirection: "row", alignItems: "center", gap: 5, marginRight: 20 },
   postActionText:     { fontSize: 13 },
+  adegaKpiRow:        { flexDirection: "row", gap: 10, padding: 16 },
+  adegaKpiCard:       { flex: 1, alignItems: "center", gap: 4, padding: 12, borderRadius: 12, borderWidth: 1 },
+  adegaKpiNum:        { fontSize: 20, fontWeight: "800" },
+  adegaKpiLabel:      { fontSize: 11, textAlign: "center" },
+  adegaPreviewTitle:  { fontSize: 14, fontWeight: "700", marginBottom: 4 },
+  adegaWineRow:       { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 10, borderWidth: 1 },
+  adegaWineDot:       { width: 8, height: 8, borderRadius: 4 },
+  adegaWineName:      { fontSize: 14, fontWeight: "600" },
+  adegaWineSub:       { fontSize: 12, marginTop: 2 },
+  adegaWineQty:       { fontSize: 12 },
+  adegaMoreText:      { fontSize: 12, textAlign: "center", marginTop: 4 },
+  adegaOpenBtn:       { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, borderRadius: 12 },
+  adegaOpenBtnText:   { color: "#fff", fontSize: 15, fontWeight: "700" },
   modalOverlay:       { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
   commentsSheet:      { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: "70%" },
   commentsHeader:     { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },

@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Platform,
   Pressable,
   ScrollView,
@@ -11,29 +12,84 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { Avatar } from "@/components/ui/Avatar";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/context/AuthContext";
+import {
+  ConnectionProfile,
+  fetchPendingConnectionsReceived,
+  fetchPendingConnectionsSent,
+  fetchConnectedUsers,
+  respondToConnection,
+} from "@/services/api";
 
 type ConexoesTab = "pendentes" | "conectados";
-
-const ENVIADAS = [
-  { id: "e1", name: "Lucas Lima",      role: "",           initial: "L" },
-  { id: "e2", name: "João Oliveira",   role: "Importador", initial: "J" },
-  { id: "e3", name: "Felipe Galtaroca",role: "Produtor",   initial: "F" },
-  { id: "e4", name: "Brenda Lima",     role: "Outros",     initial: "B" },
-  { id: "e5", name: "Julia Benetti",   role: "Outros",     initial: "J" },
-];
-
-const RECEBIDAS: typeof ENVIADAS = [];
 
 export default function ConexoesScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
 
   const [activeTab, setActiveTab] = useState<ConexoesTab>("pendentes");
+  const [loading, setLoading] = useState(true);
+
+  const [received, setReceived] = useState<ConnectionProfile[]>([]);
+  const [sent, setSent] = useState<ConnectionProfile[]>([]);
+  const [connected, setConnected] = useState<ConnectionProfile[]>([]);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
+
+  const load = useCallback(async () => {
+    if (!user?.id) return;
+    setLoading(true);
+    const [rec, snt, conn] = await Promise.all([
+      fetchPendingConnectionsReceived(user.id),
+      fetchPendingConnectionsSent(user.id),
+      fetchConnectedUsers(user.id),
+    ]);
+    setReceived(rec);
+    setSent(snt);
+    setConnected(conn);
+    setLoading(false);
+  }, [user?.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleAccept = async (connectionId: string, profileId: string) => {
+    const ok = await respondToConnection(connectionId, "accepted");
+    if (ok) {
+      const accepted = received.find((r) => r.connectionId === connectionId);
+      setReceived((prev) => prev.filter((r) => r.connectionId !== connectionId));
+      if (accepted) setConnected((prev) => [accepted, ...prev]);
+    }
+  };
+
+  const handleReject = async (connectionId: string) => {
+    const ok = await respondToConnection(connectionId, "rejected");
+    if (ok) setReceived((prev) => prev.filter((r) => r.connectionId !== connectionId));
+  };
+
+  const personRow = (person: ConnectionProfile, actions: React.ReactNode) => {
+    const name = person.full_name ?? person.username ?? "Usuário";
+    const sub = [person.position, person.company].filter(Boolean).join(" · ");
+    return (
+      <TouchableOpacity
+        key={person.connectionId}
+        style={[styles.personRow, { backgroundColor: "#fff", borderBottomColor: colors.border }]}
+        onPress={() => router.push(`/profile/${person.id}` as any)}
+        activeOpacity={0.75}
+      >
+        <Avatar uri={person.avatar_url} name={name} size={48} />
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.personName, { color: colors.navy }]}>{name}</Text>
+          {sub ? <Text style={[styles.personRole, { color: colors.mutedForeground }]} numberOfLines={1}>{sub}</Text> : null}
+        </View>
+        {actions}
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -48,8 +104,8 @@ export default function ConexoesScreen() {
       {/* Tabs */}
       <View style={[styles.tabRow, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         {([
-          { key: "pendentes",   label: "Pendentes" },
-          { key: "conectados",  label: `Conectados (0)` },
+          { key: "pendentes",  label: `Pendentes${received.length > 0 ? ` (${received.length})` : ""}` },
+          { key: "conectados", label: `Conectados (${connected.length})` },
         ] as { key: ConexoesTab; label: string }[]).map((t) => (
           <Pressable
             key={t.key}
@@ -63,87 +119,94 @@ export default function ConexoesScreen() {
         ))}
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
-        {/* ── Pendentes tab ── */}
-        {activeTab === "pendentes" && (
-          <View>
-            {/* Enviadas */}
-            {ENVIADAS.length > 0 && (
-              <View>
-                <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>ENVIADAS</Text>
-                {ENVIADAS.map((person) => (
-                  <View
-                    key={person.id}
-                    style={[styles.personRow, { backgroundColor: "#fff", borderBottomColor: colors.border }]}
-                  >
-                    <View style={[styles.avatar, { backgroundColor: colors.navy }]}>
-                      <Text style={[styles.avatarInitial, { color: colors.gold }]}>{person.initial}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.personName, { color: colors.navy }]}>{person.name}</Text>
-                      {person.role ? (
-                        <Text style={[styles.personRole, { color: colors.mutedForeground }]}>{person.role}</Text>
-                      ) : null}
-                    </View>
-                    <View style={styles.waitingBadge}>
-                      <Feather name="clock" size={13} color={colors.mutedForeground} />
-                      <Text style={[styles.waitingText, { color: colors.mutedForeground }]}>Aguardando</Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
+      {loading ? (
+        <View style={styles.empty}>
+          <ActivityIndicator size="large" color={colors.gold} />
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={{ paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
 
-            {/* Recebidas */}
-            {RECEBIDAS.length > 0 && (
-              <View>
-                <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>RECEBIDAS</Text>
-                {RECEBIDAS.map((person) => (
-                  <View
-                    key={person.id}
-                    style={[styles.personRow, { backgroundColor: "#fff", borderBottomColor: colors.border }]}
-                  >
-                    <View style={[styles.avatar, { backgroundColor: colors.navy }]}>
-                      <Text style={[styles.avatarInitial, { color: colors.gold }]}>{person.initial}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.personName, { color: colors.navy }]}>{person.name}</Text>
-                      {person.role ? (
-                        <Text style={[styles.personRole, { color: colors.mutedForeground }]}>{person.role}</Text>
-                      ) : null}
-                    </View>
-                    <View style={styles.receiveActions}>
-                      <TouchableOpacity style={[styles.acceptBtn, { backgroundColor: colors.gold }]}>
-                        <Text style={styles.acceptText}>Aceitar</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={[styles.rejectBtn, { borderColor: colors.border }]}>
-                        <Text style={[styles.rejectText, { color: colors.mutedForeground }]}>Recusar</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
+          {/* ── Pendentes tab ── */}
+          {activeTab === "pendentes" && (
+            <View>
+              {/* Recebidas */}
+              {received.length > 0 && (
+                <View>
+                  <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>RECEBIDAS</Text>
+                  {received.map((person) =>
+                    personRow(
+                      person,
+                      <View style={styles.receiveActions}>
+                        <TouchableOpacity
+                          style={[styles.acceptBtn, { backgroundColor: colors.gold }]}
+                          onPress={() => handleAccept(person.connectionId, person.id)}
+                        >
+                          <Text style={styles.acceptText}>Aceitar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.rejectBtn, { borderColor: colors.border }]}
+                          onPress={() => handleReject(person.connectionId)}
+                        >
+                          <Text style={[styles.rejectText, { color: colors.mutedForeground }]}>Recusar</Text>
+                        </TouchableOpacity>
+                      </View>,
+                    )
+                  )}
+                </View>
+              )}
 
-            {ENVIADAS.length === 0 && RECEBIDAS.length === 0 && (
+              {/* Enviadas */}
+              {sent.length > 0 && (
+                <View>
+                  <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>ENVIADAS</Text>
+                  {sent.map((person) =>
+                    personRow(
+                      person,
+                      <View style={styles.waitingBadge}>
+                        <Feather name="clock" size={13} color={colors.mutedForeground} />
+                        <Text style={[styles.waitingText, { color: colors.mutedForeground }]}>Aguardando</Text>
+                      </View>,
+                    )
+                  )}
+                </View>
+              )}
+
+              {received.length === 0 && sent.length === 0 && (
+                <View style={styles.empty}>
+                  <Feather name="users" size={36} color={colors.border} />
+                  <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+                    Nenhuma solicitação pendente
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* ── Conectados tab ── */}
+          {activeTab === "conectados" && (
+            connected.length === 0 ? (
               <View style={styles.empty}>
-                <Feather name="users" size={36} color={colors.border} />
-                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                  Nenhuma solicitação pendente
-                </Text>
+                <Feather name="user-check" size={36} color={colors.border} />
+                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhuma conexão ainda</Text>
               </View>
-            )}
-          </View>
-        )}
-
-        {/* ── Conectados tab ── */}
-        {activeTab === "conectados" && (
-          <View style={styles.empty}>
-            <Feather name="user-check" size={36} color={colors.border} />
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhuma conexão ainda</Text>
-          </View>
-        )}
-      </ScrollView>
+            ) : (
+              <View>
+                {connected.map((person) =>
+                  personRow(
+                    person,
+                    <TouchableOpacity
+                      style={[styles.msgBtn, { borderColor: colors.border }]}
+                      onPress={() => router.push(`/chat/${person.id}` as any)}
+                    >
+                      <Feather name="message-circle" size={15} color={colors.navy} />
+                    </TouchableOpacity>,
+                  )
+                )}
+              </View>
+            )
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -158,8 +221,6 @@ const styles = StyleSheet.create({
   tabLabel: { fontSize: 14, fontWeight: "600" },
   sectionLabel: { fontSize: 12, fontWeight: "700", letterSpacing: 0.8, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 8 },
   personRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1 },
-  avatar: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
-  avatarInitial: { fontSize: 18, fontWeight: "800" },
   personName: { fontSize: 15, fontWeight: "600" },
   personRole: { fontSize: 13, marginTop: 2 },
   waitingBadge: { flexDirection: "row", alignItems: "center", gap: 5 },
@@ -169,6 +230,7 @@ const styles = StyleSheet.create({
   acceptText: { color: "#fff", fontSize: 13, fontWeight: "600" },
   rejectBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
   rejectText: { fontSize: 13 },
+  msgBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   empty: { alignItems: "center", gap: 12, paddingTop: 60 },
   emptyText: { fontSize: 14 },
 });
