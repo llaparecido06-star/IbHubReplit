@@ -83,7 +83,7 @@ export default function NewOpportunityScreen() {
         Alert.alert(
           mode === "marketplace" ? "Anúncio publicado!" : "Vaga publicada!",
           `"${title}" já está visível na aba Oportunidades.`,
-          [{ text: "OK", onPress: () => router.back() }],
+          [{ text: "Ver publicação", onPress: () => router.replace(`/opportunity/${result.id}` as any) }],
         );
       } else {
         Alert.alert("Erro", "Não foi possível publicar. Tente novamente.");

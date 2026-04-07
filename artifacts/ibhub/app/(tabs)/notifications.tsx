@@ -146,7 +146,7 @@ export default function OportunidadesScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />}
       >
-        {loading && (tab === "market" || tab === "vagas") ? (
+        {loading ? (
           <ActivityIndicator color={colors.gold} style={{ marginTop: 40 }} />
         ) : null}
 
@@ -192,7 +192,7 @@ export default function OportunidadesScreen() {
         {tab === "vagas" && !loading && filteredVagas.map((item) => (
           <TouchableOpacity
             key={item.id}
-            style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}
+            style={[styles.card, { backgroundColor: "#fff", borderColor: item.is_applied ? colors.gold : colors.border }]}
             onPress={() => router.push(`/opportunity/${item.id}` as any)}
             activeOpacity={0.75}
           >
@@ -200,7 +200,14 @@ export default function OportunidadesScreen() {
               <Text style={[styles.cardTitle, { color: colors.navy, flex: 1 }]} numberOfLines={1}>
                 {item.title}
               </Text>
-              <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+              {item.is_applied ? (
+                <View style={[styles.appliedTag, { backgroundColor: colors.gold + "18" }]}>
+                  <Feather name="check-circle" size={12} color={colors.gold} />
+                  <Text style={[styles.appliedTagText, { color: colors.gold }]}>Candidatado</Text>
+                </View>
+              ) : (
+                <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+              )}
             </View>
             <View style={styles.jobMeta}>
               {item.company ? (
@@ -216,6 +223,9 @@ export default function OportunidadesScreen() {
                 </>
               ) : null}
             </View>
+            {item.salary ? (
+              <Text style={[styles.salaryText, { color: colors.gold }]}>{item.salary}</Text>
+            ) : null}
             <View style={styles.cardMeta}>
               {item.contract_type ? (
                 <View style={[styles.chip, { backgroundColor: colors.background }]}>
@@ -365,4 +375,7 @@ const styles = StyleSheet.create({
   emptyHint: { fontSize: 13, textAlign: "center", maxWidth: 260 },
   entryBadge: { alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   entryBadgeText: { fontSize: 11, fontWeight: "600" },
+  appliedTag: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
+  appliedTagText: { fontSize: 11, fontWeight: "700" },
+  salaryText: { fontSize: 13, fontWeight: "700" },
 });
