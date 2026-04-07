@@ -430,10 +430,10 @@ export default function FeedScreen() {
 
                   {/* Cargo | Empresa */}
                   <Text
-                    style={[styles.suggestRole, { color: s.headline ? colors.mutedForeground : colors.border }]}
+                    style={[styles.suggestRole, { color: colors.mutedForeground, opacity: s.headline ? 1 : 0.4 }]}
                     numberOfLines={2}
                   >
-                    {s.headline ?? "Cargo · Empresa"}
+                    {s.headline || "—"}
                   </Text>
 
                   {/* Match badge */}
