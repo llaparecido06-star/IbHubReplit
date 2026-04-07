@@ -14,6 +14,7 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -22,7 +23,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import Svg, { Rect } from "react-native-svg";
+import QRCode from "react-native-qrcode-svg";
 import { Post, PostCard } from "@/components/feed/PostCard";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
@@ -95,48 +96,6 @@ function generateMockPost(id: number): Post {
   };
 }
 
-/* ── Simple SVG QR code ── */
-function QRCodeSVG({ size = 160 }: { size?: number }) {
-  const N = 21; const C = size / N;
-  const fp = (ox: number, oy: number) => {
-    const cells: { x: number; y: number }[] = [];
-    for (let r = 0; r < 7; r++) for (let c = 0; c < 7; c++) {
-      const isEdge = r === 0 || r === 6 || c === 0 || c === 6;
-      const isCenter = r >= 2 && r <= 4 && c >= 2 && c <= 4;
-      if (isEdge || isCenter) cells.push({ x: ox + c, y: oy + r });
-    }
-    return cells;
-  };
-  const dataModules = [
-    {x:8,y:0},{x:10,y:0},{x:12,y:0},{x:8,y:1},{x:11,y:1},{x:13,y:1},
-    {x:9,y:2},{x:12,y:2},{x:8,y:3},{x:10,y:3},{x:13,y:3},
-    {x:7,y:7},{x:9,y:7},{x:11,y:7},{x:13,y:7},{x:15,y:7},{x:17,y:7},
-    {x:7,y:8},{x:8,y:8},{x:10,y:8},{x:12,y:8},{x:14,y:8},{x:16,y:8},
-    {x:7,y:9},{x:9,y:9},{x:11,y:9},{x:13,y:9},{x:15,y:9},{x:17,y:9},
-    {x:7,y:10},{x:8,y:10},{x:10,y:10},{x:16,y:10},{x:18,y:10},
-    {x:7,y:11},{x:9,y:11},{x:11,y:11},{x:13,y:11},{x:15,y:11},{x:17,y:11},
-    {x:7,y:12},{x:8,y:12},{x:12,y:12},{x:14,y:12},{x:16,y:12},
-    {x:8,y:13},{x:10,y:13},{x:12,y:13},{x:15,y:13},{x:17,y:13},
-    {x:15,y:14},{x:17,y:14},{x:18,y:14},{x:19,y:14},{x:20,y:14},
-    {x:15,y:15},{x:18,y:15},{x:20,y:15},
-    {x:15,y:16},{x:16,y:16},{x:17,y:16},{x:19,y:16},
-    {x:15,y:17},{x:17,y:17},{x:18,y:17},{x:20,y:17},
-    {x:15,y:18},{x:16,y:18},{x:19,y:18},{x:20,y:18},
-    {x:8,y:6},{x:8,y:14},{x:8,y:16},{x:8,y:18},{x:8,y:20},
-    {x:9,y:15},{x:9,y:17},{x:9,y:19},{x:10,y:14},{x:10,y:16},{x:10,y:20},
-    {x:11,y:15},{x:11,y:17},{x:11,y:19},{x:12,y:14},{x:12,y:16},{x:12,y:18},
-    {x:13,y:15},{x:13,y:17},{x:13,y:19},{x:13,y:20},
-  ];
-  const allCells = [...fp(0,0), ...fp(14,0), ...fp(0,14), ...dataModules];
-  return (
-    <Svg width={size} height={size}>
-      <Rect x={0} y={0} width={size} height={size} fill="white" />
-      {allCells.map((cell, i) => (
-        <Rect key={i} x={cell.x * C} y={cell.y * C} width={C} height={C} fill="black" />
-      ))}
-    </Svg>
-  );
-}
 
 /* ── Stars component ── */
 function StarRating({ value, onChange }: { value: number; onChange: (v: number) => void }) {
@@ -771,24 +730,69 @@ export default function FeedScreen() {
               </Text>
             </View>
             <Text style={[styles.qrName, { color: colors.navy }]}>{profile?.full_name ?? "Meu Perfil"}</Text>
-            <Text style={[styles.qrRole, { color: colors.mutedForeground }]}>{(profile as any)?.headline ?? "Sommelier Chefe"}</Text>
-            <Text style={[styles.qrCompany, { color: colors.mutedForeground }]}>Wine Academy</Text>
-            {/* QR Code */}
-            <View style={styles.qrCode}>
-              <QRCodeSVG size={160} />
-            </View>
-            <Text style={[styles.qrCaption, { color: colors.mutedForeground }]}>Escaneie para ver meu perfil no ibhub</Text>
-            {/* Buttons */}
-            <View style={styles.qrBtns}>
-              <TouchableOpacity style={[styles.qrBtn, { borderColor: colors.border }]} onPress={() => { setShowQR(false); Alert.alert("Copiado!", "Link copiado."); }}>
-                <Feather name="copy" size={15} color={colors.foreground} />
-                <Text style={[styles.qrBtnText, { color: colors.foreground }]}>Copiar Link</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.qrBtn, { backgroundColor: colors.gold, borderColor: colors.gold }]}>
-                <Feather name="share-2" size={15} color="#fff" />
-                <Text style={[styles.qrBtnText, { color: "#fff" }]}>WhatsApp</Text>
-              </TouchableOpacity>
-            </View>
+            <Text style={[styles.qrRole, { color: colors.mutedForeground }]}>{profile?.headline ?? ""}</Text>
+            {profile?.username ? (
+              <Text style={[styles.qrCompany, { color: colors.mutedForeground }]}>@{profile.username}</Text>
+            ) : null}
+            {/* QR Code real — usa userId como identificador canônico */}
+            {(() => {
+              const profileId = user?.id ?? "unknown";
+              const profileLink = `https://ibhub.app/profile/${profileId}`;
+              return (
+                <>
+                  <View style={styles.qrCode}>
+                    <QRCode
+                      value={profileLink}
+                      size={160}
+                      color="#0d1b2a"
+                      backgroundColor="#ffffff"
+                    />
+                  </View>
+                  <Text style={[styles.qrCaption, { color: colors.mutedForeground }]}>
+                    {profileLink}
+                  </Text>
+                  {/* Buttons */}
+                  <View style={styles.qrBtns}>
+                    <TouchableOpacity
+                      style={[styles.qrBtn, { borderColor: colors.border }]}
+                      onPress={async () => {
+                        if (Platform.OS === "web") {
+                          try {
+                            await navigator.clipboard.writeText(profileLink);
+                            Alert.alert("Copiado!", "Link do perfil copiado para a área de transferência.");
+                          } catch {
+                            Alert.alert("Erro", "Não foi possível copiar o link. Copie manualmente: " + profileLink);
+                          }
+                        } else {
+                          await Share.share({ message: profileLink, url: profileLink });
+                        }
+                      }}
+                    >
+                      <Feather name="copy" size={15} color={colors.foreground} />
+                      <Text style={[styles.qrBtnText, { color: colors.foreground }]}>Copiar Link</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.qrBtn, { backgroundColor: colors.gold, borderColor: colors.gold }]}
+                      onPress={async () => {
+                        if (Platform.OS === "web") {
+                          try {
+                            await navigator.clipboard.writeText(profileLink);
+                            Alert.alert("Copiado!", "Link copiado para a área de transferência.");
+                          } catch {
+                            Alert.alert("Erro", "Não foi possível copiar o link. Copie manualmente: " + profileLink);
+                          }
+                        } else {
+                          await Share.share({ message: `Veja meu perfil no ibhub: ${profileLink}`, url: profileLink });
+                        }
+                      }}
+                    >
+                      <Feather name="share-2" size={15} color="#fff" />
+                      <Text style={[styles.qrBtnText, { color: "#fff" }]}>Compartilhar</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              );
+            })()}
           </Pressable>
         </Pressable>
       </Modal>

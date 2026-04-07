@@ -18,6 +18,7 @@ import {
 import { AntDesign, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Avatar } from "@/components/ui/Avatar";
 import { useColors } from "@/hooks/useColors";
+import { createReport } from "@/services/api";
 
 export interface Post {
   id: string;
@@ -98,10 +99,15 @@ function PlanBadge({ plan, colors }: { plan?: string; colors: any }) {
   );
 }
 
+const REPORT_REASONS = ["Spam", "Conteúdo ofensivo", "Informação falsa", "Assédio", "Outro"];
+
 export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, onVote }: PostCardProps) {
   const colors = useColors();
   const router = useRouter();
   const [showOptions, setShowOptions]       = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [selectedReason, setSelectedReason]   = useState<string | null>(null);
+  const [reportSending, setReportSending]     = useState(false);
   const [expanded, setExpanded]             = useState(false);
 
   // Animated scale for like button
@@ -131,16 +137,41 @@ export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, o
   };
 
   const handleShare = async () => {
-    try {
-      if (Platform.OS === "web") {
+    const postUrl = `https://ibhub.app/post/${post.id}`;
+    if (Platform.OS === "web") {
+      try {
+        await navigator.clipboard.writeText(postUrl);
         Alert.alert("Link copiado!", "Link da publicação copiado para a área de transferência.");
-        return;
+      } catch {
+        Alert.alert("Erro", "Não foi possível copiar o link. Copie manualmente: " + postUrl);
       }
+      return;
+    }
+    try {
       await Share.share({
-        message: `Veja esta publicação no ibhub:\n\n${post.content?.slice(0, 120) ?? ""}`,
+        message: `Veja esta publicação no ibhub:\n\n${post.content?.slice(0, 120) ?? ""}\n\n${postUrl}`,
+        url: postUrl,
         title: "Compartilhar publicação",
       });
     } catch {}
+  };
+
+  const handleSubmitReport = async () => {
+    if (!selectedReason || !currentUserId) return;
+    setReportSending(true);
+    const ok = await createReport({
+      post_id: post.id,
+      reported_by: currentUserId,
+      reason: selectedReason,
+    });
+    setReportSending(false);
+    setShowReportModal(false);
+    setSelectedReason(null);
+    if (ok) {
+      Alert.alert("Denúncia enviada", "Obrigado pelo seu feedback. Nossa equipe irá analisar.");
+    } else {
+      Alert.alert("Erro", "Não foi possível enviar a denúncia. Tente novamente.");
+    }
   };
 
   const handleVote = (optionIndex: number) => {
@@ -398,7 +429,7 @@ export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, o
           <View style={[styles.menu, { backgroundColor: "#fff" }]}>
             <TouchableOpacity
               style={styles.menuItem}
-              onPress={() => { setShowOptions(false); Alert.alert("Denúncia enviada", "Obrigado pelo seu feedback."); }}
+              onPress={() => { setShowOptions(false); setSelectedReason(null); setShowReportModal(true); }}
             >
               <Feather name="flag" size={16} color="#374151" />
               <Text style={[styles.menuText, { color: "#374151" }]}>Denunciar publicação</Text>
@@ -424,6 +455,49 @@ export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, o
               <Text style={[styles.menuText, { color: "#dc2626" }]}>Bloquear usuário</Text>
             </TouchableOpacity>
           </View>
+        </Pressable>
+      </Modal>
+
+      {/* ── Report Modal ── */}
+      <Modal visible={showReportModal} transparent animationType="slide" onRequestClose={() => setShowReportModal(false)}>
+        <Pressable style={styles.overlay} onPress={() => setShowReportModal(false)}>
+          <Pressable style={[styles.reportModal, { backgroundColor: "#fff" }]}>
+            <View style={styles.reportHeader}>
+              <Text style={[styles.reportTitle, { color: "#0d1b2a" }]}>Denunciar publicação</Text>
+              <TouchableOpacity onPress={() => setShowReportModal(false)}>
+                <Feather name="x" size={20} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <Text style={[styles.reportSubtitle, { color: "#6b7280" }]}>Selecione o motivo da denúncia:</Text>
+            {REPORT_REASONS.map((reason) => (
+              <TouchableOpacity
+                key={reason}
+                style={[
+                  styles.reportReasonItem,
+                  { borderColor: selectedReason === reason ? "#c9a84c" : "#e5e7eb" },
+                  selectedReason === reason && { backgroundColor: "#fdf6e3" },
+                ]}
+                onPress={() => setSelectedReason(reason)}
+              >
+                <View style={[styles.reportRadio, { borderColor: selectedReason === reason ? "#c9a84c" : "#d1d5db" }]}>
+                  {selectedReason === reason && <View style={[styles.reportRadioInner, { backgroundColor: "#c9a84c" }]} />}
+                </View>
+                <Text style={[styles.reportReasonText, { color: "#111827" }]}>{reason}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={[
+                styles.reportSubmit,
+                { backgroundColor: selectedReason ? "#c9a84c" : "#e5e7eb" },
+              ]}
+              onPress={handleSubmitReport}
+              disabled={!selectedReason || reportSending}
+            >
+              <Text style={[styles.reportSubmitText, { color: selectedReason ? "#fff" : "#9ca3af" }]}>
+                {reportSending ? "Enviando…" : "Enviar denúncia"}
+              </Text>
+            </TouchableOpacity>
+          </Pressable>
         </Pressable>
       </Modal>
     </View>
@@ -559,4 +633,31 @@ const styles = StyleSheet.create({
   menuItem:    { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingVertical: 16 },
   menuText:    { fontSize: 14.5, fontWeight: "600" },
   menuDivider: { height: 1 },
+
+  // Report modal
+  reportModal: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    paddingBottom: 40,
+    gap: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: -4 },
+    shadowRadius: 12,
+    elevation: 16,
+  },
+  reportHeader:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
+  reportTitle:       { fontSize: 17, fontWeight: "700" },
+  reportSubtitle:    { fontSize: 13, marginBottom: 4 },
+  reportReasonItem:  { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 10, borderWidth: 1.5 },
+  reportRadio:       { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  reportRadioInner:  { width: 10, height: 10, borderRadius: 5 },
+  reportReasonText:  { fontSize: 14.5, fontWeight: "500" },
+  reportSubmit:      { paddingVertical: 16, borderRadius: 12, alignItems: "center", marginTop: 4 },
+  reportSubmitText:  { fontSize: 15, fontWeight: "700" },
 });

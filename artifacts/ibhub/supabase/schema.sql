@@ -261,7 +261,10 @@ create policy "profiles_insert" on public.profiles for insert with check (auth.u
 create policy "posts_select" on public.posts for select using (true);
 create policy "posts_insert" on public.posts for insert with check (auth.uid() = user_id);
 create policy "posts_update" on public.posts for update using (auth.uid() = user_id);
-create policy "posts_delete" on public.posts for delete using (auth.uid() = user_id);
+create policy "posts_delete" on public.posts for delete using (
+  auth.uid() = user_id
+  or exists (select 1 from public.profiles where id = auth.uid() and is_admin = true)
+);
 
 -- Likes: qualquer um lê, usuário autenticado cria/deleta os próprios
 create policy "likes_select"  on public.likes for select using (true);
@@ -323,3 +326,21 @@ create policy "messages_select" on public.messages for select
     where cp.conversation_id = conversation_id and cp.user_id = auth.uid()
   ));
 create policy "messages_insert" on public.messages for insert with check (auth.uid() = sender_id);
+
+-- ─── REPORTS ─────────────────────────────────────────────────────────────────
+create table if not exists public.reports (
+  id            uuid primary key default gen_random_uuid(),
+  post_id       uuid not null references public.posts(id) on delete cascade,
+  reported_by   uuid not null references public.profiles(id) on delete cascade,
+  reason        text not null,
+  status        text not null default 'pending' check (status in ('pending','approved','rejected')),
+  created_at    timestamptz not null default now()
+);
+alter table public.reports enable row level security;
+create policy "reports_insert" on public.reports for insert with check (auth.uid() = reported_by);
+create policy "reports_select_admin" on public.reports for select using (
+  exists (select 1 from public.profiles where id = auth.uid() and is_admin = true)
+);
+create policy "reports_update_admin" on public.reports for update using (
+  exists (select 1 from public.profiles where id = auth.uid() and is_admin = true)
+);

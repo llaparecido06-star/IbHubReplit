@@ -602,6 +602,112 @@ export async function fetchConversationParticipant(
   } catch { return null; }
 }
 
+// ─── REPORTS ─────────────────────────────────────────────────────────────────
+
+export interface AppReportPost {
+  id: string;
+  content: string;
+  user_id: string;
+}
+
+export interface AppReportReporter {
+  id: string;
+  full_name: string;
+  avatar_url?: string | null;
+}
+
+export interface AppReport {
+  id: string;
+  post_id: string;
+  reported_by: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+  reporter?: AppReportReporter | null;
+  post?: AppReportPost | null;
+}
+
+export async function createReport(params: {
+  post_id: string;
+  reported_by: string;
+  reason: string;
+}): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("reports")
+      .insert({ ...params, status: "pending" });
+    if (error) { console.error("createReport:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("createReport:", e);
+    return false;
+  }
+}
+
+export async function fetchPendingReports(): Promise<AppReport[]> {
+  try {
+    const { data, error } = await supabase
+      .from("reports")
+      .select(`
+        id, post_id, reported_by, reason, status, created_at,
+        reporter:profiles!reports_reported_by_fkey(id, full_name, avatar_url),
+        post:posts!reports_post_id_fkey(id, content, user_id)
+      `)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false });
+
+    if (error || !data) return [];
+    return data as AppReport[];
+  } catch (e) {
+    console.error("fetchPendingReports:", e);
+    return [];
+  }
+}
+
+export async function updateReportStatus(
+  reportId: string,
+  status: "approved" | "rejected",
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from("reports")
+      .update({ status })
+      .eq("id", reportId)
+      .select("id");
+    if (error) { console.error("updateReportStatus:", error); return false; }
+    // Verify at least one row was actually updated
+    if (!data || data.length === 0) {
+      console.error("updateReportStatus: no rows updated for id", reportId);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error("updateReportStatus:", e);
+    return false;
+  }
+}
+
+export async function deletePost(postId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("posts").delete().eq("id", postId);
+    if (error) { console.error("deletePost:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("deletePost:", e);
+    return false;
+  }
+}
+
+export async function countPendingReports(): Promise<number> {
+  try {
+    const { count } = await supabase
+      .from("reports")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending");
+    return count ?? 0;
+  } catch { return 0; }
+}
+
 export async function getOrCreateDirectConversation(userId1: string, userId2: string): Promise<string | null> {
   try {
     // Find existing conversation between these two users
