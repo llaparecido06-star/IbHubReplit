@@ -421,14 +421,6 @@ export default function FeedScreen() {
                     <Avatar uri={s.avatar_url} name={s.full_name ?? "?"} size={52} />
                   </TouchableOpacity>
 
-                  {/* Match badge */}
-                  {s.match_score > 0 && (
-                    <View style={[styles.matchBadge, { backgroundColor: colors.gold + "18" }]}>
-                      <Feather name="zap" size={10} color={colors.gold} />
-                      <Text style={[styles.matchBadgeText, { color: colors.gold }]}>{s.match_score} área{s.match_score > 1 ? "s" : ""} em comum</Text>
-                    </View>
-                  )}
-
                   {/* Name — tappable */}
                   <TouchableOpacity onPress={() => router.push(`/profile/${s.id}` as any)}>
                     <Text style={[styles.suggestName, { color: colors.navy }]} numberOfLines={1}>
@@ -436,9 +428,21 @@ export default function FeedScreen() {
                     </Text>
                   </TouchableOpacity>
 
-                  {s.headline ? (
-                    <Text style={[styles.suggestRole, { color: colors.mutedForeground }]} numberOfLines={2}>{s.headline}</Text>
-                  ) : null}
+                  {/* Cargo | Empresa */}
+                  <Text
+                    style={[styles.suggestRole, { color: s.headline ? colors.mutedForeground : colors.border }]}
+                    numberOfLines={2}
+                  >
+                    {s.headline ?? "Cargo · Empresa"}
+                  </Text>
+
+                  {/* Match badge */}
+                  {s.match_score > 0 && (
+                    <View style={[styles.matchBadge, { backgroundColor: colors.gold + "18" }]}>
+                      <Feather name="zap" size={10} color={colors.gold} />
+                      <Text style={[styles.matchBadgeText, { color: colors.gold }]}>{s.match_score} área{s.match_score > 1 ? "s" : ""} em comum</Text>
+                    </View>
+                  )}
 
                   {/* Connect button */}
                   {isConnected ? (
