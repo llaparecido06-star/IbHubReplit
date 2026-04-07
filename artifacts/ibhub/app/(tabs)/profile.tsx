@@ -175,7 +175,6 @@ export default function ProfileScreen() {
     return (
       <>
         <Tabs.Screen
-          name="profile"
           options={{
             title: "Empresa",
             tabBarIcon: ({ color }) => <Feather name="briefcase" size={22} color={color} />,
@@ -189,7 +188,6 @@ export default function ProfileScreen() {
   return (
     <>
     <Tabs.Screen
-      name="profile"
       options={{
         title: "Meu Perfil",
         tabBarIcon: ({ color }) => <Feather name="user" size={22} color={color} />,
