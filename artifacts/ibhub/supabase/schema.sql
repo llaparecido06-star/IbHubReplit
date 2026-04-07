@@ -205,12 +205,25 @@ create trigger like_notification_trigger
 
 -- ─── STORIES (MOMENTOS) ──────────────────────────────────────────────────────
 create table if not exists public.stories (
-  id          uuid primary key default gen_random_uuid(),
-  user_id     uuid references auth.users(id) on delete cascade not null,
-  image_url   text,
-  text        text,
-  created_at  timestamptz not null default now(),
-  expires_at  timestamptz not null default (now() + interval '24 hours')
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid references auth.users(id) on delete cascade not null,
+  image_url     text,
+  text          text,
+  tagged_users  uuid[] default '{}',
+  created_at    timestamptz not null default now(),
+  expires_at    timestamptz not null default (now() + interval '24 hours')
+);
+
+-- Adicionar coluna caso a tabela já exista
+alter table public.stories add column if not exists tagged_users uuid[] default '{}';
+
+-- ─── STORY VIEWS ─────────────────────────────────────────────────────────────
+create table if not exists public.story_views (
+  id         uuid primary key default gen_random_uuid(),
+  story_id   uuid references public.stories(id) on delete cascade not null,
+  user_id    uuid references auth.users(id) on delete cascade not null,
+  viewed_at  timestamptz not null default now(),
+  unique(story_id, user_id)
 );
 
 -- ─── CONVERSATIONS & MESSAGES ────────────────────────────────────────────────
@@ -302,6 +315,20 @@ create policy "notif_update" on public.notifications for update using (auth.uid(
 create policy "stories_select" on public.stories for select using (true);
 create policy "stories_insert" on public.stories for insert with check (auth.uid() = user_id);
 create policy "stories_delete" on public.stories for delete using (auth.uid() = user_id);
+
+-- Story views: RLS
+-- A user can see their own view records OR view records for stories they authored
+alter table public.story_views enable row level security;
+create policy "story_views_select" on public.story_views for select
+  using (
+    auth.uid() = user_id
+    or exists (
+      select 1 from public.stories s
+      where s.id = story_id and s.user_id = auth.uid()
+    )
+  );
+create policy "story_views_insert" on public.story_views for insert with check (auth.uid() = user_id);
+create policy "story_views_update" on public.story_views for update using (auth.uid() = user_id);
 
 -- Conversations: participantes podem ver
 create policy "convos_select" on public.conversations for select

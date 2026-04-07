@@ -32,9 +32,18 @@ export interface AppStory {
   user_id: string;
   image_url?: string | null;
   text?: string | null;
+  tagged_users?: string[] | null;
   created_at: string;
   expires_at: string;
   author?: { id: string; full_name: string; avatar_url?: string | null } | null;
+  viewed?: boolean;
+}
+
+export interface StoryGroup {
+  userId: string;
+  author: { id: string; full_name: string; avatar_url?: string | null };
+  stories: AppStory[];
+  hasUnseen: boolean;
 }
 
 export interface AppMessage {
@@ -380,34 +389,158 @@ export async function fetchActiveStories(): Promise<AppStory[]> {
     const { data, error } = await supabase
       .from("stories")
       .select(`
-        id, user_id, image_url, text, created_at, expires_at,
+        id, user_id, image_url, text, tagged_users, created_at, expires_at,
         author:profiles!stories_user_id_fkey(id, full_name, avatar_url)
       `)
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: false });
 
     if (error || !data) return [];
-    return data as AppStory[];
+    return data as unknown as AppStory[];
   } catch (e) {
     console.error("fetchActiveStories:", e);
     return [];
   }
 }
 
-export async function createStory(userId: string, text: string): Promise<AppStory | null> {
+export async function fetchActiveStoriesForUser(currentUserId: string): Promise<StoryGroup[]> {
   try {
+    const { data: stories, error } = await supabase
+      .from("stories")
+      .select(`
+        id, user_id, image_url, text, tagged_users, created_at, expires_at,
+        author:profiles!stories_user_id_fkey(id, full_name, avatar_url)
+      `)
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: true });
+
+    if (error || !stories) return [];
+
+    const { data: views } = await supabase
+      .from("story_views")
+      .select("story_id")
+      .eq("user_id", currentUserId);
+
+    const viewedIds = new Set((views ?? []).map((v: { story_id: string }) => v.story_id));
+
+    const storiesWithViewed = (stories as unknown as AppStory[]).map(s => ({
+      ...s,
+      viewed: viewedIds.has(s.id),
+    }));
+
+    const groupMap = new Map<string, StoryGroup>();
+    for (const story of storiesWithViewed) {
+      const uid = story.user_id;
+      if (!groupMap.has(uid)) {
+        groupMap.set(uid, {
+          userId: uid,
+          author: story.author ?? { id: uid, full_name: "Usuário", avatar_url: null },
+          stories: [],
+          hasUnseen: false,
+        });
+      }
+      const group = groupMap.get(uid)!;
+      group.stories.push(story);
+      if (!story.viewed) group.hasUnseen = true;
+    }
+
+    const ownGroup = groupMap.get(currentUserId);
+    const otherGroups = [...groupMap.values()].filter(g => g.userId !== currentUserId);
+    const result: StoryGroup[] = [];
+    if (ownGroup) result.push(ownGroup);
+    result.push(...otherGroups.sort((a, b) => (b.hasUnseen ? 1 : 0) - (a.hasUnseen ? 1 : 0)));
+    return result;
+  } catch (e) {
+    console.error("fetchActiveStoriesForUser:", e);
+    return [];
+  }
+}
+
+export async function markStoryViewed(storyId: string, userId: string): Promise<void> {
+  try {
+    await supabase
+      .from("story_views")
+      .upsert(
+        { story_id: storyId, user_id: userId },
+        { onConflict: "story_id,user_id", ignoreDuplicates: true }
+      );
+  } catch (e) {
+    console.error("markStoryViewed:", e);
+  }
+}
+
+export async function fetchStoryViewers(storyId: string): Promise<{ id: string; full_name: string; avatar_url?: string | null }[]> {
+  try {
+    const { data, error } = await supabase
+      .from("story_views")
+      .select("user_id, viewer:profiles!story_views_user_id_fkey(id, full_name, avatar_url)")
+      .eq("story_id", storyId);
+
+    if (error || !data) return [];
+    type StoryViewRow = { viewer: { id: string; full_name: string; avatar_url?: string | null } | null };
+    return (data as unknown as StoryViewRow[])
+      .map(d => d.viewer)
+      .filter((v): v is { id: string; full_name: string; avatar_url?: string | null } => v !== null);
+  } catch (e) {
+    console.error("fetchStoryViewers:", e);
+    return [];
+  }
+}
+
+export async function uploadStoryImage(userId: string, uri: string): Promise<string | null> {
+  try {
+    const ext = uri.split(".").pop()?.split("?")[0] ?? "jpg";
+    const fileName = `${userId}/${Date.now()}.${ext}`;
+
+    const response = await fetch(uri);
+    const blob = await response.blob();
+
+    const { data, error } = await supabase.storage
+      .from("stories")
+      .upload(fileName, blob, { contentType: `image/${ext === "jpg" ? "jpeg" : ext}`, upsert: true });
+
+    if (error) { console.error("uploadStoryImage:", error); return null; }
+
+    const { data: urlData } = supabase.storage.from("stories").getPublicUrl(data.path);
+    return urlData.publicUrl;
+  } catch (e) {
+    console.error("uploadStoryImage:", e);
+    return null;
+  }
+}
+
+export async function createStory(
+  userId: string,
+  options: { text?: string; imageUri?: string; taggedUsers?: string[] }
+): Promise<AppStory | null> {
+  try {
+    let imageUrl: string | null = null;
+    if (options.imageUri) {
+      imageUrl = await uploadStoryImage(userId, options.imageUri);
+      if (!imageUrl) {
+        console.error("createStory: image upload failed, aborting story creation");
+        return null;
+      }
+    }
+
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const { data, error } = await supabase
       .from("stories")
-      .insert({ user_id: userId, text, expires_at: expiresAt })
+      .insert({
+        user_id: userId,
+        text: options.text ?? null,
+        image_url: imageUrl,
+        tagged_users: options.taggedUsers ?? [],
+        expires_at: expiresAt,
+      })
       .select(`
-        id, user_id, image_url, text, created_at, expires_at,
+        id, user_id, image_url, text, tagged_users, created_at, expires_at,
         author:profiles!stories_user_id_fkey(id, full_name, avatar_url)
       `)
       .single();
 
     if (error) { console.error("createStory:", error); return null; }
-    return data as AppStory;
+    return data as unknown as AppStory;
   } catch (e) {
     console.error("createStory:", e);
     return null;

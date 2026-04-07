@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import QRCode from "react-native-qrcode-svg";
 import { Post, PostCard } from "@/components/feed/PostCard";
+import { StoryBar } from "@/components/feed/StoryBar";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
@@ -368,17 +369,8 @@ export default function FeedScreen() {
         </View>
       </View>
 
-      {/* Stories */}
-      <View style={[styles.storiesWrap, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storiesScroll}>
-          <TouchableOpacity style={styles.storyItem} onPress={() => setShowCreatePost(true)}>
-            <View style={[styles.storyCircle, { borderColor: colors.border }]}>
-              <Feather name="plus" size={22} color={colors.mutedForeground} />
-            </View>
-            <Text style={[styles.storyLabel, { color: colors.mutedForeground }]}>Momentos</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
+      {/* Stories / Momentos */}
+      <StoryBar />
 
       {/* Greeting */}
       <View style={[styles.greeting, { backgroundColor: "#fff" }]}>
