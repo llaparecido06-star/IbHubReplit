@@ -154,7 +154,7 @@ function StarRating({ value, onChange }: { value: number; onChange: (v: number) 
 export default function FeedScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [posts, setPosts] = useState<Post[]>([]);
@@ -278,8 +278,43 @@ export default function FeedScreen() {
     setPostContent(""); setPollQuestion(""); setPollOptions(["",""]); setPostMode("text");
   };
 
-  const handlePublishWine = () => {
+  const handlePublishWine = async () => {
     setShowWineReview(false);
+    if (!wineName.trim() || !user?.id) {
+      setWineName(""); setWineSafra(""); setWineStars(4); setWineScore(85);
+      setSelectedTags([]); setWineHarmonizacao(""); setWineObs("");
+      return;
+    }
+
+    const stars = "⭐".repeat(wineStars);
+    const tags = selectedTags.length > 0 ? `\n🍷 Notas: ${selectedTags.join(", ")}` : "";
+    const harmonizacao = wineHarmonizacao.trim() ? `\n🍽️ Harmonização: ${wineHarmonizacao.trim()}` : "";
+    const obs = wineObs.trim() ? `\n📝 ${wineObs.trim()}` : "";
+    const content = `${stars} ${wineName.trim()}${wineSafra ? ` (${wineSafra})` : ""}\n📊 Pontuação: ${wineScore}/100${tags}${harmonizacao}${obs}`;
+
+    const tempPost: Post = {
+      id: `tmp_${Date.now()}`,
+      user_id: user.id,
+      content,
+      likes_count: 0, comments_count: 0, shares_count: 0,
+      is_liked: false, is_bookmarked: false,
+      created_at: new Date().toISOString(),
+      author: {
+        id: user.id,
+        full_name: profile?.full_name ?? "Você",
+        username: profile?.username ?? "",
+        avatar_url: profile?.avatar_url ?? null,
+        headline: (profile as any)?.headline ?? "",
+        plan: profile?.plan ?? "basico",
+      },
+    };
+    setPosts(prev => [tempPost, ...prev]);
+
+    const saved = await API.createPost({ user_id: user.id, content });
+    if (saved) {
+      setPosts(prev => prev.map(p => p.id === tempPost.id ? saved : p));
+    }
+
     setWineName(""); setWineSafra(""); setWineStars(4); setWineScore(85);
     setSelectedTags([]); setWineHarmonizacao(""); setWineObs("");
   };
@@ -398,21 +433,33 @@ export default function FeedScreen() {
             post={item}
             onLike={(id) => {
               const post = posts.find(p => p.id === id);
-              if (!post) return;
-              // Optimistic update
+              if (!post || !user?.id) return;
               setPosts(prev => prev.map(p => p.id === id
                 ? { ...p, is_liked: !p.is_liked, likes_count: p.is_liked ? p.likes_count - 1 : p.likes_count + 1 }
                 : p));
-              // Persist (fire and forget)
-              if (user?.id) API.toggleLike(id, user.id, post.is_liked ?? false);
+              API.toggleLike(id, user.id, post.is_liked ?? false);
             }}
             onBookmark={(id) => {
               const post = posts.find(p => p.id === id);
-              if (!post) return;
+              if (!post || !user?.id) return;
               setPosts(prev => prev.map(p => p.id === id ? { ...p, is_bookmarked: !p.is_bookmarked } : p));
-              if (user?.id) API.toggleBookmark(id, user.id, post.is_bookmarked ?? false);
+              API.toggleBookmark(id, user.id, post.is_bookmarked ?? false);
             }}
             onComment={(id) => router.push(`/post/${id}` as any)}
+            onVote={(id, optionIndex) => {
+              if (!user?.id) return;
+              setPosts(prev => prev.map(p => {
+                if (p.id !== id || !p.poll || p.poll.closed || p.poll.user_voted_index != null) return p;
+                const newOptions = p.poll.options.map((o, i) =>
+                  i === optionIndex ? { ...o, votes: o.votes + 1 } : o
+                );
+                return {
+                  ...p,
+                  poll: { ...p.poll, options: newOptions, total_votes: p.poll.total_votes + 1, user_voted_index: optionIndex },
+                };
+              }));
+              API.voteOnPoll(id, user.id, optionIndex);
+            }}
           />
         )}
         ListHeaderComponent={renderHeader}

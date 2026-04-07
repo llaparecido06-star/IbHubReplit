@@ -9,6 +9,7 @@ export interface AppNotification {
   actor_id?: string | null;
   type: string;
   post_id?: string | null;
+  comment_id?: string | null;
   message?: string | null;
   read: boolean;
   created_at: string;
@@ -21,6 +22,8 @@ export interface AppComment {
   user_id: string;
   content: string;
   created_at: string;
+  likes_count?: number;
+  is_liked?: boolean;
   author?: { id: string; full_name: string; avatar_url?: string | null; headline?: string | null } | null;
 }
 
@@ -296,7 +299,7 @@ export async function fetchNotifications(userId: string): Promise<AppNotificatio
     const { data, error } = await supabase
       .from("notifications")
       .select(`
-        id, user_id, actor_id, type, post_id, message, read, created_at,
+        id, user_id, actor_id, type, post_id, comment_id, message, read, created_at,
         actor:profiles!notifications_actor_id_fkey(id, full_name, avatar_url)
       `)
       .eq("user_id", userId)
@@ -408,6 +411,58 @@ export async function createStory(userId: string, text: string): Promise<AppStor
   } catch (e) {
     console.error("createStory:", e);
     return null;
+  }
+}
+
+// ─── POLL VOTING ─────────────────────────────────────────────────────────────
+
+export async function voteOnPoll(postId: string, userId: string, optionIndex: number): Promise<void> {
+  try {
+    const { data: post } = await supabase.from("posts").select("poll").eq("id", postId).single();
+    if (!post?.poll) return;
+
+    const poll = post.poll as { options: { text: string; votes: number }[]; total_votes: number; closed: boolean; user_votes?: Record<string, number> };
+    if (poll.closed) return;
+    if (poll.user_votes?.[userId] != null) return; // already voted
+
+    const newOptions = poll.options.map((opt: any, i: number) =>
+      i === optionIndex ? { ...opt, votes: opt.votes + 1 } : opt
+    );
+    const userVotes = { ...(poll.user_votes ?? {}), [userId]: optionIndex };
+
+    await supabase.from("posts").update({
+      poll: {
+        ...poll,
+        options: newOptions,
+        total_votes: poll.total_votes + 1,
+        user_votes: userVotes,
+      },
+    }).eq("id", postId);
+  } catch (e) {
+    console.error("voteOnPoll:", e);
+  }
+}
+
+// ─── COMMENT LIKES ───────────────────────────────────────────────────────────
+
+export async function toggleCommentLike(commentId: string, userId: string): Promise<boolean> {
+  try {
+    const { data: existing } = await supabase
+      .from("comment_likes")
+      .select("id")
+      .match({ comment_id: commentId, user_id: userId })
+      .maybeSingle();
+
+    if (existing) {
+      await supabase.from("comment_likes").delete().match({ comment_id: commentId, user_id: userId });
+      return false; // now unliked
+    } else {
+      await supabase.from("comment_likes").insert({ comment_id: commentId, user_id: userId });
+      return true; // now liked
+    }
+  } catch (e) {
+    console.error("toggleCommentLike:", e);
+    return false;
   }
 }
 

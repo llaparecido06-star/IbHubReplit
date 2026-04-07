@@ -121,9 +121,14 @@ export default function NotificationsScreen() {
       await API.markNotificationRead(notif.id);
     }
 
-    // Navigate
+    // Navigate — comment/mention deep-links to specific comment
     if (notif.post_id) {
-      router.push(`/post/${notif.post_id}` as any);
+      const hasCommentDeepLink = (notif.type === "comment" || notif.type === "mention") && notif.comment_id;
+      router.push(
+        hasCommentDeepLink
+          ? (`/post/${notif.post_id}?commentId=${notif.comment_id}` as any)
+          : (`/post/${notif.post_id}` as any)
+      );
     } else if (notif.actor?.id) {
       router.push(`/profile/${notif.actor.id}` as any);
     }

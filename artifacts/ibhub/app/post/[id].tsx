@@ -33,17 +33,19 @@ function timeAgo(dateStr: string): string {
 export default function PostDetailScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { user } = useAuth();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { user, profile } = useAuth();
+  const { id, commentId: highlightCommentId } = useLocalSearchParams<{ id: string; commentId?: string }>();
   const insets = useSafeAreaInsets();
 
   const [post, setPost] = useState<Post | null>(null);
   const [comments, setComments] = useState<AppComment[]>([]);
   const [comment, setComment] = useState("");
+  const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
   const [loadingPost, setLoadingPost] = useState(true);
   const [sendingComment, setSendingComment] = useState(false);
 
   const inputRef = useRef<TextInput>(null);
+  const listRef = useRef<FlatList>(null);
   const topPad = Platform.OS === "web" ? 0 : insets.top;
 
   const load = useCallback(async () => {
@@ -54,17 +56,42 @@ export default function PostDetailScreen() {
       API.fetchComments(id),
     ]);
     if (realPost) setPost(realPost);
-    setComments(realComments);
+    // Initialize local likes_count and is_liked
+    setComments(realComments.map(c => ({ ...c, likes_count: c.likes_count ?? 0, is_liked: c.is_liked ?? false })));
     setLoadingPost(false);
   }, [id, user?.id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Scroll to highlighted comment after comments load
+  useEffect(() => {
+    if (highlightCommentId && comments.length > 0) {
+      const idx = comments.findIndex(c => c.id === highlightCommentId);
+      if (idx >= 0) {
+        setTimeout(() => {
+          listRef.current?.scrollToIndex({ index: idx + 1, animated: true }); // +1 for header
+        }, 400);
+      }
+    }
+  }, [highlightCommentId, comments]);
+
+  const handleReply = (authorId: string, authorName: string, commentId: string) => {
+    setReplyTo({ id: commentId, name: authorName });
+    setComment(`@${authorName} `);
+    inputRef.current?.focus();
+  };
+
+  const cancelReply = () => {
+    setReplyTo(null);
+    setComment("");
+  };
 
   const sendComment = async () => {
     if (!comment.trim() || !user?.id || !id) return;
     setSendingComment(true);
     const text = comment.trim();
     setComment("");
+    setReplyTo(null);
 
     // Optimistic
     const tempComment: AppComment = {
@@ -73,33 +100,102 @@ export default function PostDetailScreen() {
       user_id: user.id,
       content: text,
       created_at: new Date().toISOString(),
+      likes_count: 0,
+      is_liked: false,
       author: {
         id: user.id,
-        full_name: "Você",
-        avatar_url: null,
+        full_name: profile?.full_name ?? "Você",
+        avatar_url: profile?.avatar_url ?? null,
         headline: null,
       },
     };
     setComments(prev => [...prev, tempComment]);
     setPost(prev => prev ? { ...prev, comments_count: prev.comments_count + 1 } : prev);
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
 
     const saved = await API.addComment(id, user.id, text);
     if (saved) {
-      setComments(prev => prev.map(c => c.id === tempComment.id ? saved : c));
+      setComments(prev => prev.map(c => c.id === tempComment.id ? { ...saved, likes_count: 0, is_liked: false } : c));
     }
     setSendingComment(false);
   };
 
-  const handleLike = () => {
+  const handleLikeComment = async (commentId: string) => {
+    if (!user?.id) return;
+    // Optimistic toggle
+    setComments(prev => prev.map(c => {
+      if (c.id !== commentId) return c;
+      const wasLiked = c.is_liked ?? false;
+      return { ...c, is_liked: !wasLiked, likes_count: (c.likes_count ?? 0) + (wasLiked ? -1 : 1) };
+    }));
+    // Fire and forget (table may not exist yet — fails silently)
+    API.toggleCommentLike(commentId, user.id).catch(() => {});
+  };
+
+  const handleLikePost = () => {
     if (!post || !user?.id) return;
     setPost(p => p ? { ...p, is_liked: !p.is_liked, likes_count: p.is_liked ? p.likes_count - 1 : p.likes_count + 1 } : p);
     API.toggleLike(post.id, user.id, post.is_liked ?? false);
   };
 
-  const handleBookmark = () => {
+  const handleBookmarkPost = () => {
     if (!post || !user?.id) return;
     setPost(p => p ? { ...p, is_bookmarked: !p.is_bookmarked } : p);
     API.toggleBookmark(post.id, user.id, post.is_bookmarked ?? false);
+  };
+
+  const renderComment = ({ item, index }: { item: AppComment; index: number }) => {
+    const isHighlighted = item.id === highlightCommentId;
+    const isTemp = item.id.startsWith("tmp_");
+
+    return (
+      <View
+        style={[
+          styles.comment,
+          { borderBottomColor: colors.border },
+          isHighlighted && { backgroundColor: colors.gold + "14" },
+          isTemp && { opacity: 0.7 },
+        ]}
+      >
+        <TouchableOpacity onPress={() => item.author?.id && router.push(`/profile/${item.author.id}` as any)}>
+          <Avatar uri={item.author?.avatar_url} name={item.author?.full_name ?? "?"} size={36} />
+        </TouchableOpacity>
+        <View style={styles.commentBody}>
+          <View style={[styles.commentBubble, { backgroundColor: colors.secondary }]}>
+            <TouchableOpacity onPress={() => item.author?.id && router.push(`/profile/${item.author.id}` as any)}>
+              <Text style={[styles.commentAuthor, { color: colors.foreground }]}>
+                {item.author?.full_name ?? "Usuário"}
+              </Text>
+            </TouchableOpacity>
+            <Text style={[styles.commentContent, { color: colors.foreground }]}>{item.content}</Text>
+          </View>
+          <View style={styles.commentActions}>
+            <Text style={[styles.commentTime, { color: colors.mutedForeground }]}>{timeAgo(item.created_at)}</Text>
+            <TouchableOpacity
+              style={styles.commentAction}
+              onPress={() => handleLikeComment(item.id)}
+            >
+              <Feather
+                name="heart"
+                size={13}
+                color={(item.is_liked) ? "#e74c3c" : colors.mutedForeground}
+              />
+              {(item.likes_count ?? 0) > 0 && (
+                <Text style={[styles.commentLikes, { color: item.is_liked ? "#e74c3c" : colors.mutedForeground }]}>
+                  {item.likes_count}
+                </Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.commentAction}
+              onPress={() => item.author && handleReply(item.author.id, item.author.full_name, item.id)}
+            >
+              <Text style={[styles.commentReply, { color: colors.gold }]}>Responder</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
   };
 
   if (loadingPost) {
@@ -114,6 +210,7 @@ export default function PostDetailScreen() {
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? insets.bottom : 0}
     >
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
@@ -127,29 +224,11 @@ export default function PostDetailScreen() {
       </View>
 
       <FlatList
+        ref={listRef}
         data={comments}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={[styles.comment, { borderBottomColor: colors.border }]}>
-            <TouchableOpacity onPress={() => router.push(`/profile/${item.author?.id}` as any)}>
-              <Avatar uri={item.author?.avatar_url} name={item.author?.full_name ?? "?"} size={36} />
-            </TouchableOpacity>
-            <View style={styles.commentBody}>
-              <View style={[styles.commentBubble, { backgroundColor: colors.secondary, borderRadius: 14 }]}>
-                <Text style={[styles.commentAuthor, { color: colors.foreground }]}>
-                  {item.author?.full_name ?? "Usuário"}
-                </Text>
-                <Text style={[styles.commentContent, { color: colors.foreground }]}>{item.content}</Text>
-              </View>
-              <View style={styles.commentActions}>
-                <Text style={[styles.commentTime, { color: colors.mutedForeground }]}>{timeAgo(item.created_at)}</Text>
-                <TouchableOpacity style={styles.commentAction}>
-                  <Text style={[styles.commentReply, { color: colors.gold }]}>Responder</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        )}
+        renderItem={renderComment}
+        onScrollToIndexFailed={() => {}} // ignore if index not yet mounted
         ListHeaderComponent={() => (
           <View style={[styles.postPreview, { borderBottomColor: colors.border }]}>
             {post && (
@@ -157,7 +236,7 @@ export default function PostDetailScreen() {
                 {/* Author */}
                 <TouchableOpacity
                   style={styles.authorRow}
-                  onPress={() => router.push(`/profile/${post.author?.id}` as any)}
+                  onPress={() => post.author?.id && router.push(`/profile/${post.author.id}` as any)}
                 >
                   <Avatar uri={post.author?.avatar_url} name={post.author?.full_name ?? "?"} size={42} />
                   <View>
@@ -175,26 +254,20 @@ export default function PostDetailScreen() {
 
                 {/* Actions */}
                 <View style={styles.postActions}>
-                  <TouchableOpacity style={styles.postAction} onPress={handleLike}>
-                    <Feather
-                      name="heart"
-                      size={18}
-                      color={post.is_liked ? "#e74c3c" : colors.mutedForeground}
-                    />
+                  <TouchableOpacity style={styles.postAction} onPress={handleLikePost}>
+                    <Feather name="heart" size={18} color={post.is_liked ? "#e74c3c" : colors.mutedForeground} />
                     <Text style={[styles.postActionCount, { color: post.is_liked ? "#e74c3c" : colors.mutedForeground }]}>
-                      {post.likes_count}
+                      {post.likes_count > 0 ? post.likes_count : "Curtir"}
                     </Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.postAction}>
+                  <TouchableOpacity style={styles.postAction} onPress={() => inputRef.current?.focus()}>
                     <Feather name="message-circle" size={18} color={colors.mutedForeground} />
-                    <Text style={[styles.postActionCount, { color: colors.mutedForeground }]}>{post.comments_count}</Text>
+                    <Text style={[styles.postActionCount, { color: colors.mutedForeground }]}>
+                      {comments.length > 0 ? comments.length : "Comentar"}
+                    </Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.postAction} onPress={handleBookmark}>
-                    <Feather
-                      name="bookmark"
-                      size={18}
-                      color={post.is_bookmarked ? colors.gold : colors.mutedForeground}
-                    />
+                  <TouchableOpacity style={styles.postAction} onPress={handleBookmarkPost}>
+                    <Feather name="bookmark" size={18} color={post.is_bookmarked ? colors.gold : colors.mutedForeground} />
                   </TouchableOpacity>
                 </View>
               </>
@@ -205,20 +278,32 @@ export default function PostDetailScreen() {
             </Text>
           </View>
         )}
-        contentContainerStyle={{ paddingBottom: 80 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
       />
 
+      {/* Reply indicator */}
+      {replyTo && (
+        <View style={[styles.replyBar, { backgroundColor: colors.gold + "18", borderTopColor: colors.gold + "40" }]}>
+          <Text style={[styles.replyText, { color: colors.gold }]}>
+            Respondendo a <Text style={{ fontWeight: "800" }}>@{replyTo.name}</Text>
+          </Text>
+          <TouchableOpacity onPress={cancelReply}>
+            <Feather name="x" size={16} color={colors.gold} />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Input bar */}
       <View style={[styles.inputBar, { borderTopColor: colors.border, backgroundColor: colors.background, paddingBottom: insets.bottom + 8 }]}>
-        <Avatar name="Você" size={34} />
+        <Avatar uri={profile?.avatar_url} name={profile?.full_name ?? "Você"} size={34} />
         <View style={[styles.inputWrap, { backgroundColor: colors.secondary, borderRadius: 24 }]}>
           <TextInput
             ref={inputRef}
             style={[styles.input, { color: colors.foreground }]}
-            placeholder="Adicionar comentário..."
+            placeholder={replyTo ? `Responder a @${replyTo.name}...` : "Adicionar comentário..."}
             placeholderTextColor={colors.mutedForeground}
             value={comment}
             onChangeText={setComment}
@@ -254,19 +339,22 @@ const styles = StyleSheet.create({
   authorName:         { fontSize: 15, fontWeight: "700" },
   authorHeadline:     { fontSize: 12, maxWidth: 220 },
   postContentPreview: { fontSize: 15, lineHeight: 22 },
-  postActions:        { flexDirection: "row", gap: 20 },
+  postActions:        { flexDirection: "row", gap: 20, paddingTop: 4 },
   postAction:         { flexDirection: "row", alignItems: "center", gap: 5 },
   postActionCount:    { fontSize: 13, fontWeight: "600" },
   commentsHeader:     { fontSize: 15, fontWeight: "700", paddingTop: 4 },
   comment:            { flexDirection: "row", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, gap: 10, alignItems: "flex-start" },
   commentBody:        { flex: 1, gap: 4 },
-  commentBubble:      { padding: 12, gap: 2 },
+  commentBubble:      { padding: 12, gap: 2, borderRadius: 14 },
   commentAuthor:      { fontSize: 13, fontWeight: "700" },
   commentContent:     { fontSize: 14, lineHeight: 19 },
   commentActions:     { flexDirection: "row", alignItems: "center", gap: 14, paddingLeft: 4 },
   commentTime:        { fontSize: 12 },
   commentAction:      { flexDirection: "row", alignItems: "center", gap: 4 },
+  commentLikes:       { fontSize: 12 },
   commentReply:       { fontSize: 12, fontWeight: "700" },
+  replyBar:           { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 8, borderTopWidth: 1 },
+  replyText:          { fontSize: 13 },
   inputBar:           { flexDirection: "row", alignItems: "flex-end", padding: 10, gap: 8, borderTopWidth: 1 },
   inputWrap:          { flex: 1, paddingHorizontal: 14, paddingVertical: 8 },
   input:              { fontSize: 14, maxHeight: 100 },
