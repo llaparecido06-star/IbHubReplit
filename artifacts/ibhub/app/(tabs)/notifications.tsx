@@ -151,42 +151,54 @@ export default function OportunidadesScreen() {
         ) : null}
 
         {/* ── Market ── */}
-        {tab === "market" && !loading && filteredMarket.map((item) => (
-          <TouchableOpacity
-            key={item.id}
-            style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}
-            onPress={() => router.push(`/opportunity/${item.id}` as any)}
-            activeOpacity={0.75}
-          >
-            <View style={styles.cardTopRow}>
-              <Text style={[styles.cardTitle, { color: colors.navy, flex: 1 }]} numberOfLines={2}>
-                {item.title}
-              </Text>
-              <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
-            </View>
-            {item.company ? (
-              <Text style={[styles.cardSeller, { color: colors.mutedForeground }]}>{item.company}</Text>
-            ) : null}
-            <View style={styles.cardMeta}>
-              {item.price ? (
-                <Text style={[styles.cardPrice, { color: colors.gold }]}>{item.price}</Text>
-              ) : null}
-              {item.category ? (
-                <View style={[styles.chip, { backgroundColor: colors.background }]}>
-                  <Text style={[styles.chipText, { color: colors.mutedForeground }]}>{item.category}</Text>
+        {tab === "market" && !loading && filteredMarket.map((item) => {
+          const sellerName = item.company ?? item.creator?.full_name ?? null;
+          return (
+            <TouchableOpacity
+              key={item.id}
+              style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}
+              onPress={() => router.push(`/opportunity/${item.id}` as any)}
+              activeOpacity={0.75}
+            >
+              <View style={styles.cardTopRow}>
+                <Text style={[styles.cardTitle, { color: colors.navy, flex: 1 }]} numberOfLines={2}>
+                  {item.title}
+                </Text>
+                <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+              </View>
+              {sellerName ? (
+                <View style={styles.jobMeta}>
+                  <Feather name="user" size={13} color={colors.mutedForeground} />
+                  <Text style={[styles.cardSeller, { color: colors.mutedForeground }]}>{sellerName}</Text>
                 </View>
               ) : null}
-            </View>
-            {item.expires_at ? (
-              <View style={styles.expiryRow}>
-                <Feather name="clock" size={13} color={colors.mutedForeground} />
-                <Text style={[styles.expiryText, { color: colors.mutedForeground }]}>
-                  Expira: {new Date(item.expires_at).toLocaleDateString("pt-BR")}
-                </Text>
+              <View style={styles.cardMeta}>
+                {item.price ? (
+                  <Text style={[styles.cardPrice, { color: colors.gold }]}>{item.price}</Text>
+                ) : null}
+                {item.category ? (
+                  <View style={[styles.chip, { backgroundColor: colors.background }]}>
+                    <Text style={[styles.chipText, { color: colors.mutedForeground }]}>{item.category}</Text>
+                  </View>
+                ) : null}
               </View>
-            ) : null}
-          </TouchableOpacity>
-        ))}
+              {item.location ? (
+                <View style={styles.jobMeta}>
+                  <Feather name="map-pin" size={13} color={colors.mutedForeground} />
+                  <Text style={[styles.cardSeller, { color: colors.mutedForeground }]}>{item.location}</Text>
+                </View>
+              ) : null}
+              {item.expires_at ? (
+                <View style={styles.expiryRow}>
+                  <Feather name="clock" size={13} color={colors.mutedForeground} />
+                  <Text style={[styles.expiryText, { color: colors.mutedForeground }]}>
+                    Expira: {new Date(item.expires_at).toLocaleDateString("pt-BR")}
+                  </Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
+          );
+        })}
 
         {/* ── Vagas ── */}
         {tab === "vagas" && !loading && filteredVagas.map((item) => (

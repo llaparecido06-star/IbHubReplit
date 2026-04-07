@@ -1583,6 +1583,7 @@ export interface AppOpportunity {
   created_at: string;
   creator?: { id: string; full_name: string | null; avatar_url?: string | null; position?: string | null; company?: string | null } | null;
   is_applied?: boolean;
+  is_interested?: boolean;
   applications_count?: number;
 }
 
@@ -1636,7 +1637,7 @@ export async function fetchOpportunities(
 export async function fetchOpportunityById(
   id: string,
   userId: string,
-): Promise<(AppOpportunity & { is_applied: boolean; applications_count: number }) | null> {
+): Promise<(AppOpportunity & { is_applied: boolean; is_interested: boolean; applications_count: number }) | null> {
   try {
     const { data, error } = await supabase
       .from("opportunities")
@@ -1650,24 +1651,40 @@ export async function fetchOpportunityById(
 
     if (error || !data) return null;
 
-    const [appRes, countRes] = await Promise.all([
-      supabase
-        .from("opportunity_applications")
-        .select("id")
-        .eq("opportunity_id", id)
-        .eq("applicant_id", userId)
-        .maybeSingle(),
-      supabase
-        .from("opportunity_applications")
-        .select("id", { count: "exact", head: true })
-        .eq("opportunity_id", id),
+    const isVaga = (data as any).type === "vaga";
+
+    const [appRes, countRes, interestRes] = await Promise.all([
+      isVaga
+        ? supabase
+            .from("opportunity_applications")
+            .select("id")
+            .eq("opportunity_id", id)
+            .eq("applicant_id", userId)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      isVaga
+        ? supabase
+            .from("opportunity_applications")
+            .select("id", { count: "exact", head: true })
+            .eq("opportunity_id", id)
+        : Promise.resolve({ count: 0 }),
+      !isVaga
+        ? supabase
+            .from("notifications")
+            .select("id")
+            .eq("type", "interest")
+            .eq("opportunity_id", id)
+            .eq("actor_id", userId)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
     ]);
 
     return {
       ...(data as any),
       creator: (data as any).creator ?? null,
       is_applied: !!appRes.data,
-      applications_count: countRes.count ?? 0,
+      is_interested: !!interestRes.data,
+      applications_count: (countRes as any).count ?? 0,
     };
   } catch (e) {
     console.error("fetchOpportunityById:", e);
@@ -1760,7 +1777,6 @@ export async function expressInterest(
   message: string | null,
 ): Promise<boolean> {
   try {
-    // Para marketplace, abre conversa com criador e envia notificação
     const { data: opp } = await supabase
       .from("opportunities")
       .select("created_by, title")
@@ -1769,15 +1785,26 @@ export async function expressInterest(
 
     if (!opp) return false;
 
-    if (opp.created_by !== userId) {
-      await supabase.from("notifications").insert({
-        user_id: opp.created_by,
-        actor_id: userId,
-        type: "interest",
-        opportunity_id: opportunityId,
-        message: `tem interesse no seu anúncio "${opp.title}"`,
-      });
-    }
+    if (opp.created_by === userId) return true;
+
+    // Evita notificação duplicada: verifica se já existe interesse deste usuário neste anúncio
+    const { data: existing } = await supabase
+      .from("notifications")
+      .select("id")
+      .eq("type", "interest")
+      .eq("opportunity_id", opportunityId)
+      .eq("actor_id", userId)
+      .maybeSingle();
+
+    if (existing) return true; // já registrado — sem nova notificação
+
+    await supabase.from("notifications").insert({
+      user_id: opp.created_by,
+      actor_id: userId,
+      type: "interest",
+      opportunity_id: opportunityId,
+      message: `tem interesse no seu anúncio "${opp.title}"`,
+    });
 
     return true;
   } catch (e) {

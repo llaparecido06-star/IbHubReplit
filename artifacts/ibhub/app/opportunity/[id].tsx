@@ -45,6 +45,7 @@ export default function OpportunityDetailScreen() {
 
   const [opp, setOpp]       = useState<(AppOpportunity & { applications_count: number }) | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isInterested, setIsInterested] = useState(false);
 
   // Apply modal state
   const [showApply, setShowApply]   = useState(false);
@@ -68,6 +69,7 @@ export default function OpportunityDetailScreen() {
     (async () => {
       const data = await fetchOpportunityById(id, user.id);
       setOpp(data);
+      if (data?.is_interested) setIsInterested(true);
       setLoading(false);
     })();
   }, [id, user?.id]);
@@ -110,14 +112,17 @@ export default function OpportunityDetailScreen() {
   };
 
   const handleInterest = async () => {
-    if (!opp || !user?.id) return;
+    if (!opp || !user?.id || isInterested) return;
     setSubmitting(true);
     try {
       const ok = await expressInterest(opp.id, user.id, null);
       if (ok) {
+        setIsInterested(true);
         Alert.alert(
           "Interesse registrado!",
-          "O anunciante foi notificado. Você pode entrar em contato pelo e-mail informado.",
+          opp.contact_email
+            ? `O anunciante foi notificado. Você também pode entrar em contato: ${opp.contact_email}`
+            : "O anunciante foi notificado do seu interesse.",
         );
       }
     } finally {
@@ -271,6 +276,11 @@ export default function OpportunityDetailScreen() {
                 <Text style={styles.actionBtnText}>Candidatar-se</Text>
               </TouchableOpacity>
             )
+          ) : isInterested ? (
+            <View style={[styles.appliedBadge, { backgroundColor: colors.secondary }]}>
+              <Feather name="check-circle" size={16} color={colors.gold} />
+              <Text style={[styles.appliedText, { color: colors.gold }]}>Interesse registrado</Text>
+            </View>
           ) : (
             <TouchableOpacity
               style={[styles.actionBtn, { backgroundColor: colors.navy }]}
