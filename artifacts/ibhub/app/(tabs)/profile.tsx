@@ -22,8 +22,9 @@ import { useColors } from "@/hooks/useColors";
 import {
   CompanyPage,
   FollowProfile,
+  SuggestedProfile,
   WineEntry,
-  fetchConnectionSuggestions,
+  fetchSuggestedConnections,
   fetchFollowers,
   fetchFollowing,
   fetchUserCompanyPages,
@@ -31,7 +32,6 @@ import {
   fetchBookmarkedPosts,
   fetchWineCellar,
   sendConnectionRequest,
-  checkConnectionStatus,
 } from "@/services/api";
 import { Post } from "@/components/feed/PostCard";
 import EmpresaDashboard from "@/components/EmpresaDashboard";
@@ -55,8 +55,8 @@ export default function ProfileScreen() {
   const [wineEntries,    setWineEntries]    = useState<WineEntry[]>([]);
   const [followers,      setFollowers]      = useState<FollowProfile[]>([]);
   const [following,      setFollowing]      = useState<FollowProfile[]>([]);
-  const [suggestions,    setSuggestions]    = useState<FollowProfile[]>([]);
-  const [connectedSugg,  setConnectedSugg]  = useState<Set<string>>(new Set());
+  const [suggestions,    setSuggestions]    = useState<SuggestedProfile[]>([]);
+  const [connectingId,   setConnectingId]   = useState<string | null>(null);
   const [companyPages,   setCompanyPages]   = useState<CompanyPage[]>([]);
   const [loadingData,    setLoadingData]    = useState(true);
   const [refreshing,     setRefreshing]     = useState(false);
@@ -74,13 +74,14 @@ export default function ProfileScreen() {
 
   const loadData = useCallback(async () => {
     if (!user?.id) return;
+    const areas = profile?.areas_of_expertise ?? [];
     const [p, saved, wines, fr, fg, sg, cp] = await Promise.all([
       fetchUserPosts(user.id, user.id),
       fetchBookmarkedPosts(user.id),
       fetchWineCellar(user.id),
       fetchFollowers(user.id),
       fetchFollowing(user.id),
-      fetchConnectionSuggestions(user.id, 5),
+      fetchSuggestedConnections(user.id, areas, 8),
       fetchUserCompanyPages(user.id),
     ]);
     setPosts(p);
@@ -135,14 +136,13 @@ export default function ProfileScreen() {
   };
 
   const handleConnect = async (targetId: string) => {
-    if (!user?.id) return;
-    const status = await checkConnectionStatus(targetId, user.id);
-    if (status !== "none") {
-      setConnectedSugg((prev) => new Set(prev).add(targetId));
-      return;
-    }
+    if (!user?.id || connectingId) return;
+    setConnectingId(targetId);
     await sendConnectionRequest(targetId, user.id);
-    setConnectedSugg((prev) => new Set(prev).add(targetId));
+    setSuggestions((prev) =>
+      prev.map((s) => s.id === targetId ? { ...s, connection_status: "pending" as const } : s)
+    );
+    setConnectingId(null);
   };
 
   const wineInCellar = wineEntries.filter((w) => w.status === "adega").length;
@@ -267,46 +267,63 @@ export default function ProfileScreen() {
         ) : null}
       </View>
 
-      {/* ── Sugestões (Conectar) ── */}
+      {/* ── Sugestões (mesmo layout do feed) ── */}
       {suggestions.length > 0 ? (
-        <View style={[styles.section, { backgroundColor: "#fff" }]}>
-          <Text style={[styles.sectionTitle, { color: colors.navy }]}>Sugestões para você</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 12, paddingRight: 16 }}
-          >
+        <View style={[styles.suggestSection, { backgroundColor: "#fff" }]}>
+          <View style={styles.suggestHeader}>
+            <Text style={[styles.suggestTitle, { color: colors.navy }]}>Pessoas que você pode conhecer</Text>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestScroll}>
             {suggestions.map((s) => {
-              const isConnected = connectedSugg.has(s.id);
-              const subline = [s.position, s.company].filter(Boolean).join(" · ");
+              const isPending   = s.connection_status === "pending";
+              const isConnected = s.connection_status === "connected";
+              const isLoading   = connectingId === s.id;
               return (
-                <View key={s.id} style={[styles.suggCard, { borderColor: colors.border }]}>
-                  <TouchableOpacity onPress={() => router.push(`/profile/${s.id}` as any)} activeOpacity={0.8}>
-                    <Avatar uri={s.avatar_url} name={s.full_name ?? s.username ?? "?"} size={52} />
+                <View key={s.id} style={[styles.suggestCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                  <TouchableOpacity onPress={() => router.push(`/profile/${s.id}` as any)}>
+                    <Avatar uri={s.avatar_url} name={s.full_name ?? "?"} size={52} />
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => router.push(`/profile/${s.id}` as any)} activeOpacity={0.8} style={{ alignItems: "center", gap: 2 }}>
-                    <Text style={[styles.suggName, { color: colors.navy }]} numberOfLines={1}>
+                  <TouchableOpacity onPress={() => router.push(`/profile/${s.id}` as any)}>
+                    <Text style={[styles.suggestName, { color: colors.navy }]} numberOfLines={1}>
                       {s.full_name ?? s.username ?? "Usuário"}
                     </Text>
-                    {subline ? (
-                      <Text style={[styles.suggRole, { color: colors.mutedForeground }]} numberOfLines={2}>
-                        {subline}
-                      </Text>
-                    ) : null}
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.suggFollowBtn,
-                      { backgroundColor: isConnected ? colors.background : colors.gold, borderColor: colors.border, borderWidth: isConnected ? 1 : 0 },
-                    ]}
-                    onPress={() => !isConnected && handleConnect(s.id)}
-                    disabled={isConnected}
+                  <Text
+                    style={[styles.suggestRole, { color: colors.mutedForeground, opacity: s.headline ? 1 : 0.4 }]}
+                    numberOfLines={2}
                   >
-                    <Feather name={isConnected ? "check" : "user-plus"} size={12} color={isConnected ? colors.mutedForeground : "#fff"} />
-                    <Text style={[styles.suggFollowText, { color: isConnected ? colors.mutedForeground : "#fff" }]}>
-                      {isConnected ? "Enviado" : "Conectar"}
-                    </Text>
-                  </TouchableOpacity>
+                    {s.headline || "—"}
+                  </Text>
+                  {s.match_score > 0 && (
+                    <View style={[styles.matchBadge, { backgroundColor: colors.gold + "18" }]}>
+                      <Feather name="zap" size={10} color={colors.gold} />
+                      <Text style={[styles.matchBadgeText, { color: colors.gold }]}>
+                        {s.match_score} área{s.match_score > 1 ? "s" : ""} em comum
+                      </Text>
+                    </View>
+                  )}
+                  {isConnected ? (
+                    <View style={[styles.suggestBtnFilled, { backgroundColor: colors.navy + "14" }]}>
+                      <Feather name="check" size={12} color={colors.navy} />
+                      <Text style={[styles.suggestBtnFilledText, { color: colors.navy }]}>Conectado</Text>
+                    </View>
+                  ) : isPending ? (
+                    <View style={[styles.suggestBtnFilled, { backgroundColor: colors.border }]}>
+                      <Feather name="clock" size={12} color={colors.mutedForeground} />
+                      <Text style={[styles.suggestBtnFilledText, { color: colors.mutedForeground }]}>Enviado</Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.suggestBtnFilled, { backgroundColor: colors.navy }, isLoading && { opacity: 0.6 }]}
+                      onPress={() => handleConnect(s.id)}
+                      disabled={!!connectingId}
+                    >
+                      <Feather name="user-plus" size={12} color="#fff" />
+                      <Text style={[styles.suggestBtnFilledText, { color: "#fff" }]}>
+                        {isLoading ? "..." : "Conectar"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               );
             })}
@@ -642,13 +659,17 @@ const styles = StyleSheet.create({
   companyCategory:    { fontSize: 12 },
   switchBtn:          { flexDirection: "row", alignItems: "center", gap: 5 },
   switchText:         { fontSize: 13, fontWeight: "600" },
-  section:            { paddingHorizontal: 16, paddingVertical: 14, gap: 12, marginTop: 10 },
-  sectionTitle:       { fontSize: 16, fontWeight: "800" },
-  suggCard:           { width: 140, alignItems: "center", gap: 6, padding: 12, borderRadius: 12, borderWidth: 1 },
-  suggName:           { fontSize: 13, fontWeight: "700", textAlign: "center" },
-  suggRole:           { fontSize: 11, textAlign: "center", lineHeight: 15 },
-  suggFollowBtn:      { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
-  suggFollowText:     { fontSize: 12, fontWeight: "700" },
+  suggestSection:      { paddingTop: 12, paddingBottom: 14, marginTop: 10 },
+  suggestHeader:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, marginBottom: 12 },
+  suggestTitle:        { fontSize: 14, fontWeight: "800" },
+  suggestScroll:       { paddingHorizontal: 16, gap: 10 },
+  suggestCard:         { width: 128, borderRadius: 14, borderWidth: 1, padding: 12, alignItems: "center", gap: 6 },
+  suggestName:         { fontSize: 12.5, fontWeight: "700", textAlign: "center" },
+  suggestRole:         { fontSize: 10.5, textAlign: "center", lineHeight: 14 },
+  matchBadge:          { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
+  matchBadgeText:      { fontSize: 9.5, fontWeight: "700" },
+  suggestBtnFilled:    { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20, marginTop: 2 },
+  suggestBtnFilledText:{ fontSize: 11, fontWeight: "700" },
   tabRow:             { flexDirection: "row", borderBottomWidth: 1, marginTop: 10, backgroundColor: "#fff" },
   tab:                { flex: 1, alignItems: "center", paddingVertical: 14, borderBottomWidth: 2, borderBottomColor: "transparent" },
   tabActive:          {},
