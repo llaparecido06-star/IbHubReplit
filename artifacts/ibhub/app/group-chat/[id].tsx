@@ -53,7 +53,7 @@ export default function GroupChatScreen() {
     const msg: GroupMessage = {
       id: Date.now().toString(),
       sender_id: "me",
-      sender_name: user?.name ?? "Você",
+      sender_name: (user as any)?.name ?? "Você",
       content: input.trim(),
       created_at: new Date().toISOString(),
     };

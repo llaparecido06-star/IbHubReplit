@@ -314,7 +314,7 @@ export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, o
                 <View style={styles.pollRow}>
                   <View style={styles.pollLeft}>
                     {isMyVote ? (
-                      <AntDesign name="checkcircle" size={15} color={colors.gold} style={{ marginRight: 7 }} />
+                      <AntDesign name={"checkcircle" as any} size={15} color={colors.gold} style={{ marginRight: 7 }} />
                     ) : hasVoted && isWinner ? (
                       <AntDesign name="trophy" size={15} color={colors.navy} style={{ marginRight: 7 }} />
                     ) : null}
@@ -393,7 +393,7 @@ export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, o
         <TouchableOpacity style={styles.action} onPress={handleLike} activeOpacity={0.7}>
           <Animated.View style={{ transform: [{ scale: likeScale }] }}>
             <AntDesign
-              name={isLiked ? "heart" : "hearto"}
+              name={isLiked ? "heart" : ("hearto" as any)}
               size={22}
               color={isLiked ? "#e74c3c" : colors.mutedForeground}
             />

@@ -37,6 +37,14 @@ interface Profile {
   following_count: number;
   connections_count: number;
   is_admin: boolean;
+  website: string | null;
+  linkedin: string | null;
+  instagram: string | null;
+  profile_type: string | null;
+  is_public: boolean | null;
+  is_shadowbanned: boolean | null;
+  is_banned: boolean | null;
+  experience_summary: string | null;
 }
 
 interface AuthContextType {
