@@ -55,7 +55,11 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.logoSection}>
-            <Text style={styles.brand}>ibhub</Text>
+            <Image
+              source={require("@/assets/images/logo_dark.png")}
+              style={styles.logoImage}
+              contentFit="contain"
+            />
             <Text style={styles.tagline}>REDE PROFISSIONAL DO VINHO</Text>
           </View>
 
@@ -145,7 +149,7 @@ const styles = StyleSheet.create({
   overlay: { backgroundColor: "rgba(8, 18, 30, 0.72)" },
   scroll: { paddingHorizontal: 28, flexGrow: 1, justifyContent: "center" },
   logoSection: { alignItems: "center", marginBottom: 52 },
-  brand: { fontSize: 38, fontWeight: "800", color: "#c9a84c", letterSpacing: -1, marginBottom: 6 },
+  logoImage:   { width: 180, height: 72, marginBottom: 10 },
   tagline: { fontSize: 11, fontWeight: "700", color: "#c9a84c", letterSpacing: 2.5 },
   form: { gap: 14 },
   errorBox: { backgroundColor: "rgba(231,76,60,0.15)", padding: 12, borderRadius: 10 },

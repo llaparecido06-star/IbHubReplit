@@ -1,11 +1,9 @@
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
-  Modal,
   Platform,
-  Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -14,239 +12,387 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { UserCard, UserSummary } from "@/components/network/UserCard";
+import { Avatar } from "@/components/ui/Avatar";
+import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { supabase } from "@/context/AuthContext";
 
-const PROFILE_TYPES = ["Profissional", "Sommelier", "Produtor", "Importador", "Distribuidor"];
-const AREAS = ["Vinhos Tintos","Vinhos Brancos","Espumantes","Vinhos Rosés","Vinificação","Viticultura","Sommellerie","Enologia","Exportação","Importação","Marketing","Vendas"];
+type Category = "pessoas" | "publicacoes" | "empresas" | "grupos";
 
-const MOCK_USERS: UserSummary[] = [
-  { id: "u1", full_name: "Isabela Mondavi",  headline: "Enóloga | Vinhedo Santa Clara",      plan: "business" },
-  { id: "u2", full_name: "Rafael Borges",    headline: "Importador de Vinhos Europeus",       plan: "basico"   },
-  { id: "u3", full_name: "Carolina Stein",   headline: "Sommelier | Hotel Grand Plaza",       plan: "business" },
-  { id: "u4", full_name: "Lucas Lima",       headline: "Produtor | Vinícola Aurora",          plan: "basico"   },
-  { id: "u5", full_name: "Julia Benetti",    headline: "Head de marketing na Ideal.BI",       plan: "business" },
+interface PersonResult {
+  id: string;
+  full_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+  headline: string | null;
+  plan: string;
+}
+
+interface PostResult {
+  id: string;
+  content: string;
+  created_at: string;
+  likes_count: number;
+  comments_count: number;
+  author?: { id: string; full_name: string | null; avatar_url: string | null };
+}
+
+interface GroupResult {
+  id: string;
+  name: string;
+  description: string | null;
+  members_count: number;
+  category: string | null;
+}
+
+type SearchResults = {
+  pessoas: PersonResult[];
+  publicacoes: PostResult[];
+  empresas: PersonResult[];
+  grupos: GroupResult[];
+};
+
+const CATEGORIES: { key: Category; label: string; icon: any }[] = [
+  { key: "pessoas",     label: "Pessoas",     icon: "user" },
+  { key: "publicacoes", label: "Posts",        icon: "file-text" },
+  { key: "empresas",    label: "Empresas",    icon: "briefcase" },
+  { key: "grupos",      label: "Grupos",      icon: "users" },
 ];
 
-type SearchTab = "todos" | "pessoas" | "empresas" | "grupos" | "posts";
+const PLAN_LABELS: Record<string, string> = {
+  business:  "Pro",
+  exclusive: "Exclusivo",
+  premium:   "Premium",
+  basico:    "",
+};
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "agora";
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  return `${Math.floor(hrs / 24)}d`;
+}
 
 export default function SearchScreen() {
   const colors = useColors();
   const router = useRouter();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const inputRef = useRef<TextInput>(null);
 
-  const [query, setQuery]         = useState("");
-  const [tab, setTab]             = useState<SearchTab>("todos");
-  const [showFilters, setShowFilters] = useState(false);
-
-  // Filter state
-  const [selProfileTypes, setSelProfileTypes] = useState<string[]>([]);
-  const [selAreas, setSelAreas]               = useState<string[]>([]);
-  const [locInput, setLocInput]               = useState("");
-  const [empresaInput, setEmpresaInput]       = useState("");
+  const [query, setQuery]       = useState("");
+  const [category, setCategory] = useState<Category>("pessoas");
+  const [loading, setLoading]   = useState(false);
+  const [results, setResults]   = useState<SearchResults>({
+    pessoas: [], publicacoes: [], empresas: [], grupos: [],
+  });
 
   const topPad = Platform.OS === "web" ? 0 : insets.top;
-  const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
-  const filteredUsers = MOCK_USERS.filter((u) =>
-    u.full_name.toLowerCase().includes(query.toLowerCase())
+  const search = useCallback(async (q: string, cat: Category) => {
+    if (!q.trim()) {
+      setResults({ pessoas: [], publicacoes: [], empresas: [], grupos: [] });
+      return;
+    }
+    setLoading(true);
+    const term = `%${q.trim()}%`;
+
+    try {
+      if (cat === "pessoas") {
+        const { data } = await supabase
+          .from("profiles")
+          .select("id, full_name, username, avatar_url, headline, plan")
+          .or(`full_name.ilike.${term},username.ilike.${term},headline.ilike.${term}`)
+          .neq("id", user?.id ?? "")
+          .limit(30);
+        setResults(prev => ({ ...prev, pessoas: (data ?? []) as PersonResult[] }));
+
+      } else if (cat === "publicacoes") {
+        const { data } = await supabase
+          .from("posts")
+          .select("id, content, created_at, likes_count, comments_count, author:profiles!posts_user_id_fkey(id, full_name, avatar_url)")
+          .ilike("content", term)
+          .order("created_at", { ascending: false })
+          .limit(20);
+        setResults(prev => ({ ...prev, publicacoes: (data ?? []) as any[] }));
+
+      } else if (cat === "empresas") {
+        const { data } = await supabase
+          .from("profiles")
+          .select("id, full_name, username, avatar_url, headline, plan")
+          .or(`full_name.ilike.${term},headline.ilike.${term}`)
+          .in("plan", ["business", "premium", "exclusive"])
+          .limit(20);
+        setResults(prev => ({ ...prev, empresas: (data ?? []) as PersonResult[] }));
+
+      } else if (cat === "grupos") {
+        const { data } = await supabase
+          .from("groups")
+          .select("id, name, description, members_count, category")
+          .or(`name.ilike.${term},description.ilike.${term}`)
+          .limit(20);
+        setResults(prev => ({ ...prev, grupos: (data ?? []) as GroupResult[] }));
+      }
+    } catch {}
+
+    setLoading(false);
+  }, [user?.id]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => search(query, category), 400);
+    return () => clearTimeout(timer);
+  }, [query, category, search]);
+
+  useEffect(() => {
+    const t = setTimeout(() => inputRef.current?.focus(), 200);
+    return () => clearTimeout(t);
+  }, []);
+
+  const currentResults: any[] = results[category];
+
+  const renderPerson = ({ item }: { item: PersonResult }) => (
+    <TouchableOpacity
+      style={[styles.row, { borderBottomColor: colors.border }]}
+      onPress={() => router.push(`/profile/${item.id}` as any)}
+    >
+      <Avatar uri={item.avatar_url} name={item.full_name ?? "?"} size={46} />
+      <View style={styles.rowBody}>
+        <View style={styles.rowNameRow}>
+          <Text style={[styles.rowName, { color: colors.foreground }]} numberOfLines={1}>
+            {item.full_name ?? item.username ?? "Usuário"}
+          </Text>
+          {PLAN_LABELS[item.plan] ? (
+            <View style={[styles.planBadge, { backgroundColor: colors.gold + "18", borderColor: colors.gold + "60" }]}>
+              <Text style={[styles.planBadgeText, { color: colors.gold }]}>{PLAN_LABELS[item.plan]}</Text>
+            </View>
+          ) : null}
+        </View>
+        {item.headline ? (
+          <Text style={[styles.rowSub, { color: colors.mutedForeground }]} numberOfLines={1}>
+            {item.headline}
+          </Text>
+        ) : null}
+        {item.username ? (
+          <Text style={[styles.rowUsername, { color: colors.mutedForeground }]}>@{item.username}</Text>
+        ) : null}
+      </View>
+      <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+    </TouchableOpacity>
   );
 
-  const TABS: { key: SearchTab; label: string }[] = [
-    { key: "todos",    label: "Todos"     },
-    { key: "pessoas",  label: "Pessoas"   },
-    { key: "empresas", label: "Empresas"  },
-    { key: "grupos",   label: "Grupos"    },
-    { key: "posts",    label: "Posts"     },
-  ];
+  const renderPost = ({ item }: { item: PostResult }) => (
+    <TouchableOpacity
+      style={[styles.postRow, { borderBottomColor: colors.border }]}
+      onPress={() => router.push(`/post/${item.id}` as any)}
+    >
+      <View style={styles.postRowHeader}>
+        <Avatar uri={item.author?.avatar_url} name={item.author?.full_name ?? "?"} size={32} />
+        <Text style={[styles.postAuthorName, { color: colors.foreground }]} numberOfLines={1}>
+          {item.author?.full_name ?? "Usuário"}
+        </Text>
+        <Text style={[styles.postTime, { color: colors.mutedForeground }]}>· {timeAgo(item.created_at)}</Text>
+      </View>
+      <Text style={[styles.postContent, { color: colors.foreground }]} numberOfLines={3}>
+        {item.content}
+      </Text>
+      <View style={styles.postStats}>
+        <Feather name="heart" size={13} color={colors.mutedForeground} />
+        <Text style={[styles.statText, { color: colors.mutedForeground }]}>{item.likes_count}</Text>
+        <Feather name="message-circle" size={13} color={colors.mutedForeground} style={{ marginLeft: 8 }} />
+        <Text style={[styles.statText, { color: colors.mutedForeground }]}>{item.comments_count}</Text>
+      </View>
+    </TouchableOpacity>
+  );
 
-  const toggleItem = (arr: string[], setArr: (v: string[]) => void, item: string) =>
-    setArr(arr.includes(item) ? arr.filter((x) => x !== item) : [...arr, item]);
+  const renderGroup = ({ item }: { item: GroupResult }) => (
+    <TouchableOpacity style={[styles.row, { borderBottomColor: colors.border }]}>
+      <View style={[styles.groupIcon, { backgroundColor: colors.navy + "14" }]}>
+        <Feather name="users" size={22} color={colors.navy} />
+      </View>
+      <View style={styles.rowBody}>
+        <Text style={[styles.rowName, { color: colors.foreground }]} numberOfLines={1}>{item.name}</Text>
+        {item.description ? (
+          <Text style={[styles.rowSub, { color: colors.mutedForeground }]} numberOfLines={1}>{item.description}</Text>
+        ) : null}
+        <Text style={[styles.rowUsername, { color: colors.mutedForeground }]}>
+          {item.members_count ?? 0} membros{item.category ? ` · ${item.category}` : ""}
+        </Text>
+      </View>
+      <TouchableOpacity style={[styles.joinBtn, { borderColor: colors.navy }]}>
+        <Text style={[styles.joinBtnText, { color: colors.navy }]}>Entrar</Text>
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
 
-  const clearFilters = () => { setSelProfileTypes([]); setSelAreas([]); setLocInput(""); setEmpresaInput(""); };
+  const renderItem = (info: any) => {
+    if (category === "pessoas" || category === "empresas") return renderPerson(info);
+    if (category === "publicacoes") return renderPost(info);
+    return renderGroup(info);
+  };
 
-  const filtersActive = selProfileTypes.length > 0 || selAreas.length > 0 || locInput || empresaInput;
+  const renderEmpty = () => {
+    if (loading) return null;
+    if (!query.trim()) {
+      return (
+        <View style={styles.emptyWrap}>
+          <Feather name="search" size={44} color={colors.border} />
+          <Text style={[styles.emptyTitle, { color: colors.mutedForeground }]}>Buscar no ibhub</Text>
+          <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
+            Pesquise pessoas, publicações, empresas e grupos da indústria do vinho.
+          </Text>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.emptyWrap}>
+        <Text style={[styles.emptyTitle, { color: colors.mutedForeground }]}>Nenhum resultado</Text>
+        <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>Tente outros termos de busca.</Text>
+      </View>
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: topPad + 10, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Feather name="arrow-left" size={22} color={colors.navy} />
+      {/* Header with search input */}
+      <View style={[styles.searchHeader, { paddingTop: topPad + 8, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <Feather name="arrow-left" size={24} color={colors.foreground} />
         </TouchableOpacity>
-        <View style={[styles.searchBox, { backgroundColor: "#fff", borderColor: colors.border }]}>
-          <Feather name="search" size={16} color={colors.mutedForeground} />
+        <View style={[styles.inputWrap, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+          <Feather name="search" size={17} color={colors.mutedForeground} />
           <TextInput
-            style={[styles.searchInput, { color: colors.foreground }]}
-            placeholder="Buscar usuários, grupos, publicações..."
+            ref={inputRef}
+            style={[styles.input, { color: colors.foreground }]}
+            placeholder="Buscar pessoas, publicações..."
             placeholderTextColor={colors.mutedForeground}
             value={query}
             onChangeText={setQuery}
-            autoFocus
+            returnKeyType="search"
+            autoCorrect={false}
+            autoCapitalize="none"
           />
           {query.length > 0 && (
             <TouchableOpacity onPress={() => setQuery("")}>
-              <Feather name="x" size={14} color={colors.mutedForeground} />
+              <Feather name="x-circle" size={17} color={colors.mutedForeground} />
             </TouchableOpacity>
           )}
         </View>
-        <TouchableOpacity onPress={() => setShowFilters(true)} style={styles.filterBtn}>
-          <Feather name="sliders" size={20} color={filtersActive ? colors.gold : colors.navy} />
-          {filtersActive && <View style={[styles.filterDot, { backgroundColor: colors.gold }]} />}
-        </TouchableOpacity>
       </View>
 
-      {/* Tabs */}
-      <View style={[styles.tabsWrap, { borderBottomColor: colors.border }]}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsScroll}>
-          {TABS.map((t) => (
-            <Pressable
-              key={t.key}
-              style={[styles.tab, tab === t.key && [styles.tabActive, { borderBottomColor: colors.gold, backgroundColor: colors.gold }]]}
-              onPress={() => setTab(t.key)}
+      {/* Category tabs */}
+      <View style={[styles.tabs, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+        {CATEGORIES.map((cat) => (
+          <TouchableOpacity
+            key={cat.key}
+            style={[
+              styles.tab,
+              category === cat.key && { borderBottomColor: colors.gold },
+            ]}
+            onPress={() => setCategory(cat.key)}
+          >
+            <Feather
+              name={cat.icon}
+              size={14}
+              color={category === cat.key ? colors.gold : colors.mutedForeground}
+            />
+            <Text
+              style={[
+                styles.tabLabel,
+                { color: category === cat.key ? colors.gold : colors.mutedForeground },
+                category === cat.key && { fontWeight: "700" },
+              ]}
             >
-              <Text style={[styles.tabText, { color: tab === t.key ? "#fff" : colors.foreground }]}>
-                {t.label}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+              {cat.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
-      {/* Results */}
-      {!query && !filtersActive ? (
-        <View style={styles.emptyState}>
-          <Feather name="search" size={48} color={colors.border} />
-          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-            Digite para buscar pessoas, grupos ou publicações
-          </Text>
-          <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-            Use os filtros para refinar sua busca
-          </Text>
+      {loading && (
+        <View style={styles.loadingBar}>
+          <ActivityIndicator size="small" color={colors.gold} />
         </View>
-      ) : (
-        <FlatList
-          data={filteredUsers}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <UserCard user={item} compact />}
-          contentContainerStyle={{ paddingTop: 8, paddingBottom: bottomPad }}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Feather name="search" size={40} color={colors.border} />
-              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-                Nenhum resultado para "{query}"
-              </Text>
-            </View>
-          }
-        />
       )}
 
-      {/* Advanced Filters Modal */}
-      <Modal visible={showFilters} transparent animationType="slide" onRequestClose={() => setShowFilters(false)}>
-        <View style={styles.filterOverlay}>
-          <View style={[styles.filterModal, { backgroundColor: "#fff" }]}>
-            <View style={[styles.filterHeader, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.filterTitle, { color: colors.navy }]}>Filtros Avançados</Text>
-              <TouchableOpacity onPress={() => setShowFilters(false)}>
-                <Feather name="x" size={20} color={colors.mutedForeground} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView contentContainerStyle={styles.filterBody} showsVerticalScrollIndicator={false}>
-              {/* Tipo de Perfil */}
-              <Text style={[styles.filterSectionTitle, { color: colors.navy }]}>Tipo de Perfil</Text>
-              <View style={styles.chipRow}>
-                {PROFILE_TYPES.map((t) => (
-                  <TouchableOpacity
-                    key={t}
-                    style={[styles.filterChip, { borderColor: selProfileTypes.includes(t) ? colors.gold : colors.border, backgroundColor: selProfileTypes.includes(t) ? colors.gold + "14" : "#fff" }]}
-                    onPress={() => toggleItem(selProfileTypes, setSelProfileTypes, t)}
-                  >
-                    <Text style={[styles.filterChipText, { color: selProfileTypes.includes(t) ? colors.gold : colors.foreground }]}>{t}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Área de Atuação */}
-              <Text style={[styles.filterSectionTitle, { color: colors.navy }]}>Área de Atuação</Text>
-              <View style={styles.chipRow}>
-                {AREAS.map((a) => (
-                  <TouchableOpacity
-                    key={a}
-                    style={[styles.filterChip, { borderColor: selAreas.includes(a) ? colors.gold : colors.border, backgroundColor: selAreas.includes(a) ? colors.gold + "14" : "#fff" }]}
-                    onPress={() => toggleItem(selAreas, setSelAreas, a)}
-                  >
-                    <Text style={[styles.filterChipText, { color: selAreas.includes(a) ? colors.gold : colors.foreground }]}>{a}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Localização */}
-              <Text style={[styles.filterSectionTitle, { color: colors.navy }]}>Localização</Text>
-              <TextInput
-                style={[styles.filterInput, { borderColor: colors.border, color: colors.foreground }]}
-                placeholder="Ex: São Paulo, Portugal..."
-                placeholderTextColor={colors.mutedForeground}
-                value={locInput}
-                onChangeText={setLocInput}
-              />
-
-              {/* Empresa */}
-              <Text style={[styles.filterSectionTitle, { color: colors.navy }]}>Empresa</Text>
-              <TextInput
-                style={[styles.filterInput, { borderColor: colors.border, color: colors.foreground }]}
-                placeholder="Ex: Vinícola Aurora..."
-                placeholderTextColor={colors.mutedForeground}
-                value={empresaInput}
-                onChangeText={setEmpresaInput}
-              />
-            </ScrollView>
-
-            <View style={[styles.filterFooter, { borderTopColor: colors.border }]}>
-              <TouchableOpacity style={[styles.clearBtn, { borderColor: colors.border }]} onPress={clearFilters}>
-                <Text style={[styles.clearBtnText, { color: colors.foreground }]}>Limpar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.applyBtn, { backgroundColor: colors.navy }]} onPress={() => setShowFilters(false)}>
-                <Text style={styles.applyBtnText}>Aplicar Filtros</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <FlatList
+        style={{ flex: 1 }}
+        data={currentResults}
+        keyExtractor={(item: any) => item.id}
+        renderItem={renderItem}
+        ListEmptyComponent={renderEmpty}
+        contentContainerStyle={currentResults.length === 0 ? { flex: 1 } : { paddingBottom: 40 }}
+        keyboardDismissMode="interactive"
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container:          { flex: 1 },
-  header:             { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingBottom: 10, borderBottomWidth: 1 },
-  backBtn:            { padding: 4 },
-  searchBox:          { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
-  searchInput:        { flex: 1, fontSize: 14 },
-  filterBtn:          { padding: 4, position: "relative" },
-  filterDot:          { position: "absolute", top: 2, right: 2, width: 7, height: 7, borderRadius: 4 },
-  tabsWrap:           { borderBottomWidth: 1 },
-  tabsScroll:         { paddingHorizontal: 14, paddingVertical: 10, gap: 8 },
-  tab:                { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, borderWidth: 0 },
-  tabActive:          {},
-  tabText:            { fontSize: 13, fontWeight: "600" },
-  emptyState:         { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, padding: 40 },
-  emptyTitle:         { fontSize: 15, fontWeight: "600", textAlign: "center" },
-  emptySub:           { fontSize: 13, textAlign: "center" },
-  filterOverlay:      { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
-  filterModal:        { borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "88%", overflow: "hidden" },
-  filterHeader:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1 },
-  filterTitle:        { fontSize: 17, fontWeight: "700" },
-  filterBody:         { padding: 20, gap: 12 },
-  filterSectionTitle: { fontSize: 15, fontWeight: "700" },
-  chipRow:            { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  filterChip:         { borderWidth: 1, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 },
-  filterChipText:     { fontSize: 13 },
-  filterInput:        { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 },
-  filterFooter:       { flexDirection: "row", gap: 10, padding: 16, borderTopWidth: 1 },
-  clearBtn:           { flex: 1, paddingVertical: 14, borderRadius: 10, alignItems: "center", borderWidth: 1 },
-  clearBtnText:       { fontSize: 15, fontWeight: "600" },
-  applyBtn:           { flex: 2, paddingVertical: 14, borderRadius: 10, alignItems: "center" },
-  applyBtnText:       { color: "#fff", fontSize: 15, fontWeight: "700" },
+  container: { flex: 1 },
+  searchHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+    gap: 8,
+    borderBottomWidth: 1,
+  },
+  backBtn: { padding: 4 },
+  inputWrap: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  input: { flex: 1, fontSize: 15 },
+  tabs: { flexDirection: "row", borderBottomWidth: 1 },
+  tab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 11,
+    borderBottomWidth: 2.5,
+    borderBottomColor: "transparent",
+  },
+  tabLabel: { fontSize: 12, fontWeight: "500" },
+  loadingBar: { paddingVertical: 10, alignItems: "center" },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 12,
+  },
+  rowBody: { flex: 1, gap: 2 },
+  rowNameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  rowName: { fontSize: 15, fontWeight: "700", flex: 1 },
+  rowSub: { fontSize: 12.5 },
+  rowUsername: { fontSize: 12 },
+  planBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5, borderWidth: 1 },
+  planBadgeText: { fontSize: 10, fontWeight: "800" },
+  groupIcon: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
+  joinBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1.5 },
+  joinBtnText: { fontSize: 12, fontWeight: "700" },
+  postRow: { padding: 16, borderBottomWidth: StyleSheet.hairlineWidth },
+  postRowHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
+  postAuthorName: { fontSize: 13, fontWeight: "700", flex: 1 },
+  postTime: { fontSize: 12 },
+  postContent: { fontSize: 14, lineHeight: 20 },
+  postStats: { flexDirection: "row", alignItems: "center", marginTop: 8, gap: 4 },
+  statText: { fontSize: 12, marginRight: 4 },
+  emptyWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 10 },
+  emptyTitle: { fontSize: 16, fontWeight: "700" },
+  emptySub: { fontSize: 14, textAlign: "center", lineHeight: 20 },
 });

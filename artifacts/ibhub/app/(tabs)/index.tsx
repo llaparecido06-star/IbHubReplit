@@ -1,4 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -178,6 +180,7 @@ export default function FeedScreen() {
   // Create post state
   const [postMode, setPostMode]                     = useState<"text" | "poll">("text");
   const [postContent, setPostContent]               = useState("");
+  const [postImageUri, setPostImageUri]             = useState<string | null>(null);
   const [pollQuestion, setPollQuestion]             = useState("");
   const [pollOptions, setPollOptions]               = useState(["", ""]);
   const [pollDuration, setPollDuration]             = useState(POLL_DURATIONS[0]);
@@ -196,14 +199,27 @@ export default function FeedScreen() {
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
   const firstName = profile?.full_name?.split(" ")[0] ?? "você";
 
+  // ── Feed algorithm: posts matching user's tags appear first ──
+  const sortByRelevance = useCallback((list: Post[]) => {
+    const userTags = (profile?.areas_of_expertise ?? []).map((t: string) => t.toLowerCase());
+    if (userTags.length === 0) return list;
+    return [...list].sort((a, b) => {
+      const scoreA = (a.hashtags ?? []).filter(h => userTags.includes(h.toLowerCase())).length;
+      const scoreB = (b.hashtags ?? []).filter(h => userTags.includes(h.toLowerCase())).length;
+      if (scoreB !== scoreA) return scoreB - scoreA;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }, [profile?.areas_of_expertise]);
+
   const loadPosts = useCallback(async () => {
     // Try real Supabase data first
     if (user?.id) {
       try {
         const realPosts = await API.fetchFeedPosts(user.id);
         if (realPosts.length > 0) {
-          setPosts(realPosts);
-          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(realPosts));
+          const sorted = sortByRelevance(realPosts);
+          setPosts(sorted);
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(sorted));
           setLoading(false);
           return;
         }
@@ -212,13 +228,13 @@ export default function FeedScreen() {
     // Fallback: cached or mock
     try {
       const cached = await AsyncStorage.getItem(STORAGE_KEY);
-      if (cached) { setPosts(JSON.parse(cached)); setLoading(false); return; }
+      if (cached) { setPosts(sortByRelevance(JSON.parse(cached))); setLoading(false); return; }
     } catch {}
     const mockPosts = Array.from({ length: 6 }, (_, i) => generateMockPost(i));
-    setPosts(mockPosts);
+    setPosts(sortByRelevance(mockPosts));
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(mockPosts));
     setLoading(false);
-  }, [user?.id]);
+  }, [user?.id, sortByRelevance]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -241,11 +257,30 @@ export default function FeedScreen() {
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
 
+  const handlePickImage = async () => {
+    if (Platform.OS !== "web") {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permissão necessária", "Precisamos de acesso à galeria para selecionar uma foto.");
+        return;
+      }
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.85,
+      aspect: [16, 9],
+    });
+    if (!result.canceled && result.assets[0]) {
+      setPostImageUri(result.assets[0].uri);
+    }
+  };
+
   const handlePublishPost = async () => {
     setShowCreatePost(false);
     const content = postMode === "poll" ? pollQuestion : postContent;
-    if (!content.trim() || !user?.id) {
-      setPostContent(""); setPollQuestion(""); setPollOptions(["",""]); setPostMode("text");
+    if ((!content.trim() && !postImageUri) || !user?.id) {
+      setPostContent(""); setPollQuestion(""); setPollOptions(["",""]); setPostMode("text"); setPostImageUri(null);
       return;
     }
 
@@ -253,11 +288,11 @@ export default function FeedScreen() {
       ? { options: pollOptions.filter(o => o.trim()).map(t => ({ text: t, votes: 0 })), total_votes: 0, closed: false }
       : undefined;
 
-    // Optimistic: prepend a local post immediately
     const tempPost: Post = {
       id: `tmp_${Date.now()}`,
       user_id: user.id,
       content: content.trim(),
+      image_url: postImageUri,
       likes_count: 0, comments_count: 0, shares_count: 0,
       is_liked: false, is_bookmarked: false,
       created_at: new Date().toISOString(),
@@ -273,13 +308,12 @@ export default function FeedScreen() {
     };
     setPosts(prev => [tempPost, ...prev]);
 
-    // Persist to Supabase
     const saved = await API.createPost({ user_id: user.id, content: content.trim(), poll: pollData });
     if (saved) {
       setPosts(prev => prev.map(p => p.id === tempPost.id ? saved : p));
     }
 
-    setPostContent(""); setPollQuestion(""); setPollOptions(["",""]); setPostMode("text");
+    setPostContent(""); setPollQuestion(""); setPollOptions(["",""]); setPostMode("text"); setPostImageUri(null);
   };
 
   const handlePublishWine = async () => {
@@ -341,10 +375,11 @@ export default function FeedScreen() {
       {/* Top Header */}
       <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => setShowAccountMenu(true)} activeOpacity={0.8}>
-          <Text style={styles.brandText}>
-            <Text style={{ color: colors.navy }}>ib</Text>
-            <Text style={{ color: colors.gold }}>hub</Text>
-          </Text>
+          <Image
+            source={require("@/assets/images/logo_light.png")}
+            style={{ width: 80, height: 34 }}
+            contentFit="contain"
+          />
         </TouchableOpacity>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.push("/search" as any)}>
@@ -430,6 +465,7 @@ export default function FeedScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <FlatList
+        style={{ flex: 1 }}
         data={posts}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
@@ -597,15 +633,34 @@ export default function FeedScreen() {
               )}
             </ScrollView>
 
+            {/* Image preview */}
+            {postImageUri && (
+              <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+                <View style={{ position: "relative" }}>
+                  <Image
+                    source={{ uri: postImageUri }}
+                    style={{ width: "100%", height: 160, borderRadius: 10 }}
+                    contentFit="cover"
+                  />
+                  <TouchableOpacity
+                    style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 14, padding: 4 }}
+                    onPress={() => setPostImageUri(null)}
+                  >
+                    <Feather name="x" size={14} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
             {/* Toolbar */}
             <View style={[styles.postToolbar, { borderTopColor: colors.border }]}>
-              <TouchableOpacity style={styles.toolbarBtn}>
-                <Feather name="image" size={18} color={colors.foreground} />
-                <Text style={[styles.toolbarLabel, { color: colors.foreground }]}>Foto</Text>
+              <TouchableOpacity style={styles.toolbarBtn} onPress={handlePickImage}>
+                <Feather name="image" size={18} color={postImageUri ? colors.gold : colors.foreground} />
+                <Text style={[styles.toolbarLabel, { color: postImageUri ? colors.gold : colors.foreground }]}>Foto</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.toolbarBtn}>
+              <TouchableOpacity style={styles.toolbarBtn} onPress={handlePickImage}>
                 <Feather name="video" size={18} color={colors.foreground} />
-                <Text style={[styles.toolbarLabel, { color: colors.foreground }]}>Video</Text>
+                <Text style={[styles.toolbarLabel, { color: colors.foreground }]}>Vídeo</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.toolbarBtn} onPress={() => setPostMode(postMode === "poll" ? "text" : "poll")}>
                 <Feather name="bar-chart-2" size={18} color={postMode === "poll" ? colors.gold : colors.foreground} />

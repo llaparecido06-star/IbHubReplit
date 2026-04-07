@@ -287,7 +287,11 @@ export default function RegisterScreen() {
         <TouchableOpacity onPress={goBack} style={styles.backBtn}>
           <Feather name="arrow-left" size={22} color="#f5f0e8" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Cadastro</Text>
+        <Image
+          source={require("@/assets/images/logo_dark.png")}
+          style={{ width: 90, height: 36 }}
+          contentFit="contain"
+        />
         <View style={{ width: 32 }} />
       </View>
 
