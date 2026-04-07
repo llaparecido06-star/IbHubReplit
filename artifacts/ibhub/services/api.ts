@@ -52,6 +52,8 @@ export interface AppMessage {
   sender_id: string;
   content: string;
   created_at: string;
+  message_type?: "text" | "image" | "video" | "audio" | "file";
+  media_url?: string | null;
 }
 
 export interface AppConversation {
@@ -62,6 +64,7 @@ export interface AppConversation {
   last_message_at?: string | null;
   unread_count: number;
   participant?: { id: string; full_name: string; avatar_url?: string | null } | null;
+  accepted?: boolean;
 }
 
 // ─── POSTS ───────────────────────────────────────────────────────────────────
@@ -753,6 +756,46 @@ export async function searchProfiles(
   } catch { return []; }
 }
 
+// Search only users who are connections OR people the current user follows
+export async function searchChatContacts(
+  query: string,
+  currentUserId: string,
+  limit = 15,
+): Promise<{ id: string; full_name: string; username: string; avatar_url: string | null; headline: string | null }[]> {
+  if (!query.trim()) return [];
+  try {
+    const [connRes, followRes] = await Promise.all([
+      supabase
+        .from("connections")
+        .select("user1_id, user2_id")
+        .or(`user1_id.eq.${currentUserId},user2_id.eq.${currentUserId}`),
+      supabase
+        .from("follows")
+        .select("following_id")
+        .eq("follower_id", currentUserId),
+    ]);
+
+    const connectedIds = (connRes.data ?? []).map((c: any) =>
+      c.user1_id === currentUserId ? c.user2_id : c.user1_id,
+    );
+    const followingIds = (followRes.data ?? []).map((f: any) => f.following_id);
+    const allowedIds = [...new Set([...connectedIds, ...followingIds])];
+    if (allowedIds.length === 0) return [];
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, full_name, username, avatar_url, position, company")
+      .in("id", allowedIds)
+      .or(`full_name.ilike.%${query}%,username.ilike.%${query}%`)
+      .limit(limit);
+    if (error || !data) return [];
+    return (data as any[]).map((p) => ({
+      ...p,
+      headline: [p.position, p.company].filter(Boolean).join(" · ") || null,
+    }));
+  } catch { return []; }
+}
+
 // ─── MESSAGES ────────────────────────────────────────────────────────────────
 
 export async function fetchMessages(conversationId: string): Promise<AppMessage[]> {
@@ -797,6 +840,7 @@ export async function fetchConversations(userId: string): Promise<AppConversatio
       .from("conversation_participants")
       .select(`
         conversation_id,
+        accepted,
         conversation:conversations(id, is_group, name, created_at)
       `)
       .eq("user_id", userId);
@@ -808,39 +852,45 @@ export async function fetchConversations(userId: string): Promise<AppConversatio
       const convo = row.conversation;
       if (!convo) continue;
 
-      // Get the other participant
-      const { data: others } = await supabase
-        .from("conversation_participants")
-        .select("user_id, profile:profiles!conversation_participants_user_id_fkey(id, full_name, avatar_url)")
-        .eq("conversation_id", convo.id)
-        .neq("user_id", userId)
-        .limit(1);
+      const [othersRes, lastMsgRes, unreadRes] = await Promise.all([
+        supabase
+          .from("conversation_participants")
+          .select("user_id, profile:profiles!conversation_participants_user_id_fkey(id, full_name, avatar_url)")
+          .eq("conversation_id", convo.id)
+          .neq("user_id", userId)
+          .limit(1),
+        supabase
+          .from("messages")
+          .select("content, created_at, message_type")
+          .eq("conversation_id", convo.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from("messages")
+          .select("id", { count: "exact", head: true })
+          .eq("conversation_id", convo.id)
+          .neq("sender_id", userId),
+      ]);
 
-      // Get last message
-      const { data: lastMsg } = await supabase
-        .from("messages")
-        .select("content, created_at")
-        .eq("conversation_id", convo.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const other = othersRes.data?.[0];
+      const lastMsg = lastMsgRes.data;
+      const lastContent =
+        lastMsg?.message_type === "image" ? "📷 Foto"
+        : lastMsg?.message_type === "video" ? "🎬 Vídeo"
+        : lastMsg?.message_type === "audio" ? "🎤 Áudio"
+        : lastMsg?.message_type === "file"  ? "📎 Arquivo"
+        : (lastMsg?.content ?? null);
 
-      // Get unread count
-      const { count: unreadCount } = await supabase
-        .from("messages")
-        .select("id", { count: "exact", head: true })
-        .eq("conversation_id", convo.id)
-        .neq("sender_id", userId);
-
-      const other = others?.[0];
       results.push({
         id: convo.id,
         is_group: convo.is_group,
         name: convo.name,
-        last_message: lastMsg?.content ?? null,
+        last_message: lastContent,
         last_message_at: lastMsg?.created_at ?? convo.created_at,
-        unread_count: unreadCount ?? 0,
+        unread_count: unreadRes.count ?? 0,
         participant: other ? (other as any).profile : null,
+        accepted: row.accepted ?? true,
       });
     }
 
@@ -851,6 +901,26 @@ export async function fetchConversations(userId: string): Promise<AppConversatio
     console.error("fetchConversations:", e);
     return [];
   }
+}
+
+export async function acceptConversation(conversationId: string, userId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("conversation_participants")
+      .update({ accepted: true })
+      .match({ conversation_id: conversationId, user_id: userId });
+    return !error;
+  } catch { return false; }
+}
+
+export async function declineConversation(conversationId: string, userId: string): Promise<boolean> {
+  try {
+    await supabase
+      .from("conversation_participants")
+      .delete()
+      .match({ conversation_id: conversationId, user_id: userId });
+    return true;
+  } catch { return false; }
 }
 
 export async function fetchConversationParticipant(
@@ -1034,7 +1104,24 @@ export async function getOrCreateDirectConversation(userId1: string, userId2: st
       }
     }
 
-    // Create new
+    // Check if recipient (userId2) should receive this as a request:
+    // i.e., userId1 is NOT connected AND NOT followed BY userId2
+    const [connCheck, followCheck] = await Promise.all([
+      supabase
+        .from("connections")
+        .select("id", { count: "exact", head: true })
+        .or(
+          `and(user1_id.eq.${userId1},user2_id.eq.${userId2}),and(user1_id.eq.${userId2},user2_id.eq.${userId1})`,
+        ),
+      supabase
+        .from("follows")
+        .select("id", { count: "exact", head: true })
+        .eq("follower_id", userId2)
+        .eq("following_id", userId1),
+    ]);
+    const isKnown = (connCheck.count ?? 0) > 0 || (followCheck.count ?? 0) > 0;
+
+    // Create new conversation
     const { data: convo } = await supabase
       .from("conversations")
       .insert({ is_group: false })
@@ -1043,13 +1130,60 @@ export async function getOrCreateDirectConversation(userId1: string, userId2: st
     if (!convo) return null;
 
     await supabase.from("conversation_participants").insert([
-      { conversation_id: convo.id, user_id: userId1 },
-      { conversation_id: convo.id, user_id: userId2 },
+      { conversation_id: convo.id, user_id: userId1, accepted: true },
+      { conversation_id: convo.id, user_id: userId2, accepted: isKnown },
     ]);
 
     return convo.id;
   } catch (e) {
     console.error("getOrCreateDirectConversation:", e);
+    return null;
+  }
+}
+
+export async function uploadChatMedia(
+  conversationId: string,
+  uri: string,
+  mimeType: string,
+): Promise<string | null> {
+  try {
+    const ext  = mimeType.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
+    const path = `chat/${conversationId}/${Date.now()}.${ext}`;
+    const resp = await fetch(uri);
+    const blob = await resp.blob();
+    const { error } = await supabase.storage.from("post-images").upload(path, blob, { contentType: mimeType, upsert: false });
+    if (error) { console.error("uploadChatMedia:", error); return null; }
+    const { data } = supabase.storage.from("post-images").getPublicUrl(path);
+    return data.publicUrl;
+  } catch (e) {
+    console.error("uploadChatMedia:", e);
+    return null;
+  }
+}
+
+export async function sendMediaMessage(
+  conversationId: string,
+  senderId: string,
+  mediaUrl: string,
+  messageType: "image" | "video" | "audio" | "file",
+  caption = "",
+): Promise<AppMessage | null> {
+  try {
+    const { data, error } = await supabase
+      .from("messages")
+      .insert({
+        conversation_id: conversationId,
+        sender_id: senderId,
+        content: caption,
+        message_type: messageType,
+        media_url: mediaUrl,
+      })
+      .select()
+      .single();
+    if (error) { console.error("sendMediaMessage:", error); return null; }
+    return data as AppMessage;
+  } catch (e) {
+    console.error("sendMediaMessage:", e);
     return null;
   }
 }

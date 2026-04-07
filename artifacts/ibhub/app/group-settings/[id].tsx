@@ -68,9 +68,11 @@ export default function GroupSettingsScreen() {
         return (
           <View style={{ gap: 10, padding: 16 }}>
             {group.members.map((member) => (
-              <View
+              <TouchableOpacity
                 key={member.id}
                 style={[styles.memberRow, { backgroundColor: "#fff", borderColor: colors.border }]}
+                onPress={() => router.push(`/profile/${member.id}` as any)}
+                activeOpacity={0.7}
               >
                 <Avatar name={member.name} size={42} />
                 <View style={{ flex: 1 }}>
@@ -85,12 +87,8 @@ export default function GroupSettingsScreen() {
                     <Text style={[styles.roleText, { color: colors.mutedForeground }]}>Admin</Text>
                   )}
                 </View>
-                {member.role !== "dono" && (
-                  <TouchableOpacity>
-                    <Feather name="more-vertical" size={18} color={colors.mutedForeground} />
-                  </TouchableOpacity>
-                )}
-              </View>
+                <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+              </TouchableOpacity>
             ))}
 
             {/* Danger zone */}

@@ -19,15 +19,7 @@ import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
 import type { AppConversation } from "@/services/api";
 
-export interface Conversation {
-  id: string;
-  participant_name: string;
-  participant_avatar?: string | null;
-  last_message?: string;
-  last_message_at?: string;
-  unread_count?: number;
-  is_group?: boolean;
-}
+type MainTab = "mensagens" | "solicitacoes";
 
 function timeAgo(dateStr?: string): string {
   if (!dateStr) return "";
@@ -37,24 +29,25 @@ function timeAgo(dateStr?: string): string {
   if (mins < 60) return `${mins}m`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d`;
+  return `${Math.floor(hrs / 24)}d`;
 }
 
 export default function MessagesScreen() {
-  const colors = useColors();
-  const router = useRouter();
+  const colors  = useColors();
+  const router  = useRouter();
   const { user } = useAuth();
-  const insets = useSafeAreaInsets();
+  const insets  = useSafeAreaInsets();
 
-  const [convos, setConvos]             = useState<AppConversation[]>([]);
-  const [loading, setLoading]           = useState(true);
-  const [refreshing, setRefreshing]     = useState(false);
-  const [search, setSearch]             = useState("");
-  const [userSearch, setUserSearch]     = useState("");
+  const [convos,       setConvos]       = useState<AppConversation[]>([]);
+  const [loading,      setLoading]      = useState(true);
+  const [refreshing,   setRefreshing]   = useState(false);
+  const [search,       setSearch]       = useState("");
+  const [mainTab,      setMainTab]      = useState<MainTab>("mensagens");
   const [showNewConvo, setShowNewConvo] = useState(false);
+  const [userSearch,   setUserSearch]   = useState("");
   const [searchResults, setSearchResults] = useState<{ id: string; full_name: string; avatar_url: string | null; headline: string | null }[]>([]);
   const [startingChat, setStartingChat] = useState<string | null>(null);
+  const [accepting,    setAccepting]    = useState<string | null>(null);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
@@ -68,13 +61,14 @@ export default function MessagesScreen() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Debounced search — only connections + following
   useEffect(() => {
     if (!userSearch.trim() || !user?.id) { setSearchResults([]); return; }
-    const timeout = setTimeout(async () => {
-      const results = await API.searchProfiles(userSearch, user.id);
-      setSearchResults(results);
+    const t = setTimeout(async () => {
+      const res = await API.searchChatContacts(userSearch, user.id);
+      setSearchResults(res);
     }, 300);
-    return () => clearTimeout(timeout);
+    return () => clearTimeout(t);
   }, [userSearch, user?.id]);
 
   const onRefresh = async () => {
@@ -86,17 +80,43 @@ export default function MessagesScreen() {
   const handleStartChat = async (targetUserId: string) => {
     if (!user?.id || startingChat) return;
     setStartingChat(targetUserId);
-    const conversationId = await API.getOrCreateDirectConversation(user.id, targetUserId);
+    const convoId = await API.getOrCreateDirectConversation(user.id, targetUserId);
     setStartingChat(null);
     setShowNewConvo(false);
-    if (conversationId) router.push(`/chat/${conversationId}` as any);
+    if (convoId) router.push(`/chat/${convoId}` as any);
   };
 
-  const filtered = convos.filter((c) => {
+  const handleAccept = async (conv: AppConversation) => {
+    if (!user?.id || accepting) return;
+    setAccepting(conv.id);
+    const ok = await API.acceptConversation(conv.id, user.id);
+    if (ok) {
+      setConvos((prev) =>
+        prev.map((c) => c.id === conv.id ? { ...c, accepted: true } : c),
+      );
+      setMainTab("mensagens");
+      router.push(`/chat/${conv.id}` as any);
+    }
+    setAccepting(null);
+  };
+
+  const handleDecline = async (conv: AppConversation) => {
+    if (!user?.id) return;
+    await API.declineConversation(conv.id, user.id);
+    setConvos((prev) => prev.filter((c) => c.id !== conv.id));
+  };
+
+  // Split conversations
+  const accepted  = convos.filter((c) => c.accepted !== false);
+  const requests  = convos.filter((c) => c.accepted === false);
+
+  const filtered = (mainTab === "mensagens" ? accepted : requests).filter((c) => {
     if (!search) return true;
     const name = c.name ?? c.participant?.full_name ?? "";
     return name.toLowerCase().includes(search.toLowerCase());
   });
+
+  const requestCount = requests.length;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -105,10 +125,10 @@ export default function MessagesScreen() {
         <Text style={[styles.headerTitle, { color: colors.navy }]}>Mensagens</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity
-            style={[styles.newChatCircle, { backgroundColor: colors.gold }]}
-            onPress={() => { setShowNewConvo((v) => !v); setUserSearch(""); }}
+            style={[styles.newChatBtn, { backgroundColor: colors.gold }]}
+            onPress={() => { setShowNewConvo((v) => !v); setUserSearch(""); setSearchResults([]); }}
           >
-            <Feather name="message-square" size={18} color="#fff" />
+            <Feather name="edit" size={16} color="#fff" />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.gruposBtn}
@@ -120,57 +140,93 @@ export default function MessagesScreen() {
         </View>
       </View>
 
-      {/* Nova conversa expandable */}
+      {/* Nova conversa */}
       {showNewConvo && (
-        <View style={[styles.novaConversaCard, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
-          <Text style={[styles.novaConversaTitle, { color: colors.navy }]}>Nova conversa</Text>
-          <View style={[styles.userSearchBar, { backgroundColor: colors.background }]}>
+        <View style={[styles.novaCard, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+          <Text style={[styles.novaTitle, { color: colors.navy }]}>Nova conversa</Text>
+          <Text style={[styles.novaHint, { color: colors.mutedForeground }]}>
+            Mostrando apenas suas conexões e quem você segue
+          </Text>
+          <View style={[styles.searchBar, { backgroundColor: colors.background }]}>
             <Feather name="search" size={14} color={colors.mutedForeground} />
             <TextInput
-              style={[styles.userSearchInput, { color: colors.foreground }]}
-              placeholder="Buscar usuário por nome..."
+              style={[styles.searchInput, { color: colors.foreground }]}
+              placeholder="Buscar por nome ou @username..."
               placeholderTextColor={colors.mutedForeground}
               value={userSearch}
               onChangeText={setUserSearch}
               autoFocus
             />
+            {userSearch.length > 0 && (
+              <TouchableOpacity onPress={() => setUserSearch("")}>
+                <Feather name="x" size={14} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            )}
           </View>
           {userSearch.length > 0 && (
-            <View style={{ marginTop: 8, gap: 6 }}>
-              {searchResults.length === 0 && (
-                <Text style={[styles.userHeadline, { color: colors.mutedForeground, paddingVertical: 8, textAlign: "center" }]}>
-                  Nenhum usuário encontrado
+            <View style={{ gap: 4, marginTop: 6 }}>
+              {searchResults.length === 0 ? (
+                <Text style={[styles.noResultsText, { color: colors.mutedForeground }]}>
+                  Nenhuma conexão encontrada com esse nome
                 </Text>
+              ) : (
+                searchResults.map((u) => (
+                  <TouchableOpacity
+                    key={u.id}
+                    style={styles.userRow}
+                    onPress={() => handleStartChat(u.id)}
+                    disabled={startingChat === u.id}
+                  >
+                    <Avatar uri={u.avatar_url} name={u.full_name} size={38} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.userName, { color: colors.navy }]}>{u.full_name}</Text>
+                      {!!u.headline && (
+                        <Text style={[styles.userSub, { color: colors.mutedForeground }]} numberOfLines={1}>{u.headline}</Text>
+                      )}
+                    </View>
+                    {startingChat === u.id
+                      ? <ActivityIndicator size="small" color={colors.gold} />
+                      : <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+                    }
+                  </TouchableOpacity>
+                ))
               )}
-              {searchResults.map((u) => (
-                <TouchableOpacity
-                  key={u.id}
-                  style={styles.userRow}
-                  onPress={() => handleStartChat(u.id)}
-                  disabled={startingChat === u.id}
-                >
-                  <Avatar uri={u.avatar_url} name={u.full_name} size={38} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.userName, { color: colors.navy }]}>{u.full_name}</Text>
-                    {!!u.headline && (
-                      <Text style={[styles.userHeadline, { color: colors.mutedForeground }]} numberOfLines={1}>{u.headline}</Text>
-                    )}
-                  </View>
-                  {startingChat === u.id && <ActivityIndicator size="small" color={colors.gold} />}
-                </TouchableOpacity>
-              ))}
             </View>
           )}
         </View>
       )}
 
-      {/* Search bar */}
+      {/* Tabs: Mensagens / Solicitações */}
+      <View style={[styles.tabRow, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+        {(["mensagens", "solicitacoes"] as MainTab[]).map((t) => {
+          const label = t === "mensagens" ? "Mensagens" : "Solicitações";
+          const isActive = t === mainTab;
+          return (
+            <TouchableOpacity
+              key={t}
+              style={[styles.tab, isActive && { borderBottomColor: colors.gold, borderBottomWidth: 2 }]}
+              onPress={() => setMainTab(t)}
+            >
+              <Text style={[styles.tabText, { color: isActive ? colors.gold : colors.mutedForeground, fontWeight: isActive ? "700" : "400" }]}>
+                {label}
+              </Text>
+              {t === "solicitacoes" && requestCount > 0 && (
+                <View style={[styles.badge, { backgroundColor: colors.gold }]}>
+                  <Text style={styles.badgeText}>{requestCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Search */}
       <View style={[styles.searchWrap, { backgroundColor: "#fff" }]}>
         <View style={[styles.searchBar, { backgroundColor: colors.background }]}>
-          <Feather name="search" size={16} color={colors.mutedForeground} />
+          <Feather name="search" size={15} color={colors.mutedForeground} />
           <TextInput
             style={[styles.searchInput, { color: colors.foreground }]}
-            placeholder="Buscar conversas..."
+            placeholder={mainTab === "mensagens" ? "Buscar conversas..." : "Buscar solicitações..."}
             placeholderTextColor={colors.mutedForeground}
             value={search}
             onChangeText={setSearch}
@@ -178,47 +234,73 @@ export default function MessagesScreen() {
         </View>
       </View>
 
-      {/* Conversation list */}
+      {/* List */}
       {loading ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color={colors.gold} />
         </View>
       ) : (
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <ConversationRow conversation={item} colors={colors} />}
-        contentContainerStyle={{ paddingBottom: bottomPad }}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} colors={[colors.gold]} />}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <View style={[styles.emptyIconCircle, { backgroundColor: colors.gold + "18" }]}>
-              <Feather name="message-circle" size={36} color={colors.gold} />
-            </View>
-            <Text style={[styles.emptyTitle, { color: colors.navy }]}>O brinde começa com um "Olá"</Text>
-            <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-              Inicie uma conversa com alguém da comunidade
-            </Text>
-            <TouchableOpacity
-              style={[styles.newConvoBtn, { backgroundColor: colors.gold }]}
-              onPress={() => setShowNewConvo(true)}
-            >
-              <Feather name="message-square" size={18} color="#fff" />
-              <Text style={styles.newConvoBtnText}>Iniciar Nova Conexão</Text>
-            </TouchableOpacity>
-          </View>
-        }
-      />
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ paddingBottom: bottomPad }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} colors={[colors.gold]} />}
+          renderItem={({ item }) =>
+            mainTab === "solicitacoes" ? (
+              <RequestRow
+                conversation={item}
+                colors={colors}
+                onAccept={() => handleAccept(item)}
+                onDecline={() => handleDecline(item)}
+                accepting={accepting === item.id}
+              />
+            ) : (
+              <ConversationRow conversation={item} colors={colors} />
+            )
+          }
+          ListEmptyComponent={
+            mainTab === "solicitacoes" ? (
+              <View style={styles.empty}>
+                <View style={[styles.emptyIcon, { backgroundColor: colors.gold + "18" }]}>
+                  <Feather name="user-check" size={32} color={colors.gold} />
+                </View>
+                <Text style={[styles.emptyTitle, { color: colors.navy }]}>Sem solicitações</Text>
+                <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
+                  Quando alguém que você não segue enviar uma mensagem, aparecerá aqui
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.empty}>
+                <View style={[styles.emptyIcon, { backgroundColor: colors.gold + "18" }]}>
+                  <Feather name="message-circle" size={36} color={colors.gold} />
+                </View>
+                <Text style={[styles.emptyTitle, { color: colors.navy }]}>O brinde começa com um "Olá"</Text>
+                <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
+                  Inicie uma conversa com alguém da sua rede
+                </Text>
+                <TouchableOpacity
+                  style={[styles.newConvoBtn, { backgroundColor: colors.gold }]}
+                  onPress={() => setShowNewConvo(true)}
+                >
+                  <Feather name="edit" size={16} color="#fff" />
+                  <Text style={styles.newConvoBtnText}>Nova conversa</Text>
+                </TouchableOpacity>
+              </View>
+            )
+          }
+        />
       )}
     </View>
   );
 }
 
+// ── Conversation Row ───────────────────────────────────────────────────────────
+
 function ConversationRow({ conversation: conv, colors }: { conversation: AppConversation; colors: any }) {
-  const router = useRouter();
+  const router   = useRouter();
   const hasUnread = (conv.unread_count ?? 0) > 0;
-  const name = conv.name ?? conv.participant?.full_name ?? "Chat";
+  const name     = conv.name ?? conv.participant?.full_name ?? "Chat";
   const avatarUri = conv.participant?.avatar_url ?? null;
 
   return (
@@ -235,18 +317,14 @@ function ConversationRow({ conversation: conv, colors }: { conversation: AppConv
         </View>
         <View style={styles.convoBottom}>
           <Text
-            style={[
-              styles.convoMsg,
-              { color: hasUnread ? colors.foreground : colors.mutedForeground },
-              hasUnread && { fontWeight: "600" },
-            ]}
+            style={[styles.convoMsg, { color: hasUnread ? colors.foreground : colors.mutedForeground }, hasUnread && { fontWeight: "600" }]}
             numberOfLines={1}
           >
             {conv.last_message ?? "Iniciar conversa"}
           </Text>
           {hasUnread && (
             <View style={[styles.unreadBadge, { backgroundColor: colors.gold }]}>
-              <Text style={[styles.unreadText, { color: colors.navy }]}>{conv.unread_count}</Text>
+              <Text style={[styles.unreadText]}>{conv.unread_count}</Text>
             </View>
           )}
         </View>
@@ -255,40 +333,80 @@ function ConversationRow({ conversation: conv, colors }: { conversation: AppConv
   );
 }
 
+// ── Request Row ────────────────────────────────────────────────────────────────
+
+function RequestRow({ conversation: conv, colors, onAccept, onDecline, accepting }: {
+  conversation: AppConversation;
+  colors: any;
+  onAccept: () => void;
+  onDecline: () => void;
+  accepting: boolean;
+}) {
+  const name    = conv.participant?.full_name ?? "Desconhecido";
+  const preview = conv.last_message ?? "Enviou uma mensagem";
+
+  return (
+    <View style={[styles.requestRow, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+      <Avatar uri={conv.participant?.avatar_url ?? null} name={name} size={48} />
+      <View style={styles.requestBody}>
+        <Text style={[styles.requestName, { color: colors.navy }]}>{name}</Text>
+        <Text style={[styles.requestPreview, { color: colors.mutedForeground }]} numberOfLines={1}>{preview}</Text>
+        <View style={styles.requestActions}>
+          <TouchableOpacity
+            style={[styles.acceptBtn, { backgroundColor: colors.navy }]}
+            onPress={onAccept}
+            disabled={accepting}
+          >
+            {accepting
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Text style={styles.acceptBtnText}>Aceitar</Text>
+            }
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.declineBtn, { borderColor: colors.border }]}
+            onPress={onDecline}
+            disabled={accepting}
+          >
+            <Text style={[styles.declineBtnText, { color: colors.foreground }]}>Recusar</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ── Styles ─────────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1,
-  },
-  headerTitle:   { fontSize: 26, fontWeight: "800" },
-  headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
-  newChatCircle: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
-  gruposBtn:     { flexDirection: "row", alignItems: "center", gap: 5 },
-  gruposBtnText: { fontSize: 15, fontWeight: "600" },
+  container:    { flex: 1 },
+  header:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
+  headerTitle:  { fontSize: 26, fontWeight: "800" },
+  headerActions:{ flexDirection: "row", alignItems: "center", gap: 10 },
+  newChatBtn:   { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  gruposBtn:    { flexDirection: "row", alignItems: "center", gap: 5 },
+  gruposBtnText:{ fontSize: 15, fontWeight: "600" },
 
-  novaConversaCard: { padding: 16, borderBottomWidth: 1, gap: 10 },
-  novaConversaTitle: { fontSize: 16, fontWeight: "700" },
-  userSearchBar: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10,
-  },
-  userSearchInput: { flex: 1, fontSize: 14 },
-  userRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 6 },
-  userName: { fontSize: 14, fontWeight: "600" },
-  userHeadline: { fontSize: 12 },
+  novaCard:   { padding: 16, borderBottomWidth: 1, gap: 8 },
+  novaTitle:  { fontSize: 16, fontWeight: "700" },
+  novaHint:   { fontSize: 12, lineHeight: 16 },
+  noResultsText: { fontSize: 13, textAlign: "center", paddingVertical: 8 },
+  userRow:    { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 },
+  userName:   { fontSize: 14, fontWeight: "600" },
+  userSub:    { fontSize: 12, marginTop: 1 },
 
-  searchWrap: { padding: 12 },
-  searchBar: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10,
-  },
-  searchInput: { flex: 1, fontSize: 14 },
+  tabRow:     { flexDirection: "row", borderBottomWidth: 1, backgroundColor: "#fff" },
+  tab:        { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 14 },
+  tabText:    { fontSize: 14 },
+  badge:      { minWidth: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 },
+  badgeText:  { fontSize: 11, fontWeight: "700", color: "#fff" },
 
-  convoRow: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1,
-  },
+  searchWrap: { padding: 10 },
+  searchBar:  { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10 },
+  searchInput:{ flex: 1, fontSize: 14 },
+
+  loadingWrap:{ flex: 1, alignItems: "center", justifyContent: "center" },
+
+  convoRow:   { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 1 },
   convoBody:  { flex: 1 },
   convoTop:   { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
   convoName:  { fontSize: 15, fontWeight: "700", flex: 1, marginRight: 8 },
@@ -296,11 +414,21 @@ const styles = StyleSheet.create({
   convoBottom:{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   convoMsg:   { fontSize: 13, flex: 1, marginRight: 8 },
   unreadBadge:{ minWidth: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 },
-  unreadText: { fontSize: 11, fontWeight: "700" },
+  unreadText: { fontSize: 11, fontWeight: "700", color: "#fff" },
 
-  empty:      { alignItems: "center", justifyContent: "center", paddingTop: 80, paddingHorizontal: 40, gap: 14 },
-  emptyIconCircle: { width: 80, height: 80, borderRadius: 40, alignItems: "center", justifyContent: "center", marginBottom: 4 },
-  emptyTitle: { fontSize: 19, fontWeight: "800", textAlign: "center" },
+  requestRow:     { flexDirection: "row", alignItems: "flex-start", gap: 12, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1 },
+  requestBody:    { flex: 1, gap: 4 },
+  requestName:    { fontSize: 15, fontWeight: "700" },
+  requestPreview: { fontSize: 13 },
+  requestActions: { flexDirection: "row", gap: 8, marginTop: 6 },
+  acceptBtn:      { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 8, minWidth: 80, alignItems: "center" },
+  acceptBtnText:  { color: "#fff", fontSize: 13, fontWeight: "700" },
+  declineBtn:     { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 8, borderWidth: 1, minWidth: 80, alignItems: "center" },
+  declineBtnText: { fontSize: 13, fontWeight: "600" },
+
+  empty:      { alignItems: "center", paddingTop: 80, paddingHorizontal: 40, gap: 14 },
+  emptyIcon:  { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  emptyTitle: { fontSize: 18, fontWeight: "800", textAlign: "center" },
   emptySub:   { fontSize: 14, textAlign: "center", lineHeight: 20 },
   newConvoBtn:{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 30, marginTop: 6 },
   newConvoBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
