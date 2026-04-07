@@ -528,6 +528,12 @@ export default function FeedScreen() {
               }));
               API.voteOnPoll(id, user.id, optionIndex);
             }}
+            onHide={(postId) => {
+              setPosts(prev => prev.filter(p => p.id !== postId));
+            }}
+            onBlock={(blockedUserId) => {
+              setPosts(prev => prev.filter(p => p.user_id !== blockedUserId));
+            }}
           />
         )}
         ListHeaderComponent={renderHeader}

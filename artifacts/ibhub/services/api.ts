@@ -887,6 +887,44 @@ export async function createReport(params: {
   }
 }
 
+// ── "Não tenho interesse" ─────────────────────────────────────────────────────
+// Stores client-side via AsyncStorage (table may not exist yet) +
+// best-effort Supabase insert into `post_hidden`
+export async function hidePost(userId: string, postId: string): Promise<void> {
+  try {
+    await supabase.from("post_hidden").insert({ user_id: userId, post_id: postId });
+  } catch {
+    // silently ignore if table doesn't exist — feed filters it out locally
+  }
+}
+
+// ── Block user ────────────────────────────────────────────────────────────────
+export async function blockUser(blockerId: string, blockedId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("user_blocks")
+      .upsert({ blocker_id: blockerId, blocked_id: blockedId }, { onConflict: "blocker_id,blocked_id" });
+    if (error) { console.error("blockUser:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("blockUser:", e);
+    return false;
+  }
+}
+
+// ── Fetch IDs blocked by user (for feed filtering) ──────────────────────────
+export async function fetchBlockedIds(userId: string): Promise<string[]> {
+  try {
+    const { data } = await supabase
+      .from("user_blocks")
+      .select("blocked_id")
+      .eq("blocker_id", userId);
+    return (data ?? []).map((r: any) => r.blocked_id);
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchPendingReports(): Promise<AppReport[]> {
   try {
     const { data, error } = await supabase

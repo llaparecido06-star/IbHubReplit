@@ -18,7 +18,7 @@ import {
 import { AntDesign, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Avatar } from "@/components/ui/Avatar";
 import { useColors } from "@/hooks/useColors";
-import { createReport } from "@/services/api";
+import { createReport, hidePost, blockUser } from "@/services/api";
 
 export interface Post {
   id: string;
@@ -52,6 +52,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CONTENT_CUTOFF = 220; // chars before "Ver mais"
 
 interface PostCardProps {
+  onHide?: (postId: string) => void;
+  onBlock?: (userId: string) => void;
   post: Post;
   currentUserId?: string | null;
   onLike?: (postId: string) => void;
@@ -101,7 +103,7 @@ function PlanBadge({ plan, colors }: { plan?: string; colors: any }) {
 
 const REPORT_REASONS = ["Spam", "Conteúdo ofensivo", "Informação falsa", "Assédio", "Outro"];
 
-export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, onVote }: PostCardProps) {
+export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, onVote, onHide, onBlock }: PostCardProps) {
   const colors = useColors();
   const router = useRouter();
   const [showOptions, setShowOptions]       = useState(false);
@@ -439,7 +441,12 @@ export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, o
 
             <TouchableOpacity
               style={styles.menuItem}
-              onPress={() => { setShowOptions(false); Alert.alert("Não tenho interesse", "Veremos menos publicações assim para você."); }}
+              onPress={() => {
+                setShowOptions(false);
+                if (currentUserId) hidePost(currentUserId, post.id);
+                onHide?.(post.id);
+                Alert.alert("Pronto", "Veremos menos publicações assim para você.");
+              }}
             >
               <Feather name="eye-off" size={16} color="#374151" />
               <Text style={[styles.menuText, { color: "#374151" }]}>Não tenho interesse</Text>
@@ -449,7 +456,24 @@ export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, o
 
             <TouchableOpacity
               style={styles.menuItem}
-              onPress={() => { setShowOptions(false); Alert.alert("Usuário bloqueado", "Você não verá mais publicações desta pessoa."); }}
+              onPress={() => {
+                setShowOptions(false);
+                Alert.alert(
+                  "Bloquear usuário",
+                  "Você não verá mais publicações desta pessoa e ela não poderá interagir com você.",
+                  [
+                    { text: "Cancelar", style: "cancel" },
+                    {
+                      text: "Bloquear",
+                      style: "destructive",
+                      onPress: () => {
+                        if (currentUserId) blockUser(currentUserId, post.user_id);
+                        onBlock?.(post.user_id);
+                      },
+                    },
+                  ],
+                );
+              }}
             >
               <Feather name="slash" size={16} color="#dc2626" />
               <Text style={[styles.menuText, { color: "#dc2626" }]}>Bloquear usuário</Text>
