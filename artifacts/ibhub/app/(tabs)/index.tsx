@@ -932,7 +932,11 @@ export default function FeedScreen() {
               style={styles.accountRow}
               onPress={() => {
                 setShowAccountMenu(false);
-                router.push("/manage-business-page" as any);
+                if (activeCompany) {
+                  router.push(`/manage-business-page?id=${activeCompany.id}` as any);
+                } else {
+                  Alert.alert("Nenhuma página ativa", "Selecione ou crie uma página empresarial acima antes de gerenciar.");
+                }
               }}
             >
               <Feather name="briefcase" size={20} color={colors.gold} />

@@ -179,7 +179,7 @@ export default function EmpresaScreen() {
             </View>
             <TouchableOpacity
               style={[styles.manageBtn, { backgroundColor: colors.gold }]}
-              onPress={() => router.push("/manage-business-page" as any)}
+              onPress={() => router.push(`/manage-business-page?id=${id}` as any)}
             >
               <Feather name="home" size={13} color="#fff" />
               <Text style={styles.manageBtnText}>Gerenciar</Text>

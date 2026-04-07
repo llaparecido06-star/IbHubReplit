@@ -17,6 +17,7 @@ import { Feather } from "@expo/vector-icons";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import * as API from "@/services/api";
 
 interface Post {
   id: string;
@@ -85,6 +86,28 @@ export default function ProfileScreen() {
       { text: "Cancelar", style: "cancel" },
       { text: "Sair", style: "destructive", onPress: signOut },
     ]);
+  };
+
+  const handleBusinessPage = async () => {
+    if (!profile?.id) return;
+    const pages = await API.fetchUserCompanyPages(profile.id);
+    if (pages.length === 0) {
+      router.push("/manage-business-page" as any);
+    } else if (pages.length === 1) {
+      router.push(`/manage-business-page?id=${pages[0].id}` as any);
+    } else {
+      Alert.alert(
+        "Suas páginas",
+        "Selecione qual página gerenciar:",
+        [
+          ...pages.map(p => ({
+            text: p.name,
+            onPress: () => router.push(`/manage-business-page?id=${p.id}` as any),
+          })),
+          { text: "Cancelar", style: "cancel" as const },
+        ],
+      );
+    }
   };
 
   return (
@@ -168,7 +191,7 @@ export default function ProfileScreen() {
         <View style={styles.actionRow}>
           <TouchableOpacity
             style={[styles.btnPrimary, { backgroundColor: colors.gold }]}
-            onPress={() => router.push("/manage-business-page" as any)}
+            onPress={handleBusinessPage}
           >
             <Feather name="briefcase" size={15} color="#fff" />
             <Text style={styles.btnPrimaryText}>Página Empresarial</Text>

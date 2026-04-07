@@ -97,7 +97,7 @@ Criar na pasta `components/` em vez de repetir código:
 - Upload de imagem: `uploadPostImage()` → bucket `post-images` no Supabase Storage
 - Contadores: triggers em `follows` e `connections` mantêm `followers_count`, `following_count`, `connections_count` no `profiles`
 - Adega: tabela `wine_cellar` + tela `/wine-cellar` conectada ao Supabase
-- Páginas Empresariais: tabela `company_pages` + `fetchUserCompanyPages()` — "Gerenciar Páginas" navega para `/manage-business-page`
+- Páginas Empresariais: CRUD completo conectado ao Supabase via `fetchCompanyPageById`, `updateCompanyPage`, `deleteCompanyPage`, `fetchCompanyPageAdmins`, `addCompanyPageAdmin`, `removeCompanyPageAdmin`, `uploadCompanyLogo`. Navegação corrigida para passar `?id=` em todos os pontos de entrada (`empresa/[id].tsx`, `(tabs)/index.tsx`, `(tabs)/profile.tsx`). A tela `manage-business-page.tsx` tem 3 abas: Preview (dados reais + excluir), Editar (salvar no DB + upload de logo), Equipe (busca de usuários + add/remove membros com papéis).
 - Comment likes: tabela `comment_likes` criada
 
 ## Aba Mercado — Detalhes

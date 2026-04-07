@@ -1,7 +1,10 @@
-import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import * as ImagePicker from "expo-image-picker";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -12,52 +15,225 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { Avatar } from "@/components/ui/Avatar";
+import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import * as API from "@/services/api";
 
-type Tab = "preview" | "editar" | "equipe";
+type Tab     = "preview" | "editar" | "equipe";
 type RoleKey = "editor" | "moderador" | "visualizador";
 
-const CATEGORIES = ["Vinícola", "Importadora", "Distribuidora", "Restaurante", "Enoteca", "Consultoria", "Enoturismo", "Outros"];
+const CATEGORIES: string[] = [
+  "Vinícola", "Importadora", "Distribuidora", "Restaurante",
+  "Enoteca", "Consultoria", "Enoturismo", "Outros",
+];
+
 const ROLES: { key: RoleKey; label: string }[] = [
-  { key: "editor",      label: "Editor" },
-  { key: "moderador",   label: "Moderador" },
-  { key: "visualizador",label: "Visualizador" },
+  { key: "editor",       label: "Editor" },
+  { key: "moderador",    label: "Moderador" },
+  { key: "visualizador", label: "Visualizador" },
 ];
 
 export default function ManageBusinessPageScreen() {
-  const colors = useColors();
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const colors  = useColors();
+  const router  = useRouter();
+  const insets  = useSafeAreaInsets();
+  const { user: currentUser } = useAuth();
+  const { id: pageId }  = useLocalSearchParams<{ id: string }>();
 
   const [activeTab, setActiveTab] = useState<Tab>("preview");
+  const [page, setPage]           = useState<API.CompanyPage | null>(null);
+  const [loading, setLoading]     = useState(true);
+  const [saving, setSaving]       = useState(false);
+  const [deleting, setDeleting]   = useState(false);
 
-  // Editar state
-  const [companyName, setCompanyName] = useState("Ideal.BI");
-  const [category, setCategory]       = useState("Consultoria");
+  // Editar fields (local copies so user can cancel)
+  const [companyName, setCompanyName] = useState("");
+  const [category, setCategory]       = useState("Vinícola");
   const [desc, setDesc]               = useState("");
   const [website, setWebsite]         = useState("");
-  const [phone, setPhone]             = useState("");
-  const [email, setEmail]             = useState("");
-  const [address, setAddress]         = useState("");
-  const [city, setCity]               = useState("");
+  const [location, setLocation]       = useState("");
+  const [logoUri, setLogoUri]         = useState<string | null>(null);
 
-  // Equipe state
-  const [selectedRole, setSelectedRole] = useState<RoleKey>("editor");
-  const [memberSearch, setMemberSearch] = useState("");
+  // Equipe
+  const [admins, setAdmins]               = useState<API.CompanyPageAdmin[]>([]);
+  const [adminsLoading, setAdminsLoading] = useState(false);
+  const [selectedRole, setSelectedRole]   = useState<RoleKey>("editor");
+  const [memberSearch, setMemberSearch]   = useState("");
+  const [searchResults, setSearchResults] = useState<
+    { id: string; full_name: string; username: string; avatar_url: string | null; headline: string | null }[]
+  >([]);
+  const [addingMember, setAddingMember]   = useState(false);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
+  // ── Load company page ──────────────────────────────────────────────────────
+  const loadPage = useCallback(async () => {
+    if (!pageId) { setLoading(false); return; }
+    setLoading(true);
+    const data = await API.fetchCompanyPageById(pageId);
+    if (data) {
+      setPage(data);
+      setCompanyName(data.name);
+      setCategory(data.industry ?? "Vinícola");
+      setDesc(data.bio ?? "");
+      setWebsite(data.website ?? "");
+      setLocation(data.location ?? "");
+    }
+    setLoading(false);
+  }, [pageId]);
+
+  useEffect(() => { loadPage(); }, [loadPage]);
+
+  // ── Load admins when equipe tab opens ──────────────────────────────────────
+  useEffect(() => {
+    if (activeTab !== "equipe" || !pageId) return;
+    setAdminsLoading(true);
+    API.fetchCompanyPageAdmins(pageId).then(data => {
+      setAdmins(data);
+      setAdminsLoading(false);
+    });
+  }, [activeTab, pageId]);
+
+  // ── Member search with debounce ────────────────────────────────────────────
+  useEffect(() => {
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    if (!memberSearch.trim() || !currentUser?.id) {
+      setSearchResults([]);
+      return;
+    }
+    searchTimeout.current = setTimeout(async () => {
+      const results = await API.searchProfiles(memberSearch, currentUser.id);
+      const existingIds = new Set(admins.map(a => a.user_id));
+      setSearchResults(results.filter(r => !existingIds.has(r.id)));
+    }, 350);
+  }, [memberSearch, currentUser?.id, admins]);
+
+  // ── Save edits ─────────────────────────────────────────────────────────────
+  const handleSave = async () => {
+    if (!pageId || !companyName.trim()) {
+      Alert.alert("Atenção", "O nome da empresa é obrigatório.");
+      return;
+    }
+    setSaving(true);
+    let avatar_url = page?.avatar_url ?? null;
+
+    if (logoUri && logoUri !== page?.avatar_url) {
+      const uploaded = await API.uploadCompanyLogo(pageId, logoUri);
+      if (uploaded) avatar_url = uploaded;
+    }
+
+    const ok = await API.updateCompanyPage(pageId, {
+      name: companyName.trim(),
+      industry: category,
+      bio: desc.trim() || null,
+      website: website.trim() || null,
+      location: location.trim() || null,
+      avatar_url,
+    });
+
+    setSaving(false);
+
+    if (ok) {
+      setPage(prev => prev ? { ...prev, name: companyName, industry: category, bio: desc, website, location, avatar_url } : prev);
+      Alert.alert("Salvo!", "Alterações salvas com sucesso.");
+    } else {
+      Alert.alert("Erro", "Não foi possível salvar. Tente novamente.");
+    }
+  };
+
+  // ── Delete page ────────────────────────────────────────────────────────────
   const handleDelete = () => {
-    Alert.alert("Excluir página", "Esta ação é irreversível. Deseja continuar?", [
+    Alert.alert(
+      "Excluir página",
+      `Tem certeza que deseja excluir "${page?.name ?? "esta página"}"? Esta ação é irreversível.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: async () => {
+            if (!pageId) return;
+            setDeleting(true);
+            const ok = await API.deleteCompanyPage(pageId);
+            setDeleting(false);
+            if (ok) {
+              Alert.alert("Excluída", "A página foi excluída.", [
+                { text: "OK", onPress: () => router.back() },
+              ]);
+            } else {
+              Alert.alert("Erro", "Não foi possível excluir. Tente novamente.");
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  // ── Pick logo ──────────────────────────────────────────────────────────────
+  const handlePickLogo = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permissão necessária", "Permita o acesso à galeria para trocar o logo.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setLogoUri(result.assets[0].uri);
+    }
+  };
+
+  // ── Add member ─────────────────────────────────────────────────────────────
+  const handleAddMember = async (userId: string) => {
+    if (!pageId) return;
+    setAddingMember(true);
+    const ok = await API.addCompanyPageAdmin(pageId, userId, selectedRole);
+    if (ok) {
+      setMemberSearch("");
+      setSearchResults([]);
+      const updated = await API.fetchCompanyPageAdmins(pageId);
+      setAdmins(updated);
+    } else {
+      Alert.alert("Erro", "Não foi possível adicionar o membro.");
+    }
+    setAddingMember(false);
+  };
+
+  // ── Remove member ──────────────────────────────────────────────────────────
+  const handleRemoveMember = (userId: string, name: string) => {
+    Alert.alert("Remover membro", `Remover ${name} da equipe?`, [
       { text: "Cancelar", style: "cancel" },
-      { text: "Excluir", style: "destructive", onPress: () => router.back() },
+      {
+        text: "Remover",
+        style: "destructive",
+        onPress: async () => {
+          if (!pageId) return;
+          const ok = await API.removeCompanyPageAdmin(pageId, userId);
+          if (ok) setAdmins(prev => prev.filter(a => a.user_id !== userId));
+          else Alert.alert("Erro", "Não foi possível remover o membro.");
+        },
+      },
     ]);
   };
 
-  const handleSave = () => {
-    Alert.alert("Salvo!", "As alterações foram salvas com sucesso.");
-  };
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  const logoSource = logoUri ?? page?.avatar_url ?? null;
+  const logoInitial = (page?.name ?? companyName ?? "?")[0]?.toUpperCase() ?? "?";
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }]}>
+        <ActivityIndicator color={colors.gold} size="large" />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -65,17 +241,18 @@ export default function ManageBusinessPageScreen() {
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
-          <Text style={[styles.headerTitle, { color: colors.navy }]}>Página Empresarial</Text>
+          <Text style={[styles.headerTitle, { color: colors.navy }]}>
+            {page?.name ?? "Página Empresarial"}
+          </Text>
         </TouchableOpacity>
       </View>
 
       {/* Tabs */}
       <View style={[styles.tabBar, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
-        {([
-          { key: "preview", label: "Preview", icon: "eye" },
-          { key: "editar",  label: "Editar",  icon: "edit-2" },
-          { key: "equipe",  label: "Equipe",  icon: "users" },
-        ] as { key: Tab; label: string; icon: any }[]).map((t) => (
+        {([ { key: "preview", label: "Preview", icon: "eye" },
+             { key: "editar",  label: "Editar",  icon: "edit-2" },
+             { key: "equipe",  label: "Equipe",  icon: "users" },
+        ] as { key: Tab; label: string; icon: any }[]).map(t => (
           <TouchableOpacity
             key={t.key}
             style={[styles.tabItem, activeTab === t.key && { borderBottomColor: colors.gold, borderBottomWidth: 2 }]}
@@ -90,23 +267,53 @@ export default function ManageBusinessPageScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
+
         {/* ── Preview ── */}
         {activeTab === "preview" && (
           <View style={{ padding: 16, gap: 16 }}>
-            <View style={styles.previewCard}>
-              <View style={[styles.companyLogo, { backgroundColor: colors.navy }]}>
-                <Text style={[styles.companyLogoText, { color: colors.gold }]}>I</Text>
-              </View>
-              <Text style={[styles.previewName, { color: colors.navy }]}>{companyName}</Text>
-              <View style={[styles.categoryBadge, { backgroundColor: colors.gold + "18" }]}>
-                <Text style={[styles.categoryBadgeText, { color: colors.gold }]}>{category}</Text>
+            <View style={[styles.previewCard, { borderColor: colors.border }]}>
+              {logoSource
+                ? <Image source={{ uri: logoSource }} style={styles.previewLogo} />
+                : (
+                  <View style={[styles.previewLogoFallback, { backgroundColor: colors.navy }]}>
+                    <Text style={[styles.previewLogoInitial, { color: colors.gold }]}>{logoInitial}</Text>
+                  </View>
+                )
+              }
+              <Text style={[styles.previewName, { color: colors.navy }]}>{page?.name ?? "—"}</Text>
+              {page?.industry && (
+                <View style={[styles.categoryBadge, { backgroundColor: colors.gold + "18" }]}>
+                  <Text style={[styles.categoryBadgeText, { color: colors.gold }]}>{page.industry}</Text>
+                </View>
+              )}
+              {page?.bio ? (
+                <Text style={[styles.previewBio, { color: colors.mutedForeground }]}>{page.bio}</Text>
+              ) : null}
+              <View style={styles.previewMeta}>
+                {page?.website ? (
+                  <View style={styles.previewMetaRow}>
+                    <Feather name="globe" size={13} color={colors.mutedForeground} />
+                    <Text style={[styles.previewMetaText, { color: colors.mutedForeground }]}>{page.website}</Text>
+                  </View>
+                ) : null}
+                {page?.location ? (
+                  <View style={styles.previewMetaRow}>
+                    <Feather name="map-pin" size={13} color={colors.mutedForeground} />
+                    <Text style={[styles.previewMetaText, { color: colors.mutedForeground }]}>{page.location}</Text>
+                  </View>
+                ) : null}
               </View>
             </View>
+
             <TouchableOpacity
-              style={[styles.deletePageBtn, { borderColor: "#dc2626" }]}
+              style={[styles.deletePageBtn, { borderColor: "#dc2626", opacity: deleting ? 0.6 : 1 }]}
               onPress={handleDelete}
+              disabled={deleting}
             >
-              <Feather name="trash-2" size={16} color="#dc2626" />
+              {deleting
+                ? <ActivityIndicator size="small" color="#dc2626" />
+                : <Feather name="trash-2" size={16} color="#dc2626" />
+              }
               <Text style={[styles.deletePageText, { color: "#dc2626" }]}>Excluir página</Text>
             </TouchableOpacity>
           </View>
@@ -115,12 +322,19 @@ export default function ManageBusinessPageScreen() {
         {/* ── Editar ── */}
         {activeTab === "editar" && (
           <View style={{ padding: 16, gap: 18 }}>
-            {/* Logo with camera overlay */}
+            {/* Logo picker */}
             <View style={styles.logoWrap}>
-              <View style={[styles.companyLogoLarge, { backgroundColor: colors.navy }]}>
-                <Text style={[styles.companyLogoLargeText, { color: colors.gold }]}>I</Text>
-              </View>
-              <TouchableOpacity style={[styles.cameraOverlay, { backgroundColor: colors.gold }]}>
+              <TouchableOpacity onPress={handlePickLogo} activeOpacity={0.8}>
+                {logoSource
+                  ? <Image source={{ uri: logoSource }} style={styles.companyLogoLarge} />
+                  : (
+                    <View style={[styles.companyLogoLarge, { backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" }]}>
+                      <Text style={[styles.companyLogoLargeText, { color: colors.gold }]}>{logoInitial}</Text>
+                    </View>
+                  )
+                }
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.cameraOverlay, { backgroundColor: colors.gold }]} onPress={handlePickLogo}>
                 <Feather name="camera" size={14} color="#fff" />
               </TouchableOpacity>
             </View>
@@ -131,13 +345,15 @@ export default function ManageBusinessPageScreen() {
                 style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
                 value={companyName}
                 onChangeText={setCompanyName}
+                placeholder="Nome da empresa"
+                placeholderTextColor={colors.mutedForeground}
               />
             </View>
 
             <View style={styles.field}>
               <Text style={[styles.fieldLabel, { color: colors.navy }]}>Categoria *</Text>
               <View style={styles.catGrid}>
-                {CATEGORIES.map((cat) => (
+                {CATEGORIES.map(cat => (
                   <TouchableOpacity
                     key={cat}
                     style={[styles.catChip, {
@@ -170,12 +386,9 @@ export default function ManageBusinessPageScreen() {
             </View>
 
             {[
-              { label: "Website",  value: website,  onChange: setWebsite,  placeholder: "" },
-              { label: "Telefone", value: phone,    onChange: setPhone,    placeholder: "" },
-              { label: "E-mail",   value: email,    onChange: setEmail,    placeholder: "" },
-              { label: "Endereço", value: address,  onChange: setAddress,  placeholder: "" },
-              { label: "Cidade",   value: city,     onChange: setCity,     placeholder: "Ex: São Paulo - SP" },
-            ].map((f) => (
+              { label: "Website",    value: website,   onChange: setWebsite,   placeholder: "https://suaempresa.com.br" },
+              { label: "Localização",value: location,  onChange: setLocation,  placeholder: "Ex: São Paulo - SP" },
+            ].map(f => (
               <View key={f.label} style={styles.field}>
                 <Text style={[styles.fieldLabel, { color: colors.navy }]}>{f.label}</Text>
                 <TextInput
@@ -188,9 +401,16 @@ export default function ManageBusinessPageScreen() {
               </View>
             ))}
 
-            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.gold }]} onPress={handleSave}>
-              <Feather name="save" size={16} color="#fff" />
-              <Text style={styles.saveBtnText}>Salvar alterações</Text>
+            <TouchableOpacity
+              style={[styles.saveBtn, { backgroundColor: colors.gold, opacity: saving ? 0.7 : 1 }]}
+              onPress={handleSave}
+              disabled={saving}
+            >
+              {saving
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Feather name="save" size={16} color="#fff" />
+              }
+              <Text style={styles.saveBtnText}>{saving ? "Salvando..." : "Salvar alterações"}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -198,10 +418,11 @@ export default function ManageBusinessPageScreen() {
         {/* ── Equipe ── */}
         {activeTab === "equipe" && (
           <View style={{ padding: 16, gap: 16 }}>
+            {/* Role selector */}
             <View style={styles.field}>
-              <Text style={[styles.fieldLabel, { color: colors.navy }]}>Adicionar membro</Text>
+              <Text style={[styles.fieldLabel, { color: colors.navy }]}>Papel do novo membro</Text>
               <View style={styles.roleChips}>
-                {ROLES.map((r) => (
+                {ROLES.map(r => (
                   <TouchableOpacity
                     key={r.key}
                     style={[styles.roleChip, { backgroundColor: selectedRole === r.key ? colors.gold : "#fff", borderColor: selectedRole === r.key ? colors.gold : colors.border }]}
@@ -213,24 +434,100 @@ export default function ManageBusinessPageScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+            </View>
+
+            {/* Search bar */}
+            <View style={styles.field}>
+              <Text style={[styles.fieldLabel, { color: colors.navy }]}>Buscar usuário</Text>
               <View style={[styles.memberSearchBar, { backgroundColor: "#fff", borderColor: colors.border }]}>
                 <Feather name="search" size={14} color={colors.mutedForeground} />
                 <TextInput
                   style={[styles.memberSearchInput, { color: colors.foreground }]}
-                  placeholder="Buscar usuário..."
+                  placeholder="Nome ou @username..."
                   placeholderTextColor={colors.mutedForeground}
                   value={memberSearch}
                   onChangeText={setMemberSearch}
                 />
+                {memberSearch.length > 0 && (
+                  <TouchableOpacity onPress={() => { setMemberSearch(""); setSearchResults([]); }}>
+                    <Feather name="x" size={14} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                )}
               </View>
+
+              {/* Search results */}
+              {searchResults.length > 0 && (
+                <View style={[styles.searchResultsList, { borderColor: colors.border }]}>
+                  {searchResults.map(u => (
+                    <TouchableOpacity
+                      key={u.id}
+                      style={[styles.searchResultItem, { borderBottomColor: colors.border }]}
+                      onPress={() => handleAddMember(u.id)}
+                      disabled={addingMember}
+                    >
+                      <Avatar uri={u.avatar_url} name={u.full_name} size={36} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.memberName, { color: colors.foreground }]}>{u.full_name}</Text>
+                        {u.headline ? (
+                          <Text style={[styles.memberRole, { color: colors.mutedForeground }]}>{u.headline}</Text>
+                        ) : null}
+                      </View>
+                      {addingMember
+                        ? <ActivityIndicator size="small" color={colors.gold} />
+                        : <Feather name="plus-circle" size={18} color={colors.gold} />
+                      }
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
 
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-            <Text style={[styles.teamSectionTitle, { color: colors.navy }]}>Equipe (0)</Text>
-            <View style={styles.teamEmpty}>
-              <Text style={[styles.teamEmptyText, { color: colors.mutedForeground }]}>Nenhum membro na equipe.</Text>
-            </View>
+            {/* Team list */}
+            <Text style={[styles.teamSectionTitle, { color: colors.navy }]}>
+              Equipe ({admins.length})
+            </Text>
+
+            {adminsLoading ? (
+              <ActivityIndicator color={colors.gold} style={{ marginTop: 16 }} />
+            ) : admins.length === 0 ? (
+              <View style={styles.teamEmpty}>
+                <Feather name="users" size={32} color={colors.border} />
+                <Text style={[styles.teamEmptyText, { color: colors.mutedForeground }]}>
+                  Nenhum membro na equipe ainda.
+                </Text>
+              </View>
+            ) : (
+              admins.map(admin => {
+                const p = admin.profile;
+                const headline = [p?.position, p?.company].filter(Boolean).join(" · ") || null;
+                return (
+                  <View key={admin.user_id} style={[styles.memberRow, { borderBottomColor: colors.border }]}>
+                    <Avatar uri={p?.avatar_url} name={p?.full_name ?? "?"} size={42} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.memberName, { color: colors.foreground }]}>
+                        {p?.full_name ?? "Usuário"}
+                      </Text>
+                      {headline ? (
+                        <Text style={[styles.memberRole, { color: colors.mutedForeground }]}>{headline}</Text>
+                      ) : null}
+                    </View>
+                    <View style={[styles.roleBadge, { backgroundColor: colors.gold + "18" }]}>
+                      <Text style={[styles.roleBadgeText, { color: colors.gold }]}>
+                        {admin.role.charAt(0).toUpperCase() + admin.role.slice(1)}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.removeBtn}
+                      onPress={() => handleRemoveMember(admin.user_id, p?.full_name ?? "membro")}
+                    >
+                      <Feather name="trash-2" size={16} color="#dc2626" />
+                    </TouchableOpacity>
+                  </View>
+                );
+              })
+            )}
           </View>
         )}
       </ScrollView>
@@ -246,16 +543,25 @@ const styles = StyleSheet.create({
   tabBar: { flexDirection: "row", borderBottomWidth: 1 },
   tabItem: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 14 },
   tabLabel: { fontSize: 13, fontWeight: "600" },
-  previewCard: { alignItems: "center", gap: 12, padding: 24, borderRadius: 12, borderWidth: 1, borderColor: "#e8eaed", backgroundColor: "#fff" },
-  companyLogo: { width: 80, height: 80, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  companyLogoText: { fontSize: 32, fontWeight: "800" },
-  previewName: { fontSize: 22, fontWeight: "800" },
+
+  // Preview
+  previewCard: { alignItems: "center", gap: 12, padding: 24, borderRadius: 12, borderWidth: 1, backgroundColor: "#fff" },
+  previewLogo: { width: 80, height: 80, borderRadius: 12 },
+  previewLogoFallback: { width: 80, height: 80, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  previewLogoInitial: { fontSize: 32, fontWeight: "800" },
+  previewName: { fontSize: 22, fontWeight: "800", textAlign: "center" },
   categoryBadge: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
   categoryBadgeText: { fontSize: 13, fontWeight: "600" },
+  previewBio: { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  previewMeta: { gap: 6, width: "100%" },
+  previewMetaRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  previewMetaText: { fontSize: 13 },
   deletePageBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, borderRadius: 10, borderWidth: 1.5 },
   deletePageText: { fontSize: 15, fontWeight: "700" },
+
+  // Editar
   logoWrap: { alignSelf: "center", position: "relative" },
-  companyLogoLarge: { width: 100, height: 100, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  companyLogoLarge: { width: 100, height: 100, borderRadius: 16 },
   companyLogoLargeText: { fontSize: 40, fontWeight: "800" },
   cameraOverlay: { position: "absolute", bottom: -6, right: -6, width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   field: { gap: 8 },
@@ -268,13 +574,23 @@ const styles = StyleSheet.create({
   catChipText: { fontSize: 13 },
   saveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 15, borderRadius: 10 },
   saveBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+
+  // Equipe
   roleChips: { flexDirection: "row", gap: 8 },
   roleChip: { borderWidth: 1, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
   roleChipText: { fontSize: 13, fontWeight: "500" },
   memberSearchBar: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
   memberSearchInput: { flex: 1, fontSize: 14 },
+  searchResultsList: { borderWidth: 1, borderRadius: 10, overflow: "hidden", marginTop: 4 },
+  searchResultItem: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderBottomWidth: 1 },
   divider: { height: 1 },
   teamSectionTitle: { fontSize: 15, fontWeight: "700" },
-  teamEmpty: { alignItems: "center", paddingVertical: 24 },
+  teamEmpty: { alignItems: "center", paddingVertical: 32, gap: 10 },
   teamEmptyText: { fontSize: 14 },
+  memberRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, borderBottomWidth: 1 },
+  memberName: { fontSize: 14, fontWeight: "600" },
+  memberRole: { fontSize: 12, marginTop: 2 },
+  roleBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  roleBadgeText: { fontSize: 12, fontWeight: "600" },
+  removeBtn: { padding: 6 },
 });

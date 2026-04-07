@@ -1109,6 +1109,138 @@ export async function createCompanyPage(params: {
   }
 }
 
+export async function fetchCompanyPageById(id: string): Promise<CompanyPage | null> {
+  try {
+    const { data, error } = await supabase
+      .from("company_pages")
+      .select("*")
+      .eq("id", id)
+      .single();
+    if (error || !data) return null;
+    return data as CompanyPage;
+  } catch (e) {
+    console.error("fetchCompanyPageById:", e);
+    return null;
+  }
+}
+
+export async function updateCompanyPage(
+  id: string,
+  updates: Partial<Pick<CompanyPage, "name" | "username" | "bio" | "website" | "industry" | "location" | "avatar_url">>,
+): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("company_pages").update(updates).eq("id", id);
+    if (error) { console.error("updateCompanyPage:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("updateCompanyPage:", e);
+    return false;
+  }
+}
+
+export async function deleteCompanyPage(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("company_pages").delete().eq("id", id);
+    if (error) { console.error("deleteCompanyPage:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("deleteCompanyPage:", e);
+    return false;
+  }
+}
+
+export interface CompanyPageAdmin {
+  company_id: string;
+  user_id: string;
+  role: string;
+  added_at: string;
+  profile: {
+    id: string;
+    full_name: string;
+    avatar_url: string | null;
+    position: string | null;
+    company: string | null;
+  };
+}
+
+export async function fetchCompanyPageAdmins(companyId: string): Promise<CompanyPageAdmin[]> {
+  try {
+    const { data, error } = await supabase
+      .from("company_page_admins")
+      .select(`
+        company_id, user_id, role, added_at,
+        profile:profiles!company_page_admins_user_id_fkey(id, full_name, avatar_url, position, company)
+      `)
+      .eq("company_id", companyId)
+      .order("added_at", { ascending: true });
+    if (error || !data) return [];
+    return (data as any[]).map(row => ({
+      ...row,
+      profile: Array.isArray(row.profile) ? row.profile[0] : row.profile,
+    }));
+  } catch (e) {
+    console.error("fetchCompanyPageAdmins:", e);
+    return [];
+  }
+}
+
+export async function addCompanyPageAdmin(
+  companyId: string,
+  userId: string,
+  role: string,
+): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("company_page_admins").upsert(
+      { company_id: companyId, user_id: userId, role },
+      { onConflict: "company_id,user_id" },
+    );
+    if (error) { console.error("addCompanyPageAdmin:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("addCompanyPageAdmin:", e);
+    return false;
+  }
+}
+
+export async function removeCompanyPageAdmin(companyId: string, userId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("company_page_admins")
+      .delete()
+      .eq("company_id", companyId)
+      .eq("user_id", userId);
+    if (error) { console.error("removeCompanyPageAdmin:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("removeCompanyPageAdmin:", e);
+    return false;
+  }
+}
+
+export async function uploadCompanyLogo(companyId: string, uri: string): Promise<string | null> {
+  try {
+    const ext = uri.split(".").pop()?.toLowerCase() ?? "jpg";
+    const path = `company-logos/${companyId}.${ext}`;
+
+    const resp = await fetch(uri);
+    const blob = await resp.blob();
+    const arrayBuffer = await blob.arrayBuffer();
+    const uint8 = new Uint8Array(arrayBuffer);
+
+    const { error } = await supabase.storage
+      .from("post-images")
+      .upload(path, uint8, { contentType: `image/${ext}`, upsert: true });
+
+    if (error) { console.error("uploadCompanyLogo:", error); return null; }
+
+    const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(path);
+    return urlData.publicUrl ?? null;
+  } catch (e) {
+    console.error("uploadCompanyLogo:", e);
+    return null;
+  }
+}
+
 // ─── WINE CELLAR ─────────────────────────────────────────────────────────────
 
 export interface WineEntry {
