@@ -393,9 +393,9 @@ export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, o
         <TouchableOpacity style={styles.action} onPress={handleLike} activeOpacity={0.7}>
           <Animated.View style={{ transform: [{ scale: likeScale }] }}>
             <AntDesign
-              name={isLiked ? "heart" : ("hearto" as any)}
+              name="heart"
               size={22}
-              color={isLiked ? "#e74c3c" : colors.mutedForeground}
+              color={isLiked ? "#e74c3c" : colors.border}
             />
           </Animated.View>
           <Text style={[styles.actionLabel, { color: isLiked ? "#e74c3c" : colors.mutedForeground, fontWeight: isLiked ? "700" : "400" }]}>
