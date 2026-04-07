@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Platform,
   Pressable,
   ScrollView,
@@ -14,34 +15,100 @@ import { Feather } from "@expo/vector-icons";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { PostCard, Post } from "@/components/feed/PostCard";
+import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import * as API from "@/services/api";
 
-const MOCK_USER = {
-  id: "u1",
-  full_name: "Isabela Mondavi",
-  username: "isamondavi",
-  headline: "Enóloga | Vinhedo Santa Clara | WSET Level 4",
-  bio: "Apaixonada por vinhos do Novo Mundo e pelos clássicos europeus. 15 anos de experiência em enologia e produção. Consultora para restaurantes e adegas privadas.",
-  location: "Serra Gaúcha, RS",
-  plan: "business",
-  followers_count: 1240,
-  following_count: 386,
-  connections_count: 892,
-  areas_of_expertise: ["Enologia", "Produção", "WSET", "Consultoria"],
-  certifications: ["WSET Level 4 Diploma", "CMS Certified Sommelier"],
+const FALLBACK_USER = {
+  id: "", full_name: "Usuário", username: "usuario",
+  headline: "", bio: "", location: "",
+  avatar_url: null as string | null,
+  plan: "basico", followers_count: 0, following_count: 0, connections_count: 0,
+  areas_of_expertise: [] as string[], certifications: [] as string[],
 };
 
 export default function PublicProfileScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { id } = useLocalSearchParams();
+  const { user: currentUser } = useAuth();
+  const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const [connected, setConnected] = useState(false);
-  const [following, setFollowing] = useState(false);
+
+  const [userProfile, setUserProfile] = useState<typeof FALLBACK_USER>(FALLBACK_USER);
+  const [userPosts, setUserPosts] = useState<Post[]>([]);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<"none" | "pending" | "connected">("none");
+  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"posts" | "sobre" | "vinho">("sobre");
 
-  const user = MOCK_USER;
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+
+  const load = useCallback(async () => {
+    if (!id) return;
+    setLoading(true);
+    const [realProfile, followStatus, connStatus, posts] = await Promise.all([
+      API.fetchPublicProfile(id),
+      currentUser?.id ? API.checkIsFollowing(id, currentUser.id) : Promise.resolve(false),
+      currentUser?.id ? API.checkConnectionStatus(id, currentUser.id) : Promise.resolve("none" as const),
+      currentUser?.id ? API.fetchProfilePosts(id, currentUser.id) : Promise.resolve([]),
+    ]);
+
+    if (realProfile) setUserProfile({ ...FALLBACK_USER, ...realProfile });
+    setIsFollowing(followStatus);
+    setConnectionStatus(connStatus);
+    setUserPosts(posts);
+    setLoading(false);
+  }, [id, currentUser?.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleFollow = async () => {
+    if (!currentUser?.id || !id) return;
+    const next = !isFollowing;
+    setIsFollowing(next);
+    setUserProfile(p => ({ ...p, followers_count: p.followers_count + (next ? 1 : -1) }));
+    await API.toggleFollow(id, currentUser.id, isFollowing);
+  };
+
+  const handleConnect = async () => {
+    if (!currentUser?.id || !id || connectionStatus !== "none") return;
+    setConnectionStatus("pending");
+    await API.sendConnectionRequest(id, currentUser.id);
+  };
+
+  const handleMessage = async () => {
+    if (!currentUser?.id || !id) return;
+    const conversationId = await API.getOrCreateDirectConversation(currentUser.id, id);
+    if (conversationId) router.push(`/chat/${conversationId}` as any);
+  };
+
+  const handleLike = (postId: string) => {
+    const post = userPosts.find(p => p.id === postId);
+    if (!post || !currentUser?.id) return;
+    setUserPosts(prev => prev.map(p => p.id === postId
+      ? { ...p, is_liked: !p.is_liked, likes_count: p.is_liked ? p.likes_count - 1 : p.likes_count + 1 }
+      : p));
+    API.toggleLike(postId, currentUser.id, post.is_liked ?? false);
+  };
+
+  const handleBookmark = (postId: string) => {
+    const post = userPosts.find(p => p.id === postId);
+    if (!post || !currentUser?.id) return;
+    setUserPosts(prev => prev.map(p => p.id === postId ? { ...p, is_bookmarked: !p.is_bookmarked } : p));
+    API.toggleBookmark(postId, currentUser.id, post.is_bookmarked ?? false);
+  };
+
+  const connectLabel = connectionStatus === "connected" ? "Conectado" : connectionStatus === "pending" ? "Pendente" : "Conectar";
+  const isOwnProfile = currentUser?.id === id;
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator size="large" color={colors.gold} />
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -49,80 +116,91 @@ export default function PublicProfileScreen() {
       contentContainerStyle={{ paddingBottom: 40 }}
       showsVerticalScrollIndicator={false}
     >
+      {/* Cover */}
       <View style={[styles.cover, { backgroundColor: colors.navy, paddingTop: topPad + 8 }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Feather name="arrow-left" size={24} color={colors.gold} />
         </TouchableOpacity>
       </View>
 
+      {/* Profile card */}
       <View style={[styles.profileSection, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <View style={styles.avatarRow}>
           <View style={[styles.avatarBorder, { borderColor: colors.card }]}>
-            <Avatar name={user.full_name} size={80} />
+            <Avatar uri={userProfile.avatar_url} name={userProfile.full_name} size={80} />
           </View>
-          {user.plan !== "basico" && (
+          {userProfile.plan !== "basico" && (
             <View style={[styles.planBadge, { backgroundColor: colors.gold }]}>
               <Text style={{ color: colors.navy, fontSize: 11, fontWeight: "700" }}>
-                {user.plan.toUpperCase()}
+                {(userProfile.plan ?? "").toUpperCase()}
               </Text>
             </View>
           )}
         </View>
 
-        <Text style={[styles.name, { color: colors.foreground }]}>{user.full_name}</Text>
-        <Text style={[styles.headline, { color: colors.mutedForeground }]}>{user.headline}</Text>
-        <View style={styles.location}>
-          <Feather name="map-pin" size={12} color={colors.mutedForeground} />
-          <Text style={[styles.locationText, { color: colors.mutedForeground }]}>{user.location}</Text>
-        </View>
+        <Text style={[styles.name, { color: colors.foreground }]}>{userProfile.full_name}</Text>
+        {!!userProfile.headline && (
+          <Text style={[styles.headline, { color: colors.mutedForeground }]}>{userProfile.headline}</Text>
+        )}
+        {!!userProfile.location && (
+          <View style={styles.location}>
+            <Feather name="map-pin" size={12} color={colors.mutedForeground} />
+            <Text style={[styles.locationText, { color: colors.mutedForeground }]}>{userProfile.location}</Text>
+          </View>
+        )}
 
         <View style={styles.statsRow}>
           <View style={styles.stat}>
-            <Text style={[styles.statNum, { color: colors.foreground }]}>{user.connections_count}</Text>
+            <Text style={[styles.statNum, { color: colors.foreground }]}>{userProfile.connections_count}</Text>
             <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Conexões</Text>
           </View>
           <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
           <View style={styles.stat}>
-            <Text style={[styles.statNum, { color: colors.foreground }]}>{user.followers_count}</Text>
+            <Text style={[styles.statNum, { color: colors.foreground }]}>{userProfile.followers_count}</Text>
             <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Seguidores</Text>
           </View>
           <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
           <View style={styles.stat}>
-            <Text style={[styles.statNum, { color: colors.foreground }]}>{user.following_count}</Text>
+            <Text style={[styles.statNum, { color: colors.foreground }]}>{userProfile.following_count}</Text>
             <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Seguindo</Text>
           </View>
         </View>
 
-        <View style={styles.actionRow}>
-          <Button
-            title={connected ? "Conectado" : "Conectar"}
-            onPress={() => setConnected((v) => !v)}
-            variant={connected ? "outline" : "gold"}
-            size="sm"
-            style={{ flex: 1 }}
-          />
-          <Button
-            title={following ? "Seguindo" : "Seguir"}
-            onPress={() => setFollowing((v) => !v)}
-            variant={following ? "outline" : "primary"}
-            size="sm"
-            style={{ flex: 1 }}
-          />
-          <TouchableOpacity
-            style={[styles.messageBtn, { borderColor: colors.border }]}
-            onPress={() => router.push(`/chat/new-${id}` as any)}
-          >
-            <Feather name="message-circle" size={20} color={colors.foreground} />
-          </TouchableOpacity>
-        </View>
+        {!isOwnProfile && (
+          <View style={styles.actionRow}>
+            <Button
+              title={connectLabel}
+              onPress={handleConnect}
+              variant={connectionStatus !== "none" ? "outline" : "gold"}
+              size="sm"
+              style={{ flex: 1 }}
+            />
+            <Button
+              title={isFollowing ? "Seguindo" : "Seguir"}
+              onPress={handleFollow}
+              variant={isFollowing ? "outline" : "primary"}
+              size="sm"
+              style={{ flex: 1 }}
+            />
+            <TouchableOpacity
+              style={[styles.messageBtn, { borderColor: colors.border }]}
+              onPress={handleMessage}
+            >
+              <Feather name="message-circle" size={20} color={colors.foreground} />
+            </TouchableOpacity>
+          </View>
+        )}
 
-        <View style={styles.tags}>
-          {user.areas_of_expertise.map((area) => (
-            <Badge key={area} label={area} variant="gold" />
-          ))}
-        </View>
+        {(userProfile.areas_of_expertise ?? []).length > 0 && (
+          <View style={styles.tags}>
+            {(userProfile.areas_of_expertise ?? []).map((area) => (
+              <Badge key={area} label={area} variant="gold" />
+            ))}
+          </View>
+        )}
       </View>
 
+      {/* Tabs */}
       <View style={[styles.tabRow, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
         {(["sobre", "posts", "vinho"] as const).map((t) => (
           <Pressable
@@ -137,39 +215,60 @@ export default function PublicProfileScreen() {
         ))}
       </View>
 
+      {/* Sobre */}
       {tab === "sobre" && (
         <View style={styles.aboutSection}>
-          <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.infoTitle, { color: colors.foreground }]}>Bio</Text>
-            <Text style={[styles.infoText, { color: colors.mutedForeground }]}>{user.bio}</Text>
-          </View>
-          <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.infoTitle, { color: colors.foreground }]}>Certificações</Text>
-            {user.certifications.map((cert) => (
-              <View key={cert} style={styles.certItem}>
-                <Feather name="award" size={14} color={colors.gold} />
-                <Text style={[styles.certText, { color: colors.foreground }]}>{cert}</Text>
-              </View>
-            ))}
-          </View>
+          {!!userProfile.bio && (
+            <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.infoTitle, { color: colors.foreground }]}>Bio</Text>
+              <Text style={[styles.infoText, { color: colors.mutedForeground }]}>{userProfile.bio}</Text>
+            </View>
+          )}
+          {(userProfile.certifications ?? []).length > 0 && (
+            <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.infoTitle, { color: colors.foreground }]}>Certificações</Text>
+              {(userProfile.certifications ?? []).map((cert) => (
+                <View key={cert} style={styles.certItem}>
+                  <Feather name="award" size={14} color={colors.gold} />
+                  <Text style={[styles.certText, { color: colors.foreground }]}>{cert}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+          {!userProfile.bio && (userProfile.certifications ?? []).length === 0 && (
+            <View style={styles.empty}>
+              <Feather name="user" size={36} color={colors.mutedForeground} />
+              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Perfil ainda sem informações</Text>
+            </View>
+          )}
         </View>
       )}
 
+      {/* Posts */}
       {tab === "posts" && (
-        <View style={styles.empty}>
-          <Feather name="grid" size={40} color={colors.mutedForeground} />
-          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-            Publicações em breve
-          </Text>
-        </View>
+        userPosts.length === 0 ? (
+          <View style={styles.empty}>
+            <Feather name="grid" size={40} color={colors.mutedForeground} />
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhuma publicação ainda</Text>
+          </View>
+        ) : (
+          userPosts.map(post => (
+            <PostCard
+              key={post.id}
+              post={post}
+              onLike={handleLike}
+              onBookmark={handleBookmark}
+              onComment={(pid) => router.push(`/post/${pid}` as any)}
+            />
+          ))
+        )
       )}
 
+      {/* Vinho */}
       {tab === "vinho" && (
         <View style={styles.empty}>
           <Feather name="package" size={40} color={colors.mutedForeground} />
-          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-            Adega privada
-          </Text>
+          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Adega privada</Text>
         </View>
       )}
     </ScrollView>

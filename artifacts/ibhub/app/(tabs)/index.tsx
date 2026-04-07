@@ -25,6 +25,7 @@ import { Post, PostCard } from "@/components/feed/PostCard";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import * as API from "@/services/api";
 
 const STORAGE_KEY = "ibhub_feed_posts_v3";
 const MAX_CHARS = 350;
@@ -192,6 +193,19 @@ export default function FeedScreen() {
   const firstName = profile?.full_name?.split(" ")[0] ?? "você";
 
   const loadPosts = useCallback(async () => {
+    // Try real Supabase data first
+    if (user?.id) {
+      try {
+        const realPosts = await API.fetchFeedPosts(user.id);
+        if (realPosts.length > 0) {
+          setPosts(realPosts);
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(realPosts));
+          setLoading(false);
+          return;
+        }
+      } catch {}
+    }
+    // Fallback: cached or mock
     try {
       const cached = await AsyncStorage.getItem(STORAGE_KEY);
       if (cached) { setPosts(JSON.parse(cached)); setLoading(false); return; }
@@ -200,20 +214,67 @@ export default function FeedScreen() {
     setPosts(mockPosts);
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(mockPosts));
     setLoading(false);
-  }, []);
+  }, [user?.id]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
+    if (user?.id) {
+      try {
+        const realPosts = await API.fetchFeedPosts(user.id);
+        if (realPosts.length > 0) {
+          setPosts(realPosts);
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(realPosts));
+          setRefreshing(false);
+          return;
+        }
+      } catch {}
+    }
     await AsyncStorage.removeItem(STORAGE_KEY);
     const mockPosts = Array.from({ length: 6 }, (_, i) => generateMockPost(i));
     setPosts(mockPosts);
     setRefreshing(false);
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
 
-  const handlePublishPost = () => {
+  const handlePublishPost = async () => {
     setShowCreatePost(false);
+    const content = postMode === "poll" ? pollQuestion : postContent;
+    if (!content.trim() || !user?.id) {
+      setPostContent(""); setPollQuestion(""); setPollOptions(["",""]); setPostMode("text");
+      return;
+    }
+
+    const pollData = (postMode === "poll" && pollOptions.filter(o => o.trim()).length >= 2)
+      ? { options: pollOptions.filter(o => o.trim()).map(t => ({ text: t, votes: 0 })), total_votes: 0, closed: false }
+      : undefined;
+
+    // Optimistic: prepend a local post immediately
+    const tempPost: Post = {
+      id: `tmp_${Date.now()}`,
+      user_id: user.id,
+      content: content.trim(),
+      likes_count: 0, comments_count: 0, shares_count: 0,
+      is_liked: false, is_bookmarked: false,
+      created_at: new Date().toISOString(),
+      poll: pollData,
+      author: {
+        id: user.id,
+        full_name: profile?.full_name ?? "Você",
+        username: profile?.username ?? "",
+        avatar_url: profile?.avatar_url ?? null,
+        headline: (profile as any)?.headline ?? "",
+        plan: profile?.plan ?? "basico",
+      },
+    };
+    setPosts(prev => [tempPost, ...prev]);
+
+    // Persist to Supabase
+    const saved = await API.createPost({ user_id: user.id, content: content.trim(), poll: pollData });
+    if (saved) {
+      setPosts(prev => prev.map(p => p.id === tempPost.id ? saved : p));
+    }
+
     setPostContent(""); setPollQuestion(""); setPollOptions(["",""]); setPostMode("text");
   };
 
@@ -253,7 +314,7 @@ export default function FeedScreen() {
           <TouchableOpacity style={styles.iconBtn} onPress={() => setShowQR(true)}>
             <Feather name="grid" size={22} color={colors.navy} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push("/notificacoes" as any)}>
             <Feather name="bell" size={22} color={colors.navy} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.plusBtn} onPress={() => setShowCreateMenu(true)} activeOpacity={0.8}>
@@ -335,8 +396,22 @@ export default function FeedScreen() {
         renderItem={({ item }) => (
           <PostCard
             post={item}
-            onLike={(id) => setPosts((prev) => prev.map((p) => p.id === id ? { ...p, is_liked: !p.is_liked, likes_count: p.is_liked ? p.likes_count - 1 : p.likes_count + 1 } : p))}
-            onBookmark={(id) => setPosts((prev) => prev.map((p) => p.id === id ? { ...p, is_bookmarked: !p.is_bookmarked } : p))}
+            onLike={(id) => {
+              const post = posts.find(p => p.id === id);
+              if (!post) return;
+              // Optimistic update
+              setPosts(prev => prev.map(p => p.id === id
+                ? { ...p, is_liked: !p.is_liked, likes_count: p.is_liked ? p.likes_count - 1 : p.likes_count + 1 }
+                : p));
+              // Persist (fire and forget)
+              if (user?.id) API.toggleLike(id, user.id, post.is_liked ?? false);
+            }}
+            onBookmark={(id) => {
+              const post = posts.find(p => p.id === id);
+              if (!post) return;
+              setPosts(prev => prev.map(p => p.id === id ? { ...p, is_bookmarked: !p.is_bookmarked } : p));
+              if (user?.id) API.toggleBookmark(id, user.id, post.is_bookmarked ?? false);
+            }}
             onComment={(id) => router.push(`/post/${id}` as any)}
           />
         )}

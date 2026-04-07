@@ -1,19 +1,23 @@
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Platform,
+  RefreshControl,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  Animated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Avatar } from "@/components/ui/Avatar";
+import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import * as API from "@/services/api";
+import type { AppConversation } from "@/services/api";
 
 export interface Conversation {
   id: string;
@@ -37,38 +41,62 @@ function timeAgo(dateStr?: string): string {
   return `${days}d`;
 }
 
-const MOCK_CONVERSATIONS: Conversation[] = [
-  { id: "c1", participant_name: "Brenda Lima",    last_message: "Ola",  last_message_at: new Date(Date.now() - 86400000 * 6).toISOString(),  unread_count: 0 },
-  { id: "c2", participant_name: "Felipe Galtaroca", last_message: "Olá!", last_message_at: new Date(Date.now() - 86400000 * 29).toISOString(), unread_count: 0 },
-  { id: "c3", participant_name: "João Oliveira",  last_message: "Teste", last_message_at: new Date(Date.now() - 86400000 * 31).toISOString(), unread_count: 0 },
-  { id: "c4", participant_name: "Lucas Lima",     last_message: "Perfeito! Me adiciona no grupo quando criar. P...", last_message_at: new Date(Date.now() - 86400000 * 35).toISOString(), unread_count: 0 },
-];
-
-const MOCK_USERS = [
-  { id: "u1", name: "Isabela Mondavi",  headline: "Enóloga | Santa Clara" },
-  { id: "u2", name: "Rafael Borges",    headline: "Importador de Vinhos" },
-  { id: "u3", name: "Carolina Stein",   headline: "Sommelier | Grand Plaza" },
-  { id: "u4", name: "Marco Tulio",      headline: "Professor SENAC" },
-];
-
 export default function MessagesScreen() {
   const colors = useColors();
   const router = useRouter();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  const [search, setSearch]           = useState("");
-  const [userSearch, setUserSearch]   = useState("");
+
+  const [convos, setConvos]             = useState<AppConversation[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [refreshing, setRefreshing]     = useState(false);
+  const [search, setSearch]             = useState("");
+  const [userSearch, setUserSearch]     = useState("");
   const [showNewConvo, setShowNewConvo] = useState(false);
+  const [searchResults, setSearchResults] = useState<{ id: string; full_name: string; avatar_url: string | null; headline: string | null }[]>([]);
+  const [startingChat, setStartingChat] = useState<string | null>(null);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
 
-  const filtered = MOCK_CONVERSATIONS.filter((c) =>
-    search ? c.participant_name.toLowerCase().includes(search.toLowerCase()) : true
-  );
+  const load = useCallback(async () => {
+    if (!user?.id) { setLoading(false); return; }
+    const data = await API.fetchConversations(user.id);
+    setConvos(data);
+    setLoading(false);
+  }, [user?.id]);
 
-  const filteredUsers = MOCK_USERS.filter((u) =>
-    userSearch ? u.name.toLowerCase().includes(userSearch.toLowerCase()) : true
-  );
+  useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!userSearch.trim() || !user?.id) { setSearchResults([]); return; }
+    const timeout = setTimeout(async () => {
+      const results = await API.searchProfiles(userSearch, user.id);
+      setSearchResults(results);
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [userSearch, user?.id]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  };
+
+  const handleStartChat = async (targetUserId: string) => {
+    if (!user?.id || startingChat) return;
+    setStartingChat(targetUserId);
+    const conversationId = await API.getOrCreateDirectConversation(user.id, targetUserId);
+    setStartingChat(null);
+    setShowNewConvo(false);
+    if (conversationId) router.push(`/chat/${conversationId}` as any);
+  };
+
+  const filtered = convos.filter((c) => {
+    if (!search) return true;
+    const name = c.name ?? c.participant?.full_name ?? "";
+    return name.toLowerCase().includes(search.toLowerCase());
+  });
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -109,17 +137,26 @@ export default function MessagesScreen() {
           </View>
           {userSearch.length > 0 && (
             <View style={{ marginTop: 8, gap: 6 }}>
-              {filteredUsers.map((u) => (
+              {searchResults.length === 0 && (
+                <Text style={[styles.userHeadline, { color: colors.mutedForeground, paddingVertical: 8, textAlign: "center" }]}>
+                  Nenhum usuário encontrado
+                </Text>
+              )}
+              {searchResults.map((u) => (
                 <TouchableOpacity
                   key={u.id}
                   style={styles.userRow}
-                  onPress={() => { setShowNewConvo(false); router.push(`/chat/${u.id}` as any); }}
+                  onPress={() => handleStartChat(u.id)}
+                  disabled={startingChat === u.id}
                 >
-                  <Avatar name={u.name} size={38} />
-                  <View>
-                    <Text style={[styles.userName, { color: colors.navy }]}>{u.name}</Text>
-                    <Text style={[styles.userHeadline, { color: colors.mutedForeground }]}>{u.headline}</Text>
+                  <Avatar uri={u.avatar_url} name={u.full_name} size={38} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.userName, { color: colors.navy }]}>{u.full_name}</Text>
+                    {!!u.headline && (
+                      <Text style={[styles.userHeadline, { color: colors.mutedForeground }]} numberOfLines={1}>{u.headline}</Text>
+                    )}
                   </View>
+                  {startingChat === u.id && <ActivityIndicator size="small" color={colors.gold} />}
                 </TouchableOpacity>
               ))}
             </View>
@@ -142,12 +179,18 @@ export default function MessagesScreen() {
       </View>
 
       {/* Conversation list */}
+      {loading ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="large" color={colors.gold} />
+        </View>
+      ) : (
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <ConversationRow conversation={item} colors={colors} />}
         contentContainerStyle={{ paddingBottom: bottomPad }}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} colors={[colors.gold]} />}
         ListEmptyComponent={
           <View style={styles.empty}>
             <View style={[styles.emptyIconCircle, { backgroundColor: colors.gold + "18" }]}>
@@ -167,24 +210,28 @@ export default function MessagesScreen() {
           </View>
         }
       />
+      )}
     </View>
   );
 }
 
-function ConversationRow({ conversation: conv, colors }: { conversation: Conversation; colors: any }) {
+function ConversationRow({ conversation: conv, colors }: { conversation: AppConversation; colors: any }) {
   const router = useRouter();
   const hasUnread = (conv.unread_count ?? 0) > 0;
+  const name = conv.name ?? conv.participant?.full_name ?? "Chat";
+  const avatarUri = conv.participant?.avatar_url ?? null;
+
   return (
     <TouchableOpacity
       style={[styles.convoRow, { borderBottomColor: colors.border, backgroundColor: "#fff" }]}
       onPress={() => router.push(`/chat/${conv.id}` as any)}
       activeOpacity={0.7}
     >
-      <Avatar name={conv.participant_name} size={52} />
+      <Avatar uri={avatarUri} name={name} size={52} />
       <View style={styles.convoBody}>
         <View style={styles.convoTop}>
-          <Text style={[styles.convoName, { color: colors.navy }]} numberOfLines={1}>{conv.participant_name}</Text>
-          <Text style={[styles.convoTime, { color: colors.mutedForeground }]}>{timeAgo(conv.last_message_at)}</Text>
+          <Text style={[styles.convoName, { color: colors.navy }]} numberOfLines={1}>{name}</Text>
+          <Text style={[styles.convoTime, { color: colors.mutedForeground }]}>{timeAgo(conv.last_message_at ?? undefined)}</Text>
         </View>
         <View style={styles.convoBottom}>
           <Text
