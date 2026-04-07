@@ -1,4 +1,4 @@
-import { Tabs, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -172,27 +172,10 @@ export default function ProfileScreen() {
   const wineTotal    = wineEntries.length;
 
   if (isCompany) {
-    return (
-      <>
-        <Tabs.Screen
-          options={{
-            title: "Empresa",
-            tabBarIcon: ({ color }) => <Feather name="briefcase" size={22} color={color} />,
-          }}
-        />
-        <EmpresaDashboard />
-      </>
-    );
+    return <EmpresaDashboard />;
   }
 
   return (
-    <>
-    <Tabs.Screen
-      options={{
-        title: "Meu Perfil",
-        tabBarIcon: ({ color }) => <Feather name="user" size={22} color={color} />,
-      }}
-    />
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={{ paddingBottom: bottomPad }}
@@ -673,7 +656,6 @@ export default function ProfileScreen() {
         </Pressable>
       </Modal>
     </ScrollView>
-    </>
   );
 }
 

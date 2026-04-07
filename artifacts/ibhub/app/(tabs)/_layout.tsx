@@ -1,11 +1,14 @@
 import { Tabs } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import React from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { Platform } from "react-native";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/context/AuthContext";
 
 export default function TabLayout() {
-  const colors = useColors();
+  const colors    = useColors();
+  const { profile } = useAuth();
+  const isCompany = profile?.profile_type === "empresa";
 
   return (
     <Tabs
@@ -62,8 +65,10 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Empresa",
-          tabBarIcon: ({ color }) => <Feather name="user" size={22} color={color} />,
+          title: isCompany ? "Empresa" : "Meu Perfil",
+          tabBarIcon: ({ color }) => (
+            <Feather name={isCompany ? "briefcase" : "user"} size={22} color={color} />
+          ),
         }}
       />
     </Tabs>
