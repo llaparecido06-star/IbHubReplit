@@ -802,7 +802,7 @@ export async function fetchMessages(conversationId: string): Promise<AppMessage[
   try {
     const { data, error } = await supabase
       .from("messages")
-      .select("id, conversation_id, sender_id, content, created_at")
+      .select("id, conversation_id, sender_id, content, created_at, message_type, media_url")
       .eq("conversation_id", conversationId)
       .order("created_at", { ascending: true });
 
