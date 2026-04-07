@@ -433,7 +433,7 @@ export async function fetchNotifications(userId: string): Promise<AppNotificatio
       .limit(50);
 
     if (error || !data) return [];
-    return data as AppNotification[];
+    return data as unknown as AppNotification[];
   } catch (e) {
     console.error("fetchNotifications:", e);
     return [];
@@ -962,7 +962,7 @@ export async function fetchPendingReports(): Promise<AppReport[]> {
       .order("created_at", { ascending: false });
 
     if (error || !data) return [];
-    return data as AppReport[];
+    return data as unknown as AppReport[];
   } catch (e) {
     console.error("fetchPendingReports:", e);
     return [];

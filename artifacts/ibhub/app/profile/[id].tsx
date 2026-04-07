@@ -68,6 +68,10 @@ export default function PublicProfileScreen() {
 
   useEffect(() => { load(); }, [load]);
 
+  const isCompany    = (userProfile as any).profile_type === "empresa";
+  const isOwnProfile = currentUser?.id === id;
+  const tab2Label    = isCompany ? "Portfólio" : "Adega";
+
   // ── Follow ──────────────────────────────────────────────────────────────────
   const handleFollow = async () => {
     if (!currentUser?.id || !id) return;
@@ -122,10 +126,6 @@ export default function PublicProfileScreen() {
     setUserPosts(prev => prev.map(p => p.id === postId ? { ...p, is_bookmarked: !p.is_bookmarked } : p));
     API.toggleBookmark(postId, currentUser.id, post.is_bookmarked ?? false);
   };
-
-  const isCompany = (userProfile as any).profile_type === "empresa";
-  const isOwnProfile = currentUser?.id === id;
-  const tab2Label = isCompany ? "Portfólio" : "Adega";
 
   // Connection button label + disabled state
   const connectLabel =
