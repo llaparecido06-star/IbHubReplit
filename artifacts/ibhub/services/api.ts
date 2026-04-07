@@ -1393,6 +1393,25 @@ export interface MarketOverview {
   updated_at: string;
 }
 
+export async function updateMarketOverview(
+  period: "mes" | "trimestre" | "ano",
+  updates: Partial<Omit<MarketOverview, "period" | "updated_at">>,
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("market_overview")
+      .upsert(
+        { period, ...updates, updated_at: new Date().toISOString() },
+        { onConflict: "period" },
+      );
+    if (error) { console.error("updateMarketOverview:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("updateMarketOverview:", e);
+    return false;
+  }
+}
+
 export async function fetchMarketOverview(
   period: "mes" | "trimestre" | "ano",
 ): Promise<MarketOverview | null> {
