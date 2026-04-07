@@ -26,7 +26,9 @@ export default function NewOpportunityScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+
+  const isEmpresa = profile?.profile_type === "empresa";
 
   const [mode, setMode]         = useState<Mode>("vaga");
   const [title, setTitle]       = useState("");
@@ -48,6 +50,13 @@ export default function NewOpportunityScreen() {
 
   const handlePublish = async () => {
     if (!user?.id) { Alert.alert("Erro", "Você precisa estar logado."); return; }
+    if (!isEmpresa) {
+      Alert.alert(
+        "Apenas empresas podem publicar",
+        "Somente contas do tipo Empresa podem anunciar vagas e produtos. Acesse as configurações para alterar o tipo da sua conta.",
+      );
+      return;
+    }
     if (!canPublish) { Alert.alert("Atenção", "Preencha o título e a categoria."); return; }
 
     setPublishing(true);

@@ -18,6 +18,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
+import EmpresaDashboard from "@/components/EmpresaDashboard";
 
 interface Post {
   id: string;
@@ -65,6 +66,10 @@ export default function ProfileScreen() {
   const [commentText, setCommentText] = useState("");
   const [posts, setPosts] = useState<Post[]>(MOCK_POSTS);
   const [statModal, setStatModal] = useState<StatModal>(null);
+
+  if (profile?.profile_type === "empresa") {
+    return <EmpresaDashboard />;
+  }
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;

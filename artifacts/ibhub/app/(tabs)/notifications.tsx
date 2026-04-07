@@ -1,7 +1,10 @@
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Platform,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,31 +15,15 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/context/AuthContext";
+import { AppOpportunity, fetchOpportunities } from "@/services/api";
 
 type OporTab = "market" | "vagas" | "eventos";
 
-export interface MarketItem {
-  id: string; title: string; seller: string; price: string;
-  category: string; expiry?: string; expired?: boolean;
-}
-export interface Job {
-  id: string; title: string; company: string; location: string;
-  contract: string; category: string; expiresIn?: string; expired?: boolean;
-}
 export interface Evento {
   id: string; title: string; date: string; time: string;
   capacity: string; location: string;
 }
-
-const MOCK_MARKET: MarketItem[] = [
-  { id: "m1", title: "Adega Climatizada Brastemp 33 Garrafas", seller: "Lucas Lima", price: "R$ 1.200,00", category: "Equipamentos", expiry: "08/05/2026" },
-  { id: "m2", title: "Lote de Vinhos Bordeaux 2015",           seller: "Lucas Lima", price: "R$ 8.500,00", category: "Vinho",        expired: true },
-];
-
-const MOCK_VAGAS: Job[] = [
-  { id: "v1", title: "Sommelier Sênior",               company: "Vino & Co.",         location: "São Paulo, SP",     contract: "CLT", category: "Restaurante", expiresIn: "2 dias" },
-  { id: "v2", title: "Representante Comercial de Vinhos", company: "Importadora Grand Cru", location: "Rio de Janeiro, RJ", contract: "PJ",  category: "Vendas",      expired: true },
-];
 
 const MOCK_EVENTOS: Evento[] = [
   { id: "e1", title: "Degustação de Vinhos do Vale do São Francisco", date: "16 de mar.", time: "01:27", capacity: "0/30", location: "Enoteca Brasileira, Rua Augusta 1200, São Paulo - SP" },
@@ -47,8 +34,16 @@ export default function OportunidadesScreen() {
   const colors  = useColors();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
+  const { profile, user } = useAuth();
+
   const [tab, setTab]       = useState<OporTab>("market");
   const [search, setSearch] = useState("");
+  const [market, setMarket] = useState<AppOpportunity[]>([]);
+  const [vagas, setVagas]   = useState<AppOpportunity[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const isEmpresa = profile?.profile_type === "empresa";
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
@@ -59,30 +54,62 @@ export default function OportunidadesScreen() {
     { key: "eventos", label: "Eventos", icon: "calendar" },
   ];
 
+  const loadData = useCallback(async () => {
+    const [m, v] = await Promise.all([
+      fetchOpportunities("marketplace", "", user?.id ?? ""),
+      fetchOpportunities("vaga",        "", user?.id ?? ""),
+    ]);
+    setMarket(m);
+    setVagas(v);
+    setLoading(false);
+    setRefreshing(false);
+  }, [user?.id]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const onRefresh = () => { setRefreshing(true); loadData(); };
+
   const handleCreate = () => {
-    if (tab === "eventos") router.push("/new-event" as any);
-    else router.push("/new-opportunity" as any);
+    if (tab === "eventos") {
+      router.push("/new-event" as any);
+      return;
+    }
+    if (!isEmpresa) {
+      Alert.alert(
+        "Apenas empresas podem publicar",
+        "Somente contas do tipo Empresa podem anunciar vagas e produtos. Candidatar-se, enviar mensagens e participar de eventos é aberto a todos.",
+        [{ text: "Entendi", style: "default" }],
+      );
+      return;
+    }
+    router.push("/new-opportunity" as any);
   };
 
-  const filteredMarket = MOCK_MARKET.filter((i) =>
-    search ? i.title.toLowerCase().includes(search.toLowerCase()) : true
-  );
-  const filteredVagas = MOCK_VAGAS.filter((i) =>
-    search ? i.title.toLowerCase().includes(search.toLowerCase()) : true
-  );
-  const filteredEventos = MOCK_EVENTOS.filter((i) =>
-    search ? i.title.toLowerCase().includes(search.toLowerCase()) : true
-  );
+  const filteredMarket  = market.filter((i)  => !search || i.title.toLowerCase().includes(search.toLowerCase()));
+  const filteredVagas   = vagas.filter((i)   => !search || i.title.toLowerCase().includes(search.toLowerCase()));
+  const filteredEventos = MOCK_EVENTOS.filter((i) => !search || i.title.toLowerCase().includes(search.toLowerCase()));
+
+  const showCriarBtn = tab === "eventos" || isEmpresa;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         <Text style={[styles.headerTitle, { color: colors.navy }]}>Oportunidades</Text>
-        <TouchableOpacity style={[styles.criarBtn, { backgroundColor: colors.gold }]} onPress={handleCreate}>
-          <Feather name="plus" size={15} color="#fff" />
-          <Text style={styles.criarBtnText}>{tab === "eventos" ? "Evento" : "Criar"}</Text>
-        </TouchableOpacity>
+        {showCriarBtn ? (
+          <TouchableOpacity style={[styles.criarBtn, { backgroundColor: colors.gold }]} onPress={handleCreate}>
+            <Feather name="plus" size={15} color="#fff" />
+            <Text style={styles.criarBtnText}>{tab === "eventos" ? "Evento" : "Publicar"}</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.criarBtn, { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border }]}
+            onPress={handleCreate}
+          >
+            <Feather name="lock" size={14} color={colors.mutedForeground} />
+            <Text style={[styles.criarBtnText, { color: colors.mutedForeground }]}>Empresas</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Search */}
@@ -96,6 +123,11 @@ export default function OportunidadesScreen() {
             value={search}
             onChangeText={setSearch}
           />
+          {search ? (
+            <TouchableOpacity onPress={() => setSearch("")}>
+              <Feather name="x" size={15} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
 
@@ -119,13 +151,18 @@ export default function OportunidadesScreen() {
       <ScrollView
         contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: bottomPad }}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />}
       >
+        {loading && (tab === "market" || tab === "vagas") ? (
+          <ActivityIndicator color={colors.gold} style={{ marginTop: 40 }} />
+        ) : null}
+
         {/* ── Market ── */}
-        {tab === "market" && filteredMarket.map((item) => (
+        {tab === "market" && !loading && filteredMarket.map((item) => (
           <TouchableOpacity
             key={item.id}
             style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}
-            onPress={() => router.push(`/market-item/${item.id}` as any)}
+            onPress={() => router.push(`/opportunity/${item.id}` as any)}
             activeOpacity={0.75}
           >
             <View style={styles.cardTopRow}>
@@ -134,33 +171,36 @@ export default function OportunidadesScreen() {
               </Text>
               <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
             </View>
-            <Text style={[styles.cardSeller, { color: colors.mutedForeground }]}>{item.seller}</Text>
+            {item.company ? (
+              <Text style={[styles.cardSeller, { color: colors.mutedForeground }]}>{item.company}</Text>
+            ) : null}
             <View style={styles.cardMeta}>
-              <Text style={[styles.cardPrice, { color: colors.gold }]}>{item.price}</Text>
-              <View style={[styles.chip, { backgroundColor: colors.background }]}>
-                <Text style={[styles.chipText, { color: colors.mutedForeground }]}>{item.category}</Text>
-              </View>
+              {item.price ? (
+                <Text style={[styles.cardPrice, { color: colors.gold }]}>{item.price}</Text>
+              ) : null}
+              {item.category ? (
+                <View style={[styles.chip, { backgroundColor: colors.background }]}>
+                  <Text style={[styles.chipText, { color: colors.mutedForeground }]}>{item.category}</Text>
+                </View>
+              ) : null}
             </View>
-            {item.expired ? (
-              <View style={styles.expiredRow}>
-                <Feather name="alert-circle" size={13} color="#dc2626" />
-                <Text style={[styles.expiredText, { color: "#dc2626" }]}>Expirado</Text>
-              </View>
-            ) : item.expiry ? (
+            {item.expires_at ? (
               <View style={styles.expiryRow}>
                 <Feather name="clock" size={13} color={colors.mutedForeground} />
-                <Text style={[styles.expiryText, { color: colors.mutedForeground }]}>Expira em: {item.expiry}</Text>
+                <Text style={[styles.expiryText, { color: colors.mutedForeground }]}>
+                  Expira: {new Date(item.expires_at).toLocaleDateString("pt-BR")}
+                </Text>
               </View>
             ) : null}
           </TouchableOpacity>
         ))}
 
         {/* ── Vagas ── */}
-        {tab === "vagas" && filteredVagas.map((item) => (
+        {tab === "vagas" && !loading && filteredVagas.map((item) => (
           <TouchableOpacity
             key={item.id}
             style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}
-            onPress={() => router.push(`/job/${item.id}` as any)}
+            onPress={() => router.push(`/opportunity/${item.id}` as any)}
             activeOpacity={0.75}
           >
             <View style={styles.cardTopRow}>
@@ -170,28 +210,37 @@ export default function OportunidadesScreen() {
               <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
             </View>
             <View style={styles.jobMeta}>
-              <Feather name="briefcase" size={13} color={colors.mutedForeground} />
-              <Text style={[styles.cardSeller, { color: colors.mutedForeground }]}>{item.company}</Text>
-              <Feather name="map-pin" size={13} color={colors.mutedForeground} style={{ marginLeft: 6 }} />
-              <Text style={[styles.cardSeller, { color: colors.mutedForeground }]}>{item.location}</Text>
+              {item.company ? (
+                <>
+                  <Feather name="briefcase" size={13} color={colors.mutedForeground} />
+                  <Text style={[styles.cardSeller, { color: colors.mutedForeground }]}>{item.company}</Text>
+                </>
+              ) : null}
+              {item.location ? (
+                <>
+                  <Feather name="map-pin" size={13} color={colors.mutedForeground} style={{ marginLeft: 6 }} />
+                  <Text style={[styles.cardSeller, { color: colors.mutedForeground }]}>{item.location}</Text>
+                </>
+              ) : null}
             </View>
             <View style={styles.cardMeta}>
-              <View style={[styles.chip, { backgroundColor: colors.background }]}>
-                <Text style={[styles.chipText, { color: colors.mutedForeground }]}>{item.contract}</Text>
-              </View>
-              <View style={[styles.chip, { backgroundColor: colors.background }]}>
-                <Text style={[styles.chipText, { color: colors.mutedForeground }]}>{item.category}</Text>
-              </View>
+              {item.contract_type ? (
+                <View style={[styles.chip, { backgroundColor: colors.background }]}>
+                  <Text style={[styles.chipText, { color: colors.mutedForeground }]}>{item.contract_type}</Text>
+                </View>
+              ) : null}
+              {item.category ? (
+                <View style={[styles.chip, { backgroundColor: colors.background }]}>
+                  <Text style={[styles.chipText, { color: colors.mutedForeground }]}>{item.category}</Text>
+                </View>
+              ) : null}
             </View>
-            {item.expired ? (
-              <View style={styles.expiredRow}>
-                <Feather name="alert-circle" size={13} color="#dc2626" />
-                <Text style={[styles.expiredText, { color: "#dc2626" }]}>Expirado</Text>
-              </View>
-            ) : item.expiresIn ? (
+            {item.expires_at ? (
               <View style={styles.expiryRow}>
                 <Feather name="clock" size={13} color={colors.mutedForeground} />
-                <Text style={[styles.expiryText, { color: colors.mutedForeground }]}>Expira em {item.expiresIn}</Text>
+                <Text style={[styles.expiryText, { color: colors.mutedForeground }]}>
+                  Expira: {new Date(item.expires_at).toLocaleDateString("pt-BR")}
+                </Text>
               </View>
             ) : null}
           </TouchableOpacity>
@@ -234,12 +283,33 @@ export default function OportunidadesScreen() {
           </TouchableOpacity>
         ))}
 
-        {((tab === "market" && filteredMarket.length === 0) ||
-          (tab === "vagas" && filteredVagas.length === 0) ||
-          (tab === "eventos" && filteredEventos.length === 0)) && (
+        {/* Empty states */}
+        {!loading && tab === "market" && filteredMarket.length === 0 && (
+          <View style={styles.empty}>
+            <Feather name="shopping-bag" size={36} color={colors.mutedForeground} />
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhum anúncio encontrado.</Text>
+            {!isEmpresa ? (
+              <Text style={[styles.emptyHint, { color: colors.mutedForeground }]}>
+                Apenas empresas podem publicar anúncios.
+              </Text>
+            ) : null}
+          </View>
+        )}
+        {!loading && tab === "vagas" && filteredVagas.length === 0 && (
+          <View style={styles.empty}>
+            <Feather name="briefcase" size={36} color={colors.mutedForeground} />
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhuma vaga encontrada.</Text>
+            {!isEmpresa ? (
+              <Text style={[styles.emptyHint, { color: colors.mutedForeground }]}>
+                Apenas empresas podem publicar vagas.
+              </Text>
+            ) : null}
+          </View>
+        )}
+        {tab === "eventos" && filteredEventos.length === 0 && (
           <View style={styles.empty}>
             <Feather name="inbox" size={36} color={colors.mutedForeground} />
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhum resultado encontrado.</Text>
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhum evento encontrado.</Text>
           </View>
         )}
       </ScrollView>
@@ -254,8 +324,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1,
   },
   headerTitle: { fontSize: 26, fontWeight: "800" },
-  criarBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20 },
-  criarBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  criarBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20 },
+  criarBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   searchWrap: { padding: 12 },
   searchBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10 },
   searchInput: { flex: 1, fontSize: 14 },
@@ -273,11 +343,10 @@ const styles = StyleSheet.create({
   jobMeta: { flexDirection: "row", alignItems: "center", flexWrap: "wrap" },
   expiryRow: { flexDirection: "row", alignItems: "center", gap: 5 },
   expiryText: { fontSize: 12 },
-  expiredRow: { flexDirection: "row", alignItems: "center", gap: 5 },
-  expiredText: { fontSize: 12, fontWeight: "600" },
   eventoMeta: { flexDirection: "row", alignItems: "center", gap: 14, flexWrap: "wrap" },
   eventoMetaItem: { flexDirection: "row", alignItems: "center", gap: 5 },
   eventoMetaText: { fontSize: 12 },
-  empty: { alignItems: "center", paddingTop: 60, gap: 12 },
+  empty: { alignItems: "center", paddingTop: 60, gap: 8 },
   emptyText: { fontSize: 15 },
+  emptyHint: { fontSize: 13, textAlign: "center", maxWidth: 260 },
 });

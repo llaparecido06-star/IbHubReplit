@@ -1785,3 +1785,74 @@ export async function expressInterest(
     return false;
   }
 }
+
+// ── My Opportunities (empresa dashboard) ─────────────────────────────────────
+export async function fetchMyOpportunities(
+  userId: string,
+  type?: "vaga" | "marketplace",
+): Promise<AppOpportunity[]> {
+  try {
+    let q = supabase
+      .from("opportunities")
+      .select("*")
+      .eq("created_by", userId)
+      .order("created_at", { ascending: false });
+    if (type) q = q.eq("type", type);
+    const { data, error } = await q;
+    if (error) { console.error("fetchMyOpportunities:", error); return []; }
+    return (data ?? []) as AppOpportunity[];
+  } catch (e) {
+    console.error("fetchMyOpportunities:", e);
+    return [];
+  }
+}
+
+// ── Applications received by empresa ─────────────────────────────────────────
+export interface AppApplication {
+  id: string;
+  opportunity_id: string;
+  applicant_id: string;
+  cv_url: string | null;
+  message: string | null;
+  created_at: string;
+  applicant: {
+    id: string;
+    full_name: string | null;
+    avatar_url: string | null;
+    username: string | null;
+    position: string | null;
+    company: string | null;
+  } | null;
+  opportunity: {
+    id: string;
+    title: string;
+    type: string;
+  } | null;
+}
+
+export async function fetchApplicationsForMyOpportunities(
+  userId: string,
+): Promise<AppApplication[]> {
+  try {
+    const { data: myOps, error: opsErr } = await supabase
+      .from("opportunities")
+      .select("id")
+      .eq("created_by", userId);
+    if (opsErr || !myOps?.length) return [];
+    const opIds = myOps.map((o: any) => o.id);
+    const { data, error } = await supabase
+      .from("opportunity_applications")
+      .select(`
+        id, opportunity_id, applicant_id, cv_url, message, created_at,
+        applicant:profiles!opportunity_applications_applicant_id_fkey(id, full_name, avatar_url, username, position, company),
+        opportunity:opportunities!opportunity_applications_opportunity_id_fkey(id, title, type)
+      `)
+      .in("opportunity_id", opIds)
+      .order("created_at", { ascending: false });
+    if (error) { console.error("fetchApplicationsForMyOpportunities:", error); return []; }
+    return (data ?? []) as any[];
+  } catch (e) {
+    console.error("fetchApplicationsForMyOpportunities:", e);
+    return [];
+  }
+}
