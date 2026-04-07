@@ -21,6 +21,7 @@ import {
   AppOpportunity,
   fetchApplicationsForMyOpportunities,
   fetchMyOpportunities,
+  toggleOpportunity,
 } from "@/services/api";
 
 function fmtDate(iso: string) {
@@ -71,6 +72,21 @@ export default function EmpresaDashboard() {
   const openCV = (url: string | null) => {
     if (!url) { Alert.alert("CV", "Este candidato não anexou currículo."); return; }
     Linking.openURL(url).catch(() => Alert.alert("Erro", "Não foi possível abrir o CV."));
+  };
+
+  const handleToggle = async (id: string, currentlyActive: boolean, type: "vaga" | "marketplace") => {
+    const newState = !currentlyActive;
+    const label = type === "vaga" ? "vaga" : "anúncio";
+    const ok = await toggleOpportunity(id, newState);
+    if (ok) {
+      if (type === "vaga") {
+        setVagas((prev) => prev.map((v) => v.id === id ? { ...v, is_active: newState } : v));
+      } else {
+        setAnuncios((prev) => prev.map((a) => a.id === id ? { ...a, is_active: newState } : a));
+      }
+    } else {
+      Alert.alert("Erro", `Não foi possível ${newState ? "ativar" : "desativar"} a ${label}.`);
+    }
   };
 
   const name = profile?.full_name ?? profile?.username ?? "Empresa";
@@ -265,6 +281,7 @@ export default function EmpresaDashboard() {
         ) : (
           vagas.map((vaga) => {
             const appCount = applications.filter((a) => a.opportunity_id === vaga.id).length;
+            const isActive = vaga.is_active !== false;
             return (
               <TouchableOpacity
                 key={vaga.id}
@@ -274,11 +291,16 @@ export default function EmpresaDashboard() {
               >
                 <View style={styles.oppCardRow}>
                   <Text style={[styles.oppTitle, { color: colors.navy, flex: 1 }]} numberOfLines={1}>{vaga.title}</Text>
-                  <View style={[styles.statusChip, { backgroundColor: vaga.is_active !== false ? "#dcfce7" : "#fee2e2" }]}>
-                    <Text style={[styles.statusText, { color: vaga.is_active !== false ? "#16a34a" : "#dc2626" }]}>
-                      {vaga.is_active !== false ? "Ativa" : "Inativa"}
+                  <TouchableOpacity
+                    style={[styles.statusChip, { backgroundColor: isActive ? "#dcfce7" : "#fee2e2" }]}
+                    onPress={(e) => { e.stopPropagation(); handleToggle(vaga.id, isActive, "vaga"); }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Feather name={isActive ? "eye" : "eye-off"} size={11} color={isActive ? "#16a34a" : "#dc2626"} />
+                    <Text style={[styles.statusText, { color: isActive ? "#16a34a" : "#dc2626" }]}>
+                      {isActive ? "Ativa" : "Inativa"}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 </View>
                 <View style={styles.oppMeta}>
                   {vaga.location ? (
@@ -329,33 +351,41 @@ export default function EmpresaDashboard() {
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhum anúncio publicado.</Text>
           </View>
         ) : (
-          anuncios.map((anuncio) => (
-            <TouchableOpacity
-              key={anuncio.id}
-              style={[styles.oppCard, { borderColor: colors.border }]}
-              onPress={() => router.push(`/opportunity/${anuncio.id}` as any)}
-              activeOpacity={0.75}
-            >
-              <View style={styles.oppCardRow}>
-                <Text style={[styles.oppTitle, { color: colors.navy, flex: 1 }]} numberOfLines={1}>{anuncio.title}</Text>
-                <View style={[styles.statusChip, { backgroundColor: anuncio.is_active !== false ? "#dcfce7" : "#fee2e2" }]}>
-                  <Text style={[styles.statusText, { color: anuncio.is_active !== false ? "#16a34a" : "#dc2626" }]}>
-                    {anuncio.is_active !== false ? "Ativo" : "Inativo"}
-                  </Text>
+          anuncios.map((anuncio) => {
+            const isActive = anuncio.is_active !== false;
+            return (
+              <TouchableOpacity
+                key={anuncio.id}
+                style={[styles.oppCard, { borderColor: colors.border }]}
+                onPress={() => router.push(`/opportunity/${anuncio.id}` as any)}
+                activeOpacity={0.75}
+              >
+                <View style={styles.oppCardRow}>
+                  <Text style={[styles.oppTitle, { color: colors.navy, flex: 1 }]} numberOfLines={1}>{anuncio.title}</Text>
+                  <TouchableOpacity
+                    style={[styles.statusChip, { backgroundColor: isActive ? "#dcfce7" : "#fee2e2" }]}
+                    onPress={(e) => { e.stopPropagation(); handleToggle(anuncio.id, isActive, "marketplace"); }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Feather name={isActive ? "eye" : "eye-off"} size={11} color={isActive ? "#16a34a" : "#dc2626"} />
+                    <Text style={[styles.statusText, { color: isActive ? "#16a34a" : "#dc2626" }]}>
+                      {isActive ? "Ativo" : "Inativo"}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
-              </View>
-              <View style={styles.oppMeta}>
-                {anuncio.price ? (
-                  <Text style={[styles.oppPrice, { color: colors.gold }]}>{anuncio.price}</Text>
-                ) : null}
-                {anuncio.category ? (
-                  <View style={[styles.chip, { backgroundColor: colors.background }]}>
-                    <Text style={[styles.chipText, { color: colors.mutedForeground }]}>{anuncio.category}</Text>
-                  </View>
-                ) : null}
-              </View>
-            </TouchableOpacity>
-          ))
+                <View style={styles.oppMeta}>
+                  {anuncio.price ? (
+                    <Text style={[styles.oppPrice, { color: colors.gold }]}>{anuncio.price}</Text>
+                  ) : null}
+                  {anuncio.category ? (
+                    <View style={[styles.chip, { backgroundColor: colors.background }]}>
+                      <Text style={[styles.chipText, { color: colors.mutedForeground }]}>{anuncio.category}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </TouchableOpacity>
+            );
+          })
         )}
       </View>
 
@@ -442,7 +472,7 @@ const styles = StyleSheet.create({
   oppCard: { borderRadius: 10, borderWidth: 1, padding: 12, gap: 6 },
   oppCardRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   oppTitle: { fontSize: 14, fontWeight: "700" },
-  statusChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  statusChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   statusText: { fontSize: 11, fontWeight: "700" },
   oppMeta: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   oppPrice: { fontSize: 16, fontWeight: "800" },

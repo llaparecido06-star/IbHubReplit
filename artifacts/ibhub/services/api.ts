@@ -352,6 +352,107 @@ export async function fetchSuggestedConnections(
   }
 }
 
+// ─── USER POSTS ──────────────────────────────────────────────────────────────
+
+export async function fetchUserPosts(targetUserId: string, currentUserId: string): Promise<Post[]> {
+  try {
+    const { data, error } = await supabase
+      .from("posts")
+      .select(`
+        id, user_id, content, image_url, likes_count, comments_count, shares_count,
+        hashtags, poll, created_at,
+        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT})
+      `)
+      .eq("user_id", targetUserId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (error || !data || data.length === 0) return [];
+
+    const postIds = data.map((p: any) => p.id);
+    const [likedRes, bookmarkRes] = await Promise.all([
+      supabase.from("likes").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
+      supabase.from("bookmarks").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
+    ]);
+    const likedIds = new Set((likedRes.data ?? []).map((l: any) => l.post_id));
+    const bookmarkedIds = new Set((bookmarkRes.data ?? []).map((b: any) => b.post_id));
+
+    return data.map((post: any) => ({
+      ...post,
+      author: normaliseAuthor(post.author),
+      is_liked: likedIds.has(post.id),
+      is_bookmarked: bookmarkedIds.has(post.id),
+    }));
+  } catch (e) {
+    console.error("fetchUserPosts:", e);
+    return [];
+  }
+}
+
+// ─── FOLLOWERS / FOLLOWING ────────────────────────────────────────────────────
+
+export interface FollowProfile {
+  id: string;
+  full_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+  position: string | null;
+  company: string | null;
+}
+
+export async function fetchFollowers(userId: string): Promise<FollowProfile[]> {
+  try {
+    const { data, error } = await supabase
+      .from("follows")
+      .select("follower:profiles!follows_follower_id_fkey(id, full_name, username, avatar_url, position, company)")
+      .eq("following_id", userId)
+      .limit(100);
+    if (error || !data) return [];
+    return data.map((r: any) => r.follower).filter(Boolean) as FollowProfile[];
+  } catch (e) {
+    console.error("fetchFollowers:", e);
+    return [];
+  }
+}
+
+export async function fetchFollowing(userId: string): Promise<FollowProfile[]> {
+  try {
+    const { data, error } = await supabase
+      .from("follows")
+      .select("following:profiles!follows_following_id_fkey(id, full_name, username, avatar_url, position, company)")
+      .eq("follower_id", userId)
+      .limit(100);
+    if (error || !data) return [];
+    return data.map((r: any) => r.following).filter(Boolean) as FollowProfile[];
+  } catch (e) {
+    console.error("fetchFollowing:", e);
+    return [];
+  }
+}
+
+export async function fetchConnectionSuggestions(userId: string, limit = 5): Promise<FollowProfile[]> {
+  try {
+    // Get IDs already followed
+    const { data: followedData } = await supabase
+      .from("follows")
+      .select("following_id")
+      .eq("follower_id", userId);
+    const excludeIds = new Set<string>([(followedData ?? []).map((f: any) => f.following_id), userId].flat());
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, full_name, username, avatar_url, position, company")
+      .not("id", "in", `(${[...excludeIds].join(",")})`)
+      .limit(limit);
+
+    if (error || !data) return [];
+    return data as FollowProfile[];
+  } catch (e) {
+    console.error("fetchConnectionSuggestions:", e);
+    return [];
+  }
+}
+
 // ─── FOLLOWS & CONNECTIONS ────────────────────────────────────────────────────
 
 export async function toggleFollow(
@@ -1809,6 +1910,20 @@ export async function expressInterest(
     return true;
   } catch (e) {
     console.error("expressInterest:", e);
+    return false;
+  }
+}
+
+export async function toggleOpportunity(id: string, isActive: boolean): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("opportunities")
+      .update({ is_active: isActive })
+      .eq("id", id);
+    if (error) { console.error("toggleOpportunity:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("toggleOpportunity:", e);
     return false;
   }
 }
