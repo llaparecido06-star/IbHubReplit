@@ -97,24 +97,47 @@ export default function WineCellarScreen() {
     setWStorage(""); setWNotes(""); setWRating(0); setWStatus("adega"); setWPrivate(true);
   };
 
+  const parseDateBR = (str: string): string | null => {
+    if (!str.trim()) return null;
+    const iso = /^\d{4}-\d{2}-\d{2}$/.test(str.trim());
+    if (iso) return str.trim();
+    const parts = str.trim().split("/");
+    if (parts.length === 3) {
+      const [d, m, y] = parts;
+      if (d && m && y && y.length === 4) return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    }
+    return null;
+  };
+
   const handleAdd = async () => {
     if (!wName.trim()) { Alert.alert("Atenção", "Informe o nome do vinho."); return; }
     if (!user?.id) return;
+
+    const buyDate  = parseDateBR(wBuyDate);
+    const drinkBy  = parseDateBR(wDrinkBy);
+
+    if (wBuyDate.trim() && !buyDate) {
+      Alert.alert("Data inválida", "Informe a data de compra no formato dd/mm/aaaa."); return;
+    }
+    if (wDrinkBy.trim() && !drinkBy) {
+      Alert.alert("Data inválida", "Informe 'beber até' no formato dd/mm/aaaa."); return;
+    }
+
     setSaving(true);
     const entry = await API.addWineEntry({
       user_id: user.id,
       name: wName.trim(),
-      producer: wProducer || null,
-      vintage: wVintage || null,
-      region: wRegion || null,
-      country: wCountry || null,
-      grape: wGrape || null,
-      qty: parseInt(wQty) || 1,
-      price: wPrice ? parseFloat(wPrice.replace(",", ".")) : null,
-      buy_date: wBuyDate || null,
-      drink_by: wDrinkBy || null,
-      storage: wStorage || null,
-      notes: wNotes || null,
+      producer: wProducer.trim() || null,
+      vintage: wVintage.trim() || null,
+      region: wRegion.trim() || null,
+      country: wCountry.trim() || null,
+      grape: wGrape.trim() || null,
+      qty: Math.max(1, parseInt(wQty) || 1),
+      price: wPrice.trim() ? parseFloat(wPrice.replace(",", ".")) : null,
+      buy_date: buyDate,
+      drink_by: drinkBy,
+      storage: wStorage.trim() || null,
+      notes: wNotes.trim() || null,
       rating: wRating,
       status: wStatus,
       is_private: wPrivate,
