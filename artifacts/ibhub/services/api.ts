@@ -1562,3 +1562,226 @@ export async function fetchMarketOverview(
     return null;
   }
 }
+
+// ─── OPPORTUNITIES ─────────────────────────────────────────────────────────────
+
+export interface AppOpportunity {
+  id: string;
+  created_by: string;
+  type: "vaga" | "marketplace";
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  location?: string | null;
+  price?: string | null;
+  company?: string | null;
+  contract_type?: string | null;
+  salary?: string | null;
+  contact_email?: string | null;
+  expires_at?: string | null;
+  is_active: boolean;
+  created_at: string;
+  creator?: { id: string; full_name: string | null; avatar_url?: string | null; position?: string | null; company?: string | null } | null;
+  is_applied?: boolean;
+  applications_count?: number;
+}
+
+export async function fetchOpportunities(
+  type: "vaga" | "marketplace",
+  search: string,
+  userId: string,
+): Promise<AppOpportunity[]> {
+  try {
+    let query = supabase
+      .from("opportunities")
+      .select(`
+        id, created_by, type, title, description, category, location, price,
+        company, contract_type, salary, contact_email, expires_at, is_active, created_at,
+        creator:profiles!opportunities_created_by_fkey(id, full_name, avatar_url, position, company)
+      `)
+      .eq("is_active", true)
+      .eq("type", type)
+      .order("created_at", { ascending: false });
+
+    if (search.trim()) {
+      query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%,company.ilike.%${search}%,category.ilike.%${search}%`);
+    }
+
+    const { data, error } = await query.limit(50);
+    if (error || !data) return [];
+
+    // Check which ones the user already applied to (vagas only)
+    let appliedIds = new Set<string>();
+    if (type === "vaga" && data.length > 0) {
+      const ids = (data as any[]).map((d) => d.id);
+      const { data: apps } = await supabase
+        .from("opportunity_applications")
+        .select("opportunity_id")
+        .eq("applicant_id", userId)
+        .in("opportunity_id", ids);
+      if (apps) apps.forEach((a: any) => appliedIds.add(a.opportunity_id));
+    }
+
+    return (data as any[]).map((d) => ({
+      ...d,
+      creator: d.creator ?? null,
+      is_applied: appliedIds.has(d.id),
+    })) as AppOpportunity[];
+  } catch (e) {
+    console.error("fetchOpportunities:", e);
+    return [];
+  }
+}
+
+export async function fetchOpportunityById(
+  id: string,
+  userId: string,
+): Promise<(AppOpportunity & { is_applied: boolean; applications_count: number }) | null> {
+  try {
+    const { data, error } = await supabase
+      .from("opportunities")
+      .select(`
+        id, created_by, type, title, description, category, location, price,
+        company, contract_type, salary, contact_email, expires_at, is_active, created_at,
+        creator:profiles!opportunities_created_by_fkey(id, full_name, avatar_url, position, company)
+      `)
+      .eq("id", id)
+      .single();
+
+    if (error || !data) return null;
+
+    const [appRes, countRes] = await Promise.all([
+      supabase
+        .from("opportunity_applications")
+        .select("id")
+        .eq("opportunity_id", id)
+        .eq("applicant_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("opportunity_applications")
+        .select("id", { count: "exact", head: true })
+        .eq("opportunity_id", id),
+    ]);
+
+    return {
+      ...(data as any),
+      creator: (data as any).creator ?? null,
+      is_applied: !!appRes.data,
+      applications_count: countRes.count ?? 0,
+    };
+  } catch (e) {
+    console.error("fetchOpportunityById:", e);
+    return null;
+  }
+}
+
+export async function createOpportunity(
+  payload: Omit<AppOpportunity, "id" | "created_at" | "is_active" | "creator" | "is_applied" | "applications_count">,
+  userId: string,
+): Promise<AppOpportunity | null> {
+  try {
+    const { data, error } = await supabase
+      .from("opportunities")
+      .insert({ ...payload, created_by: userId, is_active: true })
+      .select()
+      .single();
+
+    if (error || !data) { console.error("createOpportunity:", error); return null; }
+    return data as AppOpportunity;
+  } catch (e) {
+    console.error("createOpportunity:", e);
+    return null;
+  }
+}
+
+export async function uploadCV(uri: string, userId: string): Promise<string | null> {
+  try {
+    const ext = uri.split(".").pop()?.toLowerCase() ?? "pdf";
+    const path = `cvs/${userId}/${Date.now()}.${ext}`;
+
+    const response = await fetch(uri);
+    const blob = await response.blob();
+
+    const { error } = await supabase.storage.from("cvs").upload(path, blob, {
+      contentType: blob.type || "application/pdf",
+      upsert: true,
+    });
+
+    if (error) { console.error("uploadCV:", error); return null; }
+
+    const { data } = supabase.storage.from("cvs").getPublicUrl(path);
+    return data.publicUrl;
+  } catch (e) {
+    console.error("uploadCV:", e);
+    return null;
+  }
+}
+
+export async function applyToJob(
+  opportunityId: string,
+  applicantId: string,
+  cvUrl: string | null,
+  message: string | null,
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("opportunity_applications")
+      .insert({ opportunity_id: opportunityId, applicant_id: applicantId, cv_url: cvUrl, message });
+
+    if (error) { console.error("applyToJob:", error); return false; }
+
+    // Notifica o criador da vaga
+    const { data: opp } = await supabase
+      .from("opportunities")
+      .select("created_by, title")
+      .eq("id", opportunityId)
+      .single();
+
+    if (opp && opp.created_by !== applicantId) {
+      await supabase.from("notifications").insert({
+        user_id: opp.created_by,
+        actor_id: applicantId,
+        type: "application",
+        opportunity_id: opportunityId,
+        message: `se candidatou à vaga "${opp.title}"`,
+      });
+    }
+
+    return true;
+  } catch (e) {
+    console.error("applyToJob:", e);
+    return false;
+  }
+}
+
+export async function expressInterest(
+  opportunityId: string,
+  userId: string,
+  message: string | null,
+): Promise<boolean> {
+  try {
+    // Para marketplace, abre conversa com criador e envia notificação
+    const { data: opp } = await supabase
+      .from("opportunities")
+      .select("created_by, title")
+      .eq("id", opportunityId)
+      .single();
+
+    if (!opp) return false;
+
+    if (opp.created_by !== userId) {
+      await supabase.from("notifications").insert({
+        user_id: opp.created_by,
+        actor_id: userId,
+        type: "interest",
+        opportunity_id: opportunityId,
+        message: `tem interesse no seu anúncio "${opp.title}"`,
+      });
+    }
+
+    return true;
+  } catch (e) {
+    console.error("expressInterest:", e);
+    return false;
+  }
+}

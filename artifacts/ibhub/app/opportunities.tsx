@@ -1,182 +1,298 @@
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Platform,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/context/AuthContext";
+import { AppOpportunity, fetchOpportunities } from "@/services/api";
 
-interface Opportunity {
-  id: string;
-  title: string;
-  company: string;
-  location: string;
-  type: "emprego" | "freelance" | "parceria";
-  salary?: string;
-  posted_at: string;
-  is_applied: boolean;
-  requirements: string[];
-}
+type SubTab = "vagas" | "marketplace";
 
-const MOCK_OPPORTUNITIES: Opportunity[] = [
-  { id: "o1", title: "Sommelier Sênior", company: "Hotel Fasano", location: "São Paulo, SP", type: "emprego", salary: "R$ 8.000 – 12.000", posted_at: "2025-04-04", is_applied: false, requirements: ["WSET Level 3", "5+ anos de experiência"] },
-  { id: "o2", title: "Consultor de Carta de Vinhos", company: "Restaurante D.O.M.", location: "Remoto", type: "freelance", posted_at: "2025-04-03", is_applied: true, requirements: ["Conhecimento em vinhos naturais", "Disponibilidade imediata"] },
-  { id: "o3", title: "Diretor de Importação – Vinhos Europeus", company: "Mistral Importadora", location: "São Paulo, SP", type: "emprego", salary: "R$ 15.000+", posted_at: "2025-04-02", is_applied: false, requirements: ["10+ anos na área", "Fluência em inglês e espanhol"] },
-  { id: "o4", title: "Parceria Comercial – Distribuição RS/SC", company: "Vinícola Góes", location: "Sul do Brasil", type: "parceria", posted_at: "2025-04-01", is_applied: false, requirements: ["Rede de contatos no varejo", "Experiência com distribuição"] },
-  { id: "o5", title: "Educador de Vinho – Cursos Online", company: "Wine Academy Brasil", location: "Online", type: "emprego", salary: "R$ 5.000 – 7.000", posted_at: "2025-03-30", is_applied: false, requirements: ["WSET Level 4 ou CMS", "Experiência em ensino"] },
-];
+const VAGA_CATS   = ["Todos", "Sommelier", "Enólogo", "Gerência", "Marketing", "Vendas", "Exportação", "Produção", "Outros"];
+const MARKET_CATS = ["Todos", "Vinho", "Insumo", "Equipamento", "Serviço", "Outros"];
+
+const typeColor: Record<string, "default" | "gold" | "wine" | "success"> = {
+  vaga: "gold", marketplace: "success",
+};
+const contractColor: Record<string, string> = {
+  CLT: "#2ecc71", PJ: "#3498db", Freelancer: "#9b59b6", Estágio: "#e67e22",
+};
 
 export default function OpportunitiesScreen() {
-  const colors = useColors();
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const [opps, setOpps] = useState(MOCK_OPPORTUNITIES);
-  const [filter, setFilter] = useState("todos");
+  const colors  = useColors();
+  const router  = useRouter();
+  const insets  = useSafeAreaInsets();
+  const { user } = useAuth();
 
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const topPad    = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
-  const FILTERS = ["todos", "emprego", "freelance", "parceria"];
+  const [subTab, setSubTab]     = useState<SubTab>("vagas");
+  const [search, setSearch]     = useState("");
+  const [catFilter, setCatFilter] = useState("Todos");
+  const [items, setItems]       = useState<AppOpportunity[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const filtered = filter === "todos" ? opps : opps.filter((o) => o.type === filter);
+  const searchRef = useRef<TextInput>(null);
 
-  const toggleApply = (id: string) => {
-    setOpps((prev) => prev.map((o) => o.id === id ? { ...o, is_applied: !o.is_applied } : o));
+  const load = useCallback(async (tab: SubTab, q: string) => {
+    if (!user?.id) return;
+    setLoading(true);
+    const data = await fetchOpportunities(tab === "vagas" ? "vaga" : "marketplace", q, user.id);
+    setItems(data);
+    setLoading(false);
+  }, [user?.id]);
+
+  useEffect(() => {
+    setCatFilter("Todos");
+    load(subTab, search);
+  }, [subTab]);
+
+  useEffect(() => {
+    const t = setTimeout(() => load(subTab, search), 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await load(subTab, search);
+    setRefreshing(false);
   };
 
-  const typeColors: Record<string, "default" | "gold" | "wine" | "success" | "warning"> = {
-    emprego: "gold",
-    freelance: "success",
-    parceria: "wine",
-  };
+  const cats = subTab === "vagas" ? VAGA_CATS : MARKET_CATS;
+
+  const filtered = catFilter === "Todos"
+    ? items
+    : items.filter((i) => i.category === catFilter);
+
+  const renderItem = ({ item }: { item: AppOpportunity }) => (
+    <TouchableOpacity
+      style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}
+      activeOpacity={0.85}
+      onPress={() => router.push(`/opportunity/${item.id}` as any)}
+    >
+      <View style={styles.cardTop}>
+        <View style={styles.cardTitles}>
+          <Text style={[styles.cardTitle, { color: colors.foreground }]} numberOfLines={2}>
+            {item.title}
+          </Text>
+          {item.type === "vaga" && item.company ? (
+            <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>{item.company}</Text>
+          ) : item.creator?.full_name ? (
+            <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>por {item.creator.full_name}</Text>
+          ) : null}
+        </View>
+        <Badge label={item.category ?? item.type} variant={typeColor[item.type] ?? "default"} />
+      </View>
+
+      <View style={styles.metaRow}>
+        {item.location ? (
+          <View style={styles.metaItem}>
+            <Feather name="map-pin" size={12} color={colors.mutedForeground} />
+            <Text style={[styles.metaText, { color: colors.mutedForeground }]}>{item.location}</Text>
+          </View>
+        ) : null}
+        {item.type === "vaga" && item.salary ? (
+          <View style={styles.metaItem}>
+            <Feather name="dollar-sign" size={12} color={colors.gold} />
+            <Text style={[styles.metaText, { color: colors.gold, fontWeight: "700" }]}>{item.salary}</Text>
+          </View>
+        ) : null}
+        {item.type === "marketplace" && item.price ? (
+          <View style={styles.metaItem}>
+            <Feather name="tag" size={12} color={colors.gold} />
+            <Text style={[styles.metaText, { color: colors.gold, fontWeight: "700" }]}>{item.price}</Text>
+          </View>
+        ) : null}
+        {item.contract_type ? (
+          <View style={[styles.contractBadge, { backgroundColor: (contractColor[item.contract_type] ?? colors.navy) + "22" }]}>
+            <Text style={[styles.contractText, { color: contractColor[item.contract_type] ?? colors.navy }]}>
+              {item.contract_type}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      {item.description ? (
+        <Text style={[styles.desc, { color: colors.mutedForeground }]} numberOfLines={2}>
+          {item.description}
+        </Text>
+      ) : null}
+
+      <View style={styles.cardFooter}>
+        <Text style={[styles.date, { color: colors.mutedForeground }]}>
+          {new Date(item.created_at).toLocaleDateString("pt-BR")}
+        </Text>
+        <View style={[
+          styles.actionBadge,
+          { backgroundColor: item.is_applied ? colors.secondary : colors.gold + "22" },
+        ]}>
+          <Text style={[
+            styles.actionText,
+            { color: item.is_applied ? colors.mutedForeground : colors.gold },
+          ]}>
+            {item.type === "vaga"
+              ? (item.is_applied ? "Candidatura enviada" : "Ver vaga →")
+              : "Ver anúncio →"}
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+
+      {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <Pressable onPress={() => router.back()}>
-          <Feather name="arrow-left" size={24} color={colors.foreground} />
-        </Pressable>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Oportunidades</Text>
-        <TouchableOpacity>
-          <Feather name="filter" size={22} color={colors.foreground} />
+        <TouchableOpacity
+          style={[styles.addBtn, { backgroundColor: colors.gold }]}
+          onPress={() => router.push("/new-opportunity" as any)}
+          activeOpacity={0.8}
+        >
+          <Feather name="plus" size={18} color="#fff" />
+          <Text style={styles.addText}>Publicar</Text>
         </TouchableOpacity>
       </View>
 
+      {/* Sub-tabs */}
+      <View style={[styles.subTabs, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+        {(["vagas", "marketplace"] as SubTab[]).map((t) => (
+          <Pressable
+            key={t}
+            style={[styles.subTab, subTab === t && { borderBottomColor: colors.gold, borderBottomWidth: 2 }]}
+            onPress={() => setSubTab(t)}
+          >
+            <Text style={[styles.subTabText, { color: subTab === t ? colors.gold : colors.mutedForeground, fontWeight: subTab === t ? "700" : "400" }]}>
+              {t === "vagas" ? "Vagas" : "Marketplace"}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {/* Search bar */}
+      <View style={[styles.searchWrap, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+        <Feather name="search" size={15} color={colors.mutedForeground} />
+        <TextInput
+          ref={searchRef}
+          style={[styles.searchInput, { color: colors.foreground }]}
+          placeholder={subTab === "vagas" ? "Buscar vagas, empresa..." : "Buscar anúncios, categoria..."}
+          placeholderTextColor={colors.mutedForeground}
+          value={search}
+          onChangeText={setSearch}
+          returnKeyType="search"
+        />
+        {search.length > 0 && (
+          <Pressable onPress={() => setSearch("")}>
+            <Feather name="x" size={15} color={colors.mutedForeground} />
+          </Pressable>
+        )}
+      </View>
+
+      {/* Category chips */}
       <FlatList
         horizontal
-        data={FILTERS}
-        keyExtractor={(f) => f}
-        renderItem={({ item: f }) => (
+        data={cats}
+        keyExtractor={(c) => c}
+        renderItem={({ item: c }) => (
           <Pressable
-            style={[styles.filterBtn, { backgroundColor: filter === f ? colors.navy : colors.secondary, borderRadius: 20 }]}
-            onPress={() => setFilter(f)}
+            style={[styles.chip, { backgroundColor: catFilter === c ? colors.navy : colors.secondary }]}
+            onPress={() => setCatFilter(c)}
           >
-            <Text style={{ color: filter === f ? colors.gold : colors.foreground, fontSize: 13, fontWeight: "700" }}>
-              {f.charAt(0).toUpperCase() + f.slice(1)}
+            <Text style={{ color: catFilter === c ? colors.gold : colors.foreground, fontSize: 12, fontWeight: catFilter === c ? "700" : "400" }}>
+              {c}
             </Text>
           </Pressable>
         )}
-        style={{ maxHeight: 52, borderBottomWidth: 1, borderBottomColor: colors.border }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 10, gap: 8 }}
+        style={{ maxHeight: 46 }}
+        contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 8, gap: 8 }}
         showsHorizontalScrollIndicator={false}
       />
 
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
-            <View style={styles.cardTop}>
-              <View style={styles.cardTitles}>
-                <Text style={[styles.cardTitle, { color: colors.foreground }]} numberOfLines={2}>
-                  {item.title}
-                </Text>
-                <Text style={[styles.cardCompany, { color: colors.mutedForeground }]}>
-                  {item.company}
-                </Text>
-              </View>
-              <Badge label={item.type} variant={typeColors[item.type] ?? "default"} />
-            </View>
-
-            <View style={styles.cardMeta}>
-              <View style={styles.metaItem}>
-                <Feather name="map-pin" size={13} color={colors.mutedForeground} />
-                <Text style={[styles.metaText, { color: colors.mutedForeground }]}>{item.location}</Text>
-              </View>
-              {item.salary && (
-                <View style={styles.metaItem}>
-                  <Feather name="dollar-sign" size={13} color={colors.gold} />
-                  <Text style={[styles.metaText, { color: colors.gold, fontWeight: "700" }]}>{item.salary}</Text>
-                </View>
+      {/* List */}
+      {loading && !refreshing ? (
+        <View style={styles.center}>
+          <ActivityIndicator color={colors.gold} size="large" />
+        </View>
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={(i) => i.id}
+          renderItem={renderItem}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />}
+          contentContainerStyle={{ padding: 14, gap: 12, paddingBottom: bottomPad + 40 }}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Feather name={subTab === "vagas" ? "briefcase" : "shopping-bag"} size={42} color={colors.mutedForeground} />
+              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+                {search ? "Nenhum resultado encontrado" : subTab === "vagas" ? "Nenhuma vaga publicada ainda" : "Nenhum anúncio publicado ainda"}
+              </Text>
+              <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
+                {search ? "Tente outros termos de busca" : "Seja o primeiro a publicar!"}
+              </Text>
+              {!search && (
+                <TouchableOpacity
+                  style={[styles.emptyBtn, { backgroundColor: colors.gold }]}
+                  onPress={() => router.push("/new-opportunity" as any)}
+                >
+                  <Text style={styles.emptyBtnText}>+ Publicar agora</Text>
+                </TouchableOpacity>
               )}
             </View>
-
-            <View style={styles.requirements}>
-              {item.requirements.map((req, i) => (
-                <View key={i} style={styles.reqItem}>
-                  <View style={[styles.reqDot, { backgroundColor: colors.gold }]} />
-                  <Text style={[styles.reqText, { color: colors.foreground }]}>{req}</Text>
-                </View>
-              ))}
-            </View>
-
-            <View style={styles.cardFooter}>
-              <Text style={[styles.cardDate, { color: colors.mutedForeground }]}>
-                {new Date(item.posted_at).toLocaleDateString("pt-BR")}
-              </Text>
-              <Button
-                title={item.is_applied ? "Candidatura enviada" : "Candidatar-se"}
-                onPress={() => toggleApply(item.id)}
-                variant={item.is_applied ? "outline" : "gold"}
-                size="sm"
-                disabled={item.is_applied}
-              />
-            </View>
-          </View>
-        )}
-        contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: bottomPad + 40 }}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Feather name="briefcase" size={40} color={colors.mutedForeground} />
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              Nenhuma oportunidade no momento
-            </Text>
-          </View>
-        }
-      />
+          }
+        />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 10, borderBottomWidth: 1 },
+  container:   { flex: 1 },
+  header:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1 },
   headerTitle: { fontSize: 22, fontWeight: "800" },
-  filterBtn: { paddingVertical: 7, paddingHorizontal: 16 },
-  card: { borderWidth: 1, padding: 16, gap: 12 },
-  cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10 },
-  cardTitles: { flex: 1 },
-  cardTitle: { fontSize: 16, fontWeight: "800", lineHeight: 22 },
-  cardCompany: { fontSize: 13, marginTop: 2 },
-  cardMeta: { flexDirection: "row", gap: 16, flexWrap: "wrap" },
-  metaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
-  metaText: { fontSize: 13 },
-  requirements: { gap: 4 },
-  reqItem: { flexDirection: "row", alignItems: "center", gap: 8 },
-  reqDot: { width: 5, height: 5, borderRadius: 3 },
-  reqText: { fontSize: 13 },
-  cardFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  cardDate: { fontSize: 12 },
-  empty: { alignItems: "center", justifyContent: "center", paddingTop: 60, gap: 12 },
-  emptyText: { fontSize: 15 },
+  addBtn:      { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  addText:     { color: "#fff", fontSize: 13, fontWeight: "700" },
+  subTabs:     { flexDirection: "row", borderBottomWidth: 1 },
+  subTab:      { flex: 1, alignItems: "center", paddingVertical: 12 },
+  subTabText:  { fontSize: 14 },
+  searchWrap:  { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 14, marginTop: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
+  searchInput: { flex: 1, fontSize: 14, padding: 0 },
+  chip:        { paddingVertical: 5, paddingHorizontal: 14, borderRadius: 20 },
+  card:        { borderWidth: 1, padding: 16, gap: 10 },
+  cardTop:     { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10 },
+  cardTitles:  { flex: 1 },
+  cardTitle:   { fontSize: 15, fontWeight: "800", lineHeight: 21 },
+  cardSub:     { fontSize: 12, marginTop: 2 },
+  metaRow:     { flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" },
+  metaItem:    { flexDirection: "row", alignItems: "center", gap: 4 },
+  metaText:    { fontSize: 12 },
+  contractBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  contractText:  { fontSize: 11, fontWeight: "700" },
+  desc:        { fontSize: 13, lineHeight: 19 },
+  cardFooter:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  date:        { fontSize: 11 },
+  actionBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 },
+  actionText:  { fontSize: 12, fontWeight: "700" },
+  center:      { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80 },
+  empty:       { alignItems: "center", justifyContent: "center", paddingTop: 60, gap: 10 },
+  emptyTitle:  { fontSize: 16, fontWeight: "700" },
+  emptySub:    { fontSize: 13 },
+  emptyBtn:    { marginTop: 8, paddingHorizontal: 22, paddingVertical: 11, borderRadius: 20 },
+  emptyBtnText:{ color: "#fff", fontWeight: "700", fontSize: 14 },
 });
