@@ -27,3 +27,8 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+EXPO_PUBLIC_API_URL = "https://d8bcdebb-60bd-4856-affe-92aeed4161f0-00-20sscjpqlyy34-iuspbsq7.janeway.replit.dev/api"

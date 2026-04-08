@@ -17,7 +17,7 @@ import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/context/AuthContext";
-import { updateProfile } from "@/services/api";
+import { updateProfile, deleteAccount } from "@/services/api";
 
 export default function PrivacySecurityScreen() {
   const colors = useColors();
@@ -32,6 +32,8 @@ export default function PrivacySecurityScreen() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [savingPw, setSavingPw] = useState(false);
+
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -88,7 +90,30 @@ export default function PrivacySecurityScreen() {
       "Todos os seus dados serão permanentemente removidos. Esta ação não pode ser desfeita.",
       [
         { text: "Cancelar", style: "cancel" },
-        { text: "Excluir", style: "destructive", onPress: () => {} },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: async () => {
+            setDeletingAccount(true);
+            try {
+              const { data: sessionData } = await supabase.auth.getSession();
+              const token = sessionData?.session?.access_token;
+              if (!token) {
+                Alert.alert("Erro", "Sessão inválida. Faça login novamente.");
+                return;
+              }
+              const result = await deleteAccount(token);
+              if (!result.success) {
+                Alert.alert("Erro", result.error ?? "Não foi possível excluir a conta.");
+                return;
+              }
+              await supabase.auth.signOut();
+              router.replace("/");
+            } finally {
+              setDeletingAccount(false);
+            }
+          },
+        },
       ]
     );
   };
@@ -152,10 +177,13 @@ export default function PrivacySecurityScreen() {
             Ao excluir sua conta, todos os seus dados serão permanentemente removidos. Esta ação não pode ser desfeita.
           </Text>
           <TouchableOpacity
-            style={[styles.deleteBtn, { borderColor: "#dc2626" }]}
+            style={[styles.deleteBtn, { borderColor: "#dc2626", opacity: deletingAccount ? 0.5 : 1 }]}
             onPress={handleDeleteAccount}
+            disabled={deletingAccount}
           >
-            <Text style={[styles.deleteBtnText, { color: "#dc2626" }]}>Excluir minha conta</Text>
+            <Text style={[styles.deleteBtnText, { color: "#dc2626" }]}>
+              {deletingAccount ? "Excluindo..." : "Excluir minha conta"}
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
