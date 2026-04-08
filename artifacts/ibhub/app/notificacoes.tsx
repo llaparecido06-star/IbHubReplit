@@ -11,12 +11,14 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFocusEffect } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
 import type { AppNotification } from "@/services/api";
+import { DEFAULT_PREFS, PrefKey, loadPrefs, notifTypeToKey } from "@/utils/notificationPrefs";
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -95,18 +97,29 @@ export default function NotificationsScreen() {
   const [notifs, setNotifs] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [prefs, setPrefs] = useState<Record<PrefKey, boolean>>(DEFAULT_PREFS);
 
   const topPad = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
 
   const load = useCallback(async () => {
     if (!user?.id) { setLoading(false); return; }
-    const data = await API.fetchNotifications(user.id);
+    const [data, savedPrefs] = await Promise.all([
+      API.fetchNotifications(user.id),
+      loadPrefs(),
+    ]);
     setNotifs(data);
+    setPrefs(savedPrefs);
     setLoading(false);
   }, [user?.id]);
 
   useEffect(() => { load(); }, [load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadPrefs().then(setPrefs);
+    }, [])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -115,13 +128,11 @@ export default function NotificationsScreen() {
   };
 
   const handleNotifPress = async (notif: AppNotification) => {
-    // Mark as read
     if (!notif.read) {
       setNotifs(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
       await API.markNotificationRead(notif.id);
     }
 
-    // Navigate — comment/mention deep-links to specific comment
     if (notif.post_id) {
       const hasCommentDeepLink = (notif.type === "comment" || notif.type === "mention") && notif.comment_id;
       router.push(
@@ -140,7 +151,13 @@ export default function NotificationsScreen() {
     await API.markAllNotificationsRead(user.id);
   };
 
-  const unreadCount = notifs.filter(n => !n.read).length;
+  const filteredNotifs = notifs.filter((n) => {
+    const key = notifTypeToKey(n.type);
+    if (key === null) return true;
+    return prefs[key] !== false;
+  });
+
+  const unreadCount = filteredNotifs.filter(n => !n.read).length;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -165,14 +182,14 @@ export default function NotificationsScreen() {
         </View>
       ) : (
         <FlatList
-          data={notifs}
+          data={filteredNotifs}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <NotifRow notif={item} colors={colors} onPress={() => handleNotifPress(item)} />
           )}
           onRefresh={onRefresh}
           refreshing={refreshing}
-          contentContainerStyle={notifs.length === 0 ? styles.emptyContainer : { paddingBottom: bottomPad }}
+          contentContainerStyle={filteredNotifs.length === 0 ? styles.emptyContainer : { paddingBottom: bottomPad }}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.empty}>
