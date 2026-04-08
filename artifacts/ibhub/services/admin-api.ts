@@ -1,0 +1,75 @@
+import { supabase } from "@/context/AuthContext";
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
+
+async function getAdminHeaders(): Promise<Record<string, string>> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token ?? "";
+  return {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+}
+
+export interface AdminUser {
+  id: string;
+  full_name: string | null;
+  username: string | null;
+  email: string | null;
+  plan: string;
+  areas_of_expertise: string[] | null;
+  created_at: string;
+  is_banned: boolean;
+  is_shadowbanned: boolean;
+}
+
+export async function fetchAdminUsers(search?: string): Promise<AdminUser[]> {
+  const headers = await getAdminHeaders();
+  const params = new URLSearchParams({ limit: "200" });
+  if (search) params.set("search", search);
+  const res = await fetch(`${API_URL}/admin/users?${params.toString()}`, { headers });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(body.error ?? `HTTP ${res.status}`);
+  }
+  const json = await res.json();
+  return json.users as AdminUser[];
+}
+
+export async function generateResetLink(userId: string): Promise<string> {
+  const headers = await getAdminHeaders();
+  const res = await fetch(`${API_URL}/admin/reset-password`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ userId }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(body.error ?? `HTTP ${res.status}`);
+  }
+  const json = await res.json();
+  return json.resetLink as string;
+}
+
+export interface AdminUserByEmail {
+  id: string;
+  full_name: string | null;
+  username: string | null;
+  email: string | null;
+  plan: string;
+  courtesy_until: string | null;
+}
+
+export async function fetchUserByEmail(email: string): Promise<AdminUserByEmail> {
+  const headers = await getAdminHeaders();
+  const res = await fetch(
+    `${API_URL}/admin/user-by-email?email=${encodeURIComponent(email)}`,
+    { headers }
+  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(body.error ?? `HTTP ${res.status}`);
+  }
+  const json = await res.json();
+  return json.user as AdminUserByEmail;
+}

@@ -13,14 +13,29 @@ create table if not exists public.profiles (
   bio           text,
   headline      text,
   location      text,
-  plan          text not null default 'basico' check (plan in ('basico','premium','exclusive','business')),
+  plan          text not null default 'gratuito',
   certifications        text[] default '{}',
   areas_of_expertise    text[] default '{}',
   followers_count       int not null default 0,
   following_count       int not null default 0,
   connections_count     int not null default 0,
   is_admin              boolean not null default false,
+  is_banned             boolean not null default false,
+  is_shadowbanned       boolean not null default false,
+  courtesy_until        timestamptz,
   created_at            timestamptz not null default now()
+);
+
+-- ─── PLANS ───────────────────────────────────────────────────────────────────
+create table if not exists public.plans (
+  id           text primary key,
+  name         text not null,
+  subtitle     text not null default '',
+  price_cents  int not null default 0,
+  features     text[] not null default '{}',
+  is_active    boolean not null default true,
+  sort_order   int not null default 0,
+  created_at   timestamptz not null default now()
 );
 
 -- Auto-criar perfil ao registrar
@@ -265,9 +280,13 @@ alter table public.conversations      enable row level security;
 alter table public.conversation_participants enable row level security;
 alter table public.messages           enable row level security;
 
--- Profiles: qualquer um pode ler, apenas o próprio usuário pode editar
+-- Profiles: qualquer um pode ler, o próprio usuário ou admin pode editar
 create policy "profiles_select" on public.profiles for select using (true);
-create policy "profiles_update" on public.profiles for update using (auth.uid() = id);
+create policy "profiles_update" on public.profiles for update
+  using (
+    auth.uid() = id
+    or exists (select 1 from public.profiles p where p.id = auth.uid() and p.is_admin = true)
+  );
 create policy "profiles_insert" on public.profiles for insert with check (auth.uid() = id);
 
 -- Posts: qualquer um pode ler, apenas o autor pode criar/editar/deletar
@@ -401,3 +420,13 @@ create policy "reports_select_admin" on public.reports for select using (
 create policy "reports_update_admin" on public.reports for update using (
   exists (select 1 from public.profiles where id = auth.uid() and is_admin = true)
 );
+
+-- ─── PLANS RLS ───────────────────────────────────────────────────────────────
+alter table public.plans enable row level security;
+create policy "plans_select" on public.plans for select using (true);
+create policy "plans_insert_admin" on public.plans for insert
+  with check (exists (select 1 from public.profiles where id = auth.uid() and is_admin = true));
+create policy "plans_update_admin" on public.plans for update
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin = true));
+create policy "plans_delete_admin" on public.plans for delete
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin = true));
