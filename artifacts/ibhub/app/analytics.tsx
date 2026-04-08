@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
-import React from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Platform,
   ScrollView,
   StyleSheet,
@@ -12,63 +13,63 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import Svg, { Line, Polyline, Circle, Text as SvgText } from "react-native-svg";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/context/AuthContext";
+import { fetchUserAnalytics, UserAnalytics, DailyEngagement } from "@/services/api";
 
 const CHART_W = 300;
 const CHART_H = 100;
-const DATES   = ["24/3", "27/3", "30/3", "2/4", "5/4"];
-const CURTIDAS_DATA  = [0, 0, 0, 0, 0];
-const COMENTARIOS_DATA = [0, 0, 0, 0, 0];
-const Y_MAX = 4;
 
-const TOP_POSTS = [
-  { rank: 1, title: "Goes sensacional",                        likes: 0, comments: 0 },
-  { rank: 2, title: "Nova certificação conquistada! Acab...",  likes: 0, comments: 0 },
-  { rank: 3, title: "Harmonização do dia: Pinot Noir da ...",  likes: 0, comments: 0 },
-];
+interface ChartProps {
+  data: DailyEngagement[];
+}
 
-function EngagementChart() {
+function EngagementChart({ data }: ChartProps) {
   const colors = useColors();
   const padL = 28; const padB = 28; const padR = 8; const padT = 8;
   const W = CHART_W - padL - padR;
   const H = CHART_H - padB - padT;
 
-  const xPos = (i: number) => padL + (i / (DATES.length - 1)) * W;
-  const yPos = (v: number) => padT + H - (v / Y_MAX) * H;
+  const n = data.length;
+  if (n < 2) return null;
 
-  const curtPts  = CURTIDAS_DATA.map((v, i) => `${xPos(i)},${yPos(v)}`).join(" ");
-  const commPts  = COMENTARIOS_DATA.map((v, i) => `${xPos(i)},${yPos(v)}`).join(" ");
+  const maxVal = Math.max(...data.map((d) => Math.max(d.likes, d.comments)), 1);
+  const step = Math.ceil(maxVal / 4);
+  const yMax = step * 4;
+
+  const xPos = (i: number) => padL + (i / (n - 1)) * W;
+  const yPos = (v: number) => padT + H - (v / yMax) * H;
+
+  const curtPts = data.map((d, i) => `${xPos(i)},${yPos(d.likes)}`).join(" ");
+  const commPts = data.map((d, i) => `${xPos(i)},${yPos(d.comments)}`).join(" ");
+
+  const labelIndices = [0, Math.floor((n - 1) / 3), Math.floor(2 * (n - 1) / 3), n - 1];
 
   return (
     <Svg width={CHART_W} height={CHART_H}>
-      {/* Grid lines */}
       {[0, 1, 2, 3, 4].map((v) => (
         <Line
           key={v}
-          x1={padL} y1={yPos(v)} x2={CHART_W - padR} y2={yPos(v)}
+          x1={padL} y1={yPos(v * step)} x2={CHART_W - padR} y2={yPos(v * step)}
           stroke="#e8eaed" strokeWidth={1}
         />
       ))}
-      {/* Y axis labels */}
       {[0, 1, 2, 3, 4].map((v) => (
-        <SvgText key={v} x={padL - 4} y={yPos(v) + 4} textAnchor="end" fontSize={9} fill={colors.mutedForeground}>
-          {v}
+        <SvgText key={v} x={padL - 4} y={yPos(v * step) + 4} textAnchor="end" fontSize={9} fill={colors.mutedForeground}>
+          {v * step}
         </SvgText>
       ))}
-      {/* X axis labels */}
-      {DATES.map((d, i) => (
-        <SvgText key={d} x={xPos(i)} y={CHART_H - 4} textAnchor="middle" fontSize={9} fill={colors.mutedForeground}>
-          {d}
+      {labelIndices.map((i) => (
+        <SvgText key={i} x={xPos(i)} y={CHART_H - 4} textAnchor="middle" fontSize={9} fill={colors.mutedForeground}>
+          {data[i]?.date ?? ""}
         </SvgText>
       ))}
-      {/* Lines */}
       <Polyline points={curtPts} fill="none" stroke="#ef4444" strokeWidth={2} />
       <Polyline points={commPts} fill="none" stroke={colors.gold} strokeWidth={2} />
-      {/* Dots */}
-      {CURTIDAS_DATA.map((v, i) => (
-        <Circle key={i} cx={xPos(i)} cy={yPos(v)} r={3} fill="#ef4444" />
+      {data.map((d, i) => (
+        <Circle key={`l${i}`} cx={xPos(i)} cy={yPos(d.likes)} r={3} fill="#ef4444" />
       ))}
-      {COMENTARIOS_DATA.map((v, i) => (
-        <Circle key={i} cx={xPos(i)} cy={yPos(v)} r={3} fill={colors.gold} />
+      {data.map((d, i) => (
+        <Circle key={`c${i}`} cx={xPos(i)} cy={yPos(d.comments)} r={3} fill={colors.gold} />
       ))}
     </Svg>
   );
@@ -78,20 +79,39 @@ export default function AnalyticsScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+
+  const [analytics, setAnalytics] = useState<UserAnalytics | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
+  const load = useCallback(async () => {
+    if (!user?.id) { setLoading(false); return; }
+    setLoading(true);
+    const data = await fetchUserAnalytics(user.id);
+    setAnalytics(data);
+    setLoading(false);
+  }, [user?.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const a = analytics;
+  const hasData = a && (a.totalPosts > 0 || a.totalLikes > 0 || a.totalComments > 0);
+  const engagementRate = a && a.totalPosts > 0
+    ? ((a.totalLikes + a.totalComments) / a.totalPosts).toFixed(1)
+    : "0.0";
+
   const kpis = [
-    { icon: "eye",            label: "ALCANCE ESTIMADO", value: 9,  iconColor: colors.mutedForeground },
-    { icon: "trending-up",    label: "IMPRESSÕES",        value: 14, iconColor: colors.gold },
-    { icon: "heart",          label: "CURTIDAS TOTAIS",   value: 0,  iconColor: "#ef4444" },
-    { icon: "message-circle", label: "COMENTÁRIOS",       value: 0,  iconColor: colors.mutedForeground },
+    { icon: "users",          label: "SEGUIDORES",        value: a?.followersCount ?? 0,  iconColor: colors.mutedForeground },
+    { icon: "trending-up",    label: "PUBLICAÇÕES",        value: a?.totalPosts ?? 0,      iconColor: colors.gold },
+    { icon: "heart",          label: "CURTIDAS TOTAIS",    value: a?.totalLikes ?? 0,      iconColor: "#ef4444" },
+    { icon: "message-circle", label: "COMENTÁRIOS",        value: a?.totalComments ?? 0,   iconColor: colors.mutedForeground },
   ];
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
@@ -100,75 +120,91 @@ export default function AnalyticsScreen() {
         <View style={{ width: 22 }} />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
-        {/* KPI 2x2 grid */}
-        <View style={styles.kpiGrid}>
-          {kpis.map((k) => (
-            <View key={k.label} style={[styles.kpiCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-              <View style={styles.kpiTop}>
-                <Feather name={k.icon as any} size={14} color={k.iconColor} />
-                <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>{k.label}</Text>
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={colors.gold} />
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
+          {/* KPI 2x2 grid */}
+          <View style={styles.kpiGrid}>
+            {kpis.map((k) => (
+              <View key={k.label} style={[styles.kpiCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                <View style={styles.kpiTop}>
+                  <Feather name={k.icon as any} size={14} color={k.iconColor} />
+                  <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>{k.label}</Text>
+                </View>
+                <Text style={[styles.kpiValue, { color: colors.navy }]}>{k.value}</Text>
               </View>
-              <Text style={[styles.kpiValue, { color: colors.navy }]}>{k.value}</Text>
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
 
-        {/* Engagement rate */}
-        <View style={[styles.engCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.engLabel, { color: colors.foreground }]}>Taxa de Engajamento</Text>
-            <Text style={[styles.engValue, { color: colors.navy }]}>
-              0.0 <Text style={[styles.engSub, { color: colors.mutedForeground }]}>interações/post</Text>
-            </Text>
+          {/* Engagement rate */}
+          <View style={[styles.engCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.engLabel, { color: colors.foreground }]}>Taxa de Engajamento</Text>
+              <Text style={[styles.engValue, { color: colors.navy }]}>
+                {engagementRate} <Text style={[styles.engSub, { color: colors.mutedForeground }]}>interações/post</Text>
+              </Text>
+            </View>
+            <View style={[styles.engIcon, { backgroundColor: colors.gold + "18" }]}>
+              <Feather name="bar-chart-2" size={22} color={colors.gold} />
+            </View>
           </View>
-          <View style={[styles.engIcon, { backgroundColor: colors.gold + "18" }]}>
-            <Feather name="bar-chart-2" size={22} color={colors.gold} />
-          </View>
-        </View>
 
-        {/* Engagement chart */}
-        <View style={[styles.chartCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-          <Text style={[styles.chartTitle, { color: colors.navy }]}>Engajamento (14 dias)</Text>
-          <View style={{ alignItems: "flex-start", marginTop: 8 }}>
-            <EngagementChart />
+          {/* Engagement chart */}
+          <View style={[styles.chartCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+            <Text style={[styles.chartTitle, { color: colors.navy }]}>Engajamento (14 dias)</Text>
+            {!hasData || !a?.dailyEngagement.length ? (
+              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhum dado ainda</Text>
+            ) : (
+              <>
+                <View style={{ alignItems: "flex-start", marginTop: 8 }}>
+                  <EngagementChart data={a.dailyEngagement} />
+                </View>
+                <View style={styles.legend}>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: "#ef4444" }]} />
+                    <Text style={[styles.legendText, { color: colors.mutedForeground }]}>Curtidas</Text>
+                  </View>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: colors.gold }]} />
+                    <Text style={[styles.legendText, { color: colors.mutedForeground }]}>Comentários</Text>
+                  </View>
+                </View>
+              </>
+            )}
           </View>
-          {/* Legend */}
-          <View style={styles.legend}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: "#ef4444" }]} />
-              <Text style={[styles.legendText, { color: colors.mutedForeground }]}>Curtidas</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: colors.gold }]} />
-              <Text style={[styles.legendText, { color: colors.mutedForeground }]}>Comentários</Text>
-            </View>
-          </View>
-        </View>
 
-        {/* Top posts */}
-        <View style={[styles.topCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-          <Text style={[styles.chartTitle, { color: colors.navy }]}>Posts com Mais Engajamento</Text>
-          {TOP_POSTS.map((post) => (
-            <View key={post.rank} style={[styles.topRow, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.topRank, { color: colors.mutedForeground }]}>{post.rank}</Text>
-              <Text style={[styles.topTitle, { color: colors.foreground }]} numberOfLines={1}>{post.title}</Text>
-              <View style={styles.topStats}>
-                <Feather name="heart" size={13} color={colors.mutedForeground} />
-                <Text style={[styles.topStatNum, { color: colors.mutedForeground }]}>{post.likes}</Text>
-                <Feather name="message-circle" size={13} color={colors.mutedForeground} />
-                <Text style={[styles.topStatNum, { color: colors.mutedForeground }]}>{post.comments}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      </ScrollView>
+          {/* Top posts */}
+          <View style={[styles.topCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+            <Text style={[styles.chartTitle, { color: colors.navy }]}>Posts com Mais Engajamento</Text>
+            {!a?.topPosts.length ? (
+              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhum dado ainda</Text>
+            ) : (
+              a.topPosts.map((post, idx) => (
+                <View key={post.id} style={[styles.topRow, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.topRank, { color: colors.mutedForeground }]}>{idx + 1}</Text>
+                  <Text style={[styles.topTitle, { color: colors.foreground }]} numberOfLines={1}>{post.content}</Text>
+                  <View style={styles.topStats}>
+                    <Feather name="heart" size={13} color={colors.mutedForeground} />
+                    <Text style={[styles.topStatNum, { color: colors.mutedForeground }]}>{post.likes}</Text>
+                    <Feather name="message-circle" size={13} color={colors.mutedForeground} />
+                    <Text style={[styles.topStatNum, { color: colors.mutedForeground }]}>{post.comments}</Text>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+        </ScrollView>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container:   { flex: 1 },
+  center:      { flex: 1, alignItems: "center", justifyContent: "center" },
   header:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
   headerTitle: { fontSize: 20, fontWeight: "700" },
   kpiGrid:     { flexDirection: "row", flexWrap: "wrap", gap: 10 },
@@ -193,4 +229,5 @@ const styles = StyleSheet.create({
   topTitle:    { flex: 1, fontSize: 13 },
   topStats:    { flexDirection: "row", alignItems: "center", gap: 4 },
   topStatNum:  { fontSize: 12 },
+  emptyText:   { fontSize: 13, textAlign: "center", paddingVertical: 16 },
 });

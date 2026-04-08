@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Modal,
   Platform,
@@ -15,7 +16,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
-import Svg, { Path, Polyline } from "react-native-svg";
+import Svg, { Polyline } from "react-native-svg";
+import { fetchCompanyAnalytics, CompanyAnalytics } from "@/services/api";
 
 type CompanyTab  = "publicacoes" | "portfolio" | "analytics";
 type ProductCat  = "produto" | "vinho" | "acessorio" | "servico";
@@ -54,29 +56,17 @@ const MOCK_POSTS: Post[] = [
   { id: "cp1", content: "Novidades da Ideal.BI: lançamos nossa nova plataforma de Business Intelligence para o setor vitivinícola. Acesse e confira as funcionalidades exclusivas para importadoras e distribuidoras.", date: "05/04/2026", likes: 0, comments: 0 },
 ];
 
-const KPI_CARDS = [
-  { icon: "file-text", label: "Publicações",  value: 1 },
-  { icon: "heart",     label: "Curtidas",     value: 0 },
-  { icon: "message-circle", label: "Comentários", value: 0 },
-  { icon: "users",     label: "Seguidores",   value: 0 },
-  { icon: "calendar",  label: "Eventos",      value: 0 },
-  { icon: "eye",       label: "Alcance Est.", value: 0 },
-];
+interface MiniLineChartProps {
+  points: number[];
+}
 
-const GROWTH_ROWS = [
-  { label: "Publicações", current: 1, prev: 0 },
-  { label: "Seguidores",  current: 0, prev: 0 },
-  { label: "Curtidas",    current: 0, prev: 0 },
-  { label: "Comentários", current: 0, prev: 0 },
-];
-
-const MINI_CHART_POINTS = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-
-function MiniLineChart() {
+function MiniLineChart({ points }: MiniLineChartProps) {
   const colors = useColors();
   const W = 220; const H = 40;
-  const n = MINI_CHART_POINTS.length;
-  const pts = MINI_CHART_POINTS.map((v, i) => `${(i / (n - 1)) * W},${H - v * H}`).join(" ");
+  const n = points.length;
+  if (n < 2) return null;
+  const maxVal = Math.max(...points, 1);
+  const pts = points.map((v, i) => `${(i / (n - 1)) * W},${H - (v / maxVal) * H}`).join(" ");
   return (
     <Svg width={W} height={H}>
       <Polyline points={pts} fill="none" stroke={colors.gold} strokeWidth={2} />
@@ -91,6 +81,11 @@ export default function EmpresaScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [activeTab, setActiveTab] = useState<CompanyTab>("publicacoes");
+
+  // Analytics state
+  const [companyAnalytics, setCompanyAnalytics] = useState<CompanyAnalytics | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsLoaded, setAnalyticsLoaded] = useState(false);
 
   // Portfolio state
   const [products, setProducts]         = useState<Product[]>([]);
@@ -111,6 +106,19 @@ export default function EmpresaScreen() {
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
+
+  const loadAnalytics = useCallback(async () => {
+    if (!id || analyticsLoaded) return;
+    setAnalyticsLoading(true);
+    const data = await fetchCompanyAnalytics(id);
+    setCompanyAnalytics(data);
+    setAnalyticsLoaded(true);
+    setAnalyticsLoading(false);
+  }, [id, analyticsLoaded]);
+
+  useEffect(() => {
+    if (activeTab === "analytics") { loadAnalytics(); }
+  }, [activeTab, loadAnalytics]);
 
   const resetProductForm = () => { setPName(""); setPDesc(""); setPPrice(""); setPCat("produto"); setEditingProduct(null); };
 
@@ -327,59 +335,104 @@ export default function EmpresaScreen() {
 
         {/* ── Analytics ── */}
         {activeTab === "analytics" && (
-          <View style={{ padding: 16, gap: 16 }}>
-            {/* KPI grid */}
-            <View style={styles.kpiGrid}>
-              {KPI_CARDS.map((k) => (
-                <View key={k.label} style={[styles.kpiCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-                  <View style={styles.kpiTop}>
-                    <Feather name={k.icon as any} size={16} color={colors.mutedForeground} />
-                    <View style={[styles.kpiBadge, { backgroundColor: colors.background }]}>
-                      <Text style={[styles.kpiBadgeText, { color: colors.mutedForeground }]}>—0%</Text>
+          analyticsLoading ? (
+            <View style={styles.analyticsCenter}>
+              <ActivityIndicator size="large" color={colors.gold} />
+            </View>
+          ) : (
+            <View style={{ padding: 16, gap: 16 }}>
+              {(() => {
+                const a = companyAnalytics;
+                const engRate = a && a.totalPosts > 0
+                  ? ((a.totalLikes + a.totalComments) / a.totalPosts).toFixed(1)
+                  : "0.0";
+                const kpiCards = [
+                  { icon: "file-text",      label: "Publicações",  value: a?.totalPosts ?? 0 },
+                  { icon: "heart",          label: "Curtidas",     value: a?.totalLikes ?? 0 },
+                  { icon: "message-circle", label: "Comentários",  value: a?.totalComments ?? 0 },
+                  { icon: "users",          label: "Seguidores",   value: a?.followersCount ?? 0 },
+                ];
+                const growthRows = [
+                  { label: "Publicações", current: a?.currentWeekPosts ?? 0,    prev: a?.prevWeekPosts ?? 0 },
+                  { label: "Curtidas",    current: a?.currentWeekLikes ?? 0,    prev: a?.prevWeekLikes ?? 0 },
+                  { label: "Comentários", current: a?.currentWeekComments ?? 0, prev: a?.prevWeekComments ?? 0 },
+                  { label: "Seguidores",  current: a?.followersCount ?? 0,      prev: 0 },
+                ];
+                const chartPoints = (a?.dailyEngagement ?? []).map((d) => d.likes + d.comments);
+                return (
+                  <>
+                    {/* KPI grid */}
+                    <View style={styles.kpiGrid}>
+                      {kpiCards.map((k) => (
+                        <View key={k.label} style={[styles.kpiCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                          <View style={styles.kpiTop}>
+                            <Feather name={k.icon as any} size={16} color={colors.mutedForeground} />
+                          </View>
+                          <Text style={[styles.kpiNum, { color: colors.navy }]}>{k.value}</Text>
+                          <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>{k.label}</Text>
+                        </View>
+                      ))}
                     </View>
-                  </View>
-                  <Text style={[styles.kpiNum, { color: colors.navy }]}>{k.value}</Text>
-                  <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>{k.label}</Text>
-                </View>
-              ))}
-            </View>
 
-            {/* Weekly growth */}
-            <View style={[styles.analyticsCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-              <Text style={[styles.analyticsCardTitle, { color: colors.navy }]}>Crescimento Semanal</Text>
-              {GROWTH_ROWS.map((row) => (
-                <View key={row.label} style={[styles.growthRow, { borderBottomColor: colors.border }]}>
-                  <Text style={[styles.growthLabel, { color: colors.foreground }]}>{row.label}</Text>
-                  <View style={styles.growthValues}>
-                    <Text style={[styles.growthCurrent, { color: colors.navy }]}>{row.current}</Text>
-                    <Text style={[styles.growthSep, { color: colors.mutedForeground }]}>vs</Text>
-                    <Text style={[styles.growthPrev, { color: colors.mutedForeground }]}>{row.prev}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
+                    {/* Weekly growth */}
+                    <View style={[styles.analyticsCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                      <Text style={[styles.analyticsCardTitle, { color: colors.navy }]}>Crescimento Semanal</Text>
+                      {growthRows.map((row) => (
+                        <View key={row.label} style={[styles.growthRow, { borderBottomColor: colors.border }]}>
+                          <Text style={[styles.growthLabel, { color: colors.foreground }]}>{row.label}</Text>
+                          <View style={styles.growthValues}>
+                            <Text style={[styles.growthCurrent, { color: colors.navy }]}>{row.current}</Text>
+                            <Text style={[styles.growthSep, { color: colors.mutedForeground }]}>vs</Text>
+                            <Text style={[styles.growthPrev, { color: colors.mutedForeground }]}>{row.prev}</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
 
-            {/* Engagement */}
-            <View style={[styles.analyticsCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-              <Text style={[styles.analyticsCardTitle, { color: colors.navy }]}>Taxa de Engajamento</Text>
-              <Text style={[styles.engagementRate, { color: colors.gold }]}>0.0</Text>
-              <Text style={[styles.engagementSub, { color: colors.mutedForeground }]}>interações/post</Text>
-            </View>
+                    {/* Engagement */}
+                    <View style={[styles.analyticsCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                      <Text style={[styles.analyticsCardTitle, { color: colors.navy }]}>Taxa de Engajamento</Text>
+                      <Text style={[styles.engagementRate, { color: colors.gold }]}>{engRate}</Text>
+                      <Text style={[styles.engagementSub, { color: colors.mutedForeground }]}>interações/post</Text>
+                    </View>
 
-            {/* Chart */}
-            <View style={[styles.analyticsCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-              <Text style={[styles.analyticsCardTitle, { color: colors.navy }]}>Engajamento (14 dias)</Text>
-              <View style={{ paddingTop: 8 }}>
-                <MiniLineChart />
-              </View>
-            </View>
+                    {/* Chart */}
+                    <View style={[styles.analyticsCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                      <Text style={[styles.analyticsCardTitle, { color: colors.navy }]}>Engajamento (14 dias)</Text>
+                      {chartPoints.every((v) => v === 0) ? (
+                        <Text style={[styles.noDataText, { color: colors.mutedForeground }]}>Nenhum dado ainda</Text>
+                      ) : (
+                        <View style={{ paddingTop: 8 }}>
+                          <MiniLineChart points={chartPoints} />
+                        </View>
+                      )}
+                    </View>
 
-            {/* Top posts */}
-            <View style={[styles.analyticsCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-              <Text style={[styles.analyticsCardTitle, { color: colors.navy }]}>Posts com Mais Engajamento</Text>
-              <Text style={[styles.noDataText, { color: colors.mutedForeground }]}>Nenhum dado disponível ainda.</Text>
+                    {/* Top posts */}
+                    <View style={[styles.analyticsCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                      <Text style={[styles.analyticsCardTitle, { color: colors.navy }]}>Posts com Mais Engajamento</Text>
+                      {!a?.topPosts.length ? (
+                        <Text style={[styles.noDataText, { color: colors.mutedForeground }]}>Nenhum dado ainda</Text>
+                      ) : (
+                        a.topPosts.map((post, idx) => (
+                          <View key={post.id} style={[styles.growthRow, { borderBottomColor: colors.border }]}>
+                            <Text style={[styles.growthLabel, { color: colors.mutedForeground }]}>{idx + 1}.</Text>
+                            <Text style={[styles.growthLabel, { color: colors.foreground, flex: 1 }]} numberOfLines={1}>{post.content}</Text>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                              <Feather name="heart" size={12} color={colors.mutedForeground} />
+                              <Text style={[styles.growthPrev, { color: colors.mutedForeground }]}>{post.likes}</Text>
+                              <Feather name="message-circle" size={12} color={colors.mutedForeground} />
+                              <Text style={[styles.growthPrev, { color: colors.mutedForeground }]}>{post.comments}</Text>
+                            </View>
+                          </View>
+                        ))
+                      )}
+                    </View>
+                  </>
+                );
+              })()}
             </View>
-          </View>
+          )
         )}
       </ScrollView>
 
@@ -514,6 +567,7 @@ const styles = StyleSheet.create({
   kpiBadgeText: { fontSize: 10 },
   kpiNum: { fontSize: 24, fontWeight: "800" },
   kpiLabel: { fontSize: 11 },
+  analyticsCenter: { paddingVertical: 60, alignItems: "center", justifyContent: "center" },
   analyticsCard: { borderRadius: 12, borderWidth: 1, padding: 16, gap: 10 },
   analyticsCardTitle: { fontSize: 15, fontWeight: "700" },
   growthRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 8, borderBottomWidth: 1 },
