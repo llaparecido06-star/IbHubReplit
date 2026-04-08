@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Platform,
   ScrollView,
   StyleSheet,
@@ -12,6 +13,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import AdminDrawer from "@/components/AdminDrawer";
 import { useColors } from "@/hooks/useColors";
+import { supabase } from "@/context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 
 interface FeatureFlag {
   key: string;
@@ -20,7 +23,6 @@ interface FeatureFlag {
   icon: keyof typeof Feather.glyphMap;
   iconBg: string;
   iconColor: string;
-  defaultOn: boolean;
 }
 
 const FLAGS: FeatureFlag[] = [
@@ -31,7 +33,6 @@ const FLAGS: FeatureFlag[] = [
     icon: "bar-chart-2",
     iconBg: "#fef9ee",
     iconColor: "#c9a84c",
-    defaultOn: true,
   },
   {
     key: "stories",
@@ -40,7 +41,6 @@ const FLAGS: FeatureFlag[] = [
     icon: "film",
     iconBg: "#fef9ee",
     iconColor: "#c9a84c",
-    defaultOn: true,
   },
   {
     key: "manutencao",
@@ -49,41 +49,62 @@ const FLAGS: FeatureFlag[] = [
     icon: "alert-triangle",
     iconBg: "#f3f4f6",
     iconColor: "#6b7280",
-    defaultOn: false,
-  },
-  {
-    key: "vapid_private",
-    label: "vapid_private_key",
-    description: "VAPID private key for push notifications (secret)",
-    icon: "settings",
-    iconBg: "#f3f4f6",
-    iconColor: "#6b7280",
-    defaultOn: false,
-  },
-  {
-    key: "vapid_public",
-    label: "vapid_public_key",
-    description: "VAPID public key for push notifications",
-    icon: "settings",
-    iconBg: "#f3f4f6",
-    iconColor: "#6b7280",
-    defaultOn: false,
   },
 ];
 
 export default function AdminConfiguracoesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const { session } = useAuth();
 
-  const [flags, setFlags] = useState<Record<string, boolean>>(
-    Object.fromEntries(FLAGS.map((f) => [f.key, f.defaultOn]))
-  );
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [flags, setFlags] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [toggling, setToggling] = useState<string | null>(null);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
-  const toggle = (key: string) => setFlags((prev) => ({ ...prev, [key]: !prev[key] }));
+  const fetchFlags = async () => {
+    setLoading(true);
+    setLoadError(null);
+    const keys = FLAGS.map((f) => f.key);
+    const { data, error } = await supabase
+      .from("feature_flags")
+      .select("key, enabled")
+      .in("key", keys);
+    if (error) {
+      setLoadError("Erro ao carregar flags: " + error.message);
+    } else if (data) {
+      const map: Record<string, boolean> = {};
+      for (const f of FLAGS) {
+        const found = (data as Array<{ key: string; enabled: boolean }>).find((d) => d.key === f.key);
+        map[f.key] = found ? found.enabled : false;
+      }
+      setFlags(map);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchFlags();
+  }, []);
+
+  const toggle = async (key: string) => {
+    const newVal = !flags[key];
+    setFlags((prev) => ({ ...prev, [key]: newVal }));
+    setToggling(key);
+    const userId = session?.user?.id ?? null;
+    const { error } = await supabase.from("feature_flags").upsert(
+      { key, enabled: newVal, updated_at: new Date().toISOString(), updated_by: userId },
+      { onConflict: "key" }
+    );
+    if (error) {
+      setFlags((prev) => ({ ...prev, [key]: !newVal }));
+    }
+    setToggling(null);
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -113,35 +134,47 @@ export default function AdminConfiguracoesScreen() {
           <Text style={[styles.cardDesc, { color: colors.mutedForeground }]}>
             Ligue ou desligue módulos inteiros do aplicativo globalmente. As alterações são aplicadas imediatamente para todos os usuários.
           </Text>
-          {FLAGS.map((flag, i) => (
-            <View
-              key={flag.key}
-              style={[
-                styles.flagRow,
-                { borderTopColor: colors.border },
-                i === 0 && { borderTopWidth: 1, marginTop: 4 },
-              ]}
-            >
-              <View style={[styles.flagIcon, { backgroundColor: flag.iconBg }]}>
-                <Feather name={flag.icon} size={18} color={flag.iconColor} />
+          {loading ? (
+            <ActivityIndicator size="small" color={colors.gold} style={{ marginTop: 8 }} />
+          ) : loadError ? (
+            <Text style={[styles.cardDesc, { color: "#e74c3c" }]}>{loadError}</Text>
+          ) : (
+            FLAGS.map((flag, i) => (
+              <View
+                key={flag.key}
+                style={[
+                  styles.flagRow,
+                  { borderTopColor: colors.border },
+                  i === 0 && { borderTopWidth: 1, marginTop: 4 },
+                ]}
+              >
+                <View style={[styles.flagIcon, { backgroundColor: flag.iconBg }]}>
+                  <Feather name={flag.icon} size={18} color={flag.iconColor} />
+                </View>
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text style={[styles.flagLabel, { color: colors.navy }]}>{flag.label}</Text>
+                  <Text style={[styles.flagDesc, { color: colors.mutedForeground }]}>{flag.description}</Text>
+                </View>
+                <View style={styles.switchWrap}>
+                  {toggling === flag.key ? (
+                    <ActivityIndicator size="small" color={colors.navy} />
+                  ) : (
+                    <>
+                      <Text style={[styles.switchLabel, { color: flags[flag.key] ? colors.navy : colors.mutedForeground }]}>
+                        {flags[flag.key] ? "ON" : "OFF"}
+                      </Text>
+                      <Switch
+                        value={!!flags[flag.key]}
+                        onValueChange={() => toggle(flag.key)}
+                        trackColor={{ false: colors.border, true: colors.navy }}
+                        thumbColor="#fff"
+                      />
+                    </>
+                  )}
+                </View>
               </View>
-              <View style={{ flex: 1, gap: 3 }}>
-                <Text style={[styles.flagLabel, { color: colors.navy }]}>{flag.label}</Text>
-                <Text style={[styles.flagDesc, { color: colors.mutedForeground }]}>{flag.description}</Text>
-              </View>
-              <View style={styles.switchWrap}>
-                <Text style={[styles.switchLabel, { color: flags[flag.key] ? colors.navy : colors.mutedForeground }]}>
-                  {flags[flag.key] ? "ON" : "OFF"}
-                </Text>
-                <Switch
-                  value={flags[flag.key]}
-                  onValueChange={() => toggle(flag.key)}
-                  trackColor={{ false: colors.border, true: colors.navy }}
-                  thumbColor="#fff"
-                />
-              </View>
-            </View>
-          ))}
+            ))
+          )}
         </View>
 
         {/* Informações */}
@@ -187,7 +220,7 @@ const styles = StyleSheet.create({
   flagIcon:    { width: 42, height: 42, borderRadius: 10, alignItems: "center", justifyContent: "center", marginTop: 2 },
   flagLabel:   { fontSize: 14, fontWeight: "600" },
   flagDesc:    { fontSize: 12, lineHeight: 17 },
-  switchWrap:  { alignItems: "center", gap: 3 },
+  switchWrap:  { alignItems: "center", gap: 3, minWidth: 52 },
   switchLabel: { fontSize: 10, fontWeight: "700" },
   infoCard:    { borderRadius: 12, borderWidth: 1, padding: 16, gap: 10 },
   infoTitle:   { fontSize: 16, fontWeight: "700" },

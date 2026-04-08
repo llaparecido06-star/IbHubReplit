@@ -148,4 +148,90 @@ router.get("/admin/user-by-email", async (req: Request, res: Response) => {
   res.json({ user: { ...profile, email: found.email } });
 });
 
+router.get("/admin/admin-list", async (req: Request, res: Response) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+
+  const { data: profiles, error: profErr } = await supabaseAdmin
+    .from("profiles")
+    .select("id, full_name, username, avatar_url")
+    .eq("is_admin", true)
+    .order("full_name", { ascending: true });
+
+  if (profErr) {
+    res.status(500).json({ error: profErr.message });
+    return;
+  }
+
+  const adminProfiles = (profiles ?? []) as Array<{
+    id: string;
+    full_name: string | null;
+    username: string | null;
+    avatar_url: string | null;
+  }>;
+
+  const emailMap = new Map<string, string | null>();
+  let page = 1;
+  let hasMore = true;
+  while (hasMore) {
+    const { data: authPage, error: authErr } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000, page });
+    if (authErr) {
+      res.status(500).json({ error: authErr.message });
+      return;
+    }
+    for (const u of authPage.users) emailMap.set(u.id, u.email ?? null);
+    hasMore = authPage.users.length === 1000;
+    page += 1;
+  }
+
+  const result = adminProfiles.map((p) => ({
+    ...p,
+    email: emailMap.get(p.id) ?? null,
+  }));
+
+  res.json({ admins: result });
+});
+
+router.post("/admin/create-admin", async (req: Request, res: Response) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+
+  const { fullName, email, password } = req.body as {
+    fullName?: string;
+    email?: string;
+    password?: string;
+  };
+
+  if (!fullName || !email || !password) {
+    res.status(400).json({ error: "fullName, email and password are required" });
+    return;
+  }
+
+  const { data: createData, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+    email: email.trim().toLowerCase(),
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: fullName.trim() },
+  });
+
+  if (createErr || !createData?.user) {
+    res.status(500).json({ error: createErr?.message ?? "Failed to create user" });
+    return;
+  }
+
+  const newUserId = createData.user.id;
+
+  const { error: profileErr } = await supabaseAdmin
+    .from("profiles")
+    .upsert({ id: newUserId, full_name: fullName.trim(), is_admin: true }, { onConflict: "id" });
+
+  if (profileErr) {
+    await supabaseAdmin.auth.admin.deleteUser(newUserId);
+    res.status(500).json({ error: "Failed to set admin flag; user creation rolled back: " + profileErr.message });
+    return;
+  }
+
+  res.json({ success: true, userId: newUserId });
+});
+
 export default router;

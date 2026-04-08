@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Platform,
   ScrollView,
@@ -13,28 +14,87 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import AdminDrawer from "@/components/AdminDrawer";
 import { useColors } from "@/hooks/useColors";
+import { supabase } from "@/context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 
 const SEGMENTS = ["Todos os usuários", "Gratuito", "Básico", "Empresa", "Executivo", "Profissional"];
+
+interface PushLog {
+  id: string;
+  created_at: string;
+  titulo: string;
+  mensagem: string;
+  segmento: string;
+  deep_link: string | null;
+}
+
+function formatDate(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" })
+    + " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
 
 export default function AdminComunicacaoScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { session } = useAuth();
+
   const [drawerOpen, setDrawerOpen]   = useState(false);
   const [titulo, setTitulo]           = useState("");
   const [mensagem, setMensagem]       = useState("");
   const [segmento, setSegmento]       = useState(SEGMENTS[0]);
   const [segOpen, setSegOpen]         = useState(false);
   const [deepLink, setDeepLink]       = useState("");
+  const [sending, setSending]         = useState(false);
+
+  const [logs, setLogs]               = useState<PushLog[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(true);
+  const [logsError, setLogsError]     = useState<string | null>(null);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
   const canSend = titulo.trim().length > 0 && mensagem.trim().length > 0;
 
-  const handleSend = () => {
-    if (!canSend) return;
-    Alert.alert("Enviado!", `Notificação "${titulo}" enviada para ${segmento}.`);
+  const fetchLogs = async () => {
+    setLoadingLogs(true);
+    setLogsError(null);
+    const { data, error } = await supabase
+      .from("push_notification_logs")
+      .select("id, created_at, titulo, mensagem, segmento, deep_link")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (error) {
+      setLogsError("Erro ao carregar histórico.");
+    } else if (data) {
+      setLogs(data as PushLog[]);
+    }
+    setLoadingLogs(false);
+  };
+
+  useEffect(() => {
+    fetchLogs();
+  }, []);
+
+  const handleSend = async () => {
+    if (!canSend || sending) return;
+    setSending(true);
+    const userId = session?.user?.id ?? null;
+    const { error } = await supabase.from("push_notification_logs").insert({
+      titulo: titulo.trim(),
+      mensagem: mensagem.trim(),
+      segmento,
+      deep_link: deepLink.trim() || null,
+      sent_by: userId,
+    });
+    setSending(false);
+    if (error) {
+      Alert.alert("Erro", "Não foi possível registrar a notificação: " + error.message);
+      return;
+    }
+    Alert.alert("Enviado!", `Notificação "${titulo}" registrada para ${segmento}.`);
     setTitulo(""); setMensagem(""); setDeepLink("");
+    fetchLogs();
   };
 
   return (
@@ -123,9 +183,13 @@ export default function AdminComunicacaoScreen() {
             <TouchableOpacity
               style={[styles.sendBtn, { backgroundColor: canSend ? colors.gold : colors.gold + "55" }]}
               onPress={handleSend}
-              disabled={!canSend}
+              disabled={!canSend || sending}
             >
-              <Feather name="send" size={13} color="#fff" />
+              {sending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Feather name="send" size={13} color="#fff" />
+              )}
               <Text style={styles.sendBtnText}>Enviar{"\n"}Notificação</Text>
             </TouchableOpacity>
           </View>
@@ -133,9 +197,23 @@ export default function AdminComunicacaoScreen() {
           {/* Right: Histórico */}
           <View style={[styles.rightCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
             <Text style={[styles.histTitle, { color: colors.navy }]}>Histórico</Text>
-            <Text style={[styles.histEmpty, { color: colors.mutedForeground }]}>
-              Nenhum envio{"\n"}realizado
-            </Text>
+            {loadingLogs ? (
+              <ActivityIndicator size="small" color={colors.gold} />
+            ) : logsError ? (
+              <Text style={[styles.histEmpty, { color: "#e74c3c" }]}>{logsError}</Text>
+            ) : logs.length === 0 ? (
+              <Text style={[styles.histEmpty, { color: colors.mutedForeground }]}>
+                Nenhum envio{"\n"}realizado
+              </Text>
+            ) : (
+              logs.map((log) => (
+                <View key={log.id} style={[styles.logItem, { borderTopColor: colors.border }]}>
+                  <Text style={[styles.logDate, { color: colors.mutedForeground }]}>{formatDate(log.created_at)}</Text>
+                  <Text style={[styles.logTitle, { color: colors.navy }]} numberOfLines={1}>{log.titulo}</Text>
+                  <Text style={[styles.logSeg, { color: colors.gold }]} numberOfLines={1}>{log.segmento}</Text>
+                </View>
+              ))
+            )}
           </View>
         </View>
       </ScrollView>
@@ -167,4 +245,8 @@ const styles = StyleSheet.create({
   sendBtnText: { color: "#fff", fontSize: 12, fontWeight: "700", textAlign: "center" },
   histTitle:   { fontSize: 15, fontWeight: "700" },
   histEmpty:   { fontSize: 12, lineHeight: 18 },
+  logItem:     { borderTopWidth: 1, paddingTop: 8, gap: 2 },
+  logDate:     { fontSize: 10 },
+  logTitle:    { fontSize: 12, fontWeight: "600" },
+  logSeg:      { fontSize: 10 },
 });
