@@ -2980,3 +2980,233 @@ export async function reviewCertificationRequest(
     return false;
   }
 }
+
+// ─── AVATAR UPLOAD ────────────────────────────────────────────────────────────
+
+export async function uploadAvatar(userId: string, uri: string): Promise<string | null> {
+  try {
+    const ext = uri.split(".").pop()?.split("?")[0]?.toLowerCase() ?? "jpg";
+    const mime = ext === "png" ? "image/png" : "image/jpeg";
+    const path = `avatars/${userId}.${ext}`;
+
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    const arrayBuffer = await blob.arrayBuffer();
+    const uint8 = new Uint8Array(arrayBuffer);
+
+    const { error } = await supabase.storage
+      .from("post-images")
+      .upload(path, uint8, { contentType: mime, upsert: true });
+
+    if (error) { console.error("uploadAvatar:", error); return null; }
+
+    const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(path);
+    return urlData.publicUrl ?? null;
+  } catch (e) {
+    console.error("uploadAvatar:", e);
+    return null;
+  }
+}
+
+// ─── USERNAME AVAILABILITY ───────────────────────────────────────────────────
+
+export async function checkUsernameAvailable(username: string, currentUserId: string): Promise<boolean> {
+  try {
+    if (!username.trim() || username.length < 3) return false;
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("username", username.trim().toLowerCase())
+      .neq("id", currentUserId)
+      .maybeSingle();
+    if (error) return true;
+    return !data;
+  } catch {
+    return true;
+  }
+}
+
+// ─── COMPANY POSTS ────────────────────────────────────────────────────────────
+
+export async function fetchCompanyPosts(companyId: string, currentUserId?: string): Promise<Post[]> {
+  try {
+    const { data: pageData } = await supabase
+      .from("company_pages")
+      .select("owner_id")
+      .eq("id", companyId)
+      .single();
+
+    if (!pageData?.owner_id) return [];
+
+    const { data, error } = await supabase
+      .from("posts")
+      .select(`id, content, created_at, likes_count, comments_count,
+        author:profiles!posts_user_id_fkey(id, full_name, username, avatar_url, position, company, plan)`)
+      .eq("user_id", pageData.owner_id)
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (error) { console.error("fetchCompanyPosts:", error); return []; }
+
+    const posts = (data ?? []) as any[];
+
+    if (!currentUserId || posts.length === 0) {
+      return posts.map((p) => ({ ...p, is_liked: false, is_bookmarked: false })) as Post[];
+    }
+
+    const postIds = posts.map((p) => p.id);
+    const [{ data: myLikes }, { data: myBookmarks }] = await Promise.all([
+      supabase.from("likes").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
+      supabase.from("bookmarks").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
+    ]);
+
+    const likedSet     = new Set((myLikes     ?? []).map((l: any) => l.post_id));
+    const bookmarkSet  = new Set((myBookmarks ?? []).map((b: any) => b.post_id));
+
+    return posts.map((p) => ({
+      ...p,
+      is_liked:      likedSet.has(p.id),
+      is_bookmarked: bookmarkSet.has(p.id),
+    })) as Post[];
+  } catch (e) {
+    console.error("fetchCompanyPosts:", e);
+    return [];
+  }
+}
+
+// ─── COMPANY PORTFOLIO ────────────────────────────────────────────────────────
+
+export interface CompanyProduct {
+  id: string;
+  company_id: string;
+  name: string;
+  description: string | null;
+  price: string | null;
+  category: string;
+  image_url: string | null;
+  created_at: string;
+}
+
+export async function fetchCompanyProducts(companyId: string): Promise<CompanyProduct[]> {
+  try {
+    const { data, error } = await supabase
+      .from("company_products")
+      .select("*")
+      .eq("company_id", companyId)
+      .order("created_at", { ascending: false });
+
+    if (error) { console.error("fetchCompanyProducts:", error); return []; }
+    return (data ?? []) as CompanyProduct[];
+  } catch (e) {
+    console.error("fetchCompanyProducts:", e);
+    return [];
+  }
+}
+
+export async function createCompanyProduct(params: {
+  company_id: string;
+  name: string;
+  description?: string | null;
+  price?: string | null;
+  category: string;
+  image_url?: string | null;
+}): Promise<CompanyProduct | null> {
+  try {
+    const { data, error } = await supabase
+      .from("company_products")
+      .insert(params)
+      .select()
+      .single();
+
+    if (error) { console.error("createCompanyProduct:", error); return null; }
+    return data as CompanyProduct;
+  } catch (e) {
+    console.error("createCompanyProduct:", e);
+    return null;
+  }
+}
+
+export async function updateCompanyProduct(
+  productId: string,
+  updates: Partial<Pick<CompanyProduct, "name" | "description" | "price" | "category" | "image_url">>,
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("company_products")
+      .update(updates)
+      .eq("id", productId);
+    if (error) { console.error("updateCompanyProduct:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("updateCompanyProduct:", e);
+    return false;
+  }
+}
+
+export async function deleteCompanyProduct(productId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("company_products")
+      .delete()
+      .eq("id", productId);
+    if (error) { console.error("deleteCompanyProduct:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("deleteCompanyProduct:", e);
+    return false;
+  }
+}
+
+export async function uploadProductImage(productId: string, uri: string): Promise<string | null> {
+  try {
+    const ext = uri.split(".").pop()?.split("?")[0]?.toLowerCase() ?? "jpg";
+    const mime = ext === "png" ? "image/png" : "image/jpeg";
+    const path = `product-images/${productId}.${ext}`;
+
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    const arrayBuffer = await blob.arrayBuffer();
+    const uint8 = new Uint8Array(arrayBuffer);
+
+    const { error } = await supabase.storage
+      .from("post-images")
+      .upload(path, uint8, { contentType: mime, upsert: true });
+
+    if (error) { console.error("uploadProductImage:", error); return null; }
+
+    const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(path);
+    return urlData.publicUrl ?? null;
+  } catch (e) {
+    console.error("uploadProductImage:", e);
+    return null;
+  }
+}
+
+// ─── COMPANY FOLLOW ───────────────────────────────────────────────────────────
+
+export async function checkIsFollowingCompany(companyId: string, userId: string): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from("company_follows")
+      .select("id")
+      .match({ company_id: companyId, user_id: userId })
+      .maybeSingle();
+    return !!data;
+  } catch { return false; }
+}
+
+export async function toggleCompanyFollow(companyId: string, userId: string, isCurrentlyFollowing: boolean): Promise<boolean> {
+  try {
+    if (isCurrentlyFollowing) {
+      const { error } = await supabase.from("company_follows").delete().match({ company_id: companyId, user_id: userId });
+      if (error) { console.error("toggleCompanyFollow (unfollow):", error); return false; }
+    } else {
+      const { error } = await supabase.from("company_follows").upsert({ company_id: companyId, user_id: userId }, { onConflict: "company_id,user_id" });
+      if (error) { console.error("toggleCompanyFollow (follow):", error); return false; }
+    }
+    return true;
+  } catch (e) {
+    console.error("toggleCompanyFollow:", e);
+    return false;
+  }
+}

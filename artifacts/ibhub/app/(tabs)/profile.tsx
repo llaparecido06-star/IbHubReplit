@@ -35,6 +35,9 @@ import {
   toggleLike,
   toggleBookmark,
   addComment,
+  deletePost,
+  toggleFollow,
+  checkIsFollowing,
 } from "@/services/api";
 import { Post } from "@/components/feed/PostCard";
 import EmpresaDashboard from "@/components/EmpresaDashboard";
@@ -64,6 +67,9 @@ export default function ProfileScreen() {
   const [loadingData,    setLoadingData]    = useState(true);
   const [refreshing,     setRefreshing]     = useState(false);
 
+  const [followingSet,   setFollowingSet]   = useState<Set<string>>(new Set());
+  const [togglingFollow, setTogglingFollow] = useState<string | null>(null);
+
   const isCompany = profile?.profile_type === "empresa";
   const name      = profile?.full_name ?? profile?.username ?? "Usuário";
   const username  = profile?.username  ?? "";
@@ -90,6 +96,7 @@ export default function ProfileScreen() {
     setFollowing(fg);
     setSuggestions(sg);
     setCompanyPages(cp);
+    setFollowingSet(new Set(fg.map((f) => f.id)));
     setLoadingData(false);
     setRefreshing(false);
   }, [user?.id, isCompany]);
@@ -103,7 +110,16 @@ export default function ProfileScreen() {
     setShowPostMenu(null);
     Alert.alert("Excluir publicação", "Deseja excluir esta publicação?", [
       { text: "Cancelar", style: "cancel" },
-      { text: "Excluir", style: "destructive", onPress: () => setPosts((p) => p.filter((x) => x.id !== id)) },
+      {
+        text: "Excluir", style: "destructive", onPress: async () => {
+          const ok = await deletePost(id);
+          if (ok) {
+            setPosts((p) => p.filter((x) => x.id !== id));
+          } else {
+            Alert.alert("Erro", "Não foi possível excluir a publicação. Tente novamente.");
+          }
+        }
+      },
     ]);
   };
 
@@ -143,6 +159,19 @@ export default function ProfileScreen() {
       prev.map((s) => s.id === targetId ? { ...s, connection_status: "pending" as const } : s)
     );
     setConnectingId(null);
+  };
+
+  const handleToggleFollowModal = async (targetId: string) => {
+    if (!user?.id || togglingFollow) return;
+    setTogglingFollow(targetId);
+    const isCurrentlyFollowing = followingSet.has(targetId);
+    await toggleFollow(targetId, user.id, isCurrentlyFollowing);
+    setFollowingSet((prev) => {
+      const next = new Set(prev);
+      if (isCurrentlyFollowing) { next.delete(targetId); } else { next.add(targetId); }
+      return next;
+    });
+    setTogglingFollow(null);
   };
 
   const handleLikePost = async (post: Post) => {
@@ -643,26 +672,49 @@ export default function ProfileScreen() {
                 {statModal === "seguidores" ? "Nenhum seguidor ainda." : "Não está seguindo ninguém ainda."}
               </Text>
             ) : (
-              (statModal === "seguidores" ? followers : following).map((person) => (
-                <TouchableOpacity
+              (statModal === "seguidores" ? followers : following).map((person) => {
+                const isYou = person.id === user?.id;
+                const isFollowing = followingSet.has(person.id);
+                const isToggling  = togglingFollow === person.id;
+                return (
+                <View
                   key={person.id}
                   style={[styles.statPersonRow, { borderBottomColor: colors.border }]}
-                  onPress={() => { setStatModal(null); router.push(`/profile/${person.id}` as any); }}
                 >
-                  <Avatar uri={person.avatar_url} name={person.full_name ?? person.username ?? "?"} size={40} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.statPersonName, { color: colors.navy }]}>
-                      {person.full_name ?? person.username ?? "Usuário"}
-                    </Text>
-                    {person.position || person.company ? (
-                      <Text style={[styles.statPersonRole, { color: colors.mutedForeground }]}>
-                        {[person.position, person.company].filter(Boolean).join(" · ")}
+                  <TouchableOpacity
+                    style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}
+                    onPress={() => { setStatModal(null); router.push(`/profile/${person.id}` as any); }}
+                  >
+                    <Avatar uri={person.avatar_url} name={person.full_name ?? person.username ?? "?"} size={40} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.statPersonName, { color: colors.navy }]}>
+                        {person.full_name ?? person.username ?? "Usuário"}
                       </Text>
-                    ) : null}
-                  </View>
-                  <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-                </TouchableOpacity>
-              ))
+                      {person.position || person.company ? (
+                        <Text style={[styles.statPersonRole, { color: colors.mutedForeground }]}>
+                          {[person.position, person.company].filter(Boolean).join(" · ")}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </TouchableOpacity>
+                  {!isYou && (
+                    <TouchableOpacity
+                      style={[
+                        styles.statFollowBtn,
+                        { backgroundColor: isFollowing ? colors.border : colors.gold },
+                        isToggling && { opacity: 0.6 },
+                      ]}
+                      onPress={() => handleToggleFollowModal(person.id)}
+                      disabled={!!togglingFollow}
+                    >
+                      <Text style={[styles.statFollowBtnText, { color: isFollowing ? colors.navy : "#fff" }]}>
+                        {isToggling ? "..." : isFollowing ? "Seguindo" : "Seguir"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                );
+              })
             )}
           </View>
         </Pressable>
@@ -767,4 +819,6 @@ const styles = StyleSheet.create({
   statPersonRow:      { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderBottomWidth: 1 },
   statPersonName:     { fontSize: 14, fontWeight: "600" },
   statPersonRole:     { fontSize: 12, marginTop: 2 },
+  statFollowBtn:      { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, minWidth: 72, alignItems: "center" },
+  statFollowBtnText:  { fontSize: 12, fontWeight: "700" },
 });

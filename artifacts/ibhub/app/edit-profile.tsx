@@ -1,7 +1,8 @@
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   Alert,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -12,15 +13,18 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { updateProfile } from "@/services/api";
+import { updateProfile, uploadAvatar, checkUsernameAvailable } from "@/services/api";
 
 const AREAS = [
   "Sommelier", "Produtor", "Importador", "Exportador", "Distribuidor",
   "Enoturismo", "Marketing", "Jornalismo", "Educação", "Consultoria",
   "Enólogo", "Restaurateur",
 ];
+
+type UsernameStatus = "idle" | "checking" | "available" | "unavailable";
 
 export default function EditProfileScreen() {
   const colors = useColors();
@@ -45,8 +49,86 @@ export default function EditProfileScreen() {
   const [instagram, setInstagram]     = useState(profile?.instagram    ?? "");
   const [saving, setSaving]           = useState(false);
 
+  const [avatarUri, setAvatarUri]     = useState<string | null>(profile?.avatar_url ?? null);
+  const [avatarChanged, setAvatarChanged] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>("idle");
+  const usernameDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
+
+  const isDirty = useCallback(() => {
+    return (
+      fullName   !== (profile?.full_name    ?? "") ||
+      username   !== (profile?.username     ?? "") ||
+      bio        !== (profile?.bio          ?? "") ||
+      company    !== (profile?.company      ?? "") ||
+      position   !== (profile?.position     ?? "") ||
+      website    !== (profile?.website      ?? "") ||
+      linkedin   !== (profile?.linkedin     ?? "") ||
+      instagram  !== (profile?.instagram    ?? "") ||
+      avatarChanged ||
+      JSON.stringify(selectedAreas)     !== JSON.stringify(profile?.areas_of_expertise  ?? []) ||
+      JSON.stringify(certifications)    !== JSON.stringify(
+        Array.isArray(profile?.certifications) ? profile.certifications : []
+      )
+    );
+  }, [fullName, username, bio, company, position, website, linkedin, instagram,
+      selectedAreas, certifications, avatarChanged, profile]);
+
+  const handleBack = () => {
+    if (isDirty()) {
+      Alert.alert(
+        "Alterações não salvas",
+        "Você tem alterações que não foram salvas. Deseja sair mesmo assim?",
+        [
+          { text: "Continuar editando", style: "cancel" },
+          { text: "Sair sem salvar", style: "destructive", onPress: () => router.back() },
+        ]
+      );
+    } else {
+      router.back();
+    }
+  };
+
+  const handlePickAvatar = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permissão necessária", "Precisamos de acesso à sua galeria para alterar a foto.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: "images",
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setAvatarUri(result.assets[0].uri);
+      setAvatarChanged(true);
+    }
+  };
+
+  const handleUsernameChange = (val: string) => {
+    setUsername(val);
+    if (usernameDebounce.current) clearTimeout(usernameDebounce.current);
+    if (!val.trim() || val.trim() === (profile?.username ?? "")) {
+      setUsernameStatus("idle");
+      return;
+    }
+    if (val.trim().length < 3) {
+      setUsernameStatus("unavailable");
+      return;
+    }
+    setUsernameStatus("checking");
+    usernameDebounce.current = setTimeout(async () => {
+      if (!user?.id) return;
+      const available = await checkUsernameAvailable(val.trim(), user.id);
+      setUsernameStatus(available ? "available" : "unavailable");
+    }, 600);
+  };
 
   const toggleArea = (area: string) => {
     setSelectedAreas((prev) => {
@@ -77,7 +159,24 @@ export default function EditProfileScreen() {
   const handleSave = async () => {
     if (!fullName.trim()) { Alert.alert("Atenção", "Nome completo é obrigatório."); return; }
     if (!user?.id) { Alert.alert("Erro", "Sessão expirada. Faça login novamente."); return; }
+    if (usernameStatus === "unavailable") {
+      Alert.alert("Atenção", "O nome de usuário informado não está disponível.");
+      return;
+    }
     setSaving(true);
+
+    let finalAvatarUrl: string | null | undefined = undefined;
+    if (avatarChanged && avatarUri) {
+      setUploadingAvatar(true);
+      const uploaded = await uploadAvatar(user.id, avatarUri);
+      setUploadingAvatar(false);
+      if (!uploaded) {
+        Alert.alert("Aviso", "Não foi possível fazer upload da foto, mas o resto do perfil será salvo.");
+      } else {
+        finalAvatarUrl = uploaded;
+      }
+    }
+
     const ok = await updateProfile(user.id, {
       full_name:          fullName.trim(),
       username:           username.trim() || undefined,
@@ -89,6 +188,7 @@ export default function EditProfileScreen() {
       linkedin:           linkedin.trim() || null,
       instagram:          instagram.trim() || null,
       certifications,
+      ...(finalAvatarUrl !== undefined ? { avatar_url: finalAvatarUrl } : {}),
     });
     setSaving(false);
     if (!ok) {
@@ -100,11 +200,12 @@ export default function EditProfileScreen() {
     router.back();
   };
 
+  const name = fullName || profile?.full_name || "?";
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
+        <TouchableOpacity onPress={handleBack} style={styles.backRow}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
           <Text style={[styles.headerTitle, { color: colors.navy }]}>Editar Perfil</Text>
         </TouchableOpacity>
@@ -121,13 +222,21 @@ export default function EditProfileScreen() {
       <ScrollView contentContainerStyle={{ padding: 20, gap: 18, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {/* Avatar */}
         <View style={styles.avatarWrap}>
-          <View style={[styles.avatar, { backgroundColor: colors.navy }]}>
-            <Text style={[styles.avatarInitial, { color: colors.gold }]}>
-              {fullName.charAt(0).toUpperCase() || "?"}
-            </Text>
-          </View>
-          <TouchableOpacity style={[styles.cameraBtn, { backgroundColor: colors.gold }]}>
-            <Feather name="camera" size={13} color="#fff" />
+          {avatarUri ? (
+            <Image source={{ uri: avatarUri }} style={styles.avatarImg} />
+          ) : (
+            <View style={[styles.avatar, { backgroundColor: colors.navy }]}>
+              <Text style={[styles.avatarInitial, { color: colors.gold }]}>
+                {name.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
+          <TouchableOpacity
+            style={[styles.cameraBtn, { backgroundColor: colors.gold }]}
+            onPress={handlePickAvatar}
+            disabled={uploadingAvatar}
+          >
+            <Feather name={uploadingAvatar ? "loader" : "camera"} size={13} color="#fff" />
           </TouchableOpacity>
         </View>
 
@@ -148,13 +257,18 @@ export default function EditProfileScreen() {
             <TextInput
               style={[styles.input, styles.inputFlex, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
               value={username}
-              onChangeText={setUsername}
+              onChangeText={handleUsernameChange}
               autoCapitalize="none"
             />
             <View style={[styles.checkIcon, { backgroundColor: "#fff", borderColor: colors.border }]}>
-              <Feather name="check" size={16} color="#22c55e" />
+              {usernameStatus === "idle"        && <Feather name="minus" size={16} color={colors.mutedForeground} />}
+              {usernameStatus === "checking"    && <Feather name="loader" size={16} color={colors.mutedForeground} />}
+              {usernameStatus === "available"   && <Feather name="check" size={16} color="#22c55e" />}
+              {usernameStatus === "unavailable" && <Feather name="x" size={16} color="#dc2626" />}
             </View>
           </View>
+          {usernameStatus === "available"   && <Text style={[styles.usernameHint, { color: "#22c55e" }]}>Disponível</Text>}
+          {usernameStatus === "unavailable" && <Text style={[styles.usernameHint, { color: "#dc2626" }]}>Indisponível ou muito curto</Text>}
         </View>
 
         {/* Bio */}
@@ -296,6 +410,7 @@ const styles = StyleSheet.create({
   saveBtnText:  { color: "#fff", fontSize: 14, fontWeight: "700" },
   avatarWrap:   { alignSelf: "center", position: "relative" },
   avatar:       { width: 88, height: 88, borderRadius: 44, alignItems: "center", justifyContent: "center" },
+  avatarImg:    { width: 88, height: 88, borderRadius: 44 },
   avatarInitial:{ fontSize: 36, fontWeight: "800" },
   cameraBtn:    { position: "absolute", bottom: -2, right: -2, width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   field:        { gap: 8 },
@@ -312,4 +427,5 @@ const styles = StyleSheet.create({
   certChip:     { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   certChipText: { fontSize: 13 },
   addBtn:       { width: 46, height: 46, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  usernameHint: { fontSize: 12, marginTop: -4 },
 });
