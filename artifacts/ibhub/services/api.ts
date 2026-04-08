@@ -108,8 +108,8 @@ export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
     const { data, error } = await supabase
       .from("posts")
       .select(`
-        id, user_id, content, image_url, likes_count, comments_count, shares_count,
-        hashtags, poll, created_at,
+        id, user_id, content, image_url, image_urls, likes_count, comments_count, shares_count,
+        view_count, location, hashtags, poll, created_at,
         author:profiles!posts_user_id_fkey(${AUTHOR_SELECT})
       `)
       .order("created_at", { ascending: false })
@@ -120,17 +120,18 @@ export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
     const postIds = data.map((p: any) => p.id);
 
     const [likedRes, bookmarkRes] = await Promise.all([
-      supabase.from("likes").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
+      supabase.from("likes").select("post_id, reaction_type").eq("user_id", currentUserId).in("post_id", postIds),
       supabase.from("bookmarks").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
     ]);
 
-    const likedIds = new Set((likedRes.data ?? []).map((l: any) => l.post_id));
+    const likedMap = new Map((likedRes.data ?? []).map((l: any) => [l.post_id, l.reaction_type ?? null]));
     const bookmarkedIds = new Set((bookmarkRes.data ?? []).map((b: any) => b.post_id));
 
     return data.map((post: any) => ({
       ...post,
       author: normaliseAuthor(post.author),
-      is_liked: likedIds.has(post.id),
+      is_liked: likedMap.has(post.id),
+      reaction_type: likedMap.get(post.id) ?? null,
       is_bookmarked: bookmarkedIds.has(post.id),
     }));
   } catch (e) {
@@ -166,16 +167,18 @@ export async function createPost(params: {
   user_id: string;
   content: string;
   image_url?: string | null;
+  image_urls?: string[] | null;
+  location?: string | null;
   poll?: { options: { text: string; votes: number }[]; total_votes: number; closed: boolean };
   hashtags?: string[];
 }): Promise<Post | null> {
   try {
     const { data, error } = await supabase
       .from("posts")
-      .insert({ ...params, likes_count: 0, comments_count: 0, shares_count: 0 })
+      .insert({ ...params, likes_count: 0, comments_count: 0, shares_count: 0, view_count: 0 })
       .select(`
-        id, user_id, content, image_url, likes_count, comments_count, shares_count,
-        hashtags, poll, created_at,
+        id, user_id, content, image_url, image_urls, likes_count, comments_count, shares_count,
+        view_count, location, hashtags, poll, created_at,
         author:profiles!posts_user_id_fkey(${AUTHOR_SELECT})
       `)
       .single();
@@ -193,8 +196,8 @@ export async function fetchPostById(postId: string, currentUserId?: string): Pro
     const { data, error } = await supabase
       .from("posts")
       .select(`
-        id, user_id, content, image_url, likes_count, comments_count, shares_count,
-        hashtags, poll, created_at,
+        id, user_id, content, image_url, image_urls, likes_count, comments_count, shares_count,
+        view_count, location, hashtags, poll, created_at,
         author:profiles!posts_user_id_fkey(${AUTHOR_SELECT})
       `)
       .eq("id", postId)
@@ -205,10 +208,15 @@ export async function fetchPostById(postId: string, currentUserId?: string): Pro
 
     if (currentUserId) {
       const [l, b] = await Promise.all([
-        supabase.from("likes").select("id").match({ post_id: postId, user_id: currentUserId }).maybeSingle(),
+        supabase.from("likes").select("id, reaction_type").match({ post_id: postId, user_id: currentUserId }).maybeSingle(),
         supabase.from("bookmarks").select("id").match({ post_id: postId, user_id: currentUserId }).maybeSingle(),
       ]);
-      return { ...post, is_liked: !!l.data, is_bookmarked: !!b.data } as Post;
+      return {
+        ...post,
+        is_liked: !!l.data,
+        reaction_type: (l.data as any)?.reaction_type ?? null,
+        is_bookmarked: !!b.data,
+      } as Post;
     }
     return post as Post;
   } catch (e) {
@@ -226,6 +234,70 @@ export async function toggleLike(postId: string, userId: string, isCurrentlyLike
     }
   } catch (e) {
     console.error("toggleLike:", e);
+  }
+}
+
+export async function toggleReaction(
+  postId: string,
+  userId: string,
+  reactionType: string,
+  currentReaction: string | null,
+): Promise<void> {
+  try {
+    if (currentReaction === reactionType) {
+      await supabase.from("likes").delete().match({ post_id: postId, user_id: userId });
+    } else {
+      await supabase
+        .from("likes")
+        .upsert({ post_id: postId, user_id: userId, reaction_type: reactionType }, { onConflict: "post_id,user_id" });
+    }
+  } catch (e) {
+    console.error("toggleReaction:", e);
+  }
+}
+
+export async function incrementViewCount(postId: string): Promise<void> {
+  try {
+    await supabase.rpc("increment_view_count", { post_id: postId });
+  } catch (e) {
+    // Silently ignore — view count increment is best-effort
+  }
+}
+
+export async function fetchNewPostsSince(since: string, currentUserId: string): Promise<Post[]> {
+  try {
+    const { data, error } = await supabase
+      .from("posts")
+      .select(`
+        id, user_id, content, image_url, image_urls, likes_count, comments_count, shares_count,
+        view_count, location, hashtags, poll, created_at,
+        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT})
+      `)
+      .gt("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (error || !data || data.length === 0) return [];
+
+    const postIds = data.map((p: any) => p.id);
+    const [likedRes, bookmarkRes] = await Promise.all([
+      supabase.from("likes").select("post_id, reaction_type").eq("user_id", currentUserId).in("post_id", postIds),
+      supabase.from("bookmarks").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
+    ]);
+
+    const likedMap = new Map((likedRes.data ?? []).map((l: any) => [l.post_id, l.reaction_type ?? null]));
+    const bookmarkedIds = new Set((bookmarkRes.data ?? []).map((b: any) => b.post_id));
+
+    return data.map((post: any) => ({
+      ...post,
+      author: normaliseAuthor(post.author),
+      is_liked: likedMap.has(post.id),
+      reaction_type: likedMap.get(post.id) ?? null,
+      is_bookmarked: bookmarkedIds.has(post.id),
+    }));
+  } catch (e) {
+    console.error("fetchNewPostsSince:", e);
+    return [];
   }
 }
 

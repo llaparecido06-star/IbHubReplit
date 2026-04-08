@@ -7,8 +7,11 @@ import {
   Animated,
   Dimensions,
   Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Platform,
   Pressable,
+  ScrollView,
   Share,
   StyleSheet,
   Text,
@@ -20,18 +23,31 @@ import { Avatar } from "@/components/ui/Avatar";
 import { useColors } from "@/hooks/useColors";
 import { createReport, hidePost, blockUser } from "@/services/api";
 
+export type ReactionType = "saude" | "bravo" | "destaque" | "incrivel";
+
+export const REACTIONS: { type: ReactionType; emoji: string; label: string }[] = [
+  { type: "saude",    emoji: "🍷", label: "Saúde!" },
+  { type: "bravo",    emoji: "👏", label: "Bravo!" },
+  { type: "destaque", emoji: "⭐", label: "Destaque!" },
+  { type: "incrivel", emoji: "🔥", label: "Incrível!" },
+];
+
 export interface Post {
   id: string;
   user_id: string;
   content: string;
   image_url?: string | null;
+  image_urls?: string[] | null;
   likes_count: number;
   comments_count: number;
   shares_count: number;
+  view_count?: number;
   is_liked?: boolean;
   is_bookmarked?: boolean;
+  reaction_type?: ReactionType | null;
   created_at: string;
   hashtags?: string[];
+  location?: string | null;
   poll?: {
     options: { text: string; votes: number }[];
     total_votes: number;
@@ -49,7 +65,7 @@ export interface Post {
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const CONTENT_CUTOFF = 220; // chars before "Ver mais"
+const CONTENT_CUTOFF = 220;
 
 interface PostCardProps {
   onHide?: (postId: string) => void;
@@ -57,6 +73,7 @@ interface PostCardProps {
   post: Post;
   currentUserId?: string | null;
   onLike?: (postId: string) => void;
+  onReact?: (postId: string, reaction: ReactionType) => void;
   onBookmark?: (postId: string) => void;
   onComment?: (postId: string) => void;
   onVote?: (postId: string, optionIndex: number) => void;
@@ -84,7 +101,6 @@ function detectPostType(content: string): "wine" | "poll" | "text" {
   return "text";
 }
 
-// ─── Plan badge ────────────────────────────────────────────────────────────────
 function PlanBadge({ plan, colors }: { plan?: string; colors: any }) {
   if (!plan || plan === "basico") return null;
   const map: Record<string, { label: string; color: string }> = {
@@ -101,18 +117,102 @@ function PlanBadge({ plan, colors }: { plan?: string; colors: any }) {
   );
 }
 
+function ImageCarousel({ imageUrls }: { imageUrls: string[] }) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+    setCurrentIndex(idx);
+  };
+
+  if (imageUrls.length === 1) {
+    return (
+      <Image
+        source={{ uri: imageUrls[0] }}
+        style={styles.image}
+        contentFit="cover"
+      />
+    );
+  }
+
+  return (
+    <View style={styles.carouselWrap}>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={handleScroll}
+        style={styles.carouselScroll}
+      >
+        {imageUrls.map((uri, i) => (
+          <Image
+            key={i}
+            source={{ uri }}
+            style={styles.carouselImage}
+            contentFit="cover"
+          />
+        ))}
+      </ScrollView>
+      <View style={styles.dotsRow}>
+        {imageUrls.map((_, i) => (
+          <View
+            key={i}
+            style={[
+              styles.dot,
+              i === currentIndex ? styles.dotActive : styles.dotInactive,
+            ]}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 const REPORT_REASONS = ["Spam", "Conteúdo ofensivo", "Informação falsa", "Assédio", "Outro"];
 
-export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, onVote, onHide, onBlock }: PostCardProps) {
+function ReactionPicker({
+  visible,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  onSelect: (r: ReactionType) => void;
+  onClose: () => void;
+}) {
+  if (!visible) return null;
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.reactionOverlay} onPress={onClose}>
+        <View style={styles.reactionPicker}>
+          {REACTIONS.map((r) => (
+            <TouchableOpacity
+              key={r.type}
+              style={styles.reactionBtn}
+              onPress={() => { onSelect(r.type); onClose(); }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.reactionEmoji}>{r.emoji}</Text>
+              <Text style={styles.reactionLabel}>{r.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
+export function PostCard({ post, currentUserId, onLike, onReact, onBookmark, onComment, onVote, onHide, onBlock }: PostCardProps) {
   const colors = useColors();
   const router = useRouter();
-  const [showOptions, setShowOptions]       = useState(false);
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [selectedReason, setSelectedReason]   = useState<string | null>(null);
-  const [reportSending, setReportSending]     = useState(false);
-  const [expanded, setExpanded]             = useState(false);
+  const [showOptions, setShowOptions]         = useState(false);
+  const [showReportModal, setShowReportModal]  = useState(false);
+  const [selectedReason, setSelectedReason]    = useState<string | null>(null);
+  const [reportSending, setReportSending]      = useState(false);
+  const [expanded, setExpanded]               = useState(false);
+  const [showReactions, setShowReactions]      = useState(false);
+  // Track the last reaction used so tap can toggle it back on after removal
+  const lastUsedReaction = useRef<ReactionType>("saude");
 
-  // Animated scale for like button
   const likeScale = useRef(new Animated.Value(1)).current;
 
   const isLiked      = post.is_liked      ?? false;
@@ -123,14 +223,52 @@ export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, o
     ? (post.content ?? "").slice(0, CONTENT_CUTOFF).trimEnd() + "…"
     : (post.content ?? "");
 
-  const handleLike = () => {
-    // Bounce animation
+  const currentReaction = post.reaction_type ?? null;
+  const reactionInfo = currentReaction ? REACTIONS.find(r => r.type === currentReaction) : null;
+
+  // Keep lastUsedReaction in sync when post has a reaction
+  if (currentReaction) {
+    lastUsedReaction.current = currentReaction;
+  }
+
+  const allImageUrls = (() => {
+    const urls: string[] = [];
+    if (post.image_urls && post.image_urls.length > 0) {
+      urls.push(...post.image_urls);
+    } else if (post.image_url) {
+      urls.push(post.image_url);
+    }
+    return urls;
+  })();
+
+  const animateLike = () => {
     Animated.sequence([
       Animated.spring(likeScale, { toValue: 1.35, useNativeDriver: true, speed: 40 }),
       Animated.spring(likeScale, { toValue: 1,    useNativeDriver: true, speed: 20 }),
     ]).start();
+  };
+
+  const handleLike = () => {
+    animateLike();
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onLike?.(post.id);
+    if (onReact) {
+      // Reaction-first flow: toggle the last used (or current) reaction
+      onReact(post.id, lastUsedReaction.current);
+    } else {
+      // Legacy fallback for screens that don't support reactions yet
+      onLike?.(post.id);
+    }
+  };
+
+  const handleLongPress = () => {
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setShowReactions(true);
+  };
+
+  const handleReactionSelect = (reaction: ReactionType) => {
+    lastUsedReaction.current = reaction;
+    animateLike();
+    onReact?.(post.id, reaction);
   };
 
   const handleBookmark = () => {
@@ -184,10 +322,13 @@ export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, o
 
   const author = post.author;
 
+  const likeButtonColor = reactionInfo ? "#e74c3c" : isLiked ? "#e74c3c" : colors.border;
+  const likeButtonLabel = reactionInfo ? reactionInfo.label : isLiked ? "Curtido" : "Curtir";
+  const likeButtonIcon  = reactionInfo ? reactionInfo.emoji : null;
+
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
 
-      {/* ── Wine badge ── */}
       {postType === "wine" && (
         <View style={[styles.wineBadge, { backgroundColor: colors.gold + "18" }]}>
           <Text style={styles.wineBadgeIcon}>🍷</Text>
@@ -195,7 +336,6 @@ export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, o
         </View>
       )}
 
-      {/* ── Header ── */}
       <View style={styles.header}>
         <Pressable
           style={styles.authorRow}
@@ -214,9 +354,20 @@ export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, o
                 {author.headline}
               </Text>
             ) : null}
-            <Text style={[styles.timeAgo, { color: colors.mutedForeground }]}>
-              {timeAgo(post.created_at)}
-            </Text>
+            <View style={styles.metaRow}>
+              <Text style={[styles.timeAgo, { color: colors.mutedForeground }]}>
+                {timeAgo(post.created_at)}
+              </Text>
+              {post.location ? (
+                <>
+                  <Text style={[styles.metaDot, { color: colors.mutedForeground }]}>·</Text>
+                  <Feather name="map-pin" size={11} color={colors.mutedForeground} />
+                  <Text style={[styles.locationText, { color: colors.mutedForeground }]} numberOfLines={1}>
+                    {post.location}
+                  </Text>
+                </>
+              ) : null}
+            </View>
           </View>
         </Pressable>
 
@@ -235,7 +386,6 @@ export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, o
         </View>
       </View>
 
-      {/* ── Content ── */}
       <Pressable onPress={() => router.push(`/post/${post.id}` as any)} style={styles.contentWrap}>
         {post.content ? (
           <>
@@ -262,16 +412,11 @@ export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, o
           </View>
         )}
 
-        {post.image_url && (
-          <Image
-            source={{ uri: post.image_url }}
-            style={styles.image}
-            contentFit="cover"
-          />
+        {allImageUrls.length > 0 && (
+          <ImageCarousel imageUrls={allImageUrls} />
         )}
       </Pressable>
 
-      {/* ── Poll ── */}
       {post.poll && (
         <View style={styles.pollWrap}>
           {post.poll.options.map((opt, i) => {
@@ -299,7 +444,6 @@ export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, o
                   },
                 ]}
               >
-                {/* Fill bar */}
                 {hasVoted && pct > 0 && (
                   <View
                     style={[
@@ -354,13 +498,15 @@ export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, o
         </View>
       )}
 
-      {/* ── Stats row (likes/comments/shares) ── */}
-      {(post.likes_count > 0 || post.comments_count > 0 || post.shares_count > 0) && (
+      {(post.likes_count > 0 || post.comments_count > 0 || post.shares_count > 0 || (post.view_count ?? 0) > 0) && (
         <View style={[styles.statsRow, { borderTopColor: colors.border }]}>
           {post.likes_count > 0 && (
             <View style={styles.statItem}>
               <View style={[styles.statIcon, { backgroundColor: "#e74c3c" }]}>
-                <AntDesign name="heart" size={9} color="#fff" />
+                {reactionInfo
+                  ? <Text style={{ fontSize: 9 }}>{reactionInfo.emoji}</Text>
+                  : <AntDesign name="heart" size={9} color="#fff" />
+                }
               </View>
               <Text style={[styles.statText, { color: colors.mutedForeground }]}>
                 {fmtCount(post.likes_count)}
@@ -368,12 +514,23 @@ export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, o
             </View>
           )}
           <View style={{ flex: 1 }} />
-          {post.comments_count > 0 && (
-            <TouchableOpacity onPress={() => onComment?.(post.id)}>
+          {(post.view_count ?? 0) > 0 && (
+            <View style={styles.statItem}>
+              <Feather name="eye" size={12} color={colors.mutedForeground} />
               <Text style={[styles.statText, { color: colors.mutedForeground }]}>
-                {fmtCount(post.comments_count)} comentário{post.comments_count !== 1 ? "s" : ""}
+                {fmtCount(post.view_count!)} {post.view_count === 1 ? "visualização" : "visualizações"}
               </Text>
-            </TouchableOpacity>
+            </View>
+          )}
+          {post.comments_count > 0 && (
+            <>
+              {(post.view_count ?? 0) > 0 && <Text style={[styles.statDot, { color: colors.mutedForeground }]}>·</Text>}
+              <TouchableOpacity onPress={() => onComment?.(post.id)}>
+                <Text style={[styles.statText, { color: colors.mutedForeground }]}>
+                  {fmtCount(post.comments_count)} comentário{post.comments_count !== 1 ? "s" : ""}
+                </Text>
+              </TouchableOpacity>
+            </>
           )}
           {post.comments_count > 0 && post.shares_count > 0 && (
             <Text style={[styles.statDot, { color: colors.mutedForeground }]}>·</Text>
@@ -386,36 +543,41 @@ export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, o
         </View>
       )}
 
-      {/* ── Actions bar ── */}
       <View style={[styles.actions, { borderTopColor: colors.border }]}>
 
-        {/* Like */}
-        <TouchableOpacity style={styles.action} onPress={handleLike} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.action}
+          onPress={handleLike}
+          onLongPress={handleLongPress}
+          delayLongPress={450}
+          activeOpacity={0.7}
+        >
           <Animated.View style={{ transform: [{ scale: likeScale }] }}>
-            <AntDesign
-              name="heart"
-              size={22}
-              color={isLiked ? "#e74c3c" : colors.border}
-            />
+            {likeButtonIcon ? (
+              <Text style={{ fontSize: 20 }}>{likeButtonIcon}</Text>
+            ) : (
+              <AntDesign
+                name="heart"
+                size={22}
+                color={likeButtonColor}
+              />
+            )}
           </Animated.View>
-          <Text style={[styles.actionLabel, { color: isLiked ? "#e74c3c" : colors.mutedForeground, fontWeight: isLiked ? "700" : "400" }]}>
-            Curtir
+          <Text style={[styles.actionLabel, { color: (isLiked || reactionInfo) ? "#e74c3c" : colors.mutedForeground, fontWeight: (isLiked || reactionInfo) ? "700" : "400" }]}>
+            {likeButtonLabel}
           </Text>
         </TouchableOpacity>
 
-        {/* Comment */}
         <TouchableOpacity style={styles.action} onPress={() => onComment?.(post.id)} activeOpacity={0.7}>
           <MaterialCommunityIcons name="comment-outline" size={22} color={colors.mutedForeground} />
           <Text style={[styles.actionLabel, { color: colors.mutedForeground }]}>Comentar</Text>
         </TouchableOpacity>
 
-        {/* Repost / Compartilhar */}
         <TouchableOpacity style={styles.action} onPress={handleShare} activeOpacity={0.7}>
           <MaterialCommunityIcons name="share-variant-outline" size={22} color={colors.mutedForeground} />
           <Text style={[styles.actionLabel, { color: colors.mutedForeground }]}>Compartilhar</Text>
         </TouchableOpacity>
 
-        {/* Bookmark — pushed to right */}
         <TouchableOpacity style={[styles.action, { marginLeft: "auto" }]} onPress={handleBookmark} activeOpacity={0.7}>
           <MaterialCommunityIcons
             name={isBookmarked ? "bookmark" : "bookmark-outline"}
@@ -425,7 +587,12 @@ export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, o
         </TouchableOpacity>
       </View>
 
-      {/* ── Options menu (report / block) ── */}
+      <ReactionPicker
+        visible={showReactions}
+        onSelect={handleReactionSelect}
+        onClose={() => setShowReactions(false)}
+      />
+
       <Modal visible={showOptions} transparent animationType="fade" onRequestClose={() => setShowOptions(false)}>
         <Pressable style={styles.overlay} onPress={() => setShowOptions(false)}>
           <View style={[styles.menu, { backgroundColor: "#fff" }]}>
@@ -482,7 +649,6 @@ export function PostCard({ post, currentUserId, onLike, onBookmark, onComment, o
         </Pressable>
       </Modal>
 
-      {/* ── Report Modal ── */}
       <Modal visible={showReportModal} transparent animationType="slide" onRequestClose={() => setShowReportModal(false)}>
         <Pressable style={styles.overlay} onPress={() => setShowReportModal(false)}>
           <Pressable style={[styles.reportModal, { backgroundColor: "#fff" }]}>
@@ -536,7 +702,6 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
 
-  // Wine badge
   wineBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -549,7 +714,6 @@ const styles = StyleSheet.create({
   wineBadgeIcon:  { fontSize: 13 },
   wineBadgeText:  { fontSize: 12, fontWeight: "700", letterSpacing: 0.3 },
 
-  // Header
   header: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -563,9 +727,11 @@ const styles = StyleSheet.create({
   nameRow:      { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
   authorName:   { fontSize: 15, fontWeight: "700" },
   headline:     { fontSize: 12.5, lineHeight: 17 },
+  metaRow:      { flexDirection: "row", alignItems: "center", gap: 4, flexWrap: "wrap" },
   timeAgo:      { fontSize: 11.5, marginTop: 1 },
+  metaDot:      { fontSize: 11.5 },
+  locationText: { fontSize: 11.5, flex: 1 },
 
-  // Plan badge
   planBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -574,13 +740,11 @@ const styles = StyleSheet.create({
   },
   planBadgeText: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
 
-  // Header actions
   headerActions: { flexDirection: "row", alignItems: "center", gap: 6, paddingTop: 2 },
   followBtn:     { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1.5 },
   followBtnText: { fontSize: 12.5, fontWeight: "700" },
   moreBtn:       { padding: 4 },
 
-  // Content
   contentWrap: { paddingHorizontal: 14, paddingBottom: 10 },
   content:     { fontSize: 15, lineHeight: 23, letterSpacing: 0.1 },
   seeMore:     { fontSize: 14, fontWeight: "600", marginTop: 4 },
@@ -593,7 +757,37 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
 
-  // Poll
+  carouselWrap: {
+    marginTop: 10,
+  },
+  carouselScroll: {
+    width: "100%",
+  },
+  carouselImage: {
+    width: SCREEN_WIDTH - 28,
+    height: (SCREEN_WIDTH - 28) * 0.58,
+    borderRadius: 12,
+  },
+  dotsRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 8,
+    gap: 5,
+  },
+  dot: {
+    height: 7,
+    borderRadius: 4,
+  },
+  dotActive: {
+    width: 18,
+    backgroundColor: "#c9a84c",
+  },
+  dotInactive: {
+    width: 7,
+    backgroundColor: "#d1d5db",
+  },
+
   pollWrap:       { paddingHorizontal: 14, paddingBottom: 10, gap: 6 },
   pollOption:     { borderWidth: 1, borderRadius: 10, height: 48, overflow: "hidden", position: "relative", justifyContent: "center" },
   pollFill:       { position: "absolute", left: 0, top: 0, bottom: 0 },
@@ -606,7 +800,6 @@ const styles = StyleSheet.create({
   closedBadge:    { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
   closedText:     { fontSize: 11 },
 
-  // Stats row
   statsRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -620,7 +813,6 @@ const styles = StyleSheet.create({
   statText: { fontSize: 12.5 },
   statDot:  { fontSize: 12.5 },
 
-  // Actions bar
   actions: {
     flexDirection: "row",
     alignItems: "center",
@@ -639,7 +831,6 @@ const styles = StyleSheet.create({
   },
   actionLabel: { fontSize: 13, fontWeight: "500" },
 
-  // Dropdown
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.2)" },
   menu: {
     position: "absolute",
@@ -658,7 +849,6 @@ const styles = StyleSheet.create({
   menuText:    { fontSize: 14.5, fontWeight: "600" },
   menuDivider: { height: 1 },
 
-  // Report modal
   reportModal: {
     position: "absolute",
     bottom: 0,
@@ -684,4 +874,33 @@ const styles = StyleSheet.create({
   reportReasonText:  { fontSize: 14.5, fontWeight: "500" },
   reportSubmit:      { paddingVertical: 16, borderRadius: 12, alignItems: "center", marginTop: 4 },
   reportSubmitText:  { fontSize: 15, fontWeight: "700" },
+
+  reactionOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.15)",
+    justifyContent: "flex-end",
+    paddingBottom: 100,
+    paddingHorizontal: 14,
+  },
+  reactionPicker: {
+    flexDirection: "row",
+    backgroundColor: "#fff",
+    borderRadius: 50,
+    padding: 10,
+    gap: 6,
+    alignSelf: "flex-start",
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  reactionBtn: {
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 2,
+  },
+  reactionEmoji: { fontSize: 28 },
+  reactionLabel: { fontSize: 10, fontWeight: "600", color: "#374151" },
 });

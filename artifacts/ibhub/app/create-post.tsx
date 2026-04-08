@@ -32,7 +32,9 @@ export default function CreatePostScreen() {
   const insets = useSafeAreaInsets();
 
   const [content, setContent] = useState("");
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageUris, setImageUris] = useState<string[]>([]);
+  const [location, setLocation] = useState("");
+  const [showLocationInput, setShowLocationInput] = useState(false);
   const [selectedHashtags, setSelectedHashtags] = useState<string[]>([]);
   const [posting, setPosting] = useState(false);
 
@@ -41,12 +43,20 @@ export default function CreatePostScreen() {
   const handleAddImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
+      allowsMultipleSelection: true,
       quality: 0.8,
+      selectionLimit: 5,
     });
-    if (!result.canceled) {
-      setImageUri(result.assets[0].uri);
+    if (!result.canceled && result.assets.length > 0) {
+      setImageUris(prev => {
+        const combined = [...prev, ...result.assets.map(a => a.uri)];
+        return combined.slice(0, 5);
+      });
     }
+  };
+
+  const removeImage = (idx: number) => {
+    setImageUris(prev => prev.filter((_, i) => i !== idx));
   };
 
   const toggleHashtag = (tag: string) => {
@@ -113,16 +123,45 @@ export default function CreatePostScreen() {
           autoFocus
         />
 
-        {imageUri && (
-          <View style={styles.imagePreview}>
-            <Image source={{ uri: imageUri }} style={[styles.previewImg, { borderRadius: colors.radius }]} contentFit="cover" />
-            <TouchableOpacity
-              style={[styles.removeImg, { backgroundColor: colors.destructive }]}
-              onPress={() => setImageUri(null)}
-            >
-              <Feather name="x" size={14} color="#ffffff" />
-            </TouchableOpacity>
+        {showLocationInput && (
+          <View style={[styles.locationRow, { borderColor: colors.border, backgroundColor: colors.secondary }]}>
+            <Feather name="map-pin" size={15} color={colors.gold} />
+            <TextInput
+              style={[styles.locationInput, { color: colors.foreground }]}
+              placeholder="Ex: Serra Gaúcha, Rio Grande do Sul"
+              placeholderTextColor={colors.mutedForeground}
+              value={location}
+              onChangeText={setLocation}
+              returnKeyType="done"
+              maxLength={80}
+            />
+            {location.length > 0 && (
+              <TouchableOpacity onPress={() => setLocation("")}>
+                <Feather name="x" size={15} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            )}
           </View>
+        )}
+
+        {imageUris.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageRow} contentContainerStyle={{ gap: 8 }}>
+            {imageUris.map((uri, idx) => (
+              <View key={uri} style={{ position: "relative" }}>
+                <Image source={{ uri }} style={[styles.thumbImg, { borderRadius: colors.radius }]} contentFit="cover" />
+                <TouchableOpacity
+                  style={styles.removeThumb}
+                  onPress={() => removeImage(idx)}
+                >
+                  <Feather name="x" size={12} color="#ffffff" />
+                </TouchableOpacity>
+              </View>
+            ))}
+            {imageUris.length < 5 && (
+              <TouchableOpacity style={[styles.addMoreBtn, { borderColor: colors.border }]} onPress={handleAddImage}>
+                <Feather name="plus" size={22} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            )}
+          </ScrollView>
         )}
 
         <View style={styles.hashtagSection}>
@@ -157,16 +196,16 @@ export default function CreatePostScreen() {
         </Text>
         <View style={styles.toolbarActions}>
           <TouchableOpacity onPress={handleAddImage} style={styles.toolbarBtn}>
-            <Feather name="image" size={22} color={colors.foreground} />
+            <Feather name="image" size={22} color={imageUris.length > 0 ? colors.gold : colors.foreground} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.toolbarBtn} onPress={() => setShowLocationInput(v => !v)}>
+            <Feather name="map-pin" size={22} color={location.trim() ? colors.gold : colors.foreground} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.toolbarBtn}>
             <Feather name="bar-chart-2" size={22} color={colors.foreground} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.toolbarBtn}>
             <Feather name="hash" size={22} color={colors.foreground} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.toolbarBtn}>
-            <Feather name="clock" size={22} color={colors.foreground} />
           </TouchableOpacity>
         </View>
       </View>
@@ -185,9 +224,12 @@ const styles = StyleSheet.create({
   authorName: { fontSize: 15, fontWeight: "700" },
   audienceBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, alignSelf: "flex-start" },
   textInput: { fontSize: 17, lineHeight: 25, minHeight: 120 },
-  imagePreview: { position: "relative", marginTop: 12 },
-  previewImg: { width: "100%", height: 200 },
-  removeImg: { position: "absolute", top: 8, right: 8, width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+  locationRow: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 },
+  locationInput: { flex: 1, fontSize: 14 },
+  imageRow: { marginTop: 12, marginBottom: 4 },
+  thumbImg: { width: 100, height: 100 },
+  removeThumb: { position: "absolute", top: 4, right: 4, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 12, padding: 3 },
+  addMoreBtn: { width: 100, height: 100, borderRadius: 10, borderWidth: 1.5, borderStyle: "dashed", alignItems: "center", justifyContent: "center" },
   hashtagSection: { marginTop: 20, gap: 10 },
   hashtagLabel: { fontSize: 13, fontWeight: "600" },
   hashtagChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

@@ -2,10 +2,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -19,12 +20,13 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  ViewToken,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import QRCode from "react-native-qrcode-svg";
-import { Post, PostCard } from "@/components/feed/PostCard";
+import { Post, PostCard, ReactionType } from "@/components/feed/PostCard";
 import { StoryBar } from "@/components/feed/StoryBar";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
@@ -118,6 +120,15 @@ export default function FeedScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // New posts banner
+  const [newPosts, setNewPosts]                     = useState<Post[]>([]);
+  const newPostsBannerAnim                          = useRef(new Animated.Value(0)).current;
+  const flatListRef                                 = useRef<FlatList>(null);
+  const pollingRef                                  = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // View tracking
+  const viewTimers                                  = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
   // Connection suggestions
   const [suggestions, setSuggestions] = useState<SuggestedProfile[]>([]);
   const [connectingId, setConnectingId] = useState<string | null>(null);
@@ -136,7 +147,9 @@ export default function FeedScreen() {
   // Create post state
   const [postMode, setPostMode]                     = useState<"text" | "poll">("text");
   const [postContent, setPostContent]               = useState("");
-  const [postImageUri, setPostImageUri]             = useState<string | null>(null);
+  const [postImageUris, setPostImageUris]           = useState<string[]>([]);
+  const [postLocation, setPostLocation]             = useState("");
+  const [showLocationInput, setShowLocationInput]   = useState(false);
   const [pollQuestion, setPollQuestion]             = useState("");
   const [pollOptions, setPollOptions]               = useState(["", ""]);
   const [pollDuration, setPollDuration]             = useState(POLL_DURATIONS[0]);
@@ -242,6 +255,63 @@ export default function FeedScreen() {
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
 
+  // ── Background polling for new posts (every 60s) ──
+  useEffect(() => {
+    if (!user?.id) return;
+    pollingRef.current = setInterval(async () => {
+      setPosts(currentPosts => {
+        if (currentPosts.length === 0) return currentPosts;
+        const newestCreatedAt = currentPosts[0].created_at;
+        API.fetchNewPostsSince(newestCreatedAt, user!.id!).then(fresh => {
+          if (fresh.length > 0) {
+            setNewPosts(fresh);
+            Animated.spring(newPostsBannerAnim, { toValue: 1, useNativeDriver: true, speed: 14 }).start();
+          }
+        });
+        return currentPosts;
+      });
+    }, 60000);
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [user?.id]);
+
+  const handleShowNewPosts = () => {
+    Animated.spring(newPostsBannerAnim, { toValue: 0, useNativeDriver: true, speed: 20 }).start();
+    setPosts(prev => {
+      const existingIds = new Set(prev.map(p => p.id));
+      const toInsert = newPosts.filter(p => !existingIds.has(p.id));
+      return [...toInsert, ...prev];
+    });
+    setNewPosts([]);
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+  };
+
+  // ── Viewable items tracking ──
+  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    viewableItems.forEach(({ item, isViewable }) => {
+      const post = item as Post;
+      if (isViewable) {
+        if (!viewTimers.current[post.id]) {
+          viewTimers.current[post.id] = setTimeout(() => {
+            setPosts(prev => prev.map(p =>
+              p.id === post.id ? { ...p, view_count: (p.view_count ?? 0) + 1 } : p
+            ));
+            API.incrementViewCount(post.id);
+            delete viewTimers.current[post.id];
+          }, 1000);
+        }
+      } else {
+        if (viewTimers.current[post.id]) {
+          clearTimeout(viewTimers.current[post.id]);
+          delete viewTimers.current[post.id];
+        }
+      }
+    });
+  }, []);
+
+  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 60 }).current;
+
   const handlePickImage = async () => {
     if (Platform.OS !== "web") {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -252,20 +322,25 @@ export default function FeedScreen() {
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
+      allowsMultipleSelection: true,
       quality: 0.85,
       aspect: [16, 9],
+      selectionLimit: 5,
     });
-    if (!result.canceled && result.assets[0]) {
-      setPostImageUri(result.assets[0].uri);
+    if (!result.canceled && result.assets.length > 0) {
+      setPostImageUris(prev => {
+        const combined = [...prev, ...result.assets.map(a => a.uri)];
+        return combined.slice(0, 5);
+      });
     }
   };
 
   const handlePublishPost = async () => {
     setShowCreatePost(false);
     const content = postMode === "poll" ? pollQuestion : postContent;
-    if ((!content.trim() && !postImageUri) || !user?.id) {
-      setPostContent(""); setPollQuestion(""); setPollOptions(["",""]); setPostMode("text"); setPostImageUri(null);
+    if ((!content.trim() && postImageUris.length === 0) || !user?.id) {
+      setPostContent(""); setPollQuestion(""); setPollOptions(["",""]); setPostMode("text");
+      setPostImageUris([]); setPostLocation(""); setShowLocationInput(false);
       return;
     }
 
@@ -277,8 +352,10 @@ export default function FeedScreen() {
       id: `tmp_${Date.now()}`,
       user_id: user.id,
       content: content.trim(),
-      image_url: postImageUri,
-      likes_count: 0, comments_count: 0, shares_count: 0,
+      image_url: postImageUris[0] ?? null,
+      image_urls: postImageUris.length > 0 ? postImageUris : null,
+      location: postLocation.trim() || null,
+      likes_count: 0, comments_count: 0, shares_count: 0, view_count: 0,
       is_liked: false, is_bookmarked: false,
       created_at: new Date().toISOString(),
       poll: pollData,
@@ -293,23 +370,27 @@ export default function FeedScreen() {
     };
     setPosts(prev => [tempPost, ...prev]);
 
-    // Upload image to Supabase Storage before saving
-    let uploadedImageUrl: string | null = null;
-    if (postImageUri) {
-      uploadedImageUrl = await API.uploadPostImage(postImageUri, user.id);
+    // Upload images to Supabase Storage before saving
+    let uploadedUrls: string[] = [];
+    for (const uri of postImageUris) {
+      const url = await API.uploadPostImage(uri, user.id);
+      if (url) uploadedUrls.push(url);
     }
 
     const saved = await API.createPost({
       user_id: user.id,
       content: content.trim(),
       poll: pollData,
-      image_url: uploadedImageUrl,
+      image_url: uploadedUrls[0] ?? null,
+      image_urls: uploadedUrls.length > 0 ? uploadedUrls : null,
+      location: postLocation.trim() || null,
     });
     if (saved) {
       setPosts(prev => prev.map(p => p.id === tempPost.id ? saved : p));
     }
 
-    setPostContent(""); setPollQuestion(""); setPollOptions(["",""]); setPostMode("text"); setPostImageUri(null);
+    setPostContent(""); setPollQuestion(""); setPollOptions(["",""]); setPostMode("text");
+    setPostImageUris([]); setPostLocation(""); setShowLocationInput(false);
   };
 
   const handlePublishWine = async () => {
@@ -503,6 +584,7 @@ export default function FeedScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <FlatList
+        ref={flatListRef}
         style={{ flex: 1 }}
         data={posts}
         keyExtractor={(item) => item.id}
@@ -517,6 +599,24 @@ export default function FeedScreen() {
                 ? { ...p, is_liked: !p.is_liked, likes_count: p.is_liked ? p.likes_count - 1 : p.likes_count + 1 }
                 : p));
               API.toggleLike(id, user.id, post.is_liked ?? false);
+            }}
+            onReact={(id, reaction) => {
+              const post = posts.find(p => p.id === id);
+              if (!post || !user?.id) return;
+              const isSameReaction = post.reaction_type === reaction;
+              setPosts(prev => prev.map(p => {
+                if (p.id !== id) return p;
+                const wasLiked = !!(p.is_liked || p.reaction_type);
+                return {
+                  ...p,
+                  is_liked: !isSameReaction,
+                  reaction_type: isSameReaction ? null : reaction,
+                  likes_count: isSameReaction
+                    ? Math.max(0, p.likes_count - 1)
+                    : wasLiked ? p.likes_count : p.likes_count + 1,
+                };
+              }));
+              API.toggleReaction(id, user.id, reaction, post.reaction_type ?? null);
             }}
             onBookmark={(id) => {
               const post = posts.find(p => p.id === id);
@@ -551,7 +651,33 @@ export default function FeedScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} colors={[colors.gold]} />}
         contentContainerStyle={{ paddingBottom: bottomPad }}
         showsVerticalScrollIndicator={false}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
       />
+
+      {/* ── New Posts Banner ── */}
+      {newPosts.length > 0 && (
+        <Animated.View
+          style={[
+            styles.newPostsBanner,
+            {
+              transform: [{ translateY: newPostsBannerAnim.interpolate({ inputRange: [0, 1], outputRange: [-60, 0] }) }],
+              top: topPad + 70,
+            },
+          ]}
+        >
+          <TouchableOpacity
+            style={[styles.newPostsBannerBtn, { backgroundColor: colors.navy }]}
+            onPress={handleShowNewPosts}
+            activeOpacity={0.85}
+          >
+            <Feather name="arrow-up" size={14} color="#fff" />
+            <Text style={styles.newPostsBannerText}>
+              {newPosts.length} novo{newPosts.length > 1 ? "s posts" : " post"} — toque para ver
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
 
       {/* ── Create Menu ── */}
       <Modal visible={showCreateMenu} transparent animationType="fade" onRequestClose={() => setShowCreateMenu(false)}>
@@ -676,30 +802,65 @@ export default function FeedScreen() {
               )}
             </ScrollView>
 
-            {/* Image preview */}
-            {postImageUri && (
+            {/* Location input */}
+            {showLocationInput && (
               <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-                <View style={{ position: "relative" }}>
-                  <Image
-                    source={{ uri: postImageUri }}
-                    style={{ width: "100%", height: 160, borderRadius: 10 }}
-                    contentFit="cover"
+                <View style={[styles.locationInputRow, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                  <Feather name="map-pin" size={15} color={colors.gold} />
+                  <TextInput
+                    style={[styles.locationInput, { color: colors.foreground }]}
+                    placeholder="Ex: Serra Gaúcha, Rio Grande do Sul"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={postLocation}
+                    onChangeText={setPostLocation}
+                    returnKeyType="done"
+                    maxLength={80}
                   />
-                  <TouchableOpacity
-                    style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 14, padding: 4 }}
-                    onPress={() => setPostImageUri(null)}
-                  >
-                    <Feather name="x" size={14} color="#fff" />
-                  </TouchableOpacity>
+                  {postLocation.length > 0 && (
+                    <TouchableOpacity onPress={() => setPostLocation("")}>
+                      <Feather name="x" size={15} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                  )}
                 </View>
+              </View>
+            )}
+
+            {/* Image previews */}
+            {postImageUris.length > 0 && (
+              <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                  {postImageUris.map((uri, idx) => (
+                    <View key={uri} style={{ position: "relative" }}>
+                      <Image
+                        source={{ uri }}
+                        style={{ width: 100, height: 100, borderRadius: 10 }}
+                        contentFit="cover"
+                      />
+                      <TouchableOpacity
+                        style={{ position: "absolute", top: 4, right: 4, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 12, padding: 3 }}
+                        onPress={() => setPostImageUris(prev => prev.filter((_, i) => i !== idx))}
+                      >
+                        <Feather name="x" size={12} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  {postImageUris.length < 5 && (
+                    <TouchableOpacity
+                      style={[styles.addMoreImgBtn, { borderColor: colors.border }]}
+                      onPress={handlePickImage}
+                    >
+                      <Feather name="plus" size={24} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                  )}
+                </ScrollView>
               </View>
             )}
 
             {/* Toolbar */}
             <View style={[styles.postToolbar, { borderTopColor: colors.border }]}>
               <TouchableOpacity style={styles.toolbarBtn} onPress={handlePickImage}>
-                <Feather name="image" size={18} color={postImageUri ? colors.gold : colors.foreground} />
-                <Text style={[styles.toolbarLabel, { color: postImageUri ? colors.gold : colors.foreground }]}>Foto</Text>
+                <Feather name="image" size={18} color={postImageUris.length > 0 ? colors.gold : colors.foreground} />
+                <Text style={[styles.toolbarLabel, { color: postImageUris.length > 0 ? colors.gold : colors.foreground }]}>Foto</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.toolbarBtn} onPress={() => Alert.alert("Em breve", "O upload de vídeos estará disponível em breve.")}>
                 <Feather name="video" size={18} color={colors.foreground} />
@@ -708,6 +869,13 @@ export default function FeedScreen() {
               <TouchableOpacity style={styles.toolbarBtn} onPress={() => setPostMode(postMode === "poll" ? "text" : "poll")}>
                 <Feather name="bar-chart-2" size={18} color={postMode === "poll" ? colors.gold : colors.foreground} />
                 <Text style={[styles.toolbarLabel, { color: postMode === "poll" ? colors.gold : colors.foreground }]}>Enquete</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.toolbarBtn}
+                onPress={() => setShowLocationInput(v => !v)}
+              >
+                <Feather name="map-pin" size={18} color={postLocation.trim() ? colors.gold : colors.foreground} />
+                <Text style={[styles.toolbarLabel, { color: postLocation.trim() ? colors.gold : colors.foreground }]}>Local</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1019,6 +1187,15 @@ const styles = StyleSheet.create({
   durationDropdown:   { borderRadius: 8, borderWidth: 1, overflow: "hidden" },
   durationItem:       { paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
   durationItemText:   { fontSize: 14 },
+  // New posts banner
+  newPostsBanner:     { position: "absolute", left: 0, right: 0, alignItems: "center", zIndex: 100 },
+  newPostsBannerBtn:  { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 30, shadowColor: "#000", shadowOpacity: 0.18, shadowOffset: { width: 0, height: 3 }, shadowRadius: 8, elevation: 8 },
+  newPostsBannerText: { color: "#fff", fontWeight: "700", fontSize: 13 },
+  // Location input
+  locationInputRow:   { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  locationInput:      { flex: 1, fontSize: 14 },
+  // Add more image button
+  addMoreImgBtn:      { width: 100, height: 100, borderRadius: 10, borderWidth: 1.5, borderStyle: "dashed", alignItems: "center", justifyContent: "center" },
   // Wine review modal
   wineOverlay:        { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
   wineModal:          { borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "92%", overflow: "hidden" },
