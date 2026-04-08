@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   Platform,
   ScrollView,
@@ -19,12 +20,16 @@ import { useColors } from "@/hooks/useColors";
 import {
   fetchMarketOverview,
   updateMarketOverview,
+  fetchAllMarketPresentations,
+  upsertMarketPresentation,
+  deleteMarketPresentation,
   type MarketKPI,
   type MarketTendencia,
   type MarketRegiao,
   type MarketVariedade,
   type MarketChartArea,
   type MarketChartBar,
+  type MarketPresentation,
 } from "@/services/api";
 
 type Period = "mes" | "trimestre" | "ano";
@@ -56,6 +61,19 @@ interface EditModal {
   regiao?: MarketRegiao;
   variedade?: MarketVariedade;
 }
+
+// ─── Presentation Form (blank or pre-filled) ─────────────────────────────────
+
+interface PresentationForm {
+  id?: string;
+  title: string;
+  description: string;
+  cover_url: string;
+  content_url: string;
+  published: boolean;
+}
+
+const BLANK_FORM: PresentationForm = { title: "", description: "", cover_url: "", content_url: "", published: true };
 
 // ─── KPI Section ─────────────────────────────────────────────────────────────
 
@@ -235,7 +253,76 @@ export default function AdminSlidesMercadoScreen() {
   const [saving,     setSaving]     = useState(false);
   const [saved,      setSaved]      = useState(false);
 
-  // Editable state
+  // ── Presentations state ──────────────────────────────────────────────────
+
+  const [presentations,   setPresentations]   = useState<MarketPresentation[]>([]);
+  const [presLoading,     setPresLoading]     = useState(false);
+  const [presModalOpen,   setPresModalOpen]   = useState(false);
+  const [presForm,        setPresForm]        = useState<PresentationForm>(BLANK_FORM);
+  const [presFormSaving,  setPresFormSaving]  = useState(false);
+
+  const loadPresentations = useCallback(async () => {
+    setPresLoading(true);
+    const data = await fetchAllMarketPresentations();
+    setPresentations(data);
+    setPresLoading(false);
+  }, []);
+
+  useEffect(() => { if (mainTab === "Slides") loadPresentations(); }, [mainTab, loadPresentations]);
+
+  const openNewPresForm = () => {
+    setPresForm(BLANK_FORM);
+    setPresModalOpen(true);
+  };
+
+  const openEditPresForm = (p: MarketPresentation) => {
+    setPresForm({
+      id: p.id,
+      title: p.title,
+      description: p.description ?? "",
+      cover_url: p.cover_url ?? "",
+      content_url: p.content_url,
+      published: p.published,
+    });
+    setPresModalOpen(true);
+  };
+
+  const savePresForm = async () => {
+    if (!presForm.title.trim()) { Alert.alert("Erro", "O título é obrigatório."); return; }
+    if (!presForm.content_url.trim()) { Alert.alert("Erro", "O link do conteúdo é obrigatório."); return; }
+    setPresFormSaving(true);
+    const result = await upsertMarketPresentation({
+      id: presForm.id,
+      title: presForm.title.trim(),
+      description: presForm.description.trim() || null,
+      cover_url: presForm.cover_url.trim() || null,
+      content_url: presForm.content_url.trim(),
+      published: presForm.published,
+    });
+    setPresFormSaving(false);
+    if (result) {
+      setPresModalOpen(false);
+      loadPresentations();
+    } else {
+      Alert.alert("Erro", "Não foi possível salvar a apresentação.");
+    }
+  };
+
+  const confirmDeletePresentation = (id: string) => {
+    Alert.alert("Remover", "Deseja remover esta apresentação?", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Remover", style: "destructive", onPress: async () => {
+          const ok = await deleteMarketPresentation(id);
+          if (ok) loadPresentations();
+          else Alert.alert("Erro", "Não foi possível remover.");
+        },
+      },
+    ]);
+  };
+
+  // ── Market data state ────────────────────────────────────────────────────
+
   const [kpis,       setKpis]       = useState<MarketKPI[]>([]);
   const [areaExp,    setAreaExp]     = useState("");
   const [areaImp,    setAreaImp]     = useState("");
@@ -422,16 +509,66 @@ export default function AdminSlidesMercadoScreen() {
           ))}
         </View>
 
-        {/* ── Slides tab (placeholder) ─────────────────────────────────────── */}
+        {/* ── Slides tab ──────────────────────────────────────────────────────── */}
         {mainTab === "Slides" && (
           <>
-            <View style={[s.slidesRow]}>
-              <Text style={[s.slidesCount, { color: colors.mutedForeground }]}>0 slides</Text>
+            <View style={s.slidesRow}>
+              <Text style={[s.slidesCount, { color: colors.mutedForeground }]}>
+                {presLoading ? "Carregando…" : `${presentations.length} apresentação${presentations.length !== 1 ? "ões" : ""}`}
+              </Text>
+              <TouchableOpacity style={[s.newPresBtn, { backgroundColor: colors.navy }]} onPress={openNewPresForm}>
+                <Feather name="plus" size={14} color="#fff" />
+                <Text style={s.newPresBtnText}>Nova Apresentação</Text>
+              </TouchableOpacity>
             </View>
-            <View style={s.emptyBlock}>
-              <Feather name="monitor" size={40} color="#d1d5db" />
-              <Text style={[s.emptyText, { color: colors.mutedForeground }]}>Nenhum slide encontrado</Text>
-            </View>
+
+            {presLoading ? (
+              <ActivityIndicator color={colors.gold} style={{ marginTop: 24 }} />
+            ) : presentations.length === 0 ? (
+              <View style={s.emptyBlock}>
+                <Feather name="monitor" size={40} color="#d1d5db" />
+                <Text style={[s.emptyText, { color: colors.mutedForeground }]}>Nenhuma apresentação encontrada</Text>
+                <Text style={[s.emptyHint, { color: colors.mutedForeground }]}>
+                  Toque em "Nova Apresentação" para começar.
+                </Text>
+              </View>
+            ) : (
+              presentations.map((p) => (
+                <View key={p.id} style={[s.presCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                  {p.cover_url ? (
+                    <Image source={{ uri: p.cover_url }} style={s.presCover} resizeMode="cover" />
+                  ) : (
+                    <View style={[s.presCoverPlaceholder, { backgroundColor: colors.gold + "15" }]}>
+                      <Feather name="image" size={28} color={colors.gold} />
+                    </View>
+                  )}
+                  <View style={s.presInfo}>
+                    <View style={{ flex: 1 }}>
+                      <View style={s.presTopRow}>
+                        <Text style={[s.presTitle, { color: colors.navy }]} numberOfLines={1}>{p.title}</Text>
+                        <View style={[s.presBadge, { backgroundColor: p.published ? "#dcfce7" : "#f3f4f6" }]}>
+                          <Text style={[s.presBadgeText, { color: p.published ? "#16a34a" : "#6b7280" }]}>
+                            {p.published ? "Publicado" : "Rascunho"}
+                          </Text>
+                        </View>
+                      </View>
+                      {p.description ? (
+                        <Text style={[s.presDesc, { color: colors.mutedForeground }]} numberOfLines={2}>{p.description}</Text>
+                      ) : null}
+                      <Text style={[s.presUrl, { color: colors.mutedForeground }]} numberOfLines={1}>{p.content_url}</Text>
+                    </View>
+                    <View style={s.presActions}>
+                      <TouchableOpacity style={[s.presActionBtn, { backgroundColor: "#f3f4f6" }]} onPress={() => openEditPresForm(p)}>
+                        <Feather name="edit-2" size={14} color={colors.navy} />
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[s.presActionBtn, { backgroundColor: "#fef2f2" }]} onPress={() => confirmDeletePresentation(p.id)}>
+                        <Feather name="trash-2" size={14} color="#dc2626" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              ))
+            )}
           </>
         )}
 
@@ -571,6 +708,87 @@ export default function AdminSlidesMercadoScreen() {
         )}
       </ScrollView>
 
+      {/* ── Presentation Modal ──────────────────────────────────────────────── */}
+      <Modal visible={presModalOpen} transparent animationType="fade">
+        <View style={m.overlay}>
+          <View style={[m.modal, { backgroundColor: "#fff" }]}>
+            <TouchableOpacity style={m.close} onPress={() => setPresModalOpen(false)}>
+              <Feather name="x" size={18} color="#6b7280" />
+            </TouchableOpacity>
+            <Text style={[m.title, { color: colors.navy }]}>
+              {presForm.id ? "Editar Apresentação" : "Nova Apresentação"}
+            </Text>
+
+            <View style={m.field}>
+              <Text style={[m.label, { color: colors.foreground }]}>Título *</Text>
+              <TextInput
+                style={[m.input, { borderColor: colors.border }]}
+                value={presForm.title}
+                onChangeText={(v) => setPresForm(f => ({ ...f, title: v }))}
+                placeholder="Ex: Relatório de Mercado Q1 2026"
+              />
+            </View>
+            <View style={m.field}>
+              <Text style={[m.label, { color: colors.foreground }]}>Descrição</Text>
+              <TextInput
+                style={[m.input, m.textarea, { borderColor: colors.border }]}
+                value={presForm.description}
+                onChangeText={(v) => setPresForm(f => ({ ...f, description: v }))}
+                multiline
+                textAlignVertical="top"
+                placeholder="Breve descrição da apresentação…"
+              />
+            </View>
+            <View style={m.field}>
+              <Text style={[m.label, { color: colors.foreground }]}>URL da Imagem de Capa</Text>
+              <TextInput
+                style={[m.input, { borderColor: colors.border }]}
+                value={presForm.cover_url}
+                onChangeText={(v) => setPresForm(f => ({ ...f, cover_url: v }))}
+                placeholder="https://exemplo.com/capa.jpg"
+                autoCapitalize="none"
+                keyboardType="url"
+              />
+            </View>
+            <View style={m.field}>
+              <Text style={[m.label, { color: colors.foreground }]}>Link do Conteúdo *</Text>
+              <TextInput
+                style={[m.input, { borderColor: colors.border }]}
+                value={presForm.content_url}
+                onChangeText={(v) => setPresForm(f => ({ ...f, content_url: v }))}
+                placeholder="https://docs.google.com/presentation/…"
+                autoCapitalize="none"
+                keyboardType="url"
+              />
+            </View>
+            <View style={m.switchRow}>
+              <Text style={[m.label, { color: colors.foreground }]}>Publicado</Text>
+              <Switch
+                value={presForm.published}
+                onValueChange={(v) => setPresForm(f => ({ ...f, published: v }))}
+                trackColor={{ false: colors.border, true: "#059669" }}
+                thumbColor="#fff"
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[m.saveBtn, { backgroundColor: colors.navy, opacity: presFormSaving ? 0.7 : 1 }]}
+              onPress={savePresForm}
+              disabled={presFormSaving}
+            >
+              {presFormSaving ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={m.saveBtnText}>Salvar</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={m.cancelBtn} onPress={() => setPresModalOpen(false)}>
+              <Text style={[m.cancelText, { color: colors.mutedForeground }]}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* ── Edit Modal ─────────────────────────────────────────────────────── */}
       <Modal visible={!!editModal} transparent animationType="fade">
         <View style={m.overlay}>
@@ -668,23 +886,38 @@ export default function AdminSlidesMercadoScreen() {
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  container:    { flex: 1 },
-  header:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
-  headerTitle:  { fontSize: 18, fontWeight: "700" },
-  heroTitle:    { fontSize: 22, fontWeight: "800" },
-  heroSub:      { fontSize: 13, lineHeight: 18 },
-  mainTabs:     { flexDirection: "row", borderRadius: 10, padding: 4, gap: 4 },
-  mainTab:      { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 8 },
-  mainTabText:  { fontSize: 13 },
-  slidesRow:    { flexDirection: "row", alignItems: "center" },
-  slidesCount:  { fontSize: 13 },
-  emptyBlock:   { alignItems: "center", paddingVertical: 60, gap: 12 },
-  emptyText:    { fontSize: 14 },
-  periodRow:    { flexDirection: "row", gap: 8 },
-  periodBtn:    { flex: 1, borderWidth: 1.5, borderRadius: 10, paddingVertical: 10, alignItems: "center" },
-  periodBtnText:{ fontSize: 14 },
-  saveBtn:      { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 16, borderRadius: 12, marginTop: 8 },
-  saveBtnText:  { color: "#fff", fontSize: 16, fontWeight: "700" },
+  container:      { flex: 1 },
+  header:         { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
+  headerTitle:    { fontSize: 18, fontWeight: "700" },
+  heroTitle:      { fontSize: 22, fontWeight: "800" },
+  heroSub:        { fontSize: 13, lineHeight: 18 },
+  mainTabs:       { flexDirection: "row", borderRadius: 10, padding: 4, gap: 4 },
+  mainTab:        { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 8 },
+  mainTabText:    { fontSize: 13 },
+  slidesRow:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  slidesCount:    { fontSize: 13 },
+  newPresBtn:     { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+  newPresBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  emptyBlock:     { alignItems: "center", paddingVertical: 48, gap: 10 },
+  emptyText:      { fontSize: 14 },
+  emptyHint:      { fontSize: 12, textAlign: "center" },
+  presCard:       { borderRadius: 12, borderWidth: 1, overflow: "hidden" },
+  presCover:      { width: "100%", height: 140 },
+  presCoverPlaceholder: { width: "100%", height: 140, alignItems: "center", justifyContent: "center" },
+  presInfo:       { padding: 12, gap: 8, flexDirection: "row", alignItems: "flex-start" },
+  presTopRow:     { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 },
+  presTitle:      { fontSize: 14, fontWeight: "700", flex: 1 },
+  presBadge:      { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 },
+  presBadgeText:  { fontSize: 11, fontWeight: "600" },
+  presDesc:       { fontSize: 12, lineHeight: 17, marginBottom: 2 },
+  presUrl:        { fontSize: 11 },
+  presActions:    { flexDirection: "row", gap: 6 },
+  presActionBtn:  { width: 34, height: 34, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  periodRow:      { flexDirection: "row", gap: 8 },
+  periodBtn:      { flex: 1, borderWidth: 1.5, borderRadius: 10, paddingVertical: 10, alignItems: "center" },
+  periodBtnText:  { fontSize: 14 },
+  saveBtn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 16, borderRadius: 12, marginTop: 8 },
+  saveBtnText:    { color: "#fff", fontSize: 16, fontWeight: "700" },
 });
 
 const sec = StyleSheet.create({
@@ -722,6 +955,7 @@ const m = StyleSheet.create({
   input:      { borderWidth: 1, borderRadius: 8, paddingHorizontal: 11, paddingVertical: 10, fontSize: 13 },
   textarea:   { height: 72, textAlignVertical: "top" },
   row:        { flexDirection: "row", gap: 8, alignItems: "flex-end" },
+  switchRow:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   switchField:{ gap: 5, alignItems: "center" },
   saveBtn:    { paddingVertical: 14, borderRadius: 10, alignItems: "center", marginTop: 4 },
   saveBtnText:{ color: "#fff", fontSize: 15, fontWeight: "700" },

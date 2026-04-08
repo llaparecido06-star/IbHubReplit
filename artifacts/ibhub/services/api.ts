@@ -1948,6 +1948,76 @@ export async function deleteWineEntry(id: string): Promise<boolean> {
   }
 }
 
+// ─── MARKET PRESENTATIONS ────────────────────────────────────────────────────
+
+export interface MarketPresentation {
+  id: string;
+  title: string;
+  description: string | null;
+  cover_url: string | null;
+  content_url: string;
+  published: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function fetchMarketPresentations(): Promise<MarketPresentation[]> {
+  try {
+    const { data, error } = await supabase
+      .from("market_presentations")
+      .select("*")
+      .eq("published", true)
+      .order("created_at", { ascending: false });
+    if (error || !data) return [];
+    return data as MarketPresentation[];
+  } catch (e) {
+    console.error("fetchMarketPresentations:", e);
+    return [];
+  }
+}
+
+export async function fetchAllMarketPresentations(): Promise<MarketPresentation[]> {
+  try {
+    const { data, error } = await supabase
+      .from("market_presentations")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error || !data) return [];
+    return data as MarketPresentation[];
+  } catch (e) {
+    console.error("fetchAllMarketPresentations:", e);
+    return [];
+  }
+}
+
+export async function upsertMarketPresentation(
+  payload: Omit<MarketPresentation, "id" | "created_at" | "updated_at"> & { id?: string },
+): Promise<MarketPresentation | null> {
+  try {
+    const { data, error } = await supabase
+      .from("market_presentations")
+      .upsert({ ...payload, updated_at: new Date().toISOString() }, { onConflict: "id" })
+      .select()
+      .single();
+    if (error) { console.error("upsertMarketPresentation:", error); return null; }
+    return data as MarketPresentation;
+  } catch (e) {
+    console.error("upsertMarketPresentation:", e);
+    return null;
+  }
+}
+
+export async function deleteMarketPresentation(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("market_presentations").delete().eq("id", id);
+    if (error) { console.error("deleteMarketPresentation:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("deleteMarketPresentation:", e);
+    return false;
+  }
+}
+
 // ─── MARKET OVERVIEW ─────────────────────────────────────────────────────────
 
 export interface MarketKPI {
@@ -1956,6 +2026,9 @@ export interface MarketKPI {
   period: string;
   change: number;
   icon: string;
+  description?: string;
+  source?: string;
+  updatedAt?: string;
 }
 
 export interface MarketChartArea {
