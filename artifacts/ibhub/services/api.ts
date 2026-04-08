@@ -2785,6 +2785,36 @@ export async function fetchEvents(search = "", userId = ""): Promise<AppEvent[]>
   }
 }
 
+export async function fetchAllEventsAdmin(): Promise<AppEvent[]> {
+  try {
+    const { data, error } = await supabase
+      .from("events")
+      .select(
+        "id, user_id, title, description, start_date, end_date, location_type, location, entry_type, capacity, visibility, is_active, pay_link, created_at, organizer:profiles!events_user_id_fkey(id, full_name, avatar_url, username)"
+      )
+      .order("start_date", { ascending: true });
+    if (error) { console.error("fetchAllEventsAdmin:", error); return []; }
+    return (data ?? []) as any[];
+  } catch (e) {
+    console.error("fetchAllEventsAdmin:", e);
+    return [];
+  }
+}
+
+export async function fetchConfirmedAttendanceCount(): Promise<number> {
+  try {
+    const { count, error } = await supabase
+      .from("event_attendees")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "confirmed");
+    if (error) { console.error("fetchConfirmedAttendanceCount:", error); return 0; }
+    return count ?? 0;
+  } catch (e) {
+    console.error("fetchConfirmedAttendanceCount:", e);
+    return 0;
+  }
+}
+
 export async function fetchEventById(id: string): Promise<AppEvent | null> {
   try {
     const { data, error } = await supabase
@@ -3382,6 +3412,23 @@ export async function fetchCompanyProducts(companyId: string): Promise<CompanyPr
   }
 }
 
+export async function fetchInactiveOpportunities(): Promise<AppOpportunity[]> {
+  try {
+    const { data, error } = await supabase
+      .from("opportunities")
+      .select(
+        "id, created_by, type, title, description, category, location, price, company, contract_type, salary, contact_email, expires_at, is_active, created_at, creator:profiles!opportunities_created_by_fkey(id, full_name, avatar_url, position, company)"
+      )
+      .eq("is_active", false)
+      .order("created_at", { ascending: false });
+    if (error) { console.error("fetchInactiveOpportunities:", error); return []; }
+    return ((data ?? []) as unknown as AppOpportunity[]).map((d) => ({ ...d, is_applied: false }));
+  } catch (e) {
+    console.error("fetchInactiveOpportunities:", e);
+    return [];
+  }
+}
+
 export async function createCompanyProduct(params: {
   company_id: string;
   name: string;
@@ -3418,6 +3465,44 @@ export async function updateCompanyProduct(
     return true;
   } catch (e) {
     console.error("updateCompanyProduct:", e);
+    return false;
+  }
+}
+
+export async function fetchApplicationsCount(): Promise<number> {
+  try {
+    const { count, error } = await supabase
+      .from("opportunity_applications")
+      .select("id", { count: "exact", head: true });
+    if (error) { console.error("fetchApplicationsCount:", error); return 0; }
+    return count ?? 0;
+  } catch (e) {
+    console.error("fetchApplicationsCount:", e);
+    return 0;
+  }
+}
+
+export async function fetchAllStoriesAdmin(): Promise<AppStory[]> {
+  try {
+    const { data, error } = await supabase
+      .from("stories")
+      .select("id, user_id, image_url, text, expires_at, created_at, author:profiles!stories_user_id_fkey(id, full_name, avatar_url, username)")
+      .order("created_at", { ascending: false });
+    if (error) { console.error("fetchAllStoriesAdmin:", error); return []; }
+    return (data ?? []) as unknown as AppStory[];
+  } catch (e) {
+    console.error("fetchAllStoriesAdmin:", e);
+    return [];
+  }
+}
+
+export async function deleteStoryAdmin(storyId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("stories").delete().eq("id", storyId);
+    if (error) { console.error("deleteStoryAdmin:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("deleteStoryAdmin:", e);
     return false;
   }
 }
@@ -3487,5 +3572,31 @@ export async function toggleCompanyFollow(companyId: string, userId: string, isC
   } catch (e) {
     console.error("toggleCompanyFollow:", e);
     return false;
+  }
+}
+
+export async function fetchStoryViewsCount(): Promise<number> {
+  try {
+    const { count, error } = await supabase
+      .from("story_views")
+      .select("id", { count: "exact", head: true });
+    if (error) { console.error("fetchStoryViewsCount:", error); return 0; }
+    return count ?? 0;
+  } catch (e) {
+    console.error("fetchStoryViewsCount:", e);
+    return 0;
+  }
+}
+
+export async function fetchStoryLikesCount(): Promise<number> {
+  try {
+    const { count, error } = await supabase
+      .from("story_likes")
+      .select("id", { count: "exact", head: true });
+    if (error) { console.error("fetchStoryLikesCount:", error); return 0; }
+    return count ?? 0;
+  } catch (e) {
+    console.error("fetchStoryLikesCount:", e);
+    return 0;
   }
 }

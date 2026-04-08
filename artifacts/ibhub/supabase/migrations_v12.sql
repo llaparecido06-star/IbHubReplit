@@ -1,15 +1,16 @@
--- ibhub — Migração v12: Feed Engagement + Mercado Apresentações + Company Products & Follows + Chat Engagement + Oportunidades Engagement
+-- ibhub — Migração v12: Feed Engagement + Mercado Apresentações + Perfil e Empresa + Chat Engagement + Oportunidades Engagement + Admin RLS
+-- Combina: Feed Engagement, market_presentations (task-20), Perfil e Empresa (task-19), Chat Engagement (task-17), Oportunidades Engagement (task-17), Admin Gestão de Conteúdo RLS (task-13)
 -- Execute no Supabase Dashboard → SQL Editor.
 
--- ─── 1. Novas colunas em posts ────────────────────────────────────────────────
+-- ─── PARTE A: Feed Engagement ─────────────────────────────────────────────────
 
+-- 1. Novas colunas em posts
 alter table public.posts
   add column if not exists image_urls  text[]    default null,
   add column if not exists view_count  int       not null default 0,
   add column if not exists location    text      default null;
 
--- ─── 2. Nova coluna em likes (tipo de reação) ─────────────────────────────────
-
+-- 2. Nova coluna em likes (tipo de reação)
 alter table public.likes
   add column if not exists reaction_type text default null;
 
@@ -20,8 +21,7 @@ alter table public.likes
   add constraint likes_reaction_type_check
   check (reaction_type is null or reaction_type in ('saude', 'bravo', 'destaque', 'incrivel'));
 
--- ─── 3. Função RPC: increment_view_count ─────────────────────────────────────
-
+-- 3. Função RPC: increment_view_count ─────────────────────────────────────
 create or replace function public.increment_view_count(post_id uuid)
 returns void
 language sql
@@ -36,10 +36,10 @@ $$;
 revoke all on function public.increment_view_count(uuid) from public;
 grant execute on function public.increment_view_count(uuid) to authenticated;
 
--- ─── 4. Índice em view_count ──────────────────────────────────────────────────
+-- 4. Índice em view_count ──────────────────────────────────────────────────
 create index if not exists posts_view_count_idx on public.posts (view_count desc);
 
--- ─── 5. Tabela market_presentations (task-20: Mercado — Apresentações) ────────
+-- ─── PARTE B: Tabela market_presentations (task-20: Mercado — Apresentações) ──
 
 create table if not exists public.market_presentations (
   id          uuid primary key default gen_random_uuid(),
@@ -51,8 +51,6 @@ create table if not exists public.market_presentations (
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
-
--- ─── 6. RLS para market_presentations ────────────────────────────────────────
 
 alter table public.market_presentations enable row level security;
 
@@ -81,7 +79,7 @@ create policy "presentations_delete_admin" on public.market_presentations
     exists (select 1 from public.profiles where id = auth.uid() and is_admin = true)
   );
 
--- ─── 7. Tabela company_products (task-19: Perfil e Empresa) ──────────────────
+-- ─── PARTE C: Tabela company_products (task-19: Perfil e Empresa) ──────────────────
 
 create table if not exists public.company_products (
   id          uuid primary key default gen_random_uuid(),
@@ -130,7 +128,7 @@ create policy "company_products_delete" on public.company_products
     )
   );
 
--- ─── 8. Tabela company_follows (task-19: Perfil e Empresa) ───────────────────
+-- ─── PARTE D: Tabela company_follows (task-19: Perfil e Empresa) ───────────────────
 
 create table if not exists public.company_follows (
   id          uuid primary key default gen_random_uuid(),
@@ -366,4 +364,76 @@ update public.opportunities o
 update public.opportunities o
   set applications_count = (
     select count(*) from public.opportunity_applications oa where oa.opportunity_id = o.id
+  );
+
+-- ─── PARTE E: Admin Gestão de Conteúdo — RLS (task-13) ───────────────────────────
+
+-- 5. Admin SELECT para events — permite ver eventos cancelados e privados
+drop policy if exists "events_admin_select" on public.events;
+create policy "events_admin_select" on public.events for select
+  using (
+    (is_active = true and (visibility = 'publico' or auth.uid() = user_id))
+    or exists (select 1 from public.profiles where id = auth.uid() and is_admin = true)
+  );
+
+-- 6. Admin SELECT para opportunities — permite ver oportunidades inativas
+drop policy if exists "opportunities_admin_select" on public.opportunities;
+create policy "opportunities_admin_select" on public.opportunities for select
+  using (
+    is_active = true
+    or exists (select 1 from public.profiles where id = auth.uid() and is_admin = true)
+  );
+
+-- 7. Admin delete em stories
+drop policy if exists "stories_delete" on public.stories;
+create policy "stories_delete" on public.stories for delete
+  using (
+    auth.uid() = user_id
+    or exists (select 1 from public.profiles where id = auth.uid() and is_admin = true)
+  );
+
+-- 8. Admin update em stories
+drop policy if exists "stories_update" on public.stories;
+create policy "stories_update" on public.stories for update
+  using (
+    auth.uid() = user_id
+    or exists (select 1 from public.profiles where id = auth.uid() and is_admin = true)
+  )
+  with check (
+    auth.uid() = user_id
+    or exists (select 1 from public.profiles where id = auth.uid() and is_admin = true)
+  );
+
+-- 9. Tabela story_likes — curtidas específicas de stories
+create table if not exists public.story_likes (
+  id         uuid primary key default gen_random_uuid(),
+  story_id   uuid references public.stories(id) on delete cascade not null,
+  user_id    uuid references public.profiles(id) on delete cascade not null,
+  created_at timestamptz not null default now(),
+  unique(story_id, user_id)
+);
+
+alter table public.story_likes enable row level security;
+
+create policy "story_likes_select" on public.story_likes for select using (true);
+
+create policy "story_likes_insert" on public.story_likes for insert
+  with check (auth.uid() = user_id);
+
+create policy "story_likes_delete" on public.story_likes for delete
+  using (
+    auth.uid() = user_id
+    or exists (select 1 from public.profiles where id = auth.uid() and is_admin = true)
+  );
+
+-- 10. Admin update em opportunities (usa created_by, coluna correta da tabela)
+drop policy if exists "opportunities_update" on public.opportunities;
+create policy "opportunities_update" on public.opportunities for update
+  using (
+    auth.uid() = created_by
+    or exists (select 1 from public.profiles where id = auth.uid() and is_admin = true)
+  )
+  with check (
+    auth.uid() = created_by
+    or exists (select 1 from public.profiles where id = auth.uid() and is_admin = true)
   );
