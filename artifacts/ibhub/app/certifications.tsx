@@ -1,9 +1,10 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Platform,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,16 +15,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
-
-interface Certification {
-  id: string;
-  name: string;
-  issuer: string;
-  certNumber?: string;
-  date?: string;
-  status: "pending" | "verified";
-  addedAt: string;
-}
+import { useAuth } from "@/context/AuthContext";
+import * as API from "@/services/api";
+import type { CertificationRequest } from "@/services/api";
 
 const CERT_OPTIONS = [
   "WSET Level 1",
@@ -40,18 +34,45 @@ const CERT_OPTIONS = [
   "Outro",
 ];
 
-const STORAGE_KEY = "ibhub_certifications_v2";
+function getIssuer(name: string): string {
+  if (name.startsWith("WSET")) return "WSET";
+  if (name.startsWith("CMS")) return "Court of Master Sommeliers";
+  if (name.startsWith("ABEV")) return "ABEV";
+  if (name.startsWith("ISA")) return "ISA";
+  return "Outro";
+}
+
+function statusLabel(status: string): string {
+  if (status === "verified") return "Verificado";
+  if (status === "rejected") return "Rejeitado";
+  return "Em análise";
+}
+
+function statusColor(status: string, colors: any): string {
+  if (status === "verified") return colors.gold;
+  if (status === "rejected") return "#dc2626";
+  return colors.mutedForeground;
+}
+
+function statusBg(status: string, colors: any): string {
+  if (status === "verified") return colors.gold + "18";
+  if (status === "rejected") return "#dc262618";
+  return colors.background;
+}
 
 export default function CertificationsScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
 
-  const [certs, setCerts] = useState<Certification[]>([]);
+  const [certs, setCerts] = useState<CertificationRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
 
-  // Form state
   const [selectedCert, setSelectedCert] = useState("");
   const [certNumber, setCertNumber] = useState("");
   const [certDate, setCertDate] = useState("");
@@ -59,43 +80,49 @@ export default function CertificationsScreen() {
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
-  useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((val) => {
-      if (val) setCerts(JSON.parse(val));
-    });
-  }, []);
+  const loadCerts = useCallback(async () => {
+    if (!user) return;
+    const data = await API.getMyCertificationRequests(user.id);
+    setCerts(data);
+  }, [user]);
 
-  const save = async (updated: Certification[]) => {
-    setCerts(updated);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  useEffect(() => {
+    setLoading(true);
+    loadCerts().finally(() => setLoading(false));
+  }, [loadCerts]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadCerts();
+    setRefreshing(false);
   };
 
   const handleSubmit = async () => {
     if (!selectedCert) { Alert.alert("Atenção", "Selecione uma certificação."); return; }
-    const cert: Certification = {
-      id: Date.now().toString(),
+    if (!user) return;
+
+    setSubmitting(true);
+    const result = await API.submitCertificationRequest({
+      user_id: user.id,
       name: selectedCert,
-      issuer: selectedCert.startsWith("WSET") ? "WSET" : selectedCert.startsWith("CMS") ? "Court of Master Sommeliers" : selectedCert.startsWith("ABEV") ? "ABEV" : "ISA",
-      certNumber: certNumber || undefined,
+      issuer: getIssuer(selectedCert),
+      cert_number: certNumber || undefined,
       date: certDate || undefined,
-      status: "pending",
-      addedAt: new Date().toISOString(),
-    };
-    await save([cert, ...certs]);
+    });
+    setSubmitting(false);
+
+    if (!result) {
+      Alert.alert("Erro", "Não foi possível enviar a solicitação. Tente novamente.");
+      return;
+    }
+
+    setCerts((prev) => [result, ...prev]);
     setSelectedCert(""); setCertNumber(""); setCertDate("");
     setShowForm(false);
   };
 
-  const handleRemove = async (id: string) => {
-    Alert.alert("Remover", "Deseja remover esta certificação?", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Remover", style: "destructive", onPress: () => save(certs.filter((c) => c.id !== id)) },
-    ]);
-  };
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
@@ -103,8 +130,13 @@ export default function CertificationsScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
-        {/* Request button */}
+      <ScrollView
+        contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: bottomPad }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} colors={[colors.gold]} />
+        }
+      >
         <TouchableOpacity
           style={[styles.requestBtn, { borderColor: colors.border, backgroundColor: "#fff" }]}
           onPress={() => setShowForm(!showForm)}
@@ -113,12 +145,10 @@ export default function CertificationsScreen() {
           <Text style={[styles.requestBtnText, { color: colors.foreground }]}>Solicitar Verificação</Text>
         </TouchableOpacity>
 
-        {/* Inline form */}
         {showForm && (
           <View style={[styles.formCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
             <Text style={[styles.formTitle, { color: colors.navy }]}>Solicitar Verificação</Text>
 
-            {/* Cert picker */}
             <TouchableOpacity
               style={[styles.pickerBtn, { borderColor: colors.border }]}
               onPress={() => setShowPicker(!showPicker)}
@@ -145,7 +175,6 @@ export default function CertificationsScreen() {
               </View>
             )}
 
-            {/* Cert number */}
             <TextInput
               style={[styles.input, { borderColor: colors.border, color: colors.foreground }]}
               placeholder="Número do certificado (opcional)"
@@ -154,7 +183,6 @@ export default function CertificationsScreen() {
               onChangeText={setCertNumber}
             />
 
-            {/* Date */}
             <TextInput
               style={[styles.input, { borderColor: colors.border, color: colors.foreground }]}
               placeholder="dd/mm/aaaa"
@@ -164,23 +192,30 @@ export default function CertificationsScreen() {
               keyboardType="numeric"
             />
 
-            {/* Form actions */}
             <View style={styles.formActions}>
               <TouchableOpacity style={styles.cancelBtn} onPress={() => { setShowForm(false); setShowPicker(false); }}>
                 <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.submitBtn, { backgroundColor: colors.navy }]}
+                style={[styles.submitBtn, { backgroundColor: colors.navy, opacity: submitting ? 0.7 : 1 }]}
                 onPress={handleSubmit}
+                disabled={submitting}
               >
-                <Text style={styles.submitText}>Enviar Solicitação</Text>
+                {submitting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.submitText}>Enviar Solicitação</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
         )}
 
-        {/* Empty state or list */}
-        {certs.length === 0 ? (
+        {loading ? (
+          <View style={styles.empty}>
+            <ActivityIndicator size="small" color={colors.gold} />
+          </View>
+        ) : certs.length === 0 ? (
           <View style={styles.empty}>
             <View style={[styles.emptyIconWrap, { borderColor: colors.mutedForeground }]}>
               <Feather name="award" size={36} color={colors.mutedForeground} />
@@ -193,21 +228,21 @@ export default function CertificationsScreen() {
         ) : (
           certs.map((cert) => (
             <View key={cert.id} style={[styles.certCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-              <View style={[styles.certIconWrap, { backgroundColor: cert.status === "verified" ? colors.gold + "18" : colors.background }]}>
-                <Feather name="award" size={22} color={cert.status === "verified" ? colors.gold : colors.mutedForeground} />
+              <View style={[styles.certIconWrap, { backgroundColor: statusBg(cert.status, colors) }]}>
+                <Feather name="award" size={22} color={statusColor(cert.status, colors)} />
               </View>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={[styles.certName, { color: colors.navy }]}>{cert.name}</Text>
                 {cert.date && <Text style={[styles.certMeta, { color: colors.mutedForeground }]}>{cert.date}</Text>}
-                <View style={[styles.certStatusBadge, { backgroundColor: cert.status === "verified" ? colors.gold + "18" : colors.background }]}>
-                  <Text style={[styles.certStatusText, { color: cert.status === "verified" ? colors.gold : colors.mutedForeground }]}>
-                    {cert.status === "verified" ? "Verificado" : "Em análise"}
+                {cert.cert_number && (
+                  <Text style={[styles.certMeta, { color: colors.mutedForeground }]}>Nº {cert.cert_number}</Text>
+                )}
+                <View style={[styles.certStatusBadge, { backgroundColor: statusBg(cert.status, colors) }]}>
+                  <Text style={[styles.certStatusText, { color: statusColor(cert.status, colors) }]}>
+                    {statusLabel(cert.status)}
                   </Text>
                 </View>
               </View>
-              <TouchableOpacity onPress={() => handleRemove(cert.id)} style={{ padding: 4 }}>
-                <Feather name="trash-2" size={17} color="#dc2626" />
-              </TouchableOpacity>
             </View>
           ))
         )}
@@ -234,7 +269,7 @@ const styles = StyleSheet.create({
   formActions: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 12, marginTop: 4 },
   cancelBtn: { paddingVertical: 10, paddingHorizontal: 16 },
   cancelText: { fontSize: 14 },
-  submitBtn: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 8 },
+  submitBtn: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 8, minWidth: 120, alignItems: "center" },
   submitText: { color: "#fff", fontSize: 14, fontWeight: "700" },
   empty: { alignItems: "center", gap: 14, paddingTop: 48 },
   emptyIconWrap: { width: 80, height: 80, borderRadius: 40, alignItems: "center", justifyContent: "center", borderWidth: 2 },

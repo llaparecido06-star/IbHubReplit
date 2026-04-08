@@ -14,8 +14,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import AdminDrawer from "@/components/AdminDrawer";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/context/AuthContext";
 import * as API from "@/services/api";
-import type { AppReport } from "@/services/api";
+import type { AppReport, CertificationRequest } from "@/services/api";
 
 const MAIN_TABS = ["Denúncias", "Certificações"];
 const CERT_TABS = ["Pendentes", "Verificadas", "Rejeitadas", "Todas"];
@@ -31,9 +32,17 @@ function timeAgo(dateStr: string): string {
   return `${days}d`;
 }
 
+function certTabToStatus(tab: string): "pending" | "verified" | "rejected" | undefined {
+  if (tab === "Pendentes") return "pending";
+  if (tab === "Verificadas") return "verified";
+  if (tab === "Rejeitadas") return "rejected";
+  return undefined;
+}
+
 export default function AdminModeracaoScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [mainTab, setMainTab]       = useState("Denúncias");
   const [certTab, setCertTab]       = useState("Pendentes");
@@ -42,6 +51,10 @@ export default function AdminModeracaoScreen() {
   const [reportsLoading, setReportsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  const [certRequests, setCertRequests] = useState<CertificationRequest[]>([]);
+  const [certsLoading, setCertsLoading] = useState(false);
+  const [certActionLoading, setCertActionLoading] = useState<string | null>(null);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -53,16 +66,61 @@ export default function AdminModeracaoScreen() {
     setReportsLoading(false);
   }, []);
 
+  const loadCerts = useCallback(async (tab: string) => {
+    setCertsLoading(true);
+    const data = await API.getAdminCertificationRequests(certTabToStatus(tab));
+    setCertRequests(data);
+    setCertsLoading(false);
+  }, []);
+
   useEffect(() => {
     if (mainTab === "Denúncias") {
       loadReports();
+    } else {
+      loadCerts(certTab);
     }
-  }, [mainTab, loadReports]);
+  }, [mainTab, certTab, loadReports, loadCerts]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadReports();
+    if (mainTab === "Denúncias") {
+      await loadReports();
+    } else {
+      await loadCerts(certTab);
+    }
     setRefreshing(false);
+  };
+
+  const handleCertReview = async (req: CertificationRequest, action: "verified" | "rejected") => {
+    if (!user) return;
+    const label = action === "verified" ? "aprovar" : "rejeitar";
+    Alert.alert(
+      action === "verified" ? "Aprovar Certificação" : "Rejeitar Certificação",
+      `Deseja ${label} a certificação "${req.name}" de ${req.requester?.full_name ?? "usuário"}?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: action === "verified" ? "Aprovar" : "Rejeitar",
+          style: action === "rejected" ? "destructive" : "default",
+          onPress: async () => {
+            setCertActionLoading(req.id);
+            const ok = await API.reviewCertificationRequest(req.id, action, user.id);
+            if (ok) {
+              setCertRequests((prev) => {
+                const status = certTabToStatus(certTab);
+                if (status === undefined) {
+                  return prev.map((r) => r.id === req.id ? { ...r, status: action } : r);
+                }
+                return prev.filter((r) => r.id !== req.id);
+              });
+            } else {
+              Alert.alert("Erro", "Não foi possível processar a solicitação. Tente novamente.");
+            }
+            setCertActionLoading(null);
+          },
+        },
+      ],
+    );
   };
 
   const handleApprove = async (report: AppReport) => {
@@ -112,7 +170,7 @@ export default function AdminModeracaoScreen() {
           <Feather name="menu" size={22} color={colors.navy} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.navy }]}>Moderação</Text>
-        <TouchableOpacity onPress={mainTab === "Denúncias" ? loadReports : undefined}>
+        <TouchableOpacity onPress={mainTab === "Denúncias" ? loadReports : () => loadCerts(certTab)}>
           <Feather name="refresh-cw" size={20} color={colors.navy} />
         </TouchableOpacity>
       </View>
@@ -262,10 +320,105 @@ export default function AdminModeracaoScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-            {/* Cert empty */}
-            <View style={styles.empty}>
-              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhuma certificação pendente 🎉</Text>
-            </View>
+
+            {certsLoading ? (
+              <View style={styles.empty}>
+                <ActivityIndicator size="small" color={colors.gold} />
+              </View>
+            ) : certRequests.length === 0 ? (
+              <View style={styles.empty}>
+                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+                  {certTab === "Pendentes" ? "Nenhuma solicitação pendente 🎉" : "Nenhuma certificação nessa categoria"}
+                </Text>
+              </View>
+            ) : (
+              <View style={{ gap: 12 }}>
+                {certRequests.map((req) => (
+                  <View key={req.id} style={[styles.reportCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                    <View style={styles.reportCardHeader}>
+                      <View style={[styles.flagIcon, { backgroundColor: colors.gold + "18" }]}>
+                        <Feather name="award" size={14} color={colors.gold} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.reportReason, { color: "#0d1b2a" }]} numberOfLines={1}>
+                          {req.name}
+                        </Text>
+                        <Text style={[styles.reportMeta, { color: colors.mutedForeground }]}>
+                          {timeAgo(req.created_at)}
+                        </Text>
+                      </View>
+                      {req.status !== "pending" && (
+                        <View style={[styles.certStatusBadge, {
+                          backgroundColor: req.status === "verified" ? colors.gold + "18" : "#dc262618",
+                        }]}>
+                          <Text style={[styles.certStatusText, {
+                            color: req.status === "verified" ? colors.gold : "#dc2626",
+                          }]}>
+                            {req.status === "verified" ? "Verificado" : "Rejeitado"}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <View style={[styles.postPreview, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                      <Text style={[styles.postPreviewText, { color: "#374151" }]}>
+                        Emissor: {req.issuer}
+                      </Text>
+                      {req.cert_number && (
+                        <Text style={[styles.postPreviewText, { color: "#374151" }]}>
+                          Nº {req.cert_number}
+                        </Text>
+                      )}
+                      {req.date && (
+                        <Text style={[styles.postPreviewText, { color: "#374151" }]}>
+                          Data: {req.date}
+                        </Text>
+                      )}
+                    </View>
+
+                    <Text style={[styles.reporterText, { color: colors.mutedForeground }]}>
+                      Solicitante:{" "}
+                      <Text style={{ fontWeight: "600", color: "#374151" }}>
+                        {req.requester?.full_name ?? req.user_id.slice(0, 8)}
+                      </Text>
+                    </Text>
+
+                    {req.status === "pending" && (
+                      <View style={styles.reportActions}>
+                        <TouchableOpacity
+                          style={[styles.rejectBtn, { borderColor: "#dc2626" }]}
+                          onPress={() => handleCertReview(req, "rejected")}
+                          disabled={certActionLoading === req.id}
+                        >
+                          {certActionLoading === req.id ? (
+                            <ActivityIndicator size="small" color="#dc2626" />
+                          ) : (
+                            <>
+                              <Feather name="x-circle" size={14} color="#dc2626" />
+                              <Text style={[styles.rejectBtnText, { color: "#dc2626" }]}>Rejeitar</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.approveBtn, { backgroundColor: colors.gold }]}
+                          onPress={() => handleCertReview(req, "verified")}
+                          disabled={certActionLoading === req.id}
+                        >
+                          {certActionLoading === req.id ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                          ) : (
+                            <>
+                              <Feather name="check-circle" size={14} color="#fff" />
+                              <Text style={styles.approveBtnText}>Aprovar</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
           </>
         )}
       </ScrollView>
@@ -305,4 +458,6 @@ const styles = StyleSheet.create({
   rejectBtnText:    { fontSize: 14, fontWeight: "600" },
   approveBtn:       { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 11, borderRadius: 10 },
   approveBtnText:   { fontSize: 14, fontWeight: "600", color: "#fff" },
+  certStatusBadge:  { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
+  certStatusText:   { fontSize: 11, fontWeight: "600" },
 });

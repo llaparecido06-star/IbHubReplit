@@ -354,6 +354,32 @@ create policy "messages_select" on public.messages for select
   ));
 create policy "messages_insert" on public.messages for insert with check (auth.uid() = sender_id);
 
+-- ─── CERTIFICATION REQUESTS ──────────────────────────────────────────────────
+create table if not exists public.certification_requests (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references auth.users(id) on delete cascade,
+  name          text not null,
+  issuer        text not null,
+  cert_number   text,
+  date          text,
+  status        text not null default 'pending' check (status in ('pending','verified','rejected')),
+  created_at    timestamptz not null default now(),
+  reviewed_at   timestamptz,
+  reviewed_by   uuid references auth.users(id) on delete set null
+);
+alter table public.certification_requests enable row level security;
+
+-- Users can see only their own requests; admins can see all
+create policy "cert_requests_select_own" on public.certification_requests for select
+  using (
+    auth.uid() = user_id
+    or exists (select 1 from public.profiles where id = auth.uid() and is_admin = true)
+  );
+create policy "cert_requests_insert" on public.certification_requests for insert
+  with check (auth.uid() = user_id);
+create policy "cert_requests_update_admin" on public.certification_requests for update
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin = true));
+
 -- ─── REPORTS ─────────────────────────────────────────────────────────────────
 create table if not exists public.reports (
   id            uuid primary key default gen_random_uuid(),
