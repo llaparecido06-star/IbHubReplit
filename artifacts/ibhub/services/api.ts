@@ -223,22 +223,74 @@ export async function toggleBookmark(postId: string, userId: string, isCurrently
 
 // ─── COMMENTS ────────────────────────────────────────────────────────────────
 
-export async function fetchComments(postId: string): Promise<AppComment[]> {
+export async function fetchComments(postId: string, currentUserId?: string): Promise<AppComment[]> {
   try {
     const { data, error } = await supabase
       .from("comments")
       .select(`
-        id, post_id, user_id, content, created_at,
+        id, post_id, user_id, content, created_at, likes_count,
         author:profiles!comments_user_id_fkey(${COMMENT_AUTHOR_SELECT})
       `)
       .eq("post_id", postId)
       .order("created_at", { ascending: true });
 
     if (error || !data) return [];
-    return (data as any[]).map(c => ({ ...c, author: normaliseAuthor(c.author) })) as AppComment[];
+
+    let likedSet = new Set<string>();
+    if (currentUserId && data.length > 0) {
+      const ids = (data as any[]).map(c => c.id);
+      const { data: myLikes } = await supabase
+        .from("comment_likes")
+        .select("comment_id")
+        .eq("user_id", currentUserId)
+        .in("comment_id", ids);
+      likedSet = new Set((myLikes ?? []).map((l: any) => l.comment_id));
+    }
+
+    return (data as any[]).map(c => ({
+      ...c,
+      likes_count: c.likes_count ?? 0,
+      is_liked: likedSet.has(c.id),
+      author: normaliseAuthor(c.author),
+    })) as AppComment[];
   } catch (e) {
     console.error("fetchComments:", e);
     return [];
+  }
+}
+
+export async function fetchCommentById(commentId: string, currentUserId?: string): Promise<AppComment | null> {
+  try {
+    const { data, error } = await supabase
+      .from("comments")
+      .select(`
+        id, post_id, user_id, content, created_at, likes_count,
+        author:profiles!comments_user_id_fkey(${COMMENT_AUTHOR_SELECT})
+      `)
+      .eq("id", commentId)
+      .single();
+
+    if (error || !data) return null;
+
+    let is_liked = false;
+    if (currentUserId) {
+      const { data: like } = await supabase
+        .from("comment_likes")
+        .select("id")
+        .match({ comment_id: commentId, user_id: currentUserId })
+        .maybeSingle();
+      is_liked = !!like;
+    }
+
+    return {
+      ...(data as any),
+      likes_count: (data as any).likes_count ?? 0,
+      is_liked,
+      author: normaliseAuthor((data as any).author),
+    } as AppComment;
+  } catch (e) {
+    console.error("fetchCommentById:", e);
+    return null;
   }
 }
 

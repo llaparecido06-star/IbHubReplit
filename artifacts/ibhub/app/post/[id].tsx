@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Avatar } from "@/components/ui/Avatar";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, supabase } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
 import type { AppComment } from "@/services/api";
@@ -53,15 +53,41 @@ export default function PostDetailScreen() {
     setLoadingPost(true);
     const [realPost, realComments] = await Promise.all([
       API.fetchPostById(id, user?.id),
-      API.fetchComments(id),
+      API.fetchComments(id, user?.id),
     ]);
     if (realPost) setPost(realPost);
-    // Initialize local likes_count and is_liked
-    setComments(realComments.map(c => ({ ...c, likes_count: c.likes_count ?? 0, is_liked: c.is_liked ?? false })));
+    setComments(realComments);
     setLoadingPost(false);
   }, [id, user?.id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // ── Realtime: novos comentários de outros usuários aparecem instantaneamente
+  useEffect(() => {
+    if (!id) return;
+    const channel = supabase
+      .channel(`post_comments_${id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "comments", filter: `post_id=eq.${id}` },
+        async (payload) => {
+          const row = payload.new as any;
+          // comentário do próprio usuário já foi adicionado otimisticamente
+          if (row.user_id === user?.id) return;
+          const fresh = await API.fetchCommentById(row.id, user?.id);
+          if (!fresh) return;
+          setComments(prev => {
+            if (prev.some(c => c.id === fresh.id)) return prev;
+            return [...prev, fresh];
+          });
+          setPost(prev => prev ? { ...prev, comments_count: (prev.comments_count || 0) + 1 } : prev);
+          setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+        },
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [id, user?.id]);
 
   // Scroll to highlighted comment after comments load
   useEffect(() => {
