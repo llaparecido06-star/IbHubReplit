@@ -275,6 +275,40 @@ export async function addComment(
   }
 }
 
+// ─── UPDATE PROFILE ─────────────────────────────────────────────────────────────
+
+export interface UpdateProfilePayload {
+  full_name?: string;
+  username?: string;
+  bio?: string;
+  areas_of_expertise?: string[];
+  company?: string | null;
+  position?: string | null;
+  website?: string | null;
+  linkedin?: string | null;
+  instagram?: string | null;
+  headline?: string | null;
+  certifications?: string[];
+  avatar_url?: string | null;
+}
+
+export async function updateProfile(
+  userId: string,
+  payload: UpdateProfilePayload,
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("profiles")
+      .update(payload)
+      .eq("id", userId);
+    if (error) { console.error("updateProfile:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("updateProfile:", e);
+    return false;
+  }
+}
+
 // ─── SUGGESTED CONNECTIONS ─────────────────────────────────────────────────────
 
 export interface SuggestedProfile {

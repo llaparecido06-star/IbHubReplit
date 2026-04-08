@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { updateProfile } from "@/services/api";
 
 const AREAS = [
   "Sommelier", "Produtor", "Importador", "Exportador", "Distribuidor",
@@ -24,21 +25,22 @@ const AREAS = [
 export default function EditProfileScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { profile, refreshProfile } = useAuth();
+  const { profile, user, refreshProfile } = useAuth();
   const insets = useSafeAreaInsets();
 
-  const [fullName, setFullName]       = useState(profile?.full_name    ?? "Maria Santos");
-  const [username, setUsername]       = useState(profile?.username     ?? "mariasantos");
-  const [bio, setBio]                 = useState(profile?.bio          ?? "Sommelier certificada WSET L3. Apaixonada por vinhos do novo mundo.");
+  const [fullName, setFullName]       = useState(profile?.full_name    ?? "");
+  const [username, setUsername]       = useState(profile?.username     ?? "");
+  const [bio, setBio]                 = useState(profile?.bio          ?? "");
   const [selectedAreas, setSelectedAreas] = useState<string[]>(
-    profile?.areas_of_expertise ?? ["Sommelier", "Consultoria"]
+    profile?.areas_of_expertise ?? []
   );
-  const [company, setCompany]         = useState(profile?.company      ?? "Wine Academy");
-  const [position, setPosition]       = useState(profile?.position     ?? "Sommelier Chefe");
+  const [company, setCompany]         = useState(profile?.company      ?? "");
+  const [position, setPosition]       = useState(profile?.position     ?? "");
   const [certText, setCertText]       = useState("");
   const [website, setWebsite]         = useState(profile?.website      ?? "");
   const [linkedin, setLinkedin]       = useState(profile?.linkedin     ?? "");
   const [instagram, setInstagram]     = useState(profile?.instagram    ?? "");
+  const [saving, setSaving]           = useState(false);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -56,9 +58,30 @@ export default function EditProfileScreen() {
 
   const handleSave = async () => {
     if (!fullName.trim()) { Alert.alert("Atenção", "Nome completo é obrigatório."); return; }
-    try {
-      await refreshProfile?.();
-    } catch {}
+    if (!user?.id) { Alert.alert("Erro", "Sessão expirada. Faça login novamente."); return; }
+    setSaving(true);
+    const existingCerts = profile?.certifications ?? [];
+    const newCerts = certText.trim()
+      ? [...existingCerts.filter(c => c !== certText.trim()), certText.trim()]
+      : existingCerts;
+    const ok = await updateProfile(user.id, {
+      full_name:          fullName.trim(),
+      username:           username.trim() || undefined,
+      bio:                bio.trim() || null,
+      areas_of_expertise: selectedAreas,
+      company:            company.trim() || null,
+      position:           position.trim() || null,
+      website:            website.trim() || null,
+      linkedin:           linkedin.trim() || null,
+      instagram:          instagram.trim() || null,
+      certifications:     newCerts,
+    });
+    setSaving(false);
+    if (!ok) {
+      Alert.alert("Erro", "Não foi possível salvar o perfil. Tente novamente.");
+      return;
+    }
+    try { await refreshProfile?.(); } catch {}
     Alert.alert("Salvo!", "Perfil atualizado com sucesso.");
     router.back();
   };
@@ -71,9 +94,13 @@ export default function EditProfileScreen() {
           <Feather name="arrow-left" size={22} color={colors.navy} />
           <Text style={[styles.headerTitle, { color: colors.navy }]}>Editar Perfil</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.gold }]} onPress={handleSave}>
+        <TouchableOpacity
+          style={[styles.saveBtn, { backgroundColor: saving ? colors.gold + "88" : colors.gold }]}
+          onPress={handleSave}
+          disabled={saving}
+        >
           <Feather name="save" size={14} color="#fff" />
-          <Text style={styles.saveBtnText}>Salvar</Text>
+          <Text style={styles.saveBtnText}>{saving ? "Salvando..." : "Salvar"}</Text>
         </TouchableOpacity>
       </View>
 

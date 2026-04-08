@@ -34,6 +34,7 @@ import {
   sendConnectionRequest,
   toggleLike,
   toggleBookmark,
+  addComment,
 } from "@/services/api";
 import { Post } from "@/components/feed/PostCard";
 import EmpresaDashboard from "@/components/EmpresaDashboard";
@@ -166,6 +167,17 @@ export default function ProfileScreen() {
       setSavedPosts((prev) => prev.filter((p) => p.id !== post.id));
     }
     await toggleBookmark(post.id, user.id, wasBookmarked);
+  };
+
+  const handleSubmitComment = async () => {
+    const text = commentText.trim();
+    if (!text || !showComments || !user?.id) return;
+    setCommentText("");
+    setShowComments(null);
+    setPosts((prev) =>
+      prev.map((p) => p.id === showComments ? { ...p, comments_count: p.comments_count + 1 } : p)
+    );
+    await addComment(showComments, user.id, text);
   };
 
   const wineInCellar = wineEntries.filter((w) => w.status === "adega").length;
@@ -561,19 +573,19 @@ export default function ProfileScreen() {
       )}
 
       {/* ── Comments modal ── */}
-      <Modal visible={showComments !== null} transparent animationType="slide" onRequestClose={() => setShowComments(null)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setShowComments(null)}>
+      <Modal visible={showComments !== null} transparent animationType="slide" onRequestClose={() => { setShowComments(null); setCommentText(""); }}>
+        <Pressable style={styles.modalOverlay} onPress={() => { setShowComments(null); setCommentText(""); }}>
           <View style={[styles.commentsSheet, { backgroundColor: "#fff" }]}>
             <View style={styles.commentsHeader}>
               <Text style={[styles.commentsTitle, { color: colors.navy }]}>Comentários</Text>
-              <TouchableOpacity onPress={() => setShowComments(null)}>
+              <TouchableOpacity onPress={() => { setShowComments(null); setCommentText(""); }}>
                 <Feather name="x" size={20} color={colors.navy} />
               </TouchableOpacity>
             </View>
             <TouchableOpacity
               style={[styles.commentsBody]}
               activeOpacity={0.8}
-              onPress={() => { setShowComments(null); router.push(`/post/${showComments}` as any); }}
+              onPress={() => { const pid = showComments; setShowComments(null); setCommentText(""); if (pid) router.push(`/post/${pid}` as any); }}
             >
               <Text style={[styles.commentsEmpty, { color: colors.mutedForeground }]}>
                 Ver comentários completos →
@@ -588,9 +600,9 @@ export default function ProfileScreen() {
                 onChangeText={setCommentText}
               />
               <TouchableOpacity
-                onPress={() => { if (showComments) router.push(`/post/${showComments}` as any); }}
+                onPress={commentText.trim() ? handleSubmitComment : () => { if (showComments) { setCommentText(""); setShowComments(null); router.push(`/post/${showComments}` as any); } }}
               >
-                <Feather name="send" size={20} color={commentText ? colors.gold : colors.mutedForeground} />
+                <Feather name="send" size={20} color={commentText.trim() ? colors.gold : colors.mutedForeground} />
               </TouchableOpacity>
             </View>
           </View>

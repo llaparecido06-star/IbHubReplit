@@ -226,8 +226,9 @@ export default function FeedScreen() {
       try {
         const realPosts = await API.fetchFeedPosts(user.id);
         if (realPosts.length > 0) {
-          setPosts(realPosts);
-          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(realPosts));
+          const sorted = sortByRelevance(realPosts);
+          setPosts(sorted);
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(sorted));
           setRefreshing(false);
           return;
         }
@@ -235,9 +236,9 @@ export default function FeedScreen() {
     }
     await AsyncStorage.removeItem(STORAGE_KEY);
     const mockPosts = Array.from({ length: 6 }, (_, i) => generateMockPost(i));
-    setPosts(mockPosts);
+    setPosts(sortByRelevance(mockPosts));
     setRefreshing(false);
-  }, [user?.id]);
+  }, [user?.id, sortByRelevance]);
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
 
@@ -643,9 +644,8 @@ export default function FeedScreen() {
                   <View style={[styles.pollSection, { borderTopColor: colors.border }]}>
                     <View style={styles.pollLabelRow}>
                       <Feather name="bar-chart-2" size={14} color={colors.gold} />
-                      <Text style={[styles.pollLabel, { color: colors.gold }]}>ENQUETE</Text>
+                      <Text style={[styles.pollLabel, { color: colors.gold }]}>OPÇÕES DA ENQUETE</Text>
                     </View>
-                    <TextInput style={[styles.pollOptionInput, { borderColor: colors.border, color: colors.foreground }]} placeholder="Faça uma pergunta..." placeholderTextColor={colors.mutedForeground} value={pollQuestion} onChangeText={setPollQuestion} />
                     {pollOptions.map((opt, i) => (
                       <TextInput key={i} style={[styles.pollOptionInput, { borderColor: colors.border, color: colors.foreground }]} placeholder={`Opção ${i + 1}`} placeholderTextColor={colors.mutedForeground} value={opt} onChangeText={(v) => { const n = [...pollOptions]; n[i] = v; setPollOptions(n); }} />
                     ))}
@@ -701,7 +701,7 @@ export default function FeedScreen() {
                 <Feather name="image" size={18} color={postImageUri ? colors.gold : colors.foreground} />
                 <Text style={[styles.toolbarLabel, { color: postImageUri ? colors.gold : colors.foreground }]}>Foto</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.toolbarBtn} onPress={handlePickImage}>
+              <TouchableOpacity style={styles.toolbarBtn} onPress={() => Alert.alert("Em breve", "O upload de vídeos estará disponível em breve.")}>
                 <Feather name="video" size={18} color={colors.foreground} />
                 <Text style={[styles.toolbarLabel, { color: colors.foreground }]}>Vídeo</Text>
               </TouchableOpacity>
@@ -726,7 +726,7 @@ export default function FeedScreen() {
                 <Text style={{ fontSize: 14 }}>🍷</Text>
                 <Text style={[styles.postModalTitle, { color: colors.navy }]}>Avaliar Rótulo</Text>
               </View>
-              <TouchableOpacity style={[styles.publishBtn, { backgroundColor: colors.gold + "88" }]} onPress={handlePublishWine}>
+              <TouchableOpacity style={[styles.publishBtn, { backgroundColor: wineName.trim() ? colors.gold : colors.gold + "55" }]} onPress={handlePublishWine}>
                 <Text style={styles.publishBtnText}>Publicar</Text>
               </TouchableOpacity>
             </View>
