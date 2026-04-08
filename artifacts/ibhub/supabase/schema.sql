@@ -299,9 +299,13 @@ create policy "follows_select" on public.follows for select using (true);
 create policy "follows_insert" on public.follows for insert with check (auth.uid() = follower_id);
 create policy "follows_delete" on public.follows for delete using (auth.uid() = follower_id);
 
--- Connections: participantes podem ver, requester cria
+-- Connections: participantes podem ver, admins podem ver todas, requester cria
 create policy "connections_select" on public.connections for select
-  using (auth.uid() = requester_id or auth.uid() = receiver_id);
+  using (
+    auth.uid() = requester_id
+    or auth.uid() = receiver_id
+    or exists (select 1 from public.profiles where id = auth.uid() and is_admin = true)
+  );
 create policy "connections_insert" on public.connections for insert with check (auth.uid() = requester_id);
 create policy "connections_update" on public.connections for update
   using (auth.uid() = receiver_id or auth.uid() = requester_id);
