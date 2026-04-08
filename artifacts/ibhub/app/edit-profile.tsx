@@ -25,7 +25,7 @@ const AREAS = [
 export default function EditProfileScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { profile, user, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [fullName, setFullName]       = useState(profile?.full_name    ?? "");
@@ -36,7 +36,10 @@ export default function EditProfileScreen() {
   );
   const [company, setCompany]         = useState(profile?.company      ?? "");
   const [position, setPosition]       = useState(profile?.position     ?? "");
-  const [certText, setCertText]       = useState("");
+  const [certifications, setCertifications] = useState<string[]>(
+    Array.isArray(profile?.certifications) ? profile.certifications : []
+  );
+  const [certInput, setCertInput]     = useState("");
   const [website, setWebsite]         = useState(profile?.website      ?? "");
   const [linkedin, setLinkedin]       = useState(profile?.linkedin     ?? "");
   const [instagram, setInstagram]     = useState(profile?.instagram    ?? "");
@@ -56,14 +59,25 @@ export default function EditProfileScreen() {
     });
   };
 
+  const addCertification = () => {
+    const trimmed = certInput.trim();
+    if (!trimmed) return;
+    if (certifications.includes(trimmed)) {
+      setCertInput("");
+      return;
+    }
+    setCertifications((prev) => [...prev, trimmed]);
+    setCertInput("");
+  };
+
+  const removeCertification = (cert: string) => {
+    setCertifications((prev) => prev.filter((c) => c !== cert));
+  };
+
   const handleSave = async () => {
     if (!fullName.trim()) { Alert.alert("Atenção", "Nome completo é obrigatório."); return; }
     if (!user?.id) { Alert.alert("Erro", "Sessão expirada. Faça login novamente."); return; }
     setSaving(true);
-    const existingCerts = profile?.certifications ?? [];
-    const newCerts = certText.trim()
-      ? [...existingCerts.filter(c => c !== certText.trim()), certText.trim()]
-      : existingCerts;
     const ok = await updateProfile(user.id, {
       full_name:          fullName.trim(),
       username:           username.trim() || undefined,
@@ -74,11 +88,11 @@ export default function EditProfileScreen() {
       website:            website.trim() || null,
       linkedin:           linkedin.trim() || null,
       instagram:          instagram.trim() || null,
-      certifications:     newCerts,
+      certifications,
     });
     setSaving(false);
     if (!ok) {
-      Alert.alert("Erro", "Não foi possível salvar o perfil. Tente novamente.");
+      Alert.alert("Erro", "Não foi possível salvar o perfil. Verifique se o nome de usuário já está em uso e tente novamente.");
       return;
     }
     try { await refreshProfile?.(); } catch {}
@@ -109,7 +123,7 @@ export default function EditProfileScreen() {
         <View style={styles.avatarWrap}>
           <View style={[styles.avatar, { backgroundColor: colors.navy }]}>
             <Text style={[styles.avatarInitial, { color: colors.gold }]}>
-              {fullName.charAt(0).toUpperCase() || "M"}
+              {fullName.charAt(0).toUpperCase() || "?"}
             </Text>
           </View>
           <TouchableOpacity style={[styles.cameraBtn, { backgroundColor: colors.gold }]}>
@@ -197,16 +211,38 @@ export default function EditProfileScreen() {
           />
         </View>
 
-        {/* Certificações */}
+        {/* Certificações — chips */}
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.foreground }]}>Certificações</Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-            placeholder="Ex: WSET Level 3"
-            placeholderTextColor={colors.mutedForeground}
-            value={certText}
-            onChangeText={setCertText}
-          />
+          {certifications.length > 0 && (
+            <View style={styles.chips}>
+              {certifications.map((cert) => (
+                <View key={cert} style={[styles.certChip, { backgroundColor: colors.navy + "14", borderColor: colors.navy + "30" }]}>
+                  <Text style={[styles.certChipText, { color: colors.navy }]}>{cert}</Text>
+                  <TouchableOpacity onPress={() => removeCertification(cert)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Feather name="x" size={13} color={colors.navy} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+          <View style={styles.inputRow}>
+            <TextInput
+              style={[styles.input, styles.inputFlex, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+              placeholder="Ex: WSET Level 3"
+              placeholderTextColor={colors.mutedForeground}
+              value={certInput}
+              onChangeText={setCertInput}
+              onSubmitEditing={addCertification}
+              returnKeyType="done"
+            />
+            <TouchableOpacity
+              style={[styles.addBtn, { backgroundColor: colors.gold }]}
+              onPress={addCertification}
+            >
+              <Feather name="plus" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Website */}
@@ -252,25 +288,28 @@ export default function EditProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container:   { flex: 1 },
-  header:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
-  backRow:     { flexDirection: "row", alignItems: "center", gap: 10 },
-  headerTitle: { fontSize: 20, fontWeight: "700" },
-  saveBtn:     { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20 },
-  saveBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
-  avatarWrap:  { alignSelf: "center", position: "relative" },
-  avatar:      { width: 88, height: 88, borderRadius: 44, alignItems: "center", justifyContent: "center" },
+  container:    { flex: 1 },
+  header:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
+  backRow:      { flexDirection: "row", alignItems: "center", gap: 10 },
+  headerTitle:  { fontSize: 20, fontWeight: "700" },
+  saveBtn:      { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20 },
+  saveBtnText:  { color: "#fff", fontSize: 14, fontWeight: "700" },
+  avatarWrap:   { alignSelf: "center", position: "relative" },
+  avatar:       { width: 88, height: 88, borderRadius: 44, alignItems: "center", justifyContent: "center" },
   avatarInitial:{ fontSize: 36, fontWeight: "800" },
-  cameraBtn:   { position: "absolute", bottom: -2, right: -2, width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  field:       { gap: 8 },
-  label:       { fontSize: 14, fontWeight: "600" },
-  input:       { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 },
-  inputRow:    { flexDirection: "row", gap: 8, alignItems: "center" },
-  inputFlex:   { flex: 1 },
-  checkIcon:   { width: 44, height: 46, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  textarea:    { height: 90, textAlignVertical: "top" },
-  charCount:   { fontSize: 12, textAlign: "right", marginTop: -4 },
-  chips:       { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip:        { borderWidth: 1, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
-  chipText:    { fontSize: 13 },
+  cameraBtn:    { position: "absolute", bottom: -2, right: -2, width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  field:        { gap: 8 },
+  label:        { fontSize: 14, fontWeight: "600" },
+  input:        { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 },
+  inputRow:     { flexDirection: "row", gap: 8, alignItems: "center" },
+  inputFlex:    { flex: 1 },
+  checkIcon:    { width: 44, height: 46, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  textarea:     { height: 90, textAlignVertical: "top" },
+  charCount:    { fontSize: 12, textAlign: "right", marginTop: -4 },
+  chips:        { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip:         { borderWidth: 1, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  chipText:     { fontSize: 13 },
+  certChip:     { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  certChipText: { fontSize: 13 },
+  addBtn:       { width: 46, height: 46, borderRadius: 10, alignItems: "center", justifyContent: "center" },
 });
