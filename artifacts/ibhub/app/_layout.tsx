@@ -52,7 +52,6 @@ function RootLayoutNav() {
       <Stack.Screen name="events" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="opportunities" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="groups" options={{ animation: "slide_from_right" }} />
-      <Stack.Screen name="saved-posts" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="my-events" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="new-message" options={{ presentation: "modal" }} />
       <Stack.Screen name="chat/[id]" options={{ animation: "slide_from_right" }} />

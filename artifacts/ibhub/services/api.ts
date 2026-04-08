@@ -1336,38 +1336,6 @@ export async function blockUser(blockerId: string, blockedId: string): Promise<b
   }
 }
 
-// ── Fetch blocked users with profile info ────────────────────────────────────
-export interface BlockedUser {
-  block_id: string;
-  blocked_id: string;
-  full_name: string | null;
-  username: string | null;
-  avatar_url: string | null;
-}
-
-interface BlockedUserRow {
-  id: string;
-  blocked_id: string;
-  blocked: { full_name: string | null; username: string | null; avatar_url: string | null } | null;
-}
-
-export async function fetchBlockedUsers(userId: string): Promise<BlockedUser[]> {
-  const { data, error } = await supabase
-    .from("user_blocks")
-    .select("id, blocked_id, blocked:profiles!user_blocks_blocked_id_fkey(full_name, username, avatar_url)")
-    .eq("blocker_id", userId)
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  if (!data) return [];
-  return (data as unknown as BlockedUserRow[]).map((r) => ({
-    block_id: r.id,
-    blocked_id: r.blocked_id,
-    full_name: r.blocked?.full_name ?? null,
-    username: r.blocked?.username ?? null,
-    avatar_url: r.blocked?.avatar_url ?? null,
-  }));
-}
-
 // ── Unblock user ──────────────────────────────────────────────────────────────
 export async function unblockUser(blockerId: string, blockedId: string): Promise<boolean> {
   try {
@@ -1383,6 +1351,43 @@ export async function unblockUser(blockerId: string, blockedId: string): Promise
   }
 }
 
+export interface BlockedUser {
+  id: string;
+  full_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+}
+
+interface BlockedUserRow {
+  blocked_id: string;
+  profiles: {
+    id: string;
+    full_name: string | null;
+    username: string | null;
+    avatar_url: string | null;
+  } | null;
+}
+
+export async function fetchBlockedUsers(userId: string): Promise<BlockedUser[]> {
+  try {
+    const { data, error } = await supabase
+      .from("user_blocks")
+      .select("blocked_id, profiles:profiles!user_blocks_blocked_id_fkey(id, full_name, username, avatar_url)")
+      .eq("blocker_id", userId)
+      .order("created_at", { ascending: false });
+    
+    if (error || !data) return [];
+    return (data as unknown as BlockedUserRow[]).map((row) => ({
+      id: row.profiles?.id ?? row.blocked_id,
+      full_name: row.profiles?.full_name ?? null,
+      username: row.profiles?.username ?? null,
+      avatar_url: row.profiles?.avatar_url ?? null,
+    }));
+  } catch (e) {
+    console.error("fetchBlockedUsers:", e);
+    return [];
+  }
+}
 // ── Fetch IDs blocked by user (for feed filtering) ──────────────────────────
 export async function fetchBlockedIds(userId: string): Promise<string[]> {
   try {
