@@ -449,8 +449,9 @@ export default function RegisterScreen() {
                 </View>
                 <Text style={styles.termsText}>
                   Li e concordo com os{" "}
-                  <Text style={styles.termsLink}>Termos de Uso</Text> e a{" "}
-                  <Text style={styles.termsLink}>Política de Privacidade</Text>
+                  <Text style={styles.termsLink} onPress={(e) => { e.stopPropagation?.(); router.push("/terms-of-use"); }}>Termos de Uso</Text>
+                  {" "}e a{" "}
+                  <Text style={styles.termsLink} onPress={(e) => { e.stopPropagation?.(); router.push("/privacy-policy"); }}>Política de Privacidade</Text>
                 </Text>
               </TouchableOpacity>
             </View>

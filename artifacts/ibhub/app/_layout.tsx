@@ -35,6 +35,8 @@ function RootLayoutNav() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" redirect />
+        <Stack.Screen name="terms-of-use" options={{ animation: "slide_from_right" }} />
+        <Stack.Screen name="privacy-policy" options={{ animation: "slide_from_right" }} />
       </Stack>
     );
   }
@@ -57,6 +59,10 @@ function RootLayoutNav() {
       <Stack.Screen name="chat/[id]" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="post/[id]" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="profile/[id]" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="terms-of-use" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="privacy-policy" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="contact" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="report-bug" options={{ animation: "slide_from_right" }} />
     </Stack>
   );
 }

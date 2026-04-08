@@ -96,10 +96,10 @@ export default function SettingsScreen() {
     {
       title: "SUPORTE & LEGAL",
       rows: [
-        { icon: "file-text", label: "Termos de Uso",         sub: "Termos e condições",             onPress: () => {} },
-        { icon: "file-text", label: "Política de Privacidade", sub: "Como usamos seus dados",       onPress: () => {} },
-        { icon: "mail",      label: "Fale Conosco",           sub: "Suporte e feedback",             onPress: () => {} },
-        { icon: "alert-circle", label: "Reportar Bug",        sub: "Nos ajude a melhorar",           onPress: () => {} },
+        { icon: "file-text", label: "Termos de Uso",         sub: "Termos e condições",             onPress: () => router.push("/terms-of-use") },
+        { icon: "file-text", label: "Política de Privacidade", sub: "Como usamos seus dados",       onPress: () => router.push("/privacy-policy") },
+        { icon: "mail",      label: "Fale Conosco",           sub: "Suporte e feedback",             onPress: () => router.push("/contact") },
+        { icon: "alert-circle", label: "Reportar Bug",        sub: "Nos ajude a melhorar",           onPress: () => router.push("/report-bug") },
       ],
     },
   ];
