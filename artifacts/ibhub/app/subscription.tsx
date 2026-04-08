@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Platform,
   ScrollView,
@@ -12,6 +13,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/context/AuthContext";
 
 interface Plan {
   id: string;
@@ -19,41 +22,33 @@ interface Plan {
   price: string;
   features: string[];
   popular?: boolean;
-  current?: boolean;
 }
 
 const PLANS: Plan[] = [
   {
-    id: "gratuito",
-    name: "Gratuito",
+    id: "basico",
+    name: "Básico",
     price: "GRÁTIS",
     features: ["Perfil básico", "Feed de publicações", "5 conexões/mês"],
   },
   {
-    id: "profissional",
-    name: "Profissional",
-    price: "R$ 100/mês",
-    features: ["Acesso à inteligência de mercado"],
-  },
-  {
-    id: "basico",
-    name: "Básico",
+    id: "premium",
+    name: "Premium",
     price: "R$ 149/mês",
-    features: ["Tudo do Gratuito", "Conexões ilimitadas", "Marketplace", "Dados de mercado"],
+    features: ["Tudo do Básico", "Conexões ilimitadas", "Mercado", "Dados de mercado"],
     popular: true,
   },
   {
-    id: "empresa",
-    name: "Empresa",
-    price: "R$ 247/mês",
-    features: ["Painel de gestão e criação de oportunidades"],
+    id: "exclusive",
+    name: "Exclusive",
+    price: "R$ 299/mês",
+    features: ["Tudo do Premium", "Inteligência de mercado", "Apresentações exclusivas", "Destaque no feed"],
   },
   {
-    id: "executivo",
-    name: "Executivo",
+    id: "business",
+    name: "Business",
     price: "R$ 499/mês",
-    features: ["Tudo do Básico", "Inteligência de mercado", "Vagas de emprego", "Suporte prioritário", "Página empresarial"],
-    current: true,
+    features: ["Tudo do Exclusive", "Página empresarial", "Vagas de emprego", "Suporte prioritário"],
   },
 ];
 
@@ -61,20 +56,52 @@ export default function SubscriptionScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { profile, user, refreshProfile } = useAuth();
 
-  const [activePlan, setActivePlan] = useState("executivo");
+  const [activePlan, setActivePlan] = useState<string>(profile?.plan ?? "basico");
+  const [updating, setUpdating] = useState(false);
+
+  useEffect(() => {
+    if (profile?.plan) {
+      setActivePlan(profile.plan);
+    }
+  }, [profile?.plan]);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
   const handleSelect = (plan: Plan) => {
-    if (plan.current || plan.id === activePlan) return;
+    if (plan.id === activePlan) return;
     Alert.alert(
       "Trocar plano",
       `Deseja trocar para o plano ${plan.name} por ${plan.price}?`,
       [
         { text: "Cancelar", style: "cancel" },
-        { text: "Confirmar", onPress: () => setActivePlan(plan.id) },
+        {
+          text: "Confirmar",
+          onPress: async () => {
+            if (!user) return;
+            setUpdating(true);
+            try {
+              const { error } = await supabase
+                .from("profiles")
+                .update({ plan: plan.id })
+                .eq("id", user.id);
+
+              if (error) {
+                Alert.alert("Erro", "Não foi possível trocar o plano. Tente novamente.");
+              } else {
+                setActivePlan(plan.id);
+                await refreshProfile();
+                Alert.alert("Sucesso", `Plano alterado para ${plan.name} com sucesso!`);
+              }
+            } catch {
+              Alert.alert("Erro", "Não foi possível trocar o plano. Tente novamente.");
+            } finally {
+              setUpdating(false);
+            }
+          },
+        },
       ]
     );
   };
@@ -90,6 +117,15 @@ export default function SubscriptionScreen() {
         <View style={{ width: 22 }} />
       </View>
 
+      {updating && (
+        <View style={[styles.loadingOverlay, { backgroundColor: "rgba(0,0,0,0.35)" }]}>
+          <View style={[styles.loadingBox, { backgroundColor: "#fff" }]}>
+            <ActivityIndicator size="large" color={colors.gold} />
+            <Text style={[styles.loadingText, { color: colors.navy }]}>Atualizando plano…</Text>
+          </View>
+        </View>
+      )}
+
       <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
         {/* Hero */}
         <View style={styles.hero}>
@@ -102,8 +138,7 @@ export default function SubscriptionScreen() {
 
         {/* Plan cards */}
         {PLANS.map((plan) => {
-          const isActive  = plan.id === activePlan;
-          const isCurrent = plan.current || isActive;
+          const isActive = plan.id === activePlan;
           return (
             <View
               key={plan.id}
@@ -111,8 +146,8 @@ export default function SubscriptionScreen() {
                 styles.planCard,
                 {
                   backgroundColor: "#fff",
-                  borderColor: isCurrent ? colors.gold : colors.border,
-                  borderWidth: isCurrent ? 2 : 1,
+                  borderColor: isActive ? colors.gold : colors.border,
+                  borderWidth: isActive ? 2 : 1,
                 },
               ]}
             >
@@ -125,7 +160,7 @@ export default function SubscriptionScreen() {
                 <Text style={[styles.planName, { color: colors.navy }]}>{plan.name}</Text>
                 <Text style={[styles.planPrice, { color: colors.gold }]}>{plan.price}</Text>
               </View>
-              {isCurrent && !plan.popular && (
+              {isActive && !plan.popular && (
                 <Text style={[styles.currentLabel, { color: colors.gold }]}>Plano atual</Text>
               )}
               <View style={styles.features}>
@@ -139,13 +174,13 @@ export default function SubscriptionScreen() {
               <TouchableOpacity
                 style={[
                   styles.selectBtn,
-                  { backgroundColor: isCurrent ? colors.background : colors.gold },
+                  { backgroundColor: isActive ? colors.background : colors.gold },
                 ]}
                 onPress={() => handleSelect(plan)}
-                disabled={isCurrent}
+                disabled={isActive || updating}
               >
-                <Text style={[styles.selectBtnText, { color: isCurrent ? colors.mutedForeground : "#fff" }]}>
-                  {isCurrent ? "Plano atual" : "Selecionar"}
+                <Text style={[styles.selectBtnText, { color: isActive ? colors.mutedForeground : "#fff" }]}>
+                  {isActive ? "Plano atual" : "Selecionar"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -157,22 +192,25 @@ export default function SubscriptionScreen() {
 }
 
 const styles = StyleSheet.create({
-  container:    { flex: 1 },
-  header:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
-  headerTitle:  { fontSize: 20, fontWeight: "700" },
-  hero:         { alignItems: "center", gap: 8, paddingVertical: 10 },
-  heroTitle:    { fontSize: 22, fontWeight: "800" },
-  heroSub:      { fontSize: 14 },
-  planCard:     { borderRadius: 12, padding: 16, gap: 12, overflow: "visible" },
-  popularBadge: { alignSelf: "flex-end", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, marginBottom: -4 },
-  popularText:  { color: "#fff", fontSize: 11, fontWeight: "800", letterSpacing: 0.5 },
-  planHeader:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  planName:     { fontSize: 18, fontWeight: "800" },
-  planPrice:    { fontSize: 16, fontWeight: "700" },
-  currentLabel: { fontSize: 13, fontWeight: "600", marginTop: -6 },
-  features:     { gap: 6 },
-  featureRow:   { flexDirection: "row", alignItems: "center", gap: 8 },
-  featureText:  { fontSize: 14 },
-  selectBtn:    { alignItems: "center", paddingVertical: 14, borderRadius: 10 },
-  selectBtnText:{ fontSize: 15, fontWeight: "700" },
+  container:      { flex: 1 },
+  header:         { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
+  headerTitle:    { fontSize: 20, fontWeight: "700" },
+  hero:           { alignItems: "center", gap: 8, paddingVertical: 10 },
+  heroTitle:      { fontSize: 22, fontWeight: "800" },
+  heroSub:        { fontSize: 14 },
+  planCard:       { borderRadius: 12, padding: 16, gap: 12, overflow: "visible" },
+  popularBadge:   { alignSelf: "flex-end", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, marginBottom: -4 },
+  popularText:    { color: "#fff", fontSize: 11, fontWeight: "800", letterSpacing: 0.5 },
+  planHeader:     { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  planName:       { fontSize: 18, fontWeight: "800" },
+  planPrice:      { fontSize: 16, fontWeight: "700" },
+  currentLabel:   { fontSize: 13, fontWeight: "600", marginTop: -6 },
+  features:       { gap: 6 },
+  featureRow:     { flexDirection: "row", alignItems: "center", gap: 8 },
+  featureText:    { fontSize: 14 },
+  selectBtn:      { alignItems: "center", paddingVertical: 14, borderRadius: 10 },
+  selectBtnText:  { fontSize: 15, fontWeight: "700" },
+  loadingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", zIndex: 99 },
+  loadingBox:     { borderRadius: 16, padding: 28, alignItems: "center", gap: 14, shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 12, elevation: 8 },
+  loadingText:    { fontSize: 15, fontWeight: "600" },
 });
