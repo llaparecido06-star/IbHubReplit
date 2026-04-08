@@ -1,4 +1,4 @@
--- ibhub — Migração v12: Feed Engagement Improvements + Company Products & Follows
+-- ibhub — Migração v12: Feed Engagement + Mercado Apresentações + Company Products & Follows + Chat Engagement + Oportunidades Engagement
 -- Execute no Supabase Dashboard → SQL Editor.
 
 -- ─── 1. Novas colunas em posts ────────────────────────────────────────────────
@@ -243,3 +243,127 @@ create index if not exists message_reactions_user_id_idx    on public.message_re
 create index if not exists push_tokens_user_id_idx          on public.push_tokens(user_id);
 create index if not exists messages_reply_to_id_idx         on public.messages(reply_to_id);
 create index if not exists messages_read_at_idx             on public.messages(read_at) where read_at is null;
+
+-- ─── 14. Coluna cover_image_url em opportunities ─────────────────────────────
+alter table public.opportunities
+  add column if not exists cover_image_url text;
+
+-- ─── 15. Tabela opportunity_saves ────────────────────────────────────────────
+create table if not exists public.opportunity_saves (
+  id             uuid primary key default gen_random_uuid(),
+  opportunity_id uuid not null references public.opportunities(id) on delete cascade,
+  user_id        uuid not null references public.profiles(id) on delete cascade,
+  created_at     timestamptz not null default now(),
+  unique(opportunity_id, user_id)
+);
+
+-- ─── 16. RLS em opportunity_saves ────────────────────────────────────────────
+alter table public.opportunity_saves enable row level security;
+
+drop policy if exists "opportunity_saves_select" on public.opportunity_saves;
+create policy "opportunity_saves_select" on public.opportunity_saves
+  for select using (auth.uid() = user_id);
+
+drop policy if exists "opportunity_saves_insert" on public.opportunity_saves;
+create policy "opportunity_saves_insert" on public.opportunity_saves
+  for insert with check (auth.uid() = user_id);
+
+drop policy if exists "opportunity_saves_delete" on public.opportunity_saves;
+create policy "opportunity_saves_delete" on public.opportunity_saves
+  for delete using (auth.uid() = user_id);
+
+-- ─── 17. Colunas de contadores em opportunities ───────────────────────────────
+alter table public.opportunities
+  add column if not exists interests_count    int not null default 0,
+  add column if not exists applications_count int not null default 0;
+
+-- ─── 18. Trigger: manter interests_count atualizado ──────────────────────────
+-- Uses TG_OP inside function body to avoid invalid WHEN clause referencing OLD on INSERT
+create or replace function public.update_opportunity_interests_count()
+returns trigger language plpgsql as $$
+begin
+  if TG_OP = 'INSERT' and NEW.type = 'interest' then
+    update public.opportunities
+    set interests_count = interests_count + 1
+    where id = NEW.opportunity_id;
+  elsif TG_OP = 'DELETE' and OLD.type = 'interest' then
+    update public.opportunities
+    set interests_count = greatest(interests_count - 1, 0)
+    where id = OLD.opportunity_id;
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists trg_opportunity_interests_count on public.notifications;
+create trigger trg_opportunity_interests_count
+  after insert or delete on public.notifications
+  for each row
+  execute function public.update_opportunity_interests_count();
+
+-- ─── 19. Trigger: manter applications_count atualizado ───────────────────────
+create or replace function public.update_opportunity_applications_count()
+returns trigger language plpgsql as $$
+begin
+  if TG_OP = 'INSERT' then
+    update public.opportunities
+    set applications_count = applications_count + 1
+    where id = NEW.opportunity_id;
+  elsif TG_OP = 'DELETE' then
+    update public.opportunities
+    set applications_count = greatest(applications_count - 1, 0)
+    where id = OLD.opportunity_id;
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists trg_opportunity_applications_count on public.opportunity_applications;
+create trigger trg_opportunity_applications_count
+  after insert or delete on public.opportunity_applications
+  for each row
+  execute function public.update_opportunity_applications_count();
+
+-- ─── 20. Coluna attendees_count em events ────────────────────────────────────
+alter table public.events
+  add column if not exists attendees_count int not null default 0;
+
+-- ─── 21. Trigger: manter attendees_count atualizado ──────────────────────────
+create or replace function public.update_event_attendees_count()
+returns trigger language plpgsql as $$
+begin
+  if TG_OP = 'INSERT' then
+    update public.events
+    set attendees_count = attendees_count + 1
+    where id = NEW.event_id;
+  elsif TG_OP = 'DELETE' then
+    update public.events
+    set attendees_count = greatest(attendees_count - 1, 0)
+    where id = OLD.event_id;
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists trg_event_attendees_count on public.event_attendees;
+create trigger trg_event_attendees_count
+  after insert or delete on public.event_attendees
+  for each row
+  execute function public.update_event_attendees_count();
+
+-- ─── 22. Inicializar contadores existentes ────────────────────────────────────
+update public.events e
+  set attendees_count = (
+    select count(*) from public.event_attendees ea where ea.event_id = e.id
+  );
+
+update public.opportunities o
+  set interests_count = (
+    select count(*) from public.notifications n
+    where n.type = 'interest' and n.opportunity_id = o.id
+  );
+
+update public.opportunities o
+  set applications_count = (
+    select count(*) from public.opportunity_applications oa where oa.opportunity_id = o.id
+  );

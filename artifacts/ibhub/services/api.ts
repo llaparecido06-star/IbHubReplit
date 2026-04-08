@@ -2313,6 +2313,7 @@ export interface AppOpportunity {
   category?: string | null;
   location?: string | null;
   price?: string | null;
+  cover_image_url?: string | null;
   company?: string | null;
   contract_type?: string | null;
   salary?: string | null;
@@ -2320,10 +2321,12 @@ export interface AppOpportunity {
   expires_at?: string | null;
   is_active: boolean;
   created_at: string;
+  interests_count?: number;
+  applications_count?: number;
   creator?: { id: string; full_name: string | null; avatar_url?: string | null; position?: string | null; company?: string | null } | null;
   is_applied?: boolean;
   is_interested?: boolean;
-  applications_count?: number;
+  is_saved?: boolean;
 }
 
 export async function fetchOpportunities(
@@ -2335,8 +2338,9 @@ export async function fetchOpportunities(
     let query = supabase
       .from("opportunities")
       .select(`
-        id, created_by, type, title, description, category, location, price,
+        id, created_by, type, title, description, category, location, price, cover_image_url,
         company, contract_type, salary, contact_email, expires_at, is_active, created_at,
+        interests_count, applications_count,
         creator:profiles!opportunities_created_by_fkey(id, full_name, avatar_url, position, company)
       `)
       .eq("is_active", true)
@@ -2350,22 +2354,51 @@ export async function fetchOpportunities(
     const { data, error } = await query.limit(50);
     if (error || !data) return [];
 
-    // Check which ones the user already applied to (vagas only)
+    const ids = (data as any[]).map((d) => d.id);
+
+    // Check which ones the user already applied to (vagas only) + saved
     let appliedIds = new Set<string>();
-    if (type === "vaga" && data.length > 0) {
-      const ids = (data as any[]).map((d) => d.id);
-      const { data: apps } = await supabase
-        .from("opportunity_applications")
-        .select("opportunity_id")
-        .eq("applicant_id", userId)
-        .in("opportunity_id", ids);
-      if (apps) apps.forEach((a: any) => appliedIds.add(a.opportunity_id));
+    let savedIds = new Set<string>();
+
+    const promises: Promise<any>[] = [];
+
+    if (type === "vaga" && ids.length > 0) {
+      promises.push(
+        Promise.resolve(
+          supabase
+            .from("opportunity_applications")
+            .select("opportunity_id")
+            .eq("applicant_id", userId)
+            .in("opportunity_id", ids),
+        ).then(({ data: apps }) => {
+          if (apps) apps.forEach((a: any) => appliedIds.add(a.opportunity_id));
+        }),
+      );
     }
+
+    if (ids.length > 0) {
+      promises.push(
+        Promise.resolve(
+          supabase
+            .from("opportunity_saves")
+            .select("opportunity_id")
+            .eq("user_id", userId)
+            .in("opportunity_id", ids),
+        ).then(({ data: saves }) => {
+          if (saves) saves.forEach((s: any) => savedIds.add(s.opportunity_id));
+        }),
+      );
+    }
+
+    await Promise.all(promises);
 
     return (data as any[]).map((d) => ({
       ...d,
       creator: d.creator ?? null,
       is_applied: appliedIds.has(d.id),
+      is_saved: savedIds.has(d.id),
+      interests_count: d.interests_count ?? 0,
+      applications_count: d.applications_count ?? 0,
     })) as AppOpportunity[];
   } catch (e) {
     console.error("fetchOpportunities:", e);
@@ -2566,6 +2599,44 @@ export async function toggleOpportunity(id: string, isActive: boolean): Promise<
   }
 }
 
+// ── Save / unsave opportunities ───────────────────────────────────────────────
+export async function toggleSaveOpportunity(
+  opportunityId: string,
+  userId: string,
+  isSaved: boolean,
+): Promise<boolean> {
+  try {
+    if (isSaved) {
+      const { error } = await supabase
+        .from("opportunity_saves")
+        .delete()
+        .match({ opportunity_id: opportunityId, user_id: userId });
+      if (error) { console.error("toggleSaveOpportunity (delete):", error); return false; }
+    } else {
+      const { error } = await supabase
+        .from("opportunity_saves")
+        .upsert({ opportunity_id: opportunityId, user_id: userId }, { onConflict: "opportunity_id,user_id" });
+      if (error) { console.error("toggleSaveOpportunity (insert):", error); return false; }
+    }
+    return true;
+  } catch (e) {
+    console.error("toggleSaveOpportunity:", e);
+    return false;
+  }
+}
+
+export async function fetchSavedOpportunityIds(userId: string): Promise<Set<string>> {
+  try {
+    const { data } = await supabase
+      .from("opportunity_saves")
+      .select("opportunity_id")
+      .eq("user_id", userId);
+    return new Set((data ?? []).map((r: any) => r.opportunity_id));
+  } catch {
+    return new Set();
+  }
+}
+
 // ── My Opportunities (empresa dashboard) ─────────────────────────────────────
 export async function fetchMyOpportunities(
   userId: string,
@@ -2660,6 +2731,7 @@ export interface AppEvent {
     username: string | null;
   } | null;
   attendees_count?: number;
+  is_attending?: boolean;
 }
 
 export interface AppEventAttendee {
@@ -2677,13 +2749,14 @@ export interface AppEventAttendee {
   } | null;
 }
 
-export async function fetchEvents(search = ""): Promise<AppEvent[]> {
+export async function fetchEvents(search = "", userId = ""): Promise<AppEvent[]> {
   try {
     let q = supabase
       .from("events")
       .select(`
         id, user_id, title, description, start_date, end_date,
         location_type, location, entry_type, capacity, visibility, is_active, pay_link, created_at,
+        attendees_count,
         organizer:profiles!events_user_id_fkey(id, full_name, avatar_url, username)
       `)
       .eq("is_active", true)
@@ -2691,7 +2764,21 @@ export async function fetchEvents(search = ""): Promise<AppEvent[]> {
     if (search) q = q.ilike("title", `%${search}%`);
     const { data, error } = await q;
     if (error) { console.error("fetchEvents:", error); return []; }
-    return (data ?? []) as any[];
+
+    const events = (data ?? []).map((e: any) => ({ ...e, attendees_count: e.attendees_count ?? 0, is_attending: false })) as any[];
+
+    if (userId && events.length > 0) {
+      const ids = events.map((e: any) => e.id);
+      const { data: attending } = await supabase
+        .from("event_attendees")
+        .select("event_id")
+        .eq("user_id", userId)
+        .in("event_id", ids);
+      const attendingSet = new Set((attending ?? []).map((a: any) => a.event_id));
+      return events.map((e: any) => ({ ...e, is_attending: attendingSet.has(e.id) }));
+    }
+
+    return events;
   } catch (e) {
     console.error("fetchEvents:", e);
     return [];
