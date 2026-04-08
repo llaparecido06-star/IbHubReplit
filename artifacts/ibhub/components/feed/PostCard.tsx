@@ -1,11 +1,13 @@
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Animated,
   Dimensions,
+  FlatList,
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -20,8 +22,10 @@ import {
 } from "react-native";
 import { AntDesign, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Avatar } from "@/components/ui/Avatar";
+import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { createReport, hidePost, blockUser } from "@/services/api";
+import { createReport, hidePost, blockUser, fetchConversations, sendMessage } from "@/services/api";
+import type { AppConversation } from "@/services/api";
 
 export type ReactionType = "saude" | "bravo" | "destaque" | "incrivel";
 
@@ -204,12 +208,17 @@ function ReactionPicker({
 export function PostCard({ post, currentUserId, onLike, onReact, onBookmark, onComment, onVote, onHide, onBlock }: PostCardProps) {
   const colors = useColors();
   const router = useRouter();
-  const [showOptions, setShowOptions]         = useState(false);
-  const [showReportModal, setShowReportModal]  = useState(false);
-  const [selectedReason, setSelectedReason]    = useState<string | null>(null);
-  const [reportSending, setReportSending]      = useState(false);
-  const [expanded, setExpanded]               = useState(false);
-  const [showReactions, setShowReactions]      = useState(false);
+  const { user } = useAuth();
+  const [showOptions, setShowOptions]           = useState(false);
+  const [showReportModal, setShowReportModal]   = useState(false);
+  const [selectedReason, setSelectedReason]     = useState<string | null>(null);
+  const [reportSending, setReportSending]       = useState(false);
+  const [expanded, setExpanded]                 = useState(false);
+  const [showReactions, setShowReactions]       = useState(false);
+  const [showShareChat, setShowShareChat]       = useState(false);
+  const [conversations, setConversations]       = useState<AppConversation[]>([]);
+  const [loadingConvos, setLoadingConvos]       = useState(false);
+  const [sendingToConvo, setSendingToConvo]     = useState<string | null>(null);
   // Track the last reaction used so tap can toggle it back on after removal
   const lastUsedReaction = useRef<ReactionType>("saude");
 
@@ -294,6 +303,32 @@ export function PostCard({ post, currentUserId, onLike, onReact, onBookmark, onC
         title: "Compartilhar publicação",
       });
     } catch {}
+  };
+
+  const openShareToChat = useCallback(async () => {
+    if (!user?.id) return;
+    setShowShareChat(true);
+    setLoadingConvos(true);
+    const convos = await fetchConversations(user.id);
+    setConversations(convos.filter(c => c.accepted !== false));
+    setLoadingConvos(false);
+  }, [user?.id]);
+
+  const sendToConversation = async (convoId: string) => {
+    if (!user?.id || sendingToConvo) return;
+    setSendingToConvo(convoId);
+    await sendMessage(convoId, user.id, post.content?.slice(0, 200) ?? "Publicação compartilhada", {
+      message_type: "post_share",
+      metadata: {
+        post_id: post.id,
+        content: post.content?.slice(0, 300) ?? "",
+        image_url: post.image_url ?? null,
+        author_name: post.author?.full_name ?? null,
+      },
+    });
+    setSendingToConvo(null);
+    setShowShareChat(false);
+    Alert.alert("Compartilhado!", "Publicação enviada com sucesso.");
   };
 
   const handleSubmitReport = async () => {
@@ -573,7 +608,7 @@ export function PostCard({ post, currentUserId, onLike, onReact, onBookmark, onC
           <Text style={[styles.actionLabel, { color: colors.mutedForeground }]}>Comentar</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.action} onPress={handleShare} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.action} onPress={openShareToChat} activeOpacity={0.7}>
           <MaterialCommunityIcons name="share-variant-outline" size={22} color={colors.mutedForeground} />
           <Text style={[styles.actionLabel, { color: colors.mutedForeground }]}>Compartilhar</Text>
         </TouchableOpacity>
@@ -649,6 +684,56 @@ export function PostCard({ post, currentUserId, onLike, onReact, onBookmark, onC
         </Pressable>
       </Modal>
 
+      {/* ── Share to Chat Modal ── */}
+      <Modal visible={showShareChat} transparent animationType="slide" onRequestClose={() => setShowShareChat(false)}>
+        <Pressable style={shareStyles.overlay} onPress={() => setShowShareChat(false)}>
+          <Pressable style={[shareStyles.sheet, { backgroundColor: "#fff" }]}>
+            <View style={[shareStyles.handle, { backgroundColor: "#e5e7eb" }]} />
+            <Text style={[shareStyles.title, { color: "#0d1b2a" }]}>Compartilhar no Chat</Text>
+            {loadingConvos ? (
+              <View style={shareStyles.loadingWrap}>
+                <ActivityIndicator size="large" color="#c9a84c" />
+              </View>
+            ) : conversations.length === 0 ? (
+              <View style={shareStyles.emptyWrap}>
+                <Feather name="message-circle" size={36} color="#9ca3af" />
+                <Text style={shareStyles.emptyText}>Nenhuma conversa disponível</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={conversations}
+                keyExtractor={(item) => item.id}
+                style={{ maxHeight: 350 }}
+                renderItem={({ item }) => {
+                  const name = item.name ?? item.participant?.full_name ?? "Chat";
+                  const isSending = sendingToConvo === item.id;
+                  return (
+                    <TouchableOpacity
+                      style={shareStyles.convoRow}
+                      onPress={() => sendToConversation(item.id)}
+                      disabled={!!sendingToConvo}
+                    >
+                      <Avatar uri={item.participant?.avatar_url ?? null} name={name} size={44} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={shareStyles.convoName} numberOfLines={1}>{name}</Text>
+                        {item.last_message && (
+                          <Text style={shareStyles.convoMsg} numberOfLines={1}>{item.last_message}</Text>
+                        )}
+                      </View>
+                      {isSending
+                        ? <ActivityIndicator size="small" color="#c9a84c" />
+                        : <Feather name="send" size={18} color="#c9a84c" />
+                      }
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── Report Modal ── */}
       <Modal visible={showReportModal} transparent animationType="slide" onRequestClose={() => setShowReportModal(false)}>
         <Pressable style={styles.overlay} onPress={() => setShowReportModal(false)}>
           <Pressable style={[styles.reportModal, { backgroundColor: "#fff" }]}>
@@ -903,4 +988,23 @@ const styles = StyleSheet.create({
   },
   reactionEmoji: { fontSize: 28 },
   reactionLabel: { fontSize: 10, fontWeight: "600", color: "#374151" },
+});
+
+const shareStyles = StyleSheet.create({
+  overlay:     { flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" },
+  sheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 36,
+    gap: 12,
+  },
+  handle:      { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 4 },
+  title:       { fontSize: 16, fontWeight: "700" },
+  loadingWrap: { alignItems: "center", paddingVertical: 40 },
+  emptyWrap:   { alignItems: "center", gap: 10, paddingVertical: 40 },
+  emptyText:   { fontSize: 14, color: "#9ca3af" },
+  convoRow:    { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#f3f4f6" },
+  convoName:   { fontSize: 14, fontWeight: "700", color: "#0d1b2a" },
+  convoMsg:    { fontSize: 12, color: "#9ca3af", marginTop: 2 },
 });

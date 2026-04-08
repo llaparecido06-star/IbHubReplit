@@ -159,3 +159,87 @@ create policy "company_follows_delete" on public.company_follows
 
 -- Nota: os posts da empresa são identificados pelo user_id do owner da company_page
 -- (não é necessário company_id em posts para a funcionalidade atual)
+
+-- ─── 9. Chat Engagement — Colunas em messages ────────────────────────────────
+alter table public.messages
+  add column if not exists reply_to_id  uuid references public.messages(id) on delete set null,
+  add column if not exists read_at      timestamptz,
+  add column if not exists metadata     jsonb;
+
+-- Atualizar type check se existir (adicionar post_share e wine_card)
+do $$
+declare
+  cname text;
+begin
+  select conname into cname
+    from pg_constraint
+    where conrelid = 'public.messages'::regclass
+      and contype = 'c'
+      and conname ilike '%type%'
+    limit 1;
+  if cname is not null then
+    execute format('alter table public.messages drop constraint %I', cname);
+  end if;
+end $$;
+
+-- ─── 10. Coluna last_read_at em conversation_participants ────────────────────
+alter table public.conversation_participants
+  add column if not exists last_read_at timestamptz;
+
+-- ─── 11. Tabela message_reactions ────────────────────────────────────────────
+create table if not exists public.message_reactions (
+  id          uuid primary key default gen_random_uuid(),
+  message_id  uuid not null references public.messages(id) on delete cascade,
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  emoji       text not null,
+  created_at  timestamptz not null default now(),
+  unique(message_id, user_id)
+);
+
+alter table public.message_reactions enable row level security;
+
+drop policy if exists "reactions_select" on public.message_reactions;
+create policy "reactions_select" on public.message_reactions for select using (true);
+
+drop policy if exists "reactions_insert" on public.message_reactions;
+create policy "reactions_insert" on public.message_reactions for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "reactions_delete" on public.message_reactions;
+create policy "reactions_delete" on public.message_reactions for delete
+  using (auth.uid() = user_id);
+
+-- ─── 12. Tabela push_tokens ───────────────────────────────────────────────────
+create table if not exists public.push_tokens (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  token      text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(user_id, token)
+);
+
+alter table public.push_tokens enable row level security;
+
+drop policy if exists "push_tokens_select_own" on public.push_tokens;
+create policy "push_tokens_select_own" on public.push_tokens for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "push_tokens_upsert" on public.push_tokens;
+create policy "push_tokens_upsert" on public.push_tokens for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "push_tokens_update" on public.push_tokens;
+create policy "push_tokens_update" on public.push_tokens for update
+  using (auth.uid() = user_id);
+
+drop policy if exists "push_tokens_delete" on public.push_tokens;
+create policy "push_tokens_delete" on public.push_tokens for delete
+  using (auth.uid() = user_id);
+
+-- ─── 13. Índices de performance (chat) ───────────────────────────────────────
+create index if not exists message_reactions_message_id_idx on public.message_reactions(message_id);
+create index if not exists message_reactions_user_id_idx    on public.message_reactions(user_id);
+create index if not exists push_tokens_user_id_idx          on public.push_tokens(user_id);
+create index if not exists messages_reply_to_id_idx         on public.messages(reply_to_id);
+create index if not exists messages_read_at_idx             on public.messages(read_at) where read_at is null;

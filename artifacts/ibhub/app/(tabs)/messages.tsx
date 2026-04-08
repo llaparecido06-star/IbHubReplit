@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -18,6 +19,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
 import type { AppConversation } from "@/services/api";
+
+const FOLLOWUP_KEY = "ibhub_followup_reminders";
 
 type MainTab = "mensagens" | "solicitacoes";
 
@@ -48,6 +51,7 @@ export default function MessagesScreen() {
   const [searchResults, setSearchResults] = useState<{ id: string; full_name: string; avatar_url: string | null; headline: string | null }[]>([]);
   const [startingChat, setStartingChat] = useState<string | null>(null);
   const [accepting,    setAccepting]    = useState<string | null>(null);
+  const [followUpMap,  setFollowUpMap]  = useState<Record<string, string>>({});
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
@@ -60,6 +64,16 @@ export default function MessagesScreen() {
   }, [user?.id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Load follow-up reminders from local storage
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(FOLLOWUP_KEY);
+        if (raw) setFollowUpMap(JSON.parse(raw));
+      } catch {}
+    })();
+  }, []);
 
   // Debounced search — only connections + following
   useEffect(() => {
@@ -256,7 +270,7 @@ export default function MessagesScreen() {
                 accepting={accepting === item.id}
               />
             ) : (
-              <ConversationRow conversation={item} colors={colors} />
+              <ConversationRow conversation={item} colors={colors} followUpDate={followUpMap[item.id]} />
             )
           }
           ListEmptyComponent={
@@ -297,11 +311,24 @@ export default function MessagesScreen() {
 
 // ── Conversation Row ───────────────────────────────────────────────────────────
 
-function ConversationRow({ conversation: conv, colors }: { conversation: AppConversation; colors: any }) {
+function ConversationRow({ conversation: conv, colors, followUpDate }: { conversation: AppConversation; colors: any; followUpDate?: string }) {
   const router   = useRouter();
   const hasUnread = (conv.unread_count ?? 0) > 0;
   const name     = conv.name ?? conv.participant?.full_name ?? "Chat";
   const avatarUri = conv.participant?.avatar_url ?? null;
+
+  const followUpDue = followUpDate
+    ? (() => {
+        const d = new Date(followUpDate);
+        const now = new Date();
+        if (d <= now) return "vencido";
+        const diffMs = d.getTime() - now.getTime();
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        if (diffDays === 0) return "hoje";
+        if (diffDays === 1) return "amanhã";
+        return `${diffDays}d`;
+      })()
+    : null;
 
   return (
     <TouchableOpacity
@@ -313,7 +340,15 @@ function ConversationRow({ conversation: conv, colors }: { conversation: AppConv
       <View style={styles.convoBody}>
         <View style={styles.convoTop}>
           <Text style={[styles.convoName, { color: colors.navy }]} numberOfLines={1}>{name}</Text>
-          <Text style={[styles.convoTime, { color: colors.mutedForeground }]}>{timeAgo(conv.last_message_at ?? undefined)}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            {followUpDue && (
+              <View style={[styles.followUpBadge, { backgroundColor: followUpDue === "vencido" ? "#ef4444" : colors.gold }]}>
+                <Feather name="clock" size={9} color="#fff" />
+                <Text style={styles.followUpText}>{followUpDue}</Text>
+              </View>
+            )}
+            <Text style={[styles.convoTime, { color: colors.mutedForeground }]}>{timeAgo(conv.last_message_at ?? undefined)}</Text>
+          </View>
         </View>
         <View style={styles.convoBottom}>
           <Text
@@ -413,8 +448,10 @@ const styles = StyleSheet.create({
   convoTime:  { fontSize: 12 },
   convoBottom:{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   convoMsg:   { fontSize: 13, flex: 1, marginRight: 8 },
-  unreadBadge:{ minWidth: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 },
-  unreadText: { fontSize: 11, fontWeight: "700", color: "#fff" },
+  unreadBadge:   { minWidth: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 },
+  unreadText:    { fontSize: 11, fontWeight: "700", color: "#fff" },
+  followUpBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
+  followUpText:  { fontSize: 10, fontWeight: "700", color: "#fff" },
 
   requestRow:     { flexDirection: "row", alignItems: "flex-start", gap: 12, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1 },
   requestBody:    { flex: 1, gap: 4 },

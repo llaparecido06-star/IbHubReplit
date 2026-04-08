@@ -72,8 +72,20 @@ export interface AppMessage {
   sender_id: string;
   content: string;
   created_at: string;
-  message_type?: "text" | "image" | "video" | "audio" | "file";
+  message_type?: "text" | "image" | "video" | "audio" | "file" | "post_share" | "wine_card";
   media_url?: string | null;
+  reply_to_id?: string | null;
+  reply_to?: { content: string; sender_id: string } | null;
+  read_at?: string | null;
+  metadata?: Record<string, any> | null;
+  reactions?: AppMessageReaction[];
+}
+
+export interface AppMessageReaction {
+  emoji: string;
+  count: number;
+  mine: boolean;
+  users?: string[];
 }
 
 export interface AppConversation {
@@ -1220,19 +1232,174 @@ export async function searchChatContacts(
 
 // ─── MESSAGES ────────────────────────────────────────────────────────────────
 
-export async function fetchMessages(conversationId: string): Promise<AppMessage[]> {
+export async function fetchMessages(conversationId: string, currentUserId?: string): Promise<AppMessage[]> {
   try {
     const { data, error } = await supabase
       .from("messages")
-      .select("id, conversation_id, sender_id, content, created_at, message_type, media_url")
+      .select("id, conversation_id, sender_id, content, created_at, message_type, media_url, reply_to_id, read_at, metadata")
       .eq("conversation_id", conversationId)
       .order("created_at", { ascending: true });
 
     if (error || !data) return [];
-    return data as AppMessage[];
+
+    const msgs = data as any[];
+
+    // Fetch reply-to content for quoted messages
+    const replyIds = msgs.filter(m => m.reply_to_id).map(m => m.reply_to_id as string);
+    let replyMap: Record<string, { content: string; sender_id: string }> = {};
+    if (replyIds.length > 0) {
+      const { data: replies } = await supabase
+        .from("messages")
+        .select("id, content, sender_id")
+        .in("id", replyIds);
+      (replies ?? []).forEach((r: any) => { replyMap[r.id] = { content: r.content, sender_id: r.sender_id }; });
+    }
+
+    // Fetch reactions
+    const msgIds = msgs.map(m => m.id);
+    let reactionsMap: Record<string, AppMessageReaction[]> = {};
+    if (msgIds.length > 0) {
+      const { data: rxns } = await supabase
+        .from("message_reactions")
+        .select("message_id, user_id, emoji")
+        .in("message_id", msgIds);
+      if (rxns) {
+        for (const r of rxns as any[]) {
+          if (!reactionsMap[r.message_id]) reactionsMap[r.message_id] = [];
+          const existing = reactionsMap[r.message_id].find(x => x.emoji === r.emoji);
+          if (existing) {
+            existing.count++;
+            if (r.user_id === currentUserId) existing.mine = true;
+            existing.users?.push(r.user_id);
+          } else {
+            reactionsMap[r.message_id].push({
+              emoji: r.emoji,
+              count: 1,
+              mine: r.user_id === currentUserId,
+              users: [r.user_id],
+            });
+          }
+        }
+      }
+    }
+
+    return msgs.map(m => ({
+      ...m,
+      reply_to: m.reply_to_id ? (replyMap[m.reply_to_id] ?? null) : null,
+      reactions: reactionsMap[m.id] ?? [],
+    })) as AppMessage[];
   } catch (e) {
     console.error("fetchMessages:", e);
     return [];
+  }
+}
+
+// ─── READ RECEIPTS ─────────────────────────────────────────────────────────────
+
+export async function markConversationRead(conversationId: string, userId: string): Promise<void> {
+  try {
+    const now = new Date().toISOString();
+    await Promise.all([
+      supabase
+        .from("conversation_participants")
+        .update({ last_read_at: now })
+        .match({ conversation_id: conversationId, user_id: userId }),
+      supabase
+        .from("messages")
+        .update({ read_at: now })
+        .eq("conversation_id", conversationId)
+        .neq("sender_id", userId)
+        .is("read_at", null),
+    ]);
+  } catch (e) {
+    console.error("markConversationRead:", e);
+  }
+}
+
+// ─── REACTIONS ─────────────────────────────────────────────────────────────────
+
+export async function toggleMessageReaction(
+  messageId: string,
+  userId: string,
+  emoji: string,
+): Promise<boolean> {
+  try {
+    const { data: existing } = await supabase
+      .from("message_reactions")
+      .select("id")
+      .match({ message_id: messageId, user_id: userId, emoji })
+      .maybeSingle();
+
+    if (existing) {
+      await supabase.from("message_reactions").delete().eq("id", existing.id);
+    } else {
+      // Remove any other emoji from this user on this message first (one reaction per message)
+      await supabase.from("message_reactions").delete().match({ message_id: messageId, user_id: userId });
+      await supabase.from("message_reactions").insert({ message_id: messageId, user_id: userId, emoji });
+    }
+    return true;
+  } catch (e) {
+    console.error("toggleMessageReaction:", e);
+    return false;
+  }
+}
+
+// ─── PUSH TOKENS ──────────────────────────────────────────────────────────────
+
+export async function savePushToken(userId: string, token: string): Promise<void> {
+  try {
+    await supabase
+      .from("push_tokens")
+      .upsert({ user_id: userId, token, updated_at: new Date().toISOString() }, { onConflict: "user_id,token" });
+  } catch (e) {
+    console.error("savePushToken:", e);
+  }
+}
+
+/**
+ * Fetches push tokens for all conversation participants except the sender,
+ * then calls the API server to dispatch Expo push notifications.
+ */
+export async function dispatchPushToConversation(
+  conversationId: string,
+  senderId: string,
+  senderName: string,
+  messageBody: string,
+): Promise<void> {
+  if (!API_URL) return;
+  try {
+    // Get all participants except sender
+    const { data: participants } = await supabase
+      .from("conversation_participants")
+      .select("user_id")
+      .eq("conversation_id", conversationId)
+      .neq("user_id", senderId);
+
+    if (!participants || participants.length === 0) return;
+    const recipientIds = participants.map((p: any) => p.user_id);
+
+    // Fetch their push tokens
+    const { data: tokenRows } = await supabase
+      .from("push_tokens")
+      .select("token")
+      .in("user_id", recipientIds);
+
+    if (!tokenRows || tokenRows.length === 0) return;
+    const tokens = tokenRows.map((r: any) => r.token).filter(Boolean);
+    if (tokens.length === 0) return;
+
+    await fetch(`${API_URL}/push/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tokens,
+        title: senderName,
+        body: messageBody,
+        data: { conversationId },
+      }),
+    });
+  } catch (e) {
+    console.error("dispatchPushToConversation:", e);
   }
 }
 
@@ -1240,11 +1407,21 @@ export async function sendMessage(
   conversationId: string,
   senderId: string,
   content: string,
+  opts?: { reply_to_id?: string; message_type?: string; metadata?: Record<string, any> },
 ): Promise<AppMessage | null> {
   try {
+    const payload: any = {
+      conversation_id: conversationId,
+      sender_id: senderId,
+      content,
+      message_type: opts?.message_type ?? "text",
+    };
+    if (opts?.reply_to_id) payload.reply_to_id = opts.reply_to_id;
+    if (opts?.metadata) payload.metadata = opts.metadata;
+
     const { data, error } = await supabase
       .from("messages")
-      .insert({ conversation_id: conversationId, sender_id: senderId, content })
+      .insert(payload)
       .select()
       .single();
 
@@ -1253,6 +1430,21 @@ export async function sendMessage(
   } catch (e) {
     console.error("sendMessage:", e);
     return null;
+  }
+}
+
+export async function fetchUserWines(userId: string): Promise<{ id: string; name: string; vintage?: string | null; region?: string | null; notes?: string | null; image_url?: string | null }[]> {
+  try {
+    const { data, error } = await supabase
+      .from("wines")
+      .select("id, name, vintage, region, notes, image_url")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (error || !data) return [];
+    return data as any[];
+  } catch {
+    return [];
   }
 }
 
