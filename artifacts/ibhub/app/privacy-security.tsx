@@ -1,28 +1,86 @@
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/context/AuthContext";
+import { updateProfile } from "@/services/api";
 
 export default function PrivacySecurityScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { profile, refreshProfile } = useAuth();
 
-  const [publicProfile, setPublicProfile] = useState(true);
+  const [publicProfile, setPublicProfile] = useState<boolean>(true);
+  const [savingVisibility, setSavingVisibility] = useState(false);
+
+  const [pwModalVisible, setPwModalVisible] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [savingPw, setSavingPw] = useState(false);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
+
+  useEffect(() => {
+    if (profile?.is_public !== null && profile?.is_public !== undefined) {
+      setPublicProfile(profile.is_public);
+    }
+  }, [profile?.is_public]);
+
+  const handleVisibilityToggle = async (value: boolean) => {
+    if (!profile?.id) return;
+    setPublicProfile(value);
+    setSavingVisibility(true);
+    const ok = await updateProfile(profile.id, { is_public: value });
+    setSavingVisibility(false);
+    if (!ok) {
+      setPublicProfile(!value);
+      Alert.alert("Erro", "Não foi possível salvar a configuração. Tente novamente.");
+    } else {
+      await refreshProfile();
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!newPassword || !confirmPassword) {
+      Alert.alert("Atenção", "Preencha os dois campos.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      Alert.alert("Atenção", "A senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert("Atenção", "As senhas não coincidem.");
+      return;
+    }
+    setSavingPw(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setSavingPw(false);
+    if (error) {
+      Alert.alert("Erro", error.message ?? "Não foi possível alterar a senha.");
+    } else {
+      setPwModalVisible(false);
+      setNewPassword("");
+      setConfirmPassword("");
+      Alert.alert("Sucesso", "Senha alterada com sucesso!");
+    }
+  };
 
   const handleDeleteAccount = () => {
     Alert.alert(
@@ -37,7 +95,6 @@ export default function PrivacySecurityScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
@@ -47,7 +104,6 @@ export default function PrivacySecurityScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
-        {/* Visibilidade */}
         <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
           <View style={styles.sectionHead}>
             <Feather name="eye" size={15} color={colors.gold} />
@@ -59,29 +115,34 @@ export default function PrivacySecurityScreen() {
               <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
                 Qualquer pessoa pode ver seu perfil e publicações
               </Text>
+              {savingVisibility && (
+                <Text style={[styles.rowSub, { color: colors.gold }]}>Salvando...</Text>
+              )}
             </View>
             <Switch
               value={publicProfile}
-              onValueChange={setPublicProfile}
+              onValueChange={handleVisibilityToggle}
               trackColor={{ false: colors.border, true: colors.navy }}
               thumbColor="#fff"
+              disabled={savingVisibility}
             />
           </View>
         </View>
 
-        {/* Segurança */}
         <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
           <View style={styles.sectionHead}>
             <Feather name="shield" size={15} color={colors.gold} />
             <Text style={[styles.sectionHeadText, { color: colors.navy }]}>Segurança</Text>
           </View>
-          <TouchableOpacity style={[styles.arrowRow, { borderTopColor: colors.border }]}>
+          <TouchableOpacity
+            style={[styles.arrowRow, { borderTopColor: colors.border }]}
+            onPress={() => setPwModalVisible(true)}
+          >
             <Text style={[styles.rowLabel, { color: colors.navy }]}>Alterar senha</Text>
             <Feather name="arrow-right" size={18} color={colors.mutedForeground} />
           </TouchableOpacity>
         </View>
 
-        {/* Zona de Perigo */}
         <View style={[styles.dangerCard, { backgroundColor: "#fff5f5", borderColor: "#fecaca" }]}>
           <View style={styles.dangerHead}>
             <Feather name="trash-2" size={15} color="#dc2626" />
@@ -98,6 +159,50 @@ export default function PrivacySecurityScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <Modal visible={pwModalVisible} transparent animationType="fade" onRequestClose={() => setPwModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, { backgroundColor: "#fff" }]}>
+            <Text style={[styles.modalTitle, { color: colors.navy }]}>Alterar Senha</Text>
+            <TextInput
+              style={[styles.input, { borderColor: colors.border, color: colors.navy }]}
+              placeholder="Nova senha"
+              placeholderTextColor={colors.mutedForeground}
+              secureTextEntry
+              value={newPassword}
+              onChangeText={setNewPassword}
+              autoCapitalize="none"
+            />
+            <TextInput
+              style={[styles.input, { borderColor: colors.border, color: colors.navy }]}
+              placeholder="Confirmar nova senha"
+              placeholderTextColor={colors.mutedForeground}
+              secureTextEntry
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              autoCapitalize="none"
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalBtn, { borderColor: colors.border }]}
+                onPress={() => { setPwModalVisible(false); setNewPassword(""); setConfirmPassword(""); }}
+                disabled={savingPw}
+              >
+                <Text style={[styles.modalBtnText, { color: colors.navy }]}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: colors.navy, borderColor: colors.navy }]}
+                onPress={handleChangePassword}
+                disabled={savingPw}
+              >
+                <Text style={[styles.modalBtnText, { color: "#fff" }]}>
+                  {savingPw ? "Salvando..." : "Salvar"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -119,4 +224,11 @@ const styles = StyleSheet.create({
   dangerText:      { fontSize: 13, lineHeight: 20 },
   deleteBtn:       { alignItems: "center", paddingVertical: 14, borderRadius: 10, borderWidth: 1.5 },
   deleteBtnText:   { fontSize: 15, fontWeight: "600" },
+  modalOverlay:    { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center", padding: 24 },
+  modalBox:        { width: "100%", borderRadius: 16, padding: 24, gap: 14 },
+  modalTitle:      { fontSize: 18, fontWeight: "700", marginBottom: 4 },
+  input:           { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
+  modalActions:    { flexDirection: "row", gap: 10, marginTop: 4 },
+  modalBtn:        { flex: 1, alignItems: "center", paddingVertical: 13, borderRadius: 10, borderWidth: 1.5 },
+  modalBtnText:    { fontSize: 15, fontWeight: "600" },
 });

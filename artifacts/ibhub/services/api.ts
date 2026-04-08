@@ -342,6 +342,7 @@ export interface UpdateProfilePayload {
   headline?: string | null;
   certifications?: string[];
   avatar_url?: string | null;
+  is_public?: boolean;
 }
 
 export async function updateProfile(
@@ -1331,6 +1332,53 @@ export async function blockUser(blockerId: string, blockedId: string): Promise<b
     return true;
   } catch (e) {
     console.error("blockUser:", e);
+    return false;
+  }
+}
+
+// ── Fetch blocked users with profile info ────────────────────────────────────
+export interface BlockedUser {
+  block_id: string;
+  blocked_id: string;
+  full_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+}
+
+interface BlockedUserRow {
+  id: string;
+  blocked_id: string;
+  blocked: { full_name: string | null; username: string | null; avatar_url: string | null } | null;
+}
+
+export async function fetchBlockedUsers(userId: string): Promise<BlockedUser[]> {
+  const { data, error } = await supabase
+    .from("user_blocks")
+    .select("id, blocked_id, blocked:profiles!user_blocks_blocked_id_fkey(full_name, username, avatar_url)")
+    .eq("blocker_id", userId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  if (!data) return [];
+  return (data as unknown as BlockedUserRow[]).map((r) => ({
+    block_id: r.id,
+    blocked_id: r.blocked_id,
+    full_name: r.blocked?.full_name ?? null,
+    username: r.blocked?.username ?? null,
+    avatar_url: r.blocked?.avatar_url ?? null,
+  }));
+}
+
+// ── Unblock user ──────────────────────────────────────────────────────────────
+export async function unblockUser(blockerId: string, blockedId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("user_blocks")
+      .delete()
+      .match({ blocker_id: blockerId, blocked_id: blockedId });
+    if (error) { console.error("unblockUser:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("unblockUser:", e);
     return false;
   }
 }

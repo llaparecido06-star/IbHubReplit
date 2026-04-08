@@ -45,6 +45,7 @@ interface Profile {
   is_shadowbanned: boolean | null;
   is_banned: boolean | null;
   experience_summary: string | null;
+  subscription_tier: string | null;
 }
 
 interface AuthContextType {

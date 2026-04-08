@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   Alert,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -49,9 +50,19 @@ export default function SettingsScreen() {
     ]);
   };
 
-  const name      = profile?.full_name ?? "Maria Santos";
-  const planLabel = "Plano Gratuito";
+  const name      = profile?.full_name ?? "Usuário";
   const initial   = name.charAt(0).toUpperCase();
+  const avatarUrl = profile?.avatar_url ?? null;
+
+  const planMap: Record<string, string> = {
+    exclusive: "Plano Exclusivo",
+    business:  "Plano Business",
+    premium:   "Plano Premium",
+    basico:    "Plano Básico",
+    gratuito:  "Plano Gratuito",
+  };
+  const planRaw   = profile?.plan || profile?.subscription_tier || "";
+  const planLabel = planMap[planRaw.toLowerCase()] ?? (planRaw ? planRaw : "Plano Gratuito");
 
   const sections: { title?: string; rows: MenuRow[] }[] = [
     {
@@ -107,9 +118,13 @@ export default function SettingsScreen() {
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
         {/* User card */}
         <View style={[styles.userCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-          <View style={[styles.userAvatar, { backgroundColor: colors.navy }]}>
-            <Text style={[styles.userInitial, { color: colors.gold }]}>{initial}</Text>
-          </View>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={styles.userAvatarImg} />
+          ) : (
+            <View style={[styles.userAvatar, { backgroundColor: colors.navy }]}>
+              <Text style={[styles.userInitial, { color: colors.gold }]}>{initial}</Text>
+            </View>
+          )}
           <View style={{ flex: 1 }}>
             <Text style={[styles.userName, { color: colors.navy }]}>{name}</Text>
             <Text style={[styles.userPlan, { color: colors.mutedForeground }]}>{planLabel}</Text>
@@ -218,9 +233,10 @@ const styles = StyleSheet.create({
   container:   { flex: 1 },
   header:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
   headerTitle: { fontSize: 20, fontWeight: "700" },
-  userCard:    { flexDirection: "row", alignItems: "center", gap: 14, borderRadius: 12, borderWidth: 1, padding: 16 },
-  userAvatar:  { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
-  userInitial: { fontSize: 20, fontWeight: "800" },
+  userCard:      { flexDirection: "row", alignItems: "center", gap: 14, borderRadius: 12, borderWidth: 1, padding: 16 },
+  userAvatar:    { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
+  userAvatarImg: { width: 48, height: 48, borderRadius: 24 },
+  userInitial:   { fontSize: 20, fontWeight: "800" },
   userName:    { fontSize: 16, fontWeight: "700" },
   userPlan:    { fontSize: 13, marginTop: 2 },
   menuCard:    { borderRadius: 12, borderWidth: 1, overflow: "hidden" },
