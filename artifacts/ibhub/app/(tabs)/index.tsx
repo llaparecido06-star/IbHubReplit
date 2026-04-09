@@ -161,6 +161,7 @@ export default function FeedScreen() {
   const [selectedTags, setSelectedTags]             = useState<string[]>([]);
   const [wineHarmonizacao, setWineHarmonizacao]     = useState("");
   const [wineObs, setWineObs]                       = useState("");
+  const [wineImageUri, setWineImageUri]             = useState<string | null>(null);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
@@ -391,11 +392,30 @@ export default function FeedScreen() {
     setPostImageUris([]); setPostLocation(""); setShowLocationInput(false);
   };
 
+  const handlePickWineImage = async () => {
+    if (Platform.OS !== "web") {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permissão necessária", "Precisamos de acesso à galeria para selecionar uma foto.");
+        return;
+      }
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [3, 4],
+      quality: 0.9,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setWineImageUri(result.assets[0].uri);
+    }
+  };
+
   const handlePublishWine = async () => {
     setShowWineReview(false);
     if (!wineName.trim() || !user?.id) {
       setWineName(""); setWineSafra(""); setWineStars(4); setWineScore(85);
-      setSelectedTags([]); setWineHarmonizacao(""); setWineObs("");
+      setSelectedTags([]); setWineHarmonizacao(""); setWineObs(""); setWineImageUri(null);
       return;
     }
 
@@ -405,10 +425,17 @@ export default function FeedScreen() {
     const obs = wineObs.trim() ? `\n📝 ${wineObs.trim()}` : "";
     const content = `${stars} ${wineName.trim()}${wineSafra ? ` (${wineSafra})` : ""}\n📊 Pontuação: ${wineScore}/100${tags}${harmonizacao}${obs}`;
 
+    let uploadedImageUrl: string | null = null;
+    if (wineImageUri) {
+      uploadedImageUrl = await API.uploadPostImage(wineImageUri, user.id);
+    }
+
     const tempPost: Post = {
       id: `tmp_${Date.now()}`,
       user_id: user.id,
       content,
+      image_url: wineImageUri ?? null,
+      image_urls: wineImageUri ? [wineImageUri] : null,
       likes_count: 0, comments_count: 0, shares_count: 0,
       is_liked: false, is_bookmarked: false,
       created_at: new Date().toISOString(),
@@ -423,13 +450,18 @@ export default function FeedScreen() {
     };
     setPosts(prev => [tempPost, ...prev]);
 
-    const saved = await API.createPost({ user_id: user.id, content });
+    const saved = await API.createPost({
+      user_id: user.id,
+      content,
+      image_url: uploadedImageUrl,
+      image_urls: uploadedImageUrl ? [uploadedImageUrl] : null,
+    });
     if (saved) {
       setPosts(prev => prev.map(p => p.id === tempPost.id ? saved : p));
     }
 
     setWineName(""); setWineSafra(""); setWineStars(4); setWineScore(85);
-    setSelectedTags([]); setWineHarmonizacao(""); setWineObs("");
+    setSelectedTags([]); setWineHarmonizacao(""); setWineObs(""); setWineImageUri(null);
   };
 
   const toggleTag = (tag: string) =>
@@ -904,6 +936,36 @@ export default function FeedScreen() {
                   <Text style={[styles.postAuthorRole, { color: colors.mutedForeground }]}>{(profile as any)?.headline ?? "Sommelier"}</Text>
                 </View>
               </View>
+              {/* Foto do rótulo */}
+              {wineImageUri ? (
+                <View style={styles.wineImagePreviewWrap}>
+                  <Image source={{ uri: wineImageUri }} style={styles.wineImagePreview} contentFit="cover" />
+                  <TouchableOpacity
+                    style={styles.wineImageRemoveBtn}
+                    onPress={() => setWineImageUri(null)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Feather name="x" size={14} color="#fff" />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.wineImageChangeBtn} onPress={handlePickWineImage}>
+                    <Feather name="camera" size={13} color="#fff" />
+                    <Text style={styles.wineImageChangeBtnText}>Trocar</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.wineImagePlaceholder, { borderColor: colors.border, backgroundColor: colors.background }]}
+                  onPress={handlePickWineImage}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.wineImagePlaceholderIcon, { backgroundColor: colors.gold + "18" }]}>
+                    <Feather name="camera" size={22} color={colors.gold} />
+                  </View>
+                  <Text style={[styles.wineImagePlaceholderText, { color: colors.navy }]}>Adicionar foto do rótulo</Text>
+                  <Text style={[styles.wineImagePlaceholderSub, { color: colors.mutedForeground }]}>Opcional · Aparece no feed</Text>
+                </TouchableOpacity>
+              )}
+
               {/* Nome + Safra */}
               <View>
                 <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>NOME DO VINHO / SAFRA</Text>
@@ -1117,6 +1179,15 @@ const styles = StyleSheet.create({
   wineFieldLabel:     { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, marginBottom: 8 },
   wineNameRow:        { flexDirection: "row", gap: 8 },
   wineNameInput:      { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 11, fontSize: 14 },
+  wineImagePlaceholder:     { borderWidth: 1.5, borderStyle: "dashed", borderRadius: 12, paddingVertical: 20, alignItems: "center", gap: 8 },
+  wineImagePlaceholderIcon: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
+  wineImagePlaceholderText: { fontSize: 14, fontWeight: "700" },
+  wineImagePlaceholderSub:  { fontSize: 12 },
+  wineImagePreviewWrap:     { borderRadius: 12, overflow: "hidden", position: "relative", height: 200 },
+  wineImagePreview:         { width: "100%", height: "100%" },
+  wineImageRemoveBtn:       { position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.55)", width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  wineImageChangeBtn:       { position: "absolute", bottom: 8, right: 8, backgroundColor: "rgba(0,0,0,0.55)", flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20 },
+  wineImageChangeBtnText:   { color: "#fff", fontSize: 12, fontWeight: "600" },
   scoreRow:           { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 8 },
   scoreTrack:         { flex: 1, height: 6, borderRadius: 3, overflow: "hidden", position: "relative" },
   scoreFill:          { position: "absolute", left: 0, top: 0, bottom: 0, borderRadius: 3 },
