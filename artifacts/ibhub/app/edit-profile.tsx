@@ -44,9 +44,6 @@ export default function EditProfileScreen() {
     Array.isArray(profile?.certifications) ? profile.certifications : []
   );
   const [certInput, setCertInput]     = useState("");
-  const [website, setWebsite]         = useState(profile?.website      ?? "");
-  const [linkedin, setLinkedin]       = useState(profile?.linkedin     ?? "");
-  const [instagram, setInstagram]     = useState(profile?.instagram    ?? "");
   const [saving, setSaving]           = useState(false);
 
   const [avatarUri, setAvatarUri]     = useState<string | null>(profile?.avatar_url ?? null);
@@ -66,16 +63,13 @@ export default function EditProfileScreen() {
       bio        !== (profile?.bio          ?? "") ||
       company    !== (profile?.company      ?? "") ||
       position   !== (profile?.position     ?? "") ||
-      website    !== (profile?.website      ?? "") ||
-      linkedin   !== (profile?.linkedin     ?? "") ||
-      instagram  !== (profile?.instagram    ?? "") ||
       avatarChanged ||
       JSON.stringify(selectedAreas)     !== JSON.stringify(profile?.areas_of_expertise  ?? []) ||
       JSON.stringify(certifications)    !== JSON.stringify(
         Array.isArray(profile?.certifications) ? profile.certifications : []
       )
     );
-  }, [fullName, username, bio, company, position, website, linkedin, instagram,
+  }, [fullName, username, bio, company, position,
       selectedAreas, certifications, avatarChanged, profile]);
 
   const handleBack = () => {
@@ -184,9 +178,6 @@ export default function EditProfileScreen() {
       areas_of_expertise: selectedAreas,
       company:            company.trim() || null,
       position:           position.trim() || null,
-      website:            website.trim() || null,
-      linkedin:           linkedin.trim() || null,
-      instagram:          instagram.trim() || null,
       certifications,
       ...(finalAvatarUrl !== undefined ? { avatar_url: finalAvatarUrl } : {}),
     });
@@ -364,43 +355,6 @@ export default function EditProfileScreen() {
           </View>
         </View>
 
-        {/* Website */}
-        <View style={styles.field}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Website</Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-            placeholder="https://"
-            placeholderTextColor={colors.mutedForeground}
-            value={website}
-            onChangeText={setWebsite}
-            keyboardType="url"
-            autoCapitalize="none"
-          />
-        </View>
-
-        {/* LinkedIn */}
-        <View style={styles.field}>
-          <Text style={[styles.label, { color: colors.foreground }]}>LinkedIn</Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-            value={linkedin}
-            onChangeText={setLinkedin}
-            autoCapitalize="none"
-          />
-        </View>
-
-        {/* Instagram */}
-        <View style={styles.field}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Instagram</Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-            placeholder="@"
-            placeholderTextColor={colors.mutedForeground}
-            value={instagram}
-            onChangeText={setInstagram}
-            autoCapitalize="none"
-          />
-        </View>
       </ScrollView>
     </View>
   );
