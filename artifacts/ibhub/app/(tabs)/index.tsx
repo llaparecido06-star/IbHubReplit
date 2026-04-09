@@ -44,50 +44,6 @@ const SENSORY_TAGS = [
 ];
 
 
-function generateMockPost(id: number): Post {
-  const authors = [
-    { id: "u2", full_name: "Julia Benetti",    username: "juliabenetti",   headline: "Head de marketing na Ideal.BI", plan: "business",  avatar_url: "https://randomuser.me/api/portraits/women/45.jpg" },
-    { id: "u3", full_name: "Felipe Galtaroca", username: "felipegaltar",   headline: "Ceo na Ideal.Bi",               plan: "exclusive", avatar_url: "https://randomuser.me/api/portraits/men/32.jpg" },
-    { id: "u4", full_name: "Ideal.BI",         username: "idealbi",        headline: "Consultoria",                   plan: "premium",   avatar_url: null },
-    { id: "u5", full_name: "Maria Silva",      username: "mariasilva",     headline: "Sommelier WSET Level 3",        plan: "business",  avatar_url: null },
-    { id: "u6", full_name: "João Costa",       username: "joaocosta",      headline: "Enólogo | Quinta da Serra",     plan: "basico",    avatar_url: null },
-  ];
-  const daysAgo = [19, 20, 27, 14, 7];
-  const author = authors[id % authors.length];
-  const date = new Date(Date.now() - daysAgo[id % daysAgo.length] * 86400000);
-
-  if (id === 1) {
-    return {
-      id: `post_${id}`, user_id: author.id,
-      content: "Qual tipo de vinho você prefere para o verão?",
-      likes_count: 0, comments_count: 0, shares_count: 0,
-      is_liked: false, is_bookmarked: false,
-      created_at: date.toISOString(), author,
-      poll: {
-        options: [
-          { text: "🥂 Espumante fresco", votes: 47 },
-          { text: "🍷 Rosé gelado",      votes: 31 },
-          { text: "🌿 Vinho verde",      votes: 18 },
-          { text: "🍊 Vinho laranja",    votes: 11 },
-        ],
-        total_votes: 107, closed: false,
-      },
-    };
-  }
-  const contents = [
-    "Visita à Vinícola Miolo hoje — safra 2024 promete surpreender! Taninos elegantes e boa acidez nos tintos. Muito otimista com o que está vindo por aí. 🍷",
-    "Degustação sensacional na Serra Gaúcha! Os espumantes Brut Nature da região estão em outro nível. Vale muito conhecer pessoalmente.",
-    "Acabei de chegar de uma visita incrível ao Alentejo! Os tintos desta safra prometem muito. 🍷",
-    "Resultado da minha degustação: Barolo 2019 absolutamente impecável. 96 pontos.",
-    "Dica do dia: para harmonizar com queijo de cabra, escolha um Sauvignon Blanc fresco e mineral. A acidez do vinho equilibra a gordura do queijo perfeitamente.",
-  ];
-  return {
-    id: `post_${id}`, user_id: author.id, content: contents[id % contents.length],
-    likes_count: id === 0 ? 1 : 0, comments_count: 0, shares_count: 0,
-    is_liked: id === 0, is_bookmarked: false,
-    created_at: date.toISOString(), author,
-  };
-}
 
 
 /* ── Stars component ── */
@@ -193,14 +149,23 @@ export default function FeedScreen() {
         }
       } catch {}
     }
-    // Fallback: cached or mock
+    // Fallback: cached (only real posts, strip any legacy mock posts)
     try {
       const cached = await AsyncStorage.getItem(STORAGE_KEY);
-      if (cached) { setPosts(sortByRelevance(JSON.parse(cached))); setLoading(false); return; }
+      if (cached) {
+        const parsed: Post[] = JSON.parse(cached);
+        const realCached = parsed.filter(p => !p.id.startsWith('post_'));
+        if (realCached.length !== parsed.length) {
+          if (realCached.length > 0) {
+            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(realCached));
+          } else {
+            await AsyncStorage.removeItem(STORAGE_KEY);
+          }
+        }
+        if (realCached.length > 0) { setPosts(sortByRelevance(realCached)); setLoading(false); return; }
+      }
     } catch {}
-    const mockPosts = Array.from({ length: 6 }, (_, i) => generateMockPost(i));
-    setPosts(sortByRelevance(mockPosts));
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(mockPosts));
+    setPosts([]);
     setLoading(false);
   }, [user?.id, activeCompany?.id, sortByRelevance]);
 
@@ -249,8 +214,7 @@ export default function FeedScreen() {
       } catch {}
     }
     await AsyncStorage.removeItem(STORAGE_KEY);
-    const mockPosts = Array.from({ length: 6 }, (_, i) => generateMockPost(i));
-    setPosts(sortByRelevance(mockPosts));
+    setPosts([]);
     setRefreshing(false);
   }, [user?.id, activeCompany?.id, sortByRelevance]);
 
@@ -691,6 +655,13 @@ export default function FeedScreen() {
           />
         )}
         ListHeaderComponent={renderHeader}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+              Nenhuma publicação ainda. Seja o primeiro a compartilhar!
+            </Text>
+          </View>
+        }
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} colors={[colors.gold]} />}
         contentContainerStyle={{ paddingBottom: bottomPad }}
         showsVerticalScrollIndicator={false}
@@ -1116,6 +1087,8 @@ export default function FeedScreen() {
 const styles = StyleSheet.create({
   container:          { flex: 1 },
   loadingView:        { flex: 1, alignItems: "center", justifyContent: "center" },
+  emptyContainer:     { alignItems: "center", justifyContent: "center", paddingVertical: 48, paddingHorizontal: 32 },
+  emptyText:          { fontSize: 15, textAlign: "center", lineHeight: 22 },
   companyBanner:      { paddingVertical: 8, paddingHorizontal: 16, alignItems: "center", borderBottomWidth: 1 },
   header:             { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 10, borderBottomWidth: 1 },
   brandText:          { fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
