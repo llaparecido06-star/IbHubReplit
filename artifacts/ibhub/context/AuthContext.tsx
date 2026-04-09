@@ -58,6 +58,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
   refreshProfile: () => Promise<void>;
+  patchProfile: (patch: Partial<Profile>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -94,6 +95,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await fetchProfile(user.id);
     }
   }, [user, fetchProfile]);
+
+  const patchProfile = useCallback((patch: Partial<Profile>) => {
+    setProfile((prev) => prev ? { ...prev, ...patch } : prev);
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -154,7 +159,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, user, profile, loading, signIn, signUp, signOut, resetPassword, refreshProfile }}
+      value={{ session, user, profile, loading, signIn, signUp, signOut, resetPassword, refreshProfile, patchProfile }}
     >
       {children}
     </AuthContext.Provider>

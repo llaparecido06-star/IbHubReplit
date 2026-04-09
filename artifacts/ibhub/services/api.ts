@@ -464,7 +464,7 @@ export async function updateProfile(
     const { error } = await supabase
       .from("profiles")
       .update(dbPayload)
-      .eq("id", userId);
+      .or(`id.eq.${userId},user_id.eq.${userId}`);
     if (error) { console.error("updateProfile:", error); return false; }
     return true;
   } catch (e) {

@@ -29,7 +29,7 @@ type UsernameStatus = "idle" | "checking" | "available" | "unavailable";
 export default function EditProfileScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile, patchProfile } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [fullName, setFullName]       = useState(profile?.full_name    ?? "");
@@ -194,6 +194,11 @@ export default function EditProfileScreen() {
     if (!ok) {
       Alert.alert("Erro", "Não foi possível salvar o perfil. Verifique se o nome de usuário já está em uso e tente novamente.");
       return;
+    }
+    if (finalAvatarUrl) {
+      setAvatarUri(finalAvatarUrl);
+      setAvatarChanged(false);
+      patchProfile({ avatar_url: finalAvatarUrl });
     }
     try { await refreshProfile?.(); } catch {}
     Alert.alert("Salvo!", "Perfil atualizado com sucesso.");
