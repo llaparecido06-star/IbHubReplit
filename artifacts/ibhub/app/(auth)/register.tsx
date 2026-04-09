@@ -143,6 +143,7 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
 
   const [usernameState, setUsernameState] = useState<ValidationState>("idle");
   const [emailState, setEmailState] = useState<ValidationState>("idle");
@@ -153,6 +154,7 @@ export default function RegisterScreen() {
 
   const [selectedPlan, setSelectedPlan] = useState("basico");
   const [loading, setLoading] = useState(false);
+  const [loadingMsg, setLoadingMsg] = useState("Criando conta...");
   const [error, setError] = useState<string | null>(null);
 
   const usernameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -217,6 +219,17 @@ export default function RegisterScreen() {
   );
 
   const pickAvatar = async () => {
+    if (Platform.OS !== "web") {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permissão necessária",
+          "Precisamos de acesso à sua galeria para você escolher uma foto de perfil.",
+          [{ text: "OK" }],
+        );
+        return;
+      }
+    }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
@@ -224,6 +237,26 @@ export default function RegisterScreen() {
       quality: 0.8,
     });
     if (!result.canceled) setAvatarUri(result.assets[0].uri);
+  };
+
+  const uploadAvatarToStorage = async (userId: string, localUri: string): Promise<string | null> => {
+    try {
+      const rawExt = (localUri.split(".").pop() ?? "jpg").split("?")[0].toLowerCase();
+      const safeExt = ["jpg", "jpeg", "png", "webp"].includes(rawExt) ? rawExt : "jpg";
+      const contentType = safeExt === "jpg" || safeExt === "jpeg" ? "image/jpeg" : `image/${safeExt}`;
+      const filePath = `${userId}/avatar.${safeExt}`;
+      const response = await fetch(localUri);
+      const blob = await response.blob();
+      const { error } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, blob, { upsert: true, contentType });
+      if (error) { console.warn("Avatar upload:", error.message); return null; }
+      const { data } = supabase.storage.from("avatars").getPublicUrl(filePath);
+      return data.publicUrl ?? null;
+    } catch (e) {
+      console.warn("Avatar upload error:", e);
+      return null;
+    }
   };
 
   const toggleArea = (area: string) =>
@@ -247,8 +280,10 @@ export default function RegisterScreen() {
     if (emailState === "taken") return "Esse e-mail já está cadastrado";
     if (emailState === "checking") return "Aguarde a verificação do e-mail";
     if (!password) return "Informe uma senha";
+    if (password.length < 6) return "A senha deve ter no mínimo 6 caracteres";
     if (password !== confirmPassword) return "As senhas não coincidem";
     if (!termsAccepted) return "Aceite os Termos de Uso para continuar";
+    if (!ageConfirmed) return "Confirme que você tem 18 anos ou mais";
     return null;
   };
 
@@ -269,13 +304,46 @@ export default function RegisterScreen() {
       setStep(3);
     } else {
       setLoading(true);
+      setLoadingMsg("Criando conta...");
+
+      // 1. Criar conta no Supabase Auth
       const { error: err } = await signUp(email, password, fullName);
-      setLoading(false);
       if (err) {
+        setLoading(false);
         setError(err);
-      } else {
-        router.replace("/(tabs)" as any);
+        return;
       }
+
+      // 2. Obter o usuário recém-criado
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+
+      if (currentUser) {
+        // 3. Upload da foto de perfil (se escolhida)
+        let avatarUrl: string | null = null;
+        if (avatarUri) {
+          setLoadingMsg("Enviando foto de perfil...");
+          avatarUrl = await uploadAvatarToStorage(currentUser.id, avatarUri);
+        }
+
+        // 4. Salvar todos os campos do formulário no perfil
+        setLoadingMsg("Finalizando perfil...");
+        const phoneWithDDI = phone.trim()
+          ? `${selectedCountry.ddi}${phone.trim().replace(/\D/g, "")}`
+          : null;
+
+        await supabase.from("profiles").update({
+          username:           username.toLowerCase().trim(),
+          phone:              phoneWithDDI,
+          areas_of_expertise: selectedAreas,
+          company:            company.trim() || null,
+          position:           role.trim() || null,
+          plan:               selectedPlan,
+          ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
+        }).eq("id", currentUser.id);
+      }
+
+      setLoading(false);
+      router.replace("/(tabs)" as any);
     }
   };
 
@@ -454,6 +522,21 @@ export default function RegisterScreen() {
                   <Text style={styles.termsLink} onPress={(e) => { e.stopPropagation?.(); router.push("/privacy-policy"); }}>Política de Privacidade</Text>
                 </Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.termsRow}
+                onPress={() => setAgeConfirmed((v) => !v)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.checkbox, ageConfirmed && styles.checkboxActive]}>
+                  {ageConfirmed && <Feather name="check" size={12} color="#0d1b2a" />}
+                </View>
+                <Text style={styles.termsText}>
+                  Confirmo que tenho{" "}
+                  <Text style={{ fontWeight: "700", color: "#c9a84c" }}>18 anos ou mais</Text>
+                  {" "}e estou ciente de que o ibhub é uma plataforma para profissionais do setor vitivinícola.
+                </Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -529,7 +612,10 @@ export default function RegisterScreen() {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#0d1b2a" />
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <ActivityIndicator color="#0d1b2a" />
+                <Text style={[styles.continueBtnText, { fontSize: 14 }]}>{loadingMsg}</Text>
+              </View>
             ) : (
               <Text style={styles.continueBtnText}>
                 {step === TOTAL_STEPS ? "Finalizar cadastro" : "Continuar  →"}
