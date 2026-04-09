@@ -174,7 +174,7 @@ export default function AdminCRMScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, rowGap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
         <View style={{ gap: 4 }}>
           <Text style={[styles.heroTitle, { color: colors.navy }]}>CRM Usuários</Text>
           <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>Busca global e gestão de usuários</Text>

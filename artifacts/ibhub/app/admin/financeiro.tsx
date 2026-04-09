@@ -210,7 +210,7 @@ export default function AdminFinanceiroScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: 16, rowGap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
         <View style={styles.heroRow}>
           <View style={{ flex: 1, gap: 3 }}>
             <Text style={[styles.heroTitle, { color: colors.navy }]}>Financeiro</Text>

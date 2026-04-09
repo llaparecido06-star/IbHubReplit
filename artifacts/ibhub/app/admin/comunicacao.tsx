@@ -109,7 +109,7 @@ export default function AdminComunicacaoScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: 16, rowGap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
         <View style={styles.twoCol}>
           {/* Left: Nova Notificação */}
           <View style={[styles.leftCard, { backgroundColor: "#fff", borderColor: colors.border }]}>

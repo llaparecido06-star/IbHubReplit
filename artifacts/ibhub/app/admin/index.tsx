@@ -214,7 +214,7 @@ export default function AdminDashboard() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, rowGap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
         <View style={{ gap: 4 }}>
           <Text style={[styles.heroTitle, { color: colors.navy }]}>Dashboard</Text>
           <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>Visão geral do ibhub em tempo real</Text>

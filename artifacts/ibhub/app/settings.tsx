@@ -115,7 +115,12 @@ export default function SettingsScreen() {
         <View style={{ width: 22 }} />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: bottomPad, rowGap: 16 }}
+        showsVerticalScrollIndicator={false}
+        bounces
+      >
         {/* User card */}
         <View style={[styles.userCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
           {avatarUrl ? (

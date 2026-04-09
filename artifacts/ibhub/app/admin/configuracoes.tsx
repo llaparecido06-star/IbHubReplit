@@ -118,7 +118,7 @@ export default function AdminConfiguracoesScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, rowGap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
         {/* Hero */}
         <View style={styles.heroRow}>
           <Feather name="settings" size={22} color={colors.gold} />

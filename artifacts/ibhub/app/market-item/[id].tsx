@@ -74,7 +74,7 @@ export default function MarketItemScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, rowGap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
         {/* Main info card */}
         <View style={[styles.infoCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
           <View style={styles.infoTop}>

@@ -125,7 +125,7 @@ export default function AnalyticsScreen() {
           <ActivityIndicator size="large" color={colors.gold} />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, rowGap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
           {/* KPI 2x2 grid */}
           <View style={styles.kpiGrid}>
             {kpis.map((k) => (
