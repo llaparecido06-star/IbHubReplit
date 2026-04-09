@@ -1,10 +1,8 @@
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Platform,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,8 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
-import * as API from "@/services/api";
-import type { CertificationRequest } from "@/services/api";
+import { updateProfile } from "@/services/api";
 
 const CERT_OPTIONS = [
   "WSET Level 1",
@@ -34,96 +31,68 @@ const CERT_OPTIONS = [
   "Outro",
 ];
 
-function getIssuer(name: string): string {
-  if (name.startsWith("WSET")) return "WSET";
-  if (name.startsWith("CMS")) return "Court of Master Sommeliers";
-  if (name.startsWith("ABEV")) return "ABEV";
-  if (name.startsWith("ISA")) return "ISA";
-  return "Outro";
-}
-
-function statusLabel(status: string): string {
-  if (status === "verified") return "Verificado";
-  if (status === "rejected") return "Rejeitado";
-  return "Em análise";
-}
-
-function statusColor(status: string, colors: any): string {
-  if (status === "verified") return colors.gold;
-  if (status === "rejected") return "#dc2626";
-  return colors.mutedForeground;
-}
-
-function statusBg(status: string, colors: any): string {
-  if (status === "verified") return colors.gold + "18";
-  if (status === "rejected") return "#dc262618";
-  return colors.background;
-}
-
 export default function CertificationsScreen() {
   const colors = useColors();
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const { user } = useAuth();
-
-  const [certs, setCerts] = useState<CertificationRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [showPicker, setShowPicker] = useState(false);
-
-  const [selectedCert, setSelectedCert] = useState("");
-  const [certNumber, setCertNumber] = useState("");
-  const [certDate, setCertDate] = useState("");
+  const router  = useRouter();
+  const insets  = useSafeAreaInsets();
+  const { user, profile, patchProfile } = useAuth();
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
-  const loadCerts = useCallback(async () => {
-    if (!user) return;
-    const data = await API.getMyCertificationRequests(user.id);
-    setCerts(data);
-  }, [user]);
+  const [certifications, setCertifications] = useState<string[]>(
+    Array.isArray(profile?.certifications) ? profile.certifications : []
+  );
+  const [showForm, setShowForm]     = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  const [selectedCert, setSelectedCert] = useState("");
+  const [customCert, setCustomCert]     = useState("");
+  const [saving, setSaving]             = useState(false);
 
-  useEffect(() => {
-    setLoading(true);
-    loadCerts().finally(() => setLoading(false));
-  }, [loadCerts]);
+  const handleAdd = async () => {
+    const cert = (selectedCert === "Outro" ? customCert : selectedCert).trim();
+    if (!cert) { Alert.alert("Atenção", "Selecione ou digite uma certificação."); return; }
+    if (certifications.includes(cert)) {
+      Alert.alert("Atenção", "Essa certificação já está na lista.");
+      return;
+    }
+    if (!user?.id) return;
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadCerts();
-    setRefreshing(false);
-  };
+    setSaving(true);
+    const updated = [...certifications, cert];
+    const ok = await updateProfile(user.id, { certifications: updated });
+    setSaving(false);
 
-  const handleSubmit = async () => {
-    if (!selectedCert) { Alert.alert("Atenção", "Selecione uma certificação."); return; }
-    if (!user) return;
-
-    setSubmitting(true);
-    const result = await API.submitCertificationRequest({
-      user_id: user.id,
-      name: selectedCert,
-      issuer: getIssuer(selectedCert),
-      cert_number: certNumber || undefined,
-      date: certDate || undefined,
-    });
-    setSubmitting(false);
-
-    if (!result) {
-      Alert.alert("Erro", "Não foi possível enviar a solicitação. Tente novamente.");
+    if (!ok) {
+      Alert.alert("Erro", "Não foi possível salvar. Tente novamente.");
       return;
     }
 
-    setCerts((prev) => [result, ...prev]);
-    setSelectedCert(""); setCertNumber(""); setCertDate("");
-    setShowForm(false);
+    setCertifications(updated);
+    patchProfile({ certifications: updated });
+    setSelectedCert(""); setCustomCert(""); setShowForm(false); setShowPicker(false);
+  };
+
+  const handleRemove = (cert: string) => {
+    Alert.alert("Remover certificação", `Deseja remover "${cert}"?`, [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Remover", style: "destructive", onPress: async () => {
+          if (!user?.id) return;
+          const updated = certifications.filter((c) => c !== cert);
+          const ok = await updateProfile(user.id, { certifications: updated });
+          if (ok) {
+            setCertifications(updated);
+            patchProfile({ certifications: updated });
+          }
+        },
+      },
+    ]);
   };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { paddingTop: topPad + 6, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
           <Text style={[styles.headerTitle, { color: colors.navy }]}>Certificações</Text>
@@ -131,24 +100,26 @@ export default function CertificationsScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: bottomPad }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 16, rowGap: 14, paddingBottom: bottomPad }}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} colors={[colors.gold]} />
-        }
+        bounces
       >
+        {/* Add button */}
         <TouchableOpacity
-          style={[styles.requestBtn, { borderColor: colors.border, backgroundColor: "#fff" }]}
-          onPress={() => setShowForm(!showForm)}
+          style={[styles.addBtn, { borderColor: colors.gold, backgroundColor: "#fff" }]}
+          onPress={() => { setShowForm(!showForm); setShowPicker(false); }}
         >
-          <Feather name="plus" size={16} color={colors.foreground} />
-          <Text style={[styles.requestBtnText, { color: colors.foreground }]}>Solicitar Verificação</Text>
+          <Feather name="plus" size={16} color={colors.gold} />
+          <Text style={[styles.addBtnText, { color: colors.gold }]}>Adicionar Certificação</Text>
         </TouchableOpacity>
 
+        {/* Form */}
         {showForm && (
           <View style={[styles.formCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-            <Text style={[styles.formTitle, { color: colors.navy }]}>Solicitar Verificação</Text>
+            <Text style={[styles.formTitle, { color: colors.navy }]}>Nova Certificação</Text>
 
+            {/* Picker */}
             <TouchableOpacity
               style={[styles.pickerBtn, { borderColor: colors.border }]}
               onPress={() => setShowPicker(!showPicker)}
@@ -158,12 +129,17 @@ export default function CertificationsScreen() {
               </Text>
               <Feather name={showPicker ? "chevron-up" : "chevron-down"} size={16} color={colors.mutedForeground} />
             </TouchableOpacity>
+
             {showPicker && (
               <View style={[styles.pickerDropdown, { backgroundColor: "#fff", borderColor: colors.border }]}>
                 {CERT_OPTIONS.map((opt) => (
                   <TouchableOpacity
                     key={opt}
-                    style={[styles.pickerOption, { borderBottomColor: colors.border }, selectedCert === opt && { backgroundColor: colors.gold + "12" }]}
+                    style={[
+                      styles.pickerOption,
+                      { borderBottomColor: colors.border },
+                      selectedCert === opt && { backgroundColor: colors.gold + "12" },
+                    ]}
                     onPress={() => { setSelectedCert(opt); setShowPicker(false); }}
                   >
                     <Text style={[styles.pickerOptionText, { color: selectedCert === opt ? colors.gold : colors.foreground }]}>
@@ -175,110 +151,86 @@ export default function CertificationsScreen() {
               </View>
             )}
 
-            <TextInput
-              style={[styles.input, { borderColor: colors.border, color: colors.foreground }]}
-              placeholder="Número do certificado (opcional)"
-              placeholderTextColor={colors.mutedForeground}
-              value={certNumber}
-              onChangeText={setCertNumber}
-            />
-
-            <TextInput
-              style={[styles.input, { borderColor: colors.border, color: colors.foreground }]}
-              placeholder="dd/mm/aaaa"
-              placeholderTextColor={colors.mutedForeground}
-              value={certDate}
-              onChangeText={setCertDate}
-              keyboardType="numeric"
-            />
+            {selectedCert === "Outro" && (
+              <TextInput
+                style={[styles.input, { borderColor: colors.border, color: colors.foreground }]}
+                placeholder="Nome da certificação"
+                placeholderTextColor={colors.mutedForeground}
+                value={customCert}
+                onChangeText={setCustomCert}
+              />
+            )}
 
             <View style={styles.formActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => { setShowForm(false); setShowPicker(false); }}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => { setShowForm(false); setShowPicker(false); setSelectedCert(""); }}>
                 <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.submitBtn, { backgroundColor: colors.navy, opacity: submitting ? 0.7 : 1 }]}
-                onPress={handleSubmit}
-                disabled={submitting}
+                style={[styles.submitBtn, { backgroundColor: colors.navy, opacity: saving ? 0.7 : 1 }]}
+                onPress={handleAdd}
+                disabled={saving}
               >
-                {submitting ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.submitText}>Enviar Solicitação</Text>
-                )}
+                <Text style={styles.submitText}>{saving ? "Salvando..." : "Adicionar"}</Text>
               </TouchableOpacity>
             </View>
           </View>
         )}
 
-        {loading ? (
-          <View style={styles.empty}>
-            <ActivityIndicator size="small" color={colors.gold} />
-          </View>
-        ) : certs.length === 0 ? (
+        {/* Empty state */}
+        {certifications.length === 0 && !showForm && (
           <View style={styles.empty}>
             <View style={[styles.emptyIconWrap, { borderColor: colors.mutedForeground }]}>
               <Feather name="award" size={36} color={colors.mutedForeground} />
             </View>
             <Text style={[styles.emptyTitle, { color: colors.navy }]}>Nenhuma certificação ainda</Text>
             <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-              Solicite a verificação das suas credenciais profissionais
+              Adicione suas certificações e credenciais profissionais
             </Text>
           </View>
-        ) : (
-          certs.map((cert) => (
-            <View key={cert.id} style={[styles.certCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-              <View style={[styles.certIconWrap, { backgroundColor: statusBg(cert.status, colors) }]}>
-                <Feather name="award" size={22} color={statusColor(cert.status, colors)} />
-              </View>
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text style={[styles.certName, { color: colors.navy }]}>{cert.name}</Text>
-                {cert.date && <Text style={[styles.certMeta, { color: colors.mutedForeground }]}>{cert.date}</Text>}
-                {cert.cert_number && (
-                  <Text style={[styles.certMeta, { color: colors.mutedForeground }]}>Nº {cert.cert_number}</Text>
-                )}
-                <View style={[styles.certStatusBadge, { backgroundColor: statusBg(cert.status, colors) }]}>
-                  <Text style={[styles.certStatusText, { color: statusColor(cert.status, colors) }]}>
-                    {statusLabel(cert.status)}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          ))
         )}
+
+        {/* List */}
+        {certifications.map((cert, i) => (
+          <View key={i} style={[styles.certCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+            <View style={[styles.certIconWrap, { backgroundColor: colors.gold + "18" }]}>
+              <Feather name="award" size={20} color={colors.gold} />
+            </View>
+            <Text style={[styles.certName, { color: colors.navy, flex: 1 }]}>{cert}</Text>
+            <TouchableOpacity onPress={() => handleRemove(cert)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Feather name="trash-2" size={16} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+        ))}
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
-  backRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  headerTitle: { fontSize: 22, fontWeight: "800" },
-  requestBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, borderRadius: 10, borderWidth: 1.5 },
-  requestBtnText: { fontSize: 15, fontWeight: "600" },
-  formCard: { borderRadius: 12, borderWidth: 1, padding: 16, gap: 12 },
-  formTitle: { fontSize: 16, fontWeight: "700" },
-  pickerBtn: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12 },
-  pickerBtnText: { fontSize: 14 },
+  container:      { flex: 1 },
+  header:         { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
+  backRow:        { flexDirection: "row", alignItems: "center", gap: 10 },
+  headerTitle:    { fontSize: 22, fontWeight: "800" },
+  addBtn:         { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, borderRadius: 10, borderWidth: 1.5 },
+  addBtnText:     { fontSize: 15, fontWeight: "600" },
+  formCard:       { borderRadius: 12, borderWidth: 1, padding: 16, gap: 12 },
+  formTitle:      { fontSize: 16, fontWeight: "700" },
+  pickerBtn:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12 },
+  pickerBtnText:  { fontSize: 14 },
   pickerDropdown: { borderWidth: 1, borderRadius: 8, overflow: "hidden", marginTop: -4 },
-  pickerOption: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
+  pickerOption:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
   pickerOptionText: { fontSize: 14 },
-  input: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 },
-  formActions: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 12, marginTop: 4 },
-  cancelBtn: { paddingVertical: 10, paddingHorizontal: 16 },
-  cancelText: { fontSize: 14 },
-  submitBtn: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 8, minWidth: 120, alignItems: "center" },
-  submitText: { color: "#fff", fontSize: 14, fontWeight: "700" },
-  empty: { alignItems: "center", gap: 14, paddingTop: 48 },
-  emptyIconWrap: { width: 80, height: 80, borderRadius: 40, alignItems: "center", justifyContent: "center", borderWidth: 2 },
-  emptyTitle: { fontSize: 18, fontWeight: "700" },
-  emptySub: { fontSize: 14, textAlign: "center", lineHeight: 20 },
-  certCard: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 12, borderWidth: 1, padding: 14 },
-  certIconWrap: { width: 46, height: 46, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  certName: { fontSize: 14, fontWeight: "700" },
-  certMeta: { fontSize: 12 },
-  certStatusBadge: { alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8, marginTop: 2 },
-  certStatusText: { fontSize: 11, fontWeight: "600" },
+  input:          { borderWidth: 1, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 },
+  formActions:    { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 12, marginTop: 4 },
+  cancelBtn:      { paddingVertical: 10, paddingHorizontal: 16 },
+  cancelText:     { fontSize: 14 },
+  submitBtn:      { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 8, minWidth: 100, alignItems: "center" },
+  submitText:     { color: "#fff", fontSize: 14, fontWeight: "700" },
+  empty:          { alignItems: "center", gap: 14, paddingTop: 48 },
+  emptyIconWrap:  { width: 80, height: 80, borderRadius: 40, alignItems: "center", justifyContent: "center", borderWidth: 2 },
+  emptyTitle:     { fontSize: 18, fontWeight: "700" },
+  emptySub:       { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  certCard:       { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 12, borderWidth: 1, padding: 14 },
+  certIconWrap:   { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  certName:       { fontSize: 14, fontWeight: "600" },
 });
