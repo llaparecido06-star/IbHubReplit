@@ -1,10 +1,10 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Animated,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -20,8 +20,9 @@ import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
 import { recordProfileView, fetchMutualConnections } from "@/services/api";
 
-const COVER_HEIGHT = 160;
-const AVATAR_SIZE = 88;
+const COVER_HEIGHT = 130;
+const AVATAR_SIZE  = 86;
+const AVATAR_BORDER = 4;
 
 const FALLBACK_USER = {
   id: "", full_name: "Usuário", username: "usuario",
@@ -33,58 +34,59 @@ const FALLBACK_USER = {
 };
 
 export default function PublicProfileScreen() {
-  const colors = useColors();
-  const router = useRouter();
+  const colors  = useColors();
+  const router  = useRouter();
   const { user: currentUser } = useAuth();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const insets = useSafeAreaInsets();
-  const scrollY = useRef(new Animated.Value(0)).current;
+  const { id }  = useLocalSearchParams<{ id: string }>();
+  const insets  = useSafeAreaInsets();
 
   const [userProfile, setUserProfile] = useState<typeof FALLBACK_USER>(FALLBACK_USER);
-  const [userPosts, setUserPosts] = useState<Post[]>([]);
+  const [userPosts, setUserPosts]     = useState<Post[]>([]);
   const [wineEntries, setWineEntries] = useState<API.WineEntry[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<"none" | "pending" | "connected">("none");
-  const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"posts" | "adega">("posts");
-  const [mutualConnections, setMutualConnections] = useState<{ id: string; full_name: string; avatar_url: string | null }[]>([]);
-  const [resolvedProfileId, setResolvedProfileId] = useState<string>(id ?? "");
+  const [connectionStatus, setConnectionStatus] = useState<"none"|"pending"|"connected">("none");
+  const [loading, setLoading]         = useState(true);
+  const [tab, setTab]                 = useState<"posts"|"adega">("posts");
+  const [mutuals, setMutuals]         = useState<{ id: string; full_name: string; avatar_url: string | null }[]>([]);
+  const [resolvedId, setResolvedId]   = useState<string>(id ?? "");
 
-  const topPad = Platform.OS === "ios" ? insets.top : Platform.OS === "web" ? 16 : insets.top;
+  const topPad   = insets.top;
+  const navyBg   = (colors as any).navyLight ?? colors.navy;
 
+  /* ── Data ── */
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    const realProfile = await API.fetchPublicProfile(id);
-    const resolvedId: string = (realProfile as any)?.id ?? id;
-    const isOwn = currentUser?.id === resolvedId;
+    const real = await API.fetchPublicProfile(id);
+    const rid: string = (real as any)?.id ?? id;
+    const isOwn = currentUser?.id === rid;
 
-    const [followStatus, connStatus, posts, wines, mutual] = await Promise.all([
-      currentUser?.id ? API.checkIsFollowing(resolvedId, currentUser.id) : Promise.resolve(false),
-      currentUser?.id ? API.checkConnectionStatus(resolvedId, currentUser.id) : Promise.resolve("none" as const),
-      currentUser?.id ? API.fetchProfilePosts(resolvedId, currentUser.id) : Promise.resolve([]),
-      isOwn ? API.fetchWineCellar(resolvedId) : API.fetchPublicWineCellar(resolvedId),
-      currentUser?.id && !isOwn ? fetchMutualConnections(currentUser.id, resolvedId) : Promise.resolve([]),
+    const [following, connStatus, posts, wines, mutual] = await Promise.all([
+      currentUser?.id ? API.checkIsFollowing(rid, currentUser.id)       : Promise.resolve(false),
+      currentUser?.id ? API.checkConnectionStatus(rid, currentUser.id)  : Promise.resolve("none" as const),
+      currentUser?.id ? API.fetchProfilePosts(rid, currentUser.id)       : Promise.resolve([]),
+      isOwn ? API.fetchWineCellar(rid) : API.fetchPublicWineCellar(rid),
+      currentUser?.id && !isOwn ? fetchMutualConnections(currentUser.id, rid) : Promise.resolve([]),
     ]);
 
-    if (realProfile) setUserProfile({ ...FALLBACK_USER, ...realProfile });
-    setResolvedProfileId(resolvedId);
-    setIsFollowing(followStatus);
+    if (real) setUserProfile({ ...FALLBACK_USER, ...real });
+    setResolvedId(rid);
+    setIsFollowing(following);
     setConnectionStatus(connStatus);
     setUserPosts(posts);
     setWineEntries(wines);
-    setMutualConnections(mutual);
+    setMutuals(mutual);
     setLoading(false);
-
-    if (currentUser?.id && !isOwn) recordProfileView(currentUser.id, resolvedId);
+    if (currentUser?.id && !isOwn) recordProfileView(currentUser.id, rid);
   }, [id, currentUser?.id]);
 
   useEffect(() => { load(); }, [load]);
 
   const isCompany    = (userProfile as any).profile_type === "empresa";
-  const isOwnProfile = currentUser?.id === resolvedProfileId;
+  const isOwnProfile = currentUser?.id === resolvedId;
   const tab2Label    = isCompany ? "Portfólio" : "Adega";
 
+  /* ── Actions ── */
   const handleFollow = async () => {
     if (!currentUser?.id || !id) return;
     const next = !isFollowing;
@@ -104,13 +106,13 @@ export default function PublicProfileScreen() {
     await API.sendConnectionRequest(id, currentUser.id);
   };
 
-  const canMessage = isCompany ? true : connectionStatus === "connected" || isFollowing;
-  const messagePending = !isCompany && connectionStatus !== "connected" && isFollowing;
+  const canMessage      = isCompany ? true : connectionStatus === "connected" || isFollowing;
+  const messagePending  = !isCompany && connectionStatus !== "connected" && isFollowing;
 
   const handleMessage = async () => {
     if (!currentUser?.id || !id || !canMessage) return;
-    const conversationId = await API.getOrCreateDirectConversation(currentUser.id, id);
-    if (conversationId) router.push(`/chat/${conversationId}` as any);
+    const cid = await API.getOrCreateDirectConversation(currentUser.id, id);
+    if (cid) router.push(`/chat/${cid}` as any);
   };
 
   const handleLike = (postId: string) => {
@@ -129,85 +131,63 @@ export default function PublicProfileScreen() {
     API.toggleBookmark(postId, currentUser.id, post.is_bookmarked ?? false);
   };
 
-  const connectLabel =
-    connectionStatus === "connected" ? "Conectado"
-    : connectionStatus === "pending" ? "Pendente"
-    : "Conectar";
+  const connectLabel   = connectionStatus === "connected" ? "Conectado" : connectionStatus === "pending" ? "Pendente" : "Conectar";
   const connectDisabled = connectionStatus !== "none";
 
-  // Animated header background opacity on scroll
-  const headerBg = scrollY.interpolate({
-    inputRange: [COVER_HEIGHT - 80, COVER_HEIGHT - 20],
-    outputRange: [0, 1],
-    extrapolate: "clamp",
-  });
-
+  /* ── Loading ── */
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: "center", alignItems: "center" }]}>
-        <ActivityIndicator size="large" color={colors.gold} />
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        {/* Fixed back button even on loading */}
+        <View style={[styles.fixedBar, { paddingTop: topPad, backgroundColor: navyBg }]}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <Feather name="arrow-left" size={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="large" color={colors.gold} />
+        </View>
       </View>
     );
   }
 
-  const navyColor = (colors as any).navyLight ?? colors.navy;
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
 
-      {/* ── Fixed floating nav bar (back + name after scroll) ── */}
-      <Animated.View
-        style={[
-          styles.floatingNav,
-          {
-            paddingTop: topPad,
-            backgroundColor: scrollY.interpolate({
-              inputRange: [COVER_HEIGHT - 80, COVER_HEIGHT - 20],
-              outputRange: ["rgba(0,0,0,0)", navyColor],
-              extrapolate: "clamp",
-            }),
-          },
-        ]}
-        pointerEvents="box-none"
-      >
-        {/* Back button - always accessible */}
+      {/* ══════════════════════════════════════════════════════════
+          FIXED HEADER — outside ScrollView, always on screen
+          ══════════════════════════════════════════════════════════ */}
+      <View style={[styles.fixedBar, { paddingTop: topPad, backgroundColor: navyBg }]}>
         <TouchableOpacity
-          style={[styles.navBackBtn, { backgroundColor: "rgba(0,0,0,0.32)" }]}
+          style={styles.backBtn}
           onPress={() => router.back()}
-          activeOpacity={0.75}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          activeOpacity={0.7}
         >
-          <Feather name="arrow-left" size={20} color="#fff" />
+          <Feather name="arrow-left" size={22} color="#fff" />
         </TouchableOpacity>
 
-        {/* Name fades in on scroll */}
-        <Animated.Text
-          style={[styles.navTitle, { color: "#fff", opacity: headerBg }]}
-          numberOfLines={1}
-        >
+        <Text style={[styles.headerName, { color: "#fff" }]} numberOfLines={1}>
           {userProfile.full_name}
-        </Animated.Text>
+        </Text>
 
         <View style={{ width: 44 }} />
-      </Animated.View>
+      </View>
 
-      <Animated.ScrollView
+      {/* ══════════════════════════════════════════════════════════
+          SCROLLABLE CONTENT
+          ══════════════════════════════════════════════════════════ */}
+      <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 48 }}
         showsVerticalScrollIndicator={false}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
-        scrollEventThrottle={16}
       >
-        {/* ── Cover ── */}
-        <View style={[styles.cover, { backgroundColor: navyColor, height: COVER_HEIGHT + topPad }]}>
-          {/* Decorative wine circle */}
-          <View style={[styles.coverCircle1, { backgroundColor: "rgba(201,168,76,0.12)" }]} />
-          <View style={[styles.coverCircle2, { backgroundColor: "rgba(201,168,76,0.08)" }]} />
-          {/* Gold accent line */}
-          <View style={[styles.coverAccent, { backgroundColor: colors.gold }]} />
+
+        {/* ── Cover banner (decorative, below fixed header) ── */}
+        <View style={[styles.cover, { backgroundColor: navyBg, height: COVER_HEIGHT }]}>
+          <View style={[styles.circle1, { backgroundColor: "rgba(201,168,76,0.13)" }]} />
+          <View style={[styles.circle2, { backgroundColor: "rgba(201,168,76,0.07)" }]} />
+          <View style={[styles.goldLine, { backgroundColor: colors.gold }]} />
         </View>
 
         {/* ── Profile card ── */}
@@ -218,20 +198,18 @@ export default function PublicProfileScreen() {
             <View style={[styles.avatarRing, { borderColor: colors.card, backgroundColor: colors.card }]}>
               <Avatar uri={userProfile.avatar_url} name={userProfile.full_name} size={AVATAR_SIZE} />
             </View>
-
-            {/* Plan badge top right */}
             {userProfile.plan && !["gratuito", "basico"].includes(userProfile.plan) && (
               <View style={[styles.planPill, { backgroundColor: colors.gold }]}>
                 <Feather name="award" size={11} color={colors.navy} />
-                <Text style={[styles.planPillText, { color: colors.navy }]}>
-                  {userProfile.plan.toUpperCase()}
-                </Text>
+                <Text style={[styles.planText, { color: colors.navy }]}>{userProfile.plan.toUpperCase()}</Text>
               </View>
             )}
           </View>
 
-          {/* Name + username */}
+          {/* Name */}
           <Text style={[styles.name, { color: colors.foreground }]}>{userProfile.full_name}</Text>
+
+          {/* Username */}
           {!!userProfile.username && (
             <Text style={[styles.username, { color: colors.mutedForeground }]}>@{userProfile.username}</Text>
           )}
@@ -254,53 +232,36 @@ export default function PublicProfileScreen() {
             <Text style={[styles.bio, { color: colors.foreground }]}>{userProfile.bio}</Text>
           )}
 
-          {/* ── Stats ── */}
+          {/* Stats */}
           <View style={[styles.statsRow, { borderColor: colors.border }]}>
-            <View style={styles.stat}>
-              <Text style={[styles.statNum, { color: colors.foreground }]}>
-                {fmtCount(userProfile.connections_count)}
-              </Text>
-              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Conexões</Text>
-            </View>
-            <View style={[styles.statDiv, { backgroundColor: colors.border }]} />
-            <View style={styles.stat}>
-              <Text style={[styles.statNum, { color: colors.foreground }]}>
-                {fmtCount(userProfile.followers_count)}
-              </Text>
-              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Seguidores</Text>
-            </View>
-            <View style={[styles.statDiv, { backgroundColor: colors.border }]} />
-            <View style={styles.stat}>
-              <Text style={[styles.statNum, { color: colors.foreground }]}>
-                {fmtCount(userProfile.following_count)}
-              </Text>
-              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Seguindo</Text>
-            </View>
+            {[
+              { n: userProfile.connections_count, l: "Conexões" },
+              { n: userProfile.followers_count,   l: "Seguidores" },
+              { n: userProfile.following_count,   l: "Seguindo" },
+            ].map((s, i, arr) => (
+              <React.Fragment key={s.l}>
+                <View style={styles.stat}>
+                  <Text style={[styles.statNum, { color: colors.foreground }]}>{fmtN(s.n)}</Text>
+                  <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>{s.l}</Text>
+                </View>
+                {i < arr.length - 1 && <View style={[styles.statDiv, { backgroundColor: colors.border }]} />}
+              </React.Fragment>
+            ))}
           </View>
 
-          {/* ── Action buttons ── */}
+          {/* Action buttons */}
           {!isOwnProfile && (
             <View style={styles.actionRow}>
               {isCompany ? (
                 <>
                   <TouchableOpacity
-                    style={[
-                      styles.actionBtn,
-                      { backgroundColor: isFollowing ? colors.background : colors.navy, borderColor: colors.navy, flex: 1 },
-                    ]}
-                    onPress={handleFollow}
-                    activeOpacity={0.82}
+                    style={[styles.pill, { backgroundColor: isFollowing ? "transparent" : navyBg, borderColor: navyBg, flex: 1 }]}
+                    onPress={handleFollow} activeOpacity={0.82}
                   >
-                    <Feather name={isFollowing ? "check" : "plus"} size={15} color={isFollowing ? colors.navy : "#fff"} />
-                    <Text style={[styles.actionBtnText, { color: isFollowing ? colors.navy : "#fff" }]}>
-                      {isFollowing ? "Seguindo" : "Seguir"}
-                    </Text>
+                    <Feather name={isFollowing ? "check" : "plus"} size={15} color={isFollowing ? navyBg : "#fff"} />
+                    <Text style={[styles.pillText, { color: isFollowing ? navyBg : "#fff" }]}>{isFollowing ? "Seguindo" : "Seguir"}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.iconBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
-                    onPress={handleMessage}
-                    activeOpacity={0.82}
-                  >
+                  <TouchableOpacity style={[styles.iconPill, { borderColor: colors.border, backgroundColor: colors.background }]} onPress={handleMessage} activeOpacity={0.82}>
                     <Feather name="message-circle" size={19} color={colors.foreground} />
                   </TouchableOpacity>
                 </>
@@ -308,64 +269,27 @@ export default function PublicProfileScreen() {
                 <>
                   {connectionStatus !== "connected" && (
                     <TouchableOpacity
-                      style={[
-                        styles.actionBtn,
-                        {
-                          backgroundColor: connectDisabled ? colors.background : colors.gold,
-                          borderColor: connectDisabled ? colors.border : colors.gold,
-                          flex: 1,
-                          opacity: connectDisabled ? 0.7 : 1,
-                        },
-                      ]}
-                      onPress={handleConnect}
-                      disabled={connectDisabled}
-                      activeOpacity={0.82}
+                      style={[styles.pill, { backgroundColor: connectDisabled ? "transparent" : colors.gold, borderColor: connectDisabled ? colors.border : colors.gold, flex: 1, opacity: connectDisabled ? 0.75 : 1 }]}
+                      onPress={handleConnect} disabled={connectDisabled} activeOpacity={0.82}
                     >
-                      <Feather
-                        name={connectionStatus === "pending" ? "clock" : "user-plus"}
-                        size={15}
-                        color={connectDisabled ? colors.mutedForeground : colors.navy}
-                      />
-                      <Text style={[styles.actionBtnText, { color: connectDisabled ? colors.mutedForeground : colors.navy }]}>
-                        {connectLabel}
-                      </Text>
+                      <Feather name={connectionStatus === "pending" ? "clock" : "user-plus"} size={15} color={connectDisabled ? colors.mutedForeground : colors.navy} />
+                      <Text style={[styles.pillText, { color: connectDisabled ? colors.mutedForeground : colors.navy }]}>{connectLabel}</Text>
                     </TouchableOpacity>
                   )}
-
                   <TouchableOpacity
-                    style={[
-                      styles.actionBtn,
-                      {
-                        backgroundColor: isFollowing ? colors.background : colors.navy,
-                        borderColor: isFollowing ? colors.border : colors.navy,
-                        flex: 1,
-                      },
-                    ]}
-                    onPress={handleFollow}
-                    activeOpacity={0.82}
+                    style={[styles.pill, { backgroundColor: isFollowing ? "transparent" : navyBg, borderColor: isFollowing ? colors.border : navyBg, flex: 1 }]}
+                    onPress={handleFollow} activeOpacity={0.82}
                   >
-                    <Feather name={isFollowing ? "check" : "plus"} size={15} color={isFollowing ? colors.navy : "#fff"} />
-                    <Text style={[styles.actionBtnText, { color: isFollowing ? colors.navy : "#fff" }]}>
-                      {isFollowing ? "Seguindo" : "Seguir"}
-                    </Text>
+                    <Feather name={isFollowing ? "check" : "plus"} size={15} color={isFollowing ? navyBg : "#fff"} />
+                    <Text style={[styles.pillText, { color: isFollowing ? navyBg : "#fff" }]}>{isFollowing ? "Seguindo" : "Seguir"}</Text>
                   </TouchableOpacity>
-
                   {canMessage && (
                     <TouchableOpacity
-                      style={[
-                        styles.iconBtn,
-                        {
-                          backgroundColor: colors.background,
-                          borderColor: messagePending ? colors.gold : colors.border,
-                        },
-                      ]}
-                      onPress={handleMessage}
-                      activeOpacity={0.82}
+                      style={[styles.iconPill, { borderColor: messagePending ? colors.gold : colors.border, backgroundColor: colors.background }]}
+                      onPress={handleMessage} activeOpacity={0.82}
                     >
                       <Feather name="message-circle" size={19} color={messagePending ? colors.gold : colors.foreground} />
-                      {messagePending && (
-                        <View style={[styles.pendingDot, { backgroundColor: colors.gold }]} />
-                      )}
+                      {messagePending && <View style={[styles.dot, { backgroundColor: colors.gold }]} />}
                     </TouchableOpacity>
                   )}
                 </>
@@ -373,42 +297,36 @@ export default function PublicProfileScreen() {
             </View>
           )}
 
-          {/* Áreas de expertise */}
+          {/* Tags */}
           {(userProfile.areas_of_expertise ?? []).length > 0 && (
             <View style={styles.tags}>
-              {(userProfile.areas_of_expertise ?? []).map((area) => (
-                <Badge key={area} label={area} variant="gold" />
-              ))}
+              {(userProfile.areas_of_expertise ?? []).map(a => <Badge key={a} label={a} variant="gold" />)}
             </View>
           )}
         </View>
 
-        {/* ── Mutual connections ── */}
-        {mutualConnections.length > 0 && (
+        {/* Mutual connections */}
+        {mutuals.length > 0 && (
           <View style={[styles.mutualRow, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
             <View style={styles.mutualAvatars}>
-              {mutualConnections.slice(0, 3).map((mc, i) => (
+              {mutuals.slice(0, 3).map((mc, i) => (
                 <View key={mc.id} style={{ marginLeft: i === 0 ? 0 : -8 }}>
                   <Avatar uri={mc.avatar_url} name={mc.full_name} size={24} />
                 </View>
               ))}
             </View>
             <Text style={[styles.mutualText, { color: colors.mutedForeground }]}>
-              {mutualConnections.length === 1
-                ? `${mutualConnections[0].full_name} é conexão em comum`
-                : `${mutualConnections[0].full_name} e mais ${mutualConnections.length - 1} em comum`}
+              {mutuals.length === 1
+                ? `${mutuals[0].full_name} é conexão em comum`
+                : `${mutuals[0].full_name} e mais ${mutuals.length - 1} em comum`}
             </Text>
           </View>
         )}
 
-        {/* ── Tabs ── */}
+        {/* Tabs */}
         <View style={[styles.tabRow, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
-          {(["posts", "adega"] as const).map((t) => (
-            <Pressable
-              key={t}
-              style={[styles.tab, tab === t && { borderBottomColor: colors.gold }]}
-              onPress={() => setTab(t)}
-            >
+          {(["posts", "adega"] as const).map(t => (
+            <Pressable key={t} style={[styles.tab, tab === t && { borderBottomColor: colors.gold }]} onPress={() => setTab(t)}>
               <Text style={[styles.tabText, { color: tab === t ? colors.gold : colors.mutedForeground }]}>
                 {t === "posts" ? "Posts" : tab2Label}
               </Text>
@@ -416,7 +334,7 @@ export default function PublicProfileScreen() {
           ))}
         </View>
 
-        {/* ── Posts ── */}
+        {/* Posts */}
         {tab === "posts" && (
           userPosts.length === 0 ? (
             <View style={styles.empty}>
@@ -426,17 +344,16 @@ export default function PublicProfileScreen() {
           ) : (
             userPosts.map(post => (
               <PostCard
-                key={post.id}
-                post={post}
+                key={post.id} post={post}
                 onLike={handleLike}
                 onBookmark={handleBookmark}
-                onComment={(pid) => router.push(`/post/${pid}` as any)}
+                onComment={pid => router.push(`/post/${pid}` as any)}
               />
             ))
           )
         )}
 
-        {/* ── Adega ── */}
+        {/* Adega */}
         {tab === "adega" && !isCompany && (
           <View style={{ paddingBottom: 24 }}>
             {isOwnProfile && (
@@ -457,7 +374,7 @@ export default function PublicProfileScreen() {
               </View>
             ) : (
               <View style={{ padding: 16, rowGap: 10 }}>
-                {wineEntries.map((w) => (
+                {wineEntries.map(w => (
                   <View key={w.id} style={[styles.wineCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
                       <View style={{ flex: 1 }}>
@@ -468,25 +385,18 @@ export default function PublicProfileScreen() {
                           </Text>
                         )}
                       </View>
-                      <View style={[styles.wineStatusBadge, { backgroundColor: colors.gold + "18" }]}>
-                        <Text style={[styles.wineStatusText, { color: colors.gold }]}>
-                          {w.status === "adega" ? "Na Adega"
-                            : w.status === "consumido" ? "Consumido"
-                            : w.status === "presenteado" ? "Presenteado"
-                            : "Wishlist"}
+                      <View style={[styles.wineStatus, { backgroundColor: colors.gold + "18" }]}>
+                        <Text style={[styles.wineStatusTxt, { color: colors.gold }]}>
+                          {w.status === "adega" ? "Na Adega" : w.status === "consumido" ? "Consumido" : w.status === "presenteado" ? "Presenteado" : "Wishlist"}
                         </Text>
                       </View>
                     </View>
                     {w.region && (
-                      <Text style={[styles.wineSub, { color: colors.mutedForeground }]}>
-                        {w.region}{w.country ? `, ${w.country}` : ""}
-                      </Text>
+                      <Text style={[styles.wineSub, { color: colors.mutedForeground }]}>{w.region}{w.country ? `, ${w.country}` : ""}</Text>
                     )}
                     {w.rating > 0 && (
                       <View style={{ flexDirection: "row", gap: 2, marginTop: 2 }}>
-                        {[1, 2, 3, 4, 5].map((s) => (
-                          <Feather key={s} name="star" size={12} color={s <= w.rating ? colors.gold : colors.border} />
-                        ))}
+                        {[1,2,3,4,5].map(s => <Feather key={s} name="star" size={12} color={s <= w.rating ? colors.gold : colors.border} />)}
                       </View>
                     )}
                   </View>
@@ -502,126 +412,103 @@ export default function PublicProfileScreen() {
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Portfólio ainda vazio</Text>
           </View>
         )}
-      </Animated.ScrollView>
+      </ScrollView>
     </View>
   );
 }
 
-function fmtCount(n: number): string {
+function fmtN(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return String(n);
 }
 
-const AVATAR_BORDER = 4;
-
 const styles = StyleSheet.create({
-  container:      { flex: 1 },
+  container:    { flex: 1 },
 
-  /* Floating nav */
-  floatingNav:    {
-    position: "absolute", top: 0, left: 0, right: 0, zIndex: 100,
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 12, paddingBottom: 10,
+  /* Fixed nav bar (outside ScrollView) */
+  fixedBar:     {
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 8, paddingBottom: 10,
+    zIndex: 10,
   },
-  navBackBtn:     {
+  backBtn:      {
     width: 44, height: 44, borderRadius: 22,
     alignItems: "center", justifyContent: "center",
-    shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
+    backgroundColor: "rgba(255,255,255,0.15)",
   },
-  navTitle:       { fontSize: 16, fontWeight: "700", flex: 1, textAlign: "center" },
+  headerName:   { flex: 1, textAlign: "center", fontSize: 16, fontWeight: "700", paddingHorizontal: 8 },
 
   /* Cover */
-  cover:          { overflow: "hidden", justifyContent: "flex-end" },
-  coverCircle1:   { position: "absolute", width: 320, height: 320, borderRadius: 160, top: -120, right: -80 },
-  coverCircle2:   { position: "absolute", width: 200, height: 200, borderRadius: 100, bottom: -60, left: -40 },
-  coverAccent:    { position: "absolute", bottom: 0, left: 0, right: 0, height: 3, opacity: 0.7 },
+  cover:        { overflow: "hidden" },
+  circle1:      { position: "absolute", width: 280, height: 280, borderRadius: 140, top: -100, right: -60 },
+  circle2:      { position: "absolute", width: 180, height: 180, borderRadius: 90, bottom: -50, left: -30 },
+  goldLine:     { position: "absolute", bottom: 0, left: 0, right: 0, height: 3, opacity: 0.6 },
 
   /* Profile card */
-  profileCard:    { paddingHorizontal: 16, paddingBottom: 20, rowGap: 8, borderBottomWidth: 1 },
-  avatarRow:      {
+  profileCard:  { paddingHorizontal: 16, paddingBottom: 18, rowGap: 8, borderBottomWidth: 1 },
+  avatarRow:    {
     flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between",
-    marginTop: -(AVATAR_SIZE / 2 + AVATAR_BORDER),
-    paddingTop: 0,
+    marginTop: -(AVATAR_SIZE / 2 + AVATAR_BORDER + 2),
   },
-  avatarRing:     {
-    borderRadius: (AVATAR_SIZE / 2) + AVATAR_BORDER + 2,
+  avatarRing:   {
+    borderRadius: AVATAR_SIZE / 2 + AVATAR_BORDER + 4,
     borderWidth: AVATAR_BORDER,
-    width: AVATAR_SIZE + AVATAR_BORDER * 2,
-    height: AVATAR_SIZE + AVATAR_BORDER * 2,
+    width: AVATAR_SIZE + AVATAR_BORDER * 2 + 4,
+    height: AVATAR_SIZE + AVATAR_BORDER * 2 + 4,
     overflow: "hidden",
     alignItems: "center", justifyContent: "center",
   },
-  planPill:       {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, marginBottom: 6,
-  },
-  planPillText:   { fontSize: 11, fontWeight: "800", letterSpacing: 0.5 },
+  planPill:     { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, marginBottom: 6 },
+  planText:     { fontSize: 11, fontWeight: "800", letterSpacing: 0.5 },
 
-  name:           { fontSize: 22, fontWeight: "800", marginTop: 10 },
-  username:       { fontSize: 13, fontWeight: "500", marginTop: -4 },
-  headline:       { fontSize: 13 },
-  metaRow:        { flexDirection: "row", alignItems: "center", gap: 4 },
-  metaText:       { fontSize: 12 },
-  bio:            { fontSize: 14, lineHeight: 22 },
+  name:         { fontSize: 22, fontWeight: "800", marginTop: 8 },
+  username:     { fontSize: 13, fontWeight: "500", marginTop: -4, color: "#666" },
+  headline:     { fontSize: 13 },
+  metaRow:      { flexDirection: "row", alignItems: "center", gap: 4 },
+  metaText:     { fontSize: 12 },
+  bio:          { fontSize: 14, lineHeight: 21 },
 
   /* Stats */
-  statsRow:       {
-    flexDirection: "row", alignItems: "center",
-    borderTopWidth: 1, marginTop: 4, paddingTop: 14, paddingBottom: 4,
-  },
-  stat:           { flex: 1, alignItems: "center", rowGap: 2 },
-  statNum:        { fontSize: 20, fontWeight: "800" },
-  statLabel:      { fontSize: 11, fontWeight: "500" },
-  statDiv:        { width: 1, height: 34 },
+  statsRow:     { flexDirection: "row", alignItems: "center", paddingTop: 14, borderTopWidth: 1, marginTop: 4 },
+  stat:         { flex: 1, alignItems: "center", rowGap: 2 },
+  statNum:      { fontSize: 20, fontWeight: "800" },
+  statLabel:    { fontSize: 11, fontWeight: "500" },
+  statDiv:      { width: 1, height: 32 },
 
   /* Action buttons */
-  actionRow:      { flexDirection: "row", gap: 8, alignItems: "center", marginTop: 2 },
-  actionBtn:      {
+  actionRow:    { flexDirection: "row", gap: 8, alignItems: "center" },
+  pill:         {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
     paddingVertical: 11, paddingHorizontal: 14, borderRadius: 24, borderWidth: 1.5,
   },
-  actionBtnText:  { fontSize: 14, fontWeight: "700" },
-  iconBtn:        {
-    width: 46, height: 46, borderRadius: 23, borderWidth: 1.5,
-    alignItems: "center", justifyContent: "center",
-  },
-  pendingDot:     { position: "absolute", top: 8, right: 8, width: 8, height: 8, borderRadius: 4 },
+  pillText:     { fontSize: 14, fontWeight: "700" },
+  iconPill:     { width: 46, height: 46, borderRadius: 23, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+  dot:          { position: "absolute", top: 8, right: 8, width: 8, height: 8, borderRadius: 4 },
 
-  tags:           { flexDirection: "row", gap: 6, flexWrap: "wrap" },
+  tags:         { flexDirection: "row", gap: 6, flexWrap: "wrap" },
 
   /* Mutual */
-  mutualRow:      {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    marginHorizontal: 16, marginVertical: 10,
-    borderWidth: 1, borderRadius: 12, padding: 12,
-  },
-  mutualAvatars:  { flexDirection: "row" },
-  mutualText:     { flex: 1, fontSize: 12, fontWeight: "500" },
+  mutualRow:    { flexDirection: "row", alignItems: "center", gap: 10, margin: 14, borderWidth: 1, borderRadius: 12, padding: 12 },
+  mutualAvatars:{ flexDirection: "row" },
+  mutualText:   { flex: 1, fontSize: 12, fontWeight: "500" },
 
   /* Tabs */
-  tabRow:         { flexDirection: "row", borderBottomWidth: 1 },
-  tab:            {
-    flex: 1, alignItems: "center", paddingVertical: 13,
-    borderBottomWidth: 2.5, borderBottomColor: "transparent",
-  },
-  tabText:        { fontSize: 14, fontWeight: "700" },
+  tabRow:       { flexDirection: "row", borderBottomWidth: 1 },
+  tab:          { flex: 1, alignItems: "center", paddingVertical: 13, borderBottomWidth: 2.5, borderBottomColor: "transparent" },
+  tabText:      { fontSize: 14, fontWeight: "700" },
 
   /* Empty */
-  empty:          { alignItems: "center", justifyContent: "center", paddingVertical: 60, rowGap: 12 },
-  emptyText:      { fontSize: 15 },
+  empty:        { alignItems: "center", justifyContent: "center", paddingVertical: 60, rowGap: 12 },
+  emptyText:    { fontSize: 15 },
 
   /* Cellar */
-  cellarBtn:      {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 7, margin: 16, paddingVertical: 13, borderRadius: 14,
-  },
-  cellarBtnText:  { fontSize: 14, fontWeight: "700" },
+  cellarBtn:    { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, margin: 16, paddingVertical: 13, borderRadius: 14 },
+  cellarBtnText:{ fontSize: 14, fontWeight: "700" },
 
-  /* Wine card */
-  wineCard:       { borderRadius: 12, borderWidth: 1, padding: 14, rowGap: 6 },
-  wineName:       { fontSize: 15, fontWeight: "700" },
-  wineSub:        { fontSize: 12, marginTop: 1 },
-  wineStatusBadge:{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  wineStatusText: { fontSize: 11, fontWeight: "600" },
+  /* Wine */
+  wineCard:     { borderRadius: 12, borderWidth: 1, padding: 14, rowGap: 6 },
+  wineName:     { fontSize: 15, fontWeight: "700" },
+  wineSub:      { fontSize: 12, marginTop: 1 },
+  wineStatus:   { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  wineStatusTxt:{ fontSize: 11, fontWeight: "600" },
 });
