@@ -47,6 +47,8 @@ export default function ManageBusinessPageScreen() {
   const [loading, setLoading]     = useState(true);
   const [saving, setSaving]       = useState(false);
   const [deleting, setDeleting]   = useState(false);
+  const [isOwner, setIsOwner]     = useState(false);
+  const [userRole, setUserRole]   = useState<string | null>(null);
 
   // Editar fields (local copies so user can cancel)
   const [companyName, setCompanyName] = useState("");
@@ -74,7 +76,10 @@ export default function ManageBusinessPageScreen() {
   const loadPage = useCallback(async () => {
     if (!pageId) { setLoading(false); return; }
     setLoading(true);
-    const data = await API.fetchCompanyPageById(pageId);
+    const [data, roleInfo] = await Promise.all([
+      API.fetchCompanyPageById(pageId),
+      currentUser?.id ? API.checkUserCompanyRole(pageId, currentUser.id) : Promise.resolve({ isOwner: false, role: null }),
+    ]);
     if (data) {
       setPage(data);
       setCompanyName(data.name);
@@ -83,8 +88,10 @@ export default function ManageBusinessPageScreen() {
       setWebsite(data.website ?? "");
       setLocation(data.location ?? "");
     }
+    setIsOwner(roleInfo.isOwner);
+    setUserRole(roleInfo.role);
     setLoading(false);
-  }, [pageId]);
+  }, [pageId, currentUser?.id]);
 
   useEffect(() => { loadPage(); }, [loadPage]);
 
@@ -276,10 +283,13 @@ export default function ManageBusinessPageScreen() {
       {/* Tabs — only shown when editing an existing page */}
       {!isCreateMode && (
         <View style={[styles.tabBar, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
-          {([ { key: "preview", label: "Preview", icon: "eye" },
-               { key: "editar",  label: "Editar",  icon: "edit-2" },
-               { key: "equipe",  label: "Equipe",  icon: "users" },
-          ] as { key: Tab; label: string; icon: any }[]).map(t => (
+          {(isOwner
+            ? [ { key: "preview", label: "Preview", icon: "eye" },
+                { key: "editar",  label: "Editar",  icon: "edit-2" },
+                { key: "equipe",  label: "Equipe",  icon: "users" },
+              ]
+            : [ { key: "preview", label: "Preview", icon: "eye" } ]
+          as { key: Tab; label: string; icon: any }[]).map(t => (
             <TouchableOpacity
               key={t.key}
               style={[styles.tabItem, activeTab === t.key && { borderBottomColor: colors.gold, borderBottomWidth: 2 }]}
@@ -291,6 +301,13 @@ export default function ManageBusinessPageScreen() {
               </Text>
             </TouchableOpacity>
           ))}
+          {/* Role badge for non-owners */}
+          {!isOwner && userRole && (
+            <View style={[styles.tabRoleBadge, { backgroundColor: colors.gold + "18" }]}>
+              <Feather name="user-check" size={12} color={colors.gold} />
+              <Text style={[styles.tabRoleLabel, { color: colors.gold }]}>{userRole}</Text>
+            </View>
+          )}
         </View>
       )}
 
@@ -338,17 +355,19 @@ export default function ManageBusinessPageScreen() {
               </View>
             </View>
 
-            <TouchableOpacity
-              style={[styles.deletePageBtn, { borderColor: "#dc2626", opacity: deleting ? 0.6 : 1 }]}
-              onPress={handleDelete}
-              disabled={deleting}
-            >
-              {deleting
-                ? <ActivityIndicator size="small" color="#dc2626" />
-                : <Feather name="trash-2" size={16} color="#dc2626" />
-              }
-              <Text style={[styles.deletePageText, { color: "#dc2626" }]}>Excluir página</Text>
-            </TouchableOpacity>
+            {isOwner && (
+              <TouchableOpacity
+                style={[styles.deletePageBtn, { borderColor: "#dc2626", opacity: deleting ? 0.6 : 1 }]}
+                onPress={handleDelete}
+                disabled={deleting}
+              >
+                {deleting
+                  ? <ActivityIndicator size="small" color="#dc2626" />
+                  : <Feather name="trash-2" size={16} color="#dc2626" />
+                }
+                <Text style={[styles.deletePageText, { color: "#dc2626" }]}>Excluir página</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -576,9 +595,11 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
   backRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   headerTitle: { fontSize: 20, fontWeight: "700" },
-  tabBar: { flexDirection: "row", borderBottomWidth: 1 },
+  tabBar: { flexDirection: "row", alignItems: "center", borderBottomWidth: 1 },
   tabItem: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 14 },
   tabLabel: { fontSize: 13, fontWeight: "600" },
+  tabRoleBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, marginRight: 10 },
+  tabRoleLabel: { fontSize: 11, fontWeight: "700", textTransform: "capitalize" },
 
   // Preview
   previewCard: { alignItems: "center", gap: 12, padding: 24, borderRadius: 12, borderWidth: 1, backgroundColor: "#fff" },

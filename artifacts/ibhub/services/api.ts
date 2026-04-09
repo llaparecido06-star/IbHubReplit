@@ -2000,17 +2000,66 @@ export interface CompanyPage {
 
 export async function fetchUserCompanyPages(userId: string): Promise<CompanyPage[]> {
   try {
-    const { data, error } = await supabase
+    // Pages owned by the user
+    const { data: owned, error: ownedErr } = await supabase
       .from("company_pages")
       .select("*")
       .eq("owner_id", userId)
       .order("created_at", { ascending: true });
+    if (ownedErr) console.error("fetchUserCompanyPages owned:", ownedErr);
 
-    if (error) { console.error("fetchUserCompanyPages:", error); return []; }
-    return (data ?? []) as CompanyPage[];
+    // Pages where user is an admin/member
+    const { data: memberships } = await supabase
+      .from("company_page_admins")
+      .select("company_id")
+      .eq("user_id", userId);
+
+    const adminIds = (memberships ?? []).map((m: any) => m.company_id);
+    let adminPages: CompanyPage[] = [];
+    if (adminIds.length > 0) {
+      const { data: adminData } = await supabase
+        .from("company_pages")
+        .select("*")
+        .in("id", adminIds)
+        .order("created_at", { ascending: true });
+      adminPages = (adminData ?? []) as CompanyPage[];
+    }
+
+    // Merge, deduplicate by id
+    const ownedPages = (owned ?? []) as CompanyPage[];
+    const ownedIds = new Set(ownedPages.map(p => p.id));
+    const merged = [...ownedPages, ...adminPages.filter(p => !ownedIds.has(p.id))];
+    return merged;
   } catch (e) {
     console.error("fetchUserCompanyPages:", e);
     return [];
+  }
+}
+
+export async function checkUserCompanyRole(
+  companyId: string,
+  userId: string,
+): Promise<{ isOwner: boolean; role: string | null }> {
+  try {
+    const { data: page } = await supabase
+      .from("company_pages")
+      .select("owner_id")
+      .eq("id", companyId)
+      .single();
+
+    if (page?.owner_id === userId) return { isOwner: true, role: "owner" };
+
+    const { data: adminRow } = await supabase
+      .from("company_page_admins")
+      .select("role")
+      .eq("company_id", companyId)
+      .eq("user_id", userId)
+      .single();
+
+    if (adminRow) return { isOwner: false, role: adminRow.role };
+    return { isOwner: false, role: null };
+  } catch (e) {
+    return { isOwner: false, role: null };
   }
 }
 

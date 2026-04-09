@@ -36,6 +36,7 @@ import {
   toggleCompanyFollow,
   toggleLike,
   toggleBookmark,
+  checkUserCompanyRole,
 } from "@/services/api";
 import { Post } from "@/components/feed/PostCard";
 
@@ -104,6 +105,7 @@ export default function EmpresaScreen() {
   const [companyPage, setCompanyPage] = useState<CompanyPage | null>(null);
   const [companyLoading, setCompanyLoading] = useState(true);
   const [isManager, setIsManager] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
 
@@ -147,9 +149,13 @@ export default function EmpresaScreen() {
     setCompanyPage(page);
 
     if (user?.id && page) {
-      const following = await checkIsFollowingCompany(id, user.id);
+      const [following, roleInfo] = await Promise.all([
+        checkIsFollowingCompany(id, user.id),
+        checkUserCompanyRole(id, user.id),
+      ]);
       setIsFollowing(following);
-      setIsManager(page.owner_id === user.id);
+      setIsManager(roleInfo.isOwner || roleInfo.role !== null);
+      setUserRole(roleInfo.role);
     }
     setCompanyLoading(false);
   }, [id, user?.id]);
@@ -404,14 +410,16 @@ export default function EmpresaScreen() {
           {isManager ? (
             <View style={styles.modeRow}>
               <View style={[styles.modeBadge, { backgroundColor: colors.navy + "12" }]}>
-                <Feather name="home" size={12} color={colors.navy} />
-                <Text style={[styles.modeBadgeText, { color: colors.navy }]}>Modo empresa ativo</Text>
+                <Feather name={userRole === "owner" ? "shield" : "user-check"} size={12} color={colors.navy} />
+                <Text style={[styles.modeBadgeText, { color: colors.navy }]}>
+                  {userRole === "owner" ? "Proprietário" : userRole === "editor" ? "Editor" : userRole === "moderador" ? "Moderador" : "Admin"}
+                </Text>
               </View>
               <TouchableOpacity
                 style={[styles.manageBtn, { backgroundColor: colors.gold }]}
                 onPress={() => router.push(`/manage-business-page?id=${id}` as any)}
               >
-                <Feather name="home" size={13} color="#fff" />
+                <Feather name="settings" size={13} color="#fff" />
                 <Text style={styles.manageBtnText}>Gerenciar</Text>
               </TouchableOpacity>
             </View>
