@@ -2046,12 +2046,10 @@ export async function uploadCompanyLogo(companyId: string, uri: string): Promise
 
     const resp = await fetch(uri);
     const blob = await resp.blob();
-    const arrayBuffer = await blob.arrayBuffer();
-    const uint8 = new Uint8Array(arrayBuffer);
 
     const { error } = await supabase.storage
       .from("post-images")
-      .upload(path, uint8, { contentType: `image/${ext}`, upsert: true });
+      .upload(path, blob, { contentType: `image/${ext}`, upsert: true });
 
     if (error) { console.error("uploadCompanyLogo:", error); return null; }
 
@@ -3332,12 +3330,10 @@ export async function uploadAvatar(userId: string, uri: string): Promise<string 
 
     const response = await fetch(uri);
     const blob = await response.blob();
-    const arrayBuffer = await blob.arrayBuffer();
-    const uint8 = new Uint8Array(arrayBuffer);
 
     const { error } = await supabase.storage
       .from("post-images")
-      .upload(path, uint8, { contentType: mime, upsert: true });
+      .upload(path, blob, { contentType: mime, upsert: true });
 
     if (error) { console.error("uploadAvatar:", error); return null; }
 
@@ -3561,12 +3557,10 @@ export async function uploadProductImage(productId: string, uri: string): Promis
 
     const response = await fetch(uri);
     const blob = await response.blob();
-    const arrayBuffer = await blob.arrayBuffer();
-    const uint8 = new Uint8Array(arrayBuffer);
 
     const { error } = await supabase.storage
       .from("post-images")
-      .upload(path, uint8, { contentType: mime, upsert: true });
+      .upload(path, blob, { contentType: mime, upsert: true });
 
     if (error) { console.error("uploadProductImage:", error); return null; }
 
