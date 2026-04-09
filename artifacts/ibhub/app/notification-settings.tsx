@@ -13,7 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import * as Notifications from "expo-notifications";
+import * as Notifications from "@/utils/safeNotifications";
 import { useColors } from "@/hooks/useColors";
 import {
   DEFAULT_PREFS,
