@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -128,6 +128,11 @@ export default function ProfileScreen() {
 
   useEffect(() => { loadData(); }, [loadData]);
   useEffect(() => { loadEngagement(); }, [loadEngagement]);
+  // Reload company pages on focus so newly created pages appear immediately
+  useFocusEffect(useCallback(() => {
+    if (!user?.id) return;
+    fetchUserCompanyPages(user.id).then(setCompanyPages);
+  }, [user?.id]));
   // ─────────────────────────────────────────────────────────────────────────
 
   const onRefresh = () => { setRefreshing(true); loadData(); loadEngagement(); };

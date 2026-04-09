@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -220,7 +220,9 @@ export default function FeedScreen() {
     setCompanyPages(pages);
   }, [user?.id]);
 
-  useEffect(() => { loadCompanyPages(); }, [loadCompanyPages]);
+  // Reload company pages every time the feed screen comes into focus
+  // so newly created pages appear immediately after returning from manage-business-page
+  useFocusEffect(useCallback(() => { loadCompanyPages(); }, [loadCompanyPages]));
 
   const handleConnect = useCallback(async (targetId: string) => {
     if (!user?.id || connectingId) return;
