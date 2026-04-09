@@ -120,7 +120,7 @@ export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
     const { data, error } = await supabase
       .from("posts")
       .select(`
-        id, user_id, content, image_url, image_urls, likes_count, comments_count, shares_count,
+        id, user_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count,
         view_count, location, hashtags, poll, created_at,
         author:profiles!posts_user_id_fkey(${AUTHOR_SELECT})
       `)
@@ -176,11 +176,36 @@ export async function uploadPostImage(imageUri: string, userId: string): Promise
   }
 }
 
+export async function uploadPostVideo(videoUri: string, userId: string): Promise<string | null> {
+  try {
+    const ext = videoUri.split(".").pop()?.split("?")[0]?.toLowerCase() ?? "mp4";
+    const mime = ext === "mov" ? "video/quicktime" : "video/mp4";
+    const filename = `${userId}/${Date.now()}.${ext}`;
+
+    const response = await fetch(videoUri);
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+
+    const { data, error } = await supabase.storage
+      .from("post-videos")
+      .upload(filename, bytes, { contentType: mime, upsert: false });
+
+    if (error) { console.error("uploadPostVideo storage error:", error); return null; }
+
+    const { data: urlData } = supabase.storage.from("post-videos").getPublicUrl(data.path);
+    return urlData.publicUrl ?? null;
+  } catch (e) {
+    console.error("uploadPostVideo:", e);
+    return null;
+  }
+}
+
 export async function createPost(params: {
   user_id: string;
   content: string;
   image_url?: string | null;
   image_urls?: string[] | null;
+  video_url?: string | null;
   location?: string | null;
   poll?: { options: { text: string; votes: number }[]; total_votes: number; closed: boolean };
   hashtags?: string[];
@@ -190,7 +215,7 @@ export async function createPost(params: {
       .from("posts")
       .insert({ ...params, likes_count: 0, comments_count: 0, shares_count: 0, view_count: 0 })
       .select(`
-        id, user_id, content, image_url, image_urls, likes_count, comments_count, shares_count,
+        id, user_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count,
         view_count, location, hashtags, poll, created_at,
         author:profiles!posts_user_id_fkey(${AUTHOR_SELECT})
       `)
@@ -209,7 +234,7 @@ export async function fetchPostById(postId: string, currentUserId?: string): Pro
     const { data, error } = await supabase
       .from("posts")
       .select(`
-        id, user_id, content, image_url, image_urls, likes_count, comments_count, shares_count,
+        id, user_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count,
         view_count, location, hashtags, poll, created_at,
         author:profiles!posts_user_id_fkey(${AUTHOR_SELECT})
       `)
@@ -282,7 +307,7 @@ export async function fetchNewPostsSince(since: string, currentUserId: string): 
     const { data, error } = await supabase
       .from("posts")
       .select(`
-        id, user_id, content, image_url, image_urls, likes_count, comments_count, shares_count,
+        id, user_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count,
         view_count, location, hashtags, poll, created_at,
         author:profiles!posts_user_id_fkey(${AUTHOR_SELECT})
       `)

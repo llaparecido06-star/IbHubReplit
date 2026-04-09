@@ -64,6 +64,7 @@ create table if not exists public.posts (
   user_id         uuid references auth.users(id) on delete cascade not null,
   content         text not null default '',
   image_url       text,
+  video_url       text,
   likes_count     int not null default 0,
   comments_count  int not null default 0,
   shares_count    int not null default 0,
@@ -71,6 +72,17 @@ create table if not exists public.posts (
   poll            jsonb,
   created_at      timestamptz not null default now()
 );
+
+-- Migration: add video_url if posts table already exists
+alter table public.posts add column if not exists video_url text;
+
+-- ─── STORAGE: post-videos bucket ─────────────────────────────────────────────
+-- Run once in the Supabase dashboard or via API:
+-- insert into storage.buckets (id, name, public) values ('post-videos', 'post-videos', true) on conflict do nothing;
+-- Storage policies (run in SQL Editor):
+-- create policy "post_videos_select" on storage.objects for select using (bucket_id = 'post-videos');
+-- create policy "post_videos_insert" on storage.objects for insert with check (bucket_id = 'post-videos' and auth.uid()::text = (storage.foldername(name))[1]);
+-- create policy "post_videos_delete" on storage.objects for delete using (bucket_id = 'post-videos' and auth.uid()::text = (storage.foldername(name))[1]);
 
 -- ─── LIKES ───────────────────────────────────────────────────────────────────
 create table if not exists public.likes (

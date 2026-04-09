@@ -1,6 +1,7 @@
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { Image } from "expo-image";
+import { Video, ResizeMode } from "expo-av";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -21,7 +22,7 @@ import { Feather } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { createPost, uploadPostImage } from "@/services/api";
+import { createPost, uploadPostImage, uploadPostVideo } from "@/services/api";
 
 const HASHTAG_SUGGESTIONS = [
   "vinho", "sommelier", "enologia", "degustação",
@@ -58,6 +59,7 @@ export default function CreatePostScreen() {
   // Normal post state
   const [content, setContent]               = useState("");
   const [imageUris, setImageUris]           = useState<string[]>([]);
+  const [videoUri, setVideoUri]             = useState<string | null>(null);
   const [location, setLocation]             = useState("");
   const [showLocationInput, setShowLocationInput] = useState(false);
   const [selectedHashtags, setSelectedHashtags]   = useState<string[]>([]);
@@ -78,6 +80,7 @@ export default function CreatePostScreen() {
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   const handleAddImage = async () => {
+    if (videoUri) return;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsMultipleSelection: true,
@@ -91,6 +94,20 @@ export default function CreatePostScreen() {
       });
     }
   };
+
+  const handleAddVideo = async () => {
+    if (imageUris.length > 0) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      allowsMultipleSelection: false,
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets.length > 0) {
+      setVideoUri(result.assets[0].uri);
+    }
+  };
+
+  const removeVideo = () => setVideoUri(null);
 
   const removeImage = (idx: number) => {
     setImageUris(prev => prev.filter((_, i) => i !== idx));
@@ -159,9 +176,13 @@ export default function CreatePostScreen() {
     setPosting(true);
     try {
       let uploadedUrls: string[] = [];
+      let uploadedVideoUrl: string | null = null;
       if (imageUris.length > 0 && mode === "normal") {
         const uploads = await Promise.all(imageUris.map(uri => uploadPostImage(uri, user.id)));
         uploadedUrls = uploads.filter(Boolean) as string[];
+      }
+      if (videoUri && mode === "normal") {
+        uploadedVideoUrl = await uploadPostVideo(videoUri, user.id);
       }
       const hashtags = mode === "degustacao"
         ? ["degustação", "vinho", ...(selectedHashtags)]
@@ -171,6 +192,7 @@ export default function CreatePostScreen() {
         content: finalContent,
         image_url: uploadedUrls[0] ?? null,
         image_urls: uploadedUrls.length > 0 ? uploadedUrls : null,
+        video_url: uploadedVideoUrl,
         location: location.trim() || null,
         hashtags: hashtags.length > 0 ? hashtags : undefined,
       });
@@ -288,7 +310,26 @@ export default function CreatePostScreen() {
               </View>
             )}
 
-            {imageUris.length > 0 && (
+            {videoUri && (
+              <View style={[styles.videoPreviewWrap, { borderRadius: colors.radius ?? 10 }]}>
+                <Video
+                  source={{ uri: videoUri }}
+                  style={styles.videoPreview}
+                  resizeMode={ResizeMode.COVER}
+                  isMuted
+                  isLooping
+                  shouldPlay
+                />
+                <TouchableOpacity style={styles.removeThumb} onPress={removeVideo}>
+                  <Feather name="x" size={12} color="#ffffff" />
+                </TouchableOpacity>
+                <View style={styles.videoIconOverlay}>
+                  <Feather name="video" size={16} color="#fff" />
+                </View>
+              </View>
+            )}
+
+            {imageUris.length > 0 && !videoUri && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageRow} contentContainerStyle={{ gap: 8 }}>
                 {imageUris.map((uri, idx) => (
                   <View key={uri} style={{ position: "relative" }}>
@@ -444,8 +485,11 @@ export default function CreatePostScreen() {
             {charCount}/{maxChars}
           </Text>
           <View style={styles.toolbarActions}>
-            <TouchableOpacity onPress={handleAddImage} style={styles.toolbarBtn}>
-              <Feather name="image" size={22} color={imageUris.length > 0 ? colors.gold : colors.foreground} />
+            <TouchableOpacity onPress={handleAddImage} style={styles.toolbarBtn} disabled={!!videoUri}>
+              <Feather name="image" size={22} color={imageUris.length > 0 ? colors.gold : videoUri ? colors.mutedForeground + "60" : colors.foreground} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleAddVideo} style={styles.toolbarBtn} disabled={imageUris.length > 0}>
+              <Feather name="video" size={22} color={videoUri ? colors.gold : imageUris.length > 0 ? colors.mutedForeground + "60" : colors.foreground} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.toolbarBtn} onPress={() => setShowLocationInput(v => !v)}>
               <Feather name="map-pin" size={22} color={location.trim() ? colors.gold : colors.foreground} />
@@ -481,6 +525,9 @@ const styles = StyleSheet.create({
   thumbImg: { width: 100, height: 100 },
   removeThumb: { position: "absolute", top: 4, right: 4, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 12, padding: 3 },
   addMoreBtn: { width: 100, height: 100, borderRadius: 10, borderWidth: 1.5, borderStyle: "dashed", alignItems: "center", justifyContent: "center" },
+  videoPreviewWrap: { marginTop: 12, marginBottom: 4, width: "100%", height: 180, overflow: "hidden", position: "relative", backgroundColor: "#000" },
+  videoPreview: { width: "100%", height: "100%" },
+  videoIconOverlay: { position: "absolute", bottom: 8, left: 8, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 10, padding: 4 },
   hashtagSection: { marginTop: 20, gap: 10 },
   hashtagLabel: { fontSize: 13, fontWeight: "600" },
   hashtagChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

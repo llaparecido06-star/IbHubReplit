@@ -1,6 +1,7 @@
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
+import { Video, ResizeMode } from "expo-av";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -42,6 +43,7 @@ export interface Post {
   content: string;
   image_url?: string | null;
   image_urls?: string[] | null;
+  video_url?: string | null;
   likes_count: number;
   comments_count: number;
   shares_count: number;
@@ -71,11 +73,105 @@ export interface Post {
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CONTENT_CUTOFF = 220;
 
+function VideoPlayer({ videoUrl, isVisible }: { videoUrl: string; isVisible: boolean }) {
+  const videoRef = useRef<Video>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!videoRef.current) return;
+    if (isVisible) {
+      videoRef.current.playAsync().catch(() => {});
+    } else {
+      videoRef.current.pauseAsync().catch(() => {});
+    }
+  }, [isVisible]);
+
+  const togglePlay = async () => {
+    if (!videoRef.current) return;
+    if (isPlaying) {
+      await videoRef.current.pauseAsync();
+    } else {
+      await videoRef.current.playAsync();
+    }
+  };
+
+  return (
+    <View style={videoStyles.container}>
+      <Video
+        ref={videoRef}
+        source={{ uri: videoUrl }}
+        style={videoStyles.video}
+        resizeMode={ResizeMode.COVER}
+        isMuted
+        isLooping
+        shouldPlay={isVisible}
+        onPlaybackStatusUpdate={(status) => {
+          if (status.isLoaded) {
+            setIsPlaying(status.isPlaying);
+            setIsLoading(false);
+          }
+        }}
+      />
+      {isLoading && (
+        <View style={videoStyles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#fff" />
+        </View>
+      )}
+      <TouchableOpacity style={videoStyles.playOverlay} onPress={togglePlay} activeOpacity={0.85}>
+        {!isPlaying && (
+          <View style={videoStyles.playBtn}>
+            <Feather name="play" size={28} color="#fff" />
+          </View>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const videoStyles = StyleSheet.create({
+  container: {
+    marginTop: 10,
+    width: "100%",
+    height: SCREEN_WIDTH * 0.58,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#000",
+  },
+  video: {
+    width: "100%",
+    height: "100%",
+  },
+  loadingOverlay: {
+    position: "absolute",
+    inset: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.4)",
+  },
+  playOverlay: {
+    position: "absolute",
+    inset: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  playBtn: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingLeft: 4,
+  },
+});
+
 interface PostCardProps {
   onHide?: (postId: string) => void;
   onBlock?: (userId: string) => void;
   post: Post;
   currentUserId?: string | null;
+  isVisible?: boolean;
   onLike?: (postId: string) => void;
   onReact?: (postId: string, reaction: ReactionType) => void;
   onBookmark?: (postId: string) => void;
@@ -205,7 +301,7 @@ function ReactionPicker({
   );
 }
 
-export function PostCard({ post, currentUserId, onLike, onReact, onBookmark, onComment, onVote, onHide, onBlock }: PostCardProps) {
+export function PostCard({ post, currentUserId, isVisible = false, onLike, onReact, onBookmark, onComment, onVote, onHide, onBlock }: PostCardProps) {
   const colors = useColors();
   const router = useRouter();
   const { user } = useAuth();
@@ -449,6 +545,10 @@ export function PostCard({ post, currentUserId, onLike, onReact, onBookmark, onC
 
         {allImageUrls.length > 0 && (
           <ImageCarousel imageUrls={allImageUrls} />
+        )}
+
+        {post.video_url && (
+          <VideoPlayer videoUrl={post.video_url} isVisible={isVisible} />
         )}
       </Pressable>
 

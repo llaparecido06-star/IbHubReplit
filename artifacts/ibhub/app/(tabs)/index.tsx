@@ -127,6 +127,7 @@ export default function FeedScreen() {
 
   // View tracking
   const viewTimers                                  = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const [visiblePostIds, setVisiblePostIds]         = useState<Set<string>>(new Set());
 
   // Connection suggestions
   const [suggestions, setSuggestions] = useState<SuggestedProfile[]>([]);
@@ -288,9 +289,11 @@ export default function FeedScreen() {
 
   // ── Viewable items tracking ──
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    const nowVisible = new Set<string>();
     viewableItems.forEach(({ item, isViewable }) => {
       const post = item as Post;
       if (isViewable) {
+        nowVisible.add(post.id);
         if (!viewTimers.current[post.id]) {
           viewTimers.current[post.id] = setTimeout(() => {
             setPosts(prev => prev.map(p =>
@@ -307,6 +310,7 @@ export default function FeedScreen() {
         }
       }
     });
+    setVisiblePostIds(nowVisible);
   }, []);
 
   const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 60 }).current;
@@ -619,6 +623,7 @@ export default function FeedScreen() {
           <PostCard
             post={item}
             currentUserId={user?.id}
+            isVisible={visiblePostIds.has(item.id)}
             onLike={(id) => {
               const post = posts.find(p => p.id === id);
               if (!post || !user?.id) return;
