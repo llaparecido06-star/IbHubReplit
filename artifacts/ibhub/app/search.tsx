@@ -123,8 +123,8 @@ export default function SearchScreen() {
         const { data } = await supabase
           .from("profiles")
           .select("id, full_name, username, avatar_url, headline, plan")
-          .or(`full_name.ilike.${term},headline.ilike.${term}`)
-          .in("plan", ["business", "premium", "exclusive"])
+          .or(`full_name.ilike.${term},username.ilike.${term},headline.ilike.${term}`)
+          .eq("profile_type", "empresa")
           .limit(20);
         setResults(prev => ({ ...prev, empresas: (data ?? []) as PersonResult[] }));
 
