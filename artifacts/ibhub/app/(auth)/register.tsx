@@ -111,7 +111,7 @@ function validationHint(field: "username" | "email", state: ValidationState): st
   if (field === "username") {
     if (state === "available") return "Username disponível";
     if (state === "taken") return "Username já está em uso";
-    if (state === "invalid") return "Apenas letras, números e _ (mín. 3 chars)";
+    if (state === "invalid") return "Apenas letras, números, . e _ (mín. 3 chars)";
   }
   if (field === "email") {
     if (state === "available") return "E-mail disponível";
@@ -121,7 +121,7 @@ function validationHint(field: "username" | "email", state: ValidationState): st
   return null;
 }
 
-const USERNAME_RE = /^[a-zA-Z0-9_]{3,}$/;
+const USERNAME_RE = /^[a-zA-Z0-9._]{3,}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function RegisterScreen() {
@@ -275,7 +275,7 @@ export default function RegisterScreen() {
   const validateStep1 = (): string | null => {
     if (!fullName.trim()) return "Informe seu nome completo";
     if (!username.trim()) return "Informe um username";
-    if (usernameState === "invalid") return "Username inválido (mín. 3 chars, sem espaços)";
+    if (usernameState === "invalid") return "Username inválido (mín. 3 chars, use letras, números, . e _)";
     if (usernameState === "taken") return "Esse username já está em uso";
     if (usernameState === "checking") return "Aguarde a verificação do username";
     if (!email.trim()) return "Informe um e-mail";
