@@ -2755,6 +2755,17 @@ export interface AppEventAttendee {
   } | null;
 }
 
+async function enrichEventsWithOrganizer(events: any[]): Promise<any[]> {
+  if (events.length === 0) return events;
+  const userIds = [...new Set(events.map((e: any) => e.user_id).filter(Boolean))];
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, full_name, avatar_url, username")
+    .in("id", userIds);
+  const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+  return events.map((e: any) => ({ ...e, organizer: profileMap.get(e.user_id) ?? null }));
+}
+
 export async function fetchEvents(search = "", userId = ""): Promise<AppEvent[]> {
   try {
     let q = supabase
@@ -2762,8 +2773,7 @@ export async function fetchEvents(search = "", userId = ""): Promise<AppEvent[]>
       .select(`
         id, user_id, title, description, start_date, end_date,
         location_type, location, entry_type, capacity, visibility, is_active, pay_link, created_at,
-        attendees_count,
-        organizer:profiles!events_user_id_fkey(id, full_name, avatar_url, username)
+        attendees_count
       `)
       .eq("is_active", true)
       .order("start_date", { ascending: true });
@@ -2771,7 +2781,9 @@ export async function fetchEvents(search = "", userId = ""): Promise<AppEvent[]>
     const { data, error } = await q;
     if (error) { console.error("fetchEvents:", error); return []; }
 
-    const events = (data ?? []).map((e: any) => ({ ...e, attendees_count: e.attendees_count ?? 0, is_attending: false })) as any[];
+    let events = await enrichEventsWithOrganizer(
+      (data ?? []).map((e: any) => ({ ...e, attendees_count: e.attendees_count ?? 0, is_attending: false }))
+    );
 
     if (userId && events.length > 0) {
       const ids = events.map((e: any) => e.id);
@@ -2781,7 +2793,7 @@ export async function fetchEvents(search = "", userId = ""): Promise<AppEvent[]>
         .eq("user_id", userId)
         .in("event_id", ids);
       const attendingSet = new Set((attending ?? []).map((a: any) => a.event_id));
-      return events.map((e: any) => ({ ...e, is_attending: attendingSet.has(e.id) }));
+      events = events.map((e: any) => ({ ...e, is_attending: attendingSet.has(e.id) }));
     }
 
     return events;
@@ -2795,12 +2807,10 @@ export async function fetchAllEventsAdmin(): Promise<AppEvent[]> {
   try {
     const { data, error } = await supabase
       .from("events")
-      .select(
-        "id, user_id, title, description, start_date, end_date, location_type, location, entry_type, capacity, visibility, is_active, pay_link, created_at, organizer:profiles!events_user_id_fkey(id, full_name, avatar_url, username)"
-      )
+      .select("id, user_id, title, description, start_date, end_date, location_type, location, entry_type, capacity, visibility, is_active, pay_link, created_at")
       .order("start_date", { ascending: true });
     if (error) { console.error("fetchAllEventsAdmin:", error); return []; }
-    return (data ?? []) as any[];
+    return await enrichEventsWithOrganizer(data ?? []);
   } catch (e) {
     console.error("fetchAllEventsAdmin:", e);
     return [];
@@ -2827,13 +2837,13 @@ export async function fetchEventById(id: string): Promise<AppEvent | null> {
       .from("events")
       .select(`
         id, user_id, title, description, start_date, end_date,
-        location_type, location, entry_type, capacity, visibility, is_active, pay_link, created_at,
-        organizer:profiles!events_user_id_fkey(id, full_name, avatar_url, username)
+        location_type, location, entry_type, capacity, visibility, is_active, pay_link, created_at
       `)
       .eq("id", id)
       .single();
     if (error) { console.error("fetchEventById:", error); return null; }
-    return data as any;
+    const [enriched] = await enrichEventsWithOrganizer([data]);
+    return (enriched ?? data) as any;
   } catch (e) {
     console.error("fetchEventById:", e);
     return null;
@@ -3644,7 +3654,6 @@ export interface LeaderboardEntry {
   username: string | null;
   avatar_url: string | null;
   headline: string | null;
-  location: string | null;
   followers_count: number;
   connections_count: number;
   plan: string;
@@ -3654,7 +3663,7 @@ export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
   try {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, full_name, username, avatar_url, position, company, location, followers_count, connections_count, plan")
+      .select("id, full_name, username, avatar_url, position, company, followers_count, connections_count, plan")
       .eq("profile_type", "pessoa")
       .order("followers_count", { ascending: false })
       .limit(20);
