@@ -6,6 +6,7 @@ import {
   Modal,
   Platform,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -14,6 +15,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import * as Notifications from "expo-notifications";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import * as API from "@/services/api";
@@ -87,7 +89,55 @@ export default function WineCellarScreen() {
     const data = await API.fetchWineCellar(user.id);
     setWines(data);
     setLoadingData(false);
+    scheduleDrinkWindowAlerts(data);
   }, [user?.id]);
+
+  const scheduleDrinkWindowAlerts = async (wines: API.WineEntry[]) => {
+    if (Platform.OS === "web") return;
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== "granted") {
+        const { status: newStatus } = await Notifications.requestPermissionsAsync();
+        if (newStatus !== "granted") return;
+      }
+      await Notifications.cancelAllScheduledNotificationsAsync();
+      const today = new Date();
+      for (const wine of wines) {
+        if (!wine.drink_by || wine.status !== "adega") continue;
+        const drinkDate = new Date(wine.drink_by);
+        const diffDays  = Math.ceil((drinkDate.getTime() - today.getTime()) / 86400000);
+        if (diffDays > 0 && diffDays <= 30) {
+          const trigger = new Date(drinkDate);
+          trigger.setHours(10, 0, 0, 0);
+          if (trigger > today) {
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: "🍷 Hora de abrir!",
+                body: `${wine.name} está na janela ideal de consumo — abra hoje!`,
+                data: { wine_id: wine.id },
+              },
+              trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger },
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.log("scheduleDrinkWindowAlerts:", e);
+    }
+  };
+
+  const handleShareWine = async (wine: API.WineEntry) => {
+    const score = wine.rating > 0 ? `\n⭐ Avaliação: ${"★".repeat(wine.rating)}${"☆".repeat(5 - wine.rating)}` : "";
+    const region = wine.region ? `\n📍 ${wine.region}${wine.country ? ", " + wine.country : ""}` : "";
+    const vintage = wine.vintage ? ` (${wine.vintage})` : "";
+    const message =
+      `🍷 ${wine.name}${vintage}${wine.producer ? "\n🏠 " + wine.producer : ""}${region}${score}\n\nVia ibhub — Rede do Vinho\nhttps://ibhub.com.br`;
+    try {
+      await Share.share({ message });
+    } catch (e) {
+      console.log("handleShareWine:", e);
+    }
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -182,6 +232,16 @@ export default function WineCellarScreen() {
     wishlist: wines.filter((w) => w.status === "wishlist").length,
   };
 
+  const cellarValue = wines
+    .filter((w) => w.status === "adega" && w.price != null)
+    .reduce((sum, w) => sum + (w.price ?? 0) * w.qty, 0);
+
+  const winesNearWindow = wines.filter((w) => {
+    if (!w.drink_by || w.status !== "adega") return false;
+    const diff = Math.ceil((new Date(w.drink_by).getTime() - Date.now()) / 86400000);
+    return diff >= 0 && diff <= 30;
+  });
+
   if (loadingData) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background, justifyContent: "center", alignItems: "center" }]}>
@@ -214,7 +274,7 @@ export default function WineCellarScreen() {
         {/* KPI cards */}
         <View style={styles.kpiRow}>
           {[
-            { icon: "wind", label: "Na Adega",   val: counts.adega,    color: colors.gold },
+            { icon: "wind",   label: "Na Adega",   val: counts.adega,    color: colors.gold },
             { icon: "coffee", label: "Consumidos", val: counts.consumido, color: colors.mutedForeground },
             { icon: "star",   label: "Wishlist",   val: counts.wishlist,  color: "#f59e0b" },
           ].map((k) => (
@@ -225,6 +285,31 @@ export default function WineCellarScreen() {
             </View>
           ))}
         </View>
+
+        {/* Cellar value banner */}
+        {cellarValue > 0 && (
+          <View style={[styles.valueBanner, { backgroundColor: colors.gold + "14", borderColor: colors.gold + "40" }]}>
+            <Feather name="trending-up" size={16} color={colors.gold} />
+            <Text style={[styles.valueBannerText, { color: colors.navy }]}>
+              Valor estimado da adega:{" "}
+              <Text style={{ fontWeight: "800", color: colors.gold }}>
+                R$ {cellarValue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </Text>
+            </Text>
+          </View>
+        )}
+
+        {/* Drink window alert */}
+        {winesNearWindow.length > 0 && (
+          <View style={[styles.windowBanner, { backgroundColor: "#fef3c7", borderColor: "#fbbf24" }]}>
+            <Feather name="clock" size={15} color="#b45309" />
+            <Text style={[styles.windowBannerText, { color: "#b45309" }]}>
+              {winesNearWindow.length === 1
+                ? `"${winesNearWindow[0].name}" está na janela ideal de consumo!`
+                : `${winesNearWindow.length} vinhos na janela ideal de consumo — hora de abrir!`}
+            </Text>
+          </View>
+        )}
 
         {/* Search */}
         <View style={styles.searchWrap}>
@@ -280,7 +365,10 @@ export default function WineCellarScreen() {
                       {STATUS_OPTIONS.find((s) => s.key === wine.status)?.label}
                     </Text>
                   </View>
-                  <TouchableOpacity onPress={() => handleDelete(wine.id, wine.name)} style={{ padding: 4, marginLeft: 4 }}>
+                  <TouchableOpacity onPress={() => handleShareWine(wine)} style={{ padding: 4 }}>
+                    <Feather name="share-2" size={15} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleDelete(wine.id, wine.name)} style={{ padding: 4, marginLeft: 2 }}>
                     <Feather name="trash-2" size={15} color={colors.mutedForeground} />
                   </TouchableOpacity>
                 </View>
@@ -409,10 +497,14 @@ const styles = StyleSheet.create({
   headerSub: { fontSize: 12, marginTop: 1 },
   addBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20 },
   addBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
-  kpiRow: { flexDirection: "row", gap: 10, padding: 16 },
+  kpiRow: { flexDirection: "row", gap: 10, padding: 16, paddingBottom: 8 },
   kpiCard: { flex: 1, alignItems: "center", gap: 4, padding: 14, borderRadius: 12, borderWidth: 1 },
   kpiNum: { fontSize: 22, fontWeight: "800" },
   kpiLabel: { fontSize: 11, textAlign: "center" },
+  valueBanner: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 16, marginBottom: 8, borderRadius: 10, borderWidth: 1, padding: 12 },
+  valueBannerText: { fontSize: 13, flex: 1 },
+  windowBanner: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 16, marginBottom: 8, borderRadius: 10, borderWidth: 1, padding: 12 },
+  windowBannerText: { fontSize: 13, flex: 1, fontWeight: "600" },
   searchWrap: { paddingHorizontal: 16, paddingBottom: 8 },
   searchBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
   searchInput: { flex: 1, fontSize: 14 },

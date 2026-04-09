@@ -30,7 +30,7 @@ import * as API from "@/services/api";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Period    = "mes" | "trimestre" | "ano";
-type MercadoTab = "visao" | "apresentacoes";
+type MercadoTab = "visao" | "apresentacoes" | "top";
 
 interface TooltipState {
   visible: boolean;
@@ -474,10 +474,12 @@ export default function MercadoScreen() {
   const colors  = useColors();
   const insets  = useSafeAreaInsets();
 
-  const [period,  setPeriod]  = useState<Period>("ano");
-  const [mainTab, setMainTab] = useState<MercadoTab>("visao");
-  const [data,    setData]    = useState<API.MarketOverview>(FALLBACK.ano);
-  const [loading, setLoading] = useState(false);
+  const [period,      setPeriod]      = useState<Period>("ano");
+  const [mainTab,     setMainTab]     = useState<MercadoTab>("visao");
+  const [data,        setData]        = useState<API.MarketOverview>(FALLBACK.ano);
+  const [loading,     setLoading]     = useState(false);
+  const [leaderboard, setLeaderboard] = useState<API.LeaderboardEntry[]>([]);
+  const [loadingTop,  setLoadingTop]  = useState(false);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
@@ -495,6 +497,18 @@ export default function MercadoScreen() {
   }, []);
 
   useEffect(() => { loadPeriod(period); }, [period, loadPeriod]);
+
+  const loadLeaderboard = useCallback(async () => {
+    if (leaderboard.length > 0) return;
+    setLoadingTop(true);
+    const result = await API.fetchLeaderboard();
+    setLeaderboard(result);
+    setLoadingTop(false);
+  }, [leaderboard.length]);
+
+  useEffect(() => {
+    if (mainTab === "top") loadLeaderboard();
+  }, [mainTab, loadLeaderboard]);
 
   const periods: { key: Period; label: string }[] = [
     { key: "mes",       label: "Último Mês"      },
@@ -532,6 +546,7 @@ export default function MercadoScreen() {
         {([
           { key: "visao",         label: "Visão Geral",   icon: "bar-chart-2" },
           { key: "apresentacoes", label: "Apresentações", icon: "monitor"     },
+          { key: "top",           label: "Top Perfis",    icon: "award"       },
         ] as { key: MercadoTab; label: string; icon: any }[]).map(t => (
           <TouchableOpacity
             key={t.key}
@@ -546,7 +561,55 @@ export default function MercadoScreen() {
         ))}
       </View>
 
-      {mainTab === "apresentacoes" ? (
+      {mainTab === "top" ? (
+        <ScrollView contentContainerStyle={{ paddingBottom: bottomPad, paddingTop: 8 }} showsVerticalScrollIndicator={false}>
+          <Text style={[styles.topTitle, { color: colors.navy }]}>🏆 Ranking Regional</Text>
+          <Text style={[styles.topSub, { color: colors.mutedForeground }]}>Perfis com mais seguidores na ibhub</Text>
+          {loadingTop ? (
+            <ActivityIndicator size="large" color={colors.gold} style={{ marginTop: 40 }} />
+          ) : leaderboard.length === 0 ? (
+            <View style={styles.topEmpty}>
+              <Text style={{ fontSize: 36 }}>🥂</Text>
+              <Text style={[styles.topEmptyText, { color: colors.mutedForeground }]}>Nenhum perfil encontrado ainda.</Text>
+            </View>
+          ) : (
+            leaderboard.map((entry, idx) => (
+              <View key={entry.id} style={[styles.leaderRow, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                <View style={[styles.leaderRank, {
+                  backgroundColor: idx === 0 ? "#f59e0b" : idx === 1 ? "#94a3b8" : idx === 2 ? "#b87333" : colors.secondary,
+                }]}>
+                  <Text style={[styles.leaderRankText, { color: idx < 3 ? "#fff" : colors.navy }]}>
+                    {idx < 3 ? ["🥇","🥈","🥉"][idx] : `${idx + 1}`}
+                  </Text>
+                </View>
+                <View style={styles.leaderAvatar}>
+                  <View style={[styles.leaderAvatarCircle, { backgroundColor: colors.navyLight }]}>
+                    <Text style={{ color: "#fff", fontWeight: "800", fontSize: 16 }}>
+                      {(entry.full_name ?? "?").charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.leaderName, { color: colors.navy }]} numberOfLines={1}>{entry.full_name ?? "Usuário"}</Text>
+                  {entry.headline ? (
+                    <Text style={[styles.leaderHeadline, { color: colors.mutedForeground }]} numberOfLines={1}>{entry.headline}</Text>
+                  ) : null}
+                  {entry.location ? (
+                    <View style={styles.leaderLocRow}>
+                      <Feather name="map-pin" size={10} color={colors.mutedForeground} />
+                      <Text style={[styles.leaderLoc, { color: colors.mutedForeground }]}>{entry.location}</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <View style={styles.leaderStats}>
+                  <Text style={[styles.leaderFollowers, { color: colors.gold }]}>{entry.followers_count}</Text>
+                  <Text style={[styles.leaderFollowersLabel, { color: colors.mutedForeground }]}>seguidores</Text>
+                </View>
+              </View>
+            ))
+          )}
+        </ScrollView>
+      ) : mainTab === "apresentacoes" ? (
         <ApresentacoesView colors={colors} bottomPad={bottomPad} />
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
@@ -746,7 +809,24 @@ const styles = StyleSheet.create({
   mainTabRow:      { flexDirection: "row", padding: 8, gap: 6, borderBottomWidth: 1 },
   mainTabBtn:      { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: "transparent" },
   mainTabBtnActive:{},
-  mainTabText:     { fontSize: 13 },
+  mainTabText:     { fontSize: 12 },
+  // Leaderboard
+  topTitle:         { fontSize: 20, fontWeight: "800", paddingHorizontal: 16, paddingTop: 12 },
+  topSub:           { fontSize: 13, paddingHorizontal: 16, paddingBottom: 12 },
+  topEmpty:         { alignItems: "center", gap: 10, paddingTop: 60 },
+  topEmptyText:     { fontSize: 14 },
+  leaderRow:        { flexDirection: "row", alignItems: "center", gap: 12, marginHorizontal: 16, marginBottom: 10, borderRadius: 12, borderWidth: 1, padding: 14 },
+  leaderRank:       { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  leaderRankText:   { fontSize: 14, fontWeight: "800" },
+  leaderAvatar:     {},
+  leaderAvatarCircle: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  leaderName:       { fontSize: 14, fontWeight: "700" },
+  leaderHeadline:   { fontSize: 12, marginTop: 1 },
+  leaderLocRow:     { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
+  leaderLoc:        { fontSize: 11 },
+  leaderStats:      { alignItems: "flex-end" },
+  leaderFollowers:  { fontSize: 18, fontWeight: "800" },
+  leaderFollowersLabel: { fontSize: 10 },
 
   periodRow:       { flexDirection: "row", paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
   periodBtn:       { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 20 },

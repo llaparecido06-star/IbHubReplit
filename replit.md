@@ -103,10 +103,35 @@ Criar na pasta `components/` em vez de repetir código:
 ## Aba Mercado — Detalhes
 
 - **Visão Geral**: KPIs por período (Último Mês / Trimestre YTD / Último Ano), gráfico de área Exportações vs Importações, gráfico de barras Produção Nacional, Tendências, Regiões Produtoras, Variedades em Destaque
-- **Apresentações**: catálogo de PDFs/PPTs subidos por admin. Estado vazio por padrão. Admin path: `/admin/presentations` (a implementar)
+- **Apresentações**: catálogo de PDFs/PPTs subidos por admin. Estado vazio por padrão.
+- **Top Perfis** (novo): ranking dos perfis com mais seguidores, pódio com medalhas (🥇🥈🥉)
 - Dados de mercado são mock — integração real via Supabase a implementar
 
 ## Componentes de Gráficos (react-native-svg)
 
 - `AreaChart` — embutido em `network.tsx`, exportações (gold) vs importações (vermelho)
 - `BarChart` — embutido em `network.tsx`, produção trimestral (gold)
+
+## Features de Engajamento (v16)
+
+Implementadas e integradas ao Supabase:
+
+| Feature | Tela | Detalhes |
+|---|---|---|
+| Visualizações de perfil | `profile.tsx` | Banner "X pessoas viram seu perfil esta semana" via `profile_views` table + `fetchProfileViewsThisWeek` |
+| Barra de completude do perfil | `profile.tsx` | Calcula 0-100% com base em 8 campos; clica para editar; dica adaptativa |
+| QR code do perfil | `profile.tsx` | Modal com QR (react-native-qrcode-svg), botão compartilhar link |
+| Conquistas / Badges | `profile.tsx` | 10 badges automáticos por posts, seguidores, conexões, adega, completude |
+| Código de convite | `profile.tsx` | `ensureReferralCode()` — gera código único; toque para compartilhar via Share API |
+| Registrar view de perfil | `profile/[id].tsx` | Chama `recordProfileView()` ao abrir perfil alheio |
+| Conexões em comum | `profile/[id].tsx` | `fetchMutualConnections()` — mostra avatares + texto abaixo do perfil público |
+| Leaderboard regional | `network.tsx` | Aba "Top Perfis" com ranking por seguidores |
+| Valor estimado da adega | `wine-cellar.tsx` | Calcula `qty × price` para vinhos "adega" com preço |
+| Alerta janela de consumo | `wine-cellar.tsx` | `drink_by` ≤ 30 dias → banner amarelo + notificação agendada (`expo-notifications`) |
+| Compartilhar vinho | `wine-cellar.tsx` | Botão share-2 em cada card → Share API com detalhes do vinho |
+| Nota de degustação | `create-post.tsx` | Modo "Degustação" no criar post: vinho, produtor, safra, pontuação 0-100 (12 valores), aroma, sabor, harmonização, notas |
+
+### Migração Supabase (v16)
+- Arquivo: `supabase/migrations_v16_engagement.sql`
+- Tabela `profile_views (viewer_id, profile_id, viewed_at, unique daily)` + coluna `profiles.referral_code`
+- **Precisa ser executada no Supabase SQL Editor**

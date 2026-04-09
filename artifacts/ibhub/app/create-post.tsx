@@ -16,27 +16,60 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Avatar } from "@/components/ui/Avatar";
-import { Badge } from "@/components/ui/Badge";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { createPost, uploadPostImage } from "@/services/api";
 
 const HASHTAG_SUGGESTIONS = [
   "vinho", "sommelier", "enologia", "degustação",
   "harmonização", "vinícola", "enoturismo", "wset",
 ];
 
+type PostMode = "normal" | "degustacao";
+
+const SCORE_LABELS: Record<string, string> = {
+  "": "",
+  "50": "50 — Inaceitável",
+  "60": "60 — Abaixo da média",
+  "70": "70 — Mediano",
+  "75": "75 — Aceitável",
+  "80": "80 — Bom",
+  "85": "85 — Muito Bom",
+  "88": "88 — Excelente",
+  "90": "90 — Notável",
+  "92": "92 — Excepcional",
+  "95": "95 — Extraordinário",
+  "98": "98 — Lendário",
+  "100": "100 — Perfeito",
+};
+const SCORE_OPTIONS = ["", "50", "60", "70", "75", "80", "85", "88", "90", "92", "95", "98", "100"];
+
 export default function CreatePostScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const insets = useSafeAreaInsets();
 
-  const [content, setContent] = useState("");
-  const [imageUris, setImageUris] = useState<string[]>([]);
-  const [location, setLocation] = useState("");
+  const [mode, setMode] = useState<PostMode>("normal");
+
+  // Normal post state
+  const [content, setContent]               = useState("");
+  const [imageUris, setImageUris]           = useState<string[]>([]);
+  const [location, setLocation]             = useState("");
   const [showLocationInput, setShowLocationInput] = useState(false);
-  const [selectedHashtags, setSelectedHashtags] = useState<string[]>([]);
-  const [posting, setPosting] = useState(false);
+  const [selectedHashtags, setSelectedHashtags]   = useState<string[]>([]);
+  const [posting, setPosting]               = useState(false);
+
+  // Tasting note state
+  const [tastingWine, setTastingWine]   = useState("");
+  const [tastingProducer, setTastingProducer] = useState("");
+  const [tastingVintage, setTastingVintage]   = useState("");
+  const [tastingScore, setTastingScore]   = useState("");
+  const [tastingAroma, setTastingAroma]   = useState("");
+  const [tastingFlavor, setTastingFlavor] = useState("");
+  const [tastingPair, setTastingPair]     = useState("");
+  const [tastingNotes, setTastingNotes]   = useState("");
+  const [showScorePicker, setShowScorePicker] = useState(false);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -65,16 +98,61 @@ export default function CreatePostScreen() {
     );
   };
 
-  const handlePost = async () => {
-    if (!content.trim()) return;
-    setPosting(true);
-    await new Promise((r) => setTimeout(r, 800));
-    router.back();
+  const buildTastingContent = () => {
+    const lines: string[] = [];
+    lines.push(`🍷 Degustação: ${tastingWine.trim()}`);
+    if (tastingProducer.trim()) lines.push(`🏠 Produtor: ${tastingProducer.trim()}`);
+    if (tastingVintage.trim())  lines.push(`📅 Safra: ${tastingVintage.trim()}`);
+    if (tastingScore)           lines.push(`⭐ Pontuação: ${tastingScore}/100`);
+    if (tastingAroma.trim())    lines.push(`👃 Aroma: ${tastingAroma.trim()}`);
+    if (tastingFlavor.trim())   lines.push(`👅 Sabor: ${tastingFlavor.trim()}`);
+    if (tastingPair.trim())     lines.push(`🍽️ Harmonização: ${tastingPair.trim()}`);
+    if (tastingNotes.trim())    lines.push(`📝 Notas: ${tastingNotes.trim()}`);
+    return lines.join("\n");
   };
+
+  const handlePost = async () => {
+    if (!user?.id) return;
+    let finalContent = "";
+    if (mode === "normal") {
+      finalContent = content.trim();
+    } else {
+      if (!tastingWine.trim()) return;
+      finalContent = buildTastingContent();
+    }
+    if (!finalContent) return;
+    setPosting(true);
+    try {
+      let uploadedUrls: string[] = [];
+      if (imageUris.length > 0 && mode === "normal") {
+        const uploads = await Promise.all(imageUris.map(uri => uploadPostImage(uri, user.id)));
+        uploadedUrls = uploads.filter(Boolean) as string[];
+      }
+      const hashtags = mode === "degustacao"
+        ? ["degustação", "vinho", ...(selectedHashtags)]
+        : selectedHashtags;
+      await createPost({
+        user_id: user.id,
+        content: finalContent,
+        image_url: uploadedUrls[0] ?? null,
+        image_urls: uploadedUrls.length > 0 ? uploadedUrls : null,
+        location: location.trim() || null,
+        hashtags: hashtags.length > 0 ? hashtags : undefined,
+      });
+      router.back();
+    } catch (e) {
+      console.error("handlePost:", e);
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  const canPost = mode === "normal"
+    ? content.trim().length > 0 && !posting
+    : tastingWine.trim().length > 0 && !posting;
 
   const charCount = content.length;
   const maxChars = 1000;
-  const canPost = content.trim().length > 0 && !posting;
 
   return (
     <KeyboardAvoidingView
@@ -97,6 +175,28 @@ export default function CreatePostScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Mode selector */}
+      <View style={[styles.modeRow, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
+        <TouchableOpacity
+          style={[styles.modeBtn, mode === "normal" && { borderBottomColor: colors.gold, borderBottomWidth: 2 }]}
+          onPress={() => setMode("normal")}
+        >
+          <Feather name="edit-3" size={14} color={mode === "normal" ? colors.gold : colors.mutedForeground} />
+          <Text style={[styles.modeBtnText, { color: mode === "normal" ? colors.gold : colors.mutedForeground }]}>
+            Publicação
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.modeBtn, mode === "degustacao" && { borderBottomColor: colors.gold, borderBottomWidth: 2 }]}
+          onPress={() => setMode("degustacao")}
+        >
+          <Text style={{ fontSize: 14 }}>🍷</Text>
+          <Text style={[styles.modeBtnText, { color: mode === "degustacao" ? colors.gold : colors.mutedForeground }]}>
+            Degustação
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView style={styles.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={styles.authorRow}>
           <Avatar uri={profile?.avatar_url} name={profile?.full_name} size={44} />
@@ -112,103 +212,208 @@ export default function CreatePostScreen() {
           </View>
         </View>
 
-        <TextInput
-          style={[styles.textInput, { color: colors.foreground }]}
-          placeholder="Compartilhe algo sobre vinho, eventos, oportunidades..."
-          placeholderTextColor={colors.mutedForeground}
-          multiline
-          value={content}
-          onChangeText={setContent}
-          maxLength={maxChars}
-          autoFocus
-        />
-
-        {showLocationInput && (
-          <View style={[styles.locationRow, { borderColor: colors.border, backgroundColor: colors.secondary }]}>
-            <Feather name="map-pin" size={15} color={colors.gold} />
+        {/* ── Normal post ── */}
+        {mode === "normal" && (
+          <>
             <TextInput
-              style={[styles.locationInput, { color: colors.foreground }]}
-              placeholder="Ex: Serra Gaúcha, Rio Grande do Sul"
+              style={[styles.textInput, { color: colors.foreground }]}
+              placeholder="Compartilhe algo sobre vinho, eventos, oportunidades..."
               placeholderTextColor={colors.mutedForeground}
-              value={location}
-              onChangeText={setLocation}
-              returnKeyType="done"
-              maxLength={80}
+              multiline
+              value={content}
+              onChangeText={setContent}
+              maxLength={maxChars}
+              autoFocus
             />
-            {location.length > 0 && (
-              <TouchableOpacity onPress={() => setLocation("")}>
-                <Feather name="x" size={15} color={colors.mutedForeground} />
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
 
-        {imageUris.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageRow} contentContainerStyle={{ gap: 8 }}>
-            {imageUris.map((uri, idx) => (
-              <View key={uri} style={{ position: "relative" }}>
-                <Image source={{ uri }} style={[styles.thumbImg, { borderRadius: colors.radius }]} contentFit="cover" />
-                <TouchableOpacity
-                  style={styles.removeThumb}
-                  onPress={() => removeImage(idx)}
-                >
-                  <Feather name="x" size={12} color="#ffffff" />
-                </TouchableOpacity>
+            {showLocationInput && (
+              <View style={[styles.locationRow, { borderColor: colors.border, backgroundColor: colors.secondary }]}>
+                <Feather name="map-pin" size={15} color={colors.gold} />
+                <TextInput
+                  style={[styles.locationInput, { color: colors.foreground }]}
+                  placeholder="Ex: Serra Gaúcha, Rio Grande do Sul"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={location}
+                  onChangeText={setLocation}
+                  returnKeyType="done"
+                  maxLength={80}
+                />
+                {location.length > 0 && (
+                  <TouchableOpacity onPress={() => setLocation("")}>
+                    <Feather name="x" size={15} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                )}
               </View>
-            ))}
-            {imageUris.length < 5 && (
-              <TouchableOpacity style={[styles.addMoreBtn, { borderColor: colors.border }]} onPress={handleAddImage}>
-                <Feather name="plus" size={22} color={colors.mutedForeground} />
-              </TouchableOpacity>
             )}
-          </ScrollView>
+
+            {imageUris.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageRow} contentContainerStyle={{ gap: 8 }}>
+                {imageUris.map((uri, idx) => (
+                  <View key={uri} style={{ position: "relative" }}>
+                    <Image source={{ uri }} style={[styles.thumbImg, { borderRadius: colors.radius }]} contentFit="cover" />
+                    <TouchableOpacity style={styles.removeThumb} onPress={() => removeImage(idx)}>
+                      <Feather name="x" size={12} color="#ffffff" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                {imageUris.length < 5 && (
+                  <TouchableOpacity style={[styles.addMoreBtn, { borderColor: colors.border }]} onPress={handleAddImage}>
+                    <Feather name="plus" size={22} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                )}
+              </ScrollView>
+            )}
+
+            <View style={styles.hashtagSection}>
+              <Text style={[styles.hashtagLabel, { color: colors.mutedForeground }]}>Hashtags populares</Text>
+              <View style={styles.hashtagChips}>
+                {HASHTAG_SUGGESTIONS.map((tag) => (
+                  <Pressable
+                    key={tag}
+                    style={[
+                      styles.chip,
+                      {
+                        backgroundColor: selectedHashtags.includes(tag) ? colors.gold + "20" : colors.secondary,
+                        borderColor: selectedHashtags.includes(tag) ? colors.gold : "transparent",
+                        borderRadius: 20,
+                        borderWidth: 1.5,
+                      },
+                    ]}
+                    onPress={() => toggleHashtag(tag)}
+                  >
+                    <Text style={[styles.chipText, { color: selectedHashtags.includes(tag) ? colors.gold : colors.foreground }]}>
+                      #{tag}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          </>
         )}
 
-        <View style={styles.hashtagSection}>
-          <Text style={[styles.hashtagLabel, { color: colors.mutedForeground }]}>Hashtags populares</Text>
-          <View style={styles.hashtagChips}>
-            {HASHTAG_SUGGESTIONS.map((tag) => (
-              <Pressable
-                key={tag}
-                style={[
-                  styles.chip,
-                  {
-                    backgroundColor: selectedHashtags.includes(tag) ? colors.gold + "20" : colors.secondary,
-                    borderColor: selectedHashtags.includes(tag) ? colors.gold : "transparent",
-                    borderRadius: 20,
-                    borderWidth: 1.5,
-                  },
-                ]}
-                onPress={() => toggleHashtag(tag)}
-              >
-                <Text style={[styles.chipText, { color: selectedHashtags.includes(tag) ? colors.gold : colors.foreground }]}>
-                  #{tag}
+        {/* ── Tasting note ── */}
+        {mode === "degustacao" && (
+          <View style={styles.tastingForm}>
+            <View style={[styles.tastingHero, { backgroundColor: colors.gold + "10", borderColor: colors.gold + "30", borderWidth: 1, borderRadius: 12 }]}>
+              <Text style={{ fontSize: 32 }}>🍷</Text>
+              <View>
+                <Text style={[styles.tastingHeroTitle, { color: colors.navy }]}>Nota de Degustação</Text>
+                <Text style={[styles.tastingHeroSub, { color: colors.mutedForeground }]}>Compartilhe sua avaliação profissional</Text>
+              </View>
+            </View>
+
+            <TextInput
+              style={[styles.tastingInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: "#fff" }]}
+              placeholder="Nome do vinho *"
+              placeholderTextColor={colors.mutedForeground}
+              value={tastingWine}
+              onChangeText={setTastingWine}
+              autoFocus
+            />
+            <View style={styles.tastingRow}>
+              <TextInput
+                style={[styles.tastingInput, { flex: 1, borderColor: colors.border, color: colors.foreground, backgroundColor: "#fff" }]}
+                placeholder="Produtor"
+                placeholderTextColor={colors.mutedForeground}
+                value={tastingProducer}
+                onChangeText={setTastingProducer}
+              />
+              <TextInput
+                style={[styles.tastingInput, { width: 80, borderColor: colors.border, color: colors.foreground, backgroundColor: "#fff" }]}
+                placeholder="Safra"
+                placeholderTextColor={colors.mutedForeground}
+                value={tastingVintage}
+                onChangeText={setTastingVintage}
+                keyboardType="numeric"
+              />
+            </View>
+
+            {/* Score picker */}
+            <TouchableOpacity
+              style={[styles.scorePicker, { borderColor: tastingScore ? colors.gold : colors.border, backgroundColor: "#fff" }]}
+              onPress={() => setShowScorePicker(v => !v)}
+            >
+              <Text style={{ fontSize: 22 }}>⭐</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.scorePickerLabel, { color: colors.mutedForeground }]}>Pontuação (0–100)</Text>
+                <Text style={[styles.scorePickerValue, { color: tastingScore ? colors.gold : colors.mutedForeground }]}>
+                  {tastingScore ? `${tastingScore}/100 — ${SCORE_LABELS[tastingScore] ?? tastingScore}` : "Selecionar pontuação"}
                 </Text>
-              </Pressable>
-            ))}
+              </View>
+              <Feather name={showScorePicker ? "chevron-up" : "chevron-down"} size={18} color={colors.mutedForeground} />
+            </TouchableOpacity>
+            {showScorePicker && (
+              <View style={[styles.scoreDropdown, { borderColor: colors.border, backgroundColor: "#fff" }]}>
+                {SCORE_OPTIONS.map(s => (
+                  <TouchableOpacity
+                    key={s || "none"}
+                    style={[
+                      styles.scoreOption,
+                      { borderBottomColor: colors.border },
+                      tastingScore === s && { backgroundColor: colors.gold + "12" },
+                    ]}
+                    onPress={() => { setTastingScore(s); setShowScorePicker(false); }}
+                  >
+                    <Text style={[styles.scoreOptionText, { color: tastingScore === s ? colors.gold : colors.foreground }]}>
+                      {s ? `${s}/100 — ${SCORE_LABELS[s]}` : "Sem pontuação"}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            <TextInput
+              style={[styles.tastingInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: "#fff" }]}
+              placeholder="👃 Aroma (ex: frutas vermelhas, especiarias...)"
+              placeholderTextColor={colors.mutedForeground}
+              value={tastingAroma}
+              onChangeText={setTastingAroma}
+            />
+            <TextInput
+              style={[styles.tastingInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: "#fff" }]}
+              placeholder="👅 Sabor (ex: taninos sedosos, acidez equilibrada...)"
+              placeholderTextColor={colors.mutedForeground}
+              value={tastingFlavor}
+              onChangeText={setTastingFlavor}
+            />
+            <TextInput
+              style={[styles.tastingInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: "#fff" }]}
+              placeholder="🍽️ Harmonização sugerida"
+              placeholderTextColor={colors.mutedForeground}
+              value={tastingPair}
+              onChangeText={setTastingPair}
+            />
+            <TextInput
+              style={[styles.tastingInput, styles.tastingTextarea, { borderColor: colors.border, color: colors.foreground, backgroundColor: "#fff" }]}
+              placeholder="📝 Notas adicionais sobre o vinho..."
+              placeholderTextColor={colors.mutedForeground}
+              value={tastingNotes}
+              onChangeText={setTastingNotes}
+              multiline
+              textAlignVertical="top"
+            />
           </View>
-        </View>
+        )}
       </ScrollView>
 
-      <View style={[styles.toolbar, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom + 8 }]}>
-        <Text style={[styles.charCount, { color: charCount > maxChars * 0.9 ? colors.destructive : colors.mutedForeground }]}>
-          {charCount}/{maxChars}
-        </Text>
-        <View style={styles.toolbarActions}>
-          <TouchableOpacity onPress={handleAddImage} style={styles.toolbarBtn}>
-            <Feather name="image" size={22} color={imageUris.length > 0 ? colors.gold : colors.foreground} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.toolbarBtn} onPress={() => setShowLocationInput(v => !v)}>
-            <Feather name="map-pin" size={22} color={location.trim() ? colors.gold : colors.foreground} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.toolbarBtn}>
-            <Feather name="bar-chart-2" size={22} color={colors.foreground} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.toolbarBtn}>
-            <Feather name="hash" size={22} color={colors.foreground} />
-          </TouchableOpacity>
+      {mode === "normal" && (
+        <View style={[styles.toolbar, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom + 8 }]}>
+          <Text style={[styles.charCount, { color: charCount > maxChars * 0.9 ? colors.destructive : colors.mutedForeground }]}>
+            {charCount}/{maxChars}
+          </Text>
+          <View style={styles.toolbarActions}>
+            <TouchableOpacity onPress={handleAddImage} style={styles.toolbarBtn}>
+              <Feather name="image" size={22} color={imageUris.length > 0 ? colors.gold : colors.foreground} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.toolbarBtn} onPress={() => setShowLocationInput(v => !v)}>
+              <Feather name="map-pin" size={22} color={location.trim() ? colors.gold : colors.foreground} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.toolbarBtn}>
+              <Feather name="bar-chart-2" size={22} color={colors.foreground} />
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -218,6 +423,9 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1 },
   headerTitle: { fontSize: 16, fontWeight: "700" },
   postBtn: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
+  modeRow: { flexDirection: "row", borderBottomWidth: 1 },
+  modeBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12 },
+  modeBtnText: { fontSize: 13, fontWeight: "700" },
   body: { flex: 1, paddingHorizontal: 16 },
   authorRow: { flexDirection: "row", alignItems: "flex-start", gap: 12, paddingVertical: 14 },
   authorInfo: { gap: 5 },
@@ -239,4 +447,18 @@ const styles = StyleSheet.create({
   charCount: { fontSize: 12, fontWeight: "500" },
   toolbarActions: { flexDirection: "row", gap: 4 },
   toolbarBtn: { padding: 8 },
+  // Tasting note styles
+  tastingForm: { gap: 12, paddingBottom: 40 },
+  tastingHero: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
+  tastingHeroTitle: { fontSize: 16, fontWeight: "800" },
+  tastingHeroSub: { fontSize: 12, marginTop: 2 },
+  tastingInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 },
+  tastingRow: { flexDirection: "row", gap: 10 },
+  tastingTextarea: { height: 80 },
+  scorePicker: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1.5, borderRadius: 10, padding: 14 },
+  scorePickerLabel: { fontSize: 11, marginBottom: 2 },
+  scorePickerValue: { fontSize: 14, fontWeight: "600" },
+  scoreDropdown: { borderWidth: 1, borderRadius: 10, overflow: "hidden", marginTop: -6 },
+  scoreOption: { paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 1 },
+  scoreOptionText: { fontSize: 14 },
 });

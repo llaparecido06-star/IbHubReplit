@@ -3600,3 +3600,114 @@ export async function fetchStoryLikesCount(): Promise<number> {
     return 0;
   }
 }
+
+// ─── ENGAGEMENT ───────────────────────────────────────────────────────────────
+
+export async function recordProfileView(viewerId: string, profileId: string): Promise<void> {
+  if (viewerId === profileId) return;
+  try {
+    await supabase.from("profile_views").upsert(
+      { viewer_id: viewerId, profile_id: profileId, viewed_at: new Date().toISOString().split("T")[0] },
+      { onConflict: "viewer_id,profile_id,viewed_at" }
+    );
+  } catch (e) {
+    console.error("recordProfileView:", e);
+  }
+}
+
+export async function fetchProfileViewsThisWeek(profileId: string): Promise<number> {
+  try {
+    const since = new Date();
+    since.setDate(since.getDate() - 7);
+    const { count, error } = await supabase
+      .from("profile_views")
+      .select("id", { count: "exact", head: true })
+      .eq("profile_id", profileId)
+      .gte("viewed_at", since.toISOString().split("T")[0]);
+    if (error) { console.error("fetchProfileViewsThisWeek:", error); return 0; }
+    return count ?? 0;
+  } catch (e) {
+    console.error("fetchProfileViewsThisWeek:", e);
+    return 0;
+  }
+}
+
+export interface LeaderboardEntry {
+  id: string;
+  full_name: string;
+  username: string;
+  avatar_url: string | null;
+  headline: string | null;
+  followers_count: number;
+  connections_count: number;
+  plan: string;
+  areas_of_expertise: string[];
+}
+
+export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, full_name, username, avatar_url, position, company, followers_count, connections_count, plan, areas_of_expertise")
+      .eq("profile_type", "pessoa")
+      .order("followers_count", { ascending: false })
+      .limit(20);
+    if (error) { console.error("fetchLeaderboard:", error); return []; }
+    return (data ?? []).map((p: any) => ({
+      ...p,
+      headline: [p.position, p.company].filter(Boolean).join(" · ") || null,
+    })) as LeaderboardEntry[];
+  } catch (e) {
+    console.error("fetchLeaderboard:", e);
+    return [];
+  }
+}
+
+export async function fetchMutualConnections(
+  userId1: string,
+  userId2: string
+): Promise<{ id: string; full_name: string; avatar_url: string | null }[]> {
+  try {
+    const [res1, res2] = await Promise.all([
+      supabase.from("connections").select("requester_id,receiver_id").or(`requester_id.eq.${userId1},receiver_id.eq.${userId1}`).eq("status", "connected"),
+      supabase.from("connections").select("requester_id,receiver_id").or(`requester_id.eq.${userId2},receiver_id.eq.${userId2}`).eq("status", "connected"),
+    ]);
+    const ids1 = new Set<string>();
+    for (const c of res1.data ?? []) {
+      if (c.requester_id !== userId1) ids1.add(c.requester_id);
+      if (c.receiver_id  !== userId1) ids1.add(c.receiver_id);
+    }
+    const mutualIds: string[] = [];
+    for (const c of res2.data ?? []) {
+      const other = c.requester_id !== userId2 ? c.requester_id : c.receiver_id;
+      if (ids1.has(other) && other !== userId1 && other !== userId2) mutualIds.push(other);
+    }
+    if (mutualIds.length === 0) return [];
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, full_name, avatar_url")
+      .in("id", mutualIds.slice(0, 5));
+    if (error) return [];
+    return (data ?? []) as { id: string; full_name: string; avatar_url: string | null }[];
+  } catch (e) {
+    console.error("fetchMutualConnections:", e);
+    return [];
+  }
+}
+
+export async function ensureReferralCode(userId: string): Promise<string> {
+  try {
+    const { data: existing } = await supabase
+      .from("profiles")
+      .select("referral_code")
+      .eq("id", userId)
+      .single();
+    if (existing?.referral_code) return existing.referral_code;
+    const code = "IB" + Math.random().toString(36).substring(2, 8).toUpperCase();
+    await supabase.from("profiles").update({ referral_code: code }).eq("id", userId);
+    return code;
+  } catch (e) {
+    console.error("ensureReferralCode:", e);
+    return "";
+  }
+}

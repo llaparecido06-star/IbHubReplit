@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -8,6 +8,7 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -16,6 +17,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import QRCode from "react-native-qrcode-svg";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
@@ -38,6 +40,8 @@ import {
   deletePost,
   toggleFollow,
   checkIsFollowing,
+  fetchProfileViewsThisWeek,
+  ensureReferralCode,
 } from "@/services/api";
 import { Post } from "@/components/feed/PostCard";
 import EmpresaDashboard from "@/components/EmpresaDashboard";
@@ -70,6 +74,11 @@ export default function ProfileScreen() {
   const [followingSet,   setFollowingSet]   = useState<Set<string>>(new Set());
   const [togglingFollow, setTogglingFollow] = useState<string | null>(null);
 
+  // Engagement state
+  const [profileViews,  setProfileViews]  = useState(0);
+  const [showQrModal,   setShowQrModal]   = useState(false);
+  const [referralCode,  setReferralCode]  = useState<string | null>(null);
+
   const isCompany = profile?.profile_type === "empresa";
   const name      = profile?.full_name ?? profile?.username ?? "Usuário";
   const username  = profile?.username  ?? "";
@@ -101,10 +110,52 @@ export default function ProfileScreen() {
     setRefreshing(false);
   }, [user?.id, isCompany]);
 
+  const loadEngagement = useCallback(async () => {
+    if (!user?.id) return;
+    const [views, refCode] = await Promise.all([
+      fetchProfileViewsThisWeek(user.id),
+      ensureReferralCode(user.id),
+    ]);
+    setProfileViews(views);
+    setReferralCode(refCode);
+  }, [user?.id]);
+
   useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { loadEngagement(); }, [loadEngagement]);
   // ─────────────────────────────────────────────────────────────────────────
 
-  const onRefresh = () => { setRefreshing(true); loadData(); };
+  const onRefresh = () => { setRefreshing(true); loadData(); loadEngagement(); };
+
+  // Profile completion (0-100)
+  const computeCompletion = () => {
+    if (!profile) return 0;
+    const fields = [
+      !!profile.full_name,
+      !!profile.username,
+      !!profile.headline,
+      !!profile.bio,
+      !!profile.avatar_url,
+      !!profile.location,
+      !!(profile.areas_of_expertise ?? []).length,
+      !!profile.company || !!profile.position,
+    ];
+    return Math.round((fields.filter(Boolean).length / fields.length) * 100);
+  };
+  const completion = computeCompletion();
+
+  // Badges
+  const badges = [
+    posts.length >= 1    && { icon: "✍️", label: "Primeiro Post" },
+    posts.length >= 10   && { icon: "📝", label: "Publicador Ativo" },
+    (profile?.followers_count ?? 0) >= 10  && { icon: "🌟", label: "10 Seguidores" },
+    (profile?.followers_count ?? 0) >= 100 && { icon: "🏆", label: "100 Seguidores" },
+    (profile?.connections_count ?? 0) >= 5 && { icon: "🤝", label: "Bem Conectado" },
+    wineEntries.length >= 5 && { icon: "🍷", label: "Enólogo" },
+    wineEntries.length >= 20 && { icon: "🥂", label: "Colecionador" },
+    completion >= 100 && { icon: "💎", label: "Perfil Completo" },
+    profileViews >= 10 && { icon: "👁️", label: "Destaque da Semana" },
+    !!referralCode && { icon: "🎁", label: "Embaixador" },
+  ].filter(Boolean) as { icon: string; label: string }[];
 
   const handleDeletePost = (id: string) => {
     setShowPostMenu(null);
@@ -217,6 +268,40 @@ export default function ProfileScreen() {
   }
 
   return (
+    <>
+    {/* QR Code Modal */}
+    <Modal visible={showQrModal} transparent animationType="fade" onRequestClose={() => setShowQrModal(false)}>
+      <Pressable style={styles.qrOverlay} onPress={() => setShowQrModal(false)}>
+        <Pressable style={[styles.qrCard, { backgroundColor: "#fff" }]} onPress={() => {}}>
+          <Text style={[styles.qrTitle, { color: colors.navy }]}>Meu QR Code</Text>
+          <Text style={[styles.qrSub, { color: colors.mutedForeground }]}>Mostre para conectar rapidamente</Text>
+          <View style={styles.qrBox}>
+            <QRCode
+              value={`https://ibhub.com.br/profile/${user?.id ?? "me"}`}
+              size={200}
+              color={colors.navy}
+              backgroundColor="#ffffff"
+            />
+          </View>
+          <Text style={[styles.qrName, { color: colors.navy }]}>{name}</Text>
+          {username ? <Text style={[styles.qrUsername, { color: colors.mutedForeground }]}>@{username}</Text> : null}
+          <TouchableOpacity
+            style={[styles.qrShareBtn, { backgroundColor: colors.gold }]}
+            onPress={async () => {
+              setShowQrModal(false);
+              await Share.share({ message: `Conecte-se comigo na ibhub!\nhttps://ibhub.com.br/profile/${user?.id ?? "me"}` });
+            }}
+          >
+            <Feather name="share-2" size={16} color="#fff" />
+            <Text style={styles.qrShareBtnText}>Compartilhar perfil</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={{ marginTop: 8 }} onPress={() => setShowQrModal(false)}>
+            <Text style={{ color: colors.mutedForeground, fontSize: 14 }}>Fechar</Text>
+          </TouchableOpacity>
+        </Pressable>
+      </Pressable>
+    </Modal>
+
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={{ paddingBottom: bottomPad }}
@@ -289,6 +374,39 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Profile views counter */}
+        {profileViews > 0 && (
+          <View style={[styles.viewsBanner, { backgroundColor: colors.gold + "10", borderColor: colors.gold + "30" }]}>
+            <Feather name="eye" size={14} color={colors.gold} />
+            <Text style={[styles.viewsBannerText, { color: colors.navy }]}>
+              <Text style={{ fontWeight: "800", color: colors.gold }}>{profileViews}</Text>
+              {" "}pessoa{profileViews !== 1 ? "s" : ""} visualizaram seu perfil esta semana
+            </Text>
+          </View>
+        )}
+
+        {/* Profile completion bar */}
+        {completion < 100 && (
+          <TouchableOpacity
+            style={[styles.completionCard, { backgroundColor: "#f8fafc", borderColor: colors.border }]}
+            onPress={() => router.push("/edit-profile" as any)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.completionHeader}>
+              <Text style={[styles.completionTitle, { color: colors.navy }]}>Completar perfil — {completion}%</Text>
+              <Feather name="chevron-right" size={15} color={colors.gold} />
+            </View>
+            <View style={[styles.completionTrack, { backgroundColor: colors.border }]}>
+              <View style={[styles.completionFill, { width: `${completion}%` as any, backgroundColor: colors.gold }]} />
+            </View>
+            <Text style={[styles.completionHint, { color: colors.mutedForeground }]}>
+              {completion < 50 ? "Adicione bio, foto e localização para ter mais visibilidade." :
+               completion < 80 ? "Quase lá! Adicione áreas de expertise e empresa." :
+               "Adicione uma informação final para completar 100%."}
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {/* Tags */}
         {(profile?.areas_of_expertise ?? []).length > 0 ? (
           <View style={styles.tags}>
@@ -315,7 +433,43 @@ export default function ProfileScreen() {
             <Feather name="users" size={15} color={colors.navy} />
             <Text style={[styles.btnSecondaryText, { color: colors.navy }]}>Conexões</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.btnSecondary, { borderColor: colors.gold, paddingHorizontal: 14 }]}
+            onPress={() => setShowQrModal(true)}
+          >
+            <Feather name="maximize" size={15} color={colors.gold} />
+          </TouchableOpacity>
         </View>
+
+        {/* Referral code */}
+        {referralCode && (
+          <TouchableOpacity
+            style={[styles.referralCard, { backgroundColor: colors.navy + "08", borderColor: colors.navy + "20" }]}
+            activeOpacity={0.7}
+            onPress={() => Share.share({ message: `Junte-se à ibhub — Rede do Vinho com meu convite: ${referralCode}\nhttps://ibhub.com.br` })}
+          >
+            <View>
+              <Text style={[styles.referralTitle, { color: colors.navy }]}>Seu código de convite</Text>
+              <Text style={[styles.referralCode, { color: colors.gold }]}>{referralCode}</Text>
+            </View>
+            <Feather name="share-2" size={18} color={colors.gold} />
+          </TouchableOpacity>
+        )}
+
+        {/* Badges */}
+        {badges.length > 0 && (
+          <View style={styles.badgesSection}>
+            <Text style={[styles.badgesTitle, { color: colors.navy }]}>Conquistas</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {badges.map((b) => (
+                <View key={b.label} style={[styles.badgeChip, { backgroundColor: colors.gold + "14", borderColor: colors.gold + "30" }]}>
+                  <Text style={{ fontSize: 16 }}>{b.icon}</Text>
+                  <Text style={[styles.badgeLabel, { color: colors.navy }]}>{b.label}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         {/* Company page card */}
         {companyPages.length > 0 ? (
@@ -720,6 +874,7 @@ export default function ProfileScreen() {
         </Pressable>
       </Modal>
     </ScrollView>
+    </>
   );
 }
 
@@ -746,6 +901,30 @@ const styles = StyleSheet.create({
   tags:               { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tag:                { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },
   tagText:            { fontSize: 13 },
+  viewsBanner:        { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 10, padding: 12 },
+  viewsBannerText:    { fontSize: 13, flex: 1 },
+  completionCard:     { borderWidth: 1, borderRadius: 12, padding: 14, gap: 8 },
+  completionHeader:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  completionTitle:    { fontSize: 14, fontWeight: "700" },
+  completionTrack:    { height: 6, borderRadius: 3, overflow: "hidden" },
+  completionFill:     { height: 6, borderRadius: 3 },
+  completionHint:     { fontSize: 12, lineHeight: 17 },
+  referralCard:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderRadius: 10, padding: 14 },
+  referralTitle:      { fontSize: 12, fontWeight: "600", marginBottom: 4 },
+  referralCode:       { fontSize: 18, fontWeight: "900", letterSpacing: 2 },
+  badgesSection:      { gap: 10, paddingBottom: 4 },
+  badgesTitle:        { fontSize: 14, fontWeight: "700" },
+  badgeChip:          { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  badgeLabel:         { fontSize: 12, fontWeight: "700" },
+  qrOverlay:          { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" },
+  qrCard:             { borderRadius: 24, padding: 28, alignItems: "center", width: 300, gap: 10, shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 20 },
+  qrTitle:            { fontSize: 20, fontWeight: "800" },
+  qrSub:              { fontSize: 13, textAlign: "center" },
+  qrBox:              { marginVertical: 10, padding: 16, borderRadius: 16, backgroundColor: "#fff", shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8 },
+  qrName:             { fontSize: 16, fontWeight: "800" },
+  qrUsername:         { fontSize: 13 },
+  qrShareBtn:         { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 },
+  qrShareBtnText:     { color: "#fff", fontWeight: "700", fontSize: 14 },
   actionRow:          { flexDirection: "row", gap: 10 },
   btnPrimary:         { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingVertical: 12, borderRadius: 10 },
   btnPrimaryText:     { color: "#fff", fontWeight: "700", fontSize: 14 },

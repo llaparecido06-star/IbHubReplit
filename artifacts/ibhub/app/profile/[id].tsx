@@ -19,6 +19,7 @@ import { PostCard, Post } from "@/components/feed/PostCard";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
+import { recordProfileView, fetchMutualConnections } from "@/services/api";
 
 const FALLBACK_USER = {
   id: "", full_name: "Usuário", username: "usuario",
@@ -43,6 +44,7 @@ export default function PublicProfileScreen() {
   const [connectionStatus, setConnectionStatus] = useState<"none" | "pending" | "connected">("none");
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"posts" | "adega">("posts");
+  const [mutualConnections, setMutualConnections] = useState<{ id: string; full_name: string; avatar_url: string | null }[]>([]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -50,12 +52,13 @@ export default function PublicProfileScreen() {
     if (!id) return;
     setLoading(true);
     const isOwn = currentUser?.id === id;
-    const [realProfile, followStatus, connStatus, posts, wines] = await Promise.all([
+    const [realProfile, followStatus, connStatus, posts, wines, mutual] = await Promise.all([
       API.fetchPublicProfile(id),
       currentUser?.id ? API.checkIsFollowing(id, currentUser.id) : Promise.resolve(false),
       currentUser?.id ? API.checkConnectionStatus(id, currentUser.id) : Promise.resolve("none" as const),
       currentUser?.id ? API.fetchProfilePosts(id, currentUser.id) : Promise.resolve([]),
       isOwn ? API.fetchWineCellar(id) : API.fetchPublicWineCellar(id),
+      currentUser?.id && !isOwn ? fetchMutualConnections(currentUser.id, id) : Promise.resolve([]),
     ]);
 
     if (realProfile) setUserProfile({ ...FALLBACK_USER, ...realProfile });
@@ -63,7 +66,12 @@ export default function PublicProfileScreen() {
     setConnectionStatus(connStatus);
     setUserPosts(posts);
     setWineEntries(wines);
+    setMutualConnections(mutual);
     setLoading(false);
+
+    if (currentUser?.id && !isOwn) {
+      recordProfileView(currentUser.id, id);
+    }
   }, [id, currentUser?.id]);
 
   useEffect(() => { load(); }, [load]);
@@ -298,6 +306,24 @@ export default function PublicProfileScreen() {
           )}
         </View>
 
+        {/* Mutual connections */}
+        {mutualConnections.length > 0 && (
+          <View style={[styles.mutualRow, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+            <View style={styles.mutualAvatars}>
+              {mutualConnections.slice(0, 3).map((mc, i) => (
+                <View key={mc.id} style={{ marginLeft: i === 0 ? 0 : -8 }}>
+                  <Avatar uri={mc.avatar_url} name={mc.full_name} size={22} />
+                </View>
+              ))}
+            </View>
+            <Text style={[styles.mutualText, { color: colors.mutedForeground }]}>
+              {mutualConnections.length === 1
+                ? `${mutualConnections[0].full_name} é conexão em comum`
+                : `${mutualConnections[0].full_name} e mais ${mutualConnections.length - 1} conexão${mutualConnections.length - 1 > 1 ? "ões" : ""} em comum`}
+            </Text>
+          </View>
+        )}
+
         {/* ── Tabs — apenas 2 ── */}
         <View style={[styles.tabRow, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
           {(["posts", "adega"] as const).map((t) => (
@@ -431,6 +457,9 @@ const styles = StyleSheet.create({
   messageBtn:   { width: 40, height: 40, borderRadius: 10, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
   pendingDot:   { position: "absolute", top: 6, right: 6, width: 8, height: 8, borderRadius: 4 },
   tags:         { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  mutualRow:    { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 16, marginBottom: 12, borderWidth: 1, borderRadius: 10, padding: 12 },
+  mutualAvatars:{ flexDirection: "row" },
+  mutualText:   { flex: 1, fontSize: 12, fontWeight: "500" },
   tabRow:       { flexDirection: "row", borderBottomWidth: 1 },
   tab:          { flex: 1, alignItems: "center", paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: "transparent" },
   activeTab:    {},
