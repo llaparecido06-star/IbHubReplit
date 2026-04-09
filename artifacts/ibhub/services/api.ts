@@ -120,9 +120,10 @@ export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
     const { data, error } = await supabase
       .from("posts")
       .select(`
-        id, user_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count,
+        id, user_id, company_page_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count,
         view_count, location, hashtags, poll, created_at,
-        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT})
+        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT}),
+        company_page:company_pages(id, name, avatar_url)
       `)
       .order("created_at", { ascending: false })
       .limit(30);
@@ -209,15 +210,17 @@ export async function createPost(params: {
   location?: string | null;
   poll?: { options: { text: string; votes: number }[]; total_votes: number; closed: boolean };
   hashtags?: string[];
+  company_page_id?: string | null;
 }): Promise<Post | null> {
   try {
     const { data, error } = await supabase
       .from("posts")
       .insert({ ...params, likes_count: 0, comments_count: 0, shares_count: 0, view_count: 0 })
       .select(`
-        id, user_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count,
+        id, user_id, company_page_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count,
         view_count, location, hashtags, poll, created_at,
-        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT})
+        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT}),
+        company_page:company_pages(id, name, avatar_url)
       `)
       .single();
 
@@ -234,9 +237,10 @@ export async function fetchPostById(postId: string, currentUserId?: string): Pro
     const { data, error } = await supabase
       .from("posts")
       .select(`
-        id, user_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count,
+        id, user_id, company_page_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count,
         view_count, location, hashtags, poll, created_at,
-        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT})
+        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT}),
+        company_page:company_pages(id, name, avatar_url)
       `)
       .eq("id", postId)
       .single();
@@ -307,9 +311,10 @@ export async function fetchNewPostsSince(since: string, currentUserId: string): 
     const { data, error } = await supabase
       .from("posts")
       .select(`
-        id, user_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count,
+        id, user_id, company_page_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count,
         view_count, location, hashtags, poll, created_at,
-        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT})
+        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT}),
+        company_page:company_pages(id, name, avatar_url)
       `)
       .gt("created_at", since)
       .order("created_at", { ascending: false })

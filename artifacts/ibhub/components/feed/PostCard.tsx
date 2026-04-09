@@ -40,6 +40,7 @@ export const REACTIONS: { type: ReactionType; emoji: string; label: string }[] =
 export interface Post {
   id: string;
   user_id: string;
+  company_page_id?: string | null;
   content: string;
   image_url?: string | null;
   image_urls?: string[] | null;
@@ -68,6 +69,11 @@ export interface Post {
     headline?: string | null;
     plan?: string;
   };
+  company_page?: {
+    id: string;
+    name: string;
+    avatar_url?: string | null;
+  } | null;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -452,6 +458,12 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
   };
 
   const author = post.author;
+  const companyPage = post.company_page ?? null;
+  const displayAvatar = companyPage ? companyPage.avatar_url : author?.avatar_url;
+  const displayName   = companyPage ? companyPage.name : (author?.full_name ?? "Usuário");
+  const displayPressTarget = companyPage
+    ? () => router.push(`/empresa/${companyPage.id}` as any)
+    : () => author?.id && router.push(`/profile/${author.id}` as any);
 
   const likeButtonColor = reactionInfo ? "#e74c3c" : isLiked ? "#e74c3c" : colors.border;
   const likeButtonLabel = reactionInfo ? reactionInfo.label : isLiked ? "Curtido" : "Curtir";
@@ -470,17 +482,23 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
       <View style={styles.header}>
         <Pressable
           style={styles.authorRow}
-          onPress={() => author?.id && router.push(`/profile/${author.id}` as any)}
+          onPress={displayPressTarget}
         >
-          <Avatar uri={author?.avatar_url} name={author?.full_name} size={46} />
+          <Avatar uri={displayAvatar} name={displayName} size={46} />
           <View style={styles.authorMeta}>
             <View style={styles.nameRow}>
               <Text style={[styles.authorName, { color: colors.foreground }]} numberOfLines={1}>
-                {author?.full_name ?? "Usuário"}
+                {displayName}
               </Text>
-              <PlanBadge plan={author?.plan} colors={colors} />
+              {companyPage ? (
+                <View style={[styles.planBadge, { backgroundColor: colors.gold + "18", borderColor: colors.gold + "55" }]}>
+                  <Text style={[styles.planBadgeText, { color: colors.gold }]}>Empresa</Text>
+                </View>
+              ) : (
+                <PlanBadge plan={author?.plan} colors={colors} />
+              )}
             </View>
-            {author?.headline ? (
+            {!companyPage && author?.headline ? (
               <Text style={[styles.headline, { color: colors.mutedForeground }]} numberOfLines={1}>
                 {author.headline}
               </Text>
@@ -503,7 +521,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
         </Pressable>
 
         <View style={styles.headerActions}>
-          {author?.id && author.id !== currentUserId && (
+          {!companyPage && author?.id && author.id !== currentUserId && (
             <TouchableOpacity
               style={[styles.followBtn, { borderColor: colors.gold }]}
               onPress={() => router.push(`/profile/${author.id}` as any)}

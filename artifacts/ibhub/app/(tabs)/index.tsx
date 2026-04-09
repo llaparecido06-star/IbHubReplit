@@ -356,6 +356,7 @@ export default function FeedScreen() {
     const tempPost: Post = {
       id: `tmp_${Date.now()}`,
       user_id: user.id,
+      company_page_id: activeCompany?.id ?? null,
       content: content.trim(),
       image_url: postImageUris[0] ?? null,
       image_urls: postImageUris.length > 0 ? postImageUris : null,
@@ -372,6 +373,9 @@ export default function FeedScreen() {
         headline: (profile as any)?.headline ?? "",
         plan: profile?.plan ?? "basico",
       },
+      company_page: activeCompany
+        ? { id: activeCompany.id, name: activeCompany.name, avatar_url: activeCompany.avatar_url ?? null }
+        : null,
     };
     setPosts(prev => [tempPost, ...prev]);
 
@@ -389,6 +393,7 @@ export default function FeedScreen() {
       image_url: uploadedUrls[0] ?? null,
       image_urls: uploadedUrls.length > 0 ? uploadedUrls : null,
       location: postLocation.trim() || null,
+      company_page_id: activeCompany?.id ?? null,
     });
     if (saved) {
       setPosts(prev => prev.map(p => p.id === tempPost.id ? saved : p));
@@ -439,6 +444,7 @@ export default function FeedScreen() {
     const tempPost: Post = {
       id: `tmp_${Date.now()}`,
       user_id: user.id,
+      company_page_id: activeCompany?.id ?? null,
       content,
       image_url: wineImageUri ?? null,
       image_urls: wineImageUri ? [wineImageUri] : null,
@@ -453,6 +459,9 @@ export default function FeedScreen() {
         headline: (profile as any)?.headline ?? "",
         plan: profile?.plan ?? "basico",
       },
+      company_page: activeCompany
+        ? { id: activeCompany.id, name: activeCompany.name, avatar_url: activeCompany.avatar_url ?? null }
+        : null,
     };
     setPosts(prev => [tempPost, ...prev]);
 
@@ -461,6 +470,7 @@ export default function FeedScreen() {
       content,
       image_url: uploadedImageUrl,
       image_urls: uploadedImageUrl ? [uploadedImageUrl] : null,
+      company_page_id: activeCompany?.id ?? null,
     });
     if (saved) {
       setPosts(prev => prev.map(p => p.id === tempPost.id ? saved : p));
@@ -765,13 +775,17 @@ export default function FeedScreen() {
               <View style={styles.postAuthorRow}>
                 <View style={[styles.postAvatar, { backgroundColor: colors.navy }]}>
                   <Text style={[styles.postAvatarText, { color: colors.gold }]}>
-                    {(profile?.full_name ?? "U")[0]}
+                    {activeCompany
+                      ? (activeCompany.name[0]?.toUpperCase() ?? "E")
+                      : (profile?.full_name ?? "U")[0]}
                   </Text>
                 </View>
                 <View>
-                  <Text style={[styles.postAuthorName, { color: colors.navy }]}>{profile?.full_name ?? "Você"}</Text>
+                  <Text style={[styles.postAuthorName, { color: colors.navy }]}>
+                    {activeCompany ? activeCompany.name : (profile?.full_name ?? "Você")}
+                  </Text>
                   <Text style={[styles.postAuthorRole, { color: colors.mutedForeground }]}>
-                    {(profile as any)?.headline ?? "Sommelier"}
+                    {activeCompany ? "Empresa" : ((profile as any)?.headline ?? "Sommelier")}
                   </Text>
                 </View>
               </View>

@@ -2,7 +2,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { Image } from "expo-image";
 import { Video, ResizeMode } from "expo-av";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -53,6 +53,7 @@ export default function CreatePostScreen() {
   const router = useRouter();
   const { profile, user } = useAuth();
   const insets = useSafeAreaInsets();
+  const { companyPageId, companyName } = useLocalSearchParams<{ companyPageId?: string; companyName?: string }>();
 
   const [mode, setMode] = useState<PostMode>("normal");
 
@@ -195,6 +196,7 @@ export default function CreatePostScreen() {
         video_url: uploadedVideoUrl,
         location: location.trim() || null,
         hashtags: hashtags.length > 0 ? hashtags : undefined,
+        company_page_id: companyPageId ?? null,
       });
       router.back();
     } catch (e) {
@@ -256,10 +258,14 @@ export default function CreatePostScreen() {
 
       <ScrollView style={styles.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={styles.authorRow}>
-          <Avatar uri={profile?.avatar_url} name={profile?.full_name} size={44} />
+          <Avatar
+            uri={companyPageId ? null : profile?.avatar_url}
+            name={companyPageId ? (companyName ?? "E") : profile?.full_name}
+            size={44}
+          />
           <View style={styles.authorInfo}>
             <Text style={[styles.authorName, { color: colors.foreground }]}>
-              {profile?.full_name ?? "Você"}
+              {companyPageId ? (companyName ?? "Empresa") : (profile?.full_name ?? "Você")}
             </Text>
             <View style={[styles.audienceBtn, { backgroundColor: colors.secondary, borderRadius: 12 }]}>
               <Feather name="globe" size={11} color={colors.mutedForeground} />
