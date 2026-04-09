@@ -594,6 +594,12 @@ export default function MercadoScreen() {
                   {entry.headline ? (
                     <Text style={[styles.leaderHeadline, { color: colors.mutedForeground }]} numberOfLines={1}>{entry.headline}</Text>
                   ) : null}
+                  {entry.location ? (
+                    <View style={styles.leaderLocRow}>
+                      <Feather name="map-pin" size={10} color={colors.mutedForeground} />
+                      <Text style={[styles.leaderLoc, { color: colors.mutedForeground }]}>{entry.location}</Text>
+                    </View>
+                  ) : null}
                 </View>
                 <View style={styles.leaderStats}>
                   <Text style={[styles.leaderFollowers, { color: colors.gold }]}>{entry.followers_count}</Text>

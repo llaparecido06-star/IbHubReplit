@@ -3654,6 +3654,7 @@ export interface LeaderboardEntry {
   username: string | null;
   avatar_url: string | null;
   headline: string | null;
+  location: string | null;
   followers_count: number;
   connections_count: number;
   plan: string;
@@ -3663,7 +3664,7 @@ export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
   try {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, full_name, username, avatar_url, position, company, followers_count, connections_count, plan")
+      .select("id, full_name, username, avatar_url, position, company, location, followers_count, connections_count, plan")
       .eq("profile_type", "pessoa")
       .order("followers_count", { ascending: false })
       .limit(20);
