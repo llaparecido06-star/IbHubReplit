@@ -45,23 +45,30 @@ export default function PublicProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"posts" | "adega">("posts");
   const [mutualConnections, setMutualConnections] = useState<{ id: string; full_name: string; avatar_url: string | null }[]>([]);
+  const [resolvedProfileId, setResolvedProfileId] = useState<string>(id ?? "");
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    const isOwn = currentUser?.id === id;
-    const [realProfile, followStatus, connStatus, posts, wines, mutual] = await Promise.all([
-      API.fetchPublicProfile(id),
-      currentUser?.id ? API.checkIsFollowing(id, currentUser.id) : Promise.resolve(false),
-      currentUser?.id ? API.checkConnectionStatus(id, currentUser.id) : Promise.resolve("none" as const),
-      currentUser?.id ? API.fetchProfilePosts(id, currentUser.id) : Promise.resolve([]),
-      isOwn ? API.fetchWineCellar(id) : API.fetchPublicWineCellar(id),
-      currentUser?.id && !isOwn ? fetchMutualConnections(currentUser.id, id) : Promise.resolve([]),
+
+    // Resolve profile first — supports both UUID and username in the URL
+    const realProfile = await API.fetchPublicProfile(id);
+    // Use the real UUID from the resolved profile; fall back to the URL param
+    const resolvedId: string = (realProfile as any)?.id ?? id;
+    const isOwn = currentUser?.id === resolvedId;
+
+    const [followStatus, connStatus, posts, wines, mutual] = await Promise.all([
+      currentUser?.id ? API.checkIsFollowing(resolvedId, currentUser.id) : Promise.resolve(false),
+      currentUser?.id ? API.checkConnectionStatus(resolvedId, currentUser.id) : Promise.resolve("none" as const),
+      currentUser?.id ? API.fetchProfilePosts(resolvedId, currentUser.id) : Promise.resolve([]),
+      isOwn ? API.fetchWineCellar(resolvedId) : API.fetchPublicWineCellar(resolvedId),
+      currentUser?.id && !isOwn ? fetchMutualConnections(currentUser.id, resolvedId) : Promise.resolve([]),
     ]);
 
     if (realProfile) setUserProfile({ ...FALLBACK_USER, ...realProfile });
+    setResolvedProfileId(resolvedId);
     setIsFollowing(followStatus);
     setConnectionStatus(connStatus);
     setUserPosts(posts);
@@ -70,14 +77,14 @@ export default function PublicProfileScreen() {
     setLoading(false);
 
     if (currentUser?.id && !isOwn) {
-      recordProfileView(currentUser.id, id);
+      recordProfileView(currentUser.id, resolvedId);
     }
   }, [id, currentUser?.id]);
 
   useEffect(() => { load(); }, [load]);
 
   const isCompany    = (userProfile as any).profile_type === "empresa";
-  const isOwnProfile = currentUser?.id === id;
+  const isOwnProfile = currentUser?.id === resolvedProfileId;
   const tab2Label    = isCompany ? "Portfólio" : "Adega";
 
   // ── Follow ──────────────────────────────────────────────────────────────────

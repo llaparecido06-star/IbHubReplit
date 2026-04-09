@@ -904,13 +904,29 @@ export async function getUnreadNotifCount(userId: string): Promise<number> {
 
 // ─── PROFILE ─────────────────────────────────────────────────────────────────
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const isValidUUID = (s: string) => UUID_REGEX.test(s);
+
 export async function fetchPublicProfile(userId: string) {
   try {
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .or(`id.eq.${userId},user_id.eq.${userId}`)
-      .maybeSingle();
+    let data: any = null;
+    if (isValidUUID(userId)) {
+      // Standard UUID lookup (id or legacy user_id column)
+      const res = await supabase
+        .from("profiles")
+        .select("*")
+        .or(`id.eq.${userId},user_id.eq.${userId}`)
+        .maybeSingle();
+      data = res.data;
+    } else {
+      // Treat as username
+      const res = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("username", userId)
+        .maybeSingle();
+      data = res.data;
+    }
     if (!data) return null;
     const d = data as any;
     // Normalise to the names the rest of the app expects
