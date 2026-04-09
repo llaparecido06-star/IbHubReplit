@@ -1,8 +1,11 @@
 import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -59,6 +62,7 @@ export default function CreatePostScreen() {
   const [showLocationInput, setShowLocationInput] = useState(false);
   const [selectedHashtags, setSelectedHashtags]   = useState<string[]>([]);
   const [posting, setPosting]               = useState(false);
+  const [gpsLoading, setGpsLoading]         = useState(false);
 
   // Tasting note state
   const [tastingWine, setTastingWine]   = useState("");
@@ -96,6 +100,37 @@ export default function CreatePostScreen() {
     setSelectedHashtags((prev) =>
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
     );
+  };
+
+  const handleGpsLocation = async () => {
+    setGpsLoading(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permissão negada",
+          "Para usar o GPS, ative a permissão de localização nas configurações do seu dispositivo."
+        );
+        return;
+      }
+      const coords = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const [result] = await Location.reverseGeocodeAsync({
+        latitude: coords.coords.latitude,
+        longitude: coords.coords.longitude,
+      });
+      if (result) {
+        const parts = [result.district ?? result.subregion, result.city ?? result.region].filter(Boolean);
+        const locationName = parts.join(", ") || result.formattedAddress || "";
+        setLocation(locationName);
+        if (!showLocationInput) setShowLocationInput(true);
+      } else {
+        Alert.alert("Localização não encontrada", "Não foi possível determinar o nome do local. Tente digitar manualmente.");
+      }
+    } catch {
+      Alert.alert("Erro de GPS", "Não foi possível obter a localização. Verifique se o GPS está ativo e tente novamente.");
+    } finally {
+      setGpsLoading(false);
+    }
   };
 
   const buildTastingContent = () => {
@@ -238,7 +273,14 @@ export default function CreatePostScreen() {
                   returnKeyType="done"
                   maxLength={80}
                 />
-                {location.length > 0 && (
+                {gpsLoading ? (
+                  <ActivityIndicator size="small" color={colors.gold} />
+                ) : (
+                  <TouchableOpacity onPress={handleGpsLocation} style={styles.gpsBtn}>
+                    <Feather name="crosshair" size={17} color={colors.gold} />
+                  </TouchableOpacity>
+                )}
+                {location.length > 0 && !gpsLoading && (
                   <TouchableOpacity onPress={() => setLocation("")}>
                     <Feather name="x" size={15} color={colors.mutedForeground} />
                   </TouchableOpacity>
@@ -434,6 +476,7 @@ const styles = StyleSheet.create({
   textInput: { fontSize: 17, lineHeight: 25, minHeight: 120 },
   locationRow: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 },
   locationInput: { flex: 1, fontSize: 14 },
+  gpsBtn: { padding: 2 },
   imageRow: { marginTop: 12, marginBottom: 4 },
   thumbImg: { width: 100, height: 100 },
   removeThumb: { position: "absolute", top: 4, right: 4, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 12, padding: 3 },

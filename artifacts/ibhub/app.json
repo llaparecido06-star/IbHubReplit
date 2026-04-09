@@ -22,7 +22,8 @@
         "NSPhotoLibraryUsageDescription": "O ibhub acessa sua galeria para compartilhar fotos e vídeos.",
         "NSPhotoLibraryAddUsageDescription": "O ibhub salva mídia recebida na sua galeria.",
         "NSContactsUsageDescription": "O ibhub pode sugerir conexões com base em seus contatos.",
-        "NSUserTrackingUsageDescription": "Suas informações são usadas para personalizar sua experiência na rede profissional do vinho."
+        "NSUserTrackingUsageDescription": "Suas informações são usadas para personalizar sua experiência na rede profissional do vinho.",
+        "NSLocationWhenInUseUsageDescription": "O ibhub usa sua localização para preencher automaticamente o campo de localização ao criar uma publicação."
       }
     },
     "android": {
@@ -40,7 +41,9 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.VIBRATE",
         "android.permission.INTERNET",
-        "android.permission.ACCESS_NETWORK_STATE"
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
       ]
     },
     "web": {
@@ -60,6 +63,12 @@
         {
           "photosPermission": "O ibhub acessa sua galeria para compartilhar fotos e vídeos.",
           "cameraPermission": "O ibhub usa a câmera para tirar fotos e gravar vídeos."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "O ibhub usa sua localização para preencher automaticamente o campo de localização ao criar uma publicação."
         }
       ]
     ],
