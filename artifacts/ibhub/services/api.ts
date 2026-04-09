@@ -454,9 +454,15 @@ export async function updateProfile(
   payload: UpdateProfilePayload,
 ): Promise<boolean> {
   try {
+    // `areas_of_expertise` is the app-side name; the actual DB column is `areas`
+    const { areas_of_expertise, ...rest } = payload as any;
+    const dbPayload: Record<string, unknown> = { ...rest };
+    if (areas_of_expertise !== undefined) {
+      dbPayload.areas = areas_of_expertise;
+    }
     const { error } = await supabase
       .from("profiles")
-      .update(payload)
+      .update(dbPayload)
       .eq("id", userId);
     if (error) { console.error("updateProfile:", error); return false; }
     return true;
@@ -3634,21 +3640,21 @@ export async function fetchProfileViewsThisWeek(profileId: string): Promise<numb
 
 export interface LeaderboardEntry {
   id: string;
-  full_name: string;
-  username: string;
+  full_name: string | null;
+  username: string | null;
   avatar_url: string | null;
   headline: string | null;
+  location: string | null;
   followers_count: number;
   connections_count: number;
   plan: string;
-  areas_of_expertise: string[];
 }
 
 export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
   try {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, full_name, username, avatar_url, position, company, followers_count, connections_count, plan, areas_of_expertise")
+      .select("id, full_name, username, avatar_url, position, company, location, followers_count, connections_count, plan")
       .eq("profile_type", "pessoa")
       .order("followers_count", { ascending: false })
       .limit(20);
