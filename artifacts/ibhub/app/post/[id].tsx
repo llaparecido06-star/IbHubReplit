@@ -33,7 +33,7 @@ function timeAgo(dateStr: string): string {
 export default function PostDetailScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { user, profile } = useAuth();
+  const { user, profile, activeCompany } = useAuth();
   const { id, commentId: highlightCommentId } = useLocalSearchParams<{ id: string; commentId?: string }>();
   const insets = useSafeAreaInsets();
 
@@ -124,6 +124,7 @@ export default function PostDetailScreen() {
       id: `tmp_${Date.now()}`,
       post_id: id,
       user_id: user.id,
+      company_page_id: activeCompany?.id ?? null,
       content: text,
       created_at: new Date().toISOString(),
       likes_count: 0,
@@ -134,12 +135,15 @@ export default function PostDetailScreen() {
         avatar_url: profile?.avatar_url ?? null,
         headline: null,
       },
+      company_page: activeCompany
+        ? { id: activeCompany.id, name: activeCompany.name, avatar_url: activeCompany.avatar_url ?? null }
+        : null,
     };
     setComments(prev => [...prev, tempComment]);
     setPost(prev => prev ? { ...prev, comments_count: prev.comments_count + 1 } : prev);
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
 
-    const saved = await API.addComment(id, user.id, text);
+    const saved = await API.addComment(id, user.id, text, activeCompany?.id);
     if (saved) {
       setComments(prev => prev.map(c => c.id === tempComment.id ? { ...saved, likes_count: 0, is_liked: false } : c));
     }
@@ -161,7 +165,7 @@ export default function PostDetailScreen() {
   const handleLikePost = () => {
     if (!post || !user?.id) return;
     setPost(p => p ? { ...p, is_liked: !p.is_liked, likes_count: p.is_liked ? p.likes_count - 1 : p.likes_count + 1 } : p);
-    API.toggleLike(post.id, user.id, post.is_liked ?? false);
+    API.toggleLike(post.id, user.id, post.is_liked ?? false, activeCompany?.id);
   };
 
   const handleBookmarkPost = () => {
@@ -183,14 +187,24 @@ export default function PostDetailScreen() {
           isTemp && { opacity: 0.7 },
         ]}
       >
-        <TouchableOpacity onPress={() => item.author?.id && router.push(`/profile/${item.author.id}` as any)}>
-          <Avatar uri={item.author?.avatar_url} name={item.author?.full_name ?? "?"} size={36} />
+        <TouchableOpacity onPress={() => {
+          if (item.company_page) router.push(`/empresa/${item.company_page.id}` as any);
+          else if (item.author?.id) router.push(`/profile/${item.author.id}` as any);
+        }}>
+          <Avatar
+            uri={item.company_page ? item.company_page.avatar_url : item.author?.avatar_url}
+            name={item.company_page ? item.company_page.name : (item.author?.full_name ?? "?")}
+            size={36}
+          />
         </TouchableOpacity>
         <View style={styles.commentBody}>
           <View style={[styles.commentBubble, { backgroundColor: colors.secondary }]}>
-            <TouchableOpacity onPress={() => item.author?.id && router.push(`/profile/${item.author.id}` as any)}>
+            <TouchableOpacity onPress={() => {
+              if (item.company_page) router.push(`/empresa/${item.company_page.id}` as any);
+              else if (item.author?.id) router.push(`/profile/${item.author.id}` as any);
+            }}>
               <Text style={[styles.commentAuthor, { color: colors.foreground }]}>
-                {item.author?.full_name ?? "Usuário"}
+                {item.company_page ? item.company_page.name : (item.author?.full_name ?? "Usuário")}
               </Text>
             </TouchableOpacity>
             <Text style={[styles.commentContent, { color: colors.foreground }]}>{item.content}</Text>
@@ -212,12 +226,14 @@ export default function PostDetailScreen() {
                 </Text>
               )}
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.commentAction}
-              onPress={() => item.author && handleReply(item.author.id, item.author.full_name, item.id)}
-            >
-              <Text style={[styles.commentReply, { color: colors.gold }]}>Responder</Text>
-            </TouchableOpacity>
+            {!item.company_page && item.author && (
+              <TouchableOpacity
+                style={styles.commentAction}
+                onPress={() => handleReply(item.author!.id, item.author!.full_name, item.id)}
+              >
+                <Text style={[styles.commentReply, { color: colors.gold }]}>Responder</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </View>
@@ -324,7 +340,11 @@ export default function PostDetailScreen() {
 
       {/* Input bar */}
       <View style={[styles.inputBar, { borderTopColor: colors.border, backgroundColor: colors.background, paddingBottom: insets.bottom + 8 }]}>
-        <Avatar uri={profile?.avatar_url} name={profile?.full_name ?? "Você"} size={34} />
+        <Avatar
+          uri={activeCompany ? activeCompany.avatar_url : profile?.avatar_url}
+          name={activeCompany ? activeCompany.name : (profile?.full_name ?? "Você")}
+          size={34}
+        />
         <View style={[styles.inputWrap, { backgroundColor: colors.secondary, borderRadius: 24 }]}>
           <TextInput
             ref={inputRef}

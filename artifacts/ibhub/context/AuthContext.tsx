@@ -49,12 +49,21 @@ interface Profile {
   subscription_tier: string | null;
 }
 
+export interface ActiveCompany {
+  id: string;
+  name: string;
+  avatar_url?: string | null;
+  industry?: string | null;
+}
+
 interface AuthContextType {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
   loading: boolean;
   isRecovering: boolean;
+  activeCompany: ActiveCompany | null;
+  setActiveCompany: (company: ActiveCompany | null) => void;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
@@ -81,11 +90,12 @@ function parseRecoveryUrl(url: string): { accessToken: string; refreshToken: str
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession]       = useState<Session | null>(null);
-  const [user, setUser]             = useState<User | null>(null);
-  const [profile, setProfile]       = useState<Profile | null>(null);
-  const [loading, setLoading]       = useState(true);
+  const [session, setSession]           = useState<Session | null>(null);
+  const [user, setUser]                 = useState<User | null>(null);
+  const [profile, setProfile]           = useState<Profile | null>(null);
+  const [loading, setLoading]           = useState(true);
   const [isRecovering, setIsRecovering] = useState(false);
+  const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null);
 
   const fetchProfile = useCallback(async (userId: string) => {
     try {
@@ -195,6 +205,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    setActiveCompany(null);
     await supabase.auth.signOut();
   };
 
@@ -215,6 +226,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider
       value={{
         session, user, profile, loading, isRecovering,
+        activeCompany, setActiveCompany,
         signIn, signUp, signOut,
         resetPassword, updatePassword, clearRecovery,
         refreshProfile, refreshProfileByUserId, patchProfile,

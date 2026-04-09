@@ -74,7 +74,7 @@ export default function OportunidadesScreen() {
   const colors  = useColors();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
-  const { profile, user } = useAuth();
+  const { profile, user, activeCompany } = useAuth();
 
   const [tab, setTab]       = useState<OporTab>("market");
   const [search, setSearch] = useState("");
@@ -94,7 +94,8 @@ export default function OportunidadesScreen() {
   const filterAnim = useRef(new Animated.Value(600)).current;
   const filterOverlay = useRef(new Animated.Value(0)).current;
 
-  const isEmpresa = profile?.profile_type === "empresa";
+  // Somente quem está com empresa ativa pode criar vagas, market e eventos
+  const isEmpresa = !!activeCompany;
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
@@ -142,8 +143,8 @@ export default function OportunidadesScreen() {
       Alert.alert(
         "Funcionalidade Exclusiva para Empresas",
         tab === "eventos"
-          ? "Somente empresas podem criar e promover eventos. Crie uma página de empresa para divulgar seus eventos para toda a comunidade do vinho!"
-          : "Para anunciar vagas ou produtos no Market, crie uma página de empresa. É grátis e abre muito mais oportunidades para o seu negócio!",
+          ? "Somente empresas podem criar eventos. Selecione ou crie uma página de empresa para continuar."
+          : "Para anunciar vagas ou produtos no Market, selecione ou crie uma página de empresa.",
         [
           { text: "Agora não", style: "cancel" },
           { text: "Criar página de empresa", onPress: () => router.push("/manage-business-page" as any) },

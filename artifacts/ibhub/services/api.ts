@@ -40,11 +40,13 @@ export interface AppComment {
   id: string;
   post_id: string;
   user_id: string;
+  company_page_id?: string | null;
   content: string;
   created_at: string;
   likes_count?: number;
   is_liked?: boolean;
   author?: { id: string; full_name: string; avatar_url?: string | null; headline?: string | null } | null;
+  company_page?: { id: string; name: string; avatar_url?: string | null } | null;
 }
 
 export interface AppStory {
@@ -115,7 +117,7 @@ function normaliseAuthor(author: any): any {
 const AUTHOR_SELECT = "id, full_name, username, avatar_url, position, company, plan";
 const COMMENT_AUTHOR_SELECT = "id, full_name, avatar_url, position, company";
 
-export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
+export async function fetchFeedPosts(currentUserId: string, activeCompanyId?: string | null): Promise<Post[]> {
   try {
     const { data, error } = await supabase
       .from("posts")
@@ -132,8 +134,13 @@ export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
 
     const postIds = data.map((p: any) => p.id);
 
+    // Check likes by the active identity (company or personal)
+    const likedQuery = activeCompanyId
+      ? supabase.from("likes").select("post_id, reaction_type").eq("company_page_id", activeCompanyId).in("post_id", postIds)
+      : supabase.from("likes").select("post_id, reaction_type").eq("user_id", currentUserId).is("company_page_id", null).in("post_id", postIds);
+
     const [likedRes, bookmarkRes] = await Promise.all([
-      supabase.from("likes").select("post_id, reaction_type").eq("user_id", currentUserId).in("post_id", postIds),
+      likedQuery,
       supabase.from("bookmarks").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
     ]);
 
@@ -267,12 +274,20 @@ export async function fetchPostById(postId: string, currentUserId?: string): Pro
   }
 }
 
-export async function toggleLike(postId: string, userId: string, isCurrentlyLiked: boolean): Promise<void> {
+export async function toggleLike(postId: string, userId: string, isCurrentlyLiked: boolean, companyPageId?: string | null): Promise<void> {
   try {
     if (isCurrentlyLiked) {
-      await supabase.from("likes").delete().match({ post_id: postId, user_id: userId });
+      if (companyPageId) {
+        await supabase.from("likes").delete().match({ post_id: postId, company_page_id: companyPageId });
+      } else {
+        await supabase.from("likes").delete().match({ post_id: postId, user_id: userId }).is("company_page_id", null);
+      }
     } else {
-      await supabase.from("likes").upsert({ post_id: postId, user_id: userId }, { onConflict: "post_id,user_id" });
+      if (companyPageId) {
+        await supabase.from("likes").insert({ post_id: postId, user_id: userId, company_page_id: companyPageId });
+      } else {
+        await supabase.from("likes").insert({ post_id: postId, user_id: userId });
+      }
     }
   } catch (e) {
     console.error("toggleLike:", e);
@@ -284,14 +299,23 @@ export async function toggleReaction(
   userId: string,
   reactionType: string,
   currentReaction: string | null,
+  companyPageId?: string | null,
 ): Promise<void> {
   try {
     if (currentReaction === reactionType) {
-      await supabase.from("likes").delete().match({ post_id: postId, user_id: userId });
+      if (companyPageId) {
+        await supabase.from("likes").delete().match({ post_id: postId, company_page_id: companyPageId });
+      } else {
+        await supabase.from("likes").delete().match({ post_id: postId, user_id: userId }).is("company_page_id", null);
+      }
     } else {
-      await supabase
-        .from("likes")
-        .upsert({ post_id: postId, user_id: userId, reaction_type: reactionType }, { onConflict: "post_id,user_id" });
+      if (companyPageId) {
+        await supabase.from("likes")
+          .upsert({ post_id: postId, user_id: userId, company_page_id: companyPageId, reaction_type: reactionType }, { onConflict: "post_id,company_page_id" });
+      } else {
+        await supabase.from("likes")
+          .upsert({ post_id: postId, user_id: userId, reaction_type: reactionType }, { onConflict: "post_id,user_id" });
+      }
     }
   } catch (e) {
     console.error("toggleReaction:", e);
@@ -306,7 +330,7 @@ export async function incrementViewCount(postId: string): Promise<void> {
   }
 }
 
-export async function fetchNewPostsSince(since: string, currentUserId: string): Promise<Post[]> {
+export async function fetchNewPostsSince(since: string, currentUserId: string, activeCompanyId?: string | null): Promise<Post[]> {
   try {
     const { data, error } = await supabase
       .from("posts")
@@ -323,8 +347,13 @@ export async function fetchNewPostsSince(since: string, currentUserId: string): 
     if (error || !data || data.length === 0) return [];
 
     const postIds = data.map((p: any) => p.id);
+
+    const likedQuery = activeCompanyId
+      ? supabase.from("likes").select("post_id, reaction_type").eq("company_page_id", activeCompanyId).in("post_id", postIds)
+      : supabase.from("likes").select("post_id, reaction_type").eq("user_id", currentUserId).is("company_page_id", null).in("post_id", postIds);
+
     const [likedRes, bookmarkRes] = await Promise.all([
-      supabase.from("likes").select("post_id, reaction_type").eq("user_id", currentUserId).in("post_id", postIds),
+      likedQuery,
       supabase.from("bookmarks").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
     ]);
 
@@ -363,8 +392,9 @@ export async function fetchComments(postId: string, currentUserId?: string): Pro
     const { data, error } = await supabase
       .from("comments")
       .select(`
-        id, post_id, user_id, content, created_at, likes_count,
-        author:profiles!comments_user_id_fkey(${COMMENT_AUTHOR_SELECT})
+        id, post_id, user_id, company_page_id, content, created_at, likes_count,
+        author:profiles!comments_user_id_fkey(${COMMENT_AUTHOR_SELECT}),
+        company_page:company_pages(id, name, avatar_url)
       `)
       .eq("post_id", postId)
       .order("created_at", { ascending: true });
@@ -387,6 +417,7 @@ export async function fetchComments(postId: string, currentUserId?: string): Pro
       likes_count: c.likes_count ?? 0,
       is_liked: likedSet.has(c.id),
       author: normaliseAuthor(c.author),
+      company_page: c.company_page ?? null,
     })) as AppComment[];
   } catch (e) {
     console.error("fetchComments:", e);
@@ -433,14 +464,19 @@ export async function addComment(
   postId: string,
   userId: string,
   content: string,
+  companyPageId?: string | null,
 ): Promise<AppComment | null> {
   try {
+    const insertData: any = { post_id: postId, user_id: userId, content };
+    if (companyPageId) insertData.company_page_id = companyPageId;
+
     const { data, error } = await supabase
       .from("comments")
-      .insert({ post_id: postId, user_id: userId, content })
+      .insert(insertData)
       .select(`
-        id, post_id, user_id, content, created_at,
-        author:profiles!comments_user_id_fkey(${COMMENT_AUTHOR_SELECT})
+        id, post_id, user_id, company_page_id, content, created_at,
+        author:profiles!comments_user_id_fkey(${COMMENT_AUTHOR_SELECT}),
+        company_page:company_pages(id, name, avatar_url)
       `)
       .single();
 
@@ -455,7 +491,11 @@ export async function addComment(
       });
     }
 
-    return { ...(data as any), author: normaliseAuthor((data as any)?.author) } as AppComment;
+    return {
+      ...(data as any),
+      author: normaliseAuthor((data as any)?.author),
+      company_page: (data as any)?.company_page ?? null,
+    } as AppComment;
   } catch (e) {
     console.error("addComment:", e);
     return null;

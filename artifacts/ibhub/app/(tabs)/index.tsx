@@ -112,7 +112,7 @@ function StarRating({ value, onChange }: { value: number; onChange: (v: number) 
 export default function FeedScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { user, profile } = useAuth();
+  const { user, profile, activeCompany, setActiveCompany } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [posts, setPosts] = useState<Post[]>([]);
@@ -139,9 +139,8 @@ export default function FeedScreen() {
   const [showWineReview, setShowWineReview]         = useState(false);
   const [showAccountMenu, setShowAccountMenu]       = useState(false);
 
-  // Company mode
+  // Company mode — activeCompany lives in AuthContext so all tabs can access it
   const [companyPages, setCompanyPages]             = useState<API.CompanyPage[]>([]);
-  const [activeCompany, setActiveCompany]           = useState<API.CompanyPage | null>(null);
 
   // Create post state
   const [postMode, setPostMode]                     = useState<"text" | "poll">("text");
@@ -184,7 +183,7 @@ export default function FeedScreen() {
     // Try real Supabase data first
     if (user?.id) {
       try {
-        const realPosts = await API.fetchFeedPosts(user.id);
+        const realPosts = await API.fetchFeedPosts(user.id, activeCompany?.id);
         if (realPosts.length > 0) {
           const sorted = sortByRelevance(realPosts);
           setPosts(sorted);
@@ -203,7 +202,7 @@ export default function FeedScreen() {
     setPosts(sortByRelevance(mockPosts));
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(mockPosts));
     setLoading(false);
-  }, [user?.id, sortByRelevance]);
+  }, [user?.id, activeCompany?.id, sortByRelevance]);
 
   const loadSuggestions = useCallback(async () => {
     if (!user?.id) return;
@@ -239,7 +238,7 @@ export default function FeedScreen() {
     setRefreshing(true);
     if (user?.id) {
       try {
-        const realPosts = await API.fetchFeedPosts(user.id);
+        const realPosts = await API.fetchFeedPosts(user.id, activeCompany?.id);
         if (realPosts.length > 0) {
           const sorted = sortByRelevance(realPosts);
           setPosts(sorted);
@@ -253,7 +252,7 @@ export default function FeedScreen() {
     const mockPosts = Array.from({ length: 6 }, (_, i) => generateMockPost(i));
     setPosts(sortByRelevance(mockPosts));
     setRefreshing(false);
-  }, [user?.id, sortByRelevance]);
+  }, [user?.id, activeCompany?.id, sortByRelevance]);
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
 
@@ -264,7 +263,7 @@ export default function FeedScreen() {
       setPosts(currentPosts => {
         if (currentPosts.length === 0) return currentPosts;
         const newestCreatedAt = currentPosts[0].created_at;
-        API.fetchNewPostsSince(newestCreatedAt, user!.id!).then(fresh => {
+        API.fetchNewPostsSince(newestCreatedAt, user!.id!, activeCompany?.id).then(fresh => {
           if (fresh.length > 0) {
             setNewPosts(fresh);
             Animated.spring(newPostsBannerAnim, { toValue: 1, useNativeDriver: true, speed: 14 }).start();
@@ -642,7 +641,7 @@ export default function FeedScreen() {
               setPosts(prev => prev.map(p => p.id === id
                 ? { ...p, is_liked: !p.is_liked, likes_count: p.is_liked ? p.likes_count - 1 : p.likes_count + 1 }
                 : p));
-              API.toggleLike(id, user.id, post.is_liked ?? false);
+              API.toggleLike(id, user.id, post.is_liked ?? false, activeCompany?.id);
             }}
             onReact={(id, reaction) => {
               const post = posts.find(p => p.id === id);
@@ -660,7 +659,7 @@ export default function FeedScreen() {
                     : wasLiked ? p.likes_count : p.likes_count + 1,
                 };
               }));
-              API.toggleReaction(id, user.id, reaction, post.reaction_type ?? null);
+              API.toggleReaction(id, user.id, reaction, post.reaction_type ?? null, activeCompany?.id);
             }}
             onBookmark={(id) => {
               const post = posts.find(p => p.id === id);
@@ -1075,7 +1074,7 @@ export default function FeedScreen() {
                 <TouchableOpacity
                   key={page.id}
                   style={[styles.accountRow, activeCompany?.id === page.id && { backgroundColor: colors.background }]}
-                  onPress={() => { setActiveCompany(page); setShowAccountMenu(false); }}
+                  onPress={() => { setActiveCompany({ id: page.id, name: page.name, avatar_url: page.avatar_url, industry: page.industry }); setShowAccountMenu(false); }}
                 >
                   {page.avatar_url ? (
                     <Avatar uri={page.avatar_url} name={page.name} size={40} />

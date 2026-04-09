@@ -26,9 +26,8 @@ export default function NewOpportunityScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user, profile } = useAuth();
-
-  const isEmpresa = profile?.profile_type === "empresa";
+  const { user, activeCompany } = useAuth();
+  const isEmpresa = !!activeCompany;
 
   const [mode, setMode]         = useState<Mode>("vaga");
   const [title, setTitle]       = useState("");

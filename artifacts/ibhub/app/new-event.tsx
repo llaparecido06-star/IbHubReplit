@@ -33,9 +33,7 @@ export default function NewEventScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user, profile } = useAuth();
-
-  const isEmpresa = profile?.profile_type === "empresa";
+  const { user, activeCompany } = useAuth();
 
   const [step, setStep] = useState(1);
 
@@ -118,7 +116,7 @@ export default function NewEventScreen() {
     </View>
   );
 
-  if (!isEmpresa) {
+  if (!activeCompany) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center", padding: 32 }]}>
         <View style={{ paddingTop: topPad }}>
