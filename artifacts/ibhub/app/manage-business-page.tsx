@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -111,15 +112,38 @@ export default function ManageBusinessPageScreen() {
     }, 350);
   }, [memberSearch, currentUser?.id, admins]);
 
-  // ── Save edits ─────────────────────────────────────────────────────────────
+  // ── Save edits (create or update) ─────────────────────────────────────────
   const handleSave = async () => {
-    if (!pageId || !companyName.trim()) {
+    if (!companyName.trim()) {
       Alert.alert("Atenção", "O nome da empresa é obrigatório.");
       return;
     }
+    if (!currentUser?.id) return;
     setSaving(true);
-    let avatar_url = page?.avatar_url ?? null;
 
+    // ── CREATE mode (no existing pageId) ──
+    if (!pageId) {
+      const created = await API.createCompanyPage({
+        owner_id: currentUser.id,
+        name: companyName.trim(),
+        industry: category,
+        bio: desc.trim() || undefined,
+        website: website.trim() || undefined,
+        location: location.trim() || undefined,
+      });
+      setSaving(false);
+      if (created) {
+        Alert.alert("Página criada!", `"${created.name}" foi criada com sucesso.`, [
+          { text: "OK", onPress: () => router.replace(`/manage-business-page?id=${created.id}` as any) },
+        ]);
+      } else {
+        Alert.alert("Erro", "Não foi possível criar a empresa. Tente novamente.");
+      }
+      return;
+    }
+
+    // ── EDIT mode ──
+    let avatar_url = page?.avatar_url ?? null;
     if (logoUri && logoUri !== page?.avatar_url) {
       const uploaded = await API.uploadCompanyLogo(pageId, logoUri);
       if (uploaded) avatar_url = uploaded;
@@ -235,6 +259,8 @@ export default function ManageBusinessPageScreen() {
     );
   }
 
+  const isCreateMode = !pageId;
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
@@ -242,31 +268,38 @@ export default function ManageBusinessPageScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
           <Text style={[styles.headerTitle, { color: colors.navy }]}>
-            {page?.name ?? "Página Empresarial"}
+            {isCreateMode ? "Nova Empresa" : (page?.name ?? "Página Empresarial")}
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Tabs */}
-      <View style={[styles.tabBar, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
-        {([ { key: "preview", label: "Preview", icon: "eye" },
-             { key: "editar",  label: "Editar",  icon: "edit-2" },
-             { key: "equipe",  label: "Equipe",  icon: "users" },
-        ] as { key: Tab; label: string; icon: any }[]).map(t => (
-          <TouchableOpacity
-            key={t.key}
-            style={[styles.tabItem, activeTab === t.key && { borderBottomColor: colors.gold, borderBottomWidth: 2 }]}
-            onPress={() => setActiveTab(t.key)}
-          >
-            <Feather name={t.icon} size={14} color={activeTab === t.key ? colors.gold : colors.mutedForeground} />
-            <Text style={[styles.tabLabel, { color: activeTab === t.key ? colors.gold : colors.mutedForeground }]}>
-              {t.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      {/* Tabs — only shown when editing an existing page */}
+      {!isCreateMode && (
+        <View style={[styles.tabBar, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+          {([ { key: "preview", label: "Preview", icon: "eye" },
+               { key: "editar",  label: "Editar",  icon: "edit-2" },
+               { key: "equipe",  label: "Equipe",  icon: "users" },
+          ] as { key: Tab; label: string; icon: any }[]).map(t => (
+            <TouchableOpacity
+              key={t.key}
+              style={[styles.tabItem, activeTab === t.key && { borderBottomColor: colors.gold, borderBottomWidth: 2 }]}
+              onPress={() => setActiveTab(t.key)}
+            >
+              <Feather name={t.icon} size={14} color={activeTab === t.key ? colors.gold : colors.mutedForeground} />
+              <Text style={[styles.tabLabel, { color: activeTab === t.key ? colors.gold : colors.mutedForeground }]}>
+                {t.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
-      <ScrollView contentContainerStyle={{ paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+      >
+      <ScrollView contentContainerStyle={{ paddingBottom: bottomPad }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
         {/* ── Preview ── */}
         {activeTab === "preview" && (
@@ -319,25 +352,27 @@ export default function ManageBusinessPageScreen() {
           </View>
         )}
 
-        {/* ── Editar ── */}
-        {activeTab === "editar" && (
+        {/* ── Editar / Criar ── */}
+        {(isCreateMode || activeTab === "editar") && (
           <View style={{ padding: 16, gap: 18 }}>
-            {/* Logo picker */}
-            <View style={styles.logoWrap}>
-              <TouchableOpacity onPress={handlePickLogo} activeOpacity={0.8}>
-                {logoSource
-                  ? <Image source={{ uri: logoSource }} style={styles.companyLogoLarge} />
-                  : (
-                    <View style={[styles.companyLogoLarge, { backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" }]}>
-                      <Text style={[styles.companyLogoLargeText, { color: colors.gold }]}>{logoInitial}</Text>
-                    </View>
-                  )
-                }
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.cameraOverlay, { backgroundColor: colors.gold }]} onPress={handlePickLogo}>
-                <Feather name="camera" size={14} color="#fff" />
-              </TouchableOpacity>
-            </View>
+            {/* Logo picker — only available when editing an existing page */}
+            {!isCreateMode && (
+              <View style={styles.logoWrap}>
+                <TouchableOpacity onPress={handlePickLogo} activeOpacity={0.8}>
+                  {logoSource
+                    ? <Image source={{ uri: logoSource }} style={styles.companyLogoLarge} />
+                    : (
+                      <View style={[styles.companyLogoLarge, { backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" }]}>
+                        <Text style={[styles.companyLogoLargeText, { color: colors.gold }]}>{logoInitial}</Text>
+                      </View>
+                    )
+                  }
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.cameraOverlay, { backgroundColor: colors.gold }]} onPress={handlePickLogo}>
+                  <Feather name="camera" size={14} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            )}
 
             <View style={styles.field}>
               <Text style={[styles.fieldLabel, { color: colors.navy }]}>Nome da empresa *</Text>
@@ -410,7 +445,7 @@ export default function ManageBusinessPageScreen() {
                 ? <ActivityIndicator size="small" color="#fff" />
                 : <Feather name="save" size={16} color="#fff" />
               }
-              <Text style={styles.saveBtnText}>{saving ? "Salvando..." : "Salvar alterações"}</Text>
+              <Text style={styles.saveBtnText}>{saving ? (isCreateMode ? "Criando..." : "Salvando...") : (isCreateMode ? "Criar Empresa" : "Salvar alterações")}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -531,6 +566,7 @@ export default function ManageBusinessPageScreen() {
           </View>
         )}
       </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
