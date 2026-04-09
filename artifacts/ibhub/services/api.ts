@@ -2112,6 +2112,7 @@ export async function fetchWineCellar(userId: string): Promise<WineEntry[]> {
 }
 
 export async function fetchPublicWineCellar(userId: string): Promise<WineEntry[]> {
+  if (!isValidUUID(userId)) return [];
   try {
     const { data, error } = await supabase
       .from("wine_cellar")

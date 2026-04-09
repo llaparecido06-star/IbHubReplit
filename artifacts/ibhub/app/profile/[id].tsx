@@ -58,16 +58,20 @@ export default function PublicProfileScreen() {
     if (!id) return;
     setLoading(true);
     const real = await API.fetchPublicProfile(id);
-    const rid: string = (real as any)?.id ?? id;
-    const isOwn = currentUser?.id === rid;
+    // real.id is always a UUID; if profile not found, fall back to id only if it's a UUID
+    const rid: string = (real as any)?.id ?? (API.isValidUUID(id) ? id : "");
+    const isOwn = !!rid && currentUser?.id === rid;
 
-    const [following, connStatus, posts, wines, mutual] = await Promise.all([
-      currentUser?.id ? API.checkIsFollowing(rid, currentUser.id)       : Promise.resolve(false),
-      currentUser?.id ? API.checkConnectionStatus(rid, currentUser.id)  : Promise.resolve("none" as const),
-      currentUser?.id ? API.fetchProfilePosts(rid, currentUser.id)       : Promise.resolve([]),
-      isOwn ? API.fetchWineCellar(rid) : API.fetchPublicWineCellar(rid),
-      currentUser?.id && !isOwn ? fetchMutualConnections(currentUser.id, rid) : Promise.resolve([]),
-    ]);
+    // Only run UUID-dependent queries when we have a valid UUID
+    const [following, connStatus, posts, wines, mutual] = rid
+      ? await Promise.all([
+          currentUser?.id ? API.checkIsFollowing(rid, currentUser.id)       : Promise.resolve(false),
+          currentUser?.id ? API.checkConnectionStatus(rid, currentUser.id)  : Promise.resolve("none" as const),
+          currentUser?.id ? API.fetchProfilePosts(rid, currentUser.id)       : Promise.resolve([]),
+          isOwn ? API.fetchWineCellar(rid) : API.fetchPublicWineCellar(rid),
+          currentUser?.id && !isOwn ? fetchMutualConnections(currentUser.id, rid) : Promise.resolve([]),
+        ])
+      : [false, "none" as const, [], [], []];
 
     if (real) setUserProfile({ ...FALLBACK_USER, ...real });
     setResolvedId(rid);
