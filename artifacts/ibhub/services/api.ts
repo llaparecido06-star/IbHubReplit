@@ -3758,3 +3758,121 @@ export async function ensureReferralCode(userId: string): Promise<string> {
     return "";
   }
 }
+
+// ── Referral tracking ──────────────────────────────────────────────────────────
+
+/**
+ * Links a new user to whoever shared the invite code.
+ * Sets `invited_by_id` on the new user's profile.
+ * Safe to call even if the code is invalid (fails silently).
+ */
+export async function applyReferralCode(newUserId: string, code: string): Promise<boolean> {
+  if (!code?.trim()) return false;
+  try {
+    // Find the inviter by their referral code
+    const { data: inviter } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("referral_code", code.trim().toUpperCase())
+      .maybeSingle();
+
+    if (!inviter?.id || inviter.id === newUserId) return false;
+
+    // Set invited_by_id on the new user profile
+    const { error } = await supabase
+      .from("profiles")
+      .update({ invited_by_id: inviter.id })
+      .eq("id", newUserId);
+
+    if (error) { console.error("applyReferralCode:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("applyReferralCode:", e);
+    return false;
+  }
+}
+
+export interface ReferralRankEntry {
+  id: string;
+  full_name: string;
+  username: string | null;
+  avatar_url: string | null;
+  headline: string | null;
+  invite_count: number;
+  rank: number;
+}
+
+/**
+ * Returns top inviters sorted by number of people they invited.
+ * Uses `invited_by_id` column on profiles.
+ */
+export async function fetchReferralLeaderboard(limit = 50): Promise<ReferralRankEntry[]> {
+  try {
+    // Fetch all profiles that were invited by someone
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("invited_by_id")
+      .not("invited_by_id", "is", null);
+
+    if (error) { console.error("fetchReferralLeaderboard:", error); return []; }
+
+    // Count invites per inviter
+    const counts: Record<string, number> = {};
+    for (const row of data ?? []) {
+      if (row.invited_by_id) counts[row.invited_by_id] = (counts[row.invited_by_id] ?? 0) + 1;
+    }
+
+    const topIds = Object.entries(counts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, limit)
+      .map(([id]) => id);
+
+    if (topIds.length === 0) return [];
+
+    // Fetch inviter profiles
+    const { data: profiles, error: pErr } = await supabase
+      .from("profiles")
+      .select("id, full_name, username, avatar_url, headline")
+      .in("id", topIds);
+
+    if (pErr) { console.error("fetchReferralLeaderboard profiles:", pErr); return []; }
+
+    return (profiles ?? [])
+      .map((p, _) => ({
+        id: p.id,
+        full_name: p.full_name ?? "Usuário",
+        username: p.username ?? null,
+        avatar_url: p.avatar_url ?? null,
+        headline: p.headline ?? null,
+        invite_count: counts[p.id] ?? 0,
+        rank: 0,
+      }))
+      .sort((a, b) => b.invite_count - a.invite_count)
+      .map((entry, i) => ({ ...entry, rank: i + 1 }));
+  } catch (e) {
+    console.error("fetchReferralLeaderboard:", e);
+    return [];
+  }
+}
+
+/**
+ * Returns the number of people a user has invited and their rank.
+ */
+export async function fetchMyReferralStats(userId: string): Promise<{ count: number; rank: number }> {
+  try {
+    const leaderboard = await fetchReferralLeaderboard(200);
+    const me = leaderboard.find(e => e.id === userId);
+    if (!me) {
+      // Count directly in case they're not in top 200
+      const { count } = await supabase
+        .from("profiles")
+        .select("*", { count: "exact", head: true })
+        .eq("invited_by_id", userId);
+      return { count: count ?? 0, rank: leaderboard.length + 1 };
+    }
+    return { count: me.invite_count, rank: me.rank };
+  } catch (e) {
+    console.error("fetchMyReferralStats:", e);
+    return { count: 0, rank: 0 };
+  }
+}

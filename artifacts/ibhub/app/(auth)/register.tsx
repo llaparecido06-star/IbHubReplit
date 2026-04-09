@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@/components/ui/Icon";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/context/AuthContext";
+import { applyReferralCode } from "@/services/api";
 
 const TOTAL_STEPS = 3;
 
@@ -129,6 +130,7 @@ export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
 
   const [step, setStep] = useState(1);
+  const [inviteCode, setInviteCode] = useState("");
 
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [fullName, setFullName] = useState("");
@@ -341,6 +343,11 @@ export default function RegisterScreen() {
           plan:               selectedPlan,
           ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
         }).eq("id", currentUser.id);
+
+        // Apply invite code if provided
+        if (inviteCode.trim()) {
+          await applyReferralCode(currentUser.id, inviteCode.trim());
+        }
       }
 
       setLoading(false);
@@ -506,6 +513,20 @@ export default function RegisterScreen() {
                 <TouchableOpacity onPress={() => setShowConfirm((v) => !v)}>
                   <Feather name={showConfirm ? "eye-off" : "eye"} size={18} color="#8fa3b8" />
                 </TouchableOpacity>
+              </View>
+
+              {/* Optional invite code */}
+              <View style={styles.fieldWrap}>
+                <Feather name="gift" size={16} color="#8fa3b8" style={styles.fieldIcon} />
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Código de convite (opcional)"
+                  placeholderTextColor="#8fa3b8"
+                  value={inviteCode}
+                  onChangeText={v => setInviteCode(v.toUpperCase())}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                />
               </View>
 
               <TouchableOpacity

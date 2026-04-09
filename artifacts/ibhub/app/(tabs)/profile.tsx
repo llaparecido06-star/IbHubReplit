@@ -42,6 +42,7 @@ import {
   checkIsFollowing,
   fetchProfileViewsThisWeek,
   ensureReferralCode,
+  fetchMyReferralStats,
 } from "@/services/api";
 import { Post } from "@/components/feed/PostCard";
 import EmpresaDashboard from "@/components/EmpresaDashboard";
@@ -78,6 +79,8 @@ export default function ProfileScreen() {
   const [profileViews,  setProfileViews]  = useState(0);
   const [showQrModal,   setShowQrModal]   = useState(false);
   const [referralCode,  setReferralCode]  = useState<string | null>(null);
+  const [inviteCount,   setInviteCount]   = useState(0);
+  const [inviteRank,    setInviteRank]    = useState(0);
 
   const isCompany = profile?.profile_type === "empresa";
   const name      = profile?.full_name ?? profile?.username ?? "Usuário";
@@ -112,12 +115,15 @@ export default function ProfileScreen() {
 
   const loadEngagement = useCallback(async () => {
     if (!user?.id) return;
-    const [views, refCode] = await Promise.all([
+    const [views, refCode, stats] = await Promise.all([
       fetchProfileViewsThisWeek(user.id),
       ensureReferralCode(user.id),
+      fetchMyReferralStats(user.id),
     ]);
     setProfileViews(views);
     setReferralCode(refCode);
+    setInviteCount(stats.count);
+    setInviteRank(stats.rank);
   }, [user?.id]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -453,17 +459,42 @@ export default function ProfileScreen() {
 
         {/* Referral code */}
         {referralCode && (
-          <TouchableOpacity
-            style={[styles.referralCard, { backgroundColor: colors.navy + "08", borderColor: colors.navy + "20" }]}
-            activeOpacity={0.7}
-            onPress={() => Share.share({ message: `Junte-se à ibhub — Rede do Vinho com meu convite: ${referralCode}\nhttps://ibhub.com.br` })}
-          >
-            <View>
-              <Text style={[styles.referralTitle, { color: colors.navy }]}>Seu código de convite</Text>
-              <Text style={[styles.referralCode, { color: colors.gold }]}>{referralCode}</Text>
+          <View style={[styles.referralCard, { backgroundColor: colors.navy + "08", borderColor: colors.navy + "20" }]}>
+            {/* Top row: code + share */}
+            <View style={styles.referralTopRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.referralTitle, { color: colors.navy }]}>Seu código de convite</Text>
+                <Text style={[styles.referralCode, { color: colors.gold }]}>{referralCode}</Text>
+              </View>
+              <TouchableOpacity
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                onPress={() => Share.share({ message: `Junte-se à ibhub — Rede do Vinho com meu convite: ${referralCode}\nhttps://ibhub.com.br` })}
+              >
+                <Feather name="share-2" size={18} color={colors.gold} />
+              </TouchableOpacity>
             </View>
-            <Feather name="share-2" size={18} color={colors.gold} />
-          </TouchableOpacity>
+            {/* Bottom row: stats + ranking button */}
+            <View style={styles.referralBottomRow}>
+              <View style={[styles.inviteStatBadge, { backgroundColor: colors.gold + "18" }]}>
+                <Feather name="users" size={12} color={colors.gold} />
+                <Text style={[styles.inviteStatText, { color: colors.gold }]}>
+                  {inviteCount} {inviteCount === 1 ? "convidado" : "convidados"}
+                </Text>
+                {inviteRank > 0 && (
+                  <Text style={[styles.inviteStatText, { color: colors.gold, opacity: 0.7 }]}>
+                    · #{inviteRank}
+                  </Text>
+                )}
+              </View>
+              <TouchableOpacity
+                style={[styles.rankingBtn, { borderColor: colors.navy + "30" }]}
+                onPress={() => router.push("/referral-ranking" as any)}
+              >
+                <Feather name="award" size={12} color={colors.navy} />
+                <Text style={[styles.rankingBtnText, { color: colors.navy }]}>Ver Ranking</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         )}
 
         {/* Badges */}
@@ -919,9 +950,15 @@ const styles = StyleSheet.create({
   completionTrack:    { height: 6, borderRadius: 3, overflow: "hidden" },
   completionFill:     { height: 6, borderRadius: 3 },
   completionHint:     { fontSize: 12, lineHeight: 17 },
-  referralCard:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderRadius: 10, padding: 14 },
+  referralCard:       { borderWidth: 1, borderRadius: 10, padding: 14, rowGap: 12 },
+  referralTopRow:     { flexDirection: "row", alignItems: "center" },
+  referralBottomRow:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   referralTitle:      { fontSize: 12, fontWeight: "600", marginBottom: 4 },
   referralCode:       { fontSize: 18, fontWeight: "900", letterSpacing: 2 },
+  inviteStatBadge:    { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 16 },
+  inviteStatText:     { fontSize: 12, fontWeight: "700" },
+  rankingBtn:         { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },
+  rankingBtnText:     { fontSize: 12, fontWeight: "700" },
   badgesSection:      { gap: 10, paddingBottom: 4 },
   badgesTitle:        { fontSize: 14, fontWeight: "700" },
   badgeChip:          { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
