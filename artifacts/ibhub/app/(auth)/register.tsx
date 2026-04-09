@@ -246,10 +246,11 @@ export default function RegisterScreen() {
       const contentType = safeExt === "jpg" || safeExt === "jpeg" ? "image/jpeg" : `image/${safeExt}`;
       const filePath = `${userId}/avatar.${safeExt}`;
       const response = await fetch(localUri);
-      const blob = await response.blob();
+      const arrayBuffer = await response.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
       const { error } = await supabase.storage
         .from("avatars")
-        .upload(filePath, blob, { upsert: true, contentType });
+        .upload(filePath, bytes, { upsert: true, contentType });
       if (error) { console.warn("Avatar upload:", error.message); return null; }
       const { data } = supabase.storage.from("avatars").getPublicUrl(filePath);
       return data.publicUrl ?? null;

@@ -159,11 +159,12 @@ export async function uploadPostImage(imageUri: string, userId: string): Promise
     const filename = `${userId}/${Date.now()}.${ext}`;
 
     const response = await fetch(imageUri);
-    const blob = await response.blob();
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
 
     const { data, error } = await supabase.storage
       .from("post-images")
-      .upload(filename, blob, { contentType: mime, upsert: false });
+      .upload(filename, bytes, { contentType: mime, upsert: false });
 
     if (error) { console.error("uploadPostImage storage error:", error); return null; }
 
@@ -1083,11 +1084,12 @@ export async function uploadStoryImage(userId: string, uri: string): Promise<str
     const fileName = `${userId}/${Date.now()}.${ext}`;
 
     const response = await fetch(uri);
-    const blob = await response.blob();
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
 
     const { data, error } = await supabase.storage
       .from("stories")
-      .upload(fileName, blob, { contentType: `image/${ext === "jpg" ? "jpeg" : ext}`, upsert: true });
+      .upload(fileName, bytes, { contentType: `image/${ext === "jpg" ? "jpeg" : ext}`, upsert: true });
 
     if (error) { console.error("uploadStoryImage:", error); return null; }
 
@@ -1838,8 +1840,9 @@ export async function uploadChatMedia(
     const ext  = mimeType.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
     const path = `chat/${conversationId}/${Date.now()}.${ext}`;
     const resp = await fetch(uri);
-    const blob = await resp.blob();
-    const { error } = await supabase.storage.from("post-images").upload(path, blob, { contentType: mimeType, upsert: false });
+    const arrayBuffer = await resp.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    const { error } = await supabase.storage.from("post-images").upload(path, bytes, { contentType: mimeType, upsert: false });
     if (error) { console.error("uploadChatMedia:", error); return null; }
     const { data } = supabase.storage.from("post-images").getPublicUrl(path);
     return data.publicUrl;
@@ -2045,11 +2048,12 @@ export async function uploadCompanyLogo(companyId: string, uri: string): Promise
     const path = `company-logos/${companyId}.${ext}`;
 
     const resp = await fetch(uri);
-    const blob = await resp.blob();
+    const arrayBuffer = await resp.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
 
     const { error } = await supabase.storage
       .from("post-images")
-      .upload(path, blob, { contentType: `image/${ext}`, upsert: true });
+      .upload(path, bytes, { contentType: `image/${ext}`, upsert: true });
 
     if (error) { console.error("uploadCompanyLogo:", error); return null; }
 
@@ -2509,10 +2513,12 @@ export async function uploadCV(uri: string, userId: string): Promise<string | nu
     const path = `cvs/${userId}/${Date.now()}.${ext}`;
 
     const response = await fetch(uri);
-    const blob = await response.blob();
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    const contentType = ext === "pdf" ? "application/pdf" : ext === "doc" || ext === "docx" ? "application/msword" : "application/octet-stream";
 
-    const { error } = await supabase.storage.from("cvs").upload(path, blob, {
-      contentType: blob.type || "application/pdf",
+    const { error } = await supabase.storage.from("cvs").upload(path, bytes, {
+      contentType,
       upsert: true,
     });
 
@@ -3329,11 +3335,12 @@ export async function uploadAvatar(userId: string, uri: string): Promise<string 
     const path = `avatars/${userId}.${ext}`;
 
     const response = await fetch(uri);
-    const blob = await response.blob();
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
 
     const { error } = await supabase.storage
       .from("post-images")
-      .upload(path, blob, { contentType: mime, upsert: true });
+      .upload(path, bytes, { contentType: mime, upsert: true });
 
     if (error) { console.error("uploadAvatar:", error); return null; }
 
@@ -3556,11 +3563,12 @@ export async function uploadProductImage(productId: string, uri: string): Promis
     const path = `product-images/${productId}.${ext}`;
 
     const response = await fetch(uri);
-    const blob = await response.blob();
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
 
     const { error } = await supabase.storage
       .from("post-images")
-      .upload(path, blob, { contentType: mime, upsert: true });
+      .upload(path, bytes, { contentType: mime, upsert: true });
 
     if (error) { console.error("uploadProductImage:", error); return null; }
 
