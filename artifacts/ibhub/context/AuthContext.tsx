@@ -62,6 +62,7 @@ interface AuthContextType {
   updatePassword: (newPassword: string) => Promise<{ error: string | null }>;
   clearRecovery: () => void;
   refreshProfile: () => Promise<void>;
+  refreshProfileByUserId: (userId: string) => Promise<void>;
   patchProfile: (patch: Partial<Profile>) => void;
 }
 
@@ -109,6 +110,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshProfile = useCallback(async () => {
     if (user) await fetchProfile(user.id);
   }, [user, fetchProfile]);
+
+  const refreshProfileByUserId = useCallback(async (userId: string) => {
+    await fetchProfile(userId);
+  }, [fetchProfile]);
 
   const patchProfile = useCallback((patch: Partial<Profile>) => {
     setProfile((prev) => prev ? { ...prev, ...patch } : prev);
@@ -212,7 +217,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         session, user, profile, loading, isRecovering,
         signIn, signUp, signOut,
         resetPassword, updatePassword, clearRecovery,
-        refreshProfile, patchProfile,
+        refreshProfile, refreshProfileByUserId, patchProfile,
       }}
     >
       {children}

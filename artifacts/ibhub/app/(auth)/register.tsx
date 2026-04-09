@@ -126,7 +126,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { signUp } = useAuth();
+  const { signUp, refreshProfileByUserId } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [step, setStep] = useState(1);
@@ -241,7 +241,7 @@ export default function RegisterScreen() {
     if (!result.canceled) setAvatarUri(result.assets[0].uri);
   };
 
-  const uploadAvatarToStorage = async (userId: string, localUri: string): Promise<string | null> => {
+  const uploadAvatarToStorage = async (userId: string, localUri: string): Promise<{ url: string | null; error: string | null }> => {
     try {
       const rawExt = (localUri.split(".").pop() ?? "jpg").split("?")[0].toLowerCase();
       const safeExt = ["jpg", "jpeg", "png", "webp"].includes(rawExt) ? rawExt : "jpg";
@@ -253,12 +253,12 @@ export default function RegisterScreen() {
       const { error } = await supabase.storage
         .from("avatars")
         .upload(filePath, bytes, { upsert: true, contentType });
-      if (error) { console.warn("Avatar upload:", error.message); return null; }
+      if (error) { console.warn("Avatar upload:", error.message); return { url: null, error: error.message }; }
       const { data } = supabase.storage.from("avatars").getPublicUrl(filePath);
-      return data.publicUrl ?? null;
+      return { url: data.publicUrl ?? null, error: null };
     } catch (e) {
       console.warn("Avatar upload error:", e);
-      return null;
+      return { url: null, error: "Falha ao enviar foto" };
     }
   };
 
@@ -325,7 +325,11 @@ export default function RegisterScreen() {
         let avatarUrl: string | null = null;
         if (avatarUri) {
           setLoadingMsg("Enviando foto de perfil...");
-          avatarUrl = await uploadAvatarToStorage(currentUser.id, avatarUri);
+          const result = await uploadAvatarToStorage(currentUser.id, avatarUri);
+          avatarUrl = result.url;
+          if (result.error) {
+            Alert.alert("Aviso", `Foto não foi salva: ${result.error}. Você pode adicionar depois no perfil.`);
+          }
         }
 
         // 4. Salvar todos os campos do formulário no perfil
@@ -334,7 +338,8 @@ export default function RegisterScreen() {
           ? `${selectedCountry.ddi}${phone.trim().replace(/\D/g, "")}`
           : null;
 
-        await supabase.from("profiles").update({
+        const { error: upsertError } = await supabase.from("profiles").upsert({
+          id:                 currentUser.id,
           username:           username.toLowerCase().trim(),
           phone:              phoneWithDDI,
           areas_of_expertise: selectedAreas,
@@ -342,12 +347,21 @@ export default function RegisterScreen() {
           position:           role.trim() || null,
           plan:               selectedPlan,
           ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
-        }).eq("id", currentUser.id);
+        }, { onConflict: "id" });
+
+        if (upsertError) {
+          setLoading(false);
+          setError(`Erro ao salvar perfil: ${upsertError.message}`);
+          return;
+        }
 
         // Apply invite code if provided
         if (inviteCode.trim()) {
           await applyReferralCode(currentUser.id, inviteCode.trim());
         }
+
+        // Reload profile so avatar appears immediately in header/tabs
+        await refreshProfileByUserId(currentUser.id);
       }
 
       setLoading(false);
