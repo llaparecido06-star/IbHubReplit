@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@/components/ui/Icon";
 import { useAuth } from "@/context/AuthContext";
 
 export default function LoginScreen() {

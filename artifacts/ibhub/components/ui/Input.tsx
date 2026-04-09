@@ -8,7 +8,7 @@ import {
   View,
   ViewStyle,
 } from "react-native";
-import { Feather } from "@expo/vector-icons";
+import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
 
 interface InputProps extends TextInputProps {

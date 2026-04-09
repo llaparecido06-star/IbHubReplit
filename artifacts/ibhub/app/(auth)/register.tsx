@@ -18,7 +18,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather } from "@expo/vector-icons";
+import { Feather } from "@/components/ui/Icon";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/context/AuthContext";
 

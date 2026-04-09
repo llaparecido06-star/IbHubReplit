@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather } from "@expo/vector-icons";
+import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
 
 const SECTIONS = [

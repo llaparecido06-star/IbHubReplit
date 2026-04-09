@@ -24,7 +24,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import QRCode from "react-native-qrcode-svg";
 import { Post, PostCard, ReactionType } from "@/components/feed/PostCard";
 import { StoryBar } from "@/components/feed/StoryBar";

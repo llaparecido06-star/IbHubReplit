@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { Feather } from "@expo/vector-icons";
+import { Feather } from "@/components/ui/Icon";
 import React from "react";
 import { Platform } from "react-native";
 import { useColors } from "@/hooks/useColors";
