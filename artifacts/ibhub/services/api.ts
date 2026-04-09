@@ -2044,8 +2044,14 @@ export async function removeCompanyPageAdmin(companyId: string, userId: string):
 
 export async function uploadCompanyLogo(companyId: string, uri: string): Promise<string | null> {
   try {
-    const ext = uri.split(".").pop()?.toLowerCase() ?? "jpg";
-    const path = `company-logos/${companyId}.${ext}`;
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    if (!userId) { console.error("uploadCompanyLogo: no session"); return null; }
+
+    const rawExt = (uri.split(".").pop()?.split("?")[0] ?? "jpg").toLowerCase();
+    const safeExt = ["jpg", "jpeg", "png", "webp"].includes(rawExt) ? rawExt : "jpg";
+    const mime = safeExt === "png" ? "image/png" : safeExt === "webp" ? "image/webp" : "image/jpeg";
+    const path = `${userId}/company-logos/${companyId}.${safeExt}`;
 
     const resp = await fetch(uri);
     const arrayBuffer = await resp.arrayBuffer();
@@ -2053,7 +2059,7 @@ export async function uploadCompanyLogo(companyId: string, uri: string): Promise
 
     const { error } = await supabase.storage
       .from("post-images")
-      .upload(path, bytes, { contentType: `image/${ext}`, upsert: true });
+      .upload(path, bytes, { contentType: mime, upsert: true });
 
     if (error) { console.error("uploadCompanyLogo:", error); return null; }
 
@@ -3330,21 +3336,22 @@ export async function reviewCertificationRequest(
 
 export async function uploadAvatar(userId: string, uri: string): Promise<string | null> {
   try {
-    const ext = uri.split(".").pop()?.split("?")[0]?.toLowerCase() ?? "jpg";
-    const mime = ext === "png" ? "image/png" : "image/jpeg";
-    const path = `avatars/${userId}.${ext}`;
+    const rawExt = (uri.split(".").pop()?.split("?")[0] ?? "jpg").toLowerCase();
+    const safeExt = ["jpg", "jpeg", "png", "webp"].includes(rawExt) ? rawExt : "jpg";
+    const mime = safeExt === "png" ? "image/png" : safeExt === "webp" ? "image/webp" : "image/jpeg";
+    const path = `${userId}/avatar.${safeExt}`;
 
     const response = await fetch(uri);
     const arrayBuffer = await response.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
 
     const { error } = await supabase.storage
-      .from("post-images")
+      .from("avatars")
       .upload(path, bytes, { contentType: mime, upsert: true });
 
     if (error) { console.error("uploadAvatar:", error); return null; }
 
-    const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(path);
+    const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
     return urlData.publicUrl ?? null;
   } catch (e) {
     console.error("uploadAvatar:", e);
@@ -3558,9 +3565,14 @@ export async function deleteCompanyProduct(productId: string): Promise<boolean> 
 
 export async function uploadProductImage(productId: string, uri: string): Promise<string | null> {
   try {
-    const ext = uri.split(".").pop()?.split("?")[0]?.toLowerCase() ?? "jpg";
-    const mime = ext === "png" ? "image/png" : "image/jpeg";
-    const path = `product-images/${productId}.${ext}`;
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    if (!userId) { console.error("uploadProductImage: no session"); return null; }
+
+    const rawExt = (uri.split(".").pop()?.split("?")[0] ?? "jpg").toLowerCase();
+    const safeExt = ["jpg", "jpeg", "png", "webp"].includes(rawExt) ? rawExt : "jpg";
+    const mime = safeExt === "png" ? "image/png" : safeExt === "webp" ? "image/webp" : "image/jpeg";
+    const path = `${userId}/product-images/${productId}.${safeExt}`;
 
     const response = await fetch(uri);
     const arrayBuffer = await response.arrayBuffer();
