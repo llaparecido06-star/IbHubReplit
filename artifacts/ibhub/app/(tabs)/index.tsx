@@ -25,7 +25,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
-import QRCode from "react-native-qrcode-svg";
 import { Post, PostCard, ReactionType } from "@/components/feed/PostCard";
 import { StoryBar } from "@/components/feed/StoryBar";
 import { Avatar } from "@/components/ui/Avatar";
@@ -137,7 +136,6 @@ export default function FeedScreen() {
   const [showCreateMenu, setShowCreateMenu]         = useState(false);
   const [showCreatePost, setShowCreatePost]         = useState(false);
   const [showWineReview, setShowWineReview]         = useState(false);
-  const [showQR, setShowQR]                         = useState(false);
   const [showAccountMenu, setShowAccountMenu]       = useState(false);
 
   // Company mode
@@ -461,9 +459,6 @@ export default function FeedScreen() {
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.push("/search" as any)}>
             <Feather name="search" size={22} color={colors.navy} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => setShowQR(true)}>
-            <Feather name="grid" size={22} color={colors.navy} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.push("/notificacoes" as any)}>
             <Feather name="bell" size={22} color={colors.navy} />
@@ -968,87 +963,6 @@ export default function FeedScreen() {
         </View>
       </Modal>
 
-      {/* ── QR Code Modal ── */}
-      <Modal visible={showQR} transparent animationType="fade" onRequestClose={() => setShowQR(false)}>
-        <Pressable style={styles.qrOverlay} onPress={() => setShowQR(false)}>
-          <Pressable style={[styles.qrModal, { backgroundColor: "#fff" }]}>
-            <TouchableOpacity style={styles.qrClose} onPress={() => setShowQR(false)}>
-              <Feather name="x" size={20} color={colors.mutedForeground} />
-            </TouchableOpacity>
-            {/* Avatar */}
-            <View style={[styles.qrAvatar, { backgroundColor: colors.navy, borderColor: colors.gold }]}>
-              <Text style={[styles.qrAvatarText, { color: colors.gold }]}>
-                {(profile?.full_name ?? "U")[0]}
-              </Text>
-            </View>
-            <Text style={[styles.qrName, { color: colors.navy }]}>{profile?.full_name ?? "Meu Perfil"}</Text>
-            <Text style={[styles.qrRole, { color: colors.mutedForeground }]}>{profile?.headline ?? ""}</Text>
-            {profile?.username ? (
-              <Text style={[styles.qrCompany, { color: colors.mutedForeground }]}>@{profile.username}</Text>
-            ) : null}
-            {/* QR Code real — usa userId como identificador canônico */}
-            {(() => {
-              const profileId = user?.id ?? "unknown";
-              const profileLink = `https://ibhub.app/profile/${profileId}`;
-              return (
-                <>
-                  <View style={styles.qrCode}>
-                    <QRCode
-                      value={profileLink}
-                      size={160}
-                      color="#0d1b2a"
-                      backgroundColor="#ffffff"
-                    />
-                  </View>
-                  <Text style={[styles.qrCaption, { color: colors.mutedForeground }]}>
-                    {profileLink}
-                  </Text>
-                  {/* Buttons */}
-                  <View style={styles.qrBtns}>
-                    <TouchableOpacity
-                      style={[styles.qrBtn, { borderColor: colors.border }]}
-                      onPress={async () => {
-                        if (Platform.OS === "web") {
-                          try {
-                            await navigator.clipboard.writeText(profileLink);
-                            Alert.alert("Copiado!", "Link do perfil copiado para a área de transferência.");
-                          } catch {
-                            Alert.alert("Erro", "Não foi possível copiar o link. Copie manualmente: " + profileLink);
-                          }
-                        } else {
-                          await Share.share({ message: profileLink, url: profileLink });
-                        }
-                      }}
-                    >
-                      <Feather name="copy" size={15} color={colors.foreground} />
-                      <Text style={[styles.qrBtnText, { color: colors.foreground }]}>Copiar Link</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.qrBtn, { backgroundColor: colors.gold, borderColor: colors.gold }]}
-                      onPress={async () => {
-                        if (Platform.OS === "web") {
-                          try {
-                            await navigator.clipboard.writeText(profileLink);
-                            Alert.alert("Copiado!", "Link copiado para a área de transferência.");
-                          } catch {
-                            Alert.alert("Erro", "Não foi possível copiar o link. Copie manualmente: " + profileLink);
-                          }
-                        } else {
-                          await Share.share({ message: `Veja meu perfil no ibhub: ${profileLink}`, url: profileLink });
-                        }
-                      }}
-                    >
-                      <Feather name="share-2" size={15} color="#fff" />
-                      <Text style={[styles.qrBtnText, { color: "#fff" }]}>Compartilhar</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              );
-            })()}
-          </Pressable>
-        </Pressable>
-      </Modal>
-
       {/* ── Account Menu ── */}
       <Modal visible={showAccountMenu} transparent animationType="fade" onRequestClose={() => setShowAccountMenu(false)}>
         <Pressable style={styles.menuOverlay} onPress={() => setShowAccountMenu(false)}>
@@ -1215,20 +1129,6 @@ const styles = StyleSheet.create({
   tagChipText:        { fontSize: 13 },
   wineInput:          { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 11, fontSize: 14 },
   wineTextarea:       { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 11, fontSize: 14, height: 80 },
-  // QR modal
-  qrOverlay:          { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", padding: 20 },
-  qrModal:            { width: "100%", maxWidth: 340, borderRadius: 20, padding: 24, alignItems: "center", gap: 10 },
-  qrClose:            { position: "absolute", top: 16, right: 16 },
-  qrAvatar:           { width: 70, height: 70, borderRadius: 35, alignItems: "center", justifyContent: "center", borderWidth: 3, marginBottom: 4 },
-  qrAvatarText:       { fontSize: 28, fontWeight: "900" },
-  qrName:             { fontSize: 18, fontWeight: "800" },
-  qrRole:             { fontSize: 13 },
-  qrCompany:          { fontSize: 12 },
-  qrCode:             { marginVertical: 10, borderRadius: 8, overflow: "hidden" },
-  qrCaption:          { fontSize: 12, textAlign: "center" },
-  qrBtns:             { flexDirection: "row", gap: 10, width: "100%", marginTop: 4 },
-  qrBtn:              { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 13, borderRadius: 10, borderWidth: 1 },
-  qrBtnText:          { fontSize: 13, fontWeight: "700" },
   // Account menu
   accountMenu:        { width: 280, borderRadius: 14, overflow: "hidden", shadowOpacity: 0.12, shadowOffset: { width: 0, height: 4 }, shadowRadius: 12, elevation: 8 },
   accountRow:         { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12 },

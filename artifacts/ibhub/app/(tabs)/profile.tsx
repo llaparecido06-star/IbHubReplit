@@ -418,26 +418,36 @@ export default function ProfileScreen() {
           </View>
         ) : null}
 
-        {/* Action buttons */}
-        <View style={styles.actionRow}>
-          <TouchableOpacity style={[styles.btnPrimary, { backgroundColor: colors.gold }]} onPress={handleBusinessPage}>
-            <Feather name="briefcase" size={15} color="#fff" />
-            <Text style={styles.btnPrimaryText}>
-              {companyPages.length === 0 ? "Criar Empresa" : "Página Empresarial"}
+        {/* Action cards */}
+        <View style={styles.actionGrid}>
+          <TouchableOpacity style={[styles.actionCard, { backgroundColor: colors.gold + "12", borderColor: colors.gold + "30" }]} onPress={handleBusinessPage} activeOpacity={0.75}>
+            <View style={[styles.actionCardIcon, { backgroundColor: colors.gold }]}>
+              <Feather name="briefcase" size={18} color="#fff" />
+            </View>
+            <Text style={[styles.actionCardLabel, { color: colors.navy }]}>
+              {companyPages.length === 0 ? "Empresa" : "Empresa"}
+            </Text>
+            <Text style={[styles.actionCardSub, { color: colors.mutedForeground }]}>
+              {companyPages.length === 0 ? "Criar página" : "Gerenciar"}
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.btnSecondary, { borderColor: colors.border }]}
-            onPress={() => router.push("/conexoes" as any)}
-          >
-            <Feather name="users" size={15} color={colors.navy} />
-            <Text style={[styles.btnSecondaryText, { color: colors.navy }]}>Conexões</Text>
+
+          <TouchableOpacity style={[styles.actionCard, { backgroundColor: colors.navyLight + "14", borderColor: colors.navyLight + "30" }]} onPress={() => router.push("/conexoes" as any)} activeOpacity={0.75}>
+            <View style={[styles.actionCardIcon, { backgroundColor: colors.navy }]}>
+              <Feather name="users" size={18} color="#fff" />
+            </View>
+            <Text style={[styles.actionCardLabel, { color: colors.navy }]}>Conexões</Text>
+            <Text style={[styles.actionCardSub, { color: colors.mutedForeground }]}>
+              {profile?.connections_count ?? 0} contatos
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.btnSecondary, { borderColor: colors.gold, paddingHorizontal: 14 }]}
-            onPress={() => setShowQrModal(true)}
-          >
-            <Feather name="maximize" size={15} color={colors.gold} />
+
+          <TouchableOpacity style={[styles.actionCard, { backgroundColor: "#6366f1" + "12", borderColor: "#6366f1" + "30" }]} onPress={() => setShowQrModal(true)} activeOpacity={0.75}>
+            <View style={[styles.actionCardIcon, { backgroundColor: "#6366f1" }]}>
+              <Feather name="maximize" size={18} color="#fff" />
+            </View>
+            <Text style={[styles.actionCardLabel, { color: colors.navy }]}>QR Code</Text>
+            <Text style={[styles.actionCardSub, { color: colors.mutedForeground }]}>Compartilhar</Text>
           </TouchableOpacity>
         </View>
 
@@ -925,11 +935,11 @@ const styles = StyleSheet.create({
   qrUsername:         { fontSize: 13 },
   qrShareBtn:         { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 },
   qrShareBtnText:     { color: "#fff", fontWeight: "700", fontSize: 14 },
-  actionRow:          { flexDirection: "row", gap: 10 },
-  btnPrimary:         { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingVertical: 12, borderRadius: 10 },
-  btnPrimaryText:     { color: "#fff", fontWeight: "700", fontSize: 14 },
-  btnSecondary:       { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingVertical: 12, borderRadius: 10, borderWidth: 1.5 },
-  btnSecondaryText:   { fontWeight: "700", fontSize: 14 },
+  actionGrid:         { flexDirection: "row", gap: 10, marginTop: 4 },
+  actionCard:         { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 14, paddingHorizontal: 6, borderRadius: 14, borderWidth: 1, gap: 6 },
+  actionCardIcon:     { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  actionCardLabel:    { fontSize: 13, fontWeight: "700", textAlign: "center" },
+  actionCardSub:      { fontSize: 11, textAlign: "center" },
   companyRow:         { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 12, borderWidth: 1, padding: 12 },
   companyLogoMini:    { width: 38, height: 38, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   companyLogoText:    { fontSize: 16, fontWeight: "800" },
