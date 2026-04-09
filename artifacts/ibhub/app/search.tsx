@@ -477,7 +477,7 @@ export default function SearchScreen() {
       <ScrollView
         horizontal showsHorizontalScrollIndicator={false}
         style={[styles.filtersBar, { backgroundColor: "#fff", borderBottomColor: colors.border }]}
-        contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 10, gap: 8 }}
+        contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 10, rowGap: 8 }}
       >
         {FILTERS.map(f => {
           const active = filter === f.key;

@@ -113,7 +113,8 @@ export default function ContactScreen() {
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <ScrollView
-          contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: bottomPad }}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: 16, rowGap: 14, paddingBottom: bottomPad }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >

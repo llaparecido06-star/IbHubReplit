@@ -480,7 +480,7 @@ export default function AdminSlidesMercadoScreen() {
         <View style={{ width: 22 }} />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: botPad }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: 16, rowGap: 14, paddingBottom: botPad }} showsVerticalScrollIndicator={false}>
         {/* Hero */}
         <View style={{ gap: 4 }}>
           <Text style={[s.heroTitle, { color: colors.navy }]}>Mercado</Text>
@@ -904,7 +904,7 @@ const s = StyleSheet.create({
   presCard:       { borderRadius: 12, borderWidth: 1, overflow: "hidden" },
   presCover:      { width: "100%", height: 140 },
   presCoverPlaceholder: { width: "100%", height: 140, alignItems: "center", justifyContent: "center" },
-  presInfo:       { padding: 12, gap: 8, flexDirection: "row", alignItems: "flex-start" },
+  presInfo:       { padding: 12, rowGap: 8, flexDirection: "row", alignItems: "flex-start" },
   presTopRow:     { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 },
   presTitle:      { fontSize: 14, fontWeight: "700", flex: 1 },
   presBadge:      { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 },

@@ -381,7 +381,7 @@ export default function EmpresaScreen() {
         ) : null}
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
         {/* Company card */}
         <View style={[styles.companyCard, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
           {companyLogo ? (
@@ -501,7 +501,7 @@ export default function EmpresaScreen() {
 
         {/* ── Portfólio ── */}
         {activeTab === "portfolio" && (
-          <View style={{ padding: 16, gap: 14 }}>
+          <View style={{ padding: 16, rowGap: 14 }}>
             {isManager ? (
               <TouchableOpacity
                 style={[styles.addProductBtn, { backgroundColor: colors.gold }]}
@@ -598,7 +598,7 @@ export default function EmpresaScreen() {
               <ActivityIndicator size="large" color={colors.gold} />
             </View>
           ) : (
-            <View style={{ padding: 16, gap: 16 }}>
+            <View style={{ padding: 16, rowGap: 16 }}>
               {(() => {
                 const a = companyAnalytics;
                 const engRate = a && a.totalPosts > 0
@@ -698,7 +698,7 @@ export default function EmpresaScreen() {
               <Feather name="x" size={22} color={colors.navy} />
             </TouchableOpacity>
           </View>
-          <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, rowGap: 14 }}>
             <TextInput
               style={[styles.formInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
               placeholder="Nome do produto" placeholderTextColor={colors.mutedForeground} value={pName} onChangeText={setPName} />

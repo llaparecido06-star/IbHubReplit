@@ -22,7 +22,7 @@ const LANGUAGES = [
 ];
 
 interface MenuRow {
-  icon: keyof typeof Feather.glyphMap;
+  icon: string;
   label: string;
   sub?: string;
   onPress: () => void;

@@ -126,7 +126,7 @@ export default function NotificationSettingsScreen() {
         <View style={{ width: 22 }} />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, rowGap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
         {/* Push card */}
         <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
           <View style={styles.pushRow}>

@@ -925,7 +925,7 @@ export default function FeedScreen() {
                 <Text style={styles.publishBtnText}>Publicar</Text>
               </TouchableOpacity>
             </View>
-            <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }} keyboardShouldPersistTaps="handled">
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, rowGap: 16 }} keyboardShouldPersistTaps="handled">
               {/* Author */}
               <View style={styles.postAuthorRow}>
                 <View style={[styles.postAvatar, { backgroundColor: colors.navy }]}>

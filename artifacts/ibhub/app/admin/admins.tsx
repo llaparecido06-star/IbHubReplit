@@ -154,7 +154,8 @@ export default function AdminAdminsScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: bottomPad }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 16, rowGap: 14, paddingBottom: bottomPad }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >

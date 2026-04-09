@@ -90,7 +90,7 @@ export default function EventsScreen() {
           </Pressable>
         )}
         style={{ maxHeight: 52, borderBottomWidth: 1, borderBottomColor: colors.border }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 10, gap: 8 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 10, rowGap: 8 }}
         showsHorizontalScrollIndicator={false}
       />
 
@@ -137,7 +137,7 @@ export default function EventsScreen() {
             </View>
           </View>
         )}
-        contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: bottomPad + 40 }}
+        contentContainerStyle={{ padding: 16, rowGap: 12, paddingBottom: bottomPad + 40 }}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.empty}>

@@ -220,7 +220,7 @@ export default function OpportunitiesScreen() {
           </Pressable>
         )}
         style={{ maxHeight: 46 }}
-        contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 8, gap: 8 }}
+        contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 8, rowGap: 8 }}
         showsHorizontalScrollIndicator={false}
       />
 
@@ -235,7 +235,7 @@ export default function OpportunitiesScreen() {
           keyExtractor={(i) => i.id}
           renderItem={renderItem}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />}
-          contentContainerStyle={{ padding: 14, gap: 12, paddingBottom: bottomPad + 40 }}
+          contentContainerStyle={{ padding: 14, rowGap: 12, paddingBottom: bottomPad + 40 }}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.empty}>

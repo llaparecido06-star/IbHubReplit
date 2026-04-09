@@ -437,7 +437,7 @@ function ApresentacoesView({ colors, bottomPad }: { colors: any; bottomPad: numb
   }
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: bottomPad, gap: 14 }} showsVerticalScrollIndicator={false}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: bottomPad, rowGap: 14 }} showsVerticalScrollIndicator={false}>
       {items.map(p => (
         <TouchableOpacity
           key={p.id}
@@ -899,7 +899,7 @@ const styles = StyleSheet.create({
   presentCard:           { borderRadius: 14, borderWidth: 1, overflow: "hidden" },
   presentCover:          { width: "100%", height: 160 },
   presentCoverPlaceholder:{ width: "100%", height: 120, alignItems: "center", justifyContent: "center" },
-  presentBody:           { padding: 14, gap: 6 },
+  presentBody:           { padding: 14, rowGap: 6 },
   presentTitle:          { fontSize: 16, fontWeight: "700" },
   presentDesc:           { fontSize: 13, lineHeight: 19 },
   presentFooter:         { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 4 },

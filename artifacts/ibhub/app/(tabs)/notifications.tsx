@@ -303,7 +303,8 @@ export default function OportunidadesScreen() {
 
       {/* Content */}
       <ScrollView
-        contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: bottomPad }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 16, rowGap: 10, paddingBottom: bottomPad }}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />}
       >
@@ -332,7 +333,7 @@ export default function OportunidadesScreen() {
                   resizeMode="cover"
                 />
               ) : null}
-              <View style={{ padding: 14, gap: 7 }}>
+              <View style={{ padding: 14, rowGap: 7 }}>
               {/* Badges row */}
               <View style={styles.badgesRow}>
                 {novo && (

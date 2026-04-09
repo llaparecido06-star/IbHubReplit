@@ -176,7 +176,8 @@ export default function AdminModeracaoScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: bottomPad }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 16, rowGap: 14, paddingBottom: bottomPad }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} colors={[colors.gold]} />
