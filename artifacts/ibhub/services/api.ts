@@ -3352,7 +3352,8 @@ export async function uploadAvatar(userId: string, uri: string): Promise<string 
     if (error) { console.error("uploadAvatar:", error); return null; }
 
     const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
-    return urlData.publicUrl ?? null;
+    const publicUrl = urlData.publicUrl;
+    return publicUrl ? `${publicUrl}?t=${Date.now()}` : null;
   } catch (e) {
     console.error("uploadAvatar:", e);
     return null;
