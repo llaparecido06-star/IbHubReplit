@@ -34,8 +34,8 @@ const SECTIONS = [
     body: "Na extensão máxima permitida pela lei aplicável, o ibhub não será responsável por quaisquer danos indiretos, incidentais, especiais, consequenciais ou punitivos, incluindo, sem limitação, perda de lucros, dados, uso, boa vontade ou outras perdas intangíveis resultantes do seu acesso ou uso (ou incapacidade de acesso ou uso) do serviço.",
   },
   {
-    title: "6. Rescisão",
-    body: "Podemos encerrar ou suspender sua conta e acesso ao serviço imediatamente, sem aviso prévio ou responsabilidade, por qualquer motivo, inclusive se você violar estes Termos. Após o encerramento, seu direito de usar o serviço cessará imediatamente. Se desejar encerrar sua conta, basta descontinuar o uso do serviço.",
+    title: "6. Rescisão e Exclusão de Conta",
+    body: "Podemos encerrar ou suspender sua conta e acesso ao serviço imediatamente, sem aviso prévio ou responsabilidade, por qualquer motivo, inclusive se você violar estes Termos. Após o encerramento, seu direito de usar o serviço cessará imediatamente. Se desejar encerrar sua conta, você pode solicitar a exclusão permanente de todos os seus dados diretamente no aplicativo, em Configurações › Privacidade e Segurança › Excluir minha conta. A exclusão é irreversível e remove definitivamente todos os dados pessoais, publicações, conexões e histórico associados à conta.",
   },
   {
     title: "7. Alterações nos Termos",
@@ -71,7 +71,7 @@ export default function TermsOfUseScreen() {
       >
         <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
           <Text style={[styles.lastUpdated, { color: colors.mutedForeground }]}>
-            Última atualização: 1 de janeiro de 2026
+            Última atualização: 9 de abril de 2026
           </Text>
           <Text style={[styles.intro, { color: colors.navy }]}>
             Bem-vindo ao ibhub. Ao utilizar nosso aplicativo, você concorda com os termos e condições descritos abaixo. Por favor, leia atentamente antes de prosseguir.
