@@ -2,6 +2,7 @@ import { Tabs } from "expo-router";
 import { Feather } from "@/components/ui/Icon";
 import React from "react";
 import { Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 
@@ -9,6 +10,13 @@ export default function TabLayout() {
   const colors    = useColors();
   const { profile } = useAuth();
   const isCompany = profile?.profile_type === "empresa";
+  const insets    = useSafeAreaInsets();
+
+  const tabBarHeight = Platform.select({
+    ios:     54 + insets.bottom,
+    android: 62,
+    default: 62,
+  });
 
   return (
     <Tabs
@@ -25,13 +33,17 @@ export default function TabLayout() {
           shadowOpacity: 0.06,
           shadowOffset: { width: 0, height: -2 },
           shadowRadius: 8,
-          height: Platform.select({ ios: 60, android: 64, web: 64 }),
-          paddingBottom: Platform.select({ ios: 0, android: 8, web: 0 }),
-          paddingTop: Platform.select({ ios: 6, android: 6, web: 4 }),
+          height: tabBarHeight,
+          paddingBottom: Platform.select({ ios: insets.bottom || 8, android: 10, default: 8 }),
+          paddingTop: 6,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: "600",
+          letterSpacing: 0,
+        },
+        tabBarItemStyle: {
+          paddingHorizontal: 0,
         },
       }}
     >
@@ -39,7 +51,7 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "Início",
-          tabBarIcon: ({ color, size }) => <Feather name="home" size={22} color={color} />,
+          tabBarIcon: ({ color }) => <Feather name="home" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -59,14 +71,14 @@ export default function TabLayout() {
       <Tabs.Screen
         name="notifications"
         options={{
-          title: "Oportunidades",
+          title: "Vagas",
           tabBarIcon: ({ color }) => <Feather name="briefcase" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: isCompany ? "Empresa" : "Meu Perfil",
+          title: isCompany ? "Empresa" : "Perfil",
           tabBarIcon: ({ color }) => (
             <Feather name={isCompany ? "briefcase" : "user"} size={22} color={color} />
           ),
