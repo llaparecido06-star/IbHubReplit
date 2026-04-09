@@ -20,13 +20,22 @@ SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
-  const { session, loading } = useAuth();
+  const { session, loading, isRecovering } = useAuth();
 
   if (loading) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0d1b2a" }}>
         <ActivityIndicator color="#c9a84c" size="large" />
       </View>
+    );
+  }
+
+  // Password recovery flow — show reset screen regardless of session state
+  if (isRecovering) {
+    return (
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(auth)/reset-password" options={{ headerShown: false }} />
+      </Stack>
     );
   }
 
