@@ -43,17 +43,127 @@ import {
   fetchProfileViewsThisWeek,
   ensureReferralCode,
   fetchMyReferralStats,
+  fetchCompanyPageById,
 } from "@/services/api";
 import { Post } from "@/components/feed/PostCard";
 import EmpresaDashboard from "@/components/EmpresaDashboard";
 
 type StatModal = "seguidores" | "seguindo" | null;
 
+// ── Company Profile Proxy ─────────────────────────────────────────────────────
+// Rendered in the profile tab when a company identity is active.
+function EmpresaProfileProxy({
+  companyId, colors, router, insets, topPad, bottomPad,
+}: {
+  companyId: string;
+  colors: ReturnType<typeof useColors>;
+  router: ReturnType<typeof useRouter>;
+  insets: { top: number; bottom: number };
+  topPad: number;
+  bottomPad: number;
+}) {
+  const { activeCompany, setActiveCompany } = useAuth();
+  const [company, setCompany]     = React.useState<CompanyPage | null>(null);
+  const [loading, setLoading]     = React.useState(true);
+  const [postCount, setPostCount] = React.useState(0);
+
+  React.useEffect(() => {
+    fetchCompanyPageById(companyId).then(c => { setCompany(c); setLoading(false); });
+    fetchUserPosts(companyId, companyId).then(p => setPostCount(p.length)).catch(() => {});
+  }, [companyId]);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.gold} />
+      </View>
+    );
+  }
+
+  const c = company;
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      contentContainerStyle={{ paddingBottom: bottomPad }}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Header */}
+      <View style={{ paddingTop: topPad + 14, paddingHorizontal: 16, paddingBottom: 14, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <Text style={{ fontSize: 18, fontWeight: "800", color: colors.navy }}>Modo Empresa</Text>
+          <TouchableOpacity
+            style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}
+            onPress={() => setActiveCompany(null)}
+          >
+            <Feather name="user" size={13} color={colors.mutedForeground} />
+            <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Perfil pessoal</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+          <Avatar uri={c?.avatar_url} name={c?.name ?? "Empresa"} size={72} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 20, fontWeight: "800", color: colors.navy }}>{c?.name ?? "Empresa"}</Text>
+            {!!c?.industry && <Text style={{ fontSize: 13, color: colors.gold, fontWeight: "600", marginTop: 2 }}>{c.industry}</Text>}
+            {!!c?.location && <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 2 }}>{c.location}</Text>}
+          </View>
+        </View>
+
+        {!!c?.bio && (
+          <Text style={{ fontSize: 14, color: colors.foreground, marginTop: 12, lineHeight: 20 }}>{c.bio}</Text>
+        )}
+
+        <View style={{ flexDirection: "row", marginTop: 16, gap: 8 }}>
+          <TouchableOpacity
+            style={{ flex: 1, backgroundColor: colors.gold, paddingVertical: 10, borderRadius: 10, alignItems: "center" }}
+            onPress={() => router.push(`/empresa/${companyId}` as any)}
+          >
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>Ver Perfil Completo</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{ paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: "center" }}
+            onPress={() => router.push(`/manage-business-page?id=${companyId}` as any)}
+          >
+            <Feather name="edit-2" size={16} color={colors.navy} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Quick actions */}
+      <View style={{ padding: 16, gap: 10 }}>
+        <Text style={{ fontSize: 13, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Ações rápidas</Text>
+        {[
+          { icon: "briefcase", label: "Publicações", sub: `${postCount} posts`, onPress: () => router.push(`/empresa/${companyId}` as any) },
+          { icon: "grid",      label: "Portfólio",   sub: "Produtos e serviços", onPress: () => router.push(`/empresa/${companyId}` as any) },
+          { icon: "bar-chart-2", label: "Analytics", sub: "Visualizações e engajamento", onPress: () => router.push(`/empresa/${companyId}` as any) },
+          { icon: "plus-circle", label: "Nova Vaga / Anúncio", sub: "Publicar oportunidade", onPress: () => router.push("/new-opportunity" as any) },
+          { icon: "calendar",  label: "Criar Evento", sub: "Organizar um evento", onPress: () => router.push("/new-event" as any) },
+        ].map(item => (
+          <TouchableOpacity
+            key={item.label}
+            style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 14, backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: colors.border }}
+            onPress={item.onPress}
+          >
+            <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: colors.gold + "18", alignItems: "center", justifyContent: "center" }}>
+              <Feather name={item.icon as any} size={18} color={colors.gold} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.navy }}>{item.label}</Text>
+              <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>{item.sub}</Text>
+            </View>
+            <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        ))}
+      </View>
+    </ScrollView>
+  );
+}
+
 export default function ProfileScreen() {
   const colors  = useColors();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
-  const { profile, user, signOut } = useAuth();
+  const { profile, user, signOut, activeCompany } = useAuth();
 
   const [activeTab,    setActiveTab]    = useState<"feed" | "salvos" | "adega">("feed");
   const [showComments, setShowComments] = useState<string | null>(null);
@@ -82,7 +192,7 @@ export default function ProfileScreen() {
   const [inviteCount,   setInviteCount]   = useState(0);
   const [inviteRank,    setInviteRank]    = useState(0);
 
-  const isCompany = profile?.profile_type === "empresa";
+  const isCompany = !!activeCompany || profile?.profile_type === "empresa";
   const name      = profile?.full_name ?? profile?.username ?? "Usuário";
   const username  = profile?.username  ?? "";
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
@@ -274,7 +384,11 @@ export default function ProfileScreen() {
   const wineInCellar = wineEntries.filter((w) => w.status === "adega").length;
   const wineTotal    = wineEntries.length;
 
-  if (isCompany) {
+  if (activeCompany) {
+    return <EmpresaProfileProxy companyId={activeCompany.id} colors={colors} router={router} insets={insets} topPad={topPad} bottomPad={bottomPad} />;
+  }
+
+  if (profile?.profile_type === "empresa") {
     return <EmpresaDashboard />;
   }
 

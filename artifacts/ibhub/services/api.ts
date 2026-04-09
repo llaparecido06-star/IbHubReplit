@@ -58,12 +58,16 @@ export interface AppStory {
   created_at: string;
   expires_at: string;
   author?: { id: string; full_name: string; avatar_url?: string | null } | null;
+  company_page_id?: string | null;
+  company_page?: { id: string; name: string; avatar_url?: string | null } | null;
   viewed?: boolean;
 }
 
 export interface StoryGroup {
   userId: string;
   author: { id: string; full_name: string; avatar_url?: string | null };
+  companyPageId?: string | null;
+  companyPage?: { id: string; name: string; avatar_url?: string | null } | null;
   stories: AppStory[];
   hasUnseen: boolean;
 }
@@ -72,6 +76,8 @@ export interface AppMessage {
   id: string;
   conversation_id: string;
   sender_id: string;
+  from_company_page_id?: string | null;
+  from_company_page?: { id: string; name: string; avatar_url?: string | null } | null;
   content: string;
   created_at: string;
   message_type?: "text" | "image" | "video" | "audio" | "file" | "post_share" | "wine_card";
@@ -1050,8 +1056,9 @@ export async function fetchActiveStories(): Promise<AppStory[]> {
     const { data, error } = await supabase
       .from("stories")
       .select(`
-        id, user_id, image_url, text, tagged_users, created_at, expires_at,
-        author:profiles!stories_user_id_fkey(id, full_name, avatar_url)
+        id, user_id, company_page_id, image_url, text, tagged_users, created_at, expires_at,
+        author:profiles!stories_user_id_fkey(id, full_name, avatar_url),
+        company_page:company_pages(id, name, avatar_url)
       `)
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: false });
@@ -1069,8 +1076,9 @@ export async function fetchActiveStoriesForUser(currentUserId: string): Promise<
     const { data: stories, error } = await supabase
       .from("stories")
       .select(`
-        id, user_id, image_url, text, tagged_users, created_at, expires_at,
-        author:profiles!stories_user_id_fkey(id, full_name, avatar_url)
+        id, user_id, company_page_id, image_url, text, tagged_users, created_at, expires_at,
+        author:profiles!stories_user_id_fkey(id, full_name, avatar_url),
+        company_page:company_pages(id, name, avatar_url)
       `)
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: true });
@@ -1089,24 +1097,40 @@ export async function fetchActiveStoriesForUser(currentUserId: string): Promise<
       viewed: viewedIds.has(s.id),
     }));
 
+    // Group by company_page_id (if set) or user_id
     const groupMap = new Map<string, StoryGroup>();
     for (const story of storiesWithViewed) {
-      const uid = story.user_id;
-      if (!groupMap.has(uid)) {
-        groupMap.set(uid, {
-          userId: uid,
-          author: story.author ?? { id: uid, full_name: "Usuário", avatar_url: null },
-          stories: [],
-          hasUnseen: false,
-        });
+      const groupKey = story.company_page_id ? `company_${story.company_page_id}` : story.user_id;
+      if (!groupMap.has(groupKey)) {
+        if (story.company_page_id && story.company_page) {
+          groupMap.set(groupKey, {
+            userId: story.user_id,
+            companyPageId: story.company_page_id,
+            companyPage: story.company_page,
+            author: {
+              id: story.company_page.id,
+              full_name: story.company_page.name,
+              avatar_url: story.company_page.avatar_url ?? null,
+            },
+            stories: [],
+            hasUnseen: false,
+          });
+        } else {
+          groupMap.set(groupKey, {
+            userId: story.user_id,
+            author: story.author ?? { id: story.user_id, full_name: "Usuário", avatar_url: null },
+            stories: [],
+            hasUnseen: false,
+          });
+        }
       }
-      const group = groupMap.get(uid)!;
+      const group = groupMap.get(groupKey)!;
       group.stories.push(story);
       if (!story.viewed) group.hasUnseen = true;
     }
 
     const ownGroup = groupMap.get(currentUserId);
-    const otherGroups = [...groupMap.values()].filter(g => g.userId !== currentUserId);
+    const otherGroups = [...groupMap.values()].filter(g => g.userId !== currentUserId || g.companyPageId);
     const result: StoryGroup[] = [];
     if (ownGroup) result.push(ownGroup);
     result.push(...otherGroups.sort((a, b) => (b.hasUnseen ? 1 : 0) - (a.hasUnseen ? 1 : 0)));
@@ -1173,7 +1197,7 @@ export async function uploadStoryImage(userId: string, uri: string): Promise<str
 
 export async function createStory(
   userId: string,
-  options: { text?: string; imageUri?: string; taggedUsers?: string[] }
+  options: { text?: string; imageUri?: string; taggedUsers?: string[]; companyPageId?: string | null }
 ): Promise<AppStory | null> {
   try {
     let imageUrl: string | null = null;
@@ -1186,18 +1210,22 @@ export async function createStory(
     }
 
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const insertPayload: any = {
+      user_id: userId,
+      text: options.text ?? null,
+      image_url: imageUrl,
+      tagged_users: options.taggedUsers ?? [],
+      expires_at: expiresAt,
+    };
+    if (options.companyPageId) insertPayload.company_page_id = options.companyPageId;
+
     const { data, error } = await supabase
       .from("stories")
-      .insert({
-        user_id: userId,
-        text: options.text ?? null,
-        image_url: imageUrl,
-        tagged_users: options.taggedUsers ?? [],
-        expires_at: expiresAt,
-      })
+      .insert(insertPayload)
       .select(`
-        id, user_id, image_url, text, tagged_users, created_at, expires_at,
-        author:profiles!stories_user_id_fkey(id, full_name, avatar_url)
+        id, user_id, company_page_id, image_url, text, tagged_users, created_at, expires_at,
+        author:profiles!stories_user_id_fkey(id, full_name, avatar_url),
+        company_page:company_pages(id, name, avatar_url)
       `)
       .single();
 
@@ -1330,7 +1358,11 @@ export async function fetchMessages(conversationId: string, currentUserId?: stri
   try {
     const { data, error } = await supabase
       .from("messages")
-      .select("id, conversation_id, sender_id, content, created_at, message_type, media_url, reply_to_id, read_at, metadata")
+      .select(`
+        id, conversation_id, sender_id, from_company_page_id, content, created_at,
+        message_type, media_url, reply_to_id, read_at, metadata,
+        from_company_page:company_pages(id, name, avatar_url)
+      `)
       .eq("conversation_id", conversationId)
       .order("created_at", { ascending: true });
 
@@ -1501,7 +1533,7 @@ export async function sendMessage(
   conversationId: string,
   senderId: string,
   content: string,
-  opts?: { reply_to_id?: string; message_type?: string; metadata?: Record<string, any> },
+  opts?: { reply_to_id?: string; message_type?: string; metadata?: Record<string, any>; companyPageId?: string | null },
 ): Promise<AppMessage | null> {
   try {
     const payload: any = {
@@ -1512,6 +1544,7 @@ export async function sendMessage(
     };
     if (opts?.reply_to_id) payload.reply_to_id = opts.reply_to_id;
     if (opts?.metadata) payload.metadata = opts.metadata;
+    if (opts?.companyPageId) payload.from_company_page_id = opts.companyPageId;
 
     const { data, error } = await supabase
       .from("messages")

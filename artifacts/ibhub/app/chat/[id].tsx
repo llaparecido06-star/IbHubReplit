@@ -47,7 +47,7 @@ export default function ChatScreen() {
   const colors   = useColors();
   const router   = useRouter();
   const { id }   = useLocalSearchParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user, profile, activeCompany } = useAuth();
   const insets   = useSafeAreaInsets();
 
   const [messages,       setMessages]       = useState<AppMessage[]>([]);
@@ -194,6 +194,10 @@ export default function ChatScreen() {
       id: `tmp_${Date.now()}`,
       conversation_id: id,
       sender_id: user.id,
+      from_company_page_id: activeCompany?.id ?? null,
+      from_company_page: activeCompany
+        ? { id: activeCompany.id, name: activeCompany.name, avatar_url: activeCompany.avatar_url ?? null }
+        : null,
       content: text,
       created_at: new Date().toISOString(),
       message_type: (opts?.message_type as any) ?? "text",
@@ -208,11 +212,12 @@ export default function ChatScreen() {
       reply_to_id: opts?.reply_to_id ?? replyTo?.id,
       message_type: opts?.message_type,
       metadata: opts?.metadata,
+      companyPageId: activeCompany?.id,
     });
     if (saved) setMessages((prev) => prev.map((m) => m.id === tempMsg.id ? saved : m));
     setSending(false);
     // Fire-and-forget: dispatch push notification to recipients
-    const senderName = (user as any)?.full_name ?? (user as any)?.name ?? "Alguém";
+    const senderName = activeCompany?.name ?? (user as any)?.full_name ?? (user as any)?.name ?? "Alguém";
     const pushBody = opts?.message_type === "post_share" ? "📎 Compartilhou uma postagem" :
                      opts?.message_type === "wine_card"  ? "🍷 Enviou um vinho" : text;
     API.dispatchPushToConversation(id, user.id, senderName, pushBody).catch(() => {});
@@ -464,14 +469,29 @@ export default function ChatScreen() {
     const isMe   = item.sender_id === user?.id;
     const isTemp = item.id.startsWith("tmp_");
     const type   = item.message_type ?? "text";
+    const myCompany = item.from_company_page;
 
     return (
       <View style={[styles.msgGroup, isMe ? styles.msgGroupMe : styles.msgGroupOther]}>
+        {isMe && myCompany && (
+          <Text style={[styles.companyLabel, { color: colors.gold, alignSelf: "flex-end" }]}>{myCompany.name}</Text>
+        )}
         <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
           {!isMe && (
-            <TouchableOpacity onPress={() => participant && router.push(`/profile/${participant.id}` as any)}>
-              <Avatar uri={participant?.avatar_url} name={participant?.full_name ?? "?"} size={28} style={{ marginTop: 2 }} />
+            <TouchableOpacity onPress={() => {
+              if (item.from_company_page) router.push(`/empresa/${item.from_company_page.id}` as any);
+              else if (participant) router.push(`/profile/${participant.id}` as any);
+            }}>
+              <Avatar
+                uri={item.from_company_page ? item.from_company_page.avatar_url : participant?.avatar_url}
+                name={item.from_company_page ? item.from_company_page.name : (participant?.full_name ?? "?")}
+                size={28}
+                style={{ marginTop: 2 }}
+              />
             </TouchableOpacity>
+          )}
+          {isMe && myCompany && (
+            <Avatar uri={myCompany.avatar_url} name={myCompany.name} size={28} style={{ marginTop: 2 }} />
           )}
           <Pressable
             style={[
@@ -943,6 +963,7 @@ const styles = StyleSheet.create({
   msgGroup:          { marginBottom: 4 },
   msgGroupMe:        { alignItems: "flex-end" },
   msgGroupOther:     { alignItems: "flex-start" },
+  companyLabel:      { fontSize: 10, fontWeight: "700", marginBottom: 2, marginRight: 6 },
   msgRow:            { flexDirection: "row", marginBottom: 2, gap: 6, alignItems: "flex-end" },
   msgRowMe:          { justifyContent: "flex-end" },
   msgRowOther:       { justifyContent: "flex-start" },

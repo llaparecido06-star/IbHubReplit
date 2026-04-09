@@ -36,7 +36,7 @@ interface TaggedProfile {
 export default function CreateMomentoScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { user, profile } = useAuth();
+  const { user, profile, activeCompany } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [step, setStep] = useState<Step>("pick");
@@ -127,6 +127,7 @@ export default function CreateMomentoScreen() {
       text: overlayText.trim() || undefined,
       imageUri,
       taggedUsers: taggedUsers.map(u => u.id),
+      companyPageId: activeCompany?.id,
     });
 
     setPublishing(false);
@@ -153,9 +154,18 @@ export default function CreateMomentoScreen() {
 
         <View style={styles.pickContent}>
           <View style={[styles.avatarWrap, { borderColor: colors.gold }]}>
-            <Avatar uri={profile?.avatar_url} name={profile?.full_name} size={80} />
+            <Avatar
+              uri={activeCompany ? (activeCompany.avatar_url ?? null) : profile?.avatar_url}
+              name={activeCompany ? activeCompany.name : profile?.full_name}
+              size={80}
+            />
           </View>
-          <Text style={styles.pickTitle}>{profile?.full_name ?? "Você"}</Text>
+          <Text style={styles.pickTitle}>{activeCompany ? activeCompany.name : (profile?.full_name ?? "Você")}</Text>
+          {activeCompany && (
+            <View style={[styles.companyBadge]}>
+              <Text style={[styles.companyBadgeText]}>Publicando como empresa</Text>
+            </View>
+          )}
           <Text style={styles.pickSub}>Compartilhe um momento com sua rede por 24 horas</Text>
 
           <View style={styles.pickBtns}>
@@ -278,6 +288,8 @@ const styles = StyleSheet.create({
   pickContent:       { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 },
   avatarWrap:        { borderWidth: 3, borderRadius: 50, padding: 3, marginBottom: 16 },
   pickTitle:         { fontSize: 20, fontWeight: "800", color: "#fff", marginBottom: 8 },
+  companyBadge:      { backgroundColor: "rgba(201,168,76,0.25)", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, marginBottom: 10 },
+  companyBadgeText:  { color: "#C9A84C", fontSize: 12, fontWeight: "700" },
   pickSub:           { fontSize: 14, color: "rgba(255,255,255,0.7)", textAlign: "center", marginBottom: 48 },
   pickBtns:          { flexDirection: "row", gap: 16 },
   pickBtn:           { flex: 1, alignItems: "center", justifyContent: "center", borderRadius: 16, paddingVertical: 24, gap: 8 },
