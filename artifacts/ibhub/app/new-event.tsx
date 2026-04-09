@@ -33,7 +33,9 @@ export default function NewEventScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+
+  const isEmpresa = profile?.profile_type === "empresa";
 
   const [step, setStep] = useState(1);
 
@@ -115,6 +117,34 @@ export default function NewEventScreen() {
       ))}
     </View>
   );
+
+  if (!isEmpresa) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center", padding: 32 }]}>
+        <View style={{ paddingTop: topPad }}>
+          <Feather name="lock" size={52} color={colors.gold} style={{ alignSelf: "center", marginBottom: 20 }} />
+          <Text style={[{ fontSize: 22, fontWeight: "800", color: colors.navy, textAlign: "center", marginBottom: 12 }]}>
+            Exclusivo para Empresas
+          </Text>
+          <Text style={[{ fontSize: 15, color: colors.mutedForeground, textAlign: "center", lineHeight: 22, marginBottom: 28 }]}>
+            Somente empresas podem criar e promover eventos no ibhub. Crie sua página de empresa para ter acesso completo.
+          </Text>
+          <TouchableOpacity
+            style={[{ backgroundColor: colors.gold, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 24, alignItems: "center", marginBottom: 12 }]}
+            onPress={() => router.replace("/manage-business-page" as any)}
+          >
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Criar página de empresa</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[{ borderRadius: 12, paddingVertical: 14, alignItems: "center" }]}
+            onPress={() => router.back()}
+          >
+            <Text style={{ color: colors.mutedForeground, fontSize: 15 }}>Voltar</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView

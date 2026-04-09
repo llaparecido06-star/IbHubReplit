@@ -138,19 +138,21 @@ export default function OportunidadesScreen() {
   };
 
   const handleCreate = () => {
-    if (tab === "eventos") {
-      router.push("/new-event" as any);
-      return;
-    }
     if (!isEmpresa) {
       Alert.alert(
-        "Publique como Empresa",
-        "Para anunciar vagas ou produtos no Market, crie uma página de empresa. É grátis e abre muito mais oportunidades para o seu negócio!",
+        "Funcionalidade Exclusiva para Empresas",
+        tab === "eventos"
+          ? "Somente empresas podem criar e promover eventos. Crie uma página de empresa para divulgar seus eventos para toda a comunidade do vinho!"
+          : "Para anunciar vagas ou produtos no Market, crie uma página de empresa. É grátis e abre muito mais oportunidades para o seu negócio!",
         [
           { text: "Agora não", style: "cancel" },
           { text: "Criar página de empresa", onPress: () => router.push("/manage-business-page" as any) },
         ],
       );
+      return;
+    }
+    if (tab === "eventos") {
+      router.push("/new-event" as any);
       return;
     }
     router.push("/new-opportunity" as any);
@@ -220,7 +222,7 @@ export default function OportunidadesScreen() {
   const upcomingEvents = filteredEventos.filter((i) => !isPast(i.start_date));
   const pastEvents     = filteredEventos.filter((i) => isPast(i.start_date));
 
-  const showCriarBtn = tab === "eventos" || isEmpresa;
+  const showCriarBtn = isEmpresa;
 
   const activeFilters = (() => {
     if (tab === "market" && (marketFilter.sort !== "recente" || marketFilter.category)) return true;
@@ -579,14 +581,18 @@ export default function OportunidadesScreen() {
             <Feather name="calendar" size={40} color={colors.mutedForeground} />
             <Text style={[styles.emptyTitle, { color: colors.navy }]}>Nenhum evento encontrado</Text>
             <Text style={[styles.emptyHint, { color: colors.mutedForeground }]}>
-              Crie o primeiro evento da comunidade e conecte profissionais do setor!
+              {isEmpresa
+                ? "Seja o primeiro a criar um evento e conecte profissionais do setor!"
+                : "Os eventos são publicados por empresas e produtores do setor. Em breve haverá novidades!"}
             </Text>
-            <TouchableOpacity
-              style={[styles.emptyCTA, { backgroundColor: colors.gold }]}
-              onPress={() => router.push("/new-event" as any)}
-            >
-              <Text style={styles.emptyCTAText}>Criar evento</Text>
-            </TouchableOpacity>
+            {isEmpresa && (
+              <TouchableOpacity
+                style={[styles.emptyCTA, { backgroundColor: colors.gold }]}
+                onPress={() => router.push("/new-event" as any)}
+              >
+                <Text style={styles.emptyCTAText}>Criar evento</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </ScrollView>
