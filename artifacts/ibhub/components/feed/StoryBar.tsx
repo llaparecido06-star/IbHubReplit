@@ -13,7 +13,7 @@ type RouterHref = Parameters<ReturnType<typeof useRouter>["push"]>[0];
 export function StoryBar() {
   const colors = useColors();
   const router = useRouter();
-  const { user, profile } = useAuth();
+  const { user, profile, activeCompany } = useAuth();
 
   const [groups, setGroups] = useState<StoryGroup[]>([]);
 
@@ -54,7 +54,11 @@ export function StoryBar() {
     >
       <TouchableOpacity style={styles.item} onPress={() => router.push(createHref)}>
         <View style={styles.addStory}>
-          <Avatar uri={profile?.avatar_url} name={profile?.full_name} size={56} />
+          <Avatar
+            uri={activeCompany ? activeCompany.avatar_url ?? null : profile?.avatar_url ?? null}
+            name={activeCompany ? activeCompany.name : profile?.full_name}
+            size={56}
+          />
           <View style={[styles.addBadge, { backgroundColor: colors.gold }]}>
             <Text style={{ color: colors.navy, fontSize: 18, fontWeight: "700", lineHeight: 20 }}>+</Text>
           </View>
@@ -78,7 +82,11 @@ export function StoryBar() {
             style={styles.ring}
           >
             <View style={[styles.ringInner, { backgroundColor: colors.card }]}>
-              <Avatar uri={profile?.avatar_url} name={profile?.full_name} size={52} />
+              <Avatar
+                uri={activeCompany ? activeCompany.avatar_url ?? null : profile?.avatar_url ?? null}
+                name={activeCompany ? activeCompany.name : profile?.full_name}
+                size={52}
+              />
             </View>
           </LinearGradient>
           <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>
