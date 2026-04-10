@@ -202,8 +202,9 @@ export default function FeedScreen() {
 
   useEffect(() => {
     if (!user?.id) return;
+    const uid = Math.random().toString(36).slice(2, 8);
     const ch = supabase
-      .channel(`notif_badge_${user.id}`)
+      .channel(`notif_badge_${user.id}_${uid}`)
       .on("postgres_changes", {
         event: "INSERT",
         schema: "public",
@@ -256,8 +257,9 @@ export default function FeedScreen() {
   // ── Realtime: remove accepted connections from suggestions ──
   useEffect(() => {
     if (!user?.id) return;
+    const uid = Math.random().toString(36).slice(2, 8);
     const ch = supabase
-      .channel(`connections_suggestions_${user.id}`)
+      .channel(`connections_suggestions_${user.id}_${uid}`)
       .on("postgres_changes", {
         event: "UPDATE",
         schema: "public",
@@ -278,8 +280,9 @@ export default function FeedScreen() {
   // ── Realtime subscriptions: posts, likes, comments ──
   useEffect(() => {
     if (!user?.id) return;
+    const uid = Math.random().toString(36).slice(2, 8);
     const channel = supabase
-      .channel("feed-realtime")
+      .channel(`feed-realtime_${uid}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts" }, async (payload) => {
         const raw = payload.new as any;
         if (raw.user_id === user.id) return; // our own post is already added optimistically
