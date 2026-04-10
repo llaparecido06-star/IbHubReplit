@@ -27,13 +27,6 @@ interface ReferralTrackingEntry {
   invite_count: number;
 }
 
-interface ProfileWithInvited {
-  id: string;
-  full_name: string | null;
-  referral_code: string | null;
-  invited: { id: string }[];
-}
-
 interface PushLog {
   id: string;
   created_at: string;
@@ -41,6 +34,8 @@ interface PushLog {
   mensagem: string;
   segmento: string;
   deep_link: string | null;
+  sent_at: string | null;
+  recipients_count: number | null;
 }
 
 function formatDate(iso: string) {
@@ -68,6 +63,7 @@ export default function AdminComunicacaoScreen() {
 
   const [tracking, setTracking]               = useState<ReferralTrackingEntry[]>([]);
   const [loadingTracking, setLoadingTracking] = useState(true);
+  const [trackingError, setTrackingError]     = useState<string | null>(null);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -76,30 +72,56 @@ export default function AdminComunicacaoScreen() {
 
   const fetchTracking = async () => {
     setLoadingTracking(true);
-    const { data, error } = await supabase
+    setTrackingError(null);
+
+    // Step 1: get all profiles that have a referral_code
+    const { data: inviters, error: invErr } = await supabase
       .from("profiles")
-      .select("id, full_name, referral_code, invited:profiles!invited_by_id(id)")
+      .select("id, full_name, referral_code")
       .not("referral_code", "is", null);
 
-    if (error) {
-      console.error("fetchTracking:", error.message);
+    if (invErr) {
+      setTrackingError("Erro ao carregar rastreamento: " + invErr.message);
       setLoadingTracking(false);
       return;
     }
 
-    if (data) {
-      const rows = data as ProfileWithInvited[];
-      const entries: ReferralTrackingEntry[] = rows
-        .map((p) => ({
-          id: p.id,
-          full_name: p.full_name,
-          referral_code: p.referral_code,
-          invite_count: p.invited.length,
-        }))
-        .filter((e) => e.invite_count > 0)
-        .sort((a, b) => b.invite_count - a.invite_count);
-      setTracking(entries);
+    if (!inviters || inviters.length === 0) {
+      setTracking([]);
+      setLoadingTracking(false);
+      return;
     }
+
+    // Step 2: count how many profiles have invited_by_id pointing to each inviter
+    const { data: invited, error: cntErr } = await supabase
+      .from("profiles")
+      .select("invited_by_id")
+      .not("invited_by_id", "is", null);
+
+    if (cntErr) {
+      setTrackingError("Erro ao contar convites: " + cntErr.message);
+      setLoadingTracking(false);
+      return;
+    }
+
+    // Build count map
+    const countMap: Record<string, number> = {};
+    for (const row of invited ?? []) {
+      const id = (row as any).invited_by_id as string;
+      if (id) countMap[id] = (countMap[id] ?? 0) + 1;
+    }
+
+    const entries: ReferralTrackingEntry[] = (inviters as any[])
+      .map((p) => ({
+        id: p.id as string,
+        full_name: p.full_name as string | null,
+        referral_code: p.referral_code as string | null,
+        invite_count: countMap[p.id] ?? 0,
+      }))
+      .filter((e) => e.invite_count > 0)
+      .sort((a, b) => b.invite_count - a.invite_count);
+
+    setTracking(entries);
     setLoadingTracking(false);
   };
 
@@ -108,11 +130,11 @@ export default function AdminComunicacaoScreen() {
     setLogsError(null);
     const { data, error } = await supabase
       .from("push_notification_logs")
-      .select("id, created_at, titulo, mensagem, segmento, deep_link")
+      .select("id, created_at, titulo, mensagem, segmento, deep_link, sent_at, recipients_count")
       .order("created_at", { ascending: false })
       .limit(20);
     if (error) {
-      setLogsError("Erro ao carregar histórico.");
+      setLogsError("Erro ao carregar histórico: " + error.message);
     } else if (data) {
       setLogs(data as PushLog[]);
     }
@@ -283,6 +305,11 @@ export default function AdminComunicacaoScreen() {
                   <Text style={[styles.logDate, { color: colors.mutedForeground }]}>{formatDate(log.created_at)}</Text>
                   <Text style={[styles.logTitle, { color: colors.navy }]} numberOfLines={1}>{log.titulo}</Text>
                   <Text style={[styles.logSeg, { color: colors.gold }]} numberOfLines={1}>{log.segmento}</Text>
+                  {log.recipients_count != null && (
+                    <Text style={[styles.logDate, { color: colors.mutedForeground }]}>
+                      {log.recipients_count} dispositivo{log.recipients_count !== 1 ? "s" : ""}
+                    </Text>
+                  )}
                 </View>
               ))
             )}
@@ -297,6 +324,8 @@ export default function AdminComunicacaoScreen() {
 
           {loadingTracking ? (
             <ActivityIndicator size="small" color={colors.gold} style={{ marginTop: 8 }} />
+          ) : trackingError ? (
+            <Text style={[styles.trackEmpty, { color: "#e74c3c" }]}>{trackingError}</Text>
           ) : tracking.length === 0 ? (
             <Text style={[styles.trackEmpty, { color: colors.mutedForeground }]}>
               Nenhum convite registrado ainda.
