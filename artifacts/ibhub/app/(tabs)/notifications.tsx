@@ -1,4 +1,4 @@
-import { useRouter, Router } from "expo-router";
+import { useRouter, useFocusEffect, Router } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -120,6 +120,7 @@ export default function OportunidadesScreen() {
   }, [user?.id]);
 
   useEffect(() => { loadData(); }, [loadData]);
+  useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
 
   const onRefresh = () => { setRefreshing(true); loadData(); };
 

@@ -6,7 +6,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
@@ -21,6 +21,13 @@ const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   const { session, loading, isRecovering } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !isRecovering && !session) {
+      router.replace("/(auth)/login" as any);
+    }
+  }, [session, loading, isRecovering]);
 
   if (loading) {
     return (
