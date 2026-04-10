@@ -349,14 +349,22 @@ export default function EmpresaScreen() {
 
   const handleLikePost = async (post: Post) => {
     if (!user?.id) return;
+    const wasLiked = post.is_liked ?? false;
     setPosts((prev) =>
       prev.map((p) =>
         p.id === post.id
-          ? { ...p, is_liked: !p.is_liked, likes_count: p.is_liked ? p.likes_count - 1 : p.likes_count + 1 }
+          ? { ...p, is_liked: !wasLiked, likes_count: wasLiked ? p.likes_count - 1 : p.likes_count + 1 }
           : p
       )
     );
-    await toggleLike(post.id, user.id, post.is_liked ?? false);
+    const ok = await toggleLike(post.id, user.id, wasLiked, activeCompany?.id);
+    if (!ok) {
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === post.id ? { ...p, is_liked: wasLiked, likes_count: wasLiked ? p.likes_count + 1 : p.likes_count - 1 } : p
+        )
+      );
+    }
   };
 
   const handleBookmarkPost = async (post: Post) => {

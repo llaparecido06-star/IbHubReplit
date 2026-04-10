@@ -625,13 +625,19 @@ export default function FeedScreen() {
             post={item}
             currentUserId={user?.id}
             isVisible={visiblePostIds.has(item.id)}
-            onLike={(id) => {
+            onLike={async (id) => {
               const post = posts.find(p => p.id === id);
               if (!post || !user?.id) return;
+              const wasLiked = post.is_liked ?? false;
               setPosts(prev => prev.map(p => p.id === id
-                ? { ...p, is_liked: !p.is_liked, likes_count: p.is_liked ? p.likes_count - 1 : p.likes_count + 1 }
+                ? { ...p, is_liked: !wasLiked, likes_count: wasLiked ? p.likes_count - 1 : p.likes_count + 1 }
                 : p));
-              API.toggleLike(id, user.id, post.is_liked ?? false, activeCompany?.id);
+              const ok = await API.toggleLike(id, user.id, wasLiked, activeCompany?.id);
+              if (!ok) {
+                setPosts(prev => prev.map(p => p.id === id
+                  ? { ...p, is_liked: wasLiked, likes_count: wasLiked ? p.likes_count + 1 : p.likes_count - 1 }
+                  : p));
+              }
             }}
             onReact={(id, reaction) => {
               const post = posts.find(p => p.id === id);

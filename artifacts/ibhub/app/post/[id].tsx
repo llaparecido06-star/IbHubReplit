@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -30,6 +30,25 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hrs / 24)}d`;
 }
 
+// Flatten threaded comments for FlatList: [root, reply, reply, root, reply, ...]
+type FlatItem = AppComment & { isReply: boolean; depth: number };
+function flattenComments(roots: AppComment[]): FlatItem[] {
+  const result: FlatItem[] = [];
+  for (const root of roots) {
+    result.push({ ...root, isReply: false, depth: 0 });
+    if (root.replies && root.replies.length > 0) {
+      for (const reply of root.replies) {
+        result.push({ ...reply, isReply: true, depth: 1 });
+      }
+    }
+  }
+  return result;
+}
+
+function countAll(roots: AppComment[]): number {
+  return roots.reduce((s, c) => s + 1 + (c.replies?.length ?? 0), 0);
+}
+
 export default function PostDetailScreen() {
   const colors = useColors();
   const router = useRouter();
@@ -38,15 +57,19 @@ export default function PostDetailScreen() {
   const insets = useSafeAreaInsets();
 
   const [post, setPost] = useState<Post | null>(null);
-  const [comments, setComments] = useState<AppComment[]>([]);
+  const [comments, setComments] = useState<AppComment[]>([]); // threaded roots
   const [comment, setComment] = useState("");
-  const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
+  const [replyTo, setReplyTo] = useState<{ id: string; name: string; commentId: string } | null>(null);
   const [loadingPost, setLoadingPost] = useState(true);
   const [sendingComment, setSendingComment] = useState(false);
 
   const inputRef = useRef<TextInput>(null);
   const listRef = useRef<FlatList>(null);
   const topPad = Platform.OS === "web" ? 0 : insets.top;
+
+  // Flat array for FlatList rendering
+  const flatItems = useMemo(() => flattenComments(comments), [comments]);
+  const totalComments = useMemo(() => countAll(comments), [comments]);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -62,7 +85,7 @@ export default function PostDetailScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  // ── Realtime: novos comentários de outros usuários aparecem instantaneamente
+  // Realtime: new comments from other users appear instantly
   useEffect(() => {
     if (!id) return;
     const channel = supabase
@@ -72,38 +95,44 @@ export default function PostDetailScreen() {
         { event: "INSERT", schema: "public", table: "comments", filter: `post_id=eq.${id}` },
         async (payload) => {
           const row = payload.new as any;
-          // comentário do próprio usuário já foi adicionado otimisticamente
-          if (row.user_id === user?.id) return;
+          if (row.user_id === user?.id) return; // already added optimistically
           const fresh = await API.fetchCommentById(row.id, user?.id);
           if (!fresh) return;
           setComments(prev => {
+            if (row.parent_comment_id) {
+              // It's a reply — attach to parent
+              return prev.map(c =>
+                c.id === row.parent_comment_id
+                  ? { ...c, replies: [...(c.replies ?? []), { ...fresh, replies: [] }] }
+                  : c
+              );
+            }
             if (prev.some(c => c.id === fresh.id)) return prev;
-            return [...prev, fresh];
+            return [...prev, { ...fresh, replies: [] }];
           });
           setPost(prev => prev ? { ...prev, comments_count: (prev.comments_count || 0) + 1 } : prev);
           setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
         },
       )
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, [id, user?.id]);
 
-  // Scroll to highlighted comment after comments load
+  // Scroll to highlighted comment
   useEffect(() => {
-    if (highlightCommentId && comments.length > 0) {
-      const idx = comments.findIndex(c => c.id === highlightCommentId);
+    if (highlightCommentId && flatItems.length > 0) {
+      const idx = flatItems.findIndex(c => c.id === highlightCommentId);
       if (idx >= 0) {
         setTimeout(() => {
-          listRef.current?.scrollToIndex({ index: idx + 1, animated: true }); // +1 for header
+          listRef.current?.scrollToIndex({ index: idx + 1, animated: true });
         }, 400);
       }
     }
-  }, [highlightCommentId, comments]);
+  }, [highlightCommentId, flatItems]);
 
   const handleReply = (authorId: string, authorName: string, commentId: string) => {
-    setReplyTo({ id: commentId, name: authorName });
-    setComment(`@${authorName} `);
+    setReplyTo({ id: authorId, name: authorName, commentId });
+    setComment("");
     inputRef.current?.focus();
   };
 
@@ -117,18 +146,21 @@ export default function PostDetailScreen() {
     setSendingComment(true);
     const text = comment.trim();
     setComment("");
+    const currentReplyTo = replyTo;
     setReplyTo(null);
 
-    // Optimistic
+    const tempId = `tmp_${Date.now()}`;
     const tempComment: AppComment = {
-      id: `tmp_${Date.now()}`,
+      id: tempId,
       post_id: id,
+      parent_comment_id: currentReplyTo?.commentId ?? null,
       user_id: user.id,
       company_page_id: activeCompany?.id ?? null,
       content: text,
       created_at: new Date().toISOString(),
       likes_count: 0,
       is_liked: false,
+      replies: [],
       author: {
         id: user.id,
         full_name: profile?.full_name ?? "Você",
@@ -139,33 +171,69 @@ export default function PostDetailScreen() {
         ? { id: activeCompany.id, name: activeCompany.name, avatar_url: activeCompany.avatar_url ?? null }
         : null,
     };
-    setComments(prev => [...prev, tempComment]);
-    setPost(prev => prev ? { ...prev, comments_count: prev.comments_count + 1 } : prev);
+
+    // Optimistic update
+    if (currentReplyTo?.commentId) {
+      setComments(prev => prev.map(c =>
+        c.id === currentReplyTo.commentId
+          ? { ...c, replies: [...(c.replies ?? []), tempComment] }
+          : c
+      ));
+    } else {
+      setComments(prev => [...prev, tempComment]);
+    }
+    setPost(prev => prev ? { ...prev, comments_count: (prev.comments_count || 0) + 1 } : prev);
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
 
-    const saved = await API.addComment(id, user.id, text, activeCompany?.id);
+    const saved = await API.addComment(id, user.id, text, activeCompany?.id ?? null, currentReplyTo?.commentId ?? null);
+
     if (saved) {
-      setComments(prev => prev.map(c => c.id === tempComment.id ? { ...saved, likes_count: 0, is_liked: false } : c));
+      const savedWithReplies = { ...saved, replies: [] };
+      if (currentReplyTo?.commentId) {
+        setComments(prev => prev.map(c =>
+          c.id === currentReplyTo.commentId
+            ? {
+                ...c,
+                replies: (c.replies ?? []).map(r => r.id === tempId ? savedWithReplies : r),
+              }
+            : c
+        ));
+      } else {
+        setComments(prev => prev.map(c => c.id === tempId ? savedWithReplies : c));
+      }
     }
     setSendingComment(false);
   };
 
-  const handleLikeComment = async (commentId: string) => {
+  const handleLikeComment = async (commentId: string, isReply: boolean, parentId?: string) => {
     if (!user?.id) return;
-    // Optimistic toggle
-    setComments(prev => prev.map(c => {
-      if (c.id !== commentId) return c;
-      const wasLiked = c.is_liked ?? false;
-      return { ...c, is_liked: !wasLiked, likes_count: (c.likes_count ?? 0) + (wasLiked ? -1 : 1) };
-    }));
-    // Fire and forget (table may not exist yet — fails silently)
+
+    const toggleInList = (list: AppComment[]): AppComment[] =>
+      list.map(c => {
+        if (c.id !== commentId) return c;
+        const wasLiked = c.is_liked ?? false;
+        return { ...c, is_liked: !wasLiked, likes_count: (c.likes_count ?? 0) + (wasLiked ? -1 : 1) };
+      });
+
+    if (isReply && parentId) {
+      setComments(prev => prev.map(c =>
+        c.id === parentId ? { ...c, replies: toggleInList(c.replies ?? []) } : c
+      ));
+    } else {
+      setComments(prev => toggleInList(prev));
+    }
     API.toggleCommentLike(commentId, user.id).catch(() => {});
   };
 
-  const handleLikePost = () => {
+  const handleLikePost = async () => {
     if (!post || !user?.id) return;
-    setPost(p => p ? { ...p, is_liked: !p.is_liked, likes_count: p.is_liked ? p.likes_count - 1 : p.likes_count + 1 } : p);
-    API.toggleLike(post.id, user.id, post.is_liked ?? false, activeCompany?.id);
+    const wasLiked = post.is_liked ?? false;
+    setPost(p => p ? { ...p, is_liked: !wasLiked, likes_count: wasLiked ? p.likes_count - 1 : p.likes_count + 1 } : p);
+    const ok = await API.toggleLike(post.id, user.id, wasLiked, activeCompany?.id);
+    if (!ok) {
+      // Revert on failure
+      setPost(p => p ? { ...p, is_liked: wasLiked, likes_count: wasLiked ? p.likes_count + 1 : p.likes_count - 1 } : p);
+    }
   };
 
   const handleBookmarkPost = () => {
@@ -174,7 +242,7 @@ export default function PostDetailScreen() {
     API.toggleBookmark(post.id, user.id, post.is_bookmarked ?? false);
   };
 
-  const renderComment = ({ item, index }: { item: AppComment; index: number }) => {
+  const renderItem = ({ item, index }: { item: FlatItem; index: number }) => {
     const isHighlighted = item.id === highlightCommentId;
     const isTemp = item.id.startsWith("tmp_");
 
@@ -183,10 +251,16 @@ export default function PostDetailScreen() {
         style={[
           styles.comment,
           { borderBottomColor: colors.border },
+          item.isReply && { paddingLeft: 52, backgroundColor: colors.secondary + "60" },
           isHighlighted && { backgroundColor: colors.gold + "14" },
           isTemp && { opacity: 0.7 },
         ]}
       >
+        {/* Reply indicator line */}
+        {item.isReply && (
+          <View style={[styles.replyLine, { borderColor: colors.border }]} />
+        )}
+
         <TouchableOpacity onPress={() => {
           if (item.company_page) router.push(`/empresa/${item.company_page.id}` as any);
           else if (item.author?.id) router.push(`/profile/${item.author.id}` as any);
@@ -194,9 +268,10 @@ export default function PostDetailScreen() {
           <Avatar
             uri={item.company_page ? item.company_page.avatar_url : item.author?.avatar_url}
             name={item.company_page ? item.company_page.name : (item.author?.full_name ?? "?")}
-            size={36}
+            size={item.isReply ? 30 : 36}
           />
         </TouchableOpacity>
+
         <View style={styles.commentBody}>
           <View style={[styles.commentBubble, { backgroundColor: colors.secondary }]}>
             <TouchableOpacity onPress={() => {
@@ -209,11 +284,14 @@ export default function PostDetailScreen() {
             </TouchableOpacity>
             <Text style={[styles.commentContent, { color: colors.foreground }]}>{item.content}</Text>
           </View>
+
           <View style={styles.commentActions}>
             <Text style={[styles.commentTime, { color: colors.mutedForeground }]}>{timeAgo(item.created_at)}</Text>
+
+            {/* Like comment */}
             <TouchableOpacity
               style={styles.commentAction}
-              onPress={() => handleLikeComment(item.id)}
+              onPress={() => handleLikeComment(item.id, item.isReply, item.parent_comment_id ?? undefined)}
             >
               <Feather
                 name="heart"
@@ -226,13 +304,27 @@ export default function PostDetailScreen() {
                 </Text>
               )}
             </TouchableOpacity>
-            {!item.company_page && item.author && (
+
+            {/* Reply button — only on top-level comments */}
+            {!item.isReply && (
               <TouchableOpacity
                 style={styles.commentAction}
-                onPress={() => handleReply(item.author!.id, item.author!.full_name, item.id)}
+                onPress={() => handleReply(
+                  item.author?.id ?? item.company_page?.id ?? "",
+                  item.company_page?.name ?? item.author?.full_name ?? "Usuário",
+                  item.id,
+                )}
               >
+                <Feather name="corner-down-right" size={13} color={colors.gold} />
                 <Text style={[styles.commentReply, { color: colors.gold }]}>Responder</Text>
               </TouchableOpacity>
+            )}
+
+            {/* Reply count badge */}
+            {!item.isReply && (item.replies?.length ?? 0) > 0 && (
+              <Text style={[styles.replyCount, { color: colors.mutedForeground }]}>
+                {item.replies!.length} {item.replies!.length === 1 ? "resposta" : "respostas"}
+              </Text>
             )}
           </View>
         </View>
@@ -267,10 +359,10 @@ export default function PostDetailScreen() {
 
       <FlatList
         ref={listRef}
-        data={comments}
+        data={flatItems}
         keyExtractor={(item) => item.id}
-        renderItem={renderComment}
-        onScrollToIndexFailed={() => {}} // ignore if index not yet mounted
+        renderItem={renderItem}
+        onScrollToIndexFailed={() => {}}
         ListHeaderComponent={() => (
           <View style={[styles.postPreview, { borderBottomColor: colors.border }]}>
             {post && (
@@ -305,7 +397,7 @@ export default function PostDetailScreen() {
                   <TouchableOpacity style={styles.postAction} onPress={() => inputRef.current?.focus()}>
                     <Feather name="message-circle" size={18} color={colors.mutedForeground} />
                     <Text style={[styles.postActionCount, { color: colors.mutedForeground }]}>
-                      {comments.length > 0 ? comments.length : "Comentar"}
+                      {totalComments > 0 ? totalComments : "Comentar"}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.postAction} onPress={handleBookmarkPost}>
@@ -316,7 +408,7 @@ export default function PostDetailScreen() {
             )}
 
             <Text style={[styles.commentsHeader, { color: colors.foreground }]}>
-              {comments.length} {comments.length === 1 ? "comentário" : "comentários"}
+              {totalComments} {totalComments === 1 ? "comentário" : "comentários"}
             </Text>
           </View>
         )}
@@ -326,12 +418,15 @@ export default function PostDetailScreen() {
         keyboardShouldPersistTaps="handled"
       />
 
-      {/* Reply indicator */}
+      {/* Reply indicator bar */}
       {replyTo && (
         <View style={[styles.replyBar, { backgroundColor: colors.gold + "18", borderTopColor: colors.gold + "40" }]}>
-          <Text style={[styles.replyText, { color: colors.gold }]}>
-            Respondendo a <Text style={{ fontWeight: "800" }}>@{replyTo.name}</Text>
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Feather name="corner-down-right" size={14} color={colors.gold} />
+            <Text style={[styles.replyText, { color: colors.gold }]}>
+              Respondendo a <Text style={{ fontWeight: "800" }}>{replyTo.name}</Text>
+            </Text>
+          </View>
           <TouchableOpacity onPress={cancelReply}>
             <Feather name="x" size={16} color={colors.gold} />
           </TouchableOpacity>
@@ -349,7 +444,7 @@ export default function PostDetailScreen() {
           <TextInput
             ref={inputRef}
             style={[styles.input, { color: colors.foreground }]}
-            placeholder={replyTo ? `Responder a @${replyTo.name}...` : "Adicionar comentário..."}
+            placeholder={replyTo ? `Responder a ${replyTo.name}...` : "Adicionar comentário..."}
             placeholderTextColor={colors.mutedForeground}
             value={comment}
             onChangeText={setComment}
@@ -359,10 +454,7 @@ export default function PostDetailScreen() {
           />
         </View>
         <TouchableOpacity
-          style={[
-            styles.sendBtn,
-            { backgroundColor: comment.trim() ? colors.gold : colors.border },
-          ]}
+          style={[styles.sendBtn, { backgroundColor: comment.trim() ? colors.gold : colors.border }]}
           onPress={sendComment}
           disabled={!comment.trim() || sendingComment}
         >
@@ -389,16 +481,18 @@ const styles = StyleSheet.create({
   postAction:         { flexDirection: "row", alignItems: "center", gap: 5 },
   postActionCount:    { fontSize: 13, fontWeight: "600" },
   commentsHeader:     { fontSize: 15, fontWeight: "700", paddingTop: 4 },
-  comment:            { flexDirection: "row", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, gap: 10, alignItems: "flex-start" },
+  comment:            { flexDirection: "row", paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, gap: 10, alignItems: "flex-start" },
+  replyLine:          { position: "absolute", left: 38, top: 0, bottom: 0, width: 1, borderLeftWidth: 1 },
   commentBody:        { flex: 1, gap: 4 },
-  commentBubble:      { padding: 12, gap: 2, borderRadius: 14 },
+  commentBubble:      { padding: 10, gap: 2, borderRadius: 14 },
   commentAuthor:      { fontSize: 13, fontWeight: "700" },
   commentContent:     { fontSize: 14, lineHeight: 19 },
-  commentActions:     { flexDirection: "row", alignItems: "center", gap: 14, paddingLeft: 4 },
+  commentActions:     { flexDirection: "row", alignItems: "center", gap: 14, paddingLeft: 4, flexWrap: "wrap" },
   commentTime:        { fontSize: 12 },
   commentAction:      { flexDirection: "row", alignItems: "center", gap: 4 },
   commentLikes:       { fontSize: 12 },
   commentReply:       { fontSize: 12, fontWeight: "700" },
+  replyCount:         { fontSize: 11 },
   replyBar:           { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 8, borderTopWidth: 1 },
   replyText:          { fontSize: 13 },
   inputBar:           { flexDirection: "row", alignItems: "flex-end", padding: 10, gap: 8, borderTopWidth: 1 },

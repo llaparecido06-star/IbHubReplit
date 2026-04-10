@@ -39,6 +39,7 @@ export interface AppNotification {
 export interface AppComment {
   id: string;
   post_id: string;
+  parent_comment_id?: string | null;
   user_id: string;
   company_page_id?: string | null;
   content: string;
@@ -47,6 +48,7 @@ export interface AppComment {
   is_liked?: boolean;
   author?: { id: string; full_name: string; avatar_url?: string | null; headline?: string | null } | null;
   company_page?: { id: string; name: string; avatar_url?: string | null } | null;
+  replies?: AppComment[];
 }
 
 export interface AppStory {
@@ -126,7 +128,7 @@ const COMMENT_AUTHOR_SELECT = "id, full_name, avatar_url, position, company";
 // Base post select WITHOUT the broken profiles FK join (posts.user_id → auth.users, not profiles)
 const POST_SELECT_BASE = `id, user_id, company_page_id, content, image_url, image_urls, video_url,
   likes_count, comments_count, shares_count, view_count, location, hashtags, poll, created_at`;
-const COMMENT_SELECT_BASE = `id, post_id, user_id, company_page_id, content, created_at, likes_count`;
+const COMMENT_SELECT_BASE = `id, post_id, parent_comment_id, user_id, company_page_id, content, created_at, likes_count`;
 
 // Fetch profiles by IDs (workaround: avoids broken FK join posts→auth.users)
 async function fetchProfilesForIds(userIds: string[]): Promise<Map<string, any>> {
@@ -320,23 +322,41 @@ export async function fetchPostById(postId: string, currentUserId?: string): Pro
   }
 }
 
-export async function toggleLike(postId: string, userId: string, isCurrentlyLiked: boolean, companyPageId?: string | null): Promise<void> {
+export async function toggleLike(postId: string, userId: string, isCurrentlyLiked: boolean, companyPageId?: string | null): Promise<boolean> {
   try {
     if (isCurrentlyLiked) {
-      if (companyPageId) {
-        await supabase.from("likes").delete().match({ post_id: postId, company_page_id: companyPageId });
-      } else {
-        await supabase.from("likes").delete().match({ post_id: postId, user_id: userId }).is("company_page_id", null);
-      }
+      // Unlike
+      const deleteQuery = companyPageId
+        ? supabase.from("likes").delete().match({ post_id: postId, company_page_id: companyPageId })
+        : supabase.from("likes").delete().match({ post_id: postId, user_id: userId }).is("company_page_id", null);
+      const { error } = await deleteQuery;
+      if (error) { console.error("toggleLike delete:", JSON.stringify(error)); return false; }
+      // Decrement count via RPC (bypasses RLS)
+      await supabase.rpc("decrement_post_likes", { p_post_id: postId });
     } else {
-      if (companyPageId) {
-        await supabase.from("likes").insert({ post_id: postId, user_id: userId, company_page_id: companyPageId });
-      } else {
-        await supabase.from("likes").insert({ post_id: postId, user_id: userId });
+      // Like
+      const insertPayload: any = { post_id: postId, user_id: userId };
+      if (companyPageId) insertPayload.company_page_id = companyPageId;
+      const { error } = await supabase.from("likes").insert(insertPayload);
+      if (error) { console.error("toggleLike insert:", JSON.stringify(error)); return false; }
+      // Increment count via RPC (bypasses RLS)
+      await supabase.rpc("increment_post_likes", { p_post_id: postId });
+      // Notify post author via RPC (bypasses RLS, skips self-notification)
+      const { data: authorData } = await supabase.rpc("get_post_author", { p_post_id: postId });
+      if (authorData && authorData !== userId) {
+        await supabase.rpc("create_notification", {
+          p_user_id: authorData,
+          p_actor_id: userId,
+          p_type: "like",
+          p_post_id: postId,
+          p_message: "curtiu sua publicação",
+        });
       }
     }
+    return true;
   } catch (e) {
     console.error("toggleLike:", e);
+    return false;
   }
 }
 
@@ -460,13 +480,27 @@ export async function fetchComments(postId: string, currentUserId?: string): Pro
       likedSet = new Set((myLikes ?? []).map((l: any) => l.comment_id));
     }
 
-    return (data as any[]).map(c => ({
+    const flat: AppComment[] = (data as any[]).map(c => ({
       ...c,
+      parent_comment_id: c.parent_comment_id ?? null,
       likes_count: c.likes_count ?? 0,
       is_liked: likedSet.has(c.id),
       author: normaliseAuthor(profileMap.get(c.user_id)),
       company_page: c.company_page_id ? (companyMap.get(c.company_page_id) ?? null) : null,
-    })) as AppComment[];
+      replies: [] as AppComment[],
+    }));
+
+    // Build threaded tree: top-level comments + their replies nested
+    const byId = new Map(flat.map(c => [c.id, c]));
+    const roots: AppComment[] = [];
+    for (const c of flat) {
+      if (c.parent_comment_id && byId.has(c.parent_comment_id)) {
+        byId.get(c.parent_comment_id)!.replies!.push(c);
+      } else {
+        roots.push(c);
+      }
+    }
+    return roots;
   } catch (e) {
     console.error("fetchComments:", e);
     return [];
@@ -512,10 +546,12 @@ export async function addComment(
   userId: string,
   content: string,
   companyPageId?: string | null,
+  parentCommentId?: string | null,
 ): Promise<AppComment | null> {
   try {
     const insertData: any = { post_id: postId, user_id: userId, content };
     if (companyPageId) insertData.company_page_id = companyPageId;
+    if (parentCommentId) insertData.parent_comment_id = parentCommentId;
 
     const { data, error } = await supabase
       .from("comments")
@@ -523,24 +559,41 @@ export async function addComment(
       .select(COMMENT_SELECT_BASE)
       .single();
 
-    if (error) { console.error("addComment:", error); return null; }
+    if (error) { console.error("addComment:", JSON.stringify(error)); return null; }
 
     const [profileMap, companyMap] = await Promise.all([
       fetchCommentProfilesForIds([userId]),
       companyPageId ? fetchCompanyPagesForIds([companyPageId]) : Promise.resolve(new Map()),
     ]);
 
-    // Create notification for post author
-    const { data: post } = await supabase.from("posts").select("user_id").eq("id", postId).single();
-    if (post && post.user_id !== userId) {
-      await supabase.from("notifications").insert({
-        user_id: post.user_id, actor_id: userId, type: "comment", post_id: postId,
-        message: "comentou na sua publicação",
+    // Increment comments_count via RPC (bypasses RLS)
+    await supabase.rpc("increment_post_comments", { p_post_id: postId });
+
+    if (parentCommentId) {
+      // Notify the parent comment author (reply notification)
+      await supabase.rpc("notify_comment_reply", {
+        p_parent_comment_id: parentCommentId,
+        p_actor_id: userId,
+        p_post_id: postId,
       });
+    } else {
+      // Notify post author via RPC
+      const { data: authorId } = await supabase.rpc("get_post_author", { p_post_id: postId });
+      if (authorId && authorId !== userId) {
+        await supabase.rpc("create_notification", {
+          p_user_id: authorId,
+          p_actor_id: userId,
+          p_type: "comment",
+          p_post_id: postId,
+          p_message: "comentou na sua publicação",
+        });
+      }
     }
 
     return {
       ...(data as any),
+      parent_comment_id: parentCommentId ?? null,
+      replies: [],
       author: normaliseAuthor(profileMap.get(userId)),
       company_page: companyPageId ? (companyMap.get(companyPageId) ?? null) : null,
     } as AppComment;
