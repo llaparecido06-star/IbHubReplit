@@ -26,6 +26,7 @@ import {
   applyToJob,
   expressInterest,
   fetchOpportunityById,
+  trackOpportunityView,
   uploadCV,
 } from "@/services/api";
 
@@ -71,6 +72,10 @@ export default function OpportunityDetailScreen() {
       setOpp(data);
       if (data?.is_interested) setIsInterested(true);
       setLoading(false);
+      // Track view — skip if creator is viewing their own listing
+      if (data && data.created_by !== user.id) {
+        trackOpportunityView(id);
+      }
     })();
   }, [id, user?.id]);
 
