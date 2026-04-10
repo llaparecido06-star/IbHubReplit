@@ -47,7 +47,8 @@ export default function OpportunitiesScreen() {
   const [loading, setLoading]   = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const searchRef = useRef<TextInput>(null);
+  const searchRef  = useRef<TextInput>(null);
+  const listRef    = useRef<FlatList<AppOpportunity>>(null);
 
   const load = useCallback(async (tab: SubTab, q: string) => {
     if (!user?.id) return;
@@ -59,11 +60,17 @@ export default function OpportunitiesScreen() {
 
   useEffect(() => {
     setCatFilter("Todos");
-    load(subTab, search);
+    load(subTab, search).then(() => {
+      listRef.current?.scrollToOffset({ offset: 0, animated: false });
+    });
   }, [subTab]);
 
   useEffect(() => {
-    const t = setTimeout(() => load(subTab, search), 400);
+    const t = setTimeout(() => {
+      load(subTab, search).then(() => {
+        listRef.current?.scrollToOffset({ offset: 0, animated: false });
+      });
+    }, 400);
     return () => clearTimeout(t);
   }, [search]);
 
@@ -209,6 +216,7 @@ export default function OpportunitiesScreen() {
         horizontal
         data={cats}
         keyExtractor={(c) => c}
+        keyboardShouldPersistTaps="handled"
         renderItem={({ item: c }) => (
           <Pressable
             style={[styles.chip, { backgroundColor: catFilter === c ? colors.navy : colors.secondary }]}
@@ -219,7 +227,7 @@ export default function OpportunitiesScreen() {
             </Text>
           </Pressable>
         )}
-        style={{ maxHeight: 46 }}
+        style={{ maxHeight: 46, flexShrink: 0 }}
         contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 8, rowGap: 8 }}
         showsHorizontalScrollIndicator={false}
       />
@@ -231,9 +239,11 @@ export default function OpportunitiesScreen() {
         </View>
       ) : (
         <FlatList
+          ref={listRef}
           data={filtered}
           keyExtractor={(i) => i.id}
           renderItem={renderItem}
+          keyboardShouldPersistTaps="handled"
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />}
           contentContainerStyle={{ padding: 14, rowGap: 12, paddingBottom: bottomPad + 40 }}
           showsVerticalScrollIndicator={false}
