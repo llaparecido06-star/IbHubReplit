@@ -15,6 +15,7 @@ import { Feather } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/context/AuthContext";
 import {
   ConnectionProfile,
   fetchPendingConnectionsReceived,
@@ -56,6 +57,37 @@ export default function ConexoesScreen() {
   }, [user?.id]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`connections-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "connections",
+          filter: `requester_id=eq.${user.id}`,
+        },
+        () => { load(); },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "connections",
+          filter: `receiver_id=eq.${user.id}`,
+        },
+        () => { load(); },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, load]);
 
   const handleAccept = async (connectionId: string, profileId: string) => {
     const ok = await respondToConnection(connectionId, "accepted");

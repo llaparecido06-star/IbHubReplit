@@ -25,6 +25,8 @@ import {
   Text as SvgText,
 } from "react-native-svg";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/context/AuthContext";
 import * as API from "@/services/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -473,6 +475,7 @@ function ApresentacoesView({ colors, bottomPad }: { colors: any; bottomPad: numb
 export default function MercadoScreen() {
   const colors  = useColors();
   const insets  = useSafeAreaInsets();
+  const { user } = useAuth();
 
   const [period,      setPeriod]      = useState<Period>("ano");
   const [mainTab,     setMainTab]     = useState<MercadoTab>("visao");
@@ -499,16 +502,53 @@ export default function MercadoScreen() {
   useEffect(() => { loadPeriod(period); }, [period, loadPeriod]);
 
   const loadLeaderboard = useCallback(async () => {
-    if (leaderboard.length > 0) return;
     setLoadingTop(true);
     const result = await API.fetchLeaderboard();
     setLeaderboard(result);
     setLoadingTop(false);
-  }, [leaderboard.length]);
+  }, []);
 
   useEffect(() => {
     if (mainTab === "top") loadLeaderboard();
   }, [mainTab, loadLeaderboard]);
+
+  const mainTabRef = useRef(mainTab);
+  useEffect(() => { mainTabRef.current = mainTab; }, [mainTab]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`network-connections-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "connections",
+          filter: `requester_id=eq.${user.id}`,
+        },
+        () => {
+          if (mainTabRef.current === "top") loadLeaderboard();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "connections",
+          filter: `receiver_id=eq.${user.id}`,
+        },
+        () => {
+          if (mainTabRef.current === "top") loadLeaderboard();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, loadLeaderboard]);
 
   const periods: { key: Period; label: string }[] = [
     { key: "mes",       label: "Último Mês"      },

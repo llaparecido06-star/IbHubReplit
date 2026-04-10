@@ -16,6 +16,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { PostCard, Post } from "@/components/feed/PostCard";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
 import { recordProfileView, fetchMutualConnections } from "@/services/api";
@@ -85,6 +86,44 @@ export default function PublicProfileScreen() {
   }, [id, currentUser?.id]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!currentUser?.id || !resolvedId || resolvedId === currentUser.id) return;
+    const channelName = `connection-status-${currentUser.id}-${resolvedId}`;
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "connections",
+          filter: `requester_id=eq.${currentUser.id}`,
+        },
+        async () => {
+          const status = await API.checkConnectionStatus(resolvedId, currentUser.id);
+          setConnectionStatus(status);
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "connections",
+          filter: `receiver_id=eq.${currentUser.id}`,
+        },
+        async () => {
+          const status = await API.checkConnectionStatus(resolvedId, currentUser.id);
+          setConnectionStatus(status);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser?.id, resolvedId]);
 
   const isCompany    = (userProfile as any).profile_type === "empresa";
   const isOwnProfile = currentUser?.id === resolvedId;
