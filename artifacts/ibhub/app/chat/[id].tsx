@@ -46,7 +46,7 @@ function formatTime(dateStr: string): string {
 export default function ChatScreen() {
   const colors   = useColors();
   const router   = useRouter();
-  const { id }   = useLocalSearchParams<{ id: string }>();
+  const { id, companyId } = useLocalSearchParams<{ id: string; companyId?: string }>();
   const { user, profile, activeCompany } = useAuth();
   const insets   = useSafeAreaInsets();
 
@@ -68,6 +68,7 @@ export default function ChatScreen() {
   const [wines,                 setWines]                 = useState<any[]>([]);
   const [followUpDays,          setFollowUpDays]          = useState("3");
   const [participant,           setParticipant]           = useState<{ id: string; full_name: string; avatar_url: string | null } | null>(null);
+  const [companyInfo,           setCompanyInfo]           = useState<{ id: string; name: string; avatar_url: string | null } | null>(null);
   const [isConversationAccepted, setIsConversationAccepted] = useState(true);
 
   const listRef           = useRef<FlatList>(null);
@@ -78,17 +79,25 @@ export default function ChatScreen() {
 
   const load = useCallback(async () => {
     if (!id || !user?.id) { setLoading(false); return; }
-    const [msgs, part, accepted] = await Promise.all([
+    const promises: [ReturnType<typeof API.fetchMessages>, ReturnType<typeof API.fetchConversationParticipant>, ReturnType<typeof API.fetchConversationAccepted>, Promise<any>] = [
       API.fetchMessages(id, user.id),
       API.fetchConversationParticipant(id, user.id),
       API.fetchConversationAccepted(id, user.id),
-    ]);
+      companyId
+        ? supabase.from("company_pages").select("id, name, avatar_url").eq("id", companyId).maybeSingle()
+        : Promise.resolve(null),
+    ];
+    const [msgs, part, accepted, cpRes] = await Promise.all(promises);
     setMessages(msgs);
     setParticipant(part);
     setIsConversationAccepted(accepted);
+    if (cpRes && cpRes.data) {
+      const cp = cpRes.data as any;
+      setCompanyInfo({ id: cp.id, name: cp.name, avatar_url: cp.avatar_url ?? null });
+    }
     setLoading(false);
     API.markConversationRead(id, user.id);
-  }, [id, user?.id]);
+  }, [id, user?.id, companyId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -393,7 +402,7 @@ export default function ChatScreen() {
       await Notifications.scheduleNotificationAsync({
         content: {
           title: "Lembrete de Follow-up",
-          body: `Hora de retomar a conversa com ${participant?.full_name ?? "seu contato"}!`,
+          body: `Hora de retomar a conversa com ${companyInfo?.name ?? participant?.full_name ?? "seu contato"}!`,
           data: { conversationId: id },
         },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger },
@@ -447,7 +456,7 @@ export default function ChatScreen() {
     return (
       <View style={[styles.quotedMsg, { borderLeftColor: colors.gold }]}>
         <Text style={[styles.quotedSender, { color: colors.gold }]}>
-          {isReplyFromMe ? "Você" : (participant?.full_name ?? "Usuário")}
+          {isReplyFromMe ? "Você" : (companyInfo?.name ?? participant?.full_name ?? "Usuário")}
         </Text>
         <Text style={styles.quotedContent} numberOfLines={2}>{item.reply_to.content}</Text>
       </View>
@@ -626,7 +635,9 @@ export default function ChatScreen() {
     );
   };
 
-  const participantName = participant?.full_name ?? "Chat";
+  const participantName = companyInfo?.name ?? participant?.full_name ?? "Chat";
+  const participantAvatar = companyInfo?.avatar_url ?? participant?.avatar_url ?? null;
+  const isCompanyChat = !!companyInfo;
 
   return (
     <KeyboardAvoidingView
@@ -640,12 +651,15 @@ export default function ChatScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.headerCenter}
-          onPress={() => participant && router.push(`/profile/${participant.id}` as any)}
+          onPress={() => {
+            if (isCompanyChat && companyInfo) router.push(`/empresa/${companyInfo.id}` as any);
+            else if (participant) router.push(`/profile/${participant.id}` as any);
+          }}
           activeOpacity={0.7}
         >
           <View style={styles.avatarWrapper}>
-            <Avatar uri={participant?.avatar_url} name={participantName} size={40} />
-            {isParticipantOnline && (
+            <Avatar uri={participantAvatar} name={participantName} size={40} />
+            {!isCompanyChat && isParticipantOnline && (
               <View style={[styles.onlineDot, { backgroundColor: "#22c55e", borderColor: "#fff" }]} />
             )}
           </View>
@@ -654,7 +668,11 @@ export default function ChatScreen() {
             <Text style={[styles.participantStatus, {
               color: isTyping ? colors.gold : isParticipantOnline ? "#22c55e" : colors.mutedForeground
             }]}>
-              {isTyping ? "digitando..." : isParticipantOnline ? "online" : (participant ? "offline" : "Carregando...")}
+              {isCompanyChat
+                ? "Empresa"
+                : isTyping ? "digitando..."
+                : isParticipantOnline ? "online"
+                : (participant ? "offline" : "Carregando...")}
             </Text>
           </View>
         </TouchableOpacity>
@@ -978,13 +996,17 @@ export default function ChatScreen() {
       <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
         <Pressable style={styles.menuOverlay} onPress={() => setShowMenu(false)}>
           <View style={[styles.menuCard, { backgroundColor: "#fff" }]}>
-            {participant?.id && (
+            {(participant?.id || companyInfo?.id) && (
               <TouchableOpacity
                 style={styles.menuItem}
-                onPress={() => { setShowMenu(false); router.push(`/profile/${participant.id}` as any); }}
+                onPress={() => {
+                  setShowMenu(false);
+                  if (isCompanyChat && companyInfo) router.push(`/empresa/${companyInfo.id}` as any);
+                  else if (participant) router.push(`/profile/${participant.id}` as any);
+                }}
               >
-                <Feather name="user" size={18} color={colors.navy} />
-                <Text style={[styles.menuItemText, { color: colors.navy }]}>Ver perfil</Text>
+                <Feather name={isCompanyChat ? "briefcase" : "user"} size={18} color={colors.navy} />
+                <Text style={[styles.menuItemText, { color: colors.navy }]}>{isCompanyChat ? "Ver empresa" : "Ver perfil"}</Text>
               </TouchableOpacity>
             )}
             <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />

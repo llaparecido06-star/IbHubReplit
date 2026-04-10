@@ -107,6 +107,7 @@ export interface AppConversation {
   last_message_at?: string | null;
   unread_count: number;
   participant?: { id: string; full_name: string; avatar_url?: string | null } | null;
+  participant_company?: { id: string; name: string; avatar_url?: string | null } | null;
   accepted?: boolean;
 }
 
@@ -1950,7 +1951,7 @@ export async function fetchConversations(userId: string): Promise<AppConversatio
       const [lastMsgRes, unreadRes] = await Promise.all([
         supabase
           .from("messages")
-          .select("content, created_at, message_type")
+          .select("content, created_at, message_type, sender_id, from_company_page_id")
           .eq("conversation_id", convo.id)
           .order("created_at", { ascending: false })
           .limit(1)
@@ -1966,6 +1967,11 @@ export async function fetchConversations(userId: string): Promise<AppConversatio
         : lastMsg?.message_type === "file"  ? "📎 Arquivo"
         : (lastMsg?.content ?? null);
 
+      const otherSenderCompanyId =
+        lastMsg && (lastMsg as any).sender_id !== userId
+          ? ((lastMsg as any).from_company_page_id ?? null)
+          : null;
+
       results.push({
         id: convo.id,
         is_group: convo.is_group,
@@ -1974,8 +1980,27 @@ export async function fetchConversations(userId: string): Promise<AppConversatio
         last_message_at: lastMsg?.created_at ?? convo.created_at,
         unread_count: unreadRes.count ?? 0,
         participant,
+        participant_company: otherSenderCompanyId ? { id: otherSenderCompanyId, name: "", avatar_url: null } : null,
         accepted: pInfo?.my_accepted ?? (row.accepted ?? true),
       });
+    }
+
+    // Bulk-fetch company info for conversations where last message was from a company
+    const companyIds = [...new Set(results.map(r => r.participant_company?.id).filter(Boolean) as string[])];
+    if (companyIds.length > 0) {
+      const { data: companyData } = await supabase
+        .from("company_pages")
+        .select("id, name, avatar_url")
+        .in("id", companyIds);
+      if (companyData) {
+        const companyMap = new Map((companyData as any[]).map(c => [c.id, c]));
+        for (const r of results) {
+          if (r.participant_company?.id) {
+            const cp = companyMap.get(r.participant_company.id);
+            if (cp) r.participant_company = { id: cp.id, name: cp.name, avatar_url: cp.avatar_url ?? null };
+          }
+        }
+      }
     }
 
     return results.sort(

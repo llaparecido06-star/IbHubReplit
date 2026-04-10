@@ -425,8 +425,9 @@ export default function MessagesScreen() {
 function ConversationRow({ conversation: conv, colors, followUpDate }: { conversation: AppConversation; colors: any; followUpDate?: string }) {
   const router   = useRouter();
   const hasUnread = (conv.unread_count ?? 0) > 0;
-  const name     = conv.name ?? conv.participant?.full_name ?? "Chat";
-  const avatarUri = conv.participant?.avatar_url ?? null;
+  const name     = conv.name ?? conv.participant_company?.name ?? conv.participant?.full_name ?? "Chat";
+  const avatarUri = conv.participant_company?.avatar_url ?? conv.participant?.avatar_url ?? null;
+  const companyId = conv.participant_company?.id ?? null;
 
   const followUpDue = followUpDate
     ? (() => {
@@ -444,7 +445,7 @@ function ConversationRow({ conversation: conv, colors, followUpDate }: { convers
   return (
     <TouchableOpacity
       style={[styles.convoRow, { borderBottomColor: colors.border, backgroundColor: "#fff" }]}
-      onPress={() => router.push(`/chat/${conv.id}` as any)}
+      onPress={() => router.push((companyId ? `/chat/${conv.id}?companyId=${companyId}` : `/chat/${conv.id}`) as any)}
       activeOpacity={0.7}
     >
       <Avatar uri={avatarUri} name={name} size={52} />

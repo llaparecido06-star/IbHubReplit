@@ -320,7 +320,7 @@ export default function EmpresaScreen() {
     // Companies have no messaging restrictions — forceAccepted=true
     const convoId = await getOrCreateDirectConversation(user.id, companyPage.owner_id, true);
     setMessagingLoading(false);
-    if (convoId) router.push(`/chat/${convoId}` as any);
+    if (convoId) router.push(`/chat/${convoId}?companyId=${companyPage.id}` as any);
   };
 
   const handleLikePost = async (post: Post) => {
