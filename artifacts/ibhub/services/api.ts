@@ -2767,6 +2767,7 @@ export interface MarketPermission {
   title: string;
   icon: string;
   sort_order: number;
+  section_type: string;
 }
 
 export async function fetchMarketPermissions(): Promise<MarketPermission[]> {
@@ -2899,6 +2900,7 @@ export interface MarketOverview {
   regioes: MarketRegiao[];
   variedades: MarketVariedade[];
   updated_at: string;
+  [key: string]: unknown;
 }
 
 export async function updateMarketOverview(

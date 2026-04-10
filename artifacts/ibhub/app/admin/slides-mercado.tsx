@@ -39,6 +39,16 @@ import {
 
 const MARKET_ICONS = ["activity", "bar-chart-2", "trending-up", "map-pin", "git-merge", "pie-chart", "globe", "layers", "star", "zap", "filter", "award"];
 
+const DEFAULT_PERM_IDS = new Set(["kpis", "graficos", "tendencias", "regioes", "variedades"]);
+
+const SECTION_TYPES: { key: string; label: string; icon: string; hint: string }[] = [
+  { key: "lista",   label: "Lista",   icon: "trending-up", hint: "Título, descrição e variação %" },
+  { key: "ranking", label: "Ranking", icon: "award",       hint: "Nome, volume e % do total" },
+  { key: "simples", label: "Simples", icon: "tag",         hint: "Nome, volume e variação %" },
+  { key: "kpi",     label: "KPI",     icon: "activity",    hint: "Valor, período e variação %" },
+  { key: "grafico", label: "Gráfico", icon: "bar-chart-2", hint: "Dados de gráfico de área e barras" },
+];
+
 function toSlug(s: string): string {
   return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
 }
@@ -64,13 +74,11 @@ function joinStr(arr: string[]): string { return arr.join(", "); }
 
 // ─── Edit Modal types ────────────────────────────────────────────────────────
 
-type ModalType = "tendencia" | "regiao" | "variedade";
+type ModalType = "tendencia" | "regiao" | "variedade" | "custom";
 interface EditModal {
   type: ModalType;
   index: number | null;
-  tendencia?: MarketTendencia;
-  regiao?: MarketRegiao;
-  variedade?: MarketVariedade;
+  categoryId?: string;
 }
 
 // ─── Presentation Form (blank or pre-filled) ─────────────────────────────────
@@ -264,15 +272,22 @@ export default function AdminSlidesMercadoScreen() {
   const [saving,     setSaving]     = useState(false);
   const [saved,      setSaved]      = useState(false);
 
-  // ── Market permissions (Categorias tab) ───────────────────────────────────
-  const [marketPerms,  setMarketPerms]  = useState<MarketPermission[]>([]);
-  const [loadingMp,    setLoadingMp]    = useState(false);
-  const [mpModalOpen,  setMpModalOpen]  = useState(false);
-  const [mpEditTarget, setMpEditTarget] = useState<MarketPermission | null>(null);
-  const [mpTitle,      setMpTitle]      = useState("");
-  const [mpIcon,       setMpIcon]       = useState("bar-chart-2");
-  const [mpSaving,     setMpSaving]     = useState(false);
-  const [mpDeleting,   setMpDeleting]   = useState<string | null>(null);
+  // ── Market permissions (Categorias tab + Dados de Mercado custom sections) ─
+  const [marketPerms,   setMarketPerms]   = useState<MarketPermission[]>([]);
+  const [loadingMp,     setLoadingMp]     = useState(false);
+  const [mpModalOpen,   setMpModalOpen]   = useState(false);
+  const [mpEditTarget,  setMpEditTarget]  = useState<MarketPermission | null>(null);
+  const [mpTitle,       setMpTitle]       = useState("");
+  const [mpIcon,        setMpIcon]        = useState("bar-chart-2");
+  const [mpSectionType, setMpSectionType] = useState("lista");
+  const [mpSaving,      setMpSaving]      = useState(false);
+  const [mpDeleting,    setMpDeleting]    = useState<string | null>(null);
+
+  // ── Custom category data (Dados de Mercado — non-default perms) ────────────
+  const [rawOverview, setRawOverview] = useState<Record<string, unknown> | null>(null);
+  const [customData,  setCustomData]  = useState<Record<string, unknown[]>>({});
+  // mPeriod reused for KPI "period" field in custom modal
+  const [mPeriod, setMPeriod] = useState("");
 
   // ── Presentations state ──────────────────────────────────────────────────
 
@@ -380,12 +395,26 @@ export default function AdminSlidesMercadoScreen() {
     setLoadingMp(false);
   }, []);
 
+  useEffect(() => { loadMarketPerms(); }, [loadMarketPerms]);
   useEffect(() => { if (mainTab === "Categorias") loadMarketPerms(); }, [mainTab, loadMarketPerms]);
+
+  useEffect(() => {
+    if (!rawOverview) return;
+    const newCustom: Record<string, unknown[]> = {};
+    for (const perm of marketPerms) {
+      if (!DEFAULT_PERM_IDS.has(perm.id)) {
+        const val = rawOverview[perm.id];
+        newCustom[perm.id] = Array.isArray(val) ? val : [];
+      }
+    }
+    setCustomData(newCustom);
+  }, [rawOverview, marketPerms]);
 
   const openMpNew = () => {
     setMpEditTarget(null);
     setMpTitle("");
     setMpIcon("bar-chart-2");
+    setMpSectionType("lista");
     setMpModalOpen(true);
   };
 
@@ -393,6 +422,7 @@ export default function AdminSlidesMercadoScreen() {
     setMpEditTarget(mp);
     setMpTitle(mp.title);
     setMpIcon(mp.icon ?? "bar-chart-2");
+    setMpSectionType(mp.section_type ?? "lista");
     setMpModalOpen(true);
   };
 
@@ -401,10 +431,10 @@ export default function AdminSlidesMercadoScreen() {
     setMpSaving(true);
     let ok = false;
     if (mpEditTarget) {
-      ok = await updateMarketPermission(mpEditTarget.id, { title: mpTitle.trim(), icon: mpIcon });
+      ok = await updateMarketPermission(mpEditTarget.id, { title: mpTitle.trim(), icon: mpIcon, section_type: mpSectionType });
     } else {
       const slug = toSlug(mpTitle.trim());
-      ok = !!(await createMarketPermission({ id: slug || `mp_${Date.now()}`, title: mpTitle.trim(), icon: mpIcon }));
+      ok = !!(await createMarketPermission({ id: slug || `mp_${Date.now()}`, title: mpTitle.trim(), icon: mpIcon, section_type: mpSectionType }));
     }
     setMpSaving(false);
     if (ok) { setMpModalOpen(false); loadMarketPerms(); }
@@ -439,6 +469,7 @@ export default function AdminSlidesMercadoScreen() {
       setTendencias(data.tendencias ?? []);
       setRegioes(data.regioes       ?? []);
       setVariedades(data.variedades ?? []);
+      setRawOverview(data as Record<string, unknown>);
     }
     setLoading(false);
   }, []);
@@ -459,8 +490,12 @@ export default function AdminSlidesMercadoScreen() {
       values: numArr(barVal),
       labels: strArr(barLbl),
     };
+    const customSaves: Record<string, unknown[]> = {};
+    for (const [id, items] of Object.entries(customData)) {
+      customSaves[id] = items;
+    }
     const ok = await updateMarketOverview(period, {
-      kpis, chart_area, chart_bar, tendencias, regioes, variedades,
+      kpis, chart_area, chart_bar, tendencias, regioes, variedades, ...customSaves,
     });
     setSaving(false);
     if (ok) {
@@ -503,6 +538,43 @@ export default function AdminSlidesMercadoScreen() {
     setEditModal({ type: "variedade", index });
   };
 
+  // ── Open custom category modal ───────────────────────────────────────────────
+
+  const openCustomModal = (perm: MarketPermission, index: number | null) => {
+    const stype = perm.section_type ?? "lista";
+    const items = (customData[perm.id] ?? []) as Record<string, unknown>[];
+    const item = index !== null ? items[index] : null;
+    if (stype === "lista") {
+      setMTitle((item?.title as string) ?? "");
+      setMDesc((item?.desc as string) ?? "");
+      setMChange(String(item?.change ?? ""));
+      setMPos((item?.pos as boolean) ?? true);
+    } else if (stype === "ranking") {
+      setMRank(String(item?.rank ?? (items.length + 1)));
+      setMName((item?.name as string) ?? "");
+      setMVolume((item?.volume as string) ?? "");
+      setMPct(String(item?.pct ?? ""));
+    } else if (stype === "simples") {
+      setMVarName((item?.name as string) ?? "");
+      setMVarVol((item?.volume as string) ?? "");
+      setMVarChg(String(item?.change ?? ""));
+    } else if (stype === "kpi") {
+      setMTitle((item?.label as string) ?? "");
+      setMDesc((item?.value as string) ?? "");
+      setMPeriod((item?.period as string) ?? "");
+      setMChange(String(item?.change ?? ""));
+    } else if (stype === "grafico") {
+      const a = (item?.area as Record<string, unknown>) ?? {};
+      const b = (item?.bar as Record<string, unknown>) ?? {};
+      setAreaExp(joinNum((a?.exports as number[]) ?? []));
+      setAreaImp(joinNum((a?.imports as number[]) ?? []));
+      setAreaLbl(joinStr((a?.labels as string[]) ?? []));
+      setBarVal(joinNum((b?.values as number[]) ?? []));
+      setBarLbl(joinStr((b?.labels as string[]) ?? []));
+    }
+    setEditModal({ type: "custom", index, categoryId: perm.id });
+  };
+
   // ── Save modal item ─────────────────────────────────────────────────────────
 
   const saveModalItem = () => {
@@ -522,20 +594,47 @@ export default function AdminSlidesMercadoScreen() {
       if (editModal.index !== null) {
         const updated = [...variedades]; updated[editModal.index] = item; setVariedades(updated);
       } else { setVariedades([...variedades, item]); }
+    } else if (editModal.type === "custom" && editModal.categoryId) {
+      const perm = marketPerms.find(p => p.id === editModal.categoryId);
+      const stype = perm?.section_type ?? "lista";
+      let newItem: Record<string, unknown>;
+      if (stype === "lista") {
+        newItem = { title: mTitle, desc: mDesc, change: parseFloat(mChange) || 0, pos: mPos };
+      } else if (stype === "ranking") {
+        const curr = (customData[editModal.categoryId] ?? []) as unknown[];
+        newItem = { rank: parseInt(mRank) || curr.length + 1, name: mName, volume: mVolume, pct: parseFloat(mPct) || 0 };
+      } else if (stype === "simples") {
+        newItem = { name: mVarName, volume: mVarVol, change: parseFloat(mVarChg) || 0 };
+      } else if (stype === "kpi") {
+        newItem = { label: mTitle, value: mDesc, period: mPeriod, change: parseFloat(mChange) || 0 };
+      } else if (stype === "grafico") {
+        newItem = { area: { exports: numArr(areaExp), imports: numArr(areaImp), labels: strArr(areaLbl), yLabels: [] }, bar: { values: numArr(barVal), labels: strArr(barLbl) } };
+      } else {
+        newItem = {};
+      }
+      setCustomData(prev => {
+        const curr = [...(prev[editModal.categoryId!] ?? [])];
+        if (editModal.index !== null) curr[editModal.index] = newItem;
+        else curr.push(newItem);
+        return { ...prev, [editModal.categoryId!]: curr };
+      });
     }
     setEditModal(null);
   };
 
   // ── Delete item ──────────────────────────────────────────────────────────────
 
-  const deleteItem = (type: ModalType, index: number) => {
+  const deleteItem = (type: ModalType, index: number, categoryId?: string) => {
     Alert.alert("Remover", "Deseja remover este item?", [
       { text: "Cancelar", style: "cancel" },
       {
         text: "Remover", style: "destructive", onPress: () => {
           if (type === "tendencia") setTendencias(tendencias.filter((_, i) => i !== index));
-          else if (type === "regiao")   setRegioes(regioes.filter((_, i) => i !== index));
+          else if (type === "regiao")    setRegioes(regioes.filter((_, i) => i !== index));
           else if (type === "variedade") setVariedades(variedades.filter((_, i) => i !== index));
+          else if (type === "custom" && categoryId) {
+            setCustomData(prev => ({ ...prev, [categoryId]: (prev[categoryId] ?? []).filter((_, i) => i !== index) }));
+          }
         },
       },
     ]);
@@ -761,6 +860,64 @@ export default function AdminSlidesMercadoScreen() {
                   )}
                 />
 
+                {/* Custom category sections */}
+                {marketPerms.filter(p => !DEFAULT_PERM_IDS.has(p.id)).map(perm => {
+                  const items = (customData[perm.id] ?? []) as Record<string, unknown>[];
+                  const stype = perm.section_type ?? "lista";
+                  return (
+                    <ListSection
+                      key={perm.id}
+                      title={perm.title}
+                      items={items}
+                      colors={colors}
+                      onAdd={() => openCustomModal(perm, null)}
+                      renderItem={(item: Record<string, unknown>, i: number) => (
+                        <View key={i} style={[sec.row, sec.listItem, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                          <View style={{ flex: 1 }}>
+                            {stype === "lista" && (<>
+                              <Text style={[sec.itemTitle, { color: colors.navy }]}>{item.title as string}</Text>
+                              <Text style={[sec.itemSub, { color: colors.mutedForeground }]}>{item.desc as string}</Text>
+                              <Text style={[sec.itemBadge, { color: (item.pos as boolean) ? "#059669" : "#dc2626" }]}>
+                                {(item.pos as boolean) ? "+" : ""}{item.change}%
+                              </Text>
+                            </>)}
+                            {stype === "ranking" && (<>
+                              <Text style={[sec.itemTitle, { color: colors.navy }]}>#{item.rank} {item.name as string}</Text>
+                              <Text style={[sec.itemSub, { color: colors.mutedForeground }]}>Volume: {item.volume as string}</Text>
+                              <Text style={[sec.itemBadge, { color: colors.mutedForeground }]}>{item.pct}%</Text>
+                            </>)}
+                            {stype === "simples" && (<>
+                              <Text style={[sec.itemTitle, { color: colors.navy }]}>{item.name as string}</Text>
+                              <Text style={[sec.itemSub, { color: colors.mutedForeground }]}>Volume: {item.volume as string}</Text>
+                              <Text style={[sec.itemBadge, { color: (item.change as number) >= 0 ? "#059669" : "#dc2626" }]}>
+                                {(item.change as number) >= 0 ? "+" : ""}{item.change}%
+                              </Text>
+                            </>)}
+                            {stype === "kpi" && (<>
+                              <Text style={[sec.itemTitle, { color: colors.navy }]}>{item.label as string}</Text>
+                              <Text style={[sec.itemSub, { color: colors.mutedForeground }]}>{item.value as string} · {item.period as string}</Text>
+                              <Text style={[sec.itemBadge, { color: (item.change as number) >= 0 ? "#059669" : "#dc2626" }]}>
+                                {(item.change as number) >= 0 ? "+" : ""}{item.change}%
+                              </Text>
+                            </>)}
+                            {stype === "grafico" && (
+                              <Text style={[sec.itemSub, { color: colors.mutedForeground }]}>Gráfico configurado</Text>
+                            )}
+                          </View>
+                          <View style={sec.itemActions}>
+                            <TouchableOpacity style={[sec.actionBtn, { backgroundColor: "#f3f4f6" }]} onPress={() => openCustomModal(perm, i)}>
+                              <Feather name="edit-2" size={13} color={colors.navy} />
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[sec.actionBtn, { backgroundColor: "#fef2f2" }]} onPress={() => deleteItem("custom", i, perm.id)}>
+                              <Feather name="trash-2" size={13} color="#dc2626" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+                    />
+                  );
+                })}
+
                 {/* Save button */}
                 <TouchableOpacity
                   style={[s.saveBtn, { backgroundColor: saved ? "#059669" : colors.navy, opacity: saving ? 0.7 : 1 }]}
@@ -889,6 +1046,31 @@ export default function AdminSlidesMercadoScreen() {
               </View>
             </View>
 
+            <View style={m.field}>
+              <Text style={[m.label, { color: colors.foreground }]}>Formato dos Dados</Text>
+              <View style={{ gap: 6, marginTop: 6 }}>
+                {SECTION_TYPES.map(st => (
+                  <TouchableOpacity
+                    key={st.key}
+                    onPress={() => setMpSectionType(st.key)}
+                    style={[
+                      { flexDirection: "row", alignItems: "center", gap: 10, padding: 10, borderRadius: 10, borderWidth: 1.5 },
+                      mpSectionType === st.key
+                        ? { borderColor: colors.navy, backgroundColor: colors.navy + "10" }
+                        : { borderColor: colors.border, backgroundColor: "#f9f9f9" },
+                    ]}
+                  >
+                    <Feather name={st.icon as any} size={16} color={mpSectionType === st.key ? colors.navy : colors.mutedForeground} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: mpSectionType === st.key ? colors.navy : colors.foreground }}>{st.label}</Text>
+                      <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{st.hint}</Text>
+                    </View>
+                    {mpSectionType === st.key && <Feather name="check" size={14} color={colors.navy} />}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
             <TouchableOpacity
               style={[m.saveBtn, { backgroundColor: colors.navy, opacity: mpSaving ? 0.7 : 1 }]}
               onPress={handleSaveMp}
@@ -996,7 +1178,10 @@ export default function AdminSlidesMercadoScreen() {
             </TouchableOpacity>
             <Text style={[m.title, { color: colors.navy }]}>
               {editModal?.index !== null ? "Editar" : "Adicionar"}{" "}
-              {editModal?.type === "tendencia" ? "Tendência" : editModal?.type === "regiao" ? "Região" : "Variedade"}
+              {editModal?.type === "tendencia" ? "Tendência"
+                : editModal?.type === "regiao" ? "Região"
+                : editModal?.type === "variedade" ? "Variedade"
+                : (marketPerms.find(p => p.id === editModal?.categoryId)?.title ?? "Item")}
             </Text>
 
             {editModal?.type === "tendencia" && (
@@ -1065,6 +1250,115 @@ export default function AdminSlidesMercadoScreen() {
                 </View>
               </>
             )}
+
+            {editModal?.type === "custom" && (() => {
+              const perm = marketPerms.find(p => p.id === editModal.categoryId);
+              const stype = perm?.section_type ?? "lista";
+              return (
+                <>
+                  {stype === "lista" && (<>
+                    <View style={m.field}>
+                      <Text style={[m.label, { color: colors.foreground }]}>Título *</Text>
+                      <TextInput style={[m.input, { borderColor: colors.border }]} value={mTitle} onChangeText={setMTitle} placeholder="Título do item" />
+                    </View>
+                    <View style={m.field}>
+                      <Text style={[m.label, { color: colors.foreground }]}>Descrição</Text>
+                      <TextInput style={[m.input, m.textarea, { borderColor: colors.border }]} value={mDesc} onChangeText={setMDesc} multiline textAlignVertical="top" placeholder="Descrição..." />
+                    </View>
+                    <View style={m.row}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[m.label, { color: colors.foreground }]}>Variação (%)</Text>
+                        <TextInput style={[m.input, { borderColor: colors.border }]} value={mChange} onChangeText={setMChange} keyboardType="decimal-pad" placeholder="12.5" />
+                      </View>
+                      <View style={m.switchField}>
+                        <Text style={[m.label, { color: colors.foreground }]}>Positivo</Text>
+                        <Switch value={mPos} onValueChange={setMPos} trackColor={{ false: colors.border, true: "#059669" }} thumbColor="#fff" />
+                      </View>
+                    </View>
+                  </>)}
+                  {stype === "ranking" && (<>
+                    <View style={m.row}>
+                      <View style={{ flex: 0.4 }}>
+                        <Text style={[m.label, { color: colors.foreground }]}>Rank</Text>
+                        <TextInput style={[m.input, { borderColor: colors.border }]} value={mRank} onChangeText={setMRank} keyboardType="number-pad" placeholder="1" />
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 8 }}>
+                        <Text style={[m.label, { color: colors.foreground }]}>Nome *</Text>
+                        <TextInput style={[m.input, { borderColor: colors.border }]} value={mName} onChangeText={setMName} placeholder="Nome" />
+                      </View>
+                    </View>
+                    <View style={m.row}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[m.label, { color: colors.foreground }]}>Volume</Text>
+                        <TextInput style={[m.input, { borderColor: colors.border }]} value={mVolume} onChangeText={setMVolume} placeholder="4.2M L" />
+                      </View>
+                      <View style={{ flex: 0.6, marginLeft: 8 }}>
+                        <Text style={[m.label, { color: colors.foreground }]}>% do total</Text>
+                        <TextInput style={[m.input, { borderColor: colors.border }]} value={mPct} onChangeText={setMPct} keyboardType="decimal-pad" placeholder="32" />
+                      </View>
+                    </View>
+                  </>)}
+                  {stype === "simples" && (<>
+                    <View style={m.field}>
+                      <Text style={[m.label, { color: colors.foreground }]}>Nome *</Text>
+                      <TextInput style={[m.input, { borderColor: colors.border }]} value={mVarName} onChangeText={setMVarName} placeholder="Nome" />
+                    </View>
+                    <View style={m.row}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[m.label, { color: colors.foreground }]}>Volume</Text>
+                        <TextInput style={[m.input, { borderColor: colors.border }]} value={mVarVol} onChangeText={setMVarVol} placeholder="1.8M L" />
+                      </View>
+                      <View style={{ flex: 0.6, marginLeft: 8 }}>
+                        <Text style={[m.label, { color: colors.foreground }]}>Variação %</Text>
+                        <TextInput style={[m.input, { borderColor: colors.border }]} value={mVarChg} onChangeText={setMVarChg} keyboardType="decimal-pad" placeholder="8.4" />
+                      </View>
+                    </View>
+                  </>)}
+                  {stype === "kpi" && (<>
+                    <View style={m.field}>
+                      <Text style={[m.label, { color: colors.foreground }]}>Label *</Text>
+                      <TextInput style={[m.input, { borderColor: colors.border }]} value={mTitle} onChangeText={setMTitle} placeholder="Ex: Volume Total" />
+                    </View>
+                    <View style={m.field}>
+                      <Text style={[m.label, { color: colors.foreground }]}>Valor</Text>
+                      <TextInput style={[m.input, { borderColor: colors.border }]} value={mDesc} onChangeText={setMDesc} placeholder="Ex: R$ 42M" />
+                    </View>
+                    <View style={m.row}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[m.label, { color: colors.foreground }]}>Período</Text>
+                        <TextInput style={[m.input, { borderColor: colors.border }]} value={mPeriod} onChangeText={setMPeriod} placeholder="2024" />
+                      </View>
+                      <View style={{ flex: 0.6, marginLeft: 8 }}>
+                        <Text style={[m.label, { color: colors.foreground }]}>Variação %</Text>
+                        <TextInput style={[m.input, { borderColor: colors.border }]} value={mChange} onChangeText={setMChange} keyboardType="decimal-pad" placeholder="8.4" />
+                      </View>
+                    </View>
+                  </>)}
+                  {stype === "grafico" && (<>
+                    <View style={m.field}>
+                      <Text style={[m.label, { color: colors.foreground }]}>Área — Exportações (vírgula)</Text>
+                      <TextInput style={[m.input, { borderColor: colors.border }]} value={areaExp} onChangeText={setAreaExp} placeholder="100, 120, 140" keyboardType="decimal-pad" />
+                    </View>
+                    <View style={m.field}>
+                      <Text style={[m.label, { color: colors.foreground }]}>Área — Importações (vírgula)</Text>
+                      <TextInput style={[m.input, { borderColor: colors.border }]} value={areaImp} onChangeText={setAreaImp} placeholder="80, 90, 110" keyboardType="decimal-pad" />
+                    </View>
+                    <View style={m.field}>
+                      <Text style={[m.label, { color: colors.foreground }]}>Área — Labels (vírgula)</Text>
+                      <TextInput style={[m.input, { borderColor: colors.border }]} value={areaLbl} onChangeText={setAreaLbl} placeholder="Jan, Fev, Mar" />
+                    </View>
+                    <View style={m.field}>
+                      <Text style={[m.label, { color: colors.foreground }]}>Barras — Valores (vírgula)</Text>
+                      <TextInput style={[m.input, { borderColor: colors.border }]} value={barVal} onChangeText={setBarVal} placeholder="50, 60, 70" keyboardType="decimal-pad" />
+                    </View>
+                    <View style={m.field}>
+                      <Text style={[m.label, { color: colors.foreground }]}>Barras — Labels (vírgula)</Text>
+                      <TextInput style={[m.input, { borderColor: colors.border }]} value={barLbl} onChangeText={setBarLbl} placeholder="Jan, Fev, Mar" />
+                    </View>
+                  </>)}
+                </>
+              );
+            })()}
 
             <TouchableOpacity style={[m.saveBtn, { backgroundColor: colors.navy }]} onPress={saveModalItem}>
               <Text style={m.saveBtnText}>Salvar</Text>
