@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@/components/ui/Icon";
 import QRCode from "react-native-qrcode-svg";
 import { Avatar } from "@/components/ui/Avatar";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, supabase } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import {
   CompanyPage,
@@ -253,6 +253,27 @@ export default function ProfileScreen() {
   useFocusEffect(useCallback(() => { refreshCompanyPages(); }, [refreshCompanyPages]));
   // Also reload when switching identity (activeCompany change)
   useEffect(() => { refreshCompanyPages(); }, [refreshCompanyPages, activeCompany]);
+
+  // Realtime: remove accepted connections from suggestions
+  useEffect(() => {
+    if (!user?.id) return;
+    const ch = supabase
+      .channel(`profile_connections_suggestions_${user.id}`)
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "connections",
+      }, (payload) => {
+        const row = payload.new as any;
+        if (row.status !== "accepted") return;
+        const isInvolved = row.requester_id === user.id || row.receiver_id === user.id;
+        if (!isInvolved) return;
+        const otherId = row.requester_id === user.id ? row.receiver_id : row.requester_id;
+        setSuggestions(prev => prev.filter(s => s.id !== otherId));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id]);
   // ─────────────────────────────────────────────────────────────────────────
 
   const onRefresh = () => { setRefreshing(true); loadData(); loadEngagement(); };

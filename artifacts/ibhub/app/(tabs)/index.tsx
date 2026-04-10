@@ -248,6 +248,28 @@ export default function FeedScreen() {
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
 
+  // ── Realtime: remove accepted connections from suggestions ──
+  useEffect(() => {
+    if (!user?.id) return;
+    const ch = supabase
+      .channel(`connections_suggestions_${user.id}`)
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "connections",
+      }, (payload) => {
+        const row = payload.new as any;
+        if (row.status !== "accepted") return;
+        const isInvolved =
+          row.requester_id === user.id || row.receiver_id === user.id;
+        if (!isInvolved) return;
+        const otherId = row.requester_id === user.id ? row.receiver_id : row.requester_id;
+        setSuggestions(prev => prev.filter(s => s.id !== otherId));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id]);
+
   // ── Realtime subscriptions: posts, likes, comments ──
   useEffect(() => {
     if (!user?.id) return;

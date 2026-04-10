@@ -33,6 +33,8 @@ export interface AppNotification {
   read: boolean;
   created_at: string;
   actor?: { id: string; full_name: string; avatar_url?: string | null } | null;
+  connection_id?: string | null;
+  connection_status?: "pending" | "accepted" | "rejected" | null;
 }
 
 export interface AppComment {
@@ -1053,12 +1055,43 @@ export async function fetchNotifications(userId: string): Promise<AppNotificatio
     if (!data) return [];
 
     const actorIds = [...new Set((data as any[]).map(n => n.actor_id).filter(Boolean))];
-    const profileMap = await fetchCommentProfilesForIds(actorIds);
 
-    return (data as any[]).map(n => ({
-      ...n,
-      actor: profileMap.get(n.actor_id) ?? null,
-    })) as unknown as AppNotification[];
+    // For connection notifications, fetch the corresponding connection record
+    const connectionActorIds = (data as any[])
+      .filter(n => n.type === "connection" && n.actor_id)
+      .map(n => n.actor_id);
+
+    const [profileMap, connectionsRes] = await Promise.all([
+      fetchCommentProfilesForIds(actorIds),
+      connectionActorIds.length > 0
+        ? supabase
+            .from("connections")
+            .select("id, requester_id, receiver_id, status")
+            .eq("receiver_id", userId)
+            .in("requester_id", connectionActorIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const connectionMap = new Map<string, { id: string; status: string }>();
+    ((connectionsRes as any).data ?? []).forEach((c: any) => {
+      connectionMap.set(c.requester_id, { id: c.id, status: c.status });
+    });
+
+    return (data as any[]).map(n => {
+      const base = {
+        ...n,
+        actor: profileMap.get(n.actor_id) ?? null,
+      };
+      if (n.type === "connection" && n.actor_id) {
+        const conn = connectionMap.get(n.actor_id);
+        return {
+          ...base,
+          connection_id: conn?.id ?? null,
+          connection_status: (conn?.status as any) ?? null,
+        };
+      }
+      return base;
+    }) as unknown as AppNotification[];
   } catch (e) {
     console.error("fetchNotifications:", e);
     return [];

@@ -43,12 +43,19 @@ function NotifRow({
   notif,
   colors,
   onPress,
+  onAccept,
+  onReject,
 }: {
   notif: AppNotification;
   colors: any;
   onPress: () => void;
+  onAccept?: () => void;
+  onReject?: () => void;
 }) {
   const meta = TYPE_META[notif.type] ?? { icon: "bell", color: colors.gold, label: "nova notificação" };
+  const isConnectionPending = notif.type === "connection" && notif.connection_status === "pending" && notif.connection_id;
+  const isConnectionAccepted = notif.type === "connection" && notif.connection_status === "accepted";
+  const isConnectionRejected = notif.type === "connection" && notif.connection_status === "rejected";
 
   return (
     <Pressable
@@ -80,6 +87,39 @@ function NotifRow({
         <Text style={[styles.rowTime, { color: colors.mutedForeground }]}>
           {timeAgo(notif.created_at)}
         </Text>
+
+        {isConnectionPending && onAccept && onReject && (
+          <View style={styles.connectionActions}>
+            <TouchableOpacity
+              style={[styles.acceptBtn, { backgroundColor: colors.gold }]}
+              onPress={(e) => { e.stopPropagation?.(); onAccept(); }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.acceptText}>Aceitar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.rejectBtn, { borderColor: colors.border }]}
+              onPress={(e) => { e.stopPropagation?.(); onReject(); }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.rejectText, { color: colors.mutedForeground }]}>Rejeitar</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {isConnectionAccepted && (
+          <View style={styles.connectionFeedback}>
+            <Feather name="check-circle" size={13} color="#16a34a" />
+            <Text style={[styles.feedbackText, { color: "#16a34a" }]}>Conexão aceita</Text>
+          </View>
+        )}
+
+        {isConnectionRejected && (
+          <View style={styles.connectionFeedback}>
+            <Feather name="x-circle" size={13} color={colors.mutedForeground} />
+            <Text style={[styles.feedbackText, { color: colors.mutedForeground }]}>Pedido rejeitado</Text>
+          </View>
+        )}
       </View>
 
       {!notif.read && (
@@ -111,10 +151,8 @@ export default function NotificationsScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Reload on focus so badge count is fresh
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  // Realtime: new notification arrives → prepend it
   useEffect(() => {
     if (!user?.id) return;
     const channel = supabase
@@ -128,7 +166,6 @@ export default function NotificationsScreen() {
           filter: `user_id=eq.${user.id}`,
         },
         async () => {
-          // Reload to get actor profile
           const fresh = await API.fetchNotifications(user.id);
           setNotifs(fresh);
         },
@@ -152,6 +189,38 @@ export default function NotificationsScreen() {
       router.push(`/post/${notif.post_id}` as any);
     } else if (notif.actor?.id) {
       router.push(`/profile/${notif.actor.id}` as any);
+    }
+  };
+
+  const handleAcceptConnection = async (notif: AppNotification) => {
+    if (!notif.connection_id) return;
+    const prevRead = notif.read;
+    setNotifs(prev => prev.map(n =>
+      n.id === notif.id ? { ...n, connection_status: "accepted", read: true } : n
+    ));
+    const ok = await API.respondToConnection(notif.connection_id, "accepted");
+    if (!ok) {
+      setNotifs(prev => prev.map(n =>
+        n.id === notif.id ? { ...n, connection_status: "pending", read: prevRead } : n
+      ));
+    } else {
+      await API.markNotificationRead(notif.id);
+    }
+  };
+
+  const handleRejectConnection = async (notif: AppNotification) => {
+    if (!notif.connection_id) return;
+    const prevRead = notif.read;
+    setNotifs(prev => prev.map(n =>
+      n.id === notif.id ? { ...n, connection_status: "rejected", read: true } : n
+    ));
+    const ok = await API.respondToConnection(notif.connection_id, "rejected");
+    if (!ok) {
+      setNotifs(prev => prev.map(n =>
+        n.id === notif.id ? { ...n, connection_status: "pending", read: prevRead } : n
+      ));
+    } else {
+      await API.markNotificationRead(notif.id);
     }
   };
 
@@ -201,7 +270,13 @@ export default function NotificationsScreen() {
           data={notifs}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <NotifRow notif={item} colors={colors} onPress={() => handleNotifPress(item)} />
+            <NotifRow
+              notif={item}
+              colors={colors}
+              onPress={() => handleNotifPress(item)}
+              onAccept={item.type === "connection" && item.connection_status === "pending" ? () => handleAcceptConnection(item) : undefined}
+              onReject={item.type === "connection" && item.connection_status === "pending" ? () => handleRejectConnection(item) : undefined}
+            />
           )}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />}
           contentContainerStyle={notifs.length === 0 ? styles.emptyContainer : { paddingBottom: bottomPad }}
@@ -224,27 +299,34 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container:       { flex: 1 },
-  header:          { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, gap: 10 },
-  backBtn:         { padding: 4 },
-  headerTitle:     { flex: 1, fontSize: 20, fontWeight: "800" },
-  markAllWrap:     { width: 90, alignItems: "flex-end" },
-  markAllBtn:      { fontSize: 13, fontWeight: "700" },
-  unreadBar:       { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, gap: 8 },
-  unreadBadge:     { minWidth: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
-  unreadBadgeText: { color: "#fff", fontSize: 11, fontWeight: "800" },
-  unreadBarText:   { fontSize: 13, fontWeight: "600" },
-  center:          { flex: 1, alignItems: "center", justifyContent: "center" },
-  row:             { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, gap: 12 },
-  avatarWrap:      { position: "relative" },
-  typeIcon:        { position: "absolute", bottom: -2, right: -2, width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#fff" },
-  rowBody:         { flex: 1, gap: 3 },
-  rowText:         { fontSize: 14, lineHeight: 20 },
-  rowTime:         { fontSize: 12 },
-  unreadDot:       { width: 9, height: 9, borderRadius: 5 },
-  emptyContainer:  { flex: 1 },
-  empty:           { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80, paddingHorizontal: 40, gap: 14 },
-  emptyIconCircle: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
-  emptyTitle:      { fontSize: 18, fontWeight: "800", textAlign: "center" },
-  emptySub:        { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  container:         { flex: 1 },
+  header:            { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, gap: 10 },
+  backBtn:           { padding: 4 },
+  headerTitle:       { flex: 1, fontSize: 20, fontWeight: "800" },
+  markAllWrap:       { width: 90, alignItems: "flex-end" },
+  markAllBtn:        { fontSize: 13, fontWeight: "700" },
+  unreadBar:         { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, gap: 8 },
+  unreadBadge:       { minWidth: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
+  unreadBadgeText:   { color: "#fff", fontSize: 11, fontWeight: "800" },
+  unreadBarText:     { fontSize: 13, fontWeight: "600" },
+  center:            { flex: 1, alignItems: "center", justifyContent: "center" },
+  row:               { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, gap: 12 },
+  avatarWrap:        { position: "relative" },
+  typeIcon:          { position: "absolute", bottom: -2, right: -2, width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#fff" },
+  rowBody:           { flex: 1, gap: 3 },
+  rowText:           { fontSize: 14, lineHeight: 20 },
+  rowTime:           { fontSize: 12 },
+  unreadDot:         { width: 9, height: 9, borderRadius: 5, marginTop: 5 },
+  emptyContainer:    { flex: 1 },
+  empty:             { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80, paddingHorizontal: 40, gap: 14 },
+  emptyIconCircle:   { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
+  emptyTitle:        { fontSize: 18, fontWeight: "800", textAlign: "center" },
+  emptySub:          { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  connectionActions: { flexDirection: "row", gap: 8, marginTop: 8 },
+  acceptBtn:         { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20 },
+  acceptText:        { color: "#fff", fontSize: 13, fontWeight: "700" },
+  rejectBtn:         { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
+  rejectText:        { fontSize: 13 },
+  connectionFeedback:{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 6 },
+  feedbackText:      { fontSize: 13, fontWeight: "600" },
 });
