@@ -71,7 +71,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="notifications"
         options={{
-          title: "Vagas",
+          title: "Oportunidades",
           tabBarIcon: ({ color }) => <Feather name="briefcase" size={22} color={color} />,
         }}
       />

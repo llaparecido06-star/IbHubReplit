@@ -602,17 +602,18 @@ export default function OportunidadesScreen() {
 
       {/* Filter Bottom Sheet */}
       {showFilter && (
-        <Pressable style={StyleSheet.absoluteFillObject} onPress={closeFilter}>
-          <Animated.View
-            style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.45)", opacity: filterOverlay }]}
-          />
-          <Pressable onPress={(e) => e.stopPropagation()}>
+        <>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={closeFilter}>
             <Animated.View
-              style={[
-                styles.filterSheet,
-                { backgroundColor: "#fff", transform: [{ translateY: filterAnim }] },
-              ]}
-            >
+              style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.45)", opacity: filterOverlay }]}
+            />
+          </Pressable>
+          <Animated.View
+            style={[
+              styles.filterSheet,
+              { backgroundColor: "#fff", transform: [{ translateY: filterAnim }] },
+            ]}
+          >
               <View style={styles.sheetHandle} />
               <View style={styles.filterHeader}>
                 <Text style={[styles.filterTitle, { color: colors.navy }]}>Filtros</Text>
@@ -741,9 +742,8 @@ export default function OportunidadesScreen() {
                   <Text style={styles.filterApplyText}>Aplicar</Text>
                 </TouchableOpacity>
               </View>
-            </Animated.View>
-          </Pressable>
-        </Pressable>
+          </Animated.View>
+        </>
       )}
     </View>
   );
