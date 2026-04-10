@@ -1646,8 +1646,9 @@ export async function searchChatContacts(
     const [connRes, followRes] = await Promise.all([
       supabase
         .from("connections")
-        .select("user1_id, user2_id")
-        .or(`user1_id.eq.${currentUserId},user2_id.eq.${currentUserId}`),
+        .select("requester_id, receiver_id")
+        .or(`requester_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
+        .eq("status", "accepted"),
       supabase
         .from("follows")
         .select("following_id")
@@ -1655,7 +1656,7 @@ export async function searchChatContacts(
     ]);
 
     const connectedIds = (connRes.data ?? []).map((c: any) =>
-      c.user1_id === currentUserId ? c.user2_id : c.user1_id,
+      c.requester_id === currentUserId ? c.receiver_id : c.requester_id,
     );
     const followingIds = (followRes.data ?? []).map((f: any) => f.following_id);
     const allowedIds = [...new Set([...connectedIds, ...followingIds])];
@@ -2290,20 +2291,24 @@ export async function getOrCreateDirectConversation(userId1: string, userId2: st
     ]);
     const isKnown = (connCheck.count ?? 0) > 0 || (followCheck.count ?? 0) > 0;
 
-    // Create new conversation
-    const { data: convo } = await supabase
+    // Generate UUID client-side to avoid the RLS SELECT-after-INSERT issue
+    // (convos_select requires being a participant, but participants don't exist yet at INSERT time)
+    const convoId = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+    });
+
+    const { error: convErr } = await supabase
       .from("conversations")
-      .insert({ is_group: false })
-      .select()
-      .single();
-    if (!convo) return null;
+      .insert({ id: convoId, is_group: false });
+    if (convErr) { console.error("getOrCreateDirectConversation insert:", convErr); return null; }
 
     await supabase.from("conversation_participants").insert([
-      { conversation_id: convo.id, user_id: userId1, accepted: true },
-      { conversation_id: convo.id, user_id: userId2, accepted: isKnown },
+      { conversation_id: convoId, user_id: userId1, accepted: true },
+      { conversation_id: convoId, user_id: userId2, accepted: isKnown },
     ]);
 
-    return convo.id;
+    return convoId;
   } catch (e) {
     console.error("getOrCreateDirectConversation:", e);
     return null;
