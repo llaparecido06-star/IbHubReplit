@@ -718,11 +718,13 @@ export async function fetchFollowers(userId: string): Promise<FollowProfile[]> {
   try {
     const { data, error } = await supabase
       .from("follows")
-      .select("follower:profiles!follows_follower_id_fkey(id, full_name, username, avatar_url, position, company)")
+      .select("follower_id")
       .eq("following_id", userId)
       .limit(100);
-    if (error || !data) return [];
-    return data.map((r: any) => r.follower).filter(Boolean) as FollowProfile[];
+    if (error || !data || data.length === 0) return [];
+    const ids = (data as any[]).map(r => r.follower_id).filter(Boolean);
+    const profileMap = await fetchProfilesForIds(ids);
+    return ids.map(id => profileMap.get(id)).filter(Boolean) as FollowProfile[];
   } catch (e) {
     console.error("fetchFollowers:", e);
     return [];
@@ -733,11 +735,13 @@ export async function fetchFollowing(userId: string): Promise<FollowProfile[]> {
   try {
     const { data, error } = await supabase
       .from("follows")
-      .select("following:profiles!follows_following_id_fkey(id, full_name, username, avatar_url, position, company)")
+      .select("following_id")
       .eq("follower_id", userId)
       .limit(100);
-    if (error || !data) return [];
-    return data.map((r: any) => r.following).filter(Boolean) as FollowProfile[];
+    if (error || !data || data.length === 0) return [];
+    const ids = (data as any[]).map(r => r.following_id).filter(Boolean);
+    const profileMap = await fetchProfilesForIds(ids);
+    return ids.map(id => profileMap.get(id)).filter(Boolean) as FollowProfile[];
   } catch (e) {
     console.error("fetchFollowing:", e);
     return [];
@@ -851,21 +855,17 @@ export async function fetchPendingConnectionsReceived(userId: string): Promise<C
   try {
     const { data, error } = await supabase
       .from("connections")
-      .select(`id, created_at, requester:profiles!connections_requester_id_fkey(id, full_name, username, avatar_url, position, company)`)
+      .select("id, created_at, requester_id")
       .eq("receiver_id", userId)
       .eq("status", "pending")
       .order("created_at", { ascending: false });
-    if (error || !data) return [];
-    return (data as any[]).map((row) => ({
-      connectionId: row.id,
-      id: row.requester.id,
-      full_name: row.requester.full_name,
-      username: row.requester.username,
-      avatar_url: row.requester.avatar_url,
-      position: row.requester.position,
-      company: row.requester.company,
-      created_at: row.created_at,
-    }));
+    if (error || !data || data.length === 0) return [];
+    const requesterIds = (data as any[]).map(r => r.requester_id).filter(Boolean);
+    const profileMap = await fetchProfilesForIds(requesterIds);
+    return (data as any[]).map((row) => {
+      const p = profileMap.get(row.requester_id) ?? {};
+      return { connectionId: row.id, id: row.requester_id, full_name: p.full_name ?? null, username: p.username ?? null, avatar_url: p.avatar_url ?? null, position: p.position ?? null, company: p.company ?? null, created_at: row.created_at };
+    });
   } catch (e) { console.error("fetchPendingConnectionsReceived:", e); return []; }
 }
 
@@ -873,21 +873,17 @@ export async function fetchPendingConnectionsSent(userId: string): Promise<Conne
   try {
     const { data, error } = await supabase
       .from("connections")
-      .select(`id, created_at, receiver:profiles!connections_receiver_id_fkey(id, full_name, username, avatar_url, position, company)`)
+      .select("id, created_at, receiver_id")
       .eq("requester_id", userId)
       .eq("status", "pending")
       .order("created_at", { ascending: false });
-    if (error || !data) return [];
-    return (data as any[]).map((row) => ({
-      connectionId: row.id,
-      id: row.receiver.id,
-      full_name: row.receiver.full_name,
-      username: row.receiver.username,
-      avatar_url: row.receiver.avatar_url,
-      position: row.receiver.position,
-      company: row.receiver.company,
-      created_at: row.created_at,
-    }));
+    if (error || !data || data.length === 0) return [];
+    const receiverIds = (data as any[]).map(r => r.receiver_id).filter(Boolean);
+    const profileMap = await fetchProfilesForIds(receiverIds);
+    return (data as any[]).map((row) => {
+      const p = profileMap.get(row.receiver_id) ?? {};
+      return { connectionId: row.id, id: row.receiver_id, full_name: p.full_name ?? null, username: p.username ?? null, avatar_url: p.avatar_url ?? null, position: p.position ?? null, company: p.company ?? null, created_at: row.created_at };
+    });
   } catch (e) { console.error("fetchPendingConnectionsSent:", e); return []; }
 }
 
@@ -911,37 +907,22 @@ export async function respondToConnection(
 export async function fetchConnectedUsers(userId: string): Promise<ConnectionProfile[]> {
   try {
     const [sent, received] = await Promise.all([
-      supabase
-        .from("connections")
-        .select(`id, created_at, receiver:profiles!connections_receiver_id_fkey(id, full_name, username, avatar_url, position, company)`)
-        .eq("requester_id", userId)
-        .eq("status", "accepted"),
-      supabase
-        .from("connections")
-        .select(`id, created_at, requester:profiles!connections_requester_id_fkey(id, full_name, username, avatar_url, position, company)`)
-        .eq("receiver_id", userId)
-        .eq("status", "accepted"),
+      supabase.from("connections").select("id, created_at, receiver_id").eq("requester_id", userId).eq("status", "accepted"),
+      supabase.from("connections").select("id, created_at, requester_id").eq("receiver_id", userId).eq("status", "accepted"),
     ]);
-    const s: ConnectionProfile[] = ((sent.data ?? []) as any[]).map((row) => ({
-      connectionId: row.id,
-      id: row.receiver.id,
-      full_name: row.receiver.full_name,
-      username: row.receiver.username,
-      avatar_url: row.receiver.avatar_url,
-      position: row.receiver.position,
-      company: row.receiver.company,
-      created_at: row.created_at,
-    }));
-    const r: ConnectionProfile[] = ((received.data ?? []) as any[]).map((row) => ({
-      connectionId: row.id,
-      id: row.requester.id,
-      full_name: row.requester.full_name,
-      username: row.requester.username,
-      avatar_url: row.requester.avatar_url,
-      position: row.requester.position,
-      company: row.requester.company,
-      created_at: row.created_at,
-    }));
+    const allIds = [
+      ...(sent.data ?? []).map((r: any) => r.receiver_id),
+      ...(received.data ?? []).map((r: any) => r.requester_id),
+    ].filter(Boolean);
+    const profileMap = await fetchProfilesForIds([...new Set(allIds)]);
+    const s: ConnectionProfile[] = ((sent.data ?? []) as any[]).map((row) => {
+      const p = profileMap.get(row.receiver_id) ?? {};
+      return { connectionId: row.id, id: row.receiver_id, full_name: (p as any).full_name ?? null, username: (p as any).username ?? null, avatar_url: (p as any).avatar_url ?? null, position: (p as any).position ?? null, company: (p as any).company ?? null, created_at: row.created_at };
+    });
+    const r: ConnectionProfile[] = ((received.data ?? []) as any[]).map((row) => {
+      const p = profileMap.get(row.requester_id) ?? {};
+      return { connectionId: row.id, id: row.requester_id, full_name: (p as any).full_name ?? null, username: (p as any).username ?? null, avatar_url: (p as any).avatar_url ?? null, position: (p as any).position ?? null, company: (p as any).company ?? null, created_at: row.created_at };
+    });
     return [...s, ...r].sort((a, b) => b.created_at.localeCompare(a.created_at));
   } catch (e) { console.error("fetchConnectedUsers:", e); return []; }
 }
@@ -1208,14 +1189,13 @@ export async function fetchStoryViewers(storyId: string): Promise<{ id: string; 
   try {
     const { data, error } = await supabase
       .from("story_views")
-      .select("user_id, viewer:profiles!story_views_user_id_fkey(id, full_name, avatar_url)")
+      .select("user_id")
       .eq("story_id", storyId);
 
-    if (error || !data) return [];
-    type StoryViewRow = { viewer: { id: string; full_name: string; avatar_url?: string | null } | null };
-    return (data as unknown as StoryViewRow[])
-      .map(d => d.viewer)
-      .filter((v): v is { id: string; full_name: string; avatar_url?: string | null } => v !== null);
+    if (error || !data || data.length === 0) return [];
+    const viewerIds = (data as any[]).map(d => d.user_id).filter(Boolean);
+    const profileMap = await fetchCommentProfilesForIds(viewerIds);
+    return viewerIds.map(id => profileMap.get(id)).filter((v): v is { id: string; full_name: string; avatar_url?: string | null } => v !== null);
   } catch (e) {
     console.error("fetchStoryViewers:", e);
     return [];
@@ -1654,7 +1634,7 @@ export async function fetchConversations(userId: string): Promise<AppConversatio
       const [othersRes, lastMsgRes, unreadRes] = await Promise.all([
         supabase
           .from("conversation_participants")
-          .select("user_id, profile:profiles!conversation_participants_user_id_fkey(id, full_name, avatar_url)")
+          .select("user_id")
           .eq("conversation_id", convo.id)
           .neq("user_id", userId)
           .limit(1),
@@ -1681,6 +1661,12 @@ export async function fetchConversations(userId: string): Promise<AppConversatio
         : lastMsg?.message_type === "file"  ? "📎 Arquivo"
         : (lastMsg?.content ?? null);
 
+      let participant = null;
+      if (other?.user_id) {
+        const pMap = await fetchCommentProfilesForIds([other.user_id]);
+        participant = pMap.get(other.user_id) ?? null;
+      }
+
       results.push({
         id: convo.id,
         is_group: convo.is_group,
@@ -1688,7 +1674,7 @@ export async function fetchConversations(userId: string): Promise<AppConversatio
         last_message: lastContent,
         last_message_at: lastMsg?.created_at ?? convo.created_at,
         unread_count: unreadRes.count ?? 0,
-        participant: other ? (other as any).profile : null,
+        participant,
         accepted: row.accepted ?? true,
       });
     }
@@ -1729,12 +1715,15 @@ export async function fetchConversationParticipant(
   try {
     const { data } = await supabase
       .from("conversation_participants")
-      .select("user_id, profile:profiles!conversation_participants_user_id_fkey(id, full_name, avatar_url)")
+      .select("user_id")
       .eq("conversation_id", conversationId)
       .neq("user_id", currentUserId)
       .limit(1);
     if (!data || data.length === 0) return null;
-    return (data[0] as any).profile ?? null;
+    const otherId = (data[0] as any).user_id;
+    if (!otherId) return null;
+    const pMap = await fetchCommentProfilesForIds([otherId]);
+    return pMap.get(otherId) ?? null;
   } catch { return null; }
 }
 
@@ -1841,17 +1830,17 @@ export async function fetchBlockedUsers(userId: string): Promise<BlockedUser[]> 
   try {
     const { data, error } = await supabase
       .from("user_blocks")
-      .select("blocked_id, profiles:profiles!user_blocks_blocked_id_fkey(id, full_name, username, avatar_url)")
+      .select("blocked_id")
       .eq("blocker_id", userId)
       .order("created_at", { ascending: false });
     
-    if (error || !data) return [];
-    return (data as unknown as BlockedUserRow[]).map((row) => ({
-      id: row.profiles?.id ?? row.blocked_id,
-      full_name: row.profiles?.full_name ?? null,
-      username: row.profiles?.username ?? null,
-      avatar_url: row.profiles?.avatar_url ?? null,
-    }));
+    if (error || !data || data.length === 0) return [];
+    const blockedIds = (data as any[]).map(r => r.blocked_id).filter(Boolean);
+    const profileMap = await fetchProfilesForIds(blockedIds);
+    return blockedIds.map(id => {
+      const p = profileMap.get(id) as any;
+      return { id, full_name: p?.full_name ?? null, username: p?.username ?? null, avatar_url: p?.avatar_url ?? null };
+    });
   } catch (e) {
     console.error("fetchBlockedUsers:", e);
     return [];
@@ -1874,16 +1863,28 @@ export async function fetchPendingReports(): Promise<AppReport[]> {
   try {
     const { data, error } = await supabase
       .from("reports")
-      .select(`
-        id, post_id, reported_by, reason, status, created_at,
-        reporter:profiles!reports_reported_by_fkey(id, full_name, avatar_url),
-        post:posts!reports_post_id_fkey(id, content, user_id)
-      `)
+      .select("id, post_id, reported_by, reason, status, created_at")
       .eq("status", "pending")
       .order("created_at", { ascending: false });
 
-    if (error || !data) return [];
-    return data as unknown as AppReport[];
+    if (error || !data || data.length === 0) return [];
+
+    const reporterIds = [...new Set((data as any[]).map(r => r.reported_by).filter(Boolean))];
+    const postIds = [...new Set((data as any[]).map(r => r.post_id).filter(Boolean))];
+
+    const [profileMap, postsRes] = await Promise.all([
+      fetchCommentProfilesForIds(reporterIds),
+      postIds.length > 0
+        ? supabase.from("posts").select("id, content, user_id").in("id", postIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+    const postMap = new Map(((postsRes as any).data ?? []).map((p: any) => [p.id, p]));
+
+    return (data as any[]).map(r => ({
+      ...r,
+      reporter: r.reported_by ? (profileMap.get(r.reported_by) ?? null) : null,
+      post: r.post_id ? (postMap.get(r.post_id) ?? null) : null,
+    })) as unknown as AppReport[];
   } catch (e) {
     console.error("fetchPendingReports:", e);
     return [];
@@ -2202,16 +2203,15 @@ export async function fetchCompanyPageAdmins(companyId: string): Promise<Company
   try {
     const { data, error } = await supabase
       .from("company_page_admins")
-      .select(`
-        company_id, user_id, role, added_at,
-        profile:profiles!company_page_admins_user_id_fkey(id, full_name, avatar_url, position, company)
-      `)
+      .select("company_id, user_id, role, added_at")
       .eq("company_id", companyId)
       .order("added_at", { ascending: true });
-    if (error || !data) return [];
+    if (error || !data || data.length === 0) return [];
+    const adminUserIds = [...new Set((data as any[]).map(r => r.user_id).filter(Boolean))];
+    const profileMap = await fetchProfilesForIds(adminUserIds);
     return (data as any[]).map(row => ({
       ...row,
-      profile: Array.isArray(row.profile) ? row.profile[0] : row.profile,
+      profile: row.user_id ? (profileMap.get(row.user_id) ?? null) : null,
     }));
   } catch (e) {
     console.error("fetchCompanyPageAdmins:", e);
@@ -2581,8 +2581,7 @@ export async function fetchOpportunities(
       .select(`
         id, created_by, type, title, description, category, location, price, cover_image_url,
         company, contract_type, salary, contact_email, expires_at, is_active, created_at,
-        interests_count, applications_count,
-        creator:profiles!opportunities_created_by_fkey(id, full_name, avatar_url, position, company)
+        interests_count, applications_count
       `)
       .eq("is_active", true)
       .eq("type", type)
@@ -2631,11 +2630,15 @@ export async function fetchOpportunities(
       );
     }
 
-    await Promise.all(promises);
+    const creatorIds = [...new Set((data as any[]).map(d => d.created_by).filter(Boolean))];
+    const [creatorMap] = await Promise.all([
+      fetchCommentProfilesForIds(creatorIds),
+      ...promises,
+    ]);
 
     return (data as any[]).map((d) => ({
       ...d,
-      creator: d.creator ?? null,
+      creator: d.created_by ? (creatorMap.get(d.created_by) ?? null) : null,
       is_applied: appliedIds.has(d.id),
       is_saved: savedIds.has(d.id),
       interests_count: d.interests_count ?? 0,
@@ -2654,15 +2657,16 @@ export async function fetchOpportunityById(
   try {
     const { data, error } = await supabase
       .from("opportunities")
-      .select(`
-        id, created_by, type, title, description, category, location, price,
-        company, contract_type, salary, contact_email, expires_at, is_active, created_at,
-        creator:profiles!opportunities_created_by_fkey(id, full_name, avatar_url, position, company)
-      `)
+      .select(`id, created_by, type, title, description, category, location, price,
+        company, contract_type, salary, contact_email, expires_at, is_active, created_at`)
       .eq("id", id)
       .single();
 
     if (error || !data) return null;
+
+    const creatorId = (data as any).created_by;
+    const creatorMap = creatorId ? await fetchCommentProfilesForIds([creatorId]) : new Map();
+    (data as any).creator = creatorId ? (creatorMap.get(creatorId) ?? null) : null;
 
     const isVaga = (data as any).type === "vaga";
 
@@ -2936,15 +2940,26 @@ export async function fetchApplicationsForMyOpportunities(
     const opIds = myOps.map((o: any) => o.id);
     const { data, error } = await supabase
       .from("opportunity_applications")
-      .select(`
-        id, opportunity_id, applicant_id, cv_url, message, created_at,
-        applicant:profiles!opportunity_applications_applicant_id_fkey(id, full_name, avatar_url, username, position, company),
-        opportunity:opportunities!opportunity_applications_opportunity_id_fkey(id, title, type)
-      `)
+      .select("id, opportunity_id, applicant_id, cv_url, message, created_at")
       .in("opportunity_id", opIds)
       .order("created_at", { ascending: false });
     if (error) { console.error("fetchApplicationsForMyOpportunities:", error); return []; }
-    return (data ?? []) as any[];
+    if (!data || data.length === 0) return [];
+
+    const applicantIds = [...new Set((data as any[]).map(a => a.applicant_id).filter(Boolean))];
+    const oppIds2 = [...new Set((data as any[]).map(a => a.opportunity_id).filter(Boolean))];
+
+    const [applicantMap, oppsRes] = await Promise.all([
+      fetchProfilesForIds(applicantIds),
+      supabase.from("opportunities").select("id, title, type").in("id", oppIds2),
+    ]);
+    const oppMap = new Map(((oppsRes as any).data ?? []).map((o: any) => [o.id, o]));
+
+    return (data as any[]).map(a => ({
+      ...a,
+      applicant: a.applicant_id ? (applicantMap.get(a.applicant_id) ?? null) : null,
+      opportunity: a.opportunity_id ? (oppMap.get(a.opportunity_id) ?? null) : null,
+    })) as any[];
   } catch (e) {
     console.error("fetchApplicationsForMyOpportunities:", e);
     return [];
@@ -3118,14 +3133,17 @@ export async function fetchEventAttendees(eventId: string): Promise<AppEventAtte
   try {
     const { data, error } = await supabase
       .from("event_attendees")
-      .select(`
-        id, event_id, user_id, status, created_at,
-        profile:profiles!event_attendees_user_id_fkey(id, full_name, avatar_url, username, position)
-      `)
+      .select("id, event_id, user_id, status, created_at")
       .eq("event_id", eventId)
       .order("created_at", { ascending: true });
     if (error) { console.error("fetchEventAttendees:", error); return []; }
-    return (data ?? []) as any[];
+    if (!data || data.length === 0) return [];
+    const attendeeIds = [...new Set((data as any[]).map(a => a.user_id).filter(Boolean))];
+    const profileMap = await fetchProfilesForIds(attendeeIds);
+    return (data as any[]).map(a => ({
+      ...a,
+      profile: a.user_id ? (profileMap.get(a.user_id) ?? null) : null,
+    })) as any[];
   } catch (e) {
     console.error("fetchEventAttendees:", e);
     return [];
@@ -3485,17 +3503,20 @@ export async function getAdminCertificationRequests(
   try {
     let query = supabase
       .from("certification_requests")
-      .select(`
-        id, user_id, name, issuer, cert_number, date, status, created_at, reviewed_at, reviewed_by,
-        requester:profiles!certification_requests_user_id_fkey(id, full_name, avatar_url)
-      `)
+      .select("id, user_id, name, issuer, cert_number, date, status, created_at, reviewed_at, reviewed_by")
       .order("created_at", { ascending: false });
     if (status) {
       query = query.eq("status", status);
     }
     const { data, error } = await query;
     if (error || !data) { console.error("getAdminCertificationRequests:", error); return []; }
-    return data as unknown as CertificationRequest[];
+    if (data.length === 0) return [];
+    const certUserIds = [...new Set((data as any[]).map(r => r.user_id).filter(Boolean))];
+    const profileMap = await fetchCommentProfilesForIds(certUserIds);
+    return (data as any[]).map(r => ({
+      ...r,
+      requester: r.user_id ? (profileMap.get(r.user_id) ?? null) : null,
+    })) as unknown as CertificationRequest[];
   } catch (e) {
     console.error("getAdminCertificationRequests:", e);
     return [];
@@ -3675,13 +3696,18 @@ export async function fetchInactiveOpportunities(): Promise<AppOpportunity[]> {
   try {
     const { data, error } = await supabase
       .from("opportunities")
-      .select(
-        "id, created_by, type, title, description, category, location, price, company, contract_type, salary, contact_email, expires_at, is_active, created_at, creator:profiles!opportunities_created_by_fkey(id, full_name, avatar_url, position, company)"
-      )
+      .select("id, created_by, type, title, description, category, location, price, company, contract_type, salary, contact_email, expires_at, is_active, created_at")
       .eq("is_active", false)
       .order("created_at", { ascending: false });
     if (error) { console.error("fetchInactiveOpportunities:", error); return []; }
-    return ((data ?? []) as unknown as AppOpportunity[]).map((d) => ({ ...d, is_applied: false }));
+    if (!data || data.length === 0) return [];
+    const inactCreatorIds = [...new Set((data as any[]).map(d => d.created_by).filter(Boolean))];
+    const inactCreatorMap = await fetchCommentProfilesForIds(inactCreatorIds);
+    return (data as any[]).map(d => ({
+      ...d,
+      creator: d.created_by ? (inactCreatorMap.get(d.created_by) ?? null) : null,
+      is_applied: false,
+    })) as unknown as AppOpportunity[];
   } catch (e) {
     console.error("fetchInactiveOpportunities:", e);
     return [];
