@@ -769,19 +769,19 @@ export default function FeedScreen() {
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               {/* Author */}
               <View style={styles.postAuthorRow}>
-                <View style={[styles.postAvatar, { backgroundColor: colors.navy }]}>
-                  <Text style={[styles.postAvatarText, { color: colors.gold }]}>
-                    {activeCompany
-                      ? (activeCompany.name[0]?.toUpperCase() ?? "E")
-                      : (profile?.full_name ?? "U")[0]}
-                  </Text>
-                </View>
-                <View>
+                <Avatar
+                  uri={activeCompany ? (activeCompany.avatar_url ?? null) : (profile?.avatar_url ?? null)}
+                  name={activeCompany ? activeCompany.name : (profile?.full_name ?? "Você")}
+                  size={44}
+                />
+                <View style={{ flex: 1 }}>
                   <Text style={[styles.postAuthorName, { color: colors.navy }]}>
                     {activeCompany ? activeCompany.name : (profile?.full_name ?? "Você")}
                   </Text>
-                  <Text style={[styles.postAuthorRole, { color: colors.mutedForeground }]}>
-                    {activeCompany ? "Empresa" : ((profile as any)?.headline ?? "Sommelier")}
+                  <Text style={[styles.postAuthorRole, { color: colors.mutedForeground }]} numberOfLines={1}>
+                    {activeCompany
+                      ? (activeCompany.industry ?? "Empresa")
+                      : ([profile?.position, profile?.company].filter(Boolean).join(" | ") || profile?.headline || "Membro ibhub")}
                   </Text>
                 </View>
               </View>
@@ -945,12 +945,20 @@ export default function FeedScreen() {
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, rowGap: 16 }} keyboardShouldPersistTaps="handled">
               {/* Author */}
               <View style={styles.postAuthorRow}>
-                <View style={[styles.postAvatar, { backgroundColor: colors.navy }]}>
-                  <Text style={[styles.postAvatarText, { color: colors.gold }]}>{(profile?.full_name ?? "U")[0]}</Text>
-                </View>
-                <View>
-                  <Text style={[styles.postAuthorName, { color: colors.navy }]}>{profile?.full_name ?? "Você"}</Text>
-                  <Text style={[styles.postAuthorRole, { color: colors.mutedForeground }]}>{(profile as any)?.headline ?? "Sommelier"}</Text>
+                <Avatar
+                  uri={activeCompany ? (activeCompany.avatar_url ?? null) : (profile?.avatar_url ?? null)}
+                  name={activeCompany ? activeCompany.name : (profile?.full_name ?? "Você")}
+                  size={44}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.postAuthorName, { color: colors.navy }]}>
+                    {activeCompany ? activeCompany.name : (profile?.full_name ?? "Você")}
+                  </Text>
+                  <Text style={[styles.postAuthorRole, { color: colors.mutedForeground }]} numberOfLines={1}>
+                    {activeCompany
+                      ? (activeCompany.industry ?? "Empresa")
+                      : ([profile?.position, profile?.company].filter(Boolean).join(" | ") || profile?.headline || "Membro ibhub")}
+                  </Text>
                 </View>
               </View>
               {/* Foto do rótulo */}
