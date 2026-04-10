@@ -123,29 +123,56 @@ function normaliseAuthor(author: any): any {
 const AUTHOR_SELECT = "id, full_name, username, avatar_url, position, company, plan";
 const COMMENT_AUTHOR_SELECT = "id, full_name, avatar_url, position, company";
 
+// Base post select WITHOUT the broken profiles FK join (posts.user_id → auth.users, not profiles)
+const POST_SELECT_BASE = `id, user_id, company_page_id, content, image_url, image_urls, video_url,
+  likes_count, comments_count, shares_count, view_count, location, hashtags, poll, created_at`;
+const COMMENT_SELECT_BASE = `id, post_id, user_id, company_page_id, content, created_at, likes_count`;
+
+// Fetch profiles by IDs (workaround: avoids broken FK join posts→auth.users)
+async function fetchProfilesForIds(userIds: string[]): Promise<Map<string, any>> {
+  if (userIds.length === 0) return new Map();
+  const { data } = await supabase.from("profiles").select(AUTHOR_SELECT).in("id", userIds);
+  return new Map((data ?? []).map((p: any) => [p.id, p]));
+}
+async function fetchCommentProfilesForIds(userIds: string[]): Promise<Map<string, any>> {
+  if (userIds.length === 0) return new Map();
+  const { data } = await supabase.from("profiles").select(COMMENT_AUTHOR_SELECT).in("id", userIds);
+  return new Map((data ?? []).map((p: any) => [p.id, p]));
+}
+async function fetchCompanyPagesForIds(companyIds: string[]): Promise<Map<string, any>> {
+  if (companyIds.length === 0) return new Map();
+  const { data } = await supabase.from("company_pages").select("id, name, avatar_url").in("id", companyIds);
+  return new Map((data ?? []).map((c: any) => [c.id, c]));
+}
+async function attachAuthorsToPosts(rawPosts: any[], profileMap: Map<string, any>, companyMap: Map<string, any>): Promise<any[]> {
+  return rawPosts.map((p: any) => ({
+    ...p,
+    author: normaliseAuthor(profileMap.get(p.user_id)),
+    company_page: p.company_page_id ? (companyMap.get(p.company_page_id) ?? null) : null,
+  }));
+}
+
 export async function fetchFeedPosts(currentUserId: string, activeCompanyId?: string | null): Promise<Post[]> {
   try {
     const { data, error } = await supabase
       .from("posts")
-      .select(`
-        id, user_id, company_page_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count,
-        view_count, location, hashtags, poll, created_at,
-        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT}),
-        company_page:company_pages(id, name, avatar_url)
-      `)
+      .select(POST_SELECT_BASE)
       .order("created_at", { ascending: false })
       .limit(30);
 
     if (error || !data || data.length === 0) return [];
 
     const postIds = data.map((p: any) => p.id);
+    const userIds = [...new Set(data.map((p: any) => p.user_id).filter(Boolean))];
+    const companyIds = [...new Set(data.map((p: any) => p.company_page_id).filter(Boolean))];
 
-    // Check likes by the active identity (company or personal)
     const likedQuery = activeCompanyId
       ? supabase.from("likes").select("post_id, reaction_type").eq("company_page_id", activeCompanyId).in("post_id", postIds)
       : supabase.from("likes").select("post_id, reaction_type").eq("user_id", currentUserId).is("company_page_id", null).in("post_id", postIds);
 
-    const [likedRes, bookmarkRes] = await Promise.all([
+    const [profileMap, companyMap, likedRes, bookmarkRes] = await Promise.all([
+      fetchProfilesForIds(userIds),
+      fetchCompanyPagesForIds(companyIds),
       likedQuery,
       supabase.from("bookmarks").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
     ]);
@@ -153,9 +180,8 @@ export async function fetchFeedPosts(currentUserId: string, activeCompanyId?: st
     const likedMap = new Map((likedRes.data ?? []).map((l: any) => [l.post_id, l.reaction_type ?? null]));
     const bookmarkedIds = new Set((bookmarkRes.data ?? []).map((b: any) => b.post_id));
 
-    return data.map((post: any) => ({
+    return (await attachAuthorsToPosts(data, profileMap, companyMap)).map((post: any) => ({
       ...post,
-      author: normaliseAuthor(post.author),
       is_liked: likedMap.has(post.id),
       reaction_type: likedMap.get(post.id) ?? null,
       is_bookmarked: bookmarkedIds.has(post.id),
@@ -229,16 +255,23 @@ export async function createPost(params: {
     const { data, error } = await supabase
       .from("posts")
       .insert({ ...params, likes_count: 0, comments_count: 0, shares_count: 0, view_count: 0 })
-      .select(`
-        id, user_id, company_page_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count,
-        view_count, location, hashtags, poll, created_at,
-        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT}),
-        company_page:company_pages(id, name, avatar_url)
-      `)
+      .select(POST_SELECT_BASE)
       .single();
 
     if (error) { console.error("createPost:", error); return null; }
-    return { ...data, author: normaliseAuthor((data as any).author), is_liked: false, is_bookmarked: false } as Post;
+
+    const [profileMap, companyMap] = await Promise.all([
+      fetchProfilesForIds([params.user_id]),
+      params.company_page_id ? fetchCompanyPagesForIds([params.company_page_id]) : Promise.resolve(new Map()),
+    ]);
+
+    return {
+      ...(data as any),
+      author: normaliseAuthor(profileMap.get(params.user_id)),
+      company_page: params.company_page_id ? (companyMap.get(params.company_page_id) ?? null) : null,
+      is_liked: false,
+      is_bookmarked: false,
+    } as Post;
   } catch (e) {
     console.error("createPost:", e);
     return null;
@@ -249,17 +282,24 @@ export async function fetchPostById(postId: string, currentUserId?: string): Pro
   try {
     const { data, error } = await supabase
       .from("posts")
-      .select(`
-        id, user_id, company_page_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count,
-        view_count, location, hashtags, poll, created_at,
-        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT}),
-        company_page:company_pages(id, name, avatar_url)
-      `)
+      .select(POST_SELECT_BASE)
       .eq("id", postId)
       .single();
 
     if (error || !data) return null;
-    const post = { ...data, author: normaliseAuthor((data as any).author) } as any;
+
+    const [profileMap, companyMap] = await Promise.all([
+      fetchProfilesForIds([(data as any).user_id]),
+      (data as any).company_page_id ? fetchCompanyPagesForIds([(data as any).company_page_id]) : Promise.resolve(new Map()),
+    ]);
+
+    const post: any = {
+      ...(data as any),
+      author: normaliseAuthor(profileMap.get((data as any).user_id)),
+      company_page: (data as any).company_page_id ? (companyMap.get((data as any).company_page_id) ?? null) : null,
+      is_liked: false,
+      is_bookmarked: false,
+    };
 
     if (currentUserId) {
       const [l, b] = await Promise.all([
@@ -340,12 +380,7 @@ export async function fetchNewPostsSince(since: string, currentUserId: string, a
   try {
     const { data, error } = await supabase
       .from("posts")
-      .select(`
-        id, user_id, company_page_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count,
-        view_count, location, hashtags, poll, created_at,
-        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT}),
-        company_page:company_pages(id, name, avatar_url)
-      `)
+      .select(POST_SELECT_BASE)
       .gt("created_at", since)
       .order("created_at", { ascending: false })
       .limit(20);
@@ -353,12 +388,16 @@ export async function fetchNewPostsSince(since: string, currentUserId: string, a
     if (error || !data || data.length === 0) return [];
 
     const postIds = data.map((p: any) => p.id);
+    const userIds = [...new Set(data.map((p: any) => p.user_id).filter(Boolean))];
+    const companyIds = [...new Set(data.map((p: any) => p.company_page_id).filter(Boolean))];
 
     const likedQuery = activeCompanyId
       ? supabase.from("likes").select("post_id, reaction_type").eq("company_page_id", activeCompanyId).in("post_id", postIds)
       : supabase.from("likes").select("post_id, reaction_type").eq("user_id", currentUserId).is("company_page_id", null).in("post_id", postIds);
 
-    const [likedRes, bookmarkRes] = await Promise.all([
+    const [profileMap, companyMap, likedRes, bookmarkRes] = await Promise.all([
+      fetchProfilesForIds(userIds),
+      fetchCompanyPagesForIds(companyIds),
       likedQuery,
       supabase.from("bookmarks").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
     ]);
@@ -366,9 +405,8 @@ export async function fetchNewPostsSince(since: string, currentUserId: string, a
     const likedMap = new Map((likedRes.data ?? []).map((l: any) => [l.post_id, l.reaction_type ?? null]));
     const bookmarkedIds = new Set((bookmarkRes.data ?? []).map((b: any) => b.post_id));
 
-    return data.map((post: any) => ({
+    return (await attachAuthorsToPosts(data, profileMap, companyMap)).map((post: any) => ({
       ...post,
-      author: normaliseAuthor(post.author),
       is_liked: likedMap.has(post.id),
       reaction_type: likedMap.get(post.id) ?? null,
       is_bookmarked: bookmarkedIds.has(post.id),
@@ -397,24 +435,28 @@ export async function fetchComments(postId: string, currentUserId?: string): Pro
   try {
     const { data, error } = await supabase
       .from("comments")
-      .select(`
-        id, post_id, user_id, company_page_id, content, created_at, likes_count,
-        author:profiles!comments_user_id_fkey(${COMMENT_AUTHOR_SELECT}),
-        company_page:company_pages(id, name, avatar_url)
-      `)
+      .select(COMMENT_SELECT_BASE)
       .eq("post_id", postId)
       .order("created_at", { ascending: true });
 
-    if (error || !data) return [];
+    if (error || !data || data.length === 0) return [];
+
+    const userIds = [...new Set((data as any[]).map(c => c.user_id).filter(Boolean))];
+    const companyIds = [...new Set((data as any[]).map(c => c.company_page_id).filter(Boolean))];
+    const commentIds = (data as any[]).map(c => c.id);
+
+    const [profileMap, companyMap] = await Promise.all([
+      fetchCommentProfilesForIds(userIds),
+      fetchCompanyPagesForIds(companyIds),
+    ]);
 
     let likedSet = new Set<string>();
-    if (currentUserId && data.length > 0) {
-      const ids = (data as any[]).map(c => c.id);
+    if (currentUserId && commentIds.length > 0) {
       const { data: myLikes } = await supabase
         .from("comment_likes")
         .select("comment_id")
         .eq("user_id", currentUserId)
-        .in("comment_id", ids);
+        .in("comment_id", commentIds);
       likedSet = new Set((myLikes ?? []).map((l: any) => l.comment_id));
     }
 
@@ -422,8 +464,8 @@ export async function fetchComments(postId: string, currentUserId?: string): Pro
       ...c,
       likes_count: c.likes_count ?? 0,
       is_liked: likedSet.has(c.id),
-      author: normaliseAuthor(c.author),
-      company_page: c.company_page ?? null,
+      author: normaliseAuthor(profileMap.get(c.user_id)),
+      company_page: c.company_page_id ? (companyMap.get(c.company_page_id) ?? null) : null,
     })) as AppComment[];
   } catch (e) {
     console.error("fetchComments:", e);
@@ -435,14 +477,13 @@ export async function fetchCommentById(commentId: string, currentUserId?: string
   try {
     const { data, error } = await supabase
       .from("comments")
-      .select(`
-        id, post_id, user_id, content, created_at, likes_count,
-        author:profiles!comments_user_id_fkey(${COMMENT_AUTHOR_SELECT})
-      `)
+      .select(COMMENT_SELECT_BASE)
       .eq("id", commentId)
       .single();
 
     if (error || !data) return null;
+
+    const profileMap = await fetchCommentProfilesForIds([(data as any).user_id]);
 
     let is_liked = false;
     if (currentUserId) {
@@ -458,7 +499,7 @@ export async function fetchCommentById(commentId: string, currentUserId?: string
       ...(data as any),
       likes_count: (data as any).likes_count ?? 0,
       is_liked,
-      author: normaliseAuthor((data as any).author),
+      author: normaliseAuthor(profileMap.get((data as any).user_id)),
     } as AppComment;
   } catch (e) {
     console.error("fetchCommentById:", e);
@@ -479,14 +520,15 @@ export async function addComment(
     const { data, error } = await supabase
       .from("comments")
       .insert(insertData)
-      .select(`
-        id, post_id, user_id, company_page_id, content, created_at,
-        author:profiles!comments_user_id_fkey(${COMMENT_AUTHOR_SELECT}),
-        company_page:company_pages(id, name, avatar_url)
-      `)
+      .select(COMMENT_SELECT_BASE)
       .single();
 
     if (error) { console.error("addComment:", error); return null; }
+
+    const [profileMap, companyMap] = await Promise.all([
+      fetchCommentProfilesForIds([userId]),
+      companyPageId ? fetchCompanyPagesForIds([companyPageId]) : Promise.resolve(new Map()),
+    ]);
 
     // Create notification for post author
     const { data: post } = await supabase.from("posts").select("user_id").eq("id", postId).single();
@@ -499,8 +541,8 @@ export async function addComment(
 
     return {
       ...(data as any),
-      author: normaliseAuthor((data as any)?.author),
-      company_page: (data as any)?.company_page ?? null,
+      author: normaliseAuthor(profileMap.get(userId)),
+      company_page: companyPageId ? (companyMap.get(companyPageId) ?? null) : null,
     } as AppComment;
   } catch (e) {
     console.error("addComment:", e);
@@ -632,11 +674,7 @@ export async function fetchUserPosts(targetUserId: string, currentUserId: string
   try {
     const { data, error } = await supabase
       .from("posts")
-      .select(`
-        id, user_id, content, image_url, likes_count, comments_count, shares_count,
-        hashtags, poll, created_at,
-        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT})
-      `)
+      .select(POST_SELECT_BASE)
       .eq("user_id", targetUserId)
       .order("created_at", { ascending: false })
       .limit(20);
@@ -644,16 +682,18 @@ export async function fetchUserPosts(targetUserId: string, currentUserId: string
     if (error || !data || data.length === 0) return [];
 
     const postIds = data.map((p: any) => p.id);
-    const [likedRes, bookmarkRes] = await Promise.all([
+    const companyIds = [...new Set(data.map((p: any) => p.company_page_id).filter(Boolean))];
+    const [profileMap, companyMap, likedRes, bookmarkRes] = await Promise.all([
+      fetchProfilesForIds([targetUserId]),
+      fetchCompanyPagesForIds(companyIds),
       supabase.from("likes").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
       supabase.from("bookmarks").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
     ]);
     const likedIds = new Set((likedRes.data ?? []).map((l: any) => l.post_id));
     const bookmarkedIds = new Set((bookmarkRes.data ?? []).map((b: any) => b.post_id));
 
-    return data.map((post: any) => ({
+    return (await attachAuthorsToPosts(data, profileMap, companyMap)).map((post: any) => ({
       ...post,
-      author: normaliseAuthor(post.author),
       is_liked: likedIds.has(post.id),
       is_bookmarked: bookmarkedIds.has(post.id),
     }));
@@ -917,23 +957,18 @@ export async function fetchBookmarkedPosts(userId: string): Promise<Post[]> {
     const postIds = bookmarks.map((b: any) => b.post_id);
     const { data: rawPosts, error: postsError } = await supabase
       .from("posts")
-      .select(`id, content, created_at, user_id, likes_count, comments_count,
-        author:profiles!posts_user_id_fkey(id, full_name, username, avatar_url, plan, position, company)`)
+      .select(POST_SELECT_BASE)
       .in("id", postIds);
     if (postsError || !rawPosts) return [];
+    const rawUserIds = [...new Set((rawPosts as any[]).map(p => p.user_id).filter(Boolean))];
+    const rawCompanyIds = [...new Set((rawPosts as any[]).map(p => p.company_page_id).filter(Boolean))];
+    const [profileMap, companyMap] = await Promise.all([
+      fetchProfilesForIds(rawUserIds),
+      fetchCompanyPagesForIds(rawCompanyIds),
+    ]);
     const idOrder = new Map(postIds.map((id: string, i: number) => [id, i]));
-    return (rawPosts as any[])
-      .map((p) => ({
-        id: p.id,
-        content: p.content,
-        created_at: p.created_at,
-        user_id: p.user_id,
-        likes_count: p.likes_count ?? 0,
-        comments_count: p.comments_count ?? 0,
-        is_liked: false,
-        is_bookmarked: true,
-        author: normaliseAuthor(p.author),
-      } as Post))
+    return (await attachAuthorsToPosts(rawPosts as any[], profileMap, companyMap))
+      .map((p) => ({ ...p, likes_count: p.likes_count ?? 0, comments_count: p.comments_count ?? 0, is_liked: false, is_bookmarked: true } as Post))
       .sort((a, b) => (idOrder.get(a.id) ?? 99) - (idOrder.get(b.id) ?? 99));
   } catch (e) { console.error("fetchBookmarkedPosts:", e); return []; }
 }
@@ -944,16 +979,20 @@ export async function fetchNotifications(userId: string): Promise<AppNotificatio
   try {
     const { data, error } = await supabase
       .from("notifications")
-      .select(`
-        id, user_id, actor_id, type, post_id, comment_id, message, read, created_at,
-        actor:profiles!notifications_actor_id_fkey(id, full_name, avatar_url)
-      `)
+      .select("id, user_id, actor_id, type, post_id, comment_id, message, read, created_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(50);
 
     if (error || !data) return [];
-    return data as unknown as AppNotification[];
+
+    const actorIds = [...new Set((data as any[]).map(n => n.actor_id).filter(Boolean))];
+    const profileMap = await fetchCommentProfilesForIds(actorIds);
+
+    return (data as any[]).map(n => ({
+      ...n,
+      actor: profileMap.get(n.actor_id) ?? null,
+    })) as unknown as AppNotification[];
   } catch (e) {
     console.error("fetchNotifications:", e);
     return [];
@@ -1019,11 +1058,7 @@ export async function fetchProfilePosts(userId: string, currentUserId: string): 
   try {
     const { data, error } = await supabase
       .from("posts")
-      .select(`
-        id, user_id, content, image_url, likes_count, comments_count, shares_count,
-        hashtags, poll, created_at,
-        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT})
-      `)
+      .select(POST_SELECT_BASE)
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(20);
@@ -1031,15 +1066,17 @@ export async function fetchProfilePosts(userId: string, currentUserId: string): 
     if (error || !data || data.length === 0) return [];
 
     const postIds = data.map((p: any) => p.id);
-    const [likedRes, bookmarkRes] = await Promise.all([
+    const companyIds = [...new Set(data.map((p: any) => p.company_page_id).filter(Boolean))];
+    const [profileMap, companyMap, likedRes, bookmarkRes] = await Promise.all([
+      fetchProfilesForIds([userId]),
+      fetchCompanyPagesForIds(companyIds),
       supabase.from("likes").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
       supabase.from("bookmarks").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
     ]);
     const likedIds = new Set((likedRes.data ?? []).map((l: any) => l.post_id));
     const bookmarkedIds = new Set((bookmarkRes.data ?? []).map((b: any) => b.post_id));
-    return data.map((post: any) => ({
+    return (await attachAuthorsToPosts(data, profileMap, companyMap)).map((post: any) => ({
       ...post,
-      author: normaliseAuthor(post.author),
       is_liked: likedIds.has(post.id),
       is_bookmarked: bookmarkedIds.has(post.id),
     }));
@@ -1055,16 +1092,24 @@ export async function fetchActiveStories(): Promise<AppStory[]> {
   try {
     const { data, error } = await supabase
       .from("stories")
-      .select(`
-        id, user_id, company_page_id, image_url, text, tagged_users, created_at, expires_at,
-        author:profiles!stories_user_id_fkey(id, full_name, avatar_url),
-        company_page:company_pages(id, name, avatar_url)
-      `)
+      .select("id, user_id, company_page_id, image_url, text, tagged_users, created_at, expires_at")
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: false });
 
-    if (error || !data) return [];
-    return data as unknown as AppStory[];
+    if (error || !data || data.length === 0) return [];
+
+    const sUserIds = [...new Set((data as any[]).map(s => s.user_id).filter(Boolean))];
+    const sCompanyIds = [...new Set((data as any[]).map(s => s.company_page_id).filter(Boolean))];
+    const [sProfileMap, sCompanyMap] = await Promise.all([
+      fetchCommentProfilesForIds(sUserIds),
+      fetchCompanyPagesForIds(sCompanyIds),
+    ]);
+
+    return (data as any[]).map(s => ({
+      ...s,
+      author: sProfileMap.get(s.user_id) ?? null,
+      company_page: s.company_page_id ? (sCompanyMap.get(s.company_page_id) ?? null) : null,
+    })) as unknown as AppStory[];
   } catch (e) {
     console.error("fetchActiveStories:", e);
     return [];
@@ -1073,24 +1118,29 @@ export async function fetchActiveStories(): Promise<AppStory[]> {
 
 export async function fetchActiveStoriesForUser(currentUserId: string): Promise<StoryGroup[]> {
   try {
-    const { data: stories, error } = await supabase
+    const { data: storiesRaw, error } = await supabase
       .from("stories")
-      .select(`
-        id, user_id, company_page_id, image_url, text, tagged_users, created_at, expires_at,
-        author:profiles!stories_user_id_fkey(id, full_name, avatar_url),
-        company_page:company_pages(id, name, avatar_url)
-      `)
+      .select("id, user_id, company_page_id, image_url, text, tagged_users, created_at, expires_at")
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: true });
 
-    if (error || !stories) return [];
+    if (error || !storiesRaw || storiesRaw.length === 0) return [];
 
-    const { data: views } = await supabase
-      .from("story_views")
-      .select("story_id")
-      .eq("user_id", currentUserId);
+    const gsUserIds = [...new Set((storiesRaw as any[]).map(s => s.user_id).filter(Boolean))];
+    const gsCompanyIds = [...new Set((storiesRaw as any[]).map(s => s.company_page_id).filter(Boolean))];
+    const [gsProfileMap, gsCompanyMap, viewsRes] = await Promise.all([
+      fetchCommentProfilesForIds(gsUserIds),
+      fetchCompanyPagesForIds(gsCompanyIds),
+      supabase.from("story_views").select("story_id").eq("user_id", currentUserId),
+    ]);
 
-    const viewedIds = new Set((views ?? []).map((v: { story_id: string }) => v.story_id));
+    const viewedIds = new Set((viewsRes.data ?? []).map((v: { story_id: string }) => v.story_id));
+
+    const stories = (storiesRaw as any[]).map(s => ({
+      ...s,
+      author: gsProfileMap.get(s.user_id) ?? null,
+      company_page: s.company_page_id ? (gsCompanyMap.get(s.company_page_id) ?? null) : null,
+    }));
 
     const storiesWithViewed = (stories as unknown as AppStory[]).map(s => ({
       ...s,
@@ -1222,15 +1272,23 @@ export async function createStory(
     const { data, error } = await supabase
       .from("stories")
       .insert(insertPayload)
-      .select(`
-        id, user_id, company_page_id, image_url, text, tagged_users, created_at, expires_at,
-        author:profiles!stories_user_id_fkey(id, full_name, avatar_url),
-        company_page:company_pages(id, name, avatar_url)
-      `)
+      .select("id, user_id, company_page_id, image_url, text, tagged_users, created_at, expires_at")
       .single();
 
     if (error) { console.error("createStory:", error); return null; }
-    return data as unknown as AppStory;
+
+    const csUserId = (data as any).user_id;
+    const csCompanyId = (data as any).company_page_id;
+    const [csProfileMap, csCompanyMap] = await Promise.all([
+      fetchCommentProfilesForIds([csUserId]),
+      csCompanyId ? fetchCompanyPagesForIds([csCompanyId]) : Promise.resolve(new Map()),
+    ]);
+
+    return {
+      ...(data as any),
+      author: csProfileMap.get(csUserId) ?? null,
+      company_page: csCompanyId ? (csCompanyMap.get(csCompanyId) ?? null) : null,
+    } as unknown as AppStory;
   } catch (e) {
     console.error("createStory:", e);
     return null;
@@ -3545,9 +3603,7 @@ export async function fetchCompanyPosts(companyId: string, currentUserId?: strin
 
     const { data, error } = await supabase
       .from("posts")
-      .select(`id, user_id, company_page_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count, view_count, location, hashtags, poll, created_at,
-        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT}),
-        company_page:company_pages(id, name, avatar_url)`)
+      .select(POST_SELECT_BASE)
       .or(`user_id.eq.${pageData.owner_id},company_page_id.eq.${companyId}`)
       .order("created_at", { ascending: false })
       .limit(50);
@@ -3555,23 +3611,28 @@ export async function fetchCompanyPosts(companyId: string, currentUserId?: strin
     if (error) { console.error("fetchCompanyPosts:", error); return []; }
 
     const posts = (data ?? []) as any[];
+    if (posts.length === 0) return [];
 
-    if (!currentUserId || posts.length === 0) {
-      return posts.map((p) => ({ ...p, author: normaliseAuthor(p.author), is_liked: false, is_bookmarked: false })) as Post[];
-    }
+    const postUserIds = [...new Set(posts.map((p: any) => p.user_id).filter(Boolean))];
+    const postCompanyIds = [...new Set(posts.map((p: any) => p.company_page_id).filter(Boolean))];
+    const postIds = posts.map((p: any) => p.id);
 
-    const postIds = posts.map((p) => p.id);
-    const [{ data: myLikes }, { data: myBookmarks }] = await Promise.all([
-      supabase.from("likes").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
-      supabase.from("bookmarks").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
+    const [profileMap, companyMap, likedRes, bookmarkRes] = await Promise.all([
+      fetchProfilesForIds(postUserIds),
+      fetchCompanyPagesForIds(postCompanyIds),
+      currentUserId
+        ? supabase.from("likes").select("post_id").eq("user_id", currentUserId).in("post_id", postIds)
+        : Promise.resolve({ data: [] }),
+      currentUserId
+        ? supabase.from("bookmarks").select("post_id").eq("user_id", currentUserId).in("post_id", postIds)
+        : Promise.resolve({ data: [] }),
     ]);
 
-    const likedSet    = new Set((myLikes     ?? []).map((l: any) => l.post_id));
-    const bookmarkSet = new Set((myBookmarks ?? []).map((b: any) => b.post_id));
+    const likedSet    = new Set(((likedRes as any).data ?? []).map((l: any) => l.post_id));
+    const bookmarkSet = new Set(((bookmarkRes as any).data ?? []).map((b: any) => b.post_id));
 
-    return posts.map((p) => ({
+    return (await attachAuthorsToPosts(posts, profileMap, companyMap)).map((p: any) => ({
       ...p,
-      author:       normaliseAuthor(p.author),
       is_liked:     likedSet.has(p.id),
       is_bookmarked: bookmarkSet.has(p.id),
     })) as Post[];
@@ -3684,10 +3745,13 @@ export async function fetchAllStoriesAdmin(): Promise<AppStory[]> {
   try {
     const { data, error } = await supabase
       .from("stories")
-      .select("id, user_id, image_url, text, expires_at, created_at, author:profiles!stories_user_id_fkey(id, full_name, avatar_url, username)")
+      .select("id, user_id, image_url, text, expires_at, created_at")
       .order("created_at", { ascending: false });
     if (error) { console.error("fetchAllStoriesAdmin:", error); return []; }
-    return (data ?? []) as unknown as AppStory[];
+    if (!data || data.length === 0) return [];
+    const adminUserIds = [...new Set((data as any[]).map(s => s.user_id).filter(Boolean))];
+    const adminProfileMap = await fetchProfilesForIds(adminUserIds);
+    return (data as any[]).map(s => ({ ...s, author: adminProfileMap.get(s.user_id) ?? null })) as unknown as AppStory[];
   } catch (e) {
     console.error("fetchAllStoriesAdmin:", e);
     return [];
