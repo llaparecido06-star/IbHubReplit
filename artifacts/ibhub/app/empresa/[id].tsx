@@ -19,10 +19,7 @@ import { Feather } from "@/components/ui/Icon";
 import * as ImagePicker from "expo-image-picker";
 import { useColors } from "@/hooks/useColors";
 import { useAuth, supabase } from "@/context/AuthContext";
-import Svg, { Polyline } from "react-native-svg";
 import {
-  fetchCompanyAnalytics,
-  CompanyAnalytics,
   fetchCompanyPageById,
   CompanyPage,
   fetchCompanyPosts,
@@ -40,7 +37,7 @@ import {
 } from "@/services/api";
 import { Post } from "@/components/feed/PostCard";
 
-type CompanyTab  = "publicacoes" | "portfolio" | "analytics";
+type CompanyTab  = "publicacoes" | "portfolio";
 type ProductCat  = "produto" | "vinho" | "acessorio" | "servico";
 type SortKey     = "data" | "preco" | "categoria";
 
@@ -65,24 +62,6 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "preco",     label: "Preço" },
   { key: "categoria", label: "Categoria" },
 ];
-
-interface MiniLineChartProps {
-  points: number[];
-}
-
-function MiniLineChart({ points }: MiniLineChartProps) {
-  const colors = useColors();
-  const W = 220; const H = 40;
-  const n = points.length;
-  if (n < 2) return null;
-  const maxVal = Math.max(...points, 1);
-  const pts = points.map((v, i) => `${(i / (n - 1)) * W},${H - (v / maxVal) * H}`).join(" ");
-  return (
-    <Svg width={W} height={H}>
-      <Polyline points={pts} fill="none" stroke={colors.gold} strokeWidth={2} />
-    </Svg>
-  );
-}
 
 function toLocalProduct(p: CompanyProduct): LocalProduct {
   return {
@@ -114,10 +93,6 @@ export default function EmpresaScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
   const [postsLoaded, setPostsLoaded] = useState(false);
-
-  const [companyAnalytics, setCompanyAnalytics] = useState<CompanyAnalytics | null>(null);
-  const [analyticsLoading, setAnalyticsLoading] = useState(false);
-  const [analyticsLoaded, setAnalyticsLoaded] = useState(false);
 
   const [products, setProducts]         = useState<LocalProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
@@ -178,22 +153,12 @@ export default function EmpresaScreen() {
     setProductsLoading(false);
   }, [id, productsLoaded]);
 
-  const loadAnalytics = useCallback(async () => {
-    if (!id || analyticsLoaded) return;
-    setAnalyticsLoading(true);
-    const data = await fetchCompanyAnalytics(id);
-    setCompanyAnalytics(data);
-    setAnalyticsLoaded(true);
-    setAnalyticsLoading(false);
-  }, [id, analyticsLoaded]);
-
   useEffect(() => { loadCompany(); }, [loadCompany]);
 
   useEffect(() => {
     if (activeTab === "publicacoes") { loadPosts(); }
     if (activeTab === "portfolio")   { loadProducts(); }
-    if (activeTab === "analytics")   { loadAnalytics(); }
-  }, [activeTab, loadPosts, loadProducts, loadAnalytics]);
+  }, [activeTab, loadPosts, loadProducts]);
 
   // ── Realtime: posts, likes and comments for this company ──
   useEffect(() => {
@@ -489,8 +454,7 @@ export default function EmpresaScreen() {
         <View style={[styles.tabBar, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
           {([
             { key: "publicacoes", label: "PUBLICAÇÕES" },
-            { key: "portfolio",   label: "PORTFÓLIO" },
-            { key: "analytics",   label: "ANALYTICS" },
+            { key: "portfolio",   label: "PORTIFÓLIO" },
           ] as { key: CompanyTab; label: string }[]).map((t) => (
             <TouchableOpacity
               key={t.key}
@@ -647,102 +611,6 @@ export default function EmpresaScreen() {
           </View>
         )}
 
-        {/* ── Analytics ── */}
-        {activeTab === "analytics" && (
-          analyticsLoading ? (
-            <View style={styles.analyticsCenter}>
-              <ActivityIndicator size="large" color={colors.gold} />
-            </View>
-          ) : (
-            <View style={{ padding: 16, rowGap: 16 }}>
-              {(() => {
-                const a = companyAnalytics;
-                const engRate = a && a.totalPosts > 0
-                  ? ((a.totalLikes + a.totalComments) / a.totalPosts).toFixed(1)
-                  : "0.0";
-                const kpiCards = [
-                  { icon: "file-text",      label: "Publicações",  value: a?.totalPosts ?? 0 },
-                  { icon: "heart",          label: "Curtidas",     value: a?.totalLikes ?? 0 },
-                  { icon: "message-circle", label: "Comentários",  value: a?.totalComments ?? 0 },
-                  { icon: "users",          label: "Seguidores",   value: a?.followersCount ?? 0 },
-                ];
-                const growthRows = [
-                  { label: "Publicações", current: a?.currentWeekPosts ?? 0,    prev: a?.prevWeekPosts ?? 0 },
-                  { label: "Curtidas",    current: a?.currentWeekLikes ?? 0,    prev: a?.prevWeekLikes ?? 0 },
-                  { label: "Comentários", current: a?.currentWeekComments ?? 0, prev: a?.prevWeekComments ?? 0 },
-                  { label: "Seguidores",  current: a?.followersCount ?? 0,      prev: 0 },
-                ];
-                const chartPoints = (a?.dailyEngagement ?? []).map((d) => d.likes + d.comments);
-                return (
-                  <>
-                    <View style={styles.kpiGrid}>
-                      {kpiCards.map((k) => (
-                        <View key={k.label} style={[styles.kpiCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-                          <View style={styles.kpiTop}>
-                            <Feather name={k.icon as any} size={16} color={colors.mutedForeground} />
-                          </View>
-                          <Text style={[styles.kpiNum, { color: colors.navy }]}>{k.value}</Text>
-                          <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>{k.label}</Text>
-                        </View>
-                      ))}
-                    </View>
-
-                    <View style={[styles.analyticsCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-                      <Text style={[styles.analyticsCardTitle, { color: colors.navy }]}>Crescimento Semanal</Text>
-                      {growthRows.map((row) => (
-                        <View key={row.label} style={[styles.growthRow, { borderBottomColor: colors.border }]}>
-                          <Text style={[styles.growthLabel, { color: colors.foreground }]}>{row.label}</Text>
-                          <View style={styles.growthValues}>
-                            <Text style={[styles.growthCurrent, { color: colors.navy }]}>{row.current}</Text>
-                            <Text style={[styles.growthSep, { color: colors.mutedForeground }]}>vs</Text>
-                            <Text style={[styles.growthPrev, { color: colors.mutedForeground }]}>{row.prev}</Text>
-                          </View>
-                        </View>
-                      ))}
-                    </View>
-
-                    <View style={[styles.analyticsCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-                      <Text style={[styles.analyticsCardTitle, { color: colors.navy }]}>Taxa de Engajamento</Text>
-                      <Text style={[styles.engagementRate, { color: colors.gold }]}>{engRate}</Text>
-                      <Text style={[styles.engagementSub, { color: colors.mutedForeground }]}>interações/post</Text>
-                    </View>
-
-                    <View style={[styles.analyticsCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-                      <Text style={[styles.analyticsCardTitle, { color: colors.navy }]}>Engajamento (14 dias)</Text>
-                      {chartPoints.every((v) => v === 0) ? (
-                        <Text style={[styles.noDataText, { color: colors.mutedForeground }]}>Nenhum dado ainda</Text>
-                      ) : (
-                        <View style={{ paddingTop: 8 }}>
-                          <MiniLineChart points={chartPoints} />
-                        </View>
-                      )}
-                    </View>
-
-                    <View style={[styles.analyticsCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-                      <Text style={[styles.analyticsCardTitle, { color: colors.navy }]}>Posts com Mais Engajamento</Text>
-                      {!a?.topPosts.length ? (
-                        <Text style={[styles.noDataText, { color: colors.mutedForeground }]}>Nenhum dado ainda</Text>
-                      ) : (
-                        a.topPosts.map((post, idx) => (
-                          <View key={post.id} style={[styles.growthRow, { borderBottomColor: colors.border }]}>
-                            <Text style={[styles.growthLabel, { color: colors.mutedForeground }]}>{idx + 1}.</Text>
-                            <Text style={[styles.growthLabel, { color: colors.foreground, flex: 1 }]} numberOfLines={1}>{post.content}</Text>
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                              <Feather name="heart" size={12} color={colors.mutedForeground} />
-                              <Text style={[styles.growthPrev, { color: colors.mutedForeground }]}>{post.likes}</Text>
-                              <Feather name="message-circle" size={12} color={colors.mutedForeground} />
-                              <Text style={[styles.growthPrev, { color: colors.mutedForeground }]}>{post.comments}</Text>
-                            </View>
-                          </View>
-                        ))
-                      )}
-                    </View>
-                  </>
-                );
-              })()}
-            </View>
-          )
-        )}
       </ScrollView>
 
       {/* Product Form Modal */}
@@ -897,23 +765,6 @@ const styles = StyleSheet.create({
   productActions: { flexDirection: "row", gap: 16, paddingHorizontal: 10, paddingBottom: 10, paddingTop: 4 },
   productActionBtn: { flexDirection: "row", alignItems: "center", gap: 5 },
   productActionText: { fontSize: 13 },
-  kpiGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  kpiCard: { width: "47%", borderRadius: 12, borderWidth: 1, padding: 14, gap: 4 },
-  kpiTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  kpiNum: { fontSize: 24, fontWeight: "800" },
-  kpiLabel: { fontSize: 11 },
-  analyticsCenter: { paddingVertical: 60, alignItems: "center", justifyContent: "center" },
-  analyticsCard: { borderRadius: 12, borderWidth: 1, padding: 16, gap: 10 },
-  analyticsCardTitle: { fontSize: 15, fontWeight: "700" },
-  growthRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 8, borderBottomWidth: 1 },
-  growthLabel: { fontSize: 13 },
-  growthValues: { flexDirection: "row", alignItems: "center", gap: 6 },
-  growthCurrent: { fontSize: 13, fontWeight: "700" },
-  growthSep: { fontSize: 11 },
-  growthPrev: { fontSize: 13 },
-  engagementRate: { fontSize: 36, fontWeight: "800" },
-  engagementSub: { fontSize: 12 },
-  noDataText: { fontSize: 13 },
   formContainer: { flex: 1 },
   formHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1 },
   formTitle: { fontSize: 18, fontWeight: "700" },
