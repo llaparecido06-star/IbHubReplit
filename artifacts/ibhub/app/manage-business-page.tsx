@@ -286,6 +286,16 @@ export default function ManageBusinessPageScreen() {
             {isCreateMode ? "Nova Empresa" : (page?.name ?? "Página Empresarial")}
           </Text>
         </TouchableOpacity>
+        {/* Admin panel shortcut — only for owners */}
+        {!isCreateMode && isOwner && pageId && (
+          <TouchableOpacity
+            style={[styles.adminBtn, { backgroundColor: colors.gold }]}
+            onPress={() => router.push(`/empresa/admin?id=${pageId}&name=${encodeURIComponent(page?.name ?? "")}` as any)}
+          >
+            <Feather name="bar-chart-2" size={14} color="#fff" />
+            <Text style={styles.adminBtnText}>Painel</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Tabs — only shown when editing an existing page */}
@@ -594,7 +604,9 @@ export default function ManageBusinessPageScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
+  adminBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 },
+  adminBtnText: { fontSize: 13, fontWeight: "700", color: "#fff" },
   backRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   headerTitle: { fontSize: 20, fontWeight: "700" },
   tabBar: { flexDirection: "row", alignItems: "center", borderBottomWidth: 1 },

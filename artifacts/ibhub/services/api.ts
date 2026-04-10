@@ -4264,3 +4264,164 @@ export async function fetchMyReferralStats(userId: string): Promise<{ count: num
     return { count: 0, rank: 0 };
   }
 }
+
+// ─── COMPANY ADMIN DASHBOARD ──────────────────────────────────────────────────
+
+export interface CompanyAdminOpportunity extends AppOpportunity {
+  view_count: number;
+  sold: boolean;
+  sold_via_ibhub: boolean;
+  company_page_id: string | null;
+}
+
+export interface CompanyAdminApplicant {
+  id: string;
+  applicant_id: string;
+  cv_url: string | null;
+  message: string | null;
+  status: "pending" | "reviewed" | "shortlisted" | "hired" | "rejected";
+  created_at: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  headline: string | null;
+  username: string | null;
+}
+
+export interface CompanyAdminEvent extends AppEvent {
+  company_page_id: string | null;
+}
+
+/** All vagas/anúncios linked to a company page (or created by the owner). */
+export async function fetchCompanyOpportunities(
+  companyPageId: string,
+  ownerId: string,
+  type: "vaga" | "marketplace",
+): Promise<CompanyAdminOpportunity[]> {
+  try {
+    const { data, error } = await supabase
+      .from("opportunities")
+      .select(`
+        id, created_by, type, title, description, category, location, price,
+        cover_image_url, company, contract_type, salary, contact_email,
+        expires_at, is_active, created_at,
+        interests_count, applications_count,
+        view_count, sold, sold_via_ibhub, company_page_id
+      `)
+      .eq("type", type)
+      .or(`company_page_id.eq.${companyPageId},created_by.eq.${ownerId}`)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) { console.error("fetchCompanyOpportunities:", error); return []; }
+    return (data ?? []) as CompanyAdminOpportunity[];
+  } catch (e) {
+    console.error("fetchCompanyOpportunities:", e);
+    return [];
+  }
+}
+
+/** All events linked to a company page (or created by the owner). */
+export async function fetchCompanyEvents(
+  companyPageId: string,
+  ownerId: string,
+): Promise<CompanyAdminEvent[]> {
+  try {
+    const { data, error } = await supabase
+      .from("events")
+      .select(`
+        id, user_id, title, description, start_date, end_date,
+        location_type, location, entry_type, capacity, visibility,
+        is_active, pay_link, created_at, attendees_count, company_page_id
+      `)
+      .or(`company_page_id.eq.${companyPageId},user_id.eq.${ownerId}`)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) { console.error("fetchCompanyEvents:", error); return []; }
+    return (data ?? []) as CompanyAdminEvent[];
+  } catch (e) {
+    console.error("fetchCompanyEvents:", e);
+    return [];
+  }
+}
+
+/** Applicants for a job opportunity, with profile data. */
+export async function fetchOpportunityApplicants(
+  opportunityId: string,
+): Promise<CompanyAdminApplicant[]> {
+  try {
+    const { data, error } = await supabase.rpc("get_opportunity_applicants", {
+      p_opportunity_id: opportunityId,
+    });
+    if (error) {
+      // Fallback: join manually if RPC not yet applied
+      const { data: raw } = await supabase
+        .from("opportunity_applications")
+        .select("id, applicant_id, cv_url, message, status, created_at")
+        .eq("opportunity_id", opportunityId)
+        .order("created_at", { ascending: false });
+      if (!raw) return [];
+      const ids = raw.map((r: any) => r.applicant_id).filter(Boolean);
+      const profileMap = await fetchCommentProfilesForIds(ids);
+      return raw.map((r: any) => ({
+        ...r,
+        status: r.status ?? "pending",
+        full_name: profileMap.get(r.applicant_id)?.full_name ?? null,
+        avatar_url: profileMap.get(r.applicant_id)?.avatar_url ?? null,
+        headline: profileMap.get(r.applicant_id)?.headline ?? null,
+        username: profileMap.get(r.applicant_id)?.username ?? null,
+      })) as CompanyAdminApplicant[];
+    }
+    return (data ?? []).map((r: any) => ({
+      ...r,
+      status: r.status ?? "pending",
+    })) as CompanyAdminApplicant[];
+  } catch (e) {
+    console.error("fetchOpportunityApplicants:", e);
+    return [];
+  }
+}
+
+/** Increment view count for an opportunity. */
+export async function trackOpportunityView(opportunityId: string): Promise<void> {
+  try {
+    await supabase.rpc("increment_opportunity_views", { p_opportunity_id: opportunityId });
+  } catch (e) {
+    console.error("trackOpportunityView:", e);
+  }
+}
+
+/** Toggle sold status for a marketplace item. */
+export async function markOpportunitySold(
+  opportunityId: string,
+  sold: boolean,
+  soldViaIbhub: boolean,
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("opportunities")
+      .update({ sold, sold_via_ibhub: soldViaIbhub })
+      .eq("id", opportunityId);
+    if (error) { console.error("markOpportunitySold:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("markOpportunitySold:", e);
+    return false;
+  }
+}
+
+/** Update application status (pending → reviewed → shortlisted → hired / rejected). */
+export async function updateApplicationStatus(
+  applicationId: string,
+  status: CompanyAdminApplicant["status"],
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("opportunity_applications")
+      .update({ status })
+      .eq("id", applicationId);
+    if (error) { console.error("updateApplicationStatus:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("updateApplicationStatus:", e);
+    return false;
+  }
+}
