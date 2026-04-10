@@ -3465,10 +3465,11 @@ export async function fetchAllEventsAdmin(): Promise<AppEvent[]> {
 
 export async function fetchConfirmedAttendanceCount(): Promise<number> {
   try {
+    // Count all attendee rows — cancellation removes the row so all rows are confirmed.
+    // Falls back gracefully if the status column doesn't exist yet.
     const { count, error } = await supabase
       .from("event_attendees")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "confirmed");
+      .select("id", { count: "exact", head: true });
     if (error) { console.error("fetchConfirmedAttendanceCount:", error); return 0; }
     return count ?? 0;
   } catch (e) {
