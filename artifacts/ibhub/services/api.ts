@@ -1901,22 +1901,40 @@ export async function fetchUserWines(userId: string): Promise<{ id: string; name
 
 export async function fetchConversations(userId: string): Promise<AppConversation[]> {
   try {
-    const { data, error } = await supabase
-      .from("conversation_participants")
-      .select(`
-        conversation_id,
-        accepted,
-        last_read_at,
-        conversation:conversations(id, is_group, name, created_at)
-      `)
-      .eq("user_id", userId);
+    // Use SECURITY DEFINER RPC to get all my conversations + the other participant's user_id
+    // (cp_select RLS only shows own row, so a plain JOIN would fail)
+    const [participantsRes, convosRes] = await Promise.all([
+      supabase.rpc("get_my_conversations_participants", { p_user_id: userId }),
+      supabase
+        .from("conversation_participants")
+        .select(`conversation_id, accepted, last_read_at, conversation:conversations(id, is_group, name, created_at)`)
+        .eq("user_id", userId),
+    ]);
 
-    if (error || !data) return [];
+    if (convosRes.error || !convosRes.data) return [];
+
+    // Build a map: conversation_id → { other_user_id, my_accepted }
+    const participantMap = new Map<string, { other_user_id: string | null; my_accepted: boolean }>();
+    for (const row of (participantsRes.data ?? []) as any[]) {
+      participantMap.set(row.conversation_id, {
+        other_user_id: row.other_user_id ?? null,
+        my_accepted: row.my_accepted ?? true,
+      });
+    }
+
+    // Collect all other participant user IDs for bulk profile fetch
+    const allOtherIds = [...new Set(
+      [...participantMap.values()].map(v => v.other_user_id).filter(Boolean) as string[]
+    )];
+    const profileMap = allOtherIds.length > 0 ? await fetchCommentProfilesForIds(allOtherIds) : new Map();
 
     const results: AppConversation[] = [];
-    for (const row of data as any[]) {
+    for (const row of convosRes.data as any[]) {
       const convo = row.conversation;
       if (!convo) continue;
+
+      const pInfo = participantMap.get(convo.id);
+      const participant = pInfo?.other_user_id ? (profileMap.get(pInfo.other_user_id) ?? null) : null;
 
       let unreadQuery = supabase
         .from("messages")
@@ -1929,13 +1947,7 @@ export async function fetchConversations(userId: string): Promise<AppConversatio
         unreadQuery = unreadQuery.gt("created_at", row.last_read_at);
       }
 
-      const [othersRes, lastMsgRes, unreadRes] = await Promise.all([
-        supabase
-          .from("conversation_participants")
-          .select("user_id")
-          .eq("conversation_id", convo.id)
-          .neq("user_id", userId)
-          .limit(1),
+      const [lastMsgRes, unreadRes] = await Promise.all([
         supabase
           .from("messages")
           .select("content, created_at, message_type")
@@ -1946,7 +1958,6 @@ export async function fetchConversations(userId: string): Promise<AppConversatio
         unreadQuery,
       ]);
 
-      const other = othersRes.data?.[0];
       const lastMsg = lastMsgRes.data;
       const lastContent =
         lastMsg?.message_type === "image" ? "📷 Foto"
@@ -1954,12 +1965,6 @@ export async function fetchConversations(userId: string): Promise<AppConversatio
         : lastMsg?.message_type === "audio" ? "🎤 Áudio"
         : lastMsg?.message_type === "file"  ? "📎 Arquivo"
         : (lastMsg?.content ?? null);
-
-      let participant = null;
-      if (other?.user_id) {
-        const pMap = await fetchCommentProfilesForIds([other.user_id]);
-        participant = pMap.get(other.user_id) ?? null;
-      }
 
       results.push({
         id: convo.id,
@@ -1969,7 +1974,7 @@ export async function fetchConversations(userId: string): Promise<AppConversatio
         last_message_at: lastMsg?.created_at ?? convo.created_at,
         unread_count: unreadRes.count ?? 0,
         participant,
-        accepted: row.accepted ?? true,
+        accepted: pInfo?.my_accepted ?? (row.accepted ?? true),
       });
     }
 
@@ -2007,14 +2012,14 @@ export async function fetchConversationParticipant(
   currentUserId: string,
 ): Promise<{ id: string; full_name: string; avatar_url: string | null } | null> {
   try {
-    const { data } = await supabase
-      .from("conversation_participants")
-      .select("user_id")
-      .eq("conversation_id", conversationId)
-      .neq("user_id", currentUserId)
-      .limit(1);
-    if (!data || data.length === 0) return null;
-    const otherId = (data[0] as any).user_id;
+    // Use SECURITY DEFINER RPC to bypass cp_select RLS (which only shows own row)
+    const { data, error } = await supabase.rpc("get_conversation_other_participant", {
+      p_conversation_id: conversationId,
+      p_current_user_id: currentUserId,
+    });
+    if (error) { console.error("fetchConversationParticipant rpc:", error); return null; }
+    if (!data || (data as any[]).length === 0) return null;
+    const otherId = (data as any[])[0]?.user_id ?? (data as any).user_id;
     if (!otherId) return null;
     const pMap = await fetchCommentProfilesForIds([otherId]);
     return pMap.get(otherId) ?? null;
@@ -2254,24 +2259,12 @@ export async function countPendingReports(): Promise<number> {
 
 export async function getOrCreateDirectConversation(userId1: string, userId2: string, forceAccepted = false): Promise<string | null> {
   try {
-    // Find existing conversation between these two users
-    const { data: myConvos } = await supabase
-      .from("conversation_participants")
-      .select("conversation_id")
-      .eq("user_id", userId1);
-
-    if (myConvos && myConvos.length > 0) {
-      const myConvoIds = myConvos.map((c: any) => c.conversation_id);
-      const { data: shared } = await supabase
-        .from("conversation_participants")
-        .select("conversation_id")
-        .eq("user_id", userId2)
-        .in("conversation_id", myConvoIds);
-
-      if (shared && shared.length > 0) {
-        return shared[0].conversation_id;
-      }
-    }
+    // Use SECURITY DEFINER RPC to find existing conversation (bypasses cp_select RLS)
+    const { data: existing } = await supabase.rpc("get_direct_conversation", {
+      p_user1: userId1,
+      p_user2: userId2,
+    });
+    if (existing) return existing as string;
 
     // Only an accepted connection unlocks the chat immediately (goes to Mensagens).
     // Following only → recipient's accepted=false → goes to Solicitações tab.

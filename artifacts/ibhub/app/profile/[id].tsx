@@ -48,6 +48,7 @@ export default function PublicProfileScreen() {
   const [isFollowing, setIsFollowing] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<"none"|"pending"|"connected">("none");
   const [loading, setLoading]         = useState(true);
+  const [messagingLoading, setMessagingLoading] = useState(false);
   const [tab, setTab]                 = useState<"posts"|"adega">("posts");
   const [mutuals, setMutuals]         = useState<{ id: string; full_name: string; avatar_url: string | null }[]>([]);
   const [resolvedId, setResolvedId]   = useState<string>(id ?? "");
@@ -155,8 +156,10 @@ export default function PublicProfileScreen() {
   const messagePending  = !isCompany && connectionStatus !== "connected" && isFollowing;
 
   const handleMessage = async () => {
-    if (!currentUser?.id || !id || !canMessage) return;
+    if (!currentUser?.id || !id || !canMessage || messagingLoading) return;
+    setMessagingLoading(true);
     const cid = await API.getOrCreateDirectConversation(currentUser.id, id);
+    setMessagingLoading(false);
     if (cid) router.push(`/chat/${cid}` as any);
   };
 

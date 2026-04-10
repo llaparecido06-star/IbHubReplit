@@ -88,6 +88,7 @@ export default function EmpresaScreen() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  const [messagingLoading, setMessagingLoading] = useState(false);
 
   const [activeTab, setActiveTab] = useState<CompanyTab>("publicacoes");
 
@@ -314,9 +315,11 @@ export default function EmpresaScreen() {
   };
 
   const handleMessage = async () => {
-    if (!user?.id || !companyPage?.owner_id) return;
+    if (!user?.id || !companyPage?.owner_id || messagingLoading) return;
+    setMessagingLoading(true);
     // Companies have no messaging restrictions — forceAccepted=true
     const convoId = await getOrCreateDirectConversation(user.id, companyPage.owner_id, true);
+    setMessagingLoading(false);
     if (convoId) router.push(`/chat/${convoId}` as any);
   };
 
@@ -397,10 +400,11 @@ export default function EmpresaScreen() {
         ) : user?.id ? (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <TouchableOpacity
-              style={[styles.headerIconBtn, { borderColor: colors.gold }]}
+              style={[styles.headerIconBtn, { borderColor: messagingLoading ? colors.border : colors.gold }]}
               onPress={handleMessage}
+              disabled={messagingLoading}
             >
-              <Feather name="message-circle" size={16} color={colors.gold} />
+              <Feather name="message-circle" size={16} color={messagingLoading ? colors.mutedForeground : colors.gold} />
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.followBtn, { backgroundColor: isFollowing ? colors.border : colors.gold }]}
@@ -465,11 +469,14 @@ export default function EmpresaScreen() {
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.messageBtnLarge, { borderColor: colors.gold, flex: 1 }]}
+                style={[styles.messageBtnLarge, { borderColor: messagingLoading ? colors.border : colors.gold, flex: 1 }]}
                 onPress={handleMessage}
+                disabled={messagingLoading}
               >
-                <Feather name="message-circle" size={15} color={colors.gold} />
-                <Text style={[styles.messageBtnLargeText, { color: colors.gold }]}>Mensagem</Text>
+                <Feather name="message-circle" size={15} color={messagingLoading ? colors.mutedForeground : colors.gold} />
+                <Text style={[styles.messageBtnLargeText, { color: messagingLoading ? colors.mutedForeground : colors.gold }]}>
+                  {messagingLoading ? "..." : "Mensagem"}
+                </Text>
               </TouchableOpacity>
             </View>
           )}

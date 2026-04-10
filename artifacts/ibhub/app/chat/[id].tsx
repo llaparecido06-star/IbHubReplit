@@ -64,6 +64,7 @@ export default function ChatScreen() {
   const [uploading,             setUploading]             = useState(false);
   const [loading,               setLoading]               = useState(true);
   const [isTyping,              setIsTyping]              = useState(false);
+  const [isParticipantOnline,   setIsParticipantOnline]   = useState(false);
   const [wines,                 setWines]                 = useState<any[]>([]);
   const [followUpDays,          setFollowUpDays]          = useState("3");
   const [participant,           setParticipant]           = useState<{ id: string; full_name: string; avatar_url: string | null } | null>(null);
@@ -156,6 +157,15 @@ export default function ChatScreen() {
         const others = Object.keys(state).filter(k => k !== user.id);
         const anyTyping = others.some(k => (state[k] as any[]).some((s: any) => s.typing));
         setIsTyping(anyTyping);
+        setIsParticipantOnline(others.length > 0);
+      })
+      .on("presence", { event: "join" }, ({ key }) => {
+        if (key !== user.id) setIsParticipantOnline(true);
+      })
+      .on("presence", { event: "leave" }, () => {
+        const state = presenceChannel.presenceState();
+        const others = Object.keys(state).filter(k => k !== user.id);
+        setIsParticipantOnline(others.length > 0);
       })
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
@@ -633,11 +643,18 @@ export default function ChatScreen() {
           onPress={() => participant && router.push(`/profile/${participant.id}` as any)}
           activeOpacity={0.7}
         >
-          <Avatar uri={participant?.avatar_url} name={participantName} size={36} />
+          <View style={styles.avatarWrapper}>
+            <Avatar uri={participant?.avatar_url} name={participantName} size={40} />
+            {isParticipantOnline && (
+              <View style={[styles.onlineDot, { backgroundColor: "#22c55e", borderColor: "#fff" }]} />
+            )}
+          </View>
           <View>
             <Text style={[styles.participantName, { color: colors.navy }]}>{participantName}</Text>
-            <Text style={[styles.participantStatus, { color: isTyping ? colors.gold : colors.mutedForeground }]}>
-              {isTyping ? "digitando..." : (participant ? "Ver perfil" : "Carregando...")}
+            <Text style={[styles.participantStatus, {
+              color: isTyping ? colors.gold : isParticipantOnline ? "#22c55e" : colors.mutedForeground
+            }]}>
+              {isTyping ? "digitando..." : isParticipantOnline ? "online" : (participant ? "offline" : "Carregando...")}
             </Text>
           </View>
         </TouchableOpacity>
@@ -992,6 +1009,8 @@ const styles = StyleSheet.create({
   header:            { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1 },
   headerLeft:        { padding: 4 },
   headerCenter:      { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 8 },
+  avatarWrapper:     { position: "relative" },
+  onlineDot:         { position: "absolute", bottom: 0, right: 0, width: 11, height: 11, borderRadius: 6, borderWidth: 2 },
   participantName:   { fontSize: 15, fontWeight: "700" },
   participantStatus: { fontSize: 11, color: "#9ca3af" },
   loadingWrap:       { flex: 1, alignItems: "center", justifyContent: "center" },
