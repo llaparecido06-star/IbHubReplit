@@ -639,13 +639,16 @@ export default function FeedScreen() {
                   : p));
               }
             }}
-            onReact={(id, reaction) => {
+            onReact={async (id, reaction) => {
               const post = posts.find(p => p.id === id);
               if (!post || !user?.id) return;
-              const isSameReaction = post.reaction_type === reaction;
+              const prevReaction = post.reaction_type ?? null;
+              const prevIsLiked = post.is_liked ?? false;
+              const prevCount = post.likes_count;
+              const isSameReaction = prevReaction === reaction;
+              const wasLiked = !!(prevIsLiked || prevReaction);
               setPosts(prev => prev.map(p => {
                 if (p.id !== id) return p;
-                const wasLiked = !!(p.is_liked || p.reaction_type);
                 return {
                   ...p,
                   is_liked: !isSameReaction,
@@ -655,7 +658,12 @@ export default function FeedScreen() {
                     : wasLiked ? p.likes_count : p.likes_count + 1,
                 };
               }));
-              API.toggleReaction(id, user.id, reaction, post.reaction_type ?? null, activeCompany?.id);
+              const ok = await API.toggleReaction(id, user.id, reaction, prevReaction, activeCompany?.id);
+              if (!ok) {
+                setPosts(prev => prev.map(p =>
+                  p.id !== id ? p : { ...p, is_liked: prevIsLiked, reaction_type: prevReaction, likes_count: prevCount }
+                ));
+              }
             }}
             onBookmark={(id) => {
               const post = posts.find(p => p.id === id);

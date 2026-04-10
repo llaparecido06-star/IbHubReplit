@@ -366,25 +366,50 @@ export async function toggleReaction(
   reactionType: string,
   currentReaction: string | null,
   companyPageId?: string | null,
-): Promise<void> {
+): Promise<boolean> {
   try {
-    if (currentReaction === reactionType) {
-      if (companyPageId) {
-        await supabase.from("likes").delete().match({ post_id: postId, company_page_id: companyPageId });
-      } else {
-        await supabase.from("likes").delete().match({ post_id: postId, user_id: userId }).is("company_page_id", null);
-      }
-    } else {
-      if (companyPageId) {
-        await supabase.from("likes")
-          .upsert({ post_id: postId, user_id: userId, company_page_id: companyPageId, reaction_type: reactionType }, { onConflict: "post_id,company_page_id" });
-      } else {
-        await supabase.from("likes")
-          .upsert({ post_id: postId, user_id: userId, reaction_type: reactionType }, { onConflict: "post_id,user_id" });
+    const hadPrevious = !!currentReaction;
+    const isSame = currentReaction === reactionType;
+
+    // Always remove existing like/reaction row first
+    const deleteQuery = companyPageId
+      ? supabase.from("likes").delete().match({ post_id: postId, company_page_id: companyPageId })
+      : supabase.from("likes").delete().match({ post_id: postId, user_id: userId }).is("company_page_id", null);
+    await deleteQuery;
+
+    if (isSame) {
+      // Removing reaction → decrement
+      await supabase.rpc("decrement_post_likes", { p_post_id: postId });
+      return true;
+    }
+
+    // Insert new reaction
+    const insertPayload: any = { post_id: postId, user_id: userId, reaction_type: reactionType };
+    if (companyPageId) insertPayload.company_page_id = companyPageId;
+    const { error } = await supabase.from("likes").insert(insertPayload);
+    if (error) { console.error("toggleReaction insert:", JSON.stringify(error)); return false; }
+
+    if (!hadPrevious) {
+      // Fresh reaction (no previous) → increment
+      await supabase.rpc("increment_post_likes", { p_post_id: postId });
+      // Notify post author
+      const { data: authorId } = await supabase.rpc("get_post_author", { p_post_id: postId });
+      if (authorId && authorId !== userId) {
+        await supabase.rpc("create_notification", {
+          p_user_id: authorId,
+          p_actor_id: userId,
+          p_type: "like",
+          p_post_id: postId,
+          p_message: "reagiu à sua publicação",
+        });
       }
     }
+    // Changed reaction type (delete old, insert new) → count unchanged
+
+    return true;
   } catch (e) {
     console.error("toggleReaction:", e);
+    return false;
   }
 }
 
