@@ -23,6 +23,10 @@ import {
   fetchAllMarketPresentations,
   upsertMarketPresentation,
   deleteMarketPresentation,
+  fetchMarketPermissions,
+  createMarketPermission,
+  updateMarketPermission,
+  deleteMarketPermission,
   type MarketKPI,
   type MarketTendencia,
   type MarketRegiao,
@@ -30,10 +34,17 @@ import {
   type MarketChartArea,
   type MarketChartBar,
   type MarketPresentation,
+  type MarketPermission,
 } from "@/services/api";
 
+const MARKET_ICONS = ["activity", "bar-chart-2", "trending-up", "map-pin", "git-merge", "pie-chart", "globe", "layers", "star", "zap", "filter", "award"];
+
+function toSlug(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+}
+
 type Period = "mes" | "trimestre" | "ano";
-const MAIN_TABS  = ["Slides", "Dados de Mercado"] as const;
+const MAIN_TABS = ["Apresentações", "Dados de Mercado", "Categorias"] as const;
 const PERIODS: { key: Period; label: string }[] = [
   { key: "mes",       label: "Mês" },
   { key: "trimestre", label: "Trimestre" },
@@ -253,6 +264,16 @@ export default function AdminSlidesMercadoScreen() {
   const [saving,     setSaving]     = useState(false);
   const [saved,      setSaved]      = useState(false);
 
+  // ── Market permissions (Categorias tab) ───────────────────────────────────
+  const [marketPerms,  setMarketPerms]  = useState<MarketPermission[]>([]);
+  const [loadingMp,    setLoadingMp]    = useState(false);
+  const [mpModalOpen,  setMpModalOpen]  = useState(false);
+  const [mpEditTarget, setMpEditTarget] = useState<MarketPermission | null>(null);
+  const [mpTitle,      setMpTitle]      = useState("");
+  const [mpIcon,       setMpIcon]       = useState("bar-chart-2");
+  const [mpSaving,     setMpSaving]     = useState(false);
+  const [mpDeleting,   setMpDeleting]   = useState<string | null>(null);
+
   // ── Presentations state ──────────────────────────────────────────────────
 
   const [presentations,   setPresentations]   = useState<MarketPresentation[]>([]);
@@ -268,7 +289,7 @@ export default function AdminSlidesMercadoScreen() {
     setPresLoading(false);
   }, []);
 
-  useEffect(() => { if (mainTab === "Slides") loadPresentations(); }, [mainTab, loadPresentations]);
+  useEffect(() => { if (mainTab === "Apresentações") loadPresentations(); }, [mainTab, loadPresentations]);
 
   const openNewPresForm = () => {
     setPresForm(BLANK_FORM);
@@ -349,6 +370,59 @@ export default function AdminSlidesMercadoScreen() {
   const [mVarName,   setMVarName]    = useState("");
   const [mVarVol,    setMVarVol]     = useState("");
   const [mVarChg,    setMVarChg]     = useState("");
+
+  // ── Market permissions (Categorias) ─────────────────────────────────────────
+
+  const loadMarketPerms = useCallback(async () => {
+    setLoadingMp(true);
+    const data = await fetchMarketPermissions();
+    setMarketPerms(data);
+    setLoadingMp(false);
+  }, []);
+
+  useEffect(() => { if (mainTab === "Categorias") loadMarketPerms(); }, [mainTab, loadMarketPerms]);
+
+  const openMpNew = () => {
+    setMpEditTarget(null);
+    setMpTitle("");
+    setMpIcon("bar-chart-2");
+    setMpModalOpen(true);
+  };
+
+  const openMpEdit = (mp: MarketPermission) => {
+    setMpEditTarget(mp);
+    setMpTitle(mp.title);
+    setMpIcon(mp.icon ?? "bar-chart-2");
+    setMpModalOpen(true);
+  };
+
+  const handleSaveMp = async () => {
+    if (!mpTitle.trim()) { Alert.alert("Erro", "Nome da categoria obrigatório."); return; }
+    setMpSaving(true);
+    let ok = false;
+    if (mpEditTarget) {
+      ok = await updateMarketPermission(mpEditTarget.id, { title: mpTitle.trim(), icon: mpIcon });
+    } else {
+      const slug = toSlug(mpTitle.trim());
+      ok = !!(await createMarketPermission({ id: slug || `mp_${Date.now()}`, title: mpTitle.trim(), icon: mpIcon }));
+    }
+    setMpSaving(false);
+    if (ok) { setMpModalOpen(false); loadMarketPerms(); }
+    else Alert.alert("Erro", "Não foi possível salvar. Tente novamente.");
+  };
+
+  const handleDeleteMp = (mp: MarketPermission) => {
+    Alert.alert("Remover Categoria", `Deseja remover "${mp.title}"?\n\nIsso afetará os planos que usam esta categoria.`, [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Remover", style: "destructive", onPress: async () => {
+        setMpDeleting(mp.id);
+        const ok = await deleteMarketPermission(mp.id);
+        setMpDeleting(null);
+        if (ok) loadMarketPerms();
+        else Alert.alert("Erro", "Não foi possível remover.");
+      }},
+    ]);
+  };
 
   // ── Load data ───────────────────────────────────────────────────────────────
 
@@ -476,7 +550,7 @@ export default function AdminSlidesMercadoScreen() {
         <TouchableOpacity onPress={() => setDrawerOpen(true)}>
           <Feather name="menu" size={22} color={colors.navy} />
         </TouchableOpacity>
-        <Text style={[s.headerTitle, { color: colors.navy }]}>Slides Mercado</Text>
+        <Text style={[s.headerTitle, { color: colors.navy }]}>Mercado</Text>
         <View style={{ width: 22 }} />
       </View>
 
@@ -498,7 +572,7 @@ export default function AdminSlidesMercadoScreen() {
               onPress={() => setMainTab(t)}
             >
               <Feather
-                name={t === "Slides" ? "monitor" : "bar-chart-2"}
+                name={t === "Apresentações" ? "monitor" : t === "Dados de Mercado" ? "bar-chart-2" : "tag"}
                 size={13}
                 color={t === mainTab ? colors.navy : colors.mutedForeground}
               />
@@ -509,8 +583,8 @@ export default function AdminSlidesMercadoScreen() {
           ))}
         </View>
 
-        {/* ── Slides tab ──────────────────────────────────────────────────────── */}
-        {mainTab === "Slides" && (
+        {/* ── Apresentações tab ───────────────────────────────────────────────── */}
+        {mainTab === "Apresentações" && (
           <>
             <View style={s.slidesRow}>
               <Text style={[s.slidesCount, { color: colors.mutedForeground }]}>
@@ -706,7 +780,131 @@ export default function AdminSlidesMercadoScreen() {
             )}
           </>
         )}
+
+        {/* ── Categorias tab ──────────────────────────────────────────────────── */}
+        {mainTab === "Categorias" && (
+          <>
+            <View style={s.slidesRow}>
+              <Text style={[s.slidesCount, { color: colors.mutedForeground }]}>
+                {loadingMp ? "Carregando…" : `${marketPerms.length} categoria${marketPerms.length !== 1 ? "s" : ""}`}
+              </Text>
+              <TouchableOpacity style={[s.newPresBtn, { backgroundColor: colors.navy }]} onPress={openMpNew}>
+                <Feather name="plus" size={14} color="#fff" />
+                <Text style={s.newPresBtnText}>Nova Categoria</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[s.emptyHint, { color: colors.mutedForeground, marginTop: -6 }]}>
+              Categorias definem quais seções do Mercado cada plano pode acessar (KPIs, Gráficos, etc.)
+            </Text>
+
+            {loadingMp ? (
+              <ActivityIndicator color={colors.gold} style={{ marginTop: 24 }} />
+            ) : marketPerms.length === 0 ? (
+              <View style={s.emptyBlock}>
+                <Feather name="tag" size={40} color="#d1d5db" />
+                <Text style={[s.emptyText, { color: colors.mutedForeground }]}>Nenhuma categoria cadastrada</Text>
+                <Text style={[s.emptyHint, { color: colors.mutedForeground }]}>
+                  Toque em "Nova Categoria" para começar.
+                </Text>
+              </View>
+            ) : (
+              marketPerms.map((mp) => (
+                <View key={mp.id} style={[sec.listItem, { backgroundColor: "#fff", borderColor: colors.border, flexDirection: "row", alignItems: "center" }]}>
+                  <View style={[sec.rank, { backgroundColor: colors.navy + "15", width: 40, height: 40 }]}>
+                    <Feather name={mp.icon as any} size={18} color={colors.navy} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[sec.itemTitle, { color: colors.navy }]}>{mp.title}</Text>
+                    <Text style={[sec.itemSub, { color: colors.mutedForeground }]}>chave: mercado:{mp.id}</Text>
+                  </View>
+                  <View style={sec.itemActions}>
+                    <TouchableOpacity style={[sec.actionBtn, { backgroundColor: "#f3f4f6" }]} onPress={() => openMpEdit(mp)}>
+                      <Feather name="edit-2" size={13} color={colors.navy} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[sec.actionBtn, { backgroundColor: "#fef2f2" }]}
+                      onPress={() => handleDeleteMp(mp)}
+                      disabled={mpDeleting === mp.id}
+                    >
+                      {mpDeleting === mp.id
+                        ? <ActivityIndicator size="small" color="#dc2626" />
+                        : <Feather name="trash-2" size={13} color="#dc2626" />
+                      }
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
+            )}
+          </>
+        )}
       </ScrollView>
+
+      {/* ── Categoria Modal ─────────────────────────────────────────────────── */}
+      <Modal visible={mpModalOpen} transparent animationType="fade">
+        <View style={m.overlay}>
+          <View style={[m.modal, { backgroundColor: "#fff" }]}>
+            <TouchableOpacity style={m.close} onPress={() => setMpModalOpen(false)}>
+              <Feather name="x" size={18} color="#6b7280" />
+            </TouchableOpacity>
+            <Text style={[m.title, { color: colors.navy }]}>
+              {mpEditTarget ? "Editar Categoria" : "Nova Categoria"}
+            </Text>
+
+            <View style={m.field}>
+              <Text style={[m.label, { color: colors.foreground }]}>Nome da Categoria *</Text>
+              <TextInput
+                style={[m.input, { borderColor: colors.border }]}
+                value={mpTitle}
+                onChangeText={setMpTitle}
+                placeholder="Ex: KPIs, Gráficos, Tendências…"
+              />
+            </View>
+
+            {!mpEditTarget && (
+              <View style={m.field}>
+                <Text style={[m.label, { color: colors.mutedForeground }]}>
+                  Chave gerada: {mpTitle.trim() ? `mercado:${toSlug(mpTitle.trim())}` : "–"}
+                </Text>
+              </View>
+            )}
+
+            <View style={m.field}>
+              <Text style={[m.label, { color: colors.foreground }]}>Ícone</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+                {MARKET_ICONS.map((icon) => (
+                  <TouchableOpacity
+                    key={icon}
+                    onPress={() => setMpIcon(icon)}
+                    style={[
+                      { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center", borderWidth: 2 },
+                      mpIcon === icon
+                        ? { borderColor: colors.navy, backgroundColor: colors.navy + "12" }
+                        : { borderColor: colors.border, backgroundColor: "#f9f9f9" },
+                    ]}
+                  >
+                    <Feather name={icon as any} size={18} color={mpIcon === icon ? colors.navy : colors.mutedForeground} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[m.saveBtn, { backgroundColor: colors.navy, opacity: mpSaving ? 0.7 : 1 }]}
+              onPress={handleSaveMp}
+              disabled={mpSaving}
+            >
+              {mpSaving
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={m.saveBtnText}>Salvar</Text>
+              }
+            </TouchableOpacity>
+            <TouchableOpacity style={m.cancelBtn} onPress={() => setMpModalOpen(false)}>
+              <Text style={[m.cancelText, { color: colors.mutedForeground }]}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* ── Presentation Modal ──────────────────────────────────────────────── */}
       <Modal visible={presModalOpen} transparent animationType="fade">

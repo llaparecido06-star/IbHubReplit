@@ -41,8 +41,6 @@ const DEFAULT_PLANS = [
   { id: "executivo",    name: "Executivo",    subtitle: "Acesso completo a todas as funcionalidades",   price_cents: 49900, features: ALL_GENERAL_FEATURES, is_active: true, sort_order: 4 },
 ];
 
-const MARKET_ICONS = ["activity", "bar-chart-2", "trending-up", "map-pin", "git-merge", "pie-chart", "globe", "layers", "star", "zap"];
-
 interface Plan {
   id: string;
   name: string;
@@ -88,13 +86,6 @@ export default function AdminPlanBuilderScreen() {
 
   const [marketPerms, setMarketPerms]       = useState<API.MarketPermission[]>([]);
   const [loadingMp, setLoadingMp]           = useState(true);
-
-  const [showMpModal, setShowMpModal]       = useState(false);
-  const [mpEditTarget, setMpEditTarget]     = useState<API.MarketPermission | null>(null);
-  const [mpTitle, setMpTitle]               = useState("");
-  const [mpIcon, setMpIcon]                 = useState("bar-chart-2");
-  const [mpSaving, setMpSaving]             = useState(false);
-  const [mpDeleting, setMpDeleting]         = useState<string | null>(null);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -212,58 +203,6 @@ export default function AdminPlanBuilderScreen() {
         },
       },
     ]);
-  };
-
-  const openMpNew = () => {
-    setMpEditTarget(null);
-    setMpTitle("");
-    setMpIcon("bar-chart-2");
-    setShowMpModal(true);
-  };
-
-  const openMpEdit = (mp: API.MarketPermission) => {
-    setMpEditTarget(mp);
-    setMpTitle(mp.title);
-    setMpIcon(mp.icon);
-    setShowMpModal(true);
-  };
-
-  const handleSaveMp = async () => {
-    if (!mpTitle.trim()) { Alert.alert("Erro", "Informe o título da permissão."); return; }
-    setMpSaving(true);
-    try {
-      if (mpEditTarget) {
-        await API.updateMarketPermission(mpEditTarget.id, { title: mpTitle, icon: mpIcon });
-      } else {
-        const id = toSlug(mpTitle) || `mp_${Date.now()}`;
-        await API.createMarketPermission({ id, title: mpTitle, icon: mpIcon, sort_order: marketPerms.length });
-      }
-      setShowMpModal(false);
-      await loadMarketPerms();
-    } catch (e: unknown) {
-      Alert.alert("Erro", e instanceof Error ? e.message : "Falha ao salvar.");
-    } finally {
-      setMpSaving(false);
-    }
-  };
-
-  const handleDeleteMp = (mp: API.MarketPermission) => {
-    Alert.alert(
-      "Remover permissão",
-      `Remover "${mp.title}" de todas as permissões de mercado?\n\nOs planos que tinham esta permissão precisarão ser atualizados.`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Remover", style: "destructive",
-          onPress: async () => {
-            setMpDeleting(mp.id);
-            await API.deleteMarketPermission(mp.id);
-            setMpDeleting(null);
-            loadMarketPerms();
-          },
-        },
-      ],
-    );
   };
 
   const PlanModal = ({ visible, isNew }: { visible: boolean; isNew: boolean }) => (
@@ -384,59 +323,6 @@ export default function AdminPlanBuilderScreen() {
     </Modal>
   );
 
-  const MpModal = () => (
-    <Modal visible={showMpModal} transparent animationType="slide">
-      <View style={styles.overlay}>
-        <View style={[styles.editModal, { backgroundColor: "#fff" }]}>
-          <TouchableOpacity style={styles.modalClose} onPress={() => setShowMpModal(false)}>
-            <Feather name="x" size={18} color="#6b7280" />
-          </TouchableOpacity>
-          <Text style={[styles.modalTitle, { color: colors.navy }]}>
-            {mpEditTarget ? "Editar Permissão" : "Nova Permissão de Mercado"}
-          </Text>
-          <View style={{ gap: 14 }}>
-            <View style={styles.mField}>
-              <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>TÍTULO</Text>
-              <TextInput
-                style={[styles.mInput, { borderColor: colors.border, color: colors.foreground }]}
-                placeholder="Ex: Análise de Preços"
-                placeholderTextColor={colors.mutedForeground}
-                value={mpTitle}
-                onChangeText={setMpTitle}
-              />
-            </View>
-            <View style={styles.mField}>
-              <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>ÍCONE</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  {MARKET_ICONS.map((ic) => (
-                    <TouchableOpacity
-                      key={ic}
-                      style={[styles.iconBtn, { borderColor: mpIcon === ic ? colors.gold : colors.border, backgroundColor: mpIcon === ic ? colors.gold + "15" : "transparent" }]}
-                      onPress={() => setMpIcon(ic)}
-                    >
-                      <Feather name={ic as any} size={18} color={mpIcon === ic ? colors.gold : colors.mutedForeground} />
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
-            </View>
-          </View>
-          <TouchableOpacity
-            style={[styles.mSaveBtn, { backgroundColor: mpSaving ? colors.gold + "80" : colors.gold, marginTop: 20 }]}
-            onPress={handleSaveMp}
-            disabled={mpSaving}
-          >
-            {mpSaving
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.mSaveBtnText}>{mpEditTarget ? "Salvar Alterações" : "Criar Permissão"}</Text>
-            }
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
@@ -533,60 +419,10 @@ export default function AdminPlanBuilderScreen() {
           })
         )}
 
-        {/* Market Permissions Manager */}
-        <View style={[styles.mpSection, { backgroundColor: "#fff", borderColor: colors.border }]}>
-          <View style={styles.mpSectionHead}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Feather name="bar-chart-2" size={16} color={colors.gold} />
-              <Text style={[styles.mpSectionTitle, { color: colors.navy }]}>Permissões de Mercado</Text>
-            </View>
-            <TouchableOpacity style={[styles.newBtn, { backgroundColor: colors.gold, paddingHorizontal: 12, paddingVertical: 8 }]} onPress={openMpNew}>
-              <Feather name="plus" size={13} color="#fff" />
-              <Text style={styles.newBtnText}>Adicionar</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={[styles.mpHint, { color: colors.mutedForeground }]}>
-            Seções da aba Mercado que podem ser habilitadas por plano. Altere o título ou adicione novas.
-          </Text>
-
-          {loadingMp ? (
-            <ActivityIndicator size="small" color={colors.gold} />
-          ) : marketPerms.length === 0 ? (
-            <Text style={[styles.emptyHint, { color: colors.mutedForeground }]}>Nenhuma permissão cadastrada. Rode a migration v37 no Supabase primeiro.</Text>
-          ) : (
-            <View style={{ gap: 8 }}>
-              {marketPerms.map((mp) => (
-                <View key={mp.id} style={[styles.mpRow, { borderColor: colors.border }]}>
-                  <View style={[styles.mpIconBox, { backgroundColor: colors.gold + "18" }]}>
-                    <Feather name={mp.icon as any} size={16} color={colors.gold} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.mpRowTitle, { color: colors.navy }]}>{mp.title}</Text>
-                    <Text style={[styles.mpRowId, { color: colors.mutedForeground }]}>chave: mercado:{mp.id}</Text>
-                  </View>
-                  <TouchableOpacity style={styles.mpRowBtn} onPress={() => openMpEdit(mp)}>
-                    <Feather name="edit-2" size={14} color={colors.navy} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.mpRowBtn, { opacity: mpDeleting === mp.id ? 0.5 : 1 }]}
-                    onPress={() => handleDeleteMp(mp)}
-                    disabled={mpDeleting === mp.id}
-                  >
-                    {mpDeleting === mp.id
-                      ? <ActivityIndicator size="small" color="#dc2626" />
-                      : <Feather name="trash-2" size={14} color="#dc2626" />
-                    }
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
       </ScrollView>
 
       <PlanModal visible={showEditModal} isNew={false} />
       <PlanModal visible={showNewModal} isNew={true} />
-      <MpModal />
 
       <AdminDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} activeRoute="/admin/plan-builder" />
     </View>
@@ -627,14 +463,4 @@ const styles = StyleSheet.create({
   mSaveBtn:          { paddingVertical: 15, borderRadius: 10, alignItems: "center" },
   mSaveBtnText:      { color: "#fff", fontSize: 15, fontWeight: "700" },
   emptyHint:         { fontSize: 13, fontStyle: "italic" },
-  mpSection:         { borderRadius: 12, borderWidth: 1, padding: 16, gap: 12 },
-  mpSectionHead:     { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  mpSectionTitle:    { fontSize: 15, fontWeight: "700" },
-  mpHint:            { fontSize: 13, lineHeight: 18 },
-  mpRow:             { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 10, padding: 10 },
-  mpIconBox:         { width: 34, height: 34, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  mpRowTitle:        { fontSize: 14, fontWeight: "600" },
-  mpRowId:           { fontSize: 11, marginTop: 1 },
-  mpRowBtn:          { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
-  iconBtn:           { width: 40, height: 40, borderRadius: 8, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
 });
