@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -16,13 +16,13 @@ import { Feather } from "@/components/ui/Icon";
 import AdminDrawer from "@/components/AdminDrawer";
 import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/context/AuthContext";
+import * as API from "@/services/api";
 
-const ALL_FEATURES = [
+const ALL_GENERAL_FEATURES = [
   "Chat ilimitado",
   "Criar Grupos",
   "Ver Visitantes do Perfil",
   "Smart Match B2B",
-  "Visão Geral de Mercado",
   "Relatórios Detalhados",
   "Exportar CSV",
   "Criar Página Empresa",
@@ -34,12 +34,14 @@ const ALL_FEATURES = [
 ];
 
 const DEFAULT_PLANS = [
-  { id: "gratuito",     name: "Gratuito",     subtitle: "Acesso básico à plataforma",                      price_cents: 0,     features: ALL_FEATURES, is_active: true, sort_order: 0 },
-  { id: "profissional", name: "Profissional", subtitle: "Acesso à inteligência de mercado",                 price_cents: 9990,  features: [],           is_active: true, sort_order: 1 },
-  { id: "basico",       name: "Básico",       subtitle: "Recursos profissionais essenciais",                price_cents: 14900, features: ["Chat ilimitado","Criar Grupos","Visão Geral de Mercado","Relatórios Detalhados","Criar Página Empresa","Publicar Vagas","Upload Certificados"], is_active: true, sort_order: 2 },
-  { id: "empresa",      name: "Empresa",      subtitle: "Painel de gestão e criação de oportunidades",     price_cents: 24700, features: [],           is_active: true, sort_order: 3 },
-  { id: "executivo",    name: "Executivo",    subtitle: "Acesso completo a todas as funcionalidades",       price_cents: 49900, features: ALL_FEATURES, is_active: true, sort_order: 4 },
+  { id: "gratuito",     name: "Gratuito",     subtitle: "Acesso básico à plataforma",                  price_cents: 0,     features: [], is_active: true, sort_order: 0 },
+  { id: "profissional", name: "Profissional", subtitle: "Acesso à inteligência de mercado",             price_cents: 9990,  features: [], is_active: true, sort_order: 1 },
+  { id: "basico",       name: "Básico",       subtitle: "Recursos profissionais essenciais",            price_cents: 14900, features: [], is_active: true, sort_order: 2 },
+  { id: "empresa",      name: "Empresa",      subtitle: "Painel de gestão e criação de oportunidades", price_cents: 24700, features: [], is_active: true, sort_order: 3 },
+  { id: "executivo",    name: "Executivo",    subtitle: "Acesso completo a todas as funcionalidades",   price_cents: 49900, features: ALL_GENERAL_FEATURES, is_active: true, sort_order: 4 },
 ];
+
+const MARKET_ICONS = ["activity", "bar-chart-2", "trending-up", "map-pin", "git-merge", "pie-chart", "globe", "layers", "star", "zap"];
 
 interface Plan {
   id: string;
@@ -57,27 +59,42 @@ function centsToString(cents: number): string {
 }
 
 function parsePriceString(s: string): number {
-  if (!s || s.toLowerCase() === "grátis" || s === "0") return 0;
+  if (!s || s.toLowerCase().includes("grát") || s === "0") return 0;
   const num = parseFloat(s.replace(/[R$\s.]/g, "").replace(",", "."));
   return isNaN(num) ? 0 : Math.round(num * 100);
+}
+
+function toSlug(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
 }
 
 export default function AdminPlanBuilderScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const [drawerOpen, setDrawerOpen]   = useState(false);
-  const [plans, setPlans]             = useState<Plan[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [error, setError]             = useState<string | null>(null);
-  const [editPlan, setEditPlan]       = useState<Plan | null>(null);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showNewModal, setShowNewModal]   = useState(false);
-  const [saving, setSaving]           = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const [editName, setEditName]         = useState("");
-  const [editSubtitle, setEditSubtitle] = useState("");
-  const [editPrice, setEditPrice]       = useState("");
-  const [editFeatures, setEditFeatures] = useState<string[]>([]);
+  const [plans,   setPlans]   = useState<Plan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState<string | null>(null);
+  const [saving,  setSaving]  = useState(false);
+
+  const [editPlan, setEditPlan]             = useState<Plan | null>(null);
+  const [showEditModal, setShowEditModal]   = useState(false);
+  const [showNewModal, setShowNewModal]     = useState(false);
+  const [editName, setEditName]             = useState("");
+  const [editSubtitle, setEditSubtitle]     = useState("");
+  const [editPrice, setEditPrice]           = useState("");
+  const [editFeatures, setEditFeatures]     = useState<string[]>([]);
+
+  const [marketPerms, setMarketPerms]       = useState<API.MarketPermission[]>([]);
+  const [loadingMp, setLoadingMp]           = useState(true);
+
+  const [showMpModal, setShowMpModal]       = useState(false);
+  const [mpEditTarget, setMpEditTarget]     = useState<API.MarketPermission | null>(null);
+  const [mpTitle, setMpTitle]               = useState("");
+  const [mpIcon, setMpIcon]                 = useState("bar-chart-2");
+  const [mpSaving, setMpSaving]             = useState(false);
+  const [mpDeleting, setMpDeleting]         = useState<string | null>(null);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -90,9 +107,7 @@ export default function AdminPlanBuilderScreen() {
         .from("plans")
         .select("*")
         .order("sort_order", { ascending: true });
-
       if (err) throw err;
-
       if (!data || data.length === 0) {
         const { data: seeded, error: seedErr } = await supabase
           .from("plans")
@@ -101,7 +116,6 @@ export default function AdminPlanBuilderScreen() {
         if (seedErr) throw seedErr;
         data = seeded;
       }
-
       setPlans((data ?? []) as Plan[]);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao carregar planos");
@@ -110,7 +124,17 @@ export default function AdminPlanBuilderScreen() {
     }
   }, []);
 
-  useEffect(() => { loadPlans(); }, [loadPlans]);
+  const loadMarketPerms = useCallback(async () => {
+    setLoadingMp(true);
+    const perms = await API.fetchMarketPermissions();
+    setMarketPerms(perms);
+    setLoadingMp(false);
+  }, []);
+
+  useEffect(() => {
+    loadPlans();
+    loadMarketPerms();
+  }, [loadPlans, loadMarketPerms]);
 
   const openEdit = (plan: Plan) => {
     setEditPlan(plan);
@@ -130,11 +154,11 @@ export default function AdminPlanBuilderScreen() {
     setShowNewModal(true);
   };
 
-  const toggleFeature = (f: string) => {
-    setEditFeatures((prev) =>
-      prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]
-    );
-  };
+  const toggleFeature = (f: string) =>
+    setEditFeatures((prev) => prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]);
+
+  const toggleMarketFeature = (mp: API.MarketPermission) =>
+    toggleFeature(`mercado:${mp.id}`);
 
   const handleSaveEdit = async () => {
     if (!editPlan) return;
@@ -157,25 +181,14 @@ export default function AdminPlanBuilderScreen() {
   };
 
   const handleCreateNew = async () => {
-    if (!editName.trim()) {
-      Alert.alert("Erro", "Informe o nome do plano.");
-      return;
-    }
+    if (!editName.trim()) { Alert.alert("Erro", "Informe o nome do plano."); return; }
     setSaving(true);
     try {
       const price_cents = parsePriceString(editPrice);
-      const newId = editName.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const newId = toSlug(editName) || `plano_${Date.now()}`;
       const { error: err } = await supabase
         .from("plans")
-        .insert({
-          id: newId,
-          name: editName,
-          subtitle: editSubtitle,
-          price_cents,
-          features: editFeatures,
-          is_active: true,
-          sort_order: plans.length,
-        });
+        .insert({ id: newId, name: editName, subtitle: editSubtitle, price_cents, features: editFeatures, is_active: true, sort_order: plans.length });
       if (err) throw err;
       Alert.alert("Sucesso", "Novo plano criado.");
       setShowNewModal(false);
@@ -191,18 +204,66 @@ export default function AdminPlanBuilderScreen() {
     Alert.alert("Excluir plano", `Excluir o plano "${plan.name}"? Esta ação é irreversível.`, [
       { text: "Cancelar", style: "cancel" },
       {
-        text: "Excluir",
-        style: "destructive",
+        text: "Excluir", style: "destructive",
         onPress: async () => {
           const { error: err } = await supabase.from("plans").delete().eq("id", plan.id);
-          if (err) {
-            Alert.alert("Erro", err.message);
-          } else {
-            loadPlans();
-          }
+          if (err) Alert.alert("Erro", err.message);
+          else loadPlans();
         },
       },
     ]);
+  };
+
+  const openMpNew = () => {
+    setMpEditTarget(null);
+    setMpTitle("");
+    setMpIcon("bar-chart-2");
+    setShowMpModal(true);
+  };
+
+  const openMpEdit = (mp: API.MarketPermission) => {
+    setMpEditTarget(mp);
+    setMpTitle(mp.title);
+    setMpIcon(mp.icon);
+    setShowMpModal(true);
+  };
+
+  const handleSaveMp = async () => {
+    if (!mpTitle.trim()) { Alert.alert("Erro", "Informe o título da permissão."); return; }
+    setMpSaving(true);
+    try {
+      if (mpEditTarget) {
+        await API.updateMarketPermission(mpEditTarget.id, { title: mpTitle, icon: mpIcon });
+      } else {
+        const id = toSlug(mpTitle) || `mp_${Date.now()}`;
+        await API.createMarketPermission({ id, title: mpTitle, icon: mpIcon, sort_order: marketPerms.length });
+      }
+      setShowMpModal(false);
+      await loadMarketPerms();
+    } catch (e: unknown) {
+      Alert.alert("Erro", e instanceof Error ? e.message : "Falha ao salvar.");
+    } finally {
+      setMpSaving(false);
+    }
+  };
+
+  const handleDeleteMp = (mp: API.MarketPermission) => {
+    Alert.alert(
+      "Remover permissão",
+      `Remover "${mp.title}" de todas as permissões de mercado?\n\nOs planos que tinham esta permissão precisarão ser atualizados.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Remover", style: "destructive",
+          onPress: async () => {
+            setMpDeleting(mp.id);
+            await API.deleteMarketPermission(mp.id);
+            setMpDeleting(null);
+            loadMarketPerms();
+          },
+        },
+      ],
+    );
   };
 
   const PlanModal = ({ visible, isNew }: { visible: boolean; isNew: boolean }) => (
@@ -219,8 +280,8 @@ export default function AdminPlanBuilderScreen() {
             {isNew ? "Novo Plano" : `Editar: ${editPlan?.name}`}
           </Text>
 
-          <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
-            <View style={{ gap: 12 }}>
+          <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 500 }}>
+            <View style={{ gap: 14 }}>
               <View style={styles.mField}>
                 <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>NOME</Text>
                 <TextInput
@@ -252,10 +313,12 @@ export default function AdminPlanBuilderScreen() {
                   keyboardType="decimal-pad"
                 />
               </View>
+
+              {/* General features */}
               <View style={styles.mField}>
-                <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>FUNCIONALIDADES</Text>
+                <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>FUNCIONALIDADES GERAIS</Text>
                 <View style={{ gap: 6, marginTop: 4 }}>
-                  {ALL_FEATURES.map((f) => {
+                  {ALL_GENERAL_FEATURES.map((f) => {
                     const active = editFeatures.includes(f);
                     return (
                       <TouchableOpacity
@@ -270,6 +333,39 @@ export default function AdminPlanBuilderScreen() {
                   })}
                 </View>
               </View>
+
+              {/* Market permissions */}
+              <View style={styles.mField}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                  <Feather name="bar-chart-2" size={12} color={colors.gold} />
+                  <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>DADOS DE MERCADO</Text>
+                </View>
+                {loadingMp ? (
+                  <ActivityIndicator size="small" color={colors.gold} />
+                ) : marketPerms.length === 0 ? (
+                  <Text style={[styles.emptyHint, { color: colors.mutedForeground }]}>
+                    Nenhuma permissão de mercado cadastrada ainda.
+                  </Text>
+                ) : (
+                  <View style={{ gap: 6 }}>
+                    {marketPerms.map((mp) => {
+                      const key = `mercado:${mp.id}`;
+                      const active = editFeatures.includes(key);
+                      return (
+                        <TouchableOpacity
+                          key={mp.id}
+                          style={[styles.featureToggle, { borderColor: active ? "#10b981" : colors.border, backgroundColor: active ? "#10b98110" : "transparent" }]}
+                          onPress={() => toggleMarketFeature(mp)}
+                        >
+                          <Feather name={active ? "check-square" : "square"} size={16} color={active ? "#10b981" : colors.mutedForeground} />
+                          <Feather name={mp.icon as any} size={14} color={active ? "#10b981" : colors.mutedForeground} />
+                          <Text style={[styles.featureToggleText, { color: active ? colors.navy : colors.foreground }]}>{mp.title}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
             </View>
           </ScrollView>
 
@@ -278,11 +374,63 @@ export default function AdminPlanBuilderScreen() {
             onPress={isNew ? handleCreateNew : handleSaveEdit}
             disabled={saving}
           >
-            {saving ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.mSaveBtnText}>{isNew ? "Criar Plano" : "Salvar Alterações"}</Text>
-            )}
+            {saving
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.mSaveBtnText}>{isNew ? "Criar Plano" : "Salvar Alterações"}</Text>
+            }
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const MpModal = () => (
+    <Modal visible={showMpModal} transparent animationType="slide">
+      <View style={styles.overlay}>
+        <View style={[styles.editModal, { backgroundColor: "#fff" }]}>
+          <TouchableOpacity style={styles.modalClose} onPress={() => setShowMpModal(false)}>
+            <Feather name="x" size={18} color="#6b7280" />
+          </TouchableOpacity>
+          <Text style={[styles.modalTitle, { color: colors.navy }]}>
+            {mpEditTarget ? "Editar Permissão" : "Nova Permissão de Mercado"}
+          </Text>
+          <View style={{ gap: 14 }}>
+            <View style={styles.mField}>
+              <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>TÍTULO</Text>
+              <TextInput
+                style={[styles.mInput, { borderColor: colors.border, color: colors.foreground }]}
+                placeholder="Ex: Análise de Preços"
+                placeholderTextColor={colors.mutedForeground}
+                value={mpTitle}
+                onChangeText={setMpTitle}
+              />
+            </View>
+            <View style={styles.mField}>
+              <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>ÍCONE</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  {MARKET_ICONS.map((ic) => (
+                    <TouchableOpacity
+                      key={ic}
+                      style={[styles.iconBtn, { borderColor: mpIcon === ic ? colors.gold : colors.border, backgroundColor: mpIcon === ic ? colors.gold + "15" : "transparent" }]}
+                      onPress={() => setMpIcon(ic)}
+                    >
+                      <Feather name={ic as any} size={18} color={mpIcon === ic ? colors.gold : colors.mutedForeground} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={[styles.mSaveBtn, { backgroundColor: mpSaving ? colors.gold + "80" : colors.gold, marginTop: 20 }]}
+            onPress={handleSaveMp}
+            disabled={mpSaving}
+          >
+            {mpSaving
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.mSaveBtnText}>{mpEditTarget ? "Salvar Alterações" : "Criar Permissão"}</Text>
+            }
           </TouchableOpacity>
         </View>
       </View>
@@ -306,7 +454,7 @@ export default function AdminPlanBuilderScreen() {
           <View style={{ flex: 1, gap: 3 }}>
             <Text style={[styles.heroTitle, { color: colors.navy }]}>Plan Builder</Text>
             <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>
-              Gerencie planos de assinatura e permissões de acesso
+              Planos de assinatura e permissões de acesso
             </Text>
           </View>
           <TouchableOpacity style={[styles.newBtn, { backgroundColor: colors.gold }]} onPress={openNew}>
@@ -324,52 +472,121 @@ export default function AdminPlanBuilderScreen() {
           <View style={{ alignItems: "center", paddingVertical: 32, gap: 12 }}>
             <Feather name="alert-circle" size={32} color="#dc2626" />
             <Text style={{ color: "#dc2626", fontSize: 13, textAlign: "center" }}>{error}</Text>
-            <TouchableOpacity
-              style={[styles.retryBtn, { backgroundColor: colors.gold }]}
-              onPress={loadPlans}
-            >
+            <TouchableOpacity style={[styles.retryBtn, { backgroundColor: colors.gold }]} onPress={loadPlans}>
               <Text style={{ color: "#fff", fontWeight: "700" }}>Tentar novamente</Text>
             </TouchableOpacity>
           </View>
         ) : (
-          plans.map((plan) => (
-            <View key={plan.id} style={[styles.planCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-              <View style={styles.planTopRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.planName, { color: colors.navy }]}>{plan.name}</Text>
-                  <Text style={[styles.planSub, { color: colors.mutedForeground }]}>{plan.subtitle}</Text>
+          plans.map((plan) => {
+            const generalFeats = plan.features.filter(f => !f.startsWith("mercado:"));
+            const marketFeats  = plan.features.filter(f => f.startsWith("mercado:"));
+            return (
+              <View key={plan.id} style={[styles.planCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                <View style={styles.planTopRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.planName, { color: colors.navy }]}>{plan.name}</Text>
+                    <Text style={[styles.planSub, { color: colors.mutedForeground }]}>{plan.subtitle}</Text>
+                  </View>
+                  <Text style={[styles.planPrice, { color: colors.navy }]}>{centsToString(plan.price_cents)}</Text>
+                  <TouchableOpacity style={[styles.editBtn, { borderColor: colors.border }]} onPress={() => openEdit(plan)}>
+                    <Feather name="edit-2" size={13} color={colors.foreground} />
+                    <Text style={[styles.editBtnText, { color: colors.foreground }]}>Editar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleDelete(plan)}>
+                    <Feather name="trash-2" size={18} color="#dc2626" />
+                  </TouchableOpacity>
                 </View>
-                <Text style={[styles.planPrice, { color: colors.navy }]}>{centsToString(plan.price_cents)}</Text>
-                <TouchableOpacity
-                  style={[styles.editBtn, { borderColor: colors.border }]}
-                  onPress={() => openEdit(plan)}
-                >
-                  <Feather name="edit-2" size={13} color={colors.foreground} />
-                  <Text style={[styles.editBtnText, { color: colors.foreground }]}>Editar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => handleDelete(plan)}>
-                  <Feather name="trash-2" size={18} color="#dc2626" />
-                </TouchableOpacity>
-              </View>
 
-              {plan.features.length > 0 ? (
-                <View style={styles.featureChips}>
-                  {plan.features.map((f) => (
-                    <View key={f} style={[styles.chip, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                      <Text style={[styles.chipText, { color: colors.foreground }]}>{f}</Text>
+                {generalFeats.length > 0 && (
+                  <View style={styles.featureChips}>
+                    {generalFeats.map((f) => (
+                      <View key={f} style={[styles.chip, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                        <Text style={[styles.chipText, { color: colors.foreground }]}>{f}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {marketFeats.length > 0 && (
+                  <View style={{ gap: 4 }}>
+                    <Text style={[styles.chipSection, { color: colors.mutedForeground }]}>Dados de Mercado</Text>
+                    <View style={styles.featureChips}>
+                      {marketFeats.map((f) => {
+                        const mp = marketPerms.find(p => `mercado:${p.id}` === f);
+                        const label = mp?.title ?? f.replace("mercado:", "");
+                        return (
+                          <View key={f} style={[styles.chip, { backgroundColor: "#10b98110", borderColor: "#10b98140" }]}>
+                            <Feather name={(mp?.icon ?? "bar-chart-2") as any} size={11} color="#10b981" />
+                            <Text style={[styles.chipText, { color: "#065f46" }]}>{label}</Text>
+                          </View>
+                        );
+                      })}
                     </View>
-                  ))}
-                </View>
-              ) : (
-                <Text style={[styles.noFeatures, { color: colors.mutedForeground }]}>Nenhum recurso ativo</Text>
-              )}
-            </View>
-          ))
+                  </View>
+                )}
+
+                {plan.features.length === 0 && (
+                  <Text style={[styles.noFeatures, { color: colors.mutedForeground }]}>Nenhum recurso ativo</Text>
+                )}
+              </View>
+            );
+          })
         )}
+
+        {/* Market Permissions Manager */}
+        <View style={[styles.mpSection, { backgroundColor: "#fff", borderColor: colors.border }]}>
+          <View style={styles.mpSectionHead}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Feather name="bar-chart-2" size={16} color={colors.gold} />
+              <Text style={[styles.mpSectionTitle, { color: colors.navy }]}>Permissões de Mercado</Text>
+            </View>
+            <TouchableOpacity style={[styles.newBtn, { backgroundColor: colors.gold, paddingHorizontal: 12, paddingVertical: 8 }]} onPress={openMpNew}>
+              <Feather name="plus" size={13} color="#fff" />
+              <Text style={styles.newBtnText}>Adicionar</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={[styles.mpHint, { color: colors.mutedForeground }]}>
+            Seções da aba Mercado que podem ser habilitadas por plano. Altere o título ou adicione novas.
+          </Text>
+
+          {loadingMp ? (
+            <ActivityIndicator size="small" color={colors.gold} />
+          ) : marketPerms.length === 0 ? (
+            <Text style={[styles.emptyHint, { color: colors.mutedForeground }]}>Nenhuma permissão cadastrada. Rode a migration v37 no Supabase primeiro.</Text>
+          ) : (
+            <View style={{ gap: 8 }}>
+              {marketPerms.map((mp) => (
+                <View key={mp.id} style={[styles.mpRow, { borderColor: colors.border }]}>
+                  <View style={[styles.mpIconBox, { backgroundColor: colors.gold + "18" }]}>
+                    <Feather name={mp.icon as any} size={16} color={colors.gold} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.mpRowTitle, { color: colors.navy }]}>{mp.title}</Text>
+                    <Text style={[styles.mpRowId, { color: colors.mutedForeground }]}>chave: mercado:{mp.id}</Text>
+                  </View>
+                  <TouchableOpacity style={styles.mpRowBtn} onPress={() => openMpEdit(mp)}>
+                    <Feather name="edit-2" size={14} color={colors.navy} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.mpRowBtn, { opacity: mpDeleting === mp.id ? 0.5 : 1 }]}
+                    onPress={() => handleDeleteMp(mp)}
+                    disabled={mpDeleting === mp.id}
+                  >
+                    {mpDeleting === mp.id
+                      ? <ActivityIndicator size="small" color="#dc2626" />
+                      : <Feather name="trash-2" size={14} color="#dc2626" />
+                    }
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
       </ScrollView>
 
       <PlanModal visible={showEditModal} isNew={false} />
       <PlanModal visible={showNewModal} isNew={true} />
+      <MpModal />
 
       <AdminDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} activeRoute="/admin/plan-builder" />
     </View>
@@ -393,8 +610,9 @@ const styles = StyleSheet.create({
   editBtn:           { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8 },
   editBtnText:       { fontSize: 13 },
   featureChips:      { flexDirection: "row", flexWrap: "wrap", gap: 7 },
-  chip:              { borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 16 },
+  chip:              { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 16 },
   chipText:          { fontSize: 12 },
+  chipSection:       { fontSize: 11, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 },
   noFeatures:        { fontSize: 13, fontStyle: "italic" },
   retryBtn:          { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
   overlay:           { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center", padding: 20 },
@@ -408,4 +626,15 @@ const styles = StyleSheet.create({
   featureToggleText: { fontSize: 14, flex: 1 },
   mSaveBtn:          { paddingVertical: 15, borderRadius: 10, alignItems: "center" },
   mSaveBtnText:      { color: "#fff", fontSize: 15, fontWeight: "700" },
+  emptyHint:         { fontSize: 13, fontStyle: "italic" },
+  mpSection:         { borderRadius: 12, borderWidth: 1, padding: 16, gap: 12 },
+  mpSectionHead:     { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  mpSectionTitle:    { fontSize: 15, fontWeight: "700" },
+  mpHint:            { fontSize: 13, lineHeight: 18 },
+  mpRow:             { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 10, padding: 10 },
+  mpIconBox:         { width: 34, height: 34, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  mpRowTitle:        { fontSize: 14, fontWeight: "600" },
+  mpRowId:           { fontSize: 11, marginTop: 1 },
+  mpRowBtn:          { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
+  iconBtn:           { width: 40, height: 40, borderRadius: 8, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
 });

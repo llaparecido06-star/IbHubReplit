@@ -472,16 +472,35 @@ function ApresentacoesView({ colors, bottomPad }: { colors: any; bottomPad: numb
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
+function LockedSection({ title, icon, colors }: { title: string; icon: string; colors: any }) {
+  return (
+    <View style={[styles.lockedCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+      <View style={[styles.lockedIconBox, { backgroundColor: colors.gold + "15" }]}>
+        <Feather name={icon as any} size={22} color={colors.gold} />
+      </View>
+      <Text style={[styles.lockedTitle, { color: colors.navy }]}>{title}</Text>
+      <Text style={[styles.lockedSub, { color: colors.mutedForeground }]}>
+        Esta seção não está incluída no seu plano atual.
+      </Text>
+      <View style={[styles.lockedBadge, { backgroundColor: colors.gold + "18" }]}>
+        <Feather name="lock" size={12} color={colors.gold} />
+        <Text style={[styles.lockedBadgeText, { color: colors.gold }]}>Faça upgrade para desbloquear</Text>
+      </View>
+    </View>
+  );
+}
+
 export default function MercadoScreen() {
   const colors  = useColors();
   const insets  = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
-  const [period,      setPeriod]      = useState<Period>("ano");
-  const [mainTab,     setMainTab]     = useState<MercadoTab>("visao");
-  const [data,        setData]        = useState<API.MarketOverview>(FALLBACK.ano);
-  const [loading,     setLoading]     = useState(false);
-  const [leaderboard, setLeaderboard] = useState<API.LeaderboardEntry[]>([]);
+  const [period,       setPeriod]       = useState<Period>("ano");
+  const [mainTab,      setMainTab]      = useState<MercadoTab>("visao");
+  const [data,         setData]         = useState<API.MarketOverview>(FALLBACK.ano);
+  const [loading,      setLoading]      = useState(false);
+  const [leaderboard,  setLeaderboard]  = useState<API.LeaderboardEntry[]>([]);
+  const [planFeatures, setPlanFeatures] = useState<string[] | null>(null);
   const [loadingTop,  setLoadingTop]  = useState(false);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
@@ -500,6 +519,18 @@ export default function MercadoScreen() {
   }, []);
 
   useEffect(() => { loadPeriod(period); }, [period, loadPeriod]);
+
+  useEffect(() => {
+    const planId = profile?.plan ?? "gratuito";
+    API.fetchPlanFeatures(planId).then(feats => {
+      setPlanFeatures(feats);
+    }).catch(() => setPlanFeatures([]));
+  }, [profile?.plan]);
+
+  const can = useCallback((key: string): boolean => {
+    if (planFeatures === null) return true;
+    return planFeatures.includes(`mercado:${key}`);
+  }, [planFeatures]);
 
   const loadLeaderboard = useCallback(async () => {
     setLoadingTop(true);
@@ -674,82 +705,97 @@ export default function MercadoScreen() {
           ) : (
             <>
               {/* KPIs */}
-              <View style={styles.kpiList}>
-                {data.kpis.map(kpi => (
-                  <KPICard key={kpi.label} kpi={kpi} colors={colors} />
-                ))}
-              </View>
+              {can("kpis") ? (
+                <View style={styles.kpiList}>
+                  {data.kpis.map(kpi => (
+                    <KPICard key={kpi.label} kpi={kpi} colors={colors} />
+                  ))}
+                </View>
+              ) : (
+                <LockedSection title="KPIs de Mercado" icon="activity" colors={colors} />
+              )}
 
               {/* Área: Exportações vs Importações */}
-              <View style={[styles.chartCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-                <View style={styles.chartHeader}>
-                  <Text style={[styles.chartTitle, { color: colors.navy }]}>Evolução de Exportações {"&"} Importações</Text>
-                </View>
-                <AreaChart data={data.chart_area} />
-                <View style={styles.legend}>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: colors.gold }]} />
-                    <Text style={[styles.legendText, { color: colors.mutedForeground }]}>Exportações</Text>
-                  </View>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: "#ef4444" }]} />
-                    <Text style={[styles.legendText, { color: colors.mutedForeground }]}>Importações</Text>
-                  </View>
-                  <TouchableOpacity style={styles.fonteBtn}>
-                    <Feather name="info" size={11} color={colors.mutedForeground} />
-                    <Text style={[styles.fonteText, { color: colors.mutedForeground }]}>Fonte</Text>
-                  </TouchableOpacity>
-                </View>
-                <Text style={[styles.chartHint, { color: colors.mutedForeground }]}>
-                  Toque num ponto para ver o valor exato
-                </Text>
-              </View>
-
-              {/* Barras: Produção Nacional */}
-              <View style={[styles.chartCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-                <View style={styles.chartHeader}>
-                  <Text style={[styles.chartTitle, { color: colors.navy }]}>Produção Nacional por Período</Text>
-                </View>
-                <BarChart data={data.chart_bar} />
-                <TouchableOpacity style={[styles.fonteBtn, { alignSelf: "flex-end" }]}>
-                  <Feather name="info" size={11} color={colors.mutedForeground} />
-                  <Text style={[styles.fonteText, { color: colors.mutedForeground }]}>Fonte</Text>
-                </TouchableOpacity>
-                <Text style={[styles.chartHint, { color: colors.mutedForeground }]}>
-                  Toque numa barra para ver o valor
-                </Text>
-              </View>
-
-              {/* Tendências */}
-              <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.navy }]}>Tendências</Text>
-                {data.tendencias.map(t => (
-                  <View key={t.title} style={[styles.tendCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-                    <View style={styles.tendHeader}>
-                      <Text style={[styles.tendTitle, { color: colors.navy }]}>{t.title}</Text>
-                      <Text style={[styles.tendChange, { color: t.pos ? "#16a34a" : "#dc2626" }]}>
-                        {t.pos ? "+" : ""}{t.change}%
-                      </Text>
+              {can("graficos") ? (
+                <>
+                  <View style={[styles.chartCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                    <View style={styles.chartHeader}>
+                      <Text style={[styles.chartTitle, { color: colors.navy }]}>Evolução de Exportações {"&"} Importações</Text>
                     </View>
-                    <Text style={[styles.tendDesc, { color: colors.mutedForeground }]}>{t.desc}</Text>
-                    <View style={styles.tendFooter}>
+                    <AreaChart data={data.chart_area} />
+                    <View style={styles.legend}>
+                      <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: colors.gold }]} />
+                        <Text style={[styles.legendText, { color: colors.mutedForeground }]}>Exportações</Text>
+                      </View>
+                      <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: "#ef4444" }]} />
+                        <Text style={[styles.legendText, { color: colors.mutedForeground }]}>Importações</Text>
+                      </View>
                       <TouchableOpacity style={styles.fonteBtn}>
                         <Feather name="info" size={11} color={colors.mutedForeground} />
                         <Text style={[styles.fonteText, { color: colors.mutedForeground }]}>Fonte</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.shareBtn, { backgroundColor: colors.gold + "15" }]}
-                        onPress={() => handleShare(t)}
-                      >
-                        <Feather name="share-2" size={13} color={colors.gold} />
-                        <Text style={[styles.shareText, { color: colors.gold }]}>Partilhar</Text>
-                      </TouchableOpacity>
                     </View>
+                    <Text style={[styles.chartHint, { color: colors.mutedForeground }]}>
+                      Toque num ponto para ver o valor exato
+                    </Text>
                   </View>
-                ))}
-              </View>
+
+                  {/* Barras: Produção Nacional */}
+                  <View style={[styles.chartCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                    <View style={styles.chartHeader}>
+                      <Text style={[styles.chartTitle, { color: colors.navy }]}>Produção Nacional por Período</Text>
+                    </View>
+                    <BarChart data={data.chart_bar} />
+                    <TouchableOpacity style={[styles.fonteBtn, { alignSelf: "flex-end" }]}>
+                      <Feather name="info" size={11} color={colors.mutedForeground} />
+                      <Text style={[styles.fonteText, { color: colors.mutedForeground }]}>Fonte</Text>
+                    </TouchableOpacity>
+                    <Text style={[styles.chartHint, { color: colors.mutedForeground }]}>
+                      Toque numa barra para ver o valor
+                    </Text>
+                  </View>
+                </>
+              ) : (
+                <LockedSection title="Gráficos" icon="bar-chart-2" colors={colors} />
+              )}
+
+              {/* Tendências */}
+              {can("tendencias") ? (
+                <View style={styles.section}>
+                  <Text style={[styles.sectionTitle, { color: colors.navy }]}>Tendências</Text>
+                  {data.tendencias.map(t => (
+                    <View key={t.title} style={[styles.tendCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                      <View style={styles.tendHeader}>
+                        <Text style={[styles.tendTitle, { color: colors.navy }]}>{t.title}</Text>
+                        <Text style={[styles.tendChange, { color: t.pos ? "#16a34a" : "#dc2626" }]}>
+                          {t.pos ? "+" : ""}{t.change}%
+                        </Text>
+                      </View>
+                      <Text style={[styles.tendDesc, { color: colors.mutedForeground }]}>{t.desc}</Text>
+                      <View style={styles.tendFooter}>
+                        <TouchableOpacity style={styles.fonteBtn}>
+                          <Feather name="info" size={11} color={colors.mutedForeground} />
+                          <Text style={[styles.fonteText, { color: colors.mutedForeground }]}>Fonte</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.shareBtn, { backgroundColor: colors.gold + "15" }]}
+                          onPress={() => handleShare(t)}
+                        >
+                          <Feather name="share-2" size={13} color={colors.gold} />
+                          <Text style={[styles.shareText, { color: colors.gold }]}>Partilhar</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <LockedSection title="Tendências" icon="trending-up" colors={colors} />
+              )}
 
               {/* Regiões Produtoras */}
+              {can("regioes") ? (
               <View style={styles.section}>
                 <View style={styles.sectionTitleRow}>
                   <Text style={{ fontSize: 18, marginRight: 6 }}>🍇</Text>
@@ -785,44 +831,51 @@ export default function MercadoScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
+              ) : (
+                <LockedSection title="Regiões Produtoras" icon="map-pin" colors={colors} />
+              )}
 
               {/* Variedades em Destaque */}
-              <View style={styles.section}>
-                <View style={styles.sectionTitleRow}>
-                  <Text style={{ fontSize: 18, marginRight: 6 }}>🍷</Text>
-                  <Text style={[styles.sectionTitle, { color: colors.navy }]}>Variedades em Destaque</Text>
-                </View>
-                <View style={[styles.tableCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-                  {data.variedades.map((v, idx) => {
-                    const vol = parseVol(v.volume);
-                    const barPct = maxVol > 0 ? (vol / maxVol) * 100 : 0;
-                    return (
-                      <View
-                        key={v.name}
-                        style={[styles.tableRow, { borderBottomColor: colors.border }, idx === data.variedades.length - 1 && { borderBottomWidth: 0 }]}
-                      >
-                        <View style={styles.tableMain}>
-                          <View style={styles.tableNameRow}>
-                            <Text style={[styles.tableName, { color: colors.navy }]}>{v.name}</Text>
-                            <Text style={[styles.tablePct, { color: v.change >= 0 ? "#16a34a" : "#dc2626" }]}>
-                              {v.change >= 0 ? "+" : ""}{v.change}%
-                            </Text>
-                          </View>
-                          <Text style={[styles.tableVolume, { color: colors.mutedForeground }]}>{v.volume}</Text>
-                          <View style={[styles.progressBg, { backgroundColor: colors.border }]}>
-                            <View
-                              style={[
-                                styles.progressFill,
-                                { backgroundColor: v.change >= 0 ? "#16a34a" : "#dc2626", width: `${barPct}%` },
-                              ]}
-                            />
+              {can("variedades") ? (
+                <View style={styles.section}>
+                  <View style={styles.sectionTitleRow}>
+                    <Text style={{ fontSize: 18, marginRight: 6 }}>🍷</Text>
+                    <Text style={[styles.sectionTitle, { color: colors.navy }]}>Variedades em Destaque</Text>
+                  </View>
+                  <View style={[styles.tableCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                    {data.variedades.map((v, idx) => {
+                      const vol = parseVol(v.volume);
+                      const barPct = maxVol > 0 ? (vol / maxVol) * 100 : 0;
+                      return (
+                        <View
+                          key={v.name}
+                          style={[styles.tableRow, { borderBottomColor: colors.border }, idx === data.variedades.length - 1 && { borderBottomWidth: 0 }]}
+                        >
+                          <View style={styles.tableMain}>
+                            <View style={styles.tableNameRow}>
+                              <Text style={[styles.tableName, { color: colors.navy }]}>{v.name}</Text>
+                              <Text style={[styles.tablePct, { color: v.change >= 0 ? "#16a34a" : "#dc2626" }]}>
+                                {v.change >= 0 ? "+" : ""}{v.change}%
+                              </Text>
+                            </View>
+                            <Text style={[styles.tableVolume, { color: colors.mutedForeground }]}>{v.volume}</Text>
+                            <View style={[styles.progressBg, { backgroundColor: colors.border }]}>
+                              <View
+                                style={[
+                                  styles.progressFill,
+                                  { backgroundColor: v.change >= 0 ? "#16a34a" : "#dc2626", width: `${barPct}%` },
+                                ]}
+                              />
+                            </View>
                           </View>
                         </View>
-                      </View>
-                    );
-                  })}
+                      );
+                    })}
+                  </View>
                 </View>
-              </View>
+              ) : (
+                <LockedSection title="Variedades em Destaque" icon="git-merge" colors={colors} />
+              )}
 
               {/* Última atualização */}
               {data.updated_at ? (
@@ -845,6 +898,13 @@ const styles = StyleSheet.create({
   header:         { paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1 },
   headerTitle:    { fontSize: 26, fontWeight: "800" },
   headerSubtitle: { fontSize: 13, marginTop: 2 },
+
+  lockedCard:       { marginHorizontal: 16, marginTop: 4, marginBottom: 4, borderRadius: 12, borderWidth: 1, padding: 20, alignItems: "center", gap: 8 },
+  lockedIconBox:    { width: 48, height: 48, borderRadius: 12, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  lockedTitle:      { fontSize: 16, fontWeight: "700" },
+  lockedSub:        { fontSize: 13, textAlign: "center", lineHeight: 18 },
+  lockedBadge:      { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, marginTop: 4 },
+  lockedBadgeText:  { fontSize: 12, fontWeight: "600" },
 
   mainTabRow:      { flexDirection: "row", padding: 8, gap: 6, borderBottomWidth: 1 },
   mainTabBtn:      { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: "transparent" },

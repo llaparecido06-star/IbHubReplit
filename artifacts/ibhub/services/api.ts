@@ -2760,6 +2760,91 @@ export async function deleteMarketPresentation(id: string): Promise<boolean> {
   }
 }
 
+// ─── MARKET PERMISSIONS ──────────────────────────────────────────────────────
+
+export interface MarketPermission {
+  id: string;
+  title: string;
+  icon: string;
+  sort_order: number;
+}
+
+export async function fetchMarketPermissions(): Promise<MarketPermission[]> {
+  try {
+    const { data, error } = await supabase
+      .from("market_permissions")
+      .select("*")
+      .order("sort_order", { ascending: true });
+    if (error) { console.error("fetchMarketPermissions:", error); return []; }
+    return (data ?? []) as MarketPermission[];
+  } catch (e) {
+    console.error("fetchMarketPermissions:", e);
+    return [];
+  }
+}
+
+export async function createMarketPermission(
+  perm: Omit<MarketPermission, "sort_order"> & { sort_order?: number },
+): Promise<MarketPermission | null> {
+  try {
+    const { data, error } = await supabase
+      .from("market_permissions")
+      .insert(perm)
+      .select()
+      .single();
+    if (error) { console.error("createMarketPermission:", error); return null; }
+    return data as MarketPermission;
+  } catch (e) {
+    console.error("createMarketPermission:", e);
+    return null;
+  }
+}
+
+export async function updateMarketPermission(
+  id: string,
+  updates: Partial<Omit<MarketPermission, "id">>,
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("market_permissions")
+      .update(updates)
+      .eq("id", id);
+    if (error) { console.error("updateMarketPermission:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("updateMarketPermission:", e);
+    return false;
+  }
+}
+
+export async function deleteMarketPermission(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("market_permissions")
+      .delete()
+      .eq("id", id);
+    if (error) { console.error("deleteMarketPermission:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("deleteMarketPermission:", e);
+    return false;
+  }
+}
+
+export async function fetchPlanFeatures(planId: string): Promise<string[]> {
+  try {
+    const { data, error } = await supabase
+      .from("plans")
+      .select("features")
+      .eq("id", planId)
+      .maybeSingle();
+    if (error || !data) return [];
+    return (data.features ?? []) as string[];
+  } catch {
+    return [];
+  }
+}
+
 // ─── MARKET OVERVIEW ─────────────────────────────────────────────────────────
 
 export interface MarketKPI {
