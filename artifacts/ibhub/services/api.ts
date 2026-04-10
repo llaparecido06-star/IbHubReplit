@@ -2273,23 +2273,16 @@ export async function getOrCreateDirectConversation(userId1: string, userId2: st
       }
     }
 
-    // Check if the two users are connected or follow each other
-    const [connCheck, followCheck] = await Promise.all([
-      supabase
-        .from("connections")
-        .select("id", { count: "exact", head: true })
-        .or(
-          `and(requester_id.eq.${userId1},receiver_id.eq.${userId2}),and(requester_id.eq.${userId2},receiver_id.eq.${userId1})`,
-        )
-        .eq("status", "accepted"),
-      supabase
-        .from("follows")
-        .select("id", { count: "exact", head: true })
-        .or(
-          `and(follower_id.eq.${userId1},following_id.eq.${userId2}),and(follower_id.eq.${userId2},following_id.eq.${userId1})`,
-        ),
-    ]);
-    const isKnown = (connCheck.count ?? 0) > 0 || (followCheck.count ?? 0) > 0;
+    // Only an accepted connection unlocks the chat immediately (goes to Mensagens).
+    // Following only → recipient's accepted=false → goes to Solicitações tab.
+    const connCheck = await supabase
+      .from("connections")
+      .select("id", { count: "exact", head: true })
+      .or(
+        `and(requester_id.eq.${userId1},receiver_id.eq.${userId2}),and(requester_id.eq.${userId2},receiver_id.eq.${userId1})`,
+      )
+      .eq("status", "accepted");
+    const isKnown = (connCheck.count ?? 0) > 0;
 
     // Generate UUID client-side to avoid the RLS SELECT-after-INSERT issue
     // (convos_select requires being a participant, but participants don't exist yet at INSERT time)
