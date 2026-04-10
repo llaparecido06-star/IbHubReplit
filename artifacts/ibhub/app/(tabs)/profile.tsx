@@ -199,17 +199,28 @@ export default function ProfileScreen() {
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
 
   // ── All hooks must run before any conditional return ──────────────────────
+
+  // Always keep company pages fresh — fires on mount, focus, and identity switch
+  const refreshCompanyPages = useCallback(async () => {
+    if (!user?.id) return;
+    const cp = await fetchUserCompanyPages(user.id);
+    setCompanyPages(cp);
+  }, [user?.id]);
+
   const loadData = useCallback(async () => {
-    if (!user?.id || isCompany) return;
+    if (!user?.id) return;
+    // Always fetch company pages regardless of mode
+    refreshCompanyPages();
+    // Skip heavy personal data when in company mode (we show EmpresaProfileProxy anyway)
+    if (isCompany) { setLoadingData(false); setRefreshing(false); return; }
     const areas = profile?.areas_of_expertise ?? [];
-    const [p, saved, wines, fr, fg, sg, cp] = await Promise.all([
+    const [p, saved, wines, fr, fg, sg] = await Promise.all([
       fetchUserPosts(user.id, user.id),
       fetchBookmarkedPosts(user.id),
       fetchWineCellar(user.id),
       fetchFollowers(user.id),
       fetchFollowing(user.id),
       fetchSuggestedConnections(user.id, areas, 8),
-      fetchUserCompanyPages(user.id),
     ]);
     setPosts(p);
     setSavedPosts(saved);
@@ -217,11 +228,10 @@ export default function ProfileScreen() {
     setFollowers(fr);
     setFollowing(fg);
     setSuggestions(sg);
-    setCompanyPages(cp);
     setFollowingSet(new Set(fg.map((f) => f.id)));
     setLoadingData(false);
     setRefreshing(false);
-  }, [user?.id, isCompany]);
+  }, [user?.id, isCompany, refreshCompanyPages]);
 
   const loadEngagement = useCallback(async () => {
     if (!user?.id) return;
@@ -238,11 +248,10 @@ export default function ProfileScreen() {
 
   useEffect(() => { loadData(); }, [loadData]);
   useEffect(() => { loadEngagement(); }, [loadEngagement]);
-  // Reload company pages on focus so newly created pages appear immediately
-  useFocusEffect(useCallback(() => {
-    if (!user?.id) return;
-    fetchUserCompanyPages(user.id).then(setCompanyPages);
-  }, [user?.id]));
+  // Reload company pages every time the tab gains focus
+  useFocusEffect(useCallback(() => { refreshCompanyPages(); }, [refreshCompanyPages]));
+  // Also reload when switching identity (activeCompany change)
+  useEffect(() => { refreshCompanyPages(); }, [refreshCompanyPages, activeCompany]);
   // ─────────────────────────────────────────────────────────────────────────
 
   const onRefresh = () => { setRefreshing(true); loadData(); loadEngagement(); };
