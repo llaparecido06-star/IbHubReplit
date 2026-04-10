@@ -266,22 +266,29 @@ export default function FeedScreen() {
         });
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "likes" }, (payload) => {
-        const postId = (payload.new as any)?.post_id;
+        const postId   = (payload.new as any)?.post_id;
+        const actorId  = (payload.new as any)?.user_id;
         if (!postId) return;
+        // Skip own actions — already handled by optimistic update
+        if (actorId === user.id) return;
         setPosts(prev => prev.map(p =>
           p.id === postId ? { ...p, likes_count: p.likes_count + 1 } : p
         ));
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "likes" }, (payload) => {
-        const postId = (payload.old as any)?.post_id;
+        const postId  = (payload.old as any)?.post_id;
+        const actorId = (payload.old as any)?.user_id;
         if (!postId) return;
+        if (actorId === user.id) return;
         setPosts(prev => prev.map(p =>
           p.id === postId ? { ...p, likes_count: Math.max(0, p.likes_count - 1) } : p
         ));
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "comments" }, (payload) => {
-        const postId = (payload.new as any)?.post_id;
+        const postId  = (payload.new as any)?.post_id;
+        const actorId = (payload.new as any)?.user_id;
         if (!postId) return;
+        if (actorId === user.id) return;
         setPosts(prev => prev.map(p =>
           p.id === postId ? { ...p, comments_count: p.comments_count + 1 } : p
         ));

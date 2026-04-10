@@ -341,15 +341,17 @@ export async function toggleLike(postId: string, userId: string, isCurrentlyLike
       // Increment count via RPC (bypasses RLS)
       await supabase.rpc("increment_post_likes", { p_post_id: postId });
       // Notify post author via RPC (bypasses RLS, skips self-notification)
-      const { data: authorData } = await supabase.rpc("get_post_author", { p_post_id: postId });
+      const { data: authorData, error: authorErr } = await supabase.rpc("get_post_author", { p_post_id: postId });
+      if (authorErr) console.error("get_post_author error:", JSON.stringify(authorErr));
       if (authorData && authorData !== userId) {
-        await supabase.rpc("create_notification", {
+        const { error: notifErr } = await supabase.rpc("create_notification", {
           p_user_id: authorData,
           p_actor_id: userId,
           p_type: "like",
           p_post_id: postId,
           p_message: "curtiu sua publicação",
         });
+        if (notifErr) console.error("create_notification(like) error:", JSON.stringify(notifErr));
       }
     }
     return true;
@@ -392,15 +394,17 @@ export async function toggleReaction(
       // Fresh reaction (no previous) → increment
       await supabase.rpc("increment_post_likes", { p_post_id: postId });
       // Notify post author
-      const { data: authorId } = await supabase.rpc("get_post_author", { p_post_id: postId });
+      const { data: authorId, error: authorErr2 } = await supabase.rpc("get_post_author", { p_post_id: postId });
+      if (authorErr2) console.error("get_post_author(reaction) error:", JSON.stringify(authorErr2));
       if (authorId && authorId !== userId) {
-        await supabase.rpc("create_notification", {
+        const { error: notifErr2 } = await supabase.rpc("create_notification", {
           p_user_id: authorId,
           p_actor_id: userId,
           p_type: "like",
           p_post_id: postId,
           p_message: "reagiu à sua publicação",
         });
+        if (notifErr2) console.error("create_notification(reaction) error:", JSON.stringify(notifErr2));
       }
     }
     // Changed reaction type (delete old, insert new) → count unchanged
@@ -1042,7 +1046,13 @@ export async function fetchNotifications(userId: string): Promise<AppNotificatio
       .order("created_at", { ascending: false })
       .limit(50);
 
-    if (error || !data) return [];
+    if (error) {
+      console.error("fetchNotifications DB error:", JSON.stringify(error));
+      return [];
+    }
+    if (!data) return [];
+
+    console.log(`fetchNotifications: ${data.length} rows for user ${userId}`);
 
     const actorIds = [...new Set((data as any[]).map(n => n.actor_id).filter(Boolean))];
     const profileMap = await fetchCommentProfilesForIds(actorIds);
