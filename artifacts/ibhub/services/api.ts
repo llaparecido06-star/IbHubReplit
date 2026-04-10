@@ -2252,7 +2252,7 @@ export async function countPendingReports(): Promise<number> {
   } catch { return 0; }
 }
 
-export async function getOrCreateDirectConversation(userId1: string, userId2: string): Promise<string | null> {
+export async function getOrCreateDirectConversation(userId1: string, userId2: string, forceAccepted = false): Promise<string | null> {
   try {
     // Find existing conversation between these two users
     const { data: myConvos } = await supabase
@@ -2282,7 +2282,8 @@ export async function getOrCreateDirectConversation(userId1: string, userId2: st
         `and(requester_id.eq.${userId1},receiver_id.eq.${userId2}),and(requester_id.eq.${userId2},receiver_id.eq.${userId1})`,
       )
       .eq("status", "accepted");
-    const isKnown = (connCheck.count ?? 0) > 0;
+    // forceAccepted=true for company profiles (no messaging restrictions)
+    const recipientAccepted = forceAccepted || (connCheck.count ?? 0) > 0;
 
     // Generate UUID client-side to avoid the RLS SELECT-after-INSERT issue
     // (convos_select requires being a participant, but participants don't exist yet at INSERT time)
@@ -2298,7 +2299,7 @@ export async function getOrCreateDirectConversation(userId1: string, userId2: st
 
     await supabase.from("conversation_participants").insert([
       { conversation_id: convoId, user_id: userId1, accepted: true },
-      { conversation_id: convoId, user_id: userId2, accepted: isKnown },
+      { conversation_id: convoId, user_id: userId2, accepted: recipientAccepted },
     ]);
 
     return convoId;

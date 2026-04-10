@@ -34,6 +34,7 @@ import {
   toggleLike,
   toggleBookmark,
   checkUserCompanyRole,
+  getOrCreateDirectConversation,
 } from "@/services/api";
 import { Post } from "@/components/feed/PostCard";
 
@@ -312,6 +313,13 @@ export default function EmpresaScreen() {
     setFollowLoading(false);
   };
 
+  const handleMessage = async () => {
+    if (!user?.id || !companyPage?.owner_id) return;
+    // Companies have no messaging restrictions — forceAccepted=true
+    const convoId = await getOrCreateDirectConversation(user.id, companyPage.owner_id, true);
+    if (convoId) router.push(`/chat/${convoId}` as any);
+  };
+
   const handleLikePost = async (post: Post) => {
     if (!user?.id) return;
     const wasLiked = post.is_liked ?? false;
@@ -387,16 +395,24 @@ export default function EmpresaScreen() {
             <Feather name="plus" size={18} color="#fff" />
           </TouchableOpacity>
         ) : user?.id ? (
-          <TouchableOpacity
-            style={[styles.followBtn, { backgroundColor: isFollowing ? colors.border : colors.gold }]}
-            onPress={handleToggleFollow}
-            disabled={followLoading}
-          >
-            <Feather name={isFollowing ? "user-check" : "user-plus"} size={14} color={isFollowing ? colors.navy : "#fff"} />
-            <Text style={[styles.followBtnText, { color: isFollowing ? colors.navy : "#fff" }]}>
-              {followLoading ? "..." : isFollowing ? "Seguindo" : "Seguir"}
-            </Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <TouchableOpacity
+              style={[styles.headerIconBtn, { borderColor: colors.gold }]}
+              onPress={handleMessage}
+            >
+              <Feather name="message-circle" size={16} color={colors.gold} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.followBtn, { backgroundColor: isFollowing ? colors.border : colors.gold }]}
+              onPress={handleToggleFollow}
+              disabled={followLoading}
+            >
+              <Feather name={isFollowing ? "user-check" : "user-plus"} size={14} color={isFollowing ? colors.navy : "#fff"} />
+              <Text style={[styles.followBtnText, { color: isFollowing ? colors.navy : "#fff" }]}>
+                {followLoading ? "..." : isFollowing ? "Seguindo" : "Seguir"}
+              </Text>
+            </TouchableOpacity>
+          </View>
         ) : null}
       </View>
 
@@ -437,16 +453,25 @@ export default function EmpresaScreen() {
               </TouchableOpacity>
             </View>
           ) : !user?.id ? null : (
-            <TouchableOpacity
-              style={[styles.followBtnLarge, { backgroundColor: isFollowing ? colors.border : colors.gold }]}
-              onPress={handleToggleFollow}
-              disabled={followLoading}
-            >
-              <Feather name={isFollowing ? "user-check" : "user-plus"} size={15} color={isFollowing ? colors.navy : "#fff"} />
-              <Text style={[styles.followBtnLargeText, { color: isFollowing ? colors.navy : "#fff" }]}>
-                {followLoading ? "..." : isFollowing ? "Seguindo" : "Seguir empresa"}
-              </Text>
-            </TouchableOpacity>
+            <View style={styles.companyActionRow}>
+              <TouchableOpacity
+                style={[styles.followBtnLarge, { backgroundColor: isFollowing ? colors.border : colors.gold, flex: 1 }]}
+                onPress={handleToggleFollow}
+                disabled={followLoading}
+              >
+                <Feather name={isFollowing ? "user-check" : "user-plus"} size={15} color={isFollowing ? colors.navy : "#fff"} />
+                <Text style={[styles.followBtnLargeText, { color: isFollowing ? colors.navy : "#fff" }]}>
+                  {followLoading ? "..." : isFollowing ? "Seguindo" : "Seguir"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.messageBtnLarge, { borderColor: colors.gold, flex: 1 }]}
+                onPress={handleMessage}
+              >
+                <Feather name="message-circle" size={15} color={colors.gold} />
+                <Text style={[styles.messageBtnLargeText, { color: colors.gold }]}>Mensagem</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
 
@@ -715,6 +740,7 @@ const styles = StyleSheet.create({
   fabButton: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   followBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
   followBtnText: { fontSize: 13, fontWeight: "700" },
+  headerIconBtn: { width: 34, height: 34, borderRadius: 17, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
   companyCard: { padding: 20, alignItems: "center", gap: 10, borderBottomWidth: 1, backgroundColor: "#fff" },
   companyLogo: { width: 80, height: 80, borderRadius: 12 },
   companyLogoFallback: { width: 80, height: 80, borderRadius: 12, alignItems: "center", justifyContent: "center" },
@@ -728,8 +754,11 @@ const styles = StyleSheet.create({
   modeBadgeText: { fontSize: 12, fontWeight: "600" },
   manageBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20 },
   manageBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
-  followBtnLarge: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20 },
+  followBtnLarge: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
   followBtnLargeText: { fontSize: 14, fontWeight: "700" },
+  companyActionRow: { flexDirection: "row", gap: 10, width: "100%", marginTop: 4 },
+  messageBtnLarge: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1.5 },
+  messageBtnLargeText: { fontSize: 14, fontWeight: "700" },
   tabBar: { flexDirection: "row", borderBottomWidth: 1, backgroundColor: "#fff" },
   tabItem: { flex: 1, alignItems: "center", paddingVertical: 14 },
   tabLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 0.5 },
