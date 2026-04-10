@@ -218,14 +218,19 @@ export default function FeedScreen() {
 
   const handleConnect = useCallback(async (targetId: string) => {
     if (!user?.id || connectingId) return;
+    const suggestion = suggestions.find(s => s.id === targetId);
+    const alreadyFollowing = suggestion?.is_following ?? false;
     setConnectingId(targetId);
     // Optimistic update
     setSuggestions(prev => prev.map(s =>
-      s.id === targetId ? { ...s, connection_status: "pending" } : s
+      s.id === targetId ? { ...s, connection_status: "pending", is_following: true } : s
     ));
     await API.sendConnectionRequest(targetId, user.id);
+    if (!alreadyFollowing) {
+      await API.toggleFollow(targetId, user.id, false);
+    }
     setConnectingId(null);
-  }, [user?.id, connectingId]);
+  }, [user?.id, connectingId, suggestions]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

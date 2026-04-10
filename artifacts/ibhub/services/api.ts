@@ -686,6 +686,7 @@ export interface SuggestedProfile {
   areas: string[];
   connection_status: "none" | "pending" | "connected";
   match_score: number;
+  is_following: boolean;
 }
 
 export async function fetchSuggestedConnections(
@@ -709,13 +710,22 @@ export async function fetchSuggestedConnections(
       statusMap.set(otherId, c.status === "accepted" ? "connected" : "pending");
     });
 
-    // 2. Fetch candidate profiles — use real column names
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, user_id, full_name, username, avatar_url, position, company, plan, areas")
-      .limit(80);
+    // 2. Fetch candidate profiles and current user's follows in parallel
+    const [profilesRes, followsRes] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("id, user_id, full_name, username, avatar_url, position, company, plan, areas")
+        .limit(80),
+      supabase
+        .from("follows")
+        .select("following_id")
+        .eq("follower_id", currentUserId),
+    ]);
 
+    const { data: profiles } = profilesRes;
     if (!profiles) return [];
+
+    const followingIds = new Set<string>((followsRes.data ?? []).map((f: any) => f.following_id));
 
     const lowerUserAreas = userAreas.map(a => a.toLowerCase());
 
@@ -736,6 +746,7 @@ export async function fetchSuggestedConnections(
           areas: pAreas,
           connection_status: statusMap.get(p.id) ?? "none",
           match_score,
+          is_following: followingIds.has(p.id),
         } as SuggestedProfile;
       })
       .sort((a, b) => {

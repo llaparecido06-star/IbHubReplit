@@ -356,11 +356,17 @@ export default function ProfileScreen() {
 
   const handleConnect = async (targetId: string) => {
     if (!user?.id || connectingId) return;
+    const suggestion = suggestions.find((s) => s.id === targetId);
+    const alreadyFollowing = suggestion?.is_following ?? followingSet.has(targetId);
     setConnectingId(targetId);
-    await sendConnectionRequest(targetId, user.id);
     setSuggestions((prev) =>
-      prev.map((s) => s.id === targetId ? { ...s, connection_status: "pending" as const } : s)
+      prev.map((s) => s.id === targetId ? { ...s, connection_status: "pending" as const, is_following: true } : s)
     );
+    await sendConnectionRequest(targetId, user.id);
+    if (!alreadyFollowing) {
+      await toggleFollow(targetId, user.id, false);
+      setFollowingSet((prev) => { const next = new Set(prev); next.add(targetId); return next; });
+    }
     setConnectingId(null);
   };
 

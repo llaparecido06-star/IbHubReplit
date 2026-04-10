@@ -37,6 +37,10 @@ export function UserCard({ user, onConnect, onFollow, compact = false }: UserCar
     setPendingConnect(true);
     setConnected(true);
     onConnect?.(user.id);
+    if (!following) {
+      setFollowing(true);
+      onFollow?.(user.id);
+    }
   };
 
   const handleFollow = () => {
