@@ -73,3 +73,30 @@ export async function fetchUserByEmail(email: string): Promise<AdminUserByEmail>
   const json = await res.json();
   return json.user as AdminUserByEmail;
 }
+
+export async function broadcastPushNotification(params: {
+  title: string;
+  body: string;
+  segment: string;
+  deepLink?: string;
+  logId?: string;
+}): Promise<{ sent: number; total: number }> {
+  const headers = await getAdminHeaders();
+  const res = await fetch(`${API_URL}/admin/broadcast-push`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      title: params.title,
+      body: params.body,
+      segment: params.segment,
+      deepLink: params.deepLink || undefined,
+      logId: params.logId,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(body.error ?? `HTTP ${res.status}`);
+  }
+  const json = await res.json();
+  return { sent: json.sent ?? 0, total: json.total ?? 0 };
+}

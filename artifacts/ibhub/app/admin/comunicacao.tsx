@@ -16,6 +16,7 @@ import AdminDrawer from "@/components/AdminDrawer";
 import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/context/AuthContext";
 import { useAuth } from "@/context/AuthContext";
+import { broadcastPushNotification } from "@/services/admin-api";
 
 const SEGMENTS = ["Todos os usuários", "Gratuito", "Básico", "Empresa", "Executivo", "Profissional"];
 
@@ -127,19 +128,43 @@ export default function AdminComunicacaoScreen() {
     if (!canSend || sending) return;
     setSending(true);
     const userId = session?.user?.id ?? null;
-    const { error } = await supabase.from("push_notification_logs").insert({
-      titulo: titulo.trim(),
-      mensagem: mensagem.trim(),
-      segmento,
-      deep_link: deepLink.trim() || null,
-      sent_by: userId,
-    });
-    setSending(false);
+    const titSend = titulo.trim();
+    const msgSend = mensagem.trim();
+    const dlSend = deepLink.trim() || null;
+
+    // Insert log entry first
+    const { data: logData, error } = await supabase
+      .from("push_notification_logs")
+      .insert({ titulo: titSend, mensagem: msgSend, segmento, deep_link: dlSend, sent_by: userId })
+      .select("id")
+      .single();
+
     if (error) {
+      setSending(false);
       Alert.alert("Erro", "Não foi possível registrar a notificação: " + error.message);
       return;
     }
-    Alert.alert("Enviado!", `Notificação "${titulo}" registrada para ${segmento}.`);
+
+    // Dispatch actual push notifications via API server
+    try {
+      const { sent, total } = await broadcastPushNotification({
+        title: titSend,
+        body: msgSend,
+        segment: segmento,
+        deepLink: dlSend ?? undefined,
+        logId: logData?.id,
+      });
+      Alert.alert(
+        "Enviado!",
+        total > 0
+          ? `${sent}/${total} dispositivos notificados (segmento: ${segmento}).`
+          : `Notificação registrada. Nenhum token encontrado para "${segmento}".`
+      );
+    } catch (apiErr: any) {
+      Alert.alert("Parcialmente enviado", `Notificação registrada, mas o envio falhou: ${apiErr?.message ?? "erro desconhecido"}`);
+    }
+
+    setSending(false);
     setTitulo(""); setMensagem(""); setDeepLink("");
     fetchLogs();
   };

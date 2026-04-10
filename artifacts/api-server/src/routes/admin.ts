@@ -316,4 +316,90 @@ router.post("/admin/revoke-admin", async (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
+// Broadcast push notification to a segment of users
+router.post("/admin/broadcast-push", async (req: Request, res: Response) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+
+  const { title, body, segment, deepLink, logId } = req.body as {
+    title?: string;
+    body?: string;
+    segment?: string;
+    deepLink?: string;
+    logId?: string;
+  };
+
+  if (!title || !body) {
+    res.status(400).json({ error: "title and body are required" });
+    return;
+  }
+
+  // Build query for push tokens based on segment
+  let tokenQuery = supabaseAdmin
+    .from("push_tokens")
+    .select("token, user_id, profiles!inner(plan)")
+    .not("token", "is", null);
+
+  // Filter by plan if not "Todos os usuários"
+  const planMap: Record<string, string> = {
+    "Gratuito": "free",
+    "Básico": "basico",
+    "Empresa": "empresa",
+    "Executivo": "executivo",
+    "Profissional": "profissional",
+  };
+  if (segment && segment !== "Todos os usuários" && planMap[segment]) {
+    tokenQuery = tokenQuery.eq("profiles.plan", planMap[segment]);
+  }
+
+  const { data: tokenRows, error: tokenErr } = await tokenQuery;
+  if (tokenErr) {
+    res.status(500).json({ error: "Failed to fetch push tokens: " + tokenErr.message });
+    return;
+  }
+
+  const tokens = (tokenRows ?? []).map((r: any) => r.token as string).filter(Boolean);
+
+  if (tokens.length === 0) {
+    res.json({ success: true, sent: 0, message: "No tokens found for this segment" });
+    return;
+  }
+
+  // Send in batches of 100 via Expo push API
+  const chunks: string[][] = [];
+  for (let i = 0; i < tokens.length; i += 100) {
+    chunks.push(tokens.slice(i, i + 100));
+  }
+
+  let sent = 0;
+  for (const chunk of chunks) {
+    const messages = chunk.map((token) => ({
+      to: token,
+      title,
+      body,
+      sound: "default" as const,
+      data: deepLink ? { deepLink } : {},
+    }));
+    try {
+      const pushRes = await fetch("https://exp.host/--/api/v2/push/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(messages),
+      });
+      if (pushRes.ok) sent += chunk.length;
+    } catch {}
+  }
+
+  // Mark log entry as sent if logId provided
+  if (logId) {
+    await supabaseAdmin
+      .from("push_notification_logs")
+      .update({ sent_at: new Date().toISOString(), recipients_count: sent })
+      .eq("id", logId)
+      .catch(() => {});
+  }
+
+  res.json({ success: true, sent, total: tokens.length });
+});
+
 export default router;
