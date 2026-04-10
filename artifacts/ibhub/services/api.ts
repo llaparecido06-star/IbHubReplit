@@ -1007,37 +1007,31 @@ export async function respondToConnection(
     const userId1 = (connRow as any).requester_id as string;
     const userId2 = (connRow as any).receiver_id as string;
     try {
-      // Find conversation_ids that userId1 participates in, for direct (non-group) convos only
-      const { data: myConvos, error: myConvosErr } = await supabase
+      // Find all conversation_ids where userId1 is a participant
+      const { data: convos1 } = await supabase
         .from("conversation_participants")
-        .select("conversation_id, conversation:conversations!inner(is_group)")
-        .eq("user_id", userId1)
-        .eq("conversation.is_group", false);
-      if (myConvosErr) {
-        console.error("respondToConnection: connection accepted but failed to query direct conversations for unlock", myConvosErr);
-      } else if (myConvos && myConvos.length > 0) {
-        const myConvoIds = (myConvos as any[]).map((c) => c.conversation_id);
-        const { data: shared, error: sharedErr } = await supabase
+        .select("conversation_id")
+        .eq("user_id", userId1);
+      if (convos1 && convos1.length > 0) {
+        const convoIds1 = (convos1 as any[]).map((c) => c.conversation_id);
+        // Find which of those conversations userId2 also participates in
+        const { data: shared } = await supabase
           .from("conversation_participants")
           .select("conversation_id")
           .eq("user_id", userId2)
-          .in("conversation_id", myConvoIds);
-        if (sharedErr) {
-          console.error("respondToConnection: connection accepted but failed to query shared conversations for unlock", sharedErr);
-        } else if (shared && shared.length > 0) {
+          .in("conversation_id", convoIds1);
+        if (shared && shared.length > 0) {
           const sharedConvoIds = (shared as any[]).map((c) => c.conversation_id);
-          const { error: unlockErr } = await supabase
+          // Unlock both participants in those shared conversations
+          await supabase
             .from("conversation_participants")
             .update({ accepted: true })
             .in("conversation_id", sharedConvoIds)
             .in("user_id", [userId1, userId2]);
-          if (unlockErr) {
-            console.error("respondToConnection: connection accepted but failed to unlock conversation participants", unlockErr);
-          }
         }
       }
     } catch (e) {
-      console.error("respondToConnection: connection accepted but conversation unlock threw unexpectedly", e);
+      console.error("respondToConnection: failed to unlock conversation", e);
     }
 
     return true;
@@ -2278,20 +2272,21 @@ export async function getOrCreateDirectConversation(userId1: string, userId2: st
       }
     }
 
-    // Check if recipient (userId2) should receive this as a request:
-    // i.e., userId1 is NOT connected AND NOT followed BY userId2
+    // Check if the two users are connected or follow each other
     const [connCheck, followCheck] = await Promise.all([
       supabase
         .from("connections")
         .select("id", { count: "exact", head: true })
         .or(
-          `and(user1_id.eq.${userId1},user2_id.eq.${userId2}),and(user1_id.eq.${userId2},user2_id.eq.${userId1})`,
-        ),
+          `and(requester_id.eq.${userId1},receiver_id.eq.${userId2}),and(requester_id.eq.${userId2},receiver_id.eq.${userId1})`,
+        )
+        .eq("status", "accepted"),
       supabase
         .from("follows")
         .select("id", { count: "exact", head: true })
-        .eq("follower_id", userId2)
-        .eq("following_id", userId1),
+        .or(
+          `and(follower_id.eq.${userId1},following_id.eq.${userId2}),and(follower_id.eq.${userId2},following_id.eq.${userId1})`,
+        ),
     ]);
     const isKnown = (connCheck.count ?? 0) > 0 || (followCheck.count ?? 0) > 0;
 
