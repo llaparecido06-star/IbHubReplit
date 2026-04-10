@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
@@ -308,6 +309,14 @@ export default function RegisterScreen() {
     } else {
       setLoading(true);
       setLoadingMsg("Criando conta...");
+
+      // Persist invite code before sign-up so AuthContext can apply it
+      // even if email confirmation is required (fires on SIGNED_IN event).
+      if (inviteCode.trim()) {
+        await AsyncStorage.setItem("pending_invite_code", inviteCode.trim().toUpperCase());
+      } else {
+        await AsyncStorage.removeItem("pending_invite_code");
+      }
 
       // 1. Criar conta no Supabase Auth
       const { error: err } = await signUp(email, password, fullName);

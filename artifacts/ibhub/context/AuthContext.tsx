@@ -163,6 +163,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         await fetchProfile(session.user.id);
+
+        // Apply pending referral code (saved by registration screen before sign-up).
+        // Works even when email confirmation is required — fires on first SIGNED_IN.
+        if (event === "SIGNED_IN") {
+          try {
+            const pendingCode = await AsyncStorage.getItem("pending_invite_code");
+            if (pendingCode) {
+              // Only apply if not already linked to an inviter
+              const { data: prof } = await supabase
+                .from("profiles")
+                .select("invited_by_id")
+                .eq("id", session.user.id)
+                .single();
+              if (!prof?.invited_by_id) {
+                const { data: inviter } = await supabase
+                  .from("profiles")
+                  .select("id")
+                  .eq("referral_code", pendingCode.trim().toUpperCase())
+                  .maybeSingle();
+                if (inviter?.id && inviter.id !== session.user.id) {
+                  await supabase
+                    .from("profiles")
+                    .update({ invited_by_id: inviter.id })
+                    .eq("id", session.user.id);
+                }
+              }
+              await AsyncStorage.removeItem("pending_invite_code");
+            }
+          } catch {}
+        }
       } else {
         setProfile(null);
       }
