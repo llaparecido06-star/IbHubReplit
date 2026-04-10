@@ -19,6 +19,7 @@ import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
 import type { AppComment } from "@/services/api";
 import { Post } from "@/components/feed/PostCard";
+import { LikesModal } from "@/components/feed/LikesModal";
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -62,6 +63,7 @@ export default function PostDetailScreen() {
   const [replyTo, setReplyTo] = useState<{ id: string; name: string; commentId: string } | null>(null);
   const [loadingPost, setLoadingPost] = useState(true);
   const [sendingComment, setSendingComment] = useState(false);
+  const [showLikesModal, setShowLikesModal] = useState(false);
 
   const inputRef = useRef<TextInput>(null);
   const listRef = useRef<FlatList>(null);
@@ -205,24 +207,38 @@ export default function PostDetailScreen() {
     setSendingComment(false);
   };
 
-  const handleLikeComment = async (commentId: string, isReply: boolean, parentId?: string) => {
+  const handleLikeComment = async (commentId: string, isReply: boolean, parentId?: string, isCurrentlyLiked?: boolean) => {
     if (!user?.id) return;
+    const wasLiked = isCurrentlyLiked ?? false;
 
-    const toggleInList = (list: AppComment[]): AppComment[] =>
+    const applyToggle = (list: AppComment[]): AppComment[] =>
       list.map(c => {
         if (c.id !== commentId) return c;
-        const wasLiked = c.is_liked ?? false;
         return { ...c, is_liked: !wasLiked, likes_count: (c.likes_count ?? 0) + (wasLiked ? -1 : 1) };
       });
 
+    // Optimistic update
     if (isReply && parentId) {
       setComments(prev => prev.map(c =>
-        c.id === parentId ? { ...c, replies: toggleInList(c.replies ?? []) } : c
+        c.id === parentId ? { ...c, replies: applyToggle(c.replies ?? []) } : c
       ));
     } else {
-      setComments(prev => toggleInList(prev));
+      setComments(prev => applyToggle(prev));
     }
-    API.toggleCommentLike(commentId, user.id).catch(() => {});
+
+    const ok = await API.toggleCommentLike(commentId, user.id, wasLiked);
+    if (!ok) {
+      // Revert on failure
+      const revert = (list: AppComment[]): AppComment[] =>
+        list.map(c => c.id !== commentId ? c : { ...c, is_liked: wasLiked, likes_count: (c.likes_count ?? 0) + (wasLiked ? 1 : -1) });
+      if (isReply && parentId) {
+        setComments(prev => prev.map(c =>
+          c.id === parentId ? { ...c, replies: revert(c.replies ?? []) } : c
+        ));
+      } else {
+        setComments(prev => revert(prev));
+      }
+    }
   };
 
   const handleLikePost = async () => {
@@ -291,7 +307,7 @@ export default function PostDetailScreen() {
             {/* Like comment */}
             <TouchableOpacity
               style={styles.commentAction}
-              onPress={() => handleLikeComment(item.id, item.isReply, item.parent_comment_id ?? undefined)}
+              onPress={() => handleLikeComment(item.id, item.isReply, item.parent_comment_id ?? undefined, item.is_liked)}
             >
               <Feather
                 name="heart"
@@ -394,6 +410,18 @@ export default function PostDetailScreen() {
                       {post.likes_count > 0 ? post.likes_count : "Curtir"}
                     </Text>
                   </TouchableOpacity>
+                  {/* Tapping like count shows who liked */}
+                  {post.likes_count > 0 && (
+                    <TouchableOpacity
+                      style={[styles.postAction, styles.likesCountBtn, { backgroundColor: colors.secondary }]}
+                      onPress={() => setShowLikesModal(true)}
+                    >
+                      <Feather name="users" size={13} color={colors.mutedForeground} />
+                      <Text style={[styles.likesCountText, { color: colors.mutedForeground }]}>
+                        Ver curtidas
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                   <TouchableOpacity style={styles.postAction} onPress={() => inputRef.current?.focus()}>
                     <Feather name="message-circle" size={18} color={colors.mutedForeground} />
                     <Text style={[styles.postActionCount, { color: colors.mutedForeground }]}>
@@ -464,6 +492,14 @@ export default function PostDetailScreen() {
           }
         </TouchableOpacity>
       </View>
+
+      {/* Likes modal */}
+      <LikesModal
+        postId={post?.id ?? null}
+        likesCount={post?.likes_count ?? 0}
+        visible={showLikesModal}
+        onClose={() => setShowLikesModal(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -477,9 +513,11 @@ const styles = StyleSheet.create({
   authorName:         { fontSize: 15, fontWeight: "700" },
   authorHeadline:     { fontSize: 12, maxWidth: 220 },
   postContentPreview: { fontSize: 15, lineHeight: 22 },
-  postActions:        { flexDirection: "row", gap: 20, paddingTop: 4 },
+  postActions:        { flexDirection: "row", gap: 12, paddingTop: 4, flexWrap: "wrap", alignItems: "center" },
   postAction:         { flexDirection: "row", alignItems: "center", gap: 5 },
   postActionCount:    { fontSize: 13, fontWeight: "600" },
+  likesCountBtn:      { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 4 },
+  likesCountText:     { fontSize: 12, fontWeight: "600" },
   commentsHeader:     { fontSize: 15, fontWeight: "700", paddingTop: 4 },
   comment:            { flexDirection: "row", paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, gap: 10, alignItems: "flex-start" },
   replyLine:          { position: "absolute", left: 38, top: 0, bottom: 0, width: 1, borderLeftWidth: 1 },

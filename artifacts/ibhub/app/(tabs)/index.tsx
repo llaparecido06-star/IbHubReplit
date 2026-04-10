@@ -26,6 +26,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import { Post, PostCard, ReactionType } from "@/components/feed/PostCard";
+import { LikesModal } from "@/components/feed/LikesModal";
 import { StoryBar } from "@/components/feed/StoryBar";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
@@ -90,6 +91,9 @@ export default function FeedScreen() {
 
   // Notification badge
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+
+  // Likes modal
+  const [likesModalPost, setLikesModalPost] = useState<{ id: string; count: number } | null>(null);
 
   // Modals
   const [showCreateMenu, setShowCreateMenu]         = useState(false);
@@ -711,6 +715,10 @@ export default function FeedScreen() {
               setPosts(prev => prev.map(p => p.id === id ? { ...p, is_bookmarked: !p.is_bookmarked } : p));
               API.toggleBookmark(id, user.id, post.is_bookmarked ?? false);
             }}
+            onViewLikes={(id) => {
+              const post = posts.find(p => p.id === id);
+              if (post) setLikesModalPost({ id, count: post.likes_count });
+            }}
             onComment={(id) => router.push(`/post/${id}` as any)}
             onVote={(id, optionIndex) => {
               if (!user?.id) return;
@@ -1168,6 +1176,14 @@ export default function FeedScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      {/* Likes modal (quem curtiu) */}
+      <LikesModal
+        postId={likesModalPost?.id ?? null}
+        likesCount={likesModalPost?.count ?? 0}
+        visible={!!likesModalPost}
+        onClose={() => setLikesModalPost(null)}
+      />
     </View>
   );
 }

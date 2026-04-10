@@ -1383,24 +1383,77 @@ export async function voteOnPoll(postId: string, userId: string, optionIndex: nu
 
 // ─── COMMENT LIKES ───────────────────────────────────────────────────────────
 
-export async function toggleCommentLike(commentId: string, userId: string): Promise<boolean> {
+export async function toggleCommentLike(commentId: string, userId: string, isCurrentlyLiked: boolean): Promise<boolean> {
   try {
-    const { data: existing } = await supabase
-      .from("comment_likes")
-      .select("id")
-      .match({ comment_id: commentId, user_id: userId })
-      .maybeSingle();
-
-    if (existing) {
+    if (isCurrentlyLiked) {
       await supabase.from("comment_likes").delete().match({ comment_id: commentId, user_id: userId });
-      return false; // now unliked
+      return false;
     } else {
-      await supabase.from("comment_likes").insert({ comment_id: commentId, user_id: userId });
-      return true; // now liked
+      const { error } = await supabase
+        .from("comment_likes")
+        .upsert({ comment_id: commentId, user_id: userId }, { onConflict: "comment_id,user_id", ignoreDuplicates: true });
+      if (error) { console.error("toggleCommentLike:", JSON.stringify(error)); return false; }
+      return true;
     }
   } catch (e) {
     console.error("toggleCommentLike:", e);
     return false;
+  }
+}
+
+export interface LikeUser {
+  id: string;
+  full_name: string;
+  avatar_url?: string | null;
+  headline?: string | null;
+  company_page_id?: string | null;
+  company_name?: string | null;
+  company_avatar?: string | null;
+}
+
+export async function fetchPostLikes(postId: string): Promise<LikeUser[]> {
+  try {
+    const { data, error } = await supabase
+      .from("likes")
+      .select("user_id, company_page_id")
+      .eq("post_id", postId)
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    if (error || !data) return [];
+
+    const userIds = [...new Set((data as any[]).map(l => l.user_id).filter(Boolean))];
+    const companyIds = [...new Set((data as any[]).map(l => l.company_page_id).filter(Boolean))];
+
+    const [profileMap, companyMap] = await Promise.all([
+      fetchProfilesForIds(userIds),
+      fetchCompanyPagesForIds(companyIds),
+    ]);
+
+    return (data as any[]).map(l => {
+      if (l.company_page_id) {
+        const c = companyMap.get(l.company_page_id);
+        const p = profileMap.get(l.user_id);
+        return {
+          id: l.user_id,
+          full_name: c?.name ?? p?.full_name ?? "Empresa",
+          avatar_url: c?.avatar_url ?? null,
+          headline: c?.industry ?? null,
+          company_page_id: l.company_page_id,
+        } as LikeUser;
+      }
+      const p = profileMap.get(l.user_id);
+      return {
+        id: l.user_id,
+        full_name: p?.full_name ?? "Usuário",
+        avatar_url: p?.avatar_url ?? null,
+        headline: p?.headline ?? null,
+        company_page_id: null,
+      } as LikeUser;
+    });
+  } catch (e) {
+    console.error("fetchPostLikes:", e);
+    return [];
   }
 }
 

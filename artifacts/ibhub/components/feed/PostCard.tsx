@@ -183,6 +183,7 @@ interface PostCardProps {
   onBookmark?: (postId: string) => void;
   onComment?: (postId: string) => void;
   onVote?: (postId: string, optionIndex: number) => void;
+  onViewLikes?: (postId: string) => void;
 }
 
 function timeAgo(dateStr: string): string {
@@ -307,7 +308,7 @@ function ReactionPicker({
   );
 }
 
-export function PostCard({ post, currentUserId, isVisible = false, onLike, onReact, onBookmark, onComment, onVote, onHide, onBlock }: PostCardProps) {
+export function PostCard({ post, currentUserId, isVisible = false, onLike, onReact, onBookmark, onComment, onVote, onHide, onBlock, onViewLikes }: PostCardProps) {
   const colors = useColors();
   const router = useRouter();
   const { user } = useAuth();
@@ -654,7 +655,12 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
       {(post.likes_count > 0 || post.comments_count > 0 || post.shares_count > 0 || (post.view_count ?? 0) > 0) && (
         <View style={[styles.statsRow, { borderTopColor: colors.border }]}>
           {post.likes_count > 0 && (
-            <View style={styles.statItem}>
+            <TouchableOpacity
+              style={styles.statItem}
+              onPress={() => onViewLikes?.(post.id)}
+              activeOpacity={onViewLikes ? 0.6 : 1}
+              disabled={!onViewLikes}
+            >
               <View style={[styles.statIcon, { backgroundColor: "#e74c3c" }]}>
                 {reactionInfo
                   ? <Text style={{ fontSize: 9 }}>{reactionInfo.emoji}</Text>
@@ -664,7 +670,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
               <Text style={[styles.statText, { color: colors.mutedForeground }]}>
                 {fmtCount(post.likes_count)}
               </Text>
-            </View>
+            </TouchableOpacity>
           )}
           <View style={{ flex: 1 }} />
           {(post.view_count ?? 0) > 0 && (
