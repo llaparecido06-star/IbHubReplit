@@ -25,7 +25,7 @@ import { AntDesign, Feather, MaterialCommunityIcons } from "@/components/ui/Icon
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { createReport, hidePost, blockUser, fetchConversations, sendMessage } from "@/services/api";
+import { createReport, hidePost, blockUser, fetchConversations, sendMessage, checkIsFollowing, toggleFollow } from "@/services/api";
 import type { AppConversation } from "@/services/api";
 
 export type ReactionType = "saude" | "bravo" | "destaque" | "incrivel";
@@ -322,8 +322,30 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
   const [conversations, setConversations]       = useState<AppConversation[]>([]);
   const [loadingConvos, setLoadingConvos]       = useState(false);
   const [sendingToConvo, setSendingToConvo]     = useState<string | null>(null);
+  const [isFollowing, setIsFollowing]           = useState<boolean | null>(null);
   // Track the last reaction used so tap can toggle it back on after removal
   const lastUsedReaction = useRef<ReactionType>("saude");
+
+  const isUserPost = !post.company_page_id && !!post.author?.id && post.author.id !== currentUserId;
+
+  useEffect(() => {
+    if (!isUserPost || !currentUserId || !post.author?.id) return;
+    let cancelled = false;
+    checkIsFollowing(post.author.id, currentUserId).then((following) => {
+      if (!cancelled) setIsFollowing(following);
+    });
+    return () => { cancelled = true; };
+  }, [post.author?.id, currentUserId, isUserPost]);
+
+  const handleFollow = async () => {
+    if (!currentUserId || !post.author?.id || isFollowing) return;
+    setIsFollowing(true);
+    try {
+      await toggleFollow(post.author.id, currentUserId, false);
+    } catch {
+      setIsFollowing(false);
+    }
+  };
 
   const likeScale = useRef(new Animated.Value(1)).current;
 
@@ -522,10 +544,10 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
         </Pressable>
 
         <View style={styles.headerActions}>
-          {!companyPage && author?.id && author.id !== currentUserId && (
+          {isUserPost && isFollowing === false && (
             <TouchableOpacity
               style={[styles.followBtn, { borderColor: colors.gold }]}
-              onPress={() => router.push(`/profile/${author.id}` as any)}
+              onPress={handleFollow}
             >
               <Text style={[styles.followBtnText, { color: colors.gold }]}>+ Seguir</Text>
             </TouchableOpacity>
