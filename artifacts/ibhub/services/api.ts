@@ -1021,6 +1021,69 @@ export async function fetchConnectedUsers(userId: string): Promise<ConnectionPro
   } catch (e) { console.error("fetchConnectedUsers:", e); return []; }
 }
 
+export interface UserListItem {
+  id: string;
+  full_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+}
+
+export async function fetchUserListForModal(
+  userId: string,
+  type: "followers" | "following" | "connections",
+  limit = 50,
+): Promise<UserListItem[]> {
+  try {
+    if (type === "followers") {
+      const { data, error } = await supabase
+        .from("follows")
+        .select("follower_id")
+        .eq("following_id", userId)
+        .limit(limit);
+      if (error || !data || data.length === 0) return [];
+      const ids = (data as any[]).map(r => r.follower_id).filter(Boolean);
+      const profileMap = await fetchProfilesForIds(ids);
+      return ids.map(id => {
+        const p = profileMap.get(id);
+        return p ? { id, full_name: p.full_name ?? null, username: p.username ?? null, avatar_url: p.avatar_url ?? null } : null;
+      }).filter(Boolean) as UserListItem[];
+    }
+    if (type === "following") {
+      const { data, error } = await supabase
+        .from("follows")
+        .select("following_id")
+        .eq("follower_id", userId)
+        .limit(limit);
+      if (error || !data || data.length === 0) return [];
+      const ids = (data as any[]).map(r => r.following_id).filter(Boolean);
+      const profileMap = await fetchProfilesForIds(ids);
+      return ids.map(id => {
+        const p = profileMap.get(id);
+        return p ? { id, full_name: p.full_name ?? null, username: p.username ?? null, avatar_url: p.avatar_url ?? null } : null;
+      }).filter(Boolean) as UserListItem[];
+    }
+    // connections
+    const [sent, received] = await Promise.all([
+      supabase.from("connections").select("receiver_id").eq("requester_id", userId).eq("status", "accepted").limit(limit),
+      supabase.from("connections").select("requester_id").eq("receiver_id", userId).eq("status", "accepted").limit(limit),
+    ]);
+    const allIds = [
+      ...(sent.data ?? []).map((r: any) => r.receiver_id),
+      ...(received.data ?? []).map((r: any) => r.requester_id),
+    ].filter(Boolean);
+    const uniqueIds = [...new Set(allIds)];
+    if (uniqueIds.length === 0) return [];
+    const profileMap = await fetchProfilesForIds(uniqueIds);
+    return uniqueIds.map(id => {
+      const p = profileMap.get(id);
+      return p ? { id, full_name: p.full_name ?? null, username: p.username ?? null, avatar_url: p.avatar_url ?? null } : null;
+    }).filter(Boolean) as UserListItem[];
+  } catch (e) {
+    console.error("fetchUserListForModal:", e);
+    return [];
+  }
+}
+
 export async function fetchBookmarkedPosts(userId: string): Promise<Post[]> {
   try {
     const { data: bookmarks, error } = await supabase

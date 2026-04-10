@@ -1,5 +1,5 @@
 import { useRouter, useFocusEffect } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -40,7 +40,6 @@ import {
   addComment,
   deletePost,
   toggleFollow,
-  checkIsFollowing,
   fetchProfileViewsThisWeek,
   ensureReferralCode,
   fetchMyReferralStats,
@@ -48,8 +47,9 @@ import {
 } from "@/services/api";
 import { Post } from "@/components/feed/PostCard";
 import EmpresaDashboard from "@/components/EmpresaDashboard";
+import { UserListModal, UserListType } from "@/components/profile/UserListModal";
 
-type StatModal = "seguidores" | "seguindo" | null;
+type StatModal = UserListType | null;
 
 // ── Company Profile Proxy ─────────────────────────────────────────────────────
 // Rendered in the profile tab when a company identity is active.
@@ -183,8 +183,6 @@ export default function ProfileScreen() {
   const [loadingData,    setLoadingData]    = useState(true);
   const [refreshing,     setRefreshing]     = useState(false);
 
-  const [followingSet,   setFollowingSet]   = useState<Set<string>>(new Set());
-  const [togglingFollow, setTogglingFollow] = useState<string | null>(null);
 
   // Engagement state
   const [profileViews,  setProfileViews]  = useState(0);
@@ -229,7 +227,6 @@ export default function ProfileScreen() {
     setFollowers(fr);
     setFollowing(fg);
     setSuggestions(sg);
-    setFollowingSet(new Set(fg.map((f) => f.id)));
     setLoadingData(false);
     setRefreshing(false);
   }, [user?.id, isCompany, refreshCompanyPages]);
@@ -370,19 +367,6 @@ export default function ProfileScreen() {
     setConnectingId(null);
   };
 
-  const handleToggleFollowModal = async (targetId: string) => {
-    if (!user?.id || togglingFollow) return;
-    setTogglingFollow(targetId);
-    const isCurrentlyFollowing = followingSet.has(targetId);
-    await toggleFollow(targetId, user.id, isCurrentlyFollowing);
-    setFollowingSet((prev) => {
-      const next = new Set(prev);
-      if (isCurrentlyFollowing) { next.delete(targetId); } else { next.add(targetId); }
-      return next;
-    });
-    setTogglingFollow(null);
-  };
-
   const handleLikePost = async (post: Post) => {
     if (!user?.id) return;
     const wasLiked = post.is_liked ?? false;
@@ -506,8 +490,8 @@ export default function ProfileScreen() {
         <View style={[styles.statsRow, { borderColor: colors.border }]}>
           {[
             { label: "Publicações", value: posts.length,                             onPress: undefined },
-            { label: "Seguidores",  value: profile?.followers_count  ?? followers.length,  onPress: () => setStatModal("seguidores") },
-            { label: "Seguindo",    value: profile?.following_count  ?? following.length,  onPress: () => setStatModal("seguindo") },
+            { label: "Seguidores",  value: profile?.followers_count  ?? followers.length,  onPress: () => setStatModal("followers") },
+            { label: "Seguindo",    value: profile?.following_count  ?? following.length,  onPress: () => setStatModal("following") },
             { label: "Conexões",    value: profile?.connections_count ?? 0,            onPress: () => router.push("/conexoes" as any) },
           ].map((s, i, arr) => (
             <React.Fragment key={s.label}>
@@ -1014,70 +998,12 @@ export default function ProfileScreen() {
         </Pressable>
       </Modal>
 
-      {/* ── Seguidores / Seguindo modal ── */}
-      <Modal visible={statModal !== null} transparent animationType="slide" onRequestClose={() => setStatModal(null)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setStatModal(null)}>
-          <View style={[styles.statSheet, { backgroundColor: "#fff" }]}>
-            <View style={styles.statSheetHeader}>
-              <Text style={[styles.statSheetTitle, { color: colors.navy }]}>
-                {statModal === "seguidores" ? "Seguidores" : "Seguindo"}
-              </Text>
-              <TouchableOpacity onPress={() => setStatModal(null)}>
-                <Feather name="x" size={20} color={colors.navy} />
-              </TouchableOpacity>
-            </View>
-            {(statModal === "seguidores" ? followers : following).length === 0 ? (
-              <Text style={[styles.commentsEmpty, { color: colors.mutedForeground, padding: 20 }]}>
-                {statModal === "seguidores" ? "Nenhum seguidor ainda." : "Não está seguindo ninguém ainda."}
-              </Text>
-            ) : (
-              (statModal === "seguidores" ? followers : following).map((person) => {
-                const isYou = person.id === user?.id;
-                const isFollowing = followingSet.has(person.id);
-                const isToggling  = togglingFollow === person.id;
-                return (
-                <View
-                  key={person.id}
-                  style={[styles.statPersonRow, { borderBottomColor: colors.border }]}
-                >
-                  <TouchableOpacity
-                    style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}
-                    onPress={() => { setStatModal(null); router.push(`/profile/${person.id}` as any); }}
-                  >
-                    <Avatar uri={person.avatar_url} name={person.full_name ?? person.username ?? "?"} size={40} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.statPersonName, { color: colors.navy }]}>
-                        {person.full_name ?? person.username ?? "Usuário"}
-                      </Text>
-                      {person.position || person.company ? (
-                        <Text style={[styles.statPersonRole, { color: colors.mutedForeground }]}>
-                          {[person.position, person.company].filter(Boolean).join(" · ")}
-                        </Text>
-                      ) : null}
-                    </View>
-                  </TouchableOpacity>
-                  {!isYou && (
-                    <TouchableOpacity
-                      style={[
-                        styles.statFollowBtn,
-                        { backgroundColor: isFollowing ? colors.border : colors.gold },
-                        isToggling && { opacity: 0.6 },
-                      ]}
-                      onPress={() => handleToggleFollowModal(person.id)}
-                      disabled={!!togglingFollow}
-                    >
-                      <Text style={[styles.statFollowBtnText, { color: isFollowing ? colors.navy : "#fff" }]}>
-                        {isToggling ? "..." : isFollowing ? "Seguindo" : "Seguir"}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-                );
-              })
-            )}
-          </View>
-        </Pressable>
-      </Modal>
+      <UserListModal
+        visible={statModal !== null}
+        type={statModal}
+        userId={user?.id ?? null}
+        onClose={() => setStatModal(null)}
+      />
     </ScrollView>
     </>
   );
@@ -1203,12 +1129,4 @@ const styles = StyleSheet.create({
   menuItem:           { flexDirection: "row", alignItems: "center", gap: 12, padding: 16 },
   menuItemText:       { fontSize: 15, fontWeight: "500" },
   menuDiv:            { height: 1 },
-  statSheet:          { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: "70%" },
-  statSheetHeader:    { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  statSheetTitle:     { fontSize: 17, fontWeight: "700" },
-  statPersonRow:      { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderBottomWidth: 1 },
-  statPersonName:     { fontSize: 14, fontWeight: "600" },
-  statPersonRole:     { fontSize: 12, marginTop: 2 },
-  statFollowBtn:      { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, minWidth: 72, alignItems: "center" },
-  statFollowBtnText:  { fontSize: 12, fontWeight: "700" },
 });

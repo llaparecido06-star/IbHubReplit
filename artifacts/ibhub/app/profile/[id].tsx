@@ -20,6 +20,7 @@ import { supabase } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
 import { recordProfileView, fetchMutualConnections } from "@/services/api";
+import { UserListModal, UserListType } from "@/components/profile/UserListModal";
 
 const COVER_HEIGHT = 130;
 const AVATAR_SIZE  = 86;
@@ -50,6 +51,7 @@ export default function PublicProfileScreen() {
   const [tab, setTab]                 = useState<"posts"|"adega">("posts");
   const [mutuals, setMutuals]         = useState<{ id: string; full_name: string; avatar_url: string | null }[]>([]);
   const [resolvedId, setResolvedId]   = useState<string>(id ?? "");
+  const [userListModal, setUserListModal] = useState<UserListType | null>(null);
 
   const topPad   = insets.top;
   const navyBg   = (colors as any).navyLight ?? colors.navy;
@@ -278,15 +280,19 @@ export default function PublicProfileScreen() {
           {/* Stats */}
           <View style={[styles.statsRow, { borderColor: colors.border }]}>
             {[
-              { n: userProfile.connections_count, l: "Conexões" },
-              { n: userProfile.followers_count,   l: "Seguidores" },
-              { n: userProfile.following_count,   l: "Seguindo" },
+              { n: userProfile.connections_count, l: "Conexões",  type: "connections" as UserListType },
+              { n: userProfile.followers_count,   l: "Seguidores", type: "followers" as UserListType },
+              { n: userProfile.following_count,   l: "Seguindo",   type: "following" as UserListType },
             ].map((s, i, arr) => (
               <React.Fragment key={s.l}>
-                <View style={styles.stat}>
+                <TouchableOpacity
+                  style={styles.stat}
+                  onPress={() => setUserListModal(s.type)}
+                  activeOpacity={0.7}
+                >
                   <Text style={[styles.statNum, { color: colors.foreground }]}>{fmtN(s.n)}</Text>
                   <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>{s.l}</Text>
-                </View>
+                </TouchableOpacity>
                 {i < arr.length - 1 && <View style={[styles.statDiv, { backgroundColor: colors.border }]} />}
               </React.Fragment>
             ))}
@@ -456,6 +462,13 @@ export default function PublicProfileScreen() {
           </View>
         )}
       </ScrollView>
+
+      <UserListModal
+        visible={userListModal !== null}
+        type={userListModal}
+        userId={resolvedId || null}
+        onClose={() => setUserListModal(null)}
+      />
     </View>
   );
 }
