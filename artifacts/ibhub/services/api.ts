@@ -686,7 +686,7 @@ export async function fetchUserPosts(targetUserId: string, currentUserId: string
     const [profileMap, companyMap, likedRes, bookmarkRes] = await Promise.all([
       fetchProfilesForIds([targetUserId]),
       fetchCompanyPagesForIds(companyIds),
-      supabase.from("likes").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
+      supabase.from("likes").select("post_id").eq("user_id", currentUserId).is("company_page_id", null).in("post_id", postIds),
       supabase.from("bookmarks").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
     ]);
     const likedIds = new Set((likedRes.data ?? []).map((l: any) => l.post_id));
@@ -3612,7 +3612,7 @@ export async function checkUsernameAvailable(username: string, currentUserId: st
 
 // ─── COMPANY POSTS ────────────────────────────────────────────────────────────
 
-export async function fetchCompanyPosts(companyId: string, currentUserId?: string): Promise<Post[]> {
+export async function fetchCompanyPosts(companyId: string, currentUserId?: string, activeCompanyId?: string | null): Promise<Post[]> {
   try {
     const { data: pageData } = await supabase
       .from("company_pages")
@@ -3638,12 +3638,17 @@ export async function fetchCompanyPosts(companyId: string, currentUserId?: strin
     const postCompanyIds = [...new Set(posts.map((p: any) => p.company_page_id).filter(Boolean))];
     const postIds = posts.map((p: any) => p.id);
 
+    // Check likes using active identity (company or personal)
+    const likedQuery = activeCompanyId
+      ? supabase.from("likes").select("post_id").eq("company_page_id", activeCompanyId).in("post_id", postIds)
+      : currentUserId
+        ? supabase.from("likes").select("post_id").eq("user_id", currentUserId).is("company_page_id", null).in("post_id", postIds)
+        : Promise.resolve({ data: [] });
+
     const [profileMap, companyMap, likedRes, bookmarkRes] = await Promise.all([
       fetchProfilesForIds(postUserIds),
       fetchCompanyPagesForIds(postCompanyIds),
-      currentUserId
-        ? supabase.from("likes").select("post_id").eq("user_id", currentUserId).in("post_id", postIds)
-        : Promise.resolve({ data: [] }),
+      likedQuery,
       currentUserId
         ? supabase.from("bookmarks").select("post_id").eq("user_id", currentUserId).in("post_id", postIds)
         : Promise.resolve({ data: [] }),

@@ -99,7 +99,7 @@ export default function EmpresaScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, activeCompany } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [companyPage, setCompanyPage] = useState<CompanyPage | null>(null);
@@ -163,11 +163,11 @@ export default function EmpresaScreen() {
   const loadPosts = useCallback(async () => {
     if (!id || postsLoaded) return;
     setPostsLoading(true);
-    const data = await fetchCompanyPosts(id, user?.id);
+    const data = await fetchCompanyPosts(id, user?.id, activeCompany?.id ?? null);
     setPosts(data);
     setPostsLoaded(true);
     setPostsLoading(false);
-  }, [id, user?.id, postsLoaded]);
+  }, [id, user?.id, activeCompany?.id, postsLoaded]);
 
   const loadProducts = useCallback(async () => {
     if (!id || productsLoaded) return;

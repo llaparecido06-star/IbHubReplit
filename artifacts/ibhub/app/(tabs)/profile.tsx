@@ -31,6 +31,7 @@ import {
   fetchFollowing,
   fetchUserCompanyPages,
   fetchUserPosts,
+  fetchCompanyPosts,
   fetchBookmarkedPosts,
   fetchWineCellar,
   sendConnectionRequest,
@@ -62,14 +63,14 @@ function EmpresaProfileProxy({
   topPad: number;
   bottomPad: number;
 }) {
-  const { activeCompany, setActiveCompany } = useAuth();
+  const { activeCompany, setActiveCompany, user: authUser } = useAuth();
   const [company, setCompany]     = React.useState<CompanyPage | null>(null);
   const [loading, setLoading]     = React.useState(true);
   const [postCount, setPostCount] = React.useState(0);
 
   React.useEffect(() => {
     fetchCompanyPageById(companyId).then(c => { setCompany(c); setLoading(false); });
-    fetchUserPosts(companyId, companyId).then(p => setPostCount(p.length)).catch(() => {});
+    fetchCompanyPosts(companyId, authUser?.id, activeCompany?.id ?? null).then(p => setPostCount(p.length)).catch(() => {});
   }, [companyId]);
 
   if (loading) {
