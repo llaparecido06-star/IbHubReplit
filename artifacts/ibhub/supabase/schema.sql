@@ -84,6 +84,31 @@ alter table public.posts add column if not exists video_url text;
 -- create policy "post_videos_insert" on storage.objects for insert with check (bucket_id = 'post-videos' and auth.uid()::text = (storage.foldername(name))[1]);
 -- create policy "post_videos_delete" on storage.objects for delete using (bucket_id = 'post-videos' and auth.uid()::text = (storage.foldername(name))[1]);
 
+-- ─── STORAGE: stories bucket ──────────────────────────────────────────────────
+-- Run once (migration_v34): bucket already created via API
+-- Storage policies (run in SQL Editor or via migrations_v34_storage_rls.sql):
+-- drop policy if exists "stories_select" on storage.objects;
+-- drop policy if exists "stories_insert" on storage.objects;
+-- drop policy if exists "stories_update" on storage.objects;
+-- drop policy if exists "stories_delete" on storage.objects;
+-- create policy "stories_select" on storage.objects for select using (bucket_id = 'stories');
+-- create policy "stories_insert" on storage.objects for insert with check (bucket_id = 'stories' and auth.uid()::text = (storage.foldername(name))[1]);
+-- create policy "stories_update" on storage.objects for update using (bucket_id = 'stories' and auth.uid()::text = (storage.foldername(name))[1]);
+-- create policy "stories_delete" on storage.objects for delete using (bucket_id = 'stories' and auth.uid()::text = (storage.foldername(name))[1]);
+
+-- ─── STORAGE: cvs bucket ──────────────────────────────────────────────────────
+-- Run once (migration_v34): bucket already created via API
+-- Upload path: cvs/{userId}/{filename} → foldername(name)[2] = userId
+-- Storage policies (run in SQL Editor or via migrations_v34_storage_rls.sql):
+-- drop policy if exists "cvs_select" on storage.objects;
+-- drop policy if exists "cvs_insert" on storage.objects;
+-- drop policy if exists "cvs_update" on storage.objects;
+-- drop policy if exists "cvs_delete" on storage.objects;
+-- create policy "cvs_select" on storage.objects for select using (bucket_id = 'cvs');
+-- create policy "cvs_insert" on storage.objects for insert with check (bucket_id = 'cvs' and auth.uid()::text = (storage.foldername(name))[2]);
+-- create policy "cvs_update" on storage.objects for update using (bucket_id = 'cvs' and auth.uid()::text = (storage.foldername(name))[2]);
+-- create policy "cvs_delete" on storage.objects for delete using (bucket_id = 'cvs' and auth.uid()::text = (storage.foldername(name))[2]);
+
 -- ─── LIKES ───────────────────────────────────────────────────────────────────
 create table if not exists public.likes (
   id         uuid primary key default gen_random_uuid(),
