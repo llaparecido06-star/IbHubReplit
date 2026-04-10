@@ -268,6 +268,14 @@ export default function ManageBusinessPageScreen() {
 
   const isCreateMode = !pageId;
 
+  const tabList: Array<{ key: Tab; label: string; icon: string }> = isOwner
+    ? [
+        { key: "preview", label: "Preview", icon: "eye" },
+        { key: "editar", label: "Editar", icon: "edit-2" },
+        { key: "equipe", label: "Equipe", icon: "users" },
+      ]
+    : [{ key: "preview", label: "Preview", icon: "eye" }];
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
@@ -283,19 +291,13 @@ export default function ManageBusinessPageScreen() {
       {/* Tabs — only shown when editing an existing page */}
       {!isCreateMode && (
         <View style={[styles.tabBar, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
-          {(isOwner
-            ? [ { key: "preview", label: "Preview", icon: "eye" },
-                { key: "editar",  label: "Editar",  icon: "edit-2" },
-                { key: "equipe",  label: "Equipe",  icon: "users" },
-              ]
-            : [ { key: "preview", label: "Preview", icon: "eye" } ]
-          as { key: Tab; label: string; icon: any }[]).map(t => (
+          {tabList.map(t => (
             <TouchableOpacity
               key={t.key}
               style={[styles.tabItem, activeTab === t.key && { borderBottomColor: colors.gold, borderBottomWidth: 2 }]}
               onPress={() => setActiveTab(t.key)}
             >
-              <Feather name={t.icon} size={14} color={activeTab === t.key ? colors.gold : colors.mutedForeground} />
+              <Feather name={t.icon as any} size={14} color={activeTab === t.key ? colors.gold : colors.mutedForeground} />
               <Text style={[styles.tabLabel, { color: activeTab === t.key ? colors.gold : colors.mutedForeground }]}>
                 {t.label}
               </Text>

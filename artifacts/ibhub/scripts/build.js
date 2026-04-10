@@ -160,7 +160,11 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
       stdio: ["ignore", "pipe", "pipe"],
       detached: false,
       cwd: projectRoot,
-      env,
+      env: {
+        ...env,
+        // Increase Node.js heap size to prevent Metro OOM during large bundle builds
+        NODE_OPTIONS: `${env.NODE_OPTIONS ?? ""} --max-old-space-size=4096`.trim(),
+      },
     },
   );
 

@@ -6,7 +6,15 @@ const projectRoot = __dirname;
 
 const config = getDefaultConfig(projectRoot);
 
-config.watchFolders = [workspaceRoot];
+// Watch only the directories ibhub actually needs from the workspace:
+// - node_modules: for shared dependency resolution
+// - lib: for @workspace/* shared packages (e.g. api-client-react)
+// Avoid watching the entire workspaceRoot — it includes .local/skills
+// temp directories that may not exist and crash the Metro file watcher.
+config.watchFolders = [
+  path.resolve(workspaceRoot, "node_modules"),
+  path.resolve(workspaceRoot, "lib"),
+];
 
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, "node_modules"),
