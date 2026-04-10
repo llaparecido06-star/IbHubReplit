@@ -1758,6 +1758,7 @@ export async function fetchConversations(userId: string): Promise<AppConversatio
       .select(`
         conversation_id,
         accepted,
+        last_read_at,
         conversation:conversations(id, is_group, name, created_at)
       `)
       .eq("user_id", userId);
@@ -1768,6 +1769,17 @@ export async function fetchConversations(userId: string): Promise<AppConversatio
     for (const row of data as any[]) {
       const convo = row.conversation;
       if (!convo) continue;
+
+      let unreadQuery = supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .eq("conversation_id", convo.id)
+        .neq("sender_id", userId)
+        .is("read_at", null);
+
+      if (row.last_read_at) {
+        unreadQuery = unreadQuery.gt("created_at", row.last_read_at);
+      }
 
       const [othersRes, lastMsgRes, unreadRes] = await Promise.all([
         supabase
@@ -1783,11 +1795,7 @@ export async function fetchConversations(userId: string): Promise<AppConversatio
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle(),
-        supabase
-          .from("messages")
-          .select("id", { count: "exact", head: true })
-          .eq("conversation_id", convo.id)
-          .neq("sender_id", userId),
+        unreadQuery,
       ]);
 
       const other = othersRes.data?.[0];

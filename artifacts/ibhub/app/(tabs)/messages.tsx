@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -16,9 +16,22 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
 import type { AppConversation } from "@/services/api";
+
+type RealtimeMessagePayload = {
+  new: {
+    id: string;
+    conversation_id: string;
+    sender_id: string;
+    content: string | null;
+    message_type: string | null;
+    created_at: string;
+    read_at: string | null;
+  };
+};
 
 const FOLLOWUP_KEY = "ibhub_followup_reminders";
 
@@ -64,6 +77,65 @@ export default function MessagesScreen() {
   }, [user?.id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Real-time subscription: update conversation list when new messages arrive
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`messages-list-${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        (payload: RealtimeMessagePayload) => {
+          const newMsg = payload.new;
+          if (!newMsg?.conversation_id) return;
+
+          let needsFullReload = false;
+
+          setConvos((prev) => {
+            const idx = prev.findIndex((c) => c.id === newMsg.conversation_id);
+            if (idx === -1) {
+              needsFullReload = true;
+              return prev;
+            }
+
+            const updated = [...prev];
+            const conv = { ...updated[idx] };
+
+            const msgContent =
+              newMsg.message_type === "image" ? "📷 Foto"
+              : newMsg.message_type === "video" ? "🎬 Vídeo"
+              : newMsg.message_type === "audio" ? "🎤 Áudio"
+              : newMsg.message_type === "file"  ? "📎 Arquivo"
+              : (newMsg.content ?? null);
+
+            conv.last_message = msgContent;
+            conv.last_message_at = newMsg.created_at;
+
+            if (newMsg.sender_id !== user.id) {
+              conv.unread_count = (conv.unread_count ?? 0) + 1;
+            }
+
+            updated.splice(idx, 1);
+            updated.unshift(conv);
+            return updated;
+          });
+
+          if (needsFullReload) load();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, load]);
+
+  // Reload conversations when returning from a chat screen to clear stale unread badges
+  useFocusEffect(useCallback(() => {
+    load();
+  }, [load]));
 
   // Load follow-up reminders from local storage
   useEffect(() => {
