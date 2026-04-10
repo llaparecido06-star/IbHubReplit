@@ -17,6 +17,7 @@ import { Feather } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/context/AuthContext";
+import { useUnread } from "@/context/UnreadContext";
 import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
 import type { AppConversation } from "@/services/api";
@@ -53,6 +54,7 @@ export default function MessagesScreen() {
   const router  = useRouter();
   const { user } = useAuth();
   const insets  = useSafeAreaInsets();
+  const { setUnreadCount } = useUnread();
 
   const [convos,       setConvos]       = useState<AppConversation[]>([]);
   const [loading,      setLoading]      = useState(true);
@@ -77,6 +79,11 @@ export default function MessagesScreen() {
   }, [user?.id]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const total = convos.reduce((acc, c) => acc + (c.unread_count ?? 0), 0);
+    setUnreadCount(total);
+  }, [convos, setUnreadCount]);
 
   // Real-time subscription: update conversation list when new messages arrive
   useEffect(() => {

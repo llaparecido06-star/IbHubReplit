@@ -14,6 +14,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { UnreadProvider } from "@/context/UnreadContext";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -104,7 +105,9 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <AuthProvider>
-            <RootLayoutNav />
+            <UnreadProvider>
+              <RootLayoutNav />
+            </UnreadProvider>
           </AuthProvider>
         </GestureHandlerRootView>
       </QueryClientProvider>

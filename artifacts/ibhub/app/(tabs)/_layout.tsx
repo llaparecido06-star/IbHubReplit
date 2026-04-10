@@ -5,12 +5,14 @@ import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { useUnread } from "@/context/UnreadContext";
 
 export default function TabLayout() {
   const colors    = useColors();
   const { profile } = useAuth();
   const isCompany = profile?.profile_type === "empresa";
   const insets    = useSafeAreaInsets();
+  const { unreadCount } = useUnread();
 
   const tabBarHeight = Platform.select({
     ios:     54 + insets.bottom,
@@ -66,6 +68,8 @@ export default function TabLayout() {
         options={{
           title: "Chat",
           tabBarIcon: ({ color }) => <Feather name="message-circle" size={22} color={color} />,
+          tabBarBadge: unreadCount > 0 ? (unreadCount > 99 ? "99+" : unreadCount) : undefined,
+          tabBarBadgeStyle: { backgroundColor: "#dc2626", fontSize: 10, minWidth: 16, height: 16, lineHeight: 16 },
         }}
       />
       <Tabs.Screen
