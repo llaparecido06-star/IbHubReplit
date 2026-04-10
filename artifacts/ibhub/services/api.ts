@@ -4314,6 +4314,11 @@ export async function fetchMutualConnections(
   }
 }
 
+function deriveReferralCode(userId: string): string {
+  const stripped = userId.replace(/-/g, "").toUpperCase();
+  return "IB" + stripped.substring(0, 8);
+}
+
 export async function ensureReferralCode(userId: string): Promise<string> {
   try {
     const { data: existing } = await supabase
@@ -4322,7 +4327,7 @@ export async function ensureReferralCode(userId: string): Promise<string> {
       .eq("id", userId)
       .single();
     if (existing?.referral_code) return existing.referral_code;
-    const code = "IB" + Math.random().toString(36).substring(2, 8).toUpperCase();
+    const code = deriveReferralCode(userId);
     await supabase.from("profiles").update({ referral_code: code }).eq("id", userId);
     return code;
   } catch (e) {

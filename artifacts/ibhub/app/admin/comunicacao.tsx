@@ -19,6 +19,20 @@ import { useAuth } from "@/context/AuthContext";
 
 const SEGMENTS = ["Todos os usuários", "Gratuito", "Básico", "Empresa", "Executivo", "Profissional"];
 
+interface ReferralTrackingEntry {
+  id: string;
+  full_name: string | null;
+  referral_code: string | null;
+  invite_count: number;
+}
+
+interface ProfileWithInvited {
+  id: string;
+  full_name: string | null;
+  referral_code: string | null;
+  invited: { id: string }[];
+}
+
 interface PushLog {
   id: string;
   created_at: string;
@@ -51,10 +65,42 @@ export default function AdminComunicacaoScreen() {
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [logsError, setLogsError]     = useState<string | null>(null);
 
+  const [tracking, setTracking]               = useState<ReferralTrackingEntry[]>([]);
+  const [loadingTracking, setLoadingTracking] = useState(true);
+
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
   const canSend = titulo.trim().length > 0 && mensagem.trim().length > 0;
+
+  const fetchTracking = async () => {
+    setLoadingTracking(true);
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, full_name, referral_code, invited:profiles!invited_by_id(id)")
+      .not("referral_code", "is", null);
+
+    if (error) {
+      console.error("fetchTracking:", error.message);
+      setLoadingTracking(false);
+      return;
+    }
+
+    if (data) {
+      const rows = data as ProfileWithInvited[];
+      const entries: ReferralTrackingEntry[] = rows
+        .map((p) => ({
+          id: p.id,
+          full_name: p.full_name,
+          referral_code: p.referral_code,
+          invite_count: p.invited.length,
+        }))
+        .filter((e) => e.invite_count > 0)
+        .sort((a, b) => b.invite_count - a.invite_count);
+      setTracking(entries);
+    }
+    setLoadingTracking(false);
+  };
 
   const fetchLogs = async () => {
     setLoadingLogs(true);
@@ -74,6 +120,7 @@ export default function AdminComunicacaoScreen() {
 
   useEffect(() => {
     fetchLogs();
+    fetchTracking();
   }, []);
 
   const handleSend = async () => {
@@ -216,6 +263,50 @@ export default function AdminComunicacaoScreen() {
             )}
           </View>
         </View>
+        {/* ── Rastreamento de Convites ── */}
+        <View style={[styles.trackCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+          <View style={styles.trackHead}>
+            <Feather name="users" size={14} color={colors.gold} />
+            <Text style={[styles.trackTitle, { color: colors.navy }]}>Rastreamento de Convites</Text>
+          </View>
+
+          {loadingTracking ? (
+            <ActivityIndicator size="small" color={colors.gold} style={{ marginTop: 8 }} />
+          ) : tracking.length === 0 ? (
+            <Text style={[styles.trackEmpty, { color: colors.mutedForeground }]}>
+              Nenhum convite registrado ainda.
+            </Text>
+          ) : (
+            <View style={styles.trackTable}>
+              {/* Header row */}
+              <View style={[styles.trackRow, styles.trackHeaderRow, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.trackHeaderCell, { color: colors.mutedForeground, flex: 3 }]}>USUÁRIO</Text>
+                <Text style={[styles.trackHeaderCell, { color: colors.mutedForeground, flex: 2 }]}>CÓDIGO</Text>
+                <Text style={[styles.trackHeaderCell, { color: colors.mutedForeground, flex: 1, textAlign: "right" }]}>CONVIDADOS</Text>
+              </View>
+              {tracking.map((entry, idx) => (
+                <View
+                  key={entry.id}
+                  style={[
+                    styles.trackRow,
+                    { borderBottomColor: colors.border },
+                    idx === tracking.length - 1 && { borderBottomWidth: 0 },
+                  ]}
+                >
+                  <Text style={[styles.trackCell, { color: colors.foreground, flex: 3 }]} numberOfLines={1}>
+                    {entry.full_name ?? "—"}
+                  </Text>
+                  <View style={[styles.codePill, { backgroundColor: colors.gold + "18", flex: 2 }]}>
+                    <Text style={[styles.codeText, { color: colors.gold }]}>{entry.referral_code}</Text>
+                  </View>
+                  <View style={[styles.countWrap, { flex: 1 }]}>
+                    <Text style={[styles.countNum, { color: colors.navy }]}>{entry.invite_count}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
       </ScrollView>
 
       <AdminDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} activeRoute="/admin/comunicacao" />
@@ -249,4 +340,18 @@ const styles = StyleSheet.create({
   logDate:     { fontSize: 10 },
   logTitle:    { fontSize: 12, fontWeight: "600" },
   logSeg:      { fontSize: 10 },
+
+  trackCard:       { borderRadius: 12, borderWidth: 1, padding: 14, gap: 10 },
+  trackHead:       { flexDirection: "row", alignItems: "center", gap: 8 },
+  trackTitle:      { fontSize: 15, fontWeight: "700" },
+  trackEmpty:      { fontSize: 13, lineHeight: 19 },
+  trackTable:      { gap: 0 },
+  trackHeaderRow:  { borderBottomWidth: 1, paddingBottom: 6, marginBottom: 4 },
+  trackRow:        { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8, borderBottomWidth: 1 },
+  trackHeaderCell: { fontSize: 10, fontWeight: "700", letterSpacing: 0.4, textTransform: "uppercase" },
+  trackCell:       { fontSize: 13, fontWeight: "500" },
+  codePill:        { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, alignSelf: "flex-start" },
+  codeText:        { fontSize: 12, fontWeight: "700", letterSpacing: 0.5, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" },
+  countWrap:       { alignItems: "flex-end" },
+  countNum:        { fontSize: 14, fontWeight: "800" },
 });

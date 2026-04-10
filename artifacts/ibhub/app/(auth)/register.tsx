@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@/components/ui/Icon";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/context/AuthContext";
-import { applyReferralCode } from "@/services/api";
+import { applyReferralCode, ensureReferralCode } from "@/services/api";
 
 const TOTAL_STEPS = 3;
 
@@ -354,6 +354,9 @@ export default function RegisterScreen() {
           setError(`Erro ao salvar perfil: ${upsertError.message}`);
           return;
         }
+
+        // Atribuir código de convite determinístico ao novo usuário
+        await ensureReferralCode(currentUser.id);
 
         // Apply invite code if provided
         if (inviteCode.trim()) {
