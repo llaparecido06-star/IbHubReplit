@@ -2333,12 +2333,13 @@ export async function uploadChatMedia(
   mimeType: string,
 ): Promise<string | null> {
   try {
-    const ext  = mimeType.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
+    const safeMime = mimeType || "application/octet-stream";
+    const ext  = safeMime.includes("/") ? safeMime.split("/")[1]?.replace("jpeg", "jpg").replace("quicktime", "mov") ?? "bin" : "bin";
     const path = `chat/${conversationId}/${Date.now()}.${ext}`;
+    // Use blob() instead of arrayBuffer() to avoid OOM on large files
     const resp = await fetch(uri);
-    const arrayBuffer = await resp.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
-    const { error } = await supabase.storage.from("post-images").upload(path, bytes, { contentType: mimeType, upsert: false });
+    const blob = await resp.blob();
+    const { error } = await supabase.storage.from("post-images").upload(path, blob, { contentType: safeMime, upsert: false });
     if (error) { console.error("uploadChatMedia:", error); return null; }
     const { data } = supabase.storage.from("post-images").getPublicUrl(path);
     return data.publicUrl;
