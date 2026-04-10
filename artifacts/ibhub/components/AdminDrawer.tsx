@@ -150,7 +150,7 @@ export default function AdminDrawer({ visible, onClose, activeRoute }: Props) {
         <View style={styles.dFooter}>
           <TouchableOpacity
             style={styles.footerBtn}
-            onPress={() => { onClose(); setTimeout(() => router.back(), 60); }}
+            onPress={() => { onClose(); setTimeout(() => router.replace("/(tabs)"), 60); }}
           >
             <Feather name="smartphone" size={15} color={MUTED} />
             <Text style={styles.footerText}>Voltar ao App</Text>
