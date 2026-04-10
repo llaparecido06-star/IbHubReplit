@@ -204,19 +204,21 @@ export default function SettingsScreen() {
           </View>
         ))}
 
-        {/* Painel Administrativo */}
-        <View style={[styles.menuCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-          <TouchableOpacity style={styles.menuRow} onPress={() => router.push("/admin" as any)}>
-            <View style={[styles.iconWrap, { backgroundColor: colors.background }]}>
-              <Feather name="settings" size={16} color={colors.mutedForeground} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.rowLabel, { color: colors.navy }]}>Painel Administrativo</Text>
-              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>Gerenciar plataforma</Text>
-            </View>
-            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
-          </TouchableOpacity>
-        </View>
+        {/* Painel Administrativo — visível apenas para admins */}
+        {profile?.is_admin && (
+          <View style={[styles.menuCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+            <TouchableOpacity style={styles.menuRow} onPress={() => router.push("/admin" as any)}>
+              <View style={[styles.iconWrap, { backgroundColor: "#c9a84c18" }]}>
+                <Feather name="shield" size={16} color="#c9a84c" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.rowLabel, { color: colors.navy }]}>Painel Administrativo</Text>
+                <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>Gerenciar plataforma</Text>
+              </View>
+              <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Sair da conta */}
         <TouchableOpacity

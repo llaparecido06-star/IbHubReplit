@@ -234,4 +234,86 @@ router.post("/admin/create-admin", async (req: Request, res: Response) => {
   res.json({ success: true, userId: newUserId });
 });
 
+// Search existing users by email or name (for admin promotion)
+router.get("/admin/search-users", async (req: Request, res: Response) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+
+  const query = String(req.query.q ?? "").trim().toLowerCase();
+  if (!query || query.length < 2) {
+    res.json({ users: [] });
+    return;
+  }
+
+  const { data: profiles, error } = await supabaseAdmin
+    .from("profiles")
+    .select("id, full_name, username, avatar_url, is_admin")
+    .or(`full_name.ilike.%${query}%,username.ilike.%${query}%`)
+    .limit(10);
+
+  if (error) { res.status(500).json({ error: error.message }); return; }
+
+  // Enrich with email from auth.users
+  const ids = (profiles ?? []).map((p: any) => p.id);
+  const emailMap = new Map<string, string>();
+  if (ids.length > 0) {
+    const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+    for (const u of authUsers?.users ?? []) emailMap.set(u.id, u.email ?? "");
+  }
+
+  // Try email-based search as well (by looking up auth users)
+  let extraProfile: any | null = null;
+  if (query.includes("@")) {
+    const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+    const matched = authUsers?.users.find((u) => u.email?.toLowerCase().includes(query));
+    if (matched && !ids.includes(matched.id)) {
+      const { data: p } = await supabaseAdmin.from("profiles").select("id, full_name, username, avatar_url, is_admin").eq("id", matched.id).maybeSingle();
+      if (p) extraProfile = { ...p, email: matched.email ?? null };
+    }
+  }
+
+  const result = (profiles ?? []).map((p: any) => ({
+    ...p,
+    email: emailMap.get(p.id) ?? null,
+  }));
+  if (extraProfile) result.push(extraProfile);
+
+  res.json({ users: result });
+});
+
+// Grant admin access to an existing user
+router.post("/admin/grant-admin", async (req: Request, res: Response) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+
+  const { userId } = req.body as { userId?: string };
+  if (!userId) { res.status(400).json({ error: "userId is required" }); return; }
+
+  const { error } = await supabaseAdmin
+    .from("profiles")
+    .update({ is_admin: true })
+    .eq("id", userId);
+
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.json({ success: true });
+});
+
+// Revoke admin access from a user
+router.post("/admin/revoke-admin", async (req: Request, res: Response) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+
+  const { userId } = req.body as { userId?: string };
+  if (!userId) { res.status(400).json({ error: "userId is required" }); return; }
+  if (userId === adminId) { res.status(400).json({ error: "Você não pode revogar o seu próprio acesso." }); return; }
+
+  const { error } = await supabaseAdmin
+    .from("profiles")
+    .update({ is_admin: false })
+    .eq("id", userId);
+
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.json({ success: true });
+});
+
 export default router;
