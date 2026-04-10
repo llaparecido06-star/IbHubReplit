@@ -990,11 +990,57 @@ export async function respondToConnection(
       const { error } = await supabase.from("connections").delete().eq("id", connectionId);
       return !error;
     }
+    const { data: connRow, error: fetchErr } = await supabase
+      .from("connections")
+      .select("requester_id, receiver_id")
+      .eq("id", connectionId)
+      .single();
+    if (fetchErr || !connRow) return false;
+
     const { error } = await supabase
       .from("connections")
       .update({ status: "accepted" })
       .eq("id", connectionId);
-    return !error;
+    if (error) return false;
+
+    // Unlock any existing direct conversations between these two users
+    const userId1 = (connRow as any).requester_id as string;
+    const userId2 = (connRow as any).receiver_id as string;
+    try {
+      // Find conversation_ids that userId1 participates in, for direct (non-group) convos only
+      const { data: myConvos, error: myConvosErr } = await supabase
+        .from("conversation_participants")
+        .select("conversation_id, conversation:conversations!inner(is_group)")
+        .eq("user_id", userId1)
+        .eq("conversation.is_group", false);
+      if (myConvosErr) {
+        console.error("respondToConnection: connection accepted but failed to query direct conversations for unlock", myConvosErr);
+      } else if (myConvos && myConvos.length > 0) {
+        const myConvoIds = (myConvos as any[]).map((c) => c.conversation_id);
+        const { data: shared, error: sharedErr } = await supabase
+          .from("conversation_participants")
+          .select("conversation_id")
+          .eq("user_id", userId2)
+          .in("conversation_id", myConvoIds);
+        if (sharedErr) {
+          console.error("respondToConnection: connection accepted but failed to query shared conversations for unlock", sharedErr);
+        } else if (shared && shared.length > 0) {
+          const sharedConvoIds = (shared as any[]).map((c) => c.conversation_id);
+          const { error: unlockErr } = await supabase
+            .from("conversation_participants")
+            .update({ accepted: true })
+            .in("conversation_id", sharedConvoIds)
+            .in("user_id", [userId1, userId2]);
+          if (unlockErr) {
+            console.error("respondToConnection: connection accepted but failed to unlock conversation participants", unlockErr);
+          }
+        }
+      }
+    } catch (e) {
+      console.error("respondToConnection: connection accepted but conversation unlock threw unexpectedly", e);
+    }
+
+    return true;
   } catch (e) { console.error("respondToConnection:", e); return false; }
 }
 
@@ -1978,6 +2024,29 @@ export async function fetchConversationParticipant(
     const pMap = await fetchCommentProfilesForIds([otherId]);
     return pMap.get(otherId) ?? null;
   } catch { return null; }
+}
+
+export async function fetchConversationAccepted(
+  conversationId: string,
+  userId: string,
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from("conversation_participants")
+      .select("accepted")
+      .eq("conversation_id", conversationId)
+      .eq("user_id", userId)
+      .single();
+    if (error) {
+      console.error("fetchConversationAccepted error:", error);
+      return true;
+    }
+    const accepted = (data as any)?.accepted;
+    return accepted === false ? false : true;
+  } catch (e) {
+    console.error("fetchConversationAccepted threw:", e);
+    return true;
+  }
 }
 
 // ─── REPORTS ─────────────────────────────────────────────────────────────────

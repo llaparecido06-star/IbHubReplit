@@ -132,6 +132,38 @@ export default function MessagesScreen() {
     };
   }, [user?.id, load]);
 
+  // Real-time subscription: move conversation from requests to inbox when accepted status changes
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`conv-participant-accepted-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "conversation_participants",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const updated = payload.new as any;
+          if (updated.accepted === true) {
+            setConvos((prev) =>
+              prev.map((c) =>
+                c.id === updated.conversation_id ? { ...c, accepted: true } : c,
+              ),
+            );
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
   // Reload conversations when returning from a chat screen to clear stale unread badges
   useFocusEffect(useCallback(() => {
     load();

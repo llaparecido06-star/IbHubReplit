@@ -50,23 +50,24 @@ export default function ChatScreen() {
   const { user, profile, activeCompany } = useAuth();
   const insets   = useSafeAreaInsets();
 
-  const [messages,       setMessages]       = useState<AppMessage[]>([]);
-  const [input,          setInput]          = useState("");
-  const [showMenu,       setShowMenu]       = useState(false);
-  const [showAttach,     setShowAttach]     = useState(false);
-  const [showProspect,   setShowProspect]   = useState(false);
-  const [showWines,      setShowWines]      = useState(false);
-  const [showTemplates,  setShowTemplates]  = useState(false);
-  const [showFollowUp,   setShowFollowUp]   = useState(false);
-  const [showReactions,  setShowReactions]  = useState<string | null>(null);
-  const [replyTo,        setReplyTo]        = useState<AppMessage | null>(null);
-  const [sending,        setSending]        = useState(false);
-  const [uploading,      setUploading]      = useState(false);
-  const [loading,        setLoading]        = useState(true);
-  const [isTyping,       setIsTyping]       = useState(false);
-  const [wines,          setWines]          = useState<any[]>([]);
-  const [followUpDays,   setFollowUpDays]   = useState("3");
-  const [participant,    setParticipant]    = useState<{ id: string; full_name: string; avatar_url: string | null } | null>(null);
+  const [messages,              setMessages]              = useState<AppMessage[]>([]);
+  const [input,                 setInput]                 = useState("");
+  const [showMenu,              setShowMenu]              = useState(false);
+  const [showAttach,            setShowAttach]            = useState(false);
+  const [showProspect,          setShowProspect]          = useState(false);
+  const [showWines,             setShowWines]             = useState(false);
+  const [showTemplates,         setShowTemplates]         = useState(false);
+  const [showFollowUp,          setShowFollowUp]          = useState(false);
+  const [showReactions,         setShowReactions]         = useState<string | null>(null);
+  const [replyTo,               setReplyTo]               = useState<AppMessage | null>(null);
+  const [sending,               setSending]               = useState(false);
+  const [uploading,             setUploading]             = useState(false);
+  const [loading,               setLoading]               = useState(true);
+  const [isTyping,              setIsTyping]              = useState(false);
+  const [wines,                 setWines]                 = useState<any[]>([]);
+  const [followUpDays,          setFollowUpDays]          = useState("3");
+  const [participant,           setParticipant]           = useState<{ id: string; full_name: string; avatar_url: string | null } | null>(null);
+  const [isConversationAccepted, setIsConversationAccepted] = useState(true);
 
   const listRef           = useRef<FlatList>(null);
   const typingTimer       = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -76,12 +77,14 @@ export default function ChatScreen() {
 
   const load = useCallback(async () => {
     if (!id || !user?.id) { setLoading(false); return; }
-    const [msgs, part] = await Promise.all([
+    const [msgs, part, accepted] = await Promise.all([
       API.fetchMessages(id, user.id),
       API.fetchConversationParticipant(id, user.id),
+      API.fetchConversationAccepted(id, user.id),
     ]);
     setMessages(msgs);
     setParticipant(part);
+    setIsConversationAccepted(accepted);
     setLoading(false);
     API.markConversationRead(id, user.id);
   }, [id, user?.id]);
@@ -111,6 +114,30 @@ export default function ChatScreen() {
         (payload) => {
           const updated = payload.new as AppMessage;
           setMessages((prev) => prev.map((m) => m.id === updated.id ? { ...m, read_at: updated.read_at } : m));
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [id, user?.id]);
+
+  // Realtime subscription for conversation_participants accepted status
+  useEffect(() => {
+    if (!id || !user?.id) return;
+    const channel = supabase
+      .channel(`conv-participant:${id}:${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "conversation_participants",
+          filter: `conversation_id=eq.${id}`,
+        },
+        (payload) => {
+          const updated = payload.new as any;
+          if (updated.user_id === user.id && updated.accepted === true) {
+            setIsConversationAccepted(true);
+          }
         },
       )
       .subscribe();
@@ -676,35 +703,44 @@ export default function ChatScreen() {
       )}
 
       {/* Input bar */}
-      <View style={[styles.inputBar, { backgroundColor: "#fff", borderTopColor: colors.border, paddingBottom: bottomPad + 12 }]}>
-        <TouchableOpacity style={styles.attachBtn} onPress={() => setShowAttach(true)}>
-          <Feather name="paperclip" size={22} color={colors.mutedForeground} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.attachBtn} onPress={() => setShowProspect(true)}>
-          <Feather name="plus-circle" size={22} color={colors.gold} />
-        </TouchableOpacity>
-        <View style={[styles.inputWrap, { backgroundColor: colors.background }]}>
-          <TextInput
-            style={[styles.input, { color: colors.foreground }]}
-            placeholder="Mensagem..."
-            placeholderTextColor={colors.mutedForeground}
-            value={input}
-            onChangeText={handleInputChange}
-            multiline
-            returnKeyType="send"
-            onSubmitEditing={() => sendMessage()}
-          />
+      {isConversationAccepted ? (
+        <View style={[styles.inputBar, { backgroundColor: "#fff", borderTopColor: colors.border, paddingBottom: bottomPad + 12 }]}>
+          <TouchableOpacity style={styles.attachBtn} onPress={() => setShowAttach(true)}>
+            <Feather name="paperclip" size={22} color={colors.mutedForeground} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.attachBtn} onPress={() => setShowProspect(true)}>
+            <Feather name="plus-circle" size={22} color={colors.gold} />
+          </TouchableOpacity>
+          <View style={[styles.inputWrap, { backgroundColor: colors.background }]}>
+            <TextInput
+              style={[styles.input, { color: colors.foreground }]}
+              placeholder="Mensagem..."
+              placeholderTextColor={colors.mutedForeground}
+              value={input}
+              onChangeText={handleInputChange}
+              multiline
+              returnKeyType="send"
+              onSubmitEditing={() => sendMessage()}
+            />
+          </View>
+          {input.trim() ? (
+            <TouchableOpacity style={[styles.sendBtn, { backgroundColor: colors.gold }]} onPress={() => sendMessage()} disabled={sending}>
+              {sending ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="send" size={18} color="#fff" />}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.micBtn} onPress={handleAudio}>
+              <Feather name="mic" size={22} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          )}
         </View>
-        {input.trim() ? (
-          <TouchableOpacity style={[styles.sendBtn, { backgroundColor: colors.gold }]} onPress={() => sendMessage()} disabled={sending}>
-            {sending ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="send" size={18} color="#fff" />}
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.micBtn} onPress={handleAudio}>
-            <Feather name="mic" size={22} color={colors.mutedForeground} />
-          </TouchableOpacity>
-        )}
-      </View>
+      ) : (
+        <View style={[styles.inputBar, { backgroundColor: "#fff", borderTopColor: colors.border, paddingBottom: bottomPad + 12, justifyContent: "center", alignItems: "center" }]}>
+          <Feather name="lock" size={16} color={colors.mutedForeground} />
+          <Text style={[styles.lockedText, { color: colors.mutedForeground }]}>
+            Aguardando aceitação da conexão para liberar o chat
+          </Text>
+        </View>
+      )}
 
       {/* Reaction picker modal */}
       <Modal visible={!!showReactions} transparent animationType="fade" onRequestClose={() => setShowReactions(null)}>
@@ -1037,6 +1073,7 @@ const styles = StyleSheet.create({
   input:      { fontSize: 14, maxHeight: 100 },
   sendBtn:    { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   micBtn:     { padding: 6 },
+  lockedText: { fontSize: 13, marginLeft: 8, flex: 1, textAlign: "center" },
 
   // Attach sheet
   attachOverlay:   { flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" },
