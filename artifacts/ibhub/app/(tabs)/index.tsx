@@ -88,6 +88,9 @@ export default function FeedScreen() {
   const [suggestions, setSuggestions] = useState<SuggestedProfile[]>([]);
   const [connectingId, setConnectingId] = useState<string | null>(null);
 
+  // Notification badge
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+
   // Modals
   const [showCreateMenu, setShowCreateMenu]         = useState(false);
   const [showCreatePost, setShowCreatePost]         = useState(false);
@@ -186,6 +189,28 @@ export default function FeedScreen() {
   // Reload company pages every time the feed screen comes into focus
   // so newly created pages appear immediately after returning from manage-business-page
   useFocusEffect(useCallback(() => { loadCompanyPages(); }, [loadCompanyPages]));
+
+  // Notification badge — fetch count on focus, realtime for instant updates
+  useFocusEffect(useCallback(() => {
+    if (!user?.id) return;
+    API.getUnreadNotifCount(user.id).then(setUnreadNotifCount);
+  }, [user?.id]));
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const ch = supabase
+      .channel(`notif_badge_${user.id}`)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "notifications",
+        filter: `user_id=eq.${user.id}`,
+      }, () => {
+        setUnreadNotifCount(prev => prev + 1);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id]);
 
   const handleConnect = useCallback(async (targetId: string) => {
     if (!user?.id || connectingId) return;
@@ -497,8 +522,23 @@ export default function FeedScreen() {
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.push("/search" as any)}>
             <Feather name="search" size={22} color={colors.navy} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push("/notificacoes" as any)}>
-            <Feather name="bell" size={22} color={colors.navy} />
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => {
+              setUnreadNotifCount(0);
+              router.push("/notificacoes" as any);
+            }}
+          >
+            <View>
+              <Feather name="bell" size={22} color={colors.navy} />
+              {unreadNotifCount > 0 && (
+                <View style={[styles.notifBadge, { backgroundColor: "#e74c3c" }]}>
+                  <Text style={styles.notifBadgeText}>
+                    {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
+                  </Text>
+                </View>
+              )}
+            </View>
           </TouchableOpacity>
           <TouchableOpacity style={styles.plusBtn} onPress={() => setShowCreateMenu(true)} activeOpacity={0.8}>
             <Feather name="plus" size={20} color="#fff" />
@@ -1142,6 +1182,8 @@ const styles = StyleSheet.create({
   brandText:          { fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
   headerActions:      { flexDirection: "row", alignItems: "center", gap: 4 },
   iconBtn:            { padding: 6 },
+  notifBadge:         { position: "absolute", top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center", paddingHorizontal: 3 },
+  notifBadgeText:     { color: "#fff", fontSize: 9, fontWeight: "800" },
   plusBtn:            { width: 34, height: 34, borderRadius: 17, backgroundColor: "#c9a84c", alignItems: "center", justifyContent: "center", marginHorizontal: 2 },
   avatarChevron:      { flexDirection: "row", alignItems: "center", gap: 2, paddingLeft: 4 },
   companyAvatar:      { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },

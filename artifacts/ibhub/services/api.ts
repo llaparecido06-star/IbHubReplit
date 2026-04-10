@@ -29,7 +29,6 @@ export interface AppNotification {
   actor_id?: string | null;
   type: string;
   post_id?: string | null;
-  comment_id?: string | null;
   message?: string | null;
   read: boolean;
   created_at: string;
@@ -1038,7 +1037,7 @@ export async function fetchNotifications(userId: string): Promise<AppNotificatio
   try {
     const { data, error } = await supabase
       .from("notifications")
-      .select("id, user_id, actor_id, type, post_id, comment_id, message, read, created_at")
+      .select("id, user_id, actor_id, type, post_id, message, read, created_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(50);
