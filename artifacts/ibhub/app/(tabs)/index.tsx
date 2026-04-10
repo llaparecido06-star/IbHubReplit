@@ -32,6 +32,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
 import type { SuggestedProfile } from "@/services/api";
+import { supabase } from "@/context/AuthContext";
 
 const STORAGE_KEY = "ibhub_feed_posts_v3";
 const MAX_CHARS = 350;
@@ -79,8 +80,6 @@ export default function FeedScreen() {
   const [newPosts, setNewPosts]                     = useState<Post[]>([]);
   const newPostsBannerAnim                          = useRef(new Animated.Value(0)).current;
   const flatListRef                                 = useRef<FlatList>(null);
-  const pollingRef                                  = useRef<ReturnType<typeof setInterval> | null>(null);
-
   // View tracking
   const viewTimers                                  = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const [visiblePostIds, setVisiblePostIds]         = useState<Set<string>>(new Set());
@@ -220,25 +219,46 @@ export default function FeedScreen() {
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
 
-  // ── Background polling for new posts (every 60s) ──
+  // ── Realtime subscriptions: posts, likes, comments ──
   useEffect(() => {
     if (!user?.id) return;
-    pollingRef.current = setInterval(async () => {
-      setPosts(currentPosts => {
-        if (currentPosts.length === 0) return currentPosts;
-        const newestCreatedAt = currentPosts[0].created_at;
-        API.fetchNewPostsSince(newestCreatedAt, user!.id!, activeCompany?.id).then(fresh => {
-          if (fresh.length > 0) {
-            setNewPosts(fresh);
-            Animated.spring(newPostsBannerAnim, { toValue: 1, useNativeDriver: true, speed: 14 }).start();
-          }
+    const channel = supabase
+      .channel("feed-realtime")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts" }, async (payload) => {
+        const raw = payload.new as any;
+        if (raw.user_id === user.id) return; // our own post is already added optimistically
+        const full = await API.fetchPostById(raw.id, user.id);
+        if (!full) return;
+        setPosts(prev => {
+          if (prev.some(p => p.id === full.id)) return prev;
+          setNewPosts(np => [...np, full]);
+          Animated.spring(newPostsBannerAnim, { toValue: 1, useNativeDriver: true, speed: 14 }).start();
+          return prev;
         });
-        return currentPosts;
-      });
-    }, 60000);
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
-    };
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "likes" }, (payload) => {
+        const postId = (payload.new as any)?.post_id;
+        if (!postId) return;
+        setPosts(prev => prev.map(p =>
+          p.id === postId ? { ...p, likes_count: p.likes_count + 1 } : p
+        ));
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "likes" }, (payload) => {
+        const postId = (payload.old as any)?.post_id;
+        if (!postId) return;
+        setPosts(prev => prev.map(p =>
+          p.id === postId ? { ...p, likes_count: Math.max(0, p.likes_count - 1) } : p
+        ));
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "comments" }, (payload) => {
+        const postId = (payload.new as any)?.post_id;
+        if (!postId) return;
+        setPosts(prev => prev.map(p =>
+          p.id === postId ? { ...p, comments_count: p.comments_count + 1 } : p
+        ));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [user?.id]);
 
   const handleShowNewPosts = () => {
@@ -360,6 +380,9 @@ export default function FeedScreen() {
     });
     if (saved) {
       setPosts(prev => prev.map(p => p.id === tempPost.id ? saved : p));
+    } else {
+      setPosts(prev => prev.filter(p => p.id !== tempPost.id));
+      Alert.alert("Erro ao publicar", "Não foi possível criar o post. Verifique sua conexão e tente novamente.");
     }
 
     setPostContent(""); setPollQuestion(""); setPollOptions(["",""]); setPostMode("text");
@@ -437,6 +460,9 @@ export default function FeedScreen() {
     });
     if (saved) {
       setPosts(prev => prev.map(p => p.id === tempPost.id ? saved : p));
+    } else {
+      setPosts(prev => prev.filter(p => p.id !== tempPost.id));
+      Alert.alert("Erro ao publicar", "Não foi possível criar o post. Verifique sua conexão e tente novamente.");
     }
 
     setWineName(""); setWineSafra(""); setWineStars(4); setWineScore(85);

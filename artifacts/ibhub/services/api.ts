@@ -3545,9 +3545,10 @@ export async function fetchCompanyPosts(companyId: string, currentUserId?: strin
 
     const { data, error } = await supabase
       .from("posts")
-      .select(`id, content, created_at, likes_count, comments_count,
-        author:profiles!posts_user_id_fkey(id, full_name, username, avatar_url, position, company, plan)`)
-      .eq("user_id", pageData.owner_id)
+      .select(`id, user_id, company_page_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count, view_count, location, hashtags, poll, created_at,
+        author:profiles!posts_user_id_fkey(${AUTHOR_SELECT}),
+        company_page:company_pages(id, name, avatar_url)`)
+      .or(`user_id.eq.${pageData.owner_id},company_page_id.eq.${companyId}`)
       .order("created_at", { ascending: false })
       .limit(50);
 
@@ -3556,7 +3557,7 @@ export async function fetchCompanyPosts(companyId: string, currentUserId?: strin
     const posts = (data ?? []) as any[];
 
     if (!currentUserId || posts.length === 0) {
-      return posts.map((p) => ({ ...p, is_liked: false, is_bookmarked: false })) as Post[];
+      return posts.map((p) => ({ ...p, author: normaliseAuthor(p.author), is_liked: false, is_bookmarked: false })) as Post[];
     }
 
     const postIds = posts.map((p) => p.id);
@@ -3565,12 +3566,13 @@ export async function fetchCompanyPosts(companyId: string, currentUserId?: strin
       supabase.from("bookmarks").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
     ]);
 
-    const likedSet     = new Set((myLikes     ?? []).map((l: any) => l.post_id));
-    const bookmarkSet  = new Set((myBookmarks ?? []).map((b: any) => b.post_id));
+    const likedSet    = new Set((myLikes     ?? []).map((l: any) => l.post_id));
+    const bookmarkSet = new Set((myBookmarks ?? []).map((b: any) => b.post_id));
 
     return posts.map((p) => ({
       ...p,
-      is_liked:      likedSet.has(p.id),
+      author:       normaliseAuthor(p.author),
+      is_liked:     likedSet.has(p.id),
       is_bookmarked: bookmarkSet.has(p.id),
     })) as Post[];
   } catch (e) {

@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@/components/ui/Icon";
 import * as ImagePicker from "expo-image-picker";
 import { useColors } from "@/hooks/useColors";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, supabase } from "@/context/AuthContext";
 import Svg, { Polyline } from "react-native-svg";
 import {
   fetchCompanyAnalytics,
@@ -194,6 +194,46 @@ export default function EmpresaScreen() {
     if (activeTab === "portfolio")   { loadProducts(); }
     if (activeTab === "analytics")   { loadAnalytics(); }
   }, [activeTab, loadPosts, loadProducts, loadAnalytics]);
+
+  // ── Realtime: posts, likes and comments for this company ──
+  useEffect(() => {
+    if (!id) return;
+    const channel = supabase
+      .channel(`company-${id}-realtime`)
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "posts", filter: `company_page_id=eq.${id}` },
+        async (payload) => {
+          const raw = payload.new as any;
+          const { fetchPostById } = await import("@/services/api");
+          const full = await fetchPostById(raw.id, user?.id);
+          if (!full) return;
+          setPosts(prev => prev.some(p => p.id === full.id) ? prev : [full, ...prev]);
+        }
+      )
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "likes" }, (payload) => {
+        const postId = (payload.new as any)?.post_id;
+        if (!postId) return;
+        setPosts(prev => prev.map(p =>
+          p.id === postId ? { ...p, likes_count: p.likes_count + 1 } : p
+        ));
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "likes" }, (payload) => {
+        const postId = (payload.old as any)?.post_id;
+        if (!postId) return;
+        setPosts(prev => prev.map(p =>
+          p.id === postId ? { ...p, likes_count: Math.max(0, p.likes_count - 1) } : p
+        ));
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "comments" }, (payload) => {
+        const postId = (payload.new as any)?.post_id;
+        if (!postId) return;
+        setPosts(prev => prev.map(p =>
+          p.id === postId ? { ...p, comments_count: p.comments_count + 1 } : p
+        ));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [id, user?.id]);
 
   const resetProductForm = () => {
     setPName(""); setPDesc(""); setPPrice(""); setPCat("produto");
