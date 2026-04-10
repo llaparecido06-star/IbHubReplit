@@ -1052,8 +1052,6 @@ export async function fetchNotifications(userId: string): Promise<AppNotificatio
     }
     if (!data) return [];
 
-    console.log(`fetchNotifications: ${data.length} rows for user ${userId}`);
-
     const actorIds = [...new Set((data as any[]).map(n => n.actor_id).filter(Boolean))];
     const profileMap = await fetchCommentProfilesForIds(actorIds);
 
