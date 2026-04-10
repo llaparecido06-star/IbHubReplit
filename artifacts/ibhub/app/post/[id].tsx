@@ -90,8 +90,9 @@ export default function PostDetailScreen() {
   // Realtime: new comments from other users appear instantly
   useEffect(() => {
     if (!id) return;
+    const uid = Math.random().toString(36).slice(2, 8);
     const channel = supabase
-      .channel(`post_comments_${id}`)
+      .channel(`post_comments_${id}_${uid}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "comments", filter: `post_id=eq.${id}` },

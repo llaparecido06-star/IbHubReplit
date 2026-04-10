@@ -89,8 +89,9 @@ export default function MessagesScreen() {
   useEffect(() => {
     if (!user?.id) return;
 
+    const uid = Math.random().toString(36).slice(2, 8);
     const channel = supabase
-      .channel(`messages-list-${user.id}`)
+      .channel(`messages-list-${user.id}_${uid}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages" },
@@ -143,8 +144,9 @@ export default function MessagesScreen() {
   useEffect(() => {
     if (!user?.id) return;
 
+    const uid2 = Math.random().toString(36).slice(2, 8);
     const channel = supabase
-      .channel(`conv-participant-accepted-${user.id}`)
+      .channel(`conv-participant-accepted-${user.id}_${uid2}`)
       .on(
         "postgres_changes",
         {

@@ -254,8 +254,9 @@ export default function ProfileScreen() {
   // Realtime: remove accepted connections from suggestions
   useEffect(() => {
     if (!user?.id) return;
+    const uid = Math.random().toString(36).slice(2, 8);
     const ch = supabase
-      .channel(`profile_connections_suggestions_${user.id}`)
+      .channel(`profile_connections_suggestions_${user.id}_${uid}`)
       .on("postgres_changes", {
         event: "UPDATE",
         schema: "public",

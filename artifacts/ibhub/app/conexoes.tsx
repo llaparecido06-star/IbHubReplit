@@ -60,8 +60,9 @@ export default function ConexoesScreen() {
 
   useEffect(() => {
     if (!user?.id) return;
+    const uid = Math.random().toString(36).slice(2, 8);
     const channel = supabase
-      .channel(`connections-${user.id}`)
+      .channel(`connections-${user.id}_${uid}`)
       .on(
         "postgres_changes",
         {

@@ -165,8 +165,9 @@ export default function EmpresaScreen() {
   // ── Realtime: posts, likes and comments for this company ──
   useEffect(() => {
     if (!id) return;
+    const uid = Math.random().toString(36).slice(2, 8);
     const channel = supabase
-      .channel(`company-${id}-realtime`)
+      .channel(`company-${id}-realtime_${uid}`)
       .on("postgres_changes",
         { event: "INSERT", schema: "public", table: "posts", filter: `company_page_id=eq.${id}` },
         async (payload) => {

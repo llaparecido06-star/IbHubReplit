@@ -548,8 +548,9 @@ export default function MercadoScreen() {
 
   useEffect(() => {
     if (!user?.id) return;
+    const uid = Math.random().toString(36).slice(2, 8);
     const channel = supabase
-      .channel(`network-connections-${user.id}`)
+      .channel(`network-connections-${user.id}_${uid}`)
       .on(
         "postgres_changes",
         {

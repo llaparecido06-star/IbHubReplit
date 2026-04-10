@@ -92,7 +92,8 @@ export default function PublicProfileScreen() {
 
   useEffect(() => {
     if (!currentUser?.id || !resolvedId || resolvedId === currentUser.id) return;
-    const channelName = `connection-status-${currentUser.id}-${resolvedId}`;
+    const uid = Math.random().toString(36).slice(2, 8);
+    const channelName = `connection-status-${currentUser.id}-${resolvedId}_${uid}`;
     const channel = supabase
       .channel(channelName)
       .on(

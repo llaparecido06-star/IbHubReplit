@@ -155,8 +155,9 @@ export default function NotificationsScreen() {
 
   useEffect(() => {
     if (!user?.id) return;
+    const uid = Math.random().toString(36).slice(2, 8);
     const channel = supabase
-      .channel(`notifs_${user.id}`)
+      .channel(`notifs_${user.id}_${uid}`)
       .on(
         "postgres_changes",
         {
