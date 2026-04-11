@@ -96,6 +96,7 @@ export default function SalvosScreen() {
             <PostCard
               post={item}
               currentUserId={user?.id}
+              isVisible
               onBookmark={handleBookmark}
             />
           )}

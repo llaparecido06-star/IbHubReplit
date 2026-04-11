@@ -1900,7 +1900,7 @@ export async function fetchUserWines(userId: string): Promise<{ id: string; name
   }
 }
 
-export async function fetchConversations(userId: string): Promise<AppConversation[]> {
+export async function fetchConversations(userId: string, activeCompanyId?: string | null): Promise<AppConversation[]> {
   try {
     // Use SECURITY DEFINER RPC to get all my conversations + the other participant's user_id
     // (cp_select RLS only shows own row, so a plain JOIN would fail)
@@ -2001,6 +2001,21 @@ export async function fetchConversations(userId: string): Promise<AppConversatio
           }
         }
       }
+    }
+
+    // ── Identity filter ────────────────────────────────────────────────────────
+    // When in company mode, only show conversations that have at least one
+    // message sent by the current user acting as that company.
+    if (activeCompanyId) {
+      const { data: companyMsgs } = await supabase
+        .from("messages")
+        .select("conversation_id")
+        .eq("sender_id", userId)
+        .eq("from_company_page_id", activeCompanyId);
+      const companyConvIds = new Set((companyMsgs ?? []).map((m: any) => m.conversation_id as string));
+      return results
+        .filter(r => companyConvIds.has(r.id))
+        .sort((a, b) => new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime());
     }
 
     return results.sort(

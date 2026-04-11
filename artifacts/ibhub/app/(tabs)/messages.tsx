@@ -52,7 +52,7 @@ function timeAgo(dateStr?: string): string {
 export default function MessagesScreen() {
   const colors  = useColors();
   const router  = useRouter();
-  const { user } = useAuth();
+  const { user, activeCompany } = useAuth();
   const insets  = useSafeAreaInsets();
   const { setUnreadCount } = useUnread();
 
@@ -73,10 +73,10 @@ export default function MessagesScreen() {
 
   const load = useCallback(async () => {
     if (!user?.id) { setLoading(false); return; }
-    const data = await API.fetchConversations(user.id);
+    const data = await API.fetchConversations(user.id, activeCompany?.id ?? null);
     setConvos(data);
     setLoading(false);
-  }, [user?.id]);
+  }, [user?.id, activeCompany?.id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -427,9 +427,10 @@ export default function MessagesScreen() {
 function ConversationRow({ conversation: conv, colors, followUpDate }: { conversation: AppConversation; colors: any; followUpDate?: string }) {
   const router   = useRouter();
   const hasUnread = (conv.unread_count ?? 0) > 0;
-  const name     = conv.name ?? conv.participant_company?.name ?? conv.participant?.full_name ?? "Chat";
-  const avatarUri = conv.participant_company?.avatar_url ?? conv.participant?.avatar_url ?? null;
+  const name      = conv.name ?? conv.participant_company?.name ?? conv.participant?.full_name ?? "Chat";
   const companyId = conv.participant_company?.id ?? null;
+  // Never show the human participant's photo when the OTHER party is a company
+  const avatarUri = companyId ? (conv.participant_company?.avatar_url ?? null) : (conv.participant?.avatar_url ?? null);
 
   const followUpDue = followUpDate
     ? (() => {

@@ -367,9 +367,17 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
 
   const allImageUrls = (() => {
     const urls: string[] = [];
-    if (post.image_urls && post.image_urls.length > 0) {
-      urls.push(...post.image_urls);
-    } else if (post.image_url) {
+    const rawUrls = post.image_urls;
+    if (Array.isArray(rawUrls) && rawUrls.length > 0) {
+      urls.push(...rawUrls);
+    } else if (typeof rawUrls === "string" && rawUrls.trim().startsWith("[")) {
+      // Supabase returned a JSONB-as-text value — parse it defensively
+      try {
+        const parsed: unknown = JSON.parse(rawUrls);
+        if (Array.isArray(parsed)) urls.push(...(parsed as string[]));
+      } catch {}
+    }
+    if (urls.length === 0 && post.image_url) {
       urls.push(post.image_url);
     }
     return urls;

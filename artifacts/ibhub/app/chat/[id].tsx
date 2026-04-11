@@ -819,8 +819,9 @@ export default function ChatScreen() {
   // ── Derived ──────────────────────────────────────────────────────────────────
 
   const participantName   = companyInfo?.name ?? participant?.full_name ?? "Chat";
-  const participantAvatar = companyInfo?.avatar_url ?? participant?.avatar_url ?? null;
   const isCompanyChat     = !!companyInfo;
+  // Never fall back to the human participant's photo when it's a company chat
+  const participantAvatar = isCompanyChat ? (companyInfo?.avatar_url ?? null) : (participant?.avatar_url ?? null);
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
