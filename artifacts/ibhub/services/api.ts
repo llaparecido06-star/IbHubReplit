@@ -191,7 +191,7 @@ export async function fetchFeedPosts(currentUserId: string, activeCompanyId?: st
       is_bookmarked: bookmarkedIds.has(post.id),
     }));
   } catch (e) {
-    console.error("fetchFeedPosts:", e);
+    console.warn("fetchFeedPosts:", e);
     return [];
   }
 }
@@ -319,7 +319,7 @@ export async function fetchPostById(postId: string, currentUserId?: string): Pro
     }
     return post as Post;
   } catch (e) {
-    console.error("fetchPostById:", e);
+    console.warn("fetchPostById:", e);
     return null;
   }
 }
@@ -463,7 +463,7 @@ export async function fetchNewPostsSince(since: string, currentUserId: string, a
       is_bookmarked: bookmarkedIds.has(post.id),
     }));
   } catch (e) {
-    console.error("fetchNewPostsSince:", e);
+    console.warn("fetchNewPostsSince:", e);
     return [];
   }
 }
@@ -476,7 +476,7 @@ export async function toggleBookmark(postId: string, userId: string, isCurrently
       await supabase.from("bookmarks").upsert({ post_id: postId, user_id: userId }, { onConflict: "post_id,user_id" });
     }
   } catch (e) {
-    console.error("toggleBookmark:", e);
+    console.warn("toggleBookmark:", e);
   }
 }
 
@@ -533,7 +533,7 @@ export async function fetchComments(postId: string, currentUserId?: string): Pro
     }
     return roots;
   } catch (e) {
-    console.error("fetchComments:", e);
+    console.warn("fetchComments:", e);
     return [];
   }
 }
@@ -567,7 +567,7 @@ export async function fetchCommentById(commentId: string, currentUserId?: string
       author: normaliseAuthor(profileMap.get((data as any).user_id)),
     } as AppComment;
   } catch (e) {
-    console.error("fetchCommentById:", e);
+    console.warn("fetchCommentById:", e);
     return null;
   }
 }
@@ -758,7 +758,7 @@ export async function fetchSuggestedConnections(
 
     return scored.slice(0, limit);
   } catch (e) {
-    console.error("fetchSuggestedConnections:", e);
+    console.warn("fetchSuggestedConnections:", e);
     return [];
   }
 }
@@ -793,7 +793,7 @@ export async function fetchUserPosts(targetUserId: string, currentUserId: string
       is_bookmarked: bookmarkedIds.has(post.id),
     }));
   } catch (e) {
-    console.error("fetchUserPosts:", e);
+    console.warn("fetchUserPosts:", e);
     return [];
   }
 }
@@ -821,7 +821,7 @@ export async function fetchFollowers(userId: string): Promise<FollowProfile[]> {
     const profileMap = await fetchProfilesForIds(ids);
     return ids.map(id => profileMap.get(id)).filter(Boolean) as FollowProfile[];
   } catch (e) {
-    console.error("fetchFollowers:", e);
+    console.warn("fetchFollowers:", e);
     return [];
   }
 }
@@ -838,7 +838,7 @@ export async function fetchFollowing(userId: string): Promise<FollowProfile[]> {
     const profileMap = await fetchProfilesForIds(ids);
     return ids.map(id => profileMap.get(id)).filter(Boolean) as FollowProfile[];
   } catch (e) {
-    console.error("fetchFollowing:", e);
+    console.warn("fetchFollowing:", e);
     return [];
   }
 }
@@ -861,7 +861,7 @@ export async function fetchConnectionSuggestions(userId: string, limit = 5): Pro
     if (error || !data) return [];
     return data as FollowProfile[];
   } catch (e) {
-    console.error("fetchConnectionSuggestions:", e);
+    console.warn("fetchConnectionSuggestions:", e);
     return [];
   }
 }
@@ -888,7 +888,7 @@ export async function toggleFollow(
       });
     }
   } catch (e) {
-    console.error("toggleFollow:", e);
+    console.warn("toggleFollow:", e);
   }
 }
 
@@ -961,7 +961,7 @@ export async function fetchPendingConnectionsReceived(userId: string): Promise<C
       const p = profileMap.get(row.requester_id) ?? {};
       return { connectionId: row.id, id: row.requester_id, full_name: p.full_name ?? null, username: p.username ?? null, avatar_url: p.avatar_url ?? null, position: p.position ?? null, company: p.company ?? null, created_at: row.created_at };
     });
-  } catch (e) { console.error("fetchPendingConnectionsReceived:", e); return []; }
+  } catch (e) { console.warn("fetchPendingConnectionsReceived:", e); return []; }
 }
 
 export async function fetchPendingConnectionsSent(userId: string): Promise<ConnectionProfile[]> {
@@ -979,7 +979,7 @@ export async function fetchPendingConnectionsSent(userId: string): Promise<Conne
       const p = profileMap.get(row.receiver_id) ?? {};
       return { connectionId: row.id, id: row.receiver_id, full_name: p.full_name ?? null, username: p.username ?? null, avatar_url: p.avatar_url ?? null, position: p.position ?? null, company: p.company ?? null, created_at: row.created_at };
     });
-  } catch (e) { console.error("fetchPendingConnectionsSent:", e); return []; }
+  } catch (e) { console.warn("fetchPendingConnectionsSent:", e); return []; }
 }
 
 export async function respondToConnection(
@@ -1059,7 +1059,7 @@ export async function fetchConnectedUsers(userId: string): Promise<ConnectionPro
       return { connectionId: row.id, id: row.requester_id, full_name: (p as any).full_name ?? null, username: (p as any).username ?? null, avatar_url: (p as any).avatar_url ?? null, position: (p as any).position ?? null, company: (p as any).company ?? null, created_at: row.created_at };
     });
     return [...s, ...r].sort((a, b) => b.created_at.localeCompare(a.created_at));
-  } catch (e) { console.error("fetchConnectedUsers:", e); return []; }
+  } catch (e) { console.warn("fetchConnectedUsers:", e); return []; }
 }
 
 export interface UserListItem {
@@ -1120,7 +1120,7 @@ export async function fetchUserListForModal(
       return p ? { id, full_name: p.full_name ?? null, username: p.username ?? null, avatar_url: p.avatar_url ?? null } : null;
     }).filter(Boolean) as UserListItem[];
   } catch (e) {
-    console.error("fetchUserListForModal:", e);
+    console.warn("fetchUserListForModal:", e);
     return [];
   }
 }
@@ -1149,7 +1149,7 @@ export async function fetchBookmarkedPosts(userId: string): Promise<Post[]> {
     return (await attachAuthorsToPosts(rawPosts as any[], profileMap, companyMap))
       .map((p) => ({ ...p, likes_count: p.likes_count ?? 0, comments_count: p.comments_count ?? 0, is_liked: false, is_bookmarked: true } as Post))
       .sort((a, b) => (idOrder.get(a.id) ?? 99) - (idOrder.get(b.id) ?? 99));
-  } catch (e) { console.error("fetchBookmarkedPosts:", e); return []; }
+  } catch (e) { console.warn("fetchBookmarkedPosts:", e); return []; }
 }
 
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
@@ -1208,7 +1208,7 @@ export async function fetchNotifications(userId: string): Promise<AppNotificatio
       return base;
     }) as unknown as AppNotification[];
   } catch (e) {
-    console.error("fetchNotifications:", e);
+    console.warn("fetchNotifications:", e);
     return [];
   }
 }
@@ -1295,7 +1295,7 @@ export async function fetchProfilePosts(userId: string, currentUserId: string): 
       is_bookmarked: bookmarkedIds.has(post.id),
     }));
   } catch (e) {
-    console.error("fetchProfilePosts:", e);
+    console.warn("fetchProfilePosts:", e);
     return [];
   }
 }
@@ -1325,7 +1325,7 @@ export async function fetchActiveStories(): Promise<AppStory[]> {
       company_page: s.company_page_id ? (sCompanyMap.get(s.company_page_id) ?? null) : null,
     })) as unknown as AppStory[];
   } catch (e) {
-    console.error("fetchActiveStories:", e);
+    console.warn("fetchActiveStories:", e);
     return [];
   }
 }
@@ -1400,7 +1400,7 @@ export async function fetchActiveStoriesForUser(currentUserId: string): Promise<
     result.push(...otherGroups.sort((a, b) => (b.hasUnseen ? 1 : 0) - (a.hasUnseen ? 1 : 0)));
     return result;
   } catch (e) {
-    console.error("fetchActiveStoriesForUser:", e);
+    console.warn("fetchActiveStoriesForUser:", e);
     return [];
   }
 }
@@ -1414,7 +1414,7 @@ export async function markStoryViewed(storyId: string, userId: string): Promise<
         { onConflict: "story_id,user_id", ignoreDuplicates: true }
       );
   } catch (e) {
-    console.error("markStoryViewed:", e);
+    console.warn("markStoryViewed:", e);
   }
 }
 
@@ -1430,7 +1430,7 @@ export async function fetchStoryViewers(storyId: string): Promise<{ id: string; 
     const profileMap = await fetchCommentProfilesForIds(viewerIds);
     return viewerIds.map(id => profileMap.get(id)).filter((v): v is { id: string; full_name: string; avatar_url?: string | null } => v !== null);
   } catch (e) {
-    console.error("fetchStoryViewers:", e);
+    console.warn("fetchStoryViewers:", e);
     return [];
   }
 }
@@ -1533,7 +1533,7 @@ export async function voteOnPoll(postId: string, userId: string, optionIndex: nu
       },
     }).eq("id", postId);
   } catch (e) {
-    console.error("voteOnPoll:", e);
+    console.warn("voteOnPoll:", e);
   }
 }
 
@@ -1548,11 +1548,11 @@ export async function toggleCommentLike(commentId: string, userId: string, isCur
       const { error } = await supabase
         .from("comment_likes")
         .upsert({ comment_id: commentId, user_id: userId }, { onConflict: "comment_id,user_id", ignoreDuplicates: true });
-      if (error) { console.error("toggleCommentLike:", JSON.stringify(error)); return false; }
+      if (error) { console.warn("toggleCommentLike:", JSON.stringify(error)); return false; }
       return true;
     }
   } catch (e) {
-    console.error("toggleCommentLike:", e);
+    console.warn("toggleCommentLike:", e);
     return false;
   }
 }
@@ -1608,7 +1608,7 @@ export async function fetchPostLikes(postId: string): Promise<LikeUser[]> {
       } as LikeUser;
     });
   } catch (e) {
-    console.error("fetchPostLikes:", e);
+    console.warn("fetchPostLikes:", e);
     return [];
   }
 }
@@ -1803,7 +1803,7 @@ export async function savePushToken(userId: string, token: string): Promise<void
       .from("push_tokens")
       .upsert({ user_id: userId, token, updated_at: new Date().toISOString() }, { onConflict: "user_id,token" });
   } catch (e) {
-    console.error("savePushToken:", e);
+    console.warn("savePushToken:", e);
   }
 }
 
@@ -2057,7 +2057,7 @@ export async function fetchConversationParticipant(
       p_conversation_id: conversationId,
       p_current_user_id: currentUserId,
     });
-    if (error) { console.error("fetchConversationParticipant rpc:", error); return null; }
+    if (error) { console.warn("fetchConversationParticipant rpc:", error); return null; }
     if (!data || (data as any[]).length === 0) return null;
     const otherId = (data as any[])[0]?.user_id ?? (data as any).user_id;
     if (!otherId) return null;
@@ -2078,13 +2078,13 @@ export async function fetchConversationAccepted(
       .eq("user_id", userId)
       .single();
     if (error) {
-      console.error("fetchConversationAccepted error:", error);
+      console.warn("fetchConversationAccepted error:", error);
       return true;
     }
     const accepted = (data as any)?.accepted;
     return accepted === false ? false : true;
   } catch (e) {
-    console.error("fetchConversationAccepted threw:", e);
+    console.warn("fetchConversationAccepted threw:", e);
     return true;
   }
 }
@@ -2204,7 +2204,7 @@ export async function fetchBlockedUsers(userId: string): Promise<BlockedUser[]> 
       return { id, full_name: p?.full_name ?? null, username: p?.username ?? null, avatar_url: p?.avatar_url ?? null };
     });
   } catch (e) {
-    console.error("fetchBlockedUsers:", e);
+    console.warn("fetchBlockedUsers:", e);
     return [];
   }
 }
@@ -2248,7 +2248,7 @@ export async function fetchPendingReports(): Promise<AppReport[]> {
       post: r.post_id ? (postMap.get(r.post_id) ?? null) : null,
     })) as unknown as AppReport[];
   } catch (e) {
-    console.error("fetchPendingReports:", e);
+    console.warn("fetchPendingReports:", e);
     return [];
   }
 }
@@ -2407,15 +2407,17 @@ export interface CompanyPage {
   created_at: string;
 }
 
+const COMPANY_PAGE_SELECT = "id, owner_id, name, username, avatar_url, bio, website, industry, location, plan, created_at";
+
 export async function fetchUserCompanyPages(userId: string): Promise<CompanyPage[]> {
   try {
     // Pages owned by the user
     const { data: owned, error: ownedErr } = await supabase
       .from("company_pages")
-      .select("*")
+      .select(COMPANY_PAGE_SELECT)
       .eq("owner_id", userId)
       .order("created_at", { ascending: true });
-    if (ownedErr) console.error("fetchUserCompanyPages owned:", ownedErr);
+    if (ownedErr) console.warn("fetchUserCompanyPages owned:", ownedErr.message ?? ownedErr);
 
     // Pages where user is an admin/member
     const { data: memberships } = await supabase
@@ -2428,7 +2430,7 @@ export async function fetchUserCompanyPages(userId: string): Promise<CompanyPage
     if (adminIds.length > 0) {
       const { data: adminData } = await supabase
         .from("company_pages")
-        .select("*")
+        .select(COMPANY_PAGE_SELECT)
         .in("id", adminIds)
         .order("created_at", { ascending: true });
       adminPages = (adminData ?? []) as CompanyPage[];
