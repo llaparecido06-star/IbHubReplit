@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient, Session, User } from "@supabase/supabase-js";
 import * as Linking from "expo-linking";
+import * as WebBrowser from "expo-web-browser";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
@@ -16,6 +17,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    flowType: "pkce",
   },
 });
 
@@ -29,27 +31,17 @@ interface Profile {
   headline: string | null;
   position: string | null;
   company: string | null;
-  location: string | null;
-  plan: string;
-  certifications: string[];
-  areas: string[];
+  plan: string | null;
   areas_of_expertise: string[];
-  followers_count: number;
-  following_count: number;
-  connections_count: number;
-  is_admin: boolean;
-  website: string | null;
-  linkedin: string | null;
-  instagram: string | null;
-  profile_type: string | null;
-  is_public: boolean | null;
-  is_shadowbanned: boolean | null;
-  is_banned: boolean | null;
-  experience_summary: string | null;
-  subscription_tier: string | null;
+  areas: string[];
+  country: string | null;
+  referral_code: string | null;
+  invited_by_id: string | null;
+  avatar_url?: string | null;
+  industry?: string | null;
 }
 
-export interface ActiveCompany {
+interface ActiveCompany {
   id: string;
   name: string;
   avatar_url?: string | null;
@@ -62,14 +54,18 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   isRecovering: boolean;
+  needsProfileCompletion: boolean;
   activeCompany: ActiveCompany | null;
   setActiveCompany: (company: ActiveCompany | null) => void;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
+  signInWithGoogle: () => Promise<{ error: string | null }>;
+  signInWithApple: () => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: string | null }>;
   clearRecovery: () => void;
+  clearProfileCompletion: () => void;
   refreshProfile: () => Promise<void>;
   refreshProfileByUserId: (userId: string) => Promise<void>;
   patchProfile: (patch: Partial<Profile>) => void;
@@ -89,13 +85,24 @@ function parseRecoveryUrl(url: string): { accessToken: string; refreshToken: str
   return null;
 }
 
+/** Check if a profile has the minimum required fields filled */
+function isProfileComplete(data: any): boolean {
+  const hasName = !!data?.full_name?.trim();
+  const hasUsername = !!data?.username?.trim();
+  const hasAreas =
+    (Array.isArray(data?.areas_of_expertise) && data.areas_of_expertise.length > 0) ||
+    (Array.isArray(data?.areas) && data.areas.length > 0);
+  return hasName && hasUsername && hasAreas;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession]           = useState<Session | null>(null);
-  const [user, setUser]                 = useState<User | null>(null);
-  const [profile, setProfile]           = useState<Profile | null>(null);
-  const [loading, setLoading]           = useState(true);
-  const [isRecovering, setIsRecovering] = useState(false);
-  const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null);
+  const [session, setSession]                   = useState<Session | null>(null);
+  const [user, setUser]                         = useState<User | null>(null);
+  const [profile, setProfile]                   = useState<Profile | null>(null);
+  const [loading, setLoading]                   = useState(true);
+  const [isRecovering, setIsRecovering]         = useState(false);
+  const [needsProfileCompletion, setNeedsProfileCompletion] = useState(false);
+  const [activeCompany, setActiveCompany]       = useState<ActiveCompany | null>(null);
 
   const fetchProfile = useCallback(async (userId: string) => {
     try {
@@ -113,6 +120,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           Array.isArray(d.areas_of_expertise) ? d.areas_of_expertise :
           Array.isArray(d.areas) ? d.areas : [];
         setProfile({ ...d, headline, areas_of_expertise } as Profile);
+        setNeedsProfileCompletion(!isProfileComplete({ ...d, areas_of_expertise }));
+      } else {
+        // No profile row yet — new social auth user
+        setNeedsProfileCompletion(true);
       }
     } catch {}
   }, []);
@@ -129,6 +140,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile((prev) => prev ? { ...prev, ...patch } : prev);
   }, []);
 
+  const clearProfileCompletion = useCallback(() => {
+    setNeedsProfileCompletion(false);
+  }, []);
+
   /** Handles a deep link URL — sets session if it is a password recovery link */
   const handleDeepLink = useCallback(async (url: string | null) => {
     if (!url) return;
@@ -143,6 +158,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Complete any pending auth sessions (handles OAuth redirects on app resume)
+    WebBrowser.maybeCompleteAuthSession();
+
     // 1. Restore existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -154,7 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    // 2. Auth state changes (including PASSWORD_RECOVERY)
+    // 2. Auth state changes (including PASSWORD_RECOVERY and OAuth SIGNED_IN)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "PASSWORD_RECOVERY") {
         setIsRecovering(true);
@@ -165,12 +183,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await fetchProfile(session.user.id);
 
         // Apply pending referral code (saved by registration screen before sign-up).
-        // Works even when email confirmation is required — fires on first SIGNED_IN.
         if (event === "SIGNED_IN") {
           try {
             const pendingCode = await AsyncStorage.getItem("pending_invite_code");
             if (pendingCode) {
-              // Only apply if not already linked to an inviter
               const { data: prof } = await supabase
                 .from("profiles")
                 .select("invited_by_id")
@@ -195,6 +211,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } else {
         setProfile(null);
+        setNeedsProfileCompletion(false);
       }
     });
 
@@ -234,8 +251,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: null };
   };
 
+  /** Build the redirect URI for OAuth — works in Expo Go and production */
+  const getRedirectUri = () => Linking.createURL("auth/callback");
+
+  const signInWithGoogle = async (): Promise<{ error: string | null }> => {
+    try {
+      const redirectTo = getRedirectUri();
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo, skipBrowserRedirect: true },
+      });
+      if (error) return { error: error.message };
+      if (!data?.url) return { error: "Não foi possível iniciar o login com Google." };
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      if (result.type === "success" && result.url) {
+        const url = new URL(result.url);
+        const code = url.searchParams.get("code");
+        if (code) {
+          const { error: err } = await supabase.auth.exchangeCodeForSession(code);
+          if (err) return { error: err.message };
+        }
+      } else if (result.type === "cancel") {
+        return { error: null }; // user cancelled, no error
+      }
+      return { error: null };
+    } catch (e: any) {
+      return { error: e?.message ?? "Erro ao entrar com Google." };
+    }
+  };
+
+  const signInWithApple = async (): Promise<{ error: string | null }> => {
+    try {
+      const redirectTo = getRedirectUri();
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "apple",
+        options: { redirectTo, skipBrowserRedirect: true },
+      });
+      if (error) return { error: error.message };
+      if (!data?.url) return { error: "Não foi possível iniciar o login com Apple." };
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      if (result.type === "success" && result.url) {
+        const url = new URL(result.url);
+        const code = url.searchParams.get("code");
+        if (code) {
+          const { error: err } = await supabase.auth.exchangeCodeForSession(code);
+          if (err) return { error: err.message };
+        }
+      } else if (result.type === "cancel") {
+        return { error: null };
+      }
+      return { error: null };
+    } catch (e: any) {
+      return { error: e?.message ?? "Erro ao entrar com Apple." };
+    }
+  };
+
   const signOut = async () => {
     setActiveCompany(null);
+    setNeedsProfileCompletion(false);
     await supabase.auth.signOut();
   };
 
@@ -255,10 +330,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider
       value={{
-        session, user, profile, loading, isRecovering,
+        session, user, profile, loading, isRecovering, needsProfileCompletion,
         activeCompany, setActiveCompany,
-        signIn, signUp, signOut,
-        resetPassword, updatePassword, clearRecovery,
+        signIn, signUp, signInWithGoogle, signInWithApple, signOut,
+        resetPassword, updatePassword, clearRecovery, clearProfileCompletion,
         refreshProfile, refreshProfileByUserId, patchProfile,
       }}
     >

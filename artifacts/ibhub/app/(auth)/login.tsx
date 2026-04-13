@@ -2,6 +2,7 @@ import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -18,14 +19,15 @@ import { useAuth } from "@/context/AuthContext";
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn } = useAuth();
+  const { signIn, signInWithGoogle, signInWithApple } = useAuth();
   const insets = useSafeAreaInsets();
 
-  const [email, setEmail]             = useState("");
-  const [password, setPassword]       = useState("");
+  const [email, setEmail]               = useState("");
+  const [password, setPassword]         = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading]         = useState(false);
-  const [error, setError]             = useState<string | null>(null);
+  const [loading, setLoading]           = useState(false);
+  const [socialLoading, setSocialLoading] = useState<"google" | "apple" | null>(null);
+  const [error, setError]               = useState<string | null>(null);
 
   const handleLogin = async () => {
     if (!email || !password) { setError("Preencha todos os campos"); return; }
@@ -34,6 +36,22 @@ export default function LoginScreen() {
     const { error: err } = await signIn(email, password);
     if (err) setError("Email ou senha incorretos");
     setLoading(false);
+  };
+
+  const handleGoogle = async () => {
+    setSocialLoading("google");
+    setError(null);
+    const { error: err } = await signInWithGoogle();
+    if (err) setError(err);
+    setSocialLoading(null);
+  };
+
+  const handleApple = async () => {
+    setSocialLoading("apple");
+    setError(null);
+    const { error: err } = await signInWithApple();
+    if (err) setError(err);
+    setSocialLoading(null);
   };
 
   return (
@@ -128,12 +146,26 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.socialRow}>
-              <TouchableOpacity style={styles.socialBtn}>
-                <Text style={styles.googleG}>G</Text>
+              <TouchableOpacity
+                style={[styles.socialBtn, socialLoading === "google" && { opacity: 0.6 }]}
+                onPress={handleGoogle}
+                disabled={!!socialLoading}
+              >
+                {socialLoading === "google"
+                  ? <ActivityIndicator size="small" color="#4285F4" />
+                  : <Text style={styles.googleG}>G</Text>
+                }
                 <Text style={styles.socialBtnText}>Google</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.socialBtn, styles.socialBtnApple]}>
-                <Ionicons name="logo-apple" size={18} color="#fff" />
+              <TouchableOpacity
+                style={[styles.socialBtn, styles.socialBtnApple, socialLoading === "apple" && { opacity: 0.6 }]}
+                onPress={handleApple}
+                disabled={!!socialLoading}
+              >
+                {socialLoading === "apple"
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Ionicons name="logo-apple" size={18} color="#fff" />
+                }
                 <Text style={[styles.socialBtnText, { color: "#fff" }]}>Apple</Text>
               </TouchableOpacity>
             </View>

@@ -21,14 +21,17 @@ SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
-  const { session, loading, isRecovering } = useAuth();
+  const { session, loading, isRecovering, needsProfileCompletion } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !isRecovering && !session) {
+    if (loading || isRecovering) return;
+    if (!session) {
       router.replace("/(auth)/login" as any);
+    } else if (needsProfileCompletion) {
+      router.replace("/social-complete" as any);
     }
-  }, [session, loading, isRecovering]);
+  }, [session, loading, isRecovering, needsProfileCompletion]);
 
   if (loading) {
     return (
@@ -61,6 +64,7 @@ function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" redirect />
+      <Stack.Screen name="social-complete" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="create-post" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
       <Stack.Screen name="search" options={{ animation: "slide_from_bottom" }} />
