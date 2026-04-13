@@ -31,16 +31,17 @@ function RootLayoutNav() {
     if (loading || isRecovering) return;
 
     if (!session) {
-      // Reset so next sign-in triggers navigation again
       didNavigateIn.current = false;
       router.replace("/(auth)/login" as any);
     } else if (needsProfileCompletion) {
-      // New social-auth user needs to complete their profile
       router.replace("/social-complete" as any);
     } else if (!didNavigateIn.current) {
-      // Session ready + profile complete → navigate into the app once
       didNavigateIn.current = true;
-      router.replace("/(tabs)" as any);
+      // Delay slightly so the session Stack is fully mounted before navigating.
+      // Without this, a fresh OAuth login fires router.replace while the Stack
+      // is still transitioning from non-session → session, causing a "route
+      // does not exist" error on first login (but not on relaunch).
+      setTimeout(() => router.replace("/(tabs)" as any), 80);
     }
   }, [session, loading, isRecovering, needsProfileCompletion]);
 
@@ -74,7 +75,6 @@ function RootLayoutNav() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(auth)" redirect />
       <Stack.Screen name="social-complete" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="create-post" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
