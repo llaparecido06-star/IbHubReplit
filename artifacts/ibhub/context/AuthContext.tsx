@@ -85,14 +85,14 @@ function parseRecoveryUrl(url: string): { accessToken: string; refreshToken: str
   return null;
 }
 
-/** Check if a profile has the minimum required fields filled */
+/**
+ * A profile is "complete" if the user has chosen a username.
+ * All registration paths (email/password and social-complete) require username,
+ * so this is the most reliable signal. Checking areas_of_expertise would wrongly
+ * flag users who registered before that field was added.
+ */
 function isProfileComplete(data: any): boolean {
-  const hasName = !!data?.full_name?.trim();
-  const hasUsername = !!data?.username?.trim();
-  const hasAreas =
-    (Array.isArray(data?.areas_of_expertise) && data.areas_of_expertise.length > 0) ||
-    (Array.isArray(data?.areas) && data.areas.length > 0);
-  return hasName && hasUsername && hasAreas;
+  return !!data?.username?.trim();
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
