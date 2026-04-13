@@ -251,8 +251,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: null };
   };
 
-  /** Build the redirect URI for OAuth — works in Expo Go and production */
-  const getRedirectUri = () => Linking.createURL("auth/callback");
+  /** Build the redirect URI for OAuth — always use the app scheme on native */
+  const getRedirectUri = () => "ibhub://auth/callback";
 
   const signInWithGoogle = async (): Promise<{ error: string | null }> => {
     try {
