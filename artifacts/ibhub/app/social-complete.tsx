@@ -106,7 +106,9 @@ export default function SocialCompleteScreen() {
     await refreshProfile();
     clearProfileCompletion();
     setLoading(false);
-  }, [user, fullName, username, position, areas, refreshProfile, clearProfileCompletion]);
+    // Navigate explicitly — _layout.tsx also redirects, but this is an extra guarantee
+    router.replace("/(tabs)" as any);
+  }, [user, fullName, username, position, areas, refreshProfile, clearProfileCompletion, router]);
 
   return (
     <View style={styles.root}>

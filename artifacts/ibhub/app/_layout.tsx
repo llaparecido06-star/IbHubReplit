@@ -8,7 +8,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -23,13 +23,24 @@ const queryClient = new QueryClient();
 function RootLayoutNav() {
   const { session, loading, isRecovering, needsProfileCompletion } = useAuth();
   const router = useRouter();
+  // Tracks whether we've already navigated the user into the app for this session.
+  // Prevents redirect loops when the user navigates between internal screens.
+  const didNavigateIn = useRef(false);
 
   useEffect(() => {
     if (loading || isRecovering) return;
+
     if (!session) {
+      // Reset so next sign-in triggers navigation again
+      didNavigateIn.current = false;
       router.replace("/(auth)/login" as any);
     } else if (needsProfileCompletion) {
+      // New social-auth user needs to complete their profile
       router.replace("/social-complete" as any);
+    } else if (!didNavigateIn.current) {
+      // Session ready + profile complete → navigate into the app once
+      didNavigateIn.current = true;
+      router.replace("/(tabs)" as any);
     }
   }, [session, loading, isRecovering, needsProfileCompletion]);
 
