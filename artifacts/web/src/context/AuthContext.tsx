@@ -17,6 +17,8 @@ interface Profile {
   country: string | null;
   referral_code: string | null;
   invited_by_id: string | null;
+  is_admin: boolean;
+  is_banned: boolean;
 }
 
 interface AuthContextType {

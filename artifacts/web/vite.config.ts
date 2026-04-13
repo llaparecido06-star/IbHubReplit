@@ -12,6 +12,7 @@ export default defineConfig({
   define: {
     "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(process.env.EXPO_PUBLIC_SUPABASE_URL ?? ""),
     "import.meta.env.VITE_SUPABASE_ANON_KEY": JSON.stringify(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? ""),
+    "import.meta.env.VITE_API_URL": JSON.stringify(process.env.EXPO_PUBLIC_API_URL ?? ""),
   },
   plugins: [
     react(),

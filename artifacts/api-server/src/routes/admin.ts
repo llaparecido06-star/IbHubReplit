@@ -66,7 +66,7 @@ router.get("/admin/users", async (req: Request, res: Response) => {
 
   let profileQuery = supabaseAdmin
     .from("profiles")
-    .select("id, full_name, username, plan, areas_of_expertise, created_at, is_banned, is_shadowbanned")
+    .select("id, full_name, username, plan, areas_of_expertise, created_at, is_banned, is_shadowbanned, is_admin")
     .in("id", ids)
     .order("created_at", { ascending: false });
 
@@ -314,6 +314,228 @@ router.post("/admin/revoke-admin", async (req: Request, res: Response) => {
 
   if (error) { res.status(500).json({ error: error.message }); return; }
   res.json({ success: true });
+});
+
+// Ban or unban a user
+router.post("/admin/ban-user", async (req: Request, res: Response) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+
+  const { userId, ban } = req.body as { userId?: string; ban?: boolean };
+  if (!userId || ban === undefined) {
+    res.status(400).json({ error: "userId and ban are required" });
+    return;
+  }
+
+  const { error } = await supabaseAdmin
+    .from("profiles")
+    .update({ is_banned: ban })
+    .eq("id", userId);
+
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  res.json({ success: true });
+});
+
+// Change a user's plan
+router.post("/admin/change-plan", async (req: Request, res: Response) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+
+  const { userId, plan } = req.body as { userId?: string; plan?: string };
+  if (!userId || !plan) {
+    res.status(400).json({ error: "userId and plan are required" });
+    return;
+  }
+
+  const VALID_PLANS = ["basico", "profissional", "empresarial", "premium"];
+  if (!VALID_PLANS.includes(plan)) {
+    res.status(400).json({ error: `Invalid plan. Valid values: ${VALID_PLANS.join(", ")}` });
+    return;
+  }
+
+  const { error } = await supabaseAdmin
+    .from("profiles")
+    .update({ plan })
+    .eq("id", userId);
+
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  res.json({ success: true });
+});
+
+// Delete a post (content moderation)
+router.delete("/admin/posts/:postId", async (req: Request, res: Response) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+
+  const { postId } = req.params as { postId: string };
+  if (!postId) {
+    res.status(400).json({ error: "postId is required" });
+    return;
+  }
+
+  const { error } = await supabaseAdmin.from("posts").delete().eq("id", postId);
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  res.json({ success: true });
+});
+
+// List recent posts for moderation
+router.get("/admin/posts", async (req: Request, res: Response) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+
+  const limit = Math.min(Number(req.query.limit ?? 100), 500);
+  const search = String(req.query.search ?? "").trim().toLowerCase();
+
+  const { data, error } = await supabaseAdmin
+    .from("posts")
+    .select("id, content, image_url, created_at, user_id")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+
+  type RawPost = { id: string; content: string | null; image_url: string | null; created_at: string; user_id: string };
+  const posts = (data ?? []) as RawPost[];
+  const userIds = [...new Set(posts.map((p) => p.user_id))];
+  const { data: profiles } = await supabaseAdmin.from("profiles").select("id, full_name").in("id", userIds);
+  type RawProfile = { id: string; full_name: string | null };
+  const nameMap = new Map(((profiles ?? []) as RawProfile[]).map((p) => [p.id, p.full_name]));
+
+  const result = posts.map((p) => ({ ...p, author_name: nameMap.get(p.user_id) ?? null }));
+  const filtered = search
+    ? result.filter((p) =>
+        (p.content ?? "").toLowerCase().includes(search) ||
+        (p.author_name ?? "").toLowerCase().includes(search)
+      )
+    : result;
+
+  res.json({ posts: filtered });
+});
+
+// Generate a short-lived signed URL for a private CV in Supabase Storage.
+// Caller must be authenticated (any user). RLS on the 'cvs' bucket ensures
+// only the file owner or service role can sign — here we use service role
+// on behalf of the caller (caller proves identity via JWT).
+router.post("/cv/signed-url", async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    res.status(401).json({ error: "Missing or invalid Authorization header" });
+    return;
+  }
+  const token = authHeader.slice(7);
+  const { data: userData, error: userError } = await supabaseAnon.auth.getUser(token);
+  if (userError || !userData?.user) {
+    res.status(401).json({ error: "Invalid or expired token" });
+    return;
+  }
+
+  const { path } = req.body as { path?: string };
+  if (!path || typeof path !== "string" || !path.startsWith("cvs/")) {
+    res.status(400).json({ error: "Invalid or missing storage path" });
+    return;
+  }
+
+  const userId = userData.user.id;
+  const expectedPrefix = `cvs/${userId}/`;
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", userId)
+    .maybeSingle();
+  const isAdmin = !!(profile as { is_admin?: boolean } | null)?.is_admin;
+
+  if (!path.startsWith(expectedPrefix) && !isAdmin) {
+    res.status(403).json({ error: "Access denied: you can only access your own CVs" });
+    return;
+  }
+
+  const { data, error } = await supabaseAdmin.storage.from("cvs").createSignedUrl(path, 3600);
+  if (error || !data) {
+    res.status(500).json({ error: "Failed to generate signed URL" });
+    return;
+  }
+
+  res.json({ signedUrl: data.signedUrl, expiresIn: 3600 });
+});
+
+// Broadcast notification (in-app) to segments
+router.post("/admin/broadcast-notification", async (req: Request, res: Response) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+
+  const { title, body, segment } = req.body as { title?: string; body?: string; segment?: string };
+  if (!title || !body) {
+    res.status(400).json({ error: "title and body are required" });
+    return;
+  }
+
+  const VALID_SEGMENTS = ["all", "profissional", "empresarial", "premium", "basico"];
+  const seg = segment ?? "all";
+  if (!VALID_SEGMENTS.includes(seg)) {
+    res.status(400).json({ error: `Invalid segment. Valid values: ${VALID_SEGMENTS.join(", ")}` });
+    return;
+  }
+
+  let query = supabaseAdmin.from("profiles").select("id");
+  if (seg !== "all") {
+    query = query.eq("plan", seg);
+  }
+
+  const { data: recipients, error: recipError } = await query;
+  if (recipError || !recipients) {
+    res.status(500).json({ error: "Failed to fetch recipients" });
+    return;
+  }
+
+  const count = recipients.length;
+  type Recipient = { id: string };
+  const notifs = (recipients as Recipient[]).map((r) => ({
+    user_id: r.id,
+    type: "broadcast",
+    message: `${title}: ${body}`,
+    read: false,
+  }));
+
+  const BATCH_SIZE = 500;
+  const batchErrors: string[] = [];
+  for (let i = 0; i < notifs.length; i += BATCH_SIZE) {
+    const { error: batchErr } = await supabaseAdmin
+      .from("notifications")
+      .insert(notifs.slice(i, i + BATCH_SIZE));
+    if (batchErr) batchErrors.push(batchErr.message);
+  }
+
+  if (batchErrors.length > 0) {
+    res.status(500).json({ error: "Failed to insert some notifications", details: batchErrors });
+    return;
+  }
+
+  const { error: logErr } = await supabaseAdmin.from("notification_broadcasts").insert({
+    title,
+    body,
+    segment: seg,
+    sent_at: new Date().toISOString(),
+    sent_count: count,
+  });
+
+  if (logErr) {
+    res.status(500).json({ error: "Notifications sent but failed to log broadcast", details: logErr.message });
+    return;
+  }
+
+  res.json({ success: true, count, message: `Notificação enviada para ${count} usuário(s).` });
 });
 
 // Broadcast push notification to a segment of users
