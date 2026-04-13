@@ -28,6 +28,41 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 
 ---
 
+# IbHub Web — Rede do Vinho (Web App)
+
+## Artefato
+
+- **Diretório**: `artifacts/web/`
+- **Framework**: React + Vite + TypeScript + Tailwind CSS v4
+- **Preview path**: `/web/`
+- **Backend**: Supabase (reutiliza secrets do mobile: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`)
+
+## Design System
+
+- **Paleta**: Navy `#0d1b2a` · Gold `#c9a84c` · Wine `#722f37`
+- **Fonte**: Inter (system-ui fallback)
+- **Radius**: 12px padrão
+- **Tema**: Light mode always (alinhado com mobile)
+
+## Páginas
+
+| Rota | Arquivo | Descrição |
+|---|---|---|
+| `/` | `LandingPage.tsx` | Hero, About, Features, Plans, CTA, Footer |
+| `/login` | `LoginPage.tsx` | Email/senha + Google OAuth |
+| `/cadastro` | `CadastroPage.tsx` | Registro 3 etapas (dados → áreas → plano) |
+| `/recuperar-senha` | `RecuperarSenhaPage.tsx` | Reset de senha por email |
+| `/redefinir-senha` | `RedefinirSenhaPage.tsx` | Definir nova senha |
+| `/app` | `AppFeedPage.tsx` | Placeholder autenticado (feed virá na próxima tarefa) |
+
+## Arquivos Importantes
+
+- `src/lib/supabase.ts` — cliente Supabase (usa `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` definidos no vite.config.ts a partir dos secrets EXPO_PUBLIC_*)
+- `src/context/AuthContext.tsx` — sessão, signIn/signUp/Google/signOut, resetPassword, refreshProfile
+- `src/App.tsx` — roteamento Wouter com PrivateRoute e PublicOnlyRoute guards
+
+---
+
 # IbHub — Rede do Vinho (Mobile App)
 
 ## Produto
