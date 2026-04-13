@@ -17,7 +17,9 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
-    flowType: "pkce",
+    // Implicit flow — no WebCrypto needed. Supabase returns tokens in the
+    // URL fragment (#access_token=…) rather than a PKCE code that requires
+    // SHA-256 hashing (unavailable in Expo Go's Hermes engine).
   },
 });
 
@@ -260,13 +262,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    */
   const getRedirectUri = () => Linking.createURL("auth/callback");
 
-  /** Extract the `code` param from any URL, including custom schemes (exp://, ibhub://) */
-  const extractCode = (url: string): string | null => {
-    try {
-      return new URL(url).searchParams.get("code");
-    } catch {
-      return url.match(/[?&]code=([^&#]+)/)?.[1] ?? null;
+  /**
+   * Parse the OAuth redirect URL returned by openAuthSessionAsync.
+   * Implicit flow:  tokens are in the URL *fragment* (#access_token=…)
+   * PKCE flow:      code is in the *query string* (?code=…)
+   * Returns whichever is found first.
+   */
+  const parseOAuthRedirect = (url: string) => {
+    const parseKV = (str: string) => {
+      const out: Record<string, string> = {};
+      (str || "").split("&").forEach(pair => {
+        const eq = pair.indexOf("=");
+        if (eq < 1) return;
+        try {
+          out[decodeURIComponent(pair.slice(0, eq))] = decodeURIComponent(pair.slice(eq + 1));
+        } catch {}
+      });
+      return out;
+    };
+
+    // Fragment comes after #; query comes after ? but before #
+    const hashIdx   = url.indexOf("#");
+    const queryIdx  = url.indexOf("?");
+    const fragment  = hashIdx  >= 0 ? url.slice(hashIdx  + 1) : "";
+    const query     = queryIdx >= 0 ? url.slice(queryIdx + 1, hashIdx >= 0 ? hashIdx : undefined) : "";
+
+    const frag = parseKV(fragment);
+    if (frag.access_token && frag.refresh_token) {
+      return { type: "tokens" as const, accessToken: frag.access_token, refreshToken: frag.refresh_token };
     }
+
+    const q = parseKV(query);
+    if (q.access_token && q.refresh_token) {
+      return { type: "tokens" as const, accessToken: q.access_token, refreshToken: q.refresh_token };
+    }
+    if (q.code) {
+      return { type: "code" as const, code: q.code };
+    }
+
+    return null;
   };
 
   const signInWithOAuthProvider = async (
@@ -282,16 +316,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!data?.url) return { error: `Não foi possível iniciar o login com ${provider}.` };
 
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-
       if (result.type === "cancel") return { error: null };
 
       if (result.type === "success" && result.url) {
-        const code = extractCode(result.url);
-        if (code) {
-          const { error: err } = await supabase.auth.exchangeCodeForSession(code);
+        const parsed = parseOAuthRedirect(result.url);
+
+        if (parsed?.type === "tokens") {
+          // Implicit flow — set session directly from tokens
+          const { error: err } = await supabase.auth.setSession({
+            access_token: parsed.accessToken,
+            refresh_token: parsed.refreshToken,
+          });
+          if (err) return { error: err.message };
+
+        } else if (parsed?.type === "code") {
+          // PKCE flow fallback (when WebCrypto works)
+          const { error: err } = await supabase.auth.exchangeCodeForSession(parsed.code);
           if (err) return { error: err.message };
         }
-        // If no code, session may have been set via implicit flow — just wait for onAuthStateChange
+        // onAuthStateChange(SIGNED_IN) will fire and set the session
       }
       return { error: null };
     } catch (e: any) {
