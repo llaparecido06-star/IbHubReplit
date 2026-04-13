@@ -1,5 +1,6 @@
 import { Tabs } from "expo-router";
 import { Feather } from "@/components/ui/Icon";
+import { useIsDesktop } from "@/components/ui/SidebarNav";
 import React from "react";
 import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -9,10 +10,11 @@ import { useUnread } from "@/context/UnreadContext";
 
 export default function TabLayout() {
   const colors    = useColors();
-  const { profile } = useAuth();
-  const isCompany = profile?.profile_type === "empresa";
+  const { profile, activeCompany } = useAuth();
+  const isCompany = !!activeCompany || profile?.profile_type === "empresa";
   const insets    = useSafeAreaInsets();
   const { unreadCount } = useUnread();
+  const isDesktop = useIsDesktop();
 
   const tabBarHeight = Platform.select({
     ios:     54 + insets.bottom,
@@ -26,7 +28,9 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.gold,
         tabBarInactiveTintColor: "#9ca3af",
         headerShown: false,
-        tabBarStyle: {
+        tabBarStyle: isDesktop
+          ? { display: "none" }
+          : {
           backgroundColor: "#ffffff",
           borderTopWidth: 1,
           borderTopColor: colors.border,

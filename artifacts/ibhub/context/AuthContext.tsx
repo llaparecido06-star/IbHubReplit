@@ -37,10 +37,20 @@ interface Profile {
   areas_of_expertise: string[];
   areas: string[];
   country: string | null;
+  location?: string | null;
   referral_code: string | null;
   invited_by_id: string | null;
-  avatar_url?: string | null;
   industry?: string | null;
+  profile_type?: string | null;
+  followers_count?: number;
+  following_count?: number;
+  connections_count?: number;
+  is_admin?: boolean;
+  phone?: string | null;
+  website?: string | null;
+  certifications?: string[] | null;
+  subscription_tier?: string | null;
+  is_public?: boolean;
 }
 
 interface ActiveCompany {

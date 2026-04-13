@@ -178,6 +178,7 @@ export default function ProfileScreen() {
   const [followers,      setFollowers]      = useState<FollowProfile[]>([]);
   const [following,      setFollowing]      = useState<FollowProfile[]>([]);
   const [suggestions,    setSuggestions]    = useState<SuggestedProfile[]>([]);
+  const [followingSet,   setFollowingSet]   = useState<Set<string>>(new Set());
   const [connectingId,   setConnectingId]   = useState<string | null>(null);
   const [companyPages,   setCompanyPages]   = useState<CompanyPage[]>([]);
   const [loadingData,    setLoadingData]    = useState(true);
@@ -226,6 +227,7 @@ export default function ProfileScreen() {
     setWineEntries(wines);
     setFollowers(fr);
     setFollowing(fg);
+    setFollowingSet(new Set(fg.map((f) => f.id)));
     setSuggestions(sg);
     setLoadingData(false);
     setRefreshing(false);

@@ -15,16 +15,67 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { UnreadProvider } from "@/context/UnreadContext";
+import { SidebarNav, useIsDesktop } from "@/components/ui/SidebarNav";
 
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
+function AuthenticatedLayout() {
+  const isDesktop = useIsDesktop();
+
+  const stack = (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="social-complete" options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="create-post" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
+      <Stack.Screen name="search" options={{ animation: "slide_from_bottom" }} />
+      <Stack.Screen name="wine-cellar" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="certifications" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="settings" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="edit-profile" options={{ presentation: "modal" }} />
+      <Stack.Screen name="events" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="opportunities" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="groups" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="new-group" options={{ presentation: "modal" }} />
+      <Stack.Screen name="my-events" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="new-message" options={{ presentation: "modal" }} />
+      <Stack.Screen name="chat/[id]" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="post/[id]" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="profile/[id]" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="empresa/[id]" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="event/[id]" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="job/[id]" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="opportunity/[id]" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="conexoes" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="analytics" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="privacy-security" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="notification-settings" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="terms-of-use" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="privacy-policy" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="contact" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="report-bug" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="admin" options={{ headerShown: false }} />
+    </Stack>
+  );
+
+  if (isDesktop) {
+    return (
+      <View style={{ flex: 1, flexDirection: "row" }}>
+        <SidebarNav />
+        <View style={{ flex: 1 }}>
+          {stack}
+        </View>
+      </View>
+    );
+  }
+
+  return stack;
+}
+
 function RootLayoutNav() {
   const { session, loading, isRecovering, needsProfileCompletion } = useAuth();
   const router = useRouter();
-  // Tracks whether we've already navigated the user into the app for this session.
-  // Prevents redirect loops when the user navigates between internal screens.
   const didNavigateIn = useRef(false);
 
   useEffect(() => {
@@ -37,10 +88,6 @@ function RootLayoutNav() {
       router.replace("/social-complete" as any);
     } else if (!didNavigateIn.current) {
       didNavigateIn.current = true;
-      // Delay slightly so the session Stack is fully mounted before navigating.
-      // Without this, a fresh OAuth login fires router.replace while the Stack
-      // is still transitioning from non-session → session, causing a "route
-      // does not exist" error on first login (but not on relaunch).
       setTimeout(() => router.replace("/(tabs)" as any), 80);
     }
   }, [session, loading, isRecovering, needsProfileCompletion]);
@@ -53,7 +100,6 @@ function RootLayoutNav() {
     );
   }
 
-  // Password recovery flow — show reset screen regardless of session state
   if (isRecovering) {
     return (
       <Stack screenOptions={{ headerShown: false }}>
@@ -73,30 +119,15 @@ function RootLayoutNav() {
     );
   }
 
-  return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="social-complete" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="create-post" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
-      <Stack.Screen name="search" options={{ animation: "slide_from_bottom" }} />
-      <Stack.Screen name="wine-cellar" options={{ animation: "slide_from_right" }} />
-      <Stack.Screen name="certifications" options={{ animation: "slide_from_right" }} />
-      <Stack.Screen name="settings" options={{ animation: "slide_from_right" }} />
-      <Stack.Screen name="edit-profile" options={{ presentation: "modal" }} />
-      <Stack.Screen name="events" options={{ animation: "slide_from_right" }} />
-      <Stack.Screen name="opportunities" options={{ animation: "slide_from_right" }} />
-      <Stack.Screen name="groups" options={{ animation: "slide_from_right" }} />
-      <Stack.Screen name="my-events" options={{ animation: "slide_from_right" }} />
-      <Stack.Screen name="new-message" options={{ presentation: "modal" }} />
-      <Stack.Screen name="chat/[id]" options={{ animation: "slide_from_right" }} />
-      <Stack.Screen name="post/[id]" options={{ animation: "slide_from_right" }} />
-      <Stack.Screen name="profile/[id]" options={{ animation: "slide_from_right" }} />
-      <Stack.Screen name="terms-of-use" options={{ animation: "slide_from_right" }} />
-      <Stack.Screen name="privacy-policy" options={{ animation: "slide_from_right" }} />
-      <Stack.Screen name="contact" options={{ animation: "slide_from_right" }} />
-      <Stack.Screen name="report-bug" options={{ animation: "slide_from_right" }} />
-    </Stack>
-  );
+  if (needsProfileCompletion) {
+    return (
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="social-complete" options={{ headerShown: false }} />
+      </Stack>
+    );
+  }
+
+  return <AuthenticatedLayout />;
 }
 
 export default function RootLayout() {
