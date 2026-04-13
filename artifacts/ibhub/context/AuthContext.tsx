@@ -251,62 +251,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: null };
   };
 
-  /** Build the redirect URI for OAuth — always use the app scheme on native */
-  const getRedirectUri = () => "ibhub://auth/callback";
+  /**
+   * Build the redirect URI for OAuth.
+   * - Expo Go (dev): Linking.createURL returns exp://[host]/--/auth/callback
+   *   The exp:// scheme IS registered in Expo Go, so Chrome Custom Tab closes properly.
+   * - Production / dev build: returns ibhub://auth/callback
+   * Both must be allowlisted in the Supabase Redirect URLs config.
+   */
+  const getRedirectUri = () => Linking.createURL("auth/callback");
 
-  const signInWithGoogle = async (): Promise<{ error: string | null }> => {
+  /** Extract the `code` param from any URL, including custom schemes (exp://, ibhub://) */
+  const extractCode = (url: string): string | null => {
+    try {
+      return new URL(url).searchParams.get("code");
+    } catch {
+      return url.match(/[?&]code=([^&#]+)/)?.[1] ?? null;
+    }
+  };
+
+  const signInWithOAuthProvider = async (
+    provider: "google" | "apple"
+  ): Promise<{ error: string | null }> => {
     try {
       const redirectTo = getRedirectUri();
       const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
+        provider,
         options: { redirectTo, skipBrowserRedirect: true },
       });
       if (error) return { error: error.message };
-      if (!data?.url) return { error: "Não foi possível iniciar o login com Google." };
+      if (!data?.url) return { error: `Não foi possível iniciar o login com ${provider}.` };
 
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+
+      if (result.type === "cancel") return { error: null };
+
       if (result.type === "success" && result.url) {
-        const url = new URL(result.url);
-        const code = url.searchParams.get("code");
+        const code = extractCode(result.url);
         if (code) {
           const { error: err } = await supabase.auth.exchangeCodeForSession(code);
           if (err) return { error: err.message };
         }
-      } else if (result.type === "cancel") {
-        return { error: null }; // user cancelled, no error
+        // If no code, session may have been set via implicit flow — just wait for onAuthStateChange
       }
       return { error: null };
     } catch (e: any) {
-      return { error: e?.message ?? "Erro ao entrar com Google." };
+      return { error: e?.message ?? `Erro ao entrar com ${provider}.` };
     }
   };
 
-  const signInWithApple = async (): Promise<{ error: string | null }> => {
-    try {
-      const redirectTo = getRedirectUri();
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: "apple",
-        options: { redirectTo, skipBrowserRedirect: true },
-      });
-      if (error) return { error: error.message };
-      if (!data?.url) return { error: "Não foi possível iniciar o login com Apple." };
-
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-      if (result.type === "success" && result.url) {
-        const url = new URL(result.url);
-        const code = url.searchParams.get("code");
-        if (code) {
-          const { error: err } = await supabase.auth.exchangeCodeForSession(code);
-          if (err) return { error: err.message };
-        }
-      } else if (result.type === "cancel") {
-        return { error: null };
-      }
-      return { error: null };
-    } catch (e: any) {
-      return { error: e?.message ?? "Erro ao entrar com Apple." };
-    }
-  };
+  const signInWithGoogle = () => signInWithOAuthProvider("google");
+  const signInWithApple  = () => signInWithOAuthProvider("apple");
 
   const signOut = async () => {
     setActiveCompany(null);
