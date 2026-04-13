@@ -96,11 +96,18 @@ export default function SocialCompleteScreen() {
     // Ensure referral code exists
     await ensureReferralCode(user.id);
 
-    // Also update avatar from OAuth if available
+    // Only set avatar from OAuth if user doesn't already have one
     const meta = user.user_metadata as any;
-    const avatarUrl = meta?.avatar_url ?? meta?.picture ?? null;
-    if (avatarUrl) {
-      await supabase.from("profiles").update({ avatar_url: avatarUrl }).eq("id", user.id);
+    const oauthAvatar = meta?.avatar_url ?? meta?.picture ?? null;
+    if (oauthAvatar) {
+      const { data: existing } = await supabase
+        .from("profiles")
+        .select("avatar_url")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (!existing?.avatar_url) {
+        await supabase.from("profiles").update({ avatar_url: oauthAvatar }).eq("id", user.id);
+      }
     }
 
     await refreshProfile();
