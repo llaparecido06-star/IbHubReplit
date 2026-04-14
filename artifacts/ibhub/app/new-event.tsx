@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -12,10 +13,16 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as ImagePicker from "expo-image-picker";
 import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
-import { createEvent } from "@/services/api";
+import { createEvent, uploadEventImage } from "@/services/api";
+
+const AREAS = [
+  "Sommelier", "Comprador", "Importador", "Produtor",
+  "Enólogo", "Consultor", "Investidor", "Entusiasta", "Outros",
+];
 
 function maskDate(raw: string): string {
   const digits = raw.replace(/\D/g, "").slice(0, 8);
@@ -51,22 +58,25 @@ export default function NewEventScreen() {
   const [step, setStep] = useState(1);
 
   // Step 1 fields
-  const [title, setTitle]       = useState("");
-  const [desc, setDesc]         = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [endDate, setEndDate]   = useState("");
-  const [endTime, setEndTime]   = useState("");
-  const [localType, setLocalType] = useState<LocalType>("presencial");
-  const [address, setAddress]   = useState("");
+  const [coverUri, setCoverUri]       = useState<string | null>(null);
+  const [title, setTitle]             = useState("");
+  const [desc, setDesc]               = useState("");
+  const [startDate, setStartDate]     = useState("");
+  const [startTime, setStartTime]     = useState("");
+  const [endDate, setEndDate]         = useState("");
+  const [endTime, setEndTime]         = useState("");
+  const [localType, setLocalType]     = useState<LocalType>("presencial");
+  const [address, setAddress]         = useState("");
+  const [onlineLink, setOnlineLink]   = useState("");
 
   // Step 2 fields
-  const [entryType, setEntryType] = useState<EntryType>("gratuito");
-  const [capacity, setCapacity]   = useState("");
-  const [payLink, setPayLink]     = useState("");
+  const [entryType, setEntryType]     = useState<EntryType>("gratuito");
+  const [capacity, setCapacity]       = useState("");
+  const [payLink, setPayLink]         = useState("");
 
   // Step 3 fields
-  const [visibility, setVisibility] = useState<Visibility>("publico");
+  const [visibility, setVisibility]           = useState<Visibility>("publico");
+  const [restrictedPositions, setRestrictedPositions] = useState<string[]>([]);
 
   const [creating, setCreating] = useState(false);
 
@@ -74,7 +84,6 @@ export default function NewEventScreen() {
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
   const canNext1 = title.trim().length > 0 && startDate.length > 0 && startTime.length > 0;
-  const canNext2 = true;
 
   const handleNext = () => {
     if (step === 1 && !canNext1) { Alert.alert("Atenção", "Preencha título, data e hora de início."); return; }
@@ -85,6 +94,31 @@ export default function NewEventScreen() {
     else setStep((s) => s - 1);
   };
 
+  const pickCoverImage = async () => {
+    if (Platform.OS !== "web") {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permissão necessária", "Autorize o acesso à galeria para selecionar uma imagem.");
+        return;
+      }
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets.length > 0) {
+      setCoverUri(result.assets[0].uri);
+    }
+  };
+
+  const toggleRestrictedPosition = (area: string) => {
+    setRestrictedPositions((prev) =>
+      prev.includes(area) ? prev.filter((a) => a !== area) : [...prev, area]
+    );
+  };
+
   const handleCreate = async () => {
     if (!user?.id) { Alert.alert("Erro", "Você precisa estar logado."); return; }
     const startIso = parseDateTime(startDate, startTime);
@@ -92,6 +126,12 @@ export default function NewEventScreen() {
     const endIso = endDate && endTime ? parseDateTime(endDate, endTime) : null;
     const cap = capacity ? parseInt(capacity, 10) : null;
     setCreating(true);
+
+    let imageUrl: string | null = null;
+    if (coverUri) {
+      imageUrl = await uploadEventImage(coverUri, user.id);
+    }
+
     const result = await createEvent({
       user_id: user.id,
       title: title.trim(),
@@ -100,9 +140,12 @@ export default function NewEventScreen() {
       end_date: endIso,
       location_type: localType,
       location: localType === "presencial" ? (address.trim() || null) : null,
+      link: localType === "online" ? (onlineLink.trim() || null) : null,
+      image_url: imageUrl,
       entry_type: entryType,
       capacity: cap && !isNaN(cap) ? cap : null,
       visibility,
+      restricted_positions: visibility === "restrito" && restrictedPositions.length > 0 ? restrictedPositions : null,
       pay_link: entryType !== "gratuito" ? (payLink.trim() || null) : null,
     });
     setCreating(false);
@@ -196,15 +239,27 @@ export default function NewEventScreen() {
       >
         {/* ── Step 1 ── */}
         {step === 1 && <>
-          {/* Cover image */}
+          {/* Cover image picker */}
           <TouchableOpacity
-            style={[styles.coverPicker, { backgroundColor: "#fff", borderColor: colors.border }]}
-            onPress={() => Alert.alert("Em breve", "Upload de imagem em desenvolvimento.")}
+            style={[styles.coverPicker, { borderColor: colors.border }]}
+            onPress={pickCoverImage}
+            activeOpacity={0.8}
           >
-            <Feather name="image" size={32} color={colors.border} />
-            <Text style={[styles.coverPickerText, { color: colors.mutedForeground }]}>
-              Toque para adicionar capa
-            </Text>
+            {coverUri ? (
+              <Image source={{ uri: coverUri }} style={styles.coverImage} resizeMode="cover" />
+            ) : (
+              <>
+                <Feather name="image" size={32} color={colors.border} />
+                <Text style={[styles.coverPickerText, { color: colors.mutedForeground }]}>
+                  Toque para adicionar capa
+                </Text>
+              </>
+            )}
+            {coverUri ? (
+              <View style={[styles.coverOverlay]}>
+                <Feather name="edit-2" size={16} color="#fff" />
+              </View>
+            ) : null}
           </TouchableOpacity>
 
           <View style={styles.field}>
@@ -320,6 +375,24 @@ export default function NewEventScreen() {
               />
             </View>
           )}
+
+          {localType === "online" && (
+            <View style={styles.field}>
+              <Text style={[styles.label, { color: colors.navy }]}>Link do evento (Zoom, Meet...)</Text>
+              <Text style={[{ fontSize: 12, color: colors.mutedForeground, marginTop: -4 }]}>
+                Visível apenas para participantes confirmados
+              </Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+                placeholder="https://meet.google.com/..."
+                placeholderTextColor={colors.mutedForeground}
+                value={onlineLink}
+                onChangeText={setOnlineLink}
+                autoCapitalize="none"
+                keyboardType="url"
+              />
+            </View>
+          )}
         </>}
 
         {/* ── Step 2 ── */}
@@ -414,6 +487,42 @@ export default function NewEventScreen() {
               ))}
             </View>
           </View>
+
+          {visibility === "restrito" && (
+            <View style={styles.field}>
+              <Text style={[styles.label, { color: colors.navy }]}>Cargos permitidos</Text>
+              <Text style={[{ fontSize: 12, color: colors.mutedForeground, marginTop: -4 }]}>
+                Selecione um ou mais cargos que poderão ver este evento
+              </Text>
+              <View style={styles.areasGrid}>
+                {AREAS.map((area) => {
+                  const selected = restrictedPositions.includes(area);
+                  return (
+                    <TouchableOpacity
+                      key={area}
+                      style={[
+                        styles.areaChip,
+                        {
+                          backgroundColor: selected ? colors.gold : "#fff",
+                          borderColor: selected ? colors.gold : colors.border,
+                        },
+                      ]}
+                      onPress={() => toggleRestrictedPosition(area)}
+                    >
+                      <Text style={[styles.areaChipText, { color: selected ? "#fff" : colors.mutedForeground }]}>
+                        {area}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {restrictedPositions.length === 0 && (
+                <Text style={[{ fontSize: 12, color: "#f59e0b", marginTop: 4 }]}>
+                  Selecione ao menos um cargo ou mude para Público/Privado
+                </Text>
+              )}
+            </View>
+          )}
         </>}
       </ScrollView>
     </KeyboardAvoidingView>
@@ -426,21 +535,28 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1,
   },
-  backRow:     { padding: 4 },
-  headerCenter:{ alignItems: "center" },
-  headerTitle: { fontSize: 16, fontWeight: "700" },
-  headerStep:  { fontSize: 12, marginTop: 2 },
-  nextRow:     { flexDirection: "row", alignItems: "center", gap: 4 },
-  nextText:    { fontSize: 15, fontWeight: "600" },
-  createBtn:   { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-  createBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
-  progressBar: { flexDirection: "row", gap: 4, paddingHorizontal: 16, paddingVertical: 8 },
+  backRow:      { padding: 4 },
+  headerCenter: { alignItems: "center" },
+  headerTitle:  { fontSize: 16, fontWeight: "700" },
+  headerStep:   { fontSize: 12, marginTop: 2 },
+  nextRow:      { flexDirection: "row", alignItems: "center", gap: 4 },
+  nextText:     { fontSize: 15, fontWeight: "600" },
+  createBtn:    { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  createBtnText:{ color: "#fff", fontSize: 14, fontWeight: "700" },
+  progressBar:  { flexDirection: "row", gap: 4, paddingHorizontal: 16, paddingVertical: 8 },
   progressSegment: { flex: 1, height: 4, borderRadius: 2 },
   coverPicker: {
     borderWidth: 2, borderStyle: "dashed", borderRadius: 12,
-    aspectRatio: 16 / 9, alignItems: "center", justifyContent: "center", gap: 8,
+    aspectRatio: 16 / 9, alignItems: "center", justifyContent: "center",
+    overflow: "hidden",
   },
-  coverPickerText: { fontSize: 13 },
+  coverImage:   { width: "100%", height: "100%" },
+  coverOverlay: {
+    position: "absolute", bottom: 8, right: 8,
+    backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 16,
+    padding: 6,
+  },
+  coverPickerText: { fontSize: 13, marginTop: 8 },
   field:  { gap: 8 },
   label:  { fontSize: 15, fontWeight: "700" },
   input:  { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 },
@@ -459,4 +575,7 @@ const styles = StyleSheet.create({
   visLabel: { fontSize: 15, fontWeight: "700" },
   visDesc:  { fontSize: 12, marginTop: 2 },
   visDot:   { width: 12, height: 12, borderRadius: 6 },
+  areasGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  areaChip: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
+  areaChipText: { fontSize: 13, fontWeight: "600" },
 });

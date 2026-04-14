@@ -3523,6 +3523,9 @@ export interface AppEvent {
   end_date: string | null;
   location_type: "presencial" | "online" | string;
   location: string | null;
+  link: string | null;
+  image_url: string | null;
+  restricted_positions: string[] | null;
   entry_type: "gratuito" | "pago-externo" | "pago-integrado" | string;
   capacity: number | null;
   visibility: string | null;
@@ -3534,6 +3537,11 @@ export interface AppEvent {
     full_name: string | null;
     avatar_url: string | null;
     username: string | null;
+  } | null;
+  company_organizer?: {
+    id: string;
+    name: string;
+    avatar_url: string | null;
   } | null;
   attendees_count?: number;
   is_attending?: boolean;
@@ -3562,7 +3570,18 @@ async function enrichEventsWithOrganizer(events: any[]): Promise<any[]> {
     .select("id, full_name, avatar_url, username")
     .in("id", userIds);
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
-  return events.map((e: any) => ({ ...e, organizer: profileMap.get(e.user_id) ?? null }));
+
+  const { data: companies } = await supabase
+    .from("company_pages")
+    .select("id, owner_id, name, avatar_url")
+    .in("owner_id", userIds);
+  const companyByOwner = new Map((companies ?? []).map((c: any) => [c.owner_id, c]));
+
+  return events.map((e: any) => ({
+    ...e,
+    organizer: profileMap.get(e.user_id) ?? null,
+    company_organizer: companyByOwner.get(e.user_id) ?? null,
+  }));
 }
 
 export async function fetchEvents(search = "", userId = ""): Promise<AppEvent[]> {
@@ -3571,7 +3590,8 @@ export async function fetchEvents(search = "", userId = ""): Promise<AppEvent[]>
       .from("events")
       .select(`
         id, user_id, title, description, start_date, end_date,
-        location_type, location, entry_type, capacity, visibility, is_active, pay_link, created_at,
+        location_type, location, link, image_url, restricted_positions,
+        entry_type, capacity, visibility, is_active, pay_link, created_at,
         attendees_count
       `)
       .eq("is_active", true)
@@ -3606,7 +3626,7 @@ export async function fetchAllEventsAdmin(): Promise<AppEvent[]> {
   try {
     const { data, error } = await supabase
       .from("events")
-      .select("id, user_id, title, description, start_date, end_date, location_type, location, entry_type, capacity, visibility, is_active, pay_link, created_at")
+      .select("id, user_id, title, description, start_date, end_date, location_type, location, link, image_url, restricted_positions, entry_type, capacity, visibility, is_active, pay_link, created_at")
       .order("start_date", { ascending: true });
     if (error) { console.error("fetchAllEventsAdmin:", error); return []; }
     return await enrichEventsWithOrganizer(data ?? []);
@@ -3637,7 +3657,8 @@ export async function fetchEventById(id: string): Promise<AppEvent | null> {
       .from("events")
       .select(`
         id, user_id, title, description, start_date, end_date,
-        location_type, location, entry_type, capacity, visibility, is_active, pay_link, created_at
+        location_type, location, link, image_url, restricted_positions,
+        entry_type, capacity, visibility, is_active, pay_link, created_at
       `)
       .eq("id", id)
       .single();
@@ -3650,6 +3671,30 @@ export async function fetchEventById(id: string): Promise<AppEvent | null> {
   }
 }
 
+export async function uploadEventImage(imageUri: string, userId: string): Promise<string | null> {
+  try {
+    const ext = imageUri.split(".").pop()?.toLowerCase() ?? "jpg";
+    const path = `events/${userId}/${Date.now()}.${ext}`;
+    const response = await fetch(imageUri);
+    const blob = await response.blob();
+    const bytes = await new Promise<Uint8Array>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(blob);
+    });
+    const { data, error } = await supabase.storage
+      .from("post-images")
+      .upload(path, bytes, { contentType: `image/${ext === "jpg" ? "jpeg" : ext}`, upsert: true });
+    if (error) { console.error("uploadEventImage:", error); return null; }
+    const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(data.path);
+    return urlData.publicUrl;
+  } catch (e) {
+    console.error("uploadEventImage:", e);
+    return null;
+  }
+}
+
 export async function createEvent(params: {
   user_id: string;
   title: string;
@@ -3658,6 +3703,9 @@ export async function createEvent(params: {
   end_date?: string | null;
   location_type: string;
   location?: string | null;
+  link?: string | null;
+  image_url?: string | null;
+  restricted_positions?: string[] | null;
   entry_type: string;
   capacity?: number | null;
   visibility?: string;

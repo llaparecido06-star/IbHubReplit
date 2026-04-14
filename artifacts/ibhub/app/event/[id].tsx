@@ -3,6 +3,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
+  Linking,
   Platform,
   RefreshControl,
   ScrollView,
@@ -84,8 +86,11 @@ export default function EventScreen() {
 
   const onRefresh = () => { setRefreshing(true); loadData(); };
 
+  const isCreator = !!(user?.id && event?.user_id && user.id === event.user_id);
+
   const handleRSVP = async () => {
     if (!user?.id || !event) return;
+    if (isCreator) return;
     setRsvpLoading(true);
     if (isAttending) {
       const ok = await cancelAttendance(event.id, user.id);
@@ -153,7 +158,11 @@ export default function EventScreen() {
 
   const remaining = event.capacity != null ? event.capacity - attendees.length : null;
   const visibleAttendees = showAllAttendees ? attendees : attendees.slice(0, 5);
-  const organizerName = event.organizer?.full_name ?? event.organizer?.username ?? "Organizador";
+
+  const companyOrg = event.company_organizer;
+  const orgName = companyOrg?.name ?? event.organizer?.full_name ?? event.organizer?.username ?? "Organizador";
+  const orgAvatar = companyOrg?.avatar_url ?? event.organizer?.avatar_url ?? null;
+  const orgHandle = !companyOrg && event.organizer?.username ? `@${event.organizer.username}` : null;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -170,167 +179,218 @@ export default function EventScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16, rowGap: 14, paddingBottom: bottomPad }}
+        contentContainerStyle={{ paddingBottom: bottomPad, rowGap: 0 }}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />}
       >
-        {/* Title + entry badge */}
-        <View style={{ gap: 8 }}>
-          <Text style={[styles.eventTitle, { color: colors.navy }]}>{event.title}</Text>
-          <View style={styles.badgeRow}>
-            <View style={[styles.badge, { backgroundColor: event.entry_type === "gratuito" ? "#dcfce7" : "#fef9c3" }]}>
-              <Text style={[styles.badgeText, { color: event.entry_type === "gratuito" ? "#16a34a" : "#a16207" }]}>
-                {entryLabels[event.entry_type] ?? event.entry_type}
-              </Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: colors.background }]}>
-              <Text style={[styles.badgeText, { color: colors.mutedForeground }]}>
-                {event.location_type === "online" ? "🌐 Online" : "📍 Presencial"}
-              </Text>
+        {/* Cover image */}
+        {event.image_url ? (
+          <Image
+            source={{ uri: event.image_url }}
+            style={styles.coverImage}
+            resizeMode="cover"
+          />
+        ) : null}
+
+        <View style={{ padding: 16, gap: 14 }}>
+          {/* Title + entry badge */}
+          <View style={{ gap: 8 }}>
+            <Text style={[styles.eventTitle, { color: colors.navy }]}>{event.title}</Text>
+            <View style={styles.badgeRow}>
+              <View style={[styles.badge, { backgroundColor: event.entry_type === "gratuito" ? "#dcfce7" : "#fef9c3" }]}>
+                <Text style={[styles.badgeText, { color: event.entry_type === "gratuito" ? "#16a34a" : "#a16207" }]}>
+                  {entryLabels[event.entry_type] ?? event.entry_type}
+                </Text>
+              </View>
+              <View style={[styles.badge, { backgroundColor: colors.background }]}>
+                <Text style={[styles.badgeText, { color: colors.mutedForeground }]}>
+                  {event.location_type === "online" ? "🌐 Online" : "📍 Presencial"}
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
 
-        {/* Meta */}
-        <View style={styles.metaList}>
-          <View style={styles.metaRow}>
-            <Feather name="calendar" size={16} color={colors.mutedForeground} />
-            <Text style={[styles.metaText, { color: colors.foreground }]}>
-              {fmtDateTime(event.start_date)}
-            </Text>
+          {/* Meta */}
+          <View style={styles.metaList}>
+            <View style={styles.metaRow}>
+              <Feather name="calendar" size={16} color={colors.mutedForeground} />
+              <Text style={[styles.metaText, { color: colors.foreground }]}>
+                {fmtDateTime(event.start_date)}
+              </Text>
+            </View>
+            {event.end_date ? (
+              <View style={styles.metaRow}>
+                <Feather name="clock" size={16} color={colors.mutedForeground} />
+                <Text style={[styles.metaText, { color: colors.foreground }]}>
+                  Até {fmtTime(event.end_date)}
+                </Text>
+              </View>
+            ) : null}
+            {(event.location || event.location_type === "online") ? (
+              <View style={styles.metaRow}>
+                <Feather name="map-pin" size={16} color={colors.mutedForeground} />
+                <Text style={[styles.metaText, { color: colors.foreground }]}>
+                  {event.location_type === "online" ? "Online" : event.location}
+                </Text>
+              </View>
+            ) : null}
+            {event.pay_link ? (
+              <View style={styles.metaRow}>
+                <Feather name="external-link" size={16} color={colors.gold} />
+                <Text style={[styles.metaText, { color: colors.gold }]} numberOfLines={1}>
+                  {event.pay_link}
+                </Text>
+              </View>
+            ) : null}
           </View>
-          {event.end_date ? (
-            <View style={styles.metaRow}>
-              <Feather name="clock" size={16} color={colors.mutedForeground} />
-              <Text style={[styles.metaText, { color: colors.foreground }]}>
-                Até {fmtTime(event.end_date)}
-              </Text>
-            </View>
-          ) : null}
-          {(event.location || event.location_type === "online") ? (
-            <View style={styles.metaRow}>
-              <Feather name="map-pin" size={16} color={colors.mutedForeground} />
-              <Text style={[styles.metaText, { color: colors.foreground }]}>
-                {event.location_type === "online" ? "Online" : event.location}
-              </Text>
-            </View>
-          ) : null}
-          {event.pay_link ? (
-            <View style={styles.metaRow}>
-              <Feather name="link" size={16} color={colors.gold} />
-              <Text style={[styles.metaText, { color: colors.gold }]} numberOfLines={1}>
-                {event.pay_link}
-              </Text>
-            </View>
-          ) : null}
-        </View>
 
-        {/* Confirm button */}
-        <TouchableOpacity
-          style={[
-            styles.confirmBtn,
-            {
-              backgroundColor: isAttending ? "#fff" : colors.gold,
-              borderColor: colors.gold,
-              borderWidth: isAttending ? 2 : 0,
-              opacity: rsvpLoading ? 0.7 : 1,
-            },
-          ]}
-          onPress={handleRSVP}
-          disabled={rsvpLoading}
-        >
-          {rsvpLoading ? (
-            <ActivityIndicator color={isAttending ? colors.gold : "#fff"} />
+          {/* Online link — visible only to confirmed attendees */}
+          {event.location_type === "online" && event.link && isAttending ? (
+            <TouchableOpacity
+              style={[styles.onlineLinkCard, { backgroundColor: "#eff6ff", borderColor: "#bfdbfe" }]}
+              onPress={() => Linking.openURL(event.link!).catch(() => {})}
+              activeOpacity={0.8}
+            >
+              <Feather name="video" size={18} color="#2563eb" />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#1d4ed8" }}>
+                  Link de acesso ao evento
+                </Text>
+                <Text style={{ fontSize: 12, color: "#3b82f6", marginTop: 2 }} numberOfLines={1}>
+                  {event.link}
+                </Text>
+              </View>
+              <Feather name="external-link" size={16} color="#3b82f6" />
+            </TouchableOpacity>
+          ) : event.location_type === "online" && event.link && !isAttending && !isCreator ? (
+            <View style={[styles.onlineLinkCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <Feather name="lock" size={16} color={colors.mutedForeground} />
+              <Text style={{ fontSize: 13, color: colors.mutedForeground, flex: 1 }}>
+                O link de acesso é disponibilizado após confirmar presença
+              </Text>
+            </View>
+          ) : null}
+
+          {/* RSVP button — hidden for creator */}
+          {isCreator ? (
+            <View style={[styles.creatorBadge, { backgroundColor: colors.background, borderColor: colors.gold }]}>
+              <Feather name="star" size={14} color={colors.gold} />
+              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.gold }}>
+                Você é o organizador deste evento
+              </Text>
+            </View>
           ) : (
-            <Text style={[styles.confirmBtnText, { color: isAttending ? colors.gold : "#fff" }]}>
-              {isAttending ? "✓ Presença confirmada — Cancelar" : "Confirmar Presença"}
-            </Text>
+            <TouchableOpacity
+              style={[
+                styles.confirmBtn,
+                {
+                  backgroundColor: isAttending ? "#fff" : colors.gold,
+                  borderColor: colors.gold,
+                  borderWidth: isAttending ? 2 : 0,
+                  opacity: rsvpLoading ? 0.7 : 1,
+                },
+              ]}
+              onPress={handleRSVP}
+              disabled={rsvpLoading}
+            >
+              {rsvpLoading ? (
+                <ActivityIndicator color={isAttending ? colors.gold : "#fff"} />
+              ) : (
+                <Text style={[styles.confirmBtnText, { color: isAttending ? colors.gold : "#fff" }]}>
+                  {isAttending ? "✓ Presença confirmada — Cancelar" : "Confirmar Presença"}
+                </Text>
+              )}
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
 
-        {/* Participants */}
-        <View style={[styles.participantsCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-          <View style={styles.participantsTopRow}>
-            <View style={styles.participantsLeft}>
-              <Feather name="users" size={16} color={colors.gold} />
-              <Text style={[styles.participantsLabel, { color: colors.navy }]}>
-                Participantes ({attendees.length}
-                {event.capacity != null ? `/${event.capacity}` : ""})
-              </Text>
+          {/* Participants */}
+          <View style={[styles.participantsCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+            <View style={styles.participantsTopRow}>
+              <View style={styles.participantsLeft}>
+                <Feather name="users" size={16} color={colors.gold} />
+                <Text style={[styles.participantsLabel, { color: colors.navy }]}>
+                  Participantes ({attendees.length}
+                  {event.capacity != null ? `/${event.capacity}` : ""})
+                </Text>
+              </View>
+              {remaining != null && (
+                <Text style={[styles.participantsRemaining, { color: remaining > 0 ? colors.mutedForeground : "#dc2626" }]}>
+                  {remaining > 0 ? `${remaining} vagas` : "Lotado"}
+                </Text>
+              )}
             </View>
-            {remaining != null && (
-              <Text style={[styles.participantsRemaining, { color: remaining > 0 ? colors.mutedForeground : "#dc2626" }]}>
-                {remaining > 0 ? `${remaining} vagas` : "Lotado"}
+
+            {attendees.length === 0 ? (
+              <Text style={[styles.noAttendees, { color: colors.mutedForeground }]}>
+                Seja o primeiro a confirmar presença!
               </Text>
+            ) : (
+              <View style={{ gap: 10, marginTop: 10 }}>
+                {visibleAttendees.map((att) => {
+                  const name = att.profile?.full_name ?? att.profile?.username ?? "Participante";
+                  const sub  = att.profile?.position;
+                  return (
+                    <TouchableOpacity
+                      key={att.id}
+                      style={styles.attendeeRow}
+                      onPress={() => router.push(`/profile/${att.user_id}` as any)}
+                      activeOpacity={0.7}
+                    >
+                      <Avatar uri={att.profile?.avatar_url} name={name} size={38} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.attendeeName, { color: colors.navy }]}>{name}</Text>
+                        {sub ? (
+                          <Text style={[styles.attendeeSub, { color: colors.mutedForeground }]}>{sub}</Text>
+                        ) : null}
+                      </View>
+                      {att.status === "confirmed" ? (
+                        <Feather name="check-circle" size={16} color="#16a34a" />
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                })}
+                {attendees.length > 5 && (
+                  <TouchableOpacity onPress={() => setShowAllAttendees((v) => !v)} style={styles.showMoreBtn}>
+                    <Text style={[styles.showMoreText, { color: colors.gold }]}>
+                      {showAllAttendees ? "Ver menos" : `Ver todos (${attendees.length})`}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
           </View>
 
-          {attendees.length === 0 ? (
-            <Text style={[styles.noAttendees, { color: colors.mutedForeground }]}>
-              Seja o primeiro a confirmar presença!
-            </Text>
-          ) : (
-            <View style={{ gap: 10, marginTop: 10 }}>
-              {visibleAttendees.map((att) => {
-                const name = att.profile?.full_name ?? att.profile?.username ?? "Participante";
-                const sub  = att.profile?.position;
-                return (
-                  <TouchableOpacity
-                    key={att.id}
-                    style={styles.attendeeRow}
-                    onPress={() => router.push(`/profile/${att.user_id}` as any)}
-                    activeOpacity={0.7}
-                  >
-                    <Avatar uri={att.profile?.avatar_url} name={name} size={38} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.attendeeName, { color: colors.navy }]}>{name}</Text>
-                      {sub ? (
-                        <Text style={[styles.attendeeSub, { color: colors.mutedForeground }]}>{sub}</Text>
-                      ) : null}
-                    </View>
-                    {att.status === "confirmed" ? (
-                      <Feather name="check-circle" size={16} color="#16a34a" />
-                    ) : null}
-                  </TouchableOpacity>
-                );
-              })}
-              {attendees.length > 5 && (
-                <TouchableOpacity onPress={() => setShowAllAttendees((v) => !v)} style={styles.showMoreBtn}>
-                  <Text style={[styles.showMoreText, { color: colors.gold }]}>
-                    {showAllAttendees ? "Ver menos" : `Ver todos (${attendees.length})`}
-                  </Text>
-                </TouchableOpacity>
-              )}
+          {/* About */}
+          {event.description ? (
+            <View style={[styles.aboutCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+              <Text style={[styles.aboutTitle, { color: colors.navy }]}>Sobre o Evento</Text>
+              <Text style={[styles.aboutText, { color: colors.foreground }]}>{event.description}</Text>
             </View>
-          )}
-        </View>
+          ) : null}
 
-        {/* About */}
-        {event.description ? (
-          <View style={[styles.aboutCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-            <Text style={[styles.aboutTitle, { color: colors.navy }]}>Sobre o Evento</Text>
-            <Text style={[styles.aboutText, { color: colors.foreground }]}>{event.description}</Text>
+          {/* Organizer */}
+          <View style={styles.organizerRow}>
+            <Text style={[styles.organizerLabel, { color: colors.mutedForeground }]}>Organizado por</Text>
+            <TouchableOpacity
+              style={styles.organizerInfo}
+              onPress={() =>
+                companyOrg
+                  ? router.push(`/company/${companyOrg.id}` as any)
+                  : router.push(`/profile/${event.user_id}` as any)
+              }
+              activeOpacity={0.7}
+            >
+              <Avatar uri={orgAvatar} name={orgName} size={36} />
+              <View>
+                <Text style={[styles.organizerName, { color: colors.navy }]}>{orgName}</Text>
+                {companyOrg ? (
+                  <Text style={[styles.organizerHandle, { color: colors.mutedForeground }]}>Página de empresa</Text>
+                ) : orgHandle ? (
+                  <Text style={[styles.organizerHandle, { color: colors.mutedForeground }]}>{orgHandle}</Text>
+                ) : null}
+              </View>
+            </TouchableOpacity>
           </View>
-        ) : null}
-
-        {/* Organizer */}
-        <View style={styles.organizerRow}>
-          <Text style={[styles.organizerLabel, { color: colors.mutedForeground }]}>Organizado por</Text>
-          <TouchableOpacity
-            style={styles.organizerInfo}
-            onPress={() => router.push(`/profile/${event.user_id}` as any)}
-            activeOpacity={0.7}
-          >
-            <Avatar uri={event.organizer?.avatar_url} name={organizerName} size={36} />
-            <View>
-              <Text style={[styles.organizerName, { color: colors.navy }]}>{organizerName}</Text>
-              {event.organizer?.username ? (
-                <Text style={[styles.organizerHandle, { color: colors.mutedForeground }]}>
-                  @{event.organizer.username}
-                </Text>
-              ) : null}
-            </View>
-          </TouchableOpacity>
         </View>
       </ScrollView>
     </View>
@@ -345,6 +405,7 @@ const styles = StyleSheet.create({
   },
   backRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   headerTitle: { fontSize: 20, fontWeight: "700" },
+  coverImage: { width: "100%", aspectRatio: 16 / 9 },
   eventTitle: { fontSize: 22, fontWeight: "800", lineHeight: 30 },
   badgeRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
@@ -352,6 +413,15 @@ const styles = StyleSheet.create({
   metaList: { gap: 10 },
   metaRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   metaText: { fontSize: 14, lineHeight: 20, flex: 1 },
+  onlineLinkCard: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    borderRadius: 10, borderWidth: 1, padding: 12,
+  },
+  creatorBadge: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    borderRadius: 10, borderWidth: 1.5, padding: 14,
+    justifyContent: "center",
+  },
   confirmBtn: { paddingVertical: 16, borderRadius: 10, alignItems: "center" },
   confirmBtnText: { fontSize: 16, fontWeight: "700" },
   participantsCard: { borderRadius: 12, borderWidth: 1, padding: 16 },
