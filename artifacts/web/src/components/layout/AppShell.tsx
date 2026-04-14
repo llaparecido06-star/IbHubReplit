@@ -398,10 +398,9 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
   const activeAvatar = activeCompany ? activeCompany.avatar_url : profile?.avatar_url;
 
   const currentNavItems = activeCompany ? [
-    { path: "/app",               label: "Feed da Empresa",   icon: I.home },
-    { path: "/app/mensagens",     label: "Chat da Empresa",   icon: I.msg },
-    { path: "/app/grupos",        label: "Grupos",            icon: I.group },
-    { path: "/app/adega",         label: "Portfólio",         icon: I.wine },
+    { path: "/app",               label: "Início",            icon: I.home },
+    { path: "/app/mensagens",     label: "Chat",              icon: I.msg },
+    { path: "/app/oportunidades", label: "Oportunidades",     icon: I.brief },
     { path: `/app/empresa/${activeCompany.id}`, label: "Perfil da Empresa", icon: I.company },
   ] : NAV_ITEMS;
 

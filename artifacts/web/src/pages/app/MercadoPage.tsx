@@ -1,13 +1,22 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
-import { MARKET_FALLBACK, MarketOverview, Period, fetchMarketOverview, fetchMarketPresentations, MarketPresentation } from "@/services/api";
+import { useAuth } from "@/context/AuthContext";
+import {
+  MARKET_FALLBACK, MarketOverview, Period, fetchMarketOverview,
+  fetchMarketPresentations, MarketPresentation,
+  MarketPost, MarketComment,
+  fetchMarketPosts, createMarketPost, toggleMarketPostLike,
+  fetchMarketComments, addMarketComment, uploadMarketPostImage,
+} from "@/services/api";
 
-const GOLD = "#c9a84c";
-const NAVY = "#0d1b2a";
-const MUTED = "#7a8494";
+const GOLD   = "#c9a84c";
+const NAVY   = "#0d1b2a";
+const MUTED  = "#7a8494";
 const BORDER = "#e8e8e3";
+const WHITE  = "#fff";
+const BG     = "#f5f4ef";
 
-type MercadoTab = "visao" | "top" | "apresentacoes";
+type MercadoTab = "visao" | "idealbi" | "apresentacoes";
 
 // ─── Simple SVG charts ────────────────────────────────────────────────────────
 
@@ -72,11 +81,10 @@ function BarChart({ data }: { data: MarketOverview["chart_bar"] }) {
   const n = data.values.length;
   const barW = Math.min(60, (CW / n) * 0.6);
   const gap = CW / n;
-  const maxV = 100;
 
   const xAt = (i: number) => PL + i * gap + (gap - barW) / 2;
-  const yTop = (v: number) => PT + (1 - v / maxV) * CH;
-  const yH = (v: number) => (v / maxV) * CH;
+  const yTop = (v: number) => PT + (1 - v / 100) * CH;
+  const yH   = (v: number) => (v / 100) * CH;
 
   return (
     <div style={{ overflowX: "auto" }}>
@@ -97,7 +105,6 @@ function BarChart({ data }: { data: MarketOverview["chart_bar"] }) {
     </div>
   );
 }
-
 
 /* ─── Apresentações Panel ─────────────────── */
 function ApresentacoesPanel() {
@@ -128,7 +135,7 @@ function ApresentacoesPanel() {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}>
       {presentations.map(p => (
-        <div key={p.id} style={{ backgroundColor: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden" }}>
+        <div key={p.id} style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden" }}>
           {p.cover_url ? (
             <img src={p.cover_url} alt={p.title} style={{ width: "100%", height: 140, objectFit: "cover" }} />
           ) : (
@@ -155,14 +162,323 @@ function ApresentacoesPanel() {
   );
 }
 
+/* ─── Ideal.BI Feed ──────────────────────────────────────────────────────── */
+
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "agora";
+  if (m < 60) return `${m}min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
+
+function MarketPostAvatar({ src, name, size = 36 }: { src?: string | null; name: string; size?: number }) {
+  if (src) return <img src={src} alt={name} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
+  return (
+    <div style={{ width: size, height: size, borderRadius: "50%", backgroundColor: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.38, fontWeight: 800, color: NAVY, flexShrink: 0 }}>
+      {(name?.[0] ?? "I").toUpperCase()}
+    </div>
+  );
+}
+
+function MarketPostComments({ postId, userId }: { postId: string; userId: string }) {
+  const [comments, setComments] = useState<MarketComment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [text, setText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    fetchMarketComments(postId).then(c => { setComments(c); setLoading(false); });
+  }, [postId]);
+
+  const submit = async () => {
+    if (!text.trim() || submitting) return;
+    setSubmitting(true);
+    const c = await addMarketComment(postId, userId, text.trim());
+    if (c) setComments(prev => [...prev, c]);
+    setText("");
+    setSubmitting(false);
+  };
+
+  return (
+    <div style={{ borderTop: `1px solid ${BORDER}`, padding: "12px 16px", background: "#fafaf8" }}>
+      {loading ? (
+        <div style={{ fontSize: 12, color: MUTED, padding: "4px 0" }}>Carregando comentários…</div>
+      ) : comments.length === 0 ? (
+        <div style={{ fontSize: 12, color: MUTED, padding: "4px 0" }}>Nenhum comentário ainda.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
+          {comments.map(c => (
+            <div key={c.id} style={{ display: "flex", gap: 8 }}>
+              <MarketPostAvatar src={c.author?.avatar_url} name={c.author?.full_name ?? "U"} size={28} />
+              <div style={{ flex: 1, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "8px 12px" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{c.author?.full_name ?? "Usuário"} </span>
+                <span style={{ fontSize: 12, color: "#555" }}>{c.content}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8 }}>
+        <input
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && !e.shiftKey && submit()}
+          placeholder="Escreva um comentário…"
+          style={{ flex: 1, padding: "8px 12px", borderRadius: 20, border: `1px solid ${BORDER}`, fontSize: 13, outline: "none", fontFamily: "inherit" }}
+        />
+        <button
+          onClick={submit}
+          disabled={!text.trim() || submitting}
+          style={{ padding: "8px 16px", borderRadius: 20, backgroundColor: GOLD, border: "none", color: NAVY, fontWeight: 700, fontSize: 13, cursor: text.trim() ? "pointer" : "not-allowed", opacity: text.trim() ? 1 : 0.5, fontFamily: "inherit" }}
+        >
+          Enviar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MarketPostCard({ post, userId, isAdmin, onLikeToggle }: { post: MarketPost; userId: string; isAdmin: boolean; onLikeToggle: (id: string, liked: boolean, count: number) => void }) {
+  const [showComments, setShowComments] = useState(false);
+
+  const handleLike = async () => {
+    const newLiked = await toggleMarketPostLike(post.id, userId, post.user_liked);
+    const delta = newLiked ? 1 : -1;
+    onLikeToggle(post.id, newLiked, post.likes_count + delta);
+  };
+
+  return (
+    <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden" }}>
+      {/* Author header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px 10px" }}>
+        <MarketPostAvatar src={post.author?.avatar_url} name={post.author?.full_name ?? "Ideal.BI"} size={40} />
+        <div style={{ flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{post.author?.full_name ?? "Ideal.BI"}</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: WHITE, backgroundColor: GOLD, borderRadius: 4, padding: "1px 6px", letterSpacing: 0.3 }}>IDEAL.BI</span>
+          </div>
+          {post.author?.headline && (
+            <div style={{ fontSize: 12, color: MUTED }}>{post.author.headline}</div>
+          )}
+          <div style={{ fontSize: 11, color: "#aaa" }}>{timeAgo(post.created_at)}</div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ padding: "0 16px 14px" }}>
+        <p style={{ fontSize: 14, color: "#222", lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap" }}>{post.content}</p>
+      </div>
+
+      {/* Image */}
+      {post.image_url && (
+        <img src={post.image_url} alt="conteúdo" style={{ width: "100%", maxHeight: 400, objectFit: "cover" }} />
+      )}
+
+      {/* Actions */}
+      <div style={{ display: "flex", gap: 4, padding: "10px 12px", borderTop: `1px solid ${BORDER}` }}>
+        <button
+          onClick={handleLike}
+          style={{
+            display: "flex", alignItems: "center", gap: 6, padding: "7px 14px",
+            borderRadius: 20, border: `1px solid ${post.user_liked ? GOLD : BORDER}`,
+            backgroundColor: post.user_liked ? `${GOLD}18` : "transparent",
+            color: post.user_liked ? GOLD : MUTED,
+            fontSize: 13, fontWeight: post.user_liked ? 700 : 500, cursor: "pointer",
+            fontFamily: "inherit", transition: "all 0.15s",
+          }}
+        >
+          {post.user_liked ? "🥂" : "🤍"} {post.likes_count > 0 ? post.likes_count : ""} Curtir
+        </button>
+
+        <button
+          onClick={() => setShowComments(v => !v)}
+          style={{
+            display: "flex", alignItems: "center", gap: 6, padding: "7px 14px",
+            borderRadius: 20, border: `1px solid ${showComments ? GOLD + "60" : BORDER}`,
+            backgroundColor: showComments ? `${GOLD}10` : "transparent",
+            color: showComments ? GOLD : MUTED,
+            fontSize: 13, fontWeight: 500, cursor: "pointer",
+            fontFamily: "inherit", transition: "all 0.15s",
+          }}
+        >
+          💬 {post.comments_count > 0 ? post.comments_count : ""} Comentar
+        </button>
+      </div>
+
+      {/* Comments section */}
+      {showComments && <MarketPostComments postId={post.id} userId={userId} />}
+    </div>
+  );
+}
+
+function IdealBIFeed({ userId, isAdmin, plan }: { userId: string; isAdmin: boolean; plan: string }) {
+  const [posts, setPosts] = useState<MarketPost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [newContent, setNewContent] = useState("");
+  const [newImageFile, setNewImageFile] = useState<File | null>(null);
+  const [newImagePreview, setNewImagePreview] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const imgRef = useRef<HTMLInputElement>(null);
+
+  const isPaidPlan = plan !== "gratuito" && plan !== "";
+
+  useEffect(() => {
+    fetchMarketPosts(userId).then(p => { setPosts(p); setLoading(false); });
+  }, [userId]);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setNewImageFile(file);
+    const reader = new FileReader();
+    reader.onload = ev => setNewImagePreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = async () => {
+    if (!newContent.trim() || submitting) return;
+    setSubmitting(true);
+    let imageUrl: string | null = null;
+    if (newImageFile) {
+      imageUrl = await uploadMarketPostImage(newImageFile, userId);
+    }
+    const post = await createMarketPost(userId, newContent.trim(), imageUrl);
+    if (post) {
+      setPosts(prev => [post, ...prev]);
+      setNewContent("");
+      setNewImageFile(null);
+      setNewImagePreview(null);
+      setCreating(false);
+    }
+    setSubmitting(false);
+  };
+
+  const handleLikeToggle = (id: string, liked: boolean, count: number) => {
+    setPosts(prev => prev.map(p => p.id === id ? { ...p, user_liked: liked, likes_count: count } : p));
+  };
+
+  if (!isPaidPlan) {
+    return (
+      <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 40, textAlign: "center" }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>📡</div>
+        <h3 style={{ fontSize: 20, fontWeight: 900, color: NAVY, marginBottom: 8 }}>Feed Exclusivo Ideal.BI</h3>
+        <p style={{ fontSize: 14, color: MUTED, lineHeight: 1.7, maxWidth: 420, margin: "0 auto 24px" }}>
+          Acesse análises exclusivas, informações privilegiadas de mercado e insights estratégicos do setor vitivinícola, publicados pela equipe Ideal.BI.
+          Disponível para assinantes.
+        </p>
+        <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 20 }}>
+          {[
+            { icon: "📊", label: "Análises de mercado" },
+            { icon: "🍷", label: "Tendências do setor" },
+            { icon: "🌍", label: "Dados de importação/exportação" },
+            { icon: "💡", label: "Insights estratégicos" },
+          ].map(f => (
+            <div key={f.label} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", backgroundColor: `${GOLD}12`, borderRadius: 20, fontSize: 13, color: NAVY, fontWeight: 600 }}>
+              {f.icon} {f.label}
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={() => window.location.href = "/planos"}
+          style={{ padding: "12px 32px", backgroundColor: GOLD, border: "none", borderRadius: 10, fontSize: 15, fontWeight: 800, color: NAVY, cursor: "pointer", fontFamily: "inherit" }}
+        >
+          Ver planos de assinatura →
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Admin create post */}
+      {isAdmin && (
+        <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16 }}>
+          {!creating ? (
+            <button
+              onClick={() => setCreating(true)}
+              style={{ width: "100%", textAlign: "left", padding: "12px 16px", border: `1px dashed ${GOLD}60`, borderRadius: 10, backgroundColor: `${GOLD}08`, color: MUTED, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}
+            >
+              ✏️ Publicar informação de mercado (admin)…
+            </button>
+          ) : (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5 }}>📡 Publicação Ideal.BI</span>
+              </div>
+              <textarea
+                value={newContent}
+                onChange={e => setNewContent(e.target.value)}
+                placeholder="Escreva a análise ou informação de mercado…"
+                rows={4}
+                style={{ width: "100%", padding: "12px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, fontFamily: "inherit", resize: "vertical", outline: "none", boxSizing: "border-box" }}
+              />
+              {newImagePreview && (
+                <div style={{ position: "relative", marginTop: 8 }}>
+                  <img src={newImagePreview} alt="preview" style={{ width: "100%", maxHeight: 240, objectFit: "cover", borderRadius: 10 }} />
+                  <button onClick={() => { setNewImageFile(null); setNewImagePreview(null); }} style={{ position: "absolute", top: 6, right: 6, background: "rgba(0,0,0,0.6)", color: WHITE, border: "none", borderRadius: "50%", width: 24, height: 24, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center" }}>
+                <button onClick={() => imgRef.current?.click()} style={{ padding: "7px 14px", border: `1px solid ${BORDER}`, borderRadius: 8, backgroundColor: "transparent", color: MUTED, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
+                  🖼 Adicionar imagem
+                </button>
+                <input ref={imgRef} type="file" accept="image/*" onChange={handleImageChange} style={{ display: "none" }} />
+                <div style={{ flex: 1 }} />
+                <button onClick={() => { setCreating(false); setNewContent(""); setNewImageFile(null); setNewImagePreview(null); }} style={{ padding: "7px 16px", border: `1px solid ${BORDER}`, borderRadius: 8, backgroundColor: "transparent", color: MUTED, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={!newContent.trim() || submitting}
+                  style={{ padding: "7px 20px", backgroundColor: GOLD, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, color: NAVY, cursor: newContent.trim() ? "pointer" : "not-allowed", opacity: newContent.trim() ? 1 : 0.5, fontFamily: "inherit" }}
+                >
+                  {submitting ? "Publicando…" : "Publicar"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Feed */}
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 60, color: MUTED }}>⏳ Carregando feed…</div>
+      ) : posts.length === 0 ? (
+        <div style={{ textAlign: "center", padding: 60, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14 }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>📡</div>
+          <h3 style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Nenhuma publicação ainda</h3>
+          <p style={{ fontSize: 14, color: MUTED }}>As informações exclusivas de mercado aparecerão aqui.</p>
+        </div>
+      ) : (
+        posts.map(post => (
+          <MarketPostCard
+            key={post.id}
+            post={post}
+            userId={userId}
+            isAdmin={isAdmin}
+            onLikeToggle={handleLikeToggle}
+          />
+        ))
+      )}
+    </div>
+  );
+}
+
+/* ─── Main Page ───────────────────────────────────────────────────────────── */
+
 export default function MercadoPage() {
+  const { profile, user } = useAuth();
   const [period, setPeriod] = useState<Period>("ano");
   const [mainTab, setMainTab] = useState<MercadoTab>("visao");
   const [data, setData] = useState<MarketOverview>(MARKET_FALLBACK.ano);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (mainTab === "apresentacoes") return;
+    if (mainTab !== "visao") return;
     setLoading(true);
     fetchMarketOverview(period).then((d) => {
       setData(d);
@@ -177,9 +493,9 @@ export default function MercadoPage() {
   ];
 
   const TABS: { key: MercadoTab; label: string }[] = [
-    { key: "visao",          label: "📊 Visão Geral" },
-    { key: "top",            label: "🏆 Rankings" },
-    { key: "apresentacoes",  label: "📋 Apresentações" },
+    { key: "visao",         label: "📊 Visão Geral" },
+    { key: "idealbi",       label: "📡 Ideal.BI" },
+    { key: "apresentacoes", label: "📋 Apresentações" },
   ];
 
   return (
@@ -191,8 +507,7 @@ export default function MercadoPage() {
             <h1 style={{ fontSize: 24, fontWeight: 900, color: NAVY, margin: 0 }}>Mercado</h1>
             <p style={{ fontSize: 14, color: "#8a93a2", margin: "4px 0 0" }}>Dados e indicadores do setor vitivinícola brasileiro</p>
           </div>
-          {/* Period selector (hidden on Apresentações) */}
-          {mainTab !== "apresentacoes" && (
+          {mainTab === "visao" && (
             <div style={{ display: "flex", gap: 6 }}>
               {PERIODS.map((p) => (
                 <button
@@ -202,8 +517,8 @@ export default function MercadoPage() {
                     padding: "7px 16px",
                     borderRadius: 20,
                     border: `1px solid ${period === p.key ? GOLD : "#e8eaed"}`,
-                    backgroundColor: period === p.key ? GOLD : "#fff",
-                    color: period === p.key ? "#fff" : "#555",
+                    backgroundColor: period === p.key ? GOLD : WHITE,
+                    color: period === p.key ? WHITE : "#555",
                     fontSize: 13,
                     fontWeight: period === p.key ? 700 : 500,
                     cursor: "pointer",
@@ -233,16 +548,23 @@ export default function MercadoPage() {
           ))}
         </div>
 
+        {/* Content */}
         {mainTab === "apresentacoes" ? (
           <ApresentacoesPanel />
+        ) : mainTab === "idealbi" ? (
+          <IdealBIFeed
+            userId={user?.id ?? ""}
+            isAdmin={profile?.is_admin ?? false}
+            plan={profile?.plan ?? "gratuito"}
+          />
         ) : loading ? (
           <div style={{ textAlign: "center", padding: 60, color: "#aaa" }}>⏳ Carregando dados...</div>
-        ) : mainTab === "visao" ? (
+        ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             {/* KPI Cards */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
               {data.kpis.map((kpi) => (
-                <div key={kpi.label} style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
+                <div key={kpi.label} style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
                     <div style={{ width: 42, height: 42, backgroundColor: `${GOLD}18`, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>
                       {kpi.icon === "Globe" ? "🌍" : kpi.icon === "TrendingUp" ? "📈" : "📊"}
@@ -262,7 +584,7 @@ export default function MercadoPage() {
             </div>
 
             {/* Area Chart */}
-            <div style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
+            <div style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
                 <span style={{ color: GOLD }}>📈</span>
                 <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0 }}>Exportações × Importações</h3>
@@ -271,7 +593,7 @@ export default function MercadoPage() {
             </div>
 
             {/* Bar Chart */}
-            <div style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
+            <div style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
                 <span style={{ color: GOLD }}>📊</span>
                 <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0 }}>Produção Nacional (Índice)</h3>
@@ -280,7 +602,7 @@ export default function MercadoPage() {
             </div>
 
             {/* Tendências */}
-            <div style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
+            <div style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
                 <span>🔥</span>
                 <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0 }}>Tendências do Período</h3>
@@ -291,8 +613,7 @@ export default function MercadoPage() {
                     <div style={{
                       width: 42, height: 42, borderRadius: 10, flexShrink: 0,
                       backgroundColor: t.pos ? "#dcfce7" : "#fef2f2",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 18,
+                      display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18,
                     }}>
                       {t.pos ? "📈" : "📉"}
                     </div>
@@ -309,58 +630,6 @@ export default function MercadoPage() {
                 ))}
               </div>
             </div>
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-            {/* Rankings de Regiões */}
-            <div style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                <span>🗺️</span>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0 }}>Ranking por Região Produtora</h3>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {data.regioes.map((r) => (
-                  <div key={r.name} style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                    <span style={{ fontSize: 16, fontWeight: 800, color: GOLD, width: 24, textAlign: "center" }}>#{r.rank}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                        <span style={{ fontSize: 14, fontWeight: 600, color: NAVY }}>{r.name}</span>
-                        <span style={{ fontSize: 13, color: GOLD, fontWeight: 700 }}>{r.volume}</span>
-                      </div>
-                      <div style={{ height: 6, backgroundColor: "#e8eaed", borderRadius: 3, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${r.pct}%`, backgroundColor: GOLD, borderRadius: 3 }} />
-                      </div>
-                    </div>
-                    <span style={{ fontSize: 12, color: "#aaa", width: 36, textAlign: "right" }}>{r.pct}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Variedades */}
-            <div style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                <span>🍇</span>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0 }}>Top Variedades</h3>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {data.variedades.map((v, idx) => (
-                  <div key={v.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", backgroundColor: "#f9fafb", borderRadius: 10 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <span style={{ fontSize: 14, fontWeight: 800, color: GOLD }}>#{idx + 1}</span>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: NAVY }}>{v.name}</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <span style={{ fontSize: 13, color: "#8a93a2" }}>{v.volume}</span>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: v.change >= 0 ? "#16a34a" : "#dc2626" }}>
-                        {v.change >= 0 ? "+" : ""}{v.change}%
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
           </div>
         )}
       </div>

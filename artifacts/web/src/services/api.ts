@@ -1600,3 +1600,156 @@ export async function leaveGroup(groupId: string, userId: string): Promise<boole
     return false;
   }
 }
+
+// ─── Ideal.BI Market Feed ───────────────────────────────────────────────────
+
+export interface MarketPost {
+  id: string;
+  content: string;
+  image_url?: string | null;
+  created_at: string;
+  author_id: string;
+  likes_count: number;
+  comments_count: number;
+  user_liked: boolean;
+  author?: {
+    id: string;
+    full_name?: string | null;
+    avatar_url?: string | null;
+    headline?: string | null;
+  };
+}
+
+export interface MarketComment {
+  id: string;
+  post_id: string;
+  author_id: string;
+  content: string;
+  created_at: string;
+  author?: {
+    id: string;
+    full_name?: string | null;
+    avatar_url?: string | null;
+  };
+}
+
+export async function fetchMarketPosts(userId?: string): Promise<MarketPost[]> {
+  try {
+    const { data, error } = await supabase
+      .from("market_posts")
+      .select("id, content, image_url, created_at, author_id, likes_count, comments_count")
+      .order("created_at", { ascending: false })
+      .limit(30);
+    if (error) return [];
+    if (!data || data.length === 0) return [];
+
+    const authorIds = [...new Set(data.map((p: any) => p.author_id))];
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, user_id, full_name, avatar_url, headline")
+      .in("user_id", authorIds);
+    const profileMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p]));
+
+    let likedSet = new Set<string>();
+    if (userId) {
+      const { data: likes } = await supabase
+        .from("market_post_likes")
+        .select("post_id")
+        .eq("user_id", userId);
+      likedSet = new Set((likes ?? []).map((l: any) => l.post_id));
+    }
+
+    return data.map((p: any) => ({
+      ...p,
+      user_liked: likedSet.has(p.id),
+      author: profileMap.get(p.author_id) ?? null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function createMarketPost(authorId: string, content: string, imageUrl?: string | null): Promise<MarketPost | null> {
+  try {
+    const { data, error } = await supabase
+      .from("market_posts")
+      .insert({ author_id: authorId, content, image_url: imageUrl ?? null, likes_count: 0, comments_count: 0 })
+      .select("id, content, image_url, created_at, author_id, likes_count, comments_count")
+      .single();
+    if (error || !data) return null;
+    return { ...data, user_liked: false };
+  } catch {
+    return null;
+  }
+}
+
+export async function toggleMarketPostLike(postId: string, userId: string, currentlyLiked: boolean): Promise<boolean> {
+  try {
+    if (currentlyLiked) {
+      await supabase.from("market_post_likes").delete().eq("post_id", postId).eq("user_id", userId);
+      const { data: cur } = await supabase.from("market_posts").select("likes_count").eq("id", postId).single();
+      await supabase.from("market_posts").update({ likes_count: Math.max(0, (cur?.likes_count ?? 1) - 1) }).eq("id", postId);
+    } else {
+      await supabase.from("market_post_likes").insert({ post_id: postId, user_id: userId });
+      const { data: cur } = await supabase.from("market_posts").select("likes_count").eq("id", postId).single();
+      await supabase.from("market_posts").update({ likes_count: (cur?.likes_count ?? 0) + 1 }).eq("id", postId);
+    }
+    return !currentlyLiked;
+  } catch {
+    return currentlyLiked;
+  }
+}
+
+export async function fetchMarketComments(postId: string): Promise<MarketComment[]> {
+  try {
+    const { data, error } = await supabase
+      .from("market_post_comments")
+      .select("id, post_id, author_id, content, created_at")
+      .eq("post_id", postId)
+      .order("created_at", { ascending: true });
+    if (error || !data) return [];
+
+    const authorIds = [...new Set(data.map((c: any) => c.author_id))];
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, user_id, full_name, avatar_url")
+      .in("user_id", authorIds);
+    const profileMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p]));
+
+    return data.map((c: any) => ({
+      ...c,
+      author: profileMap.get(c.author_id) ?? null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function addMarketComment(postId: string, authorId: string, content: string): Promise<MarketComment | null> {
+  try {
+    const { data, error } = await supabase
+      .from("market_post_comments")
+      .insert({ post_id: postId, author_id: authorId, content })
+      .select("id, post_id, author_id, content, created_at")
+      .single();
+    if (error || !data) return null;
+    const { data: cur } = await supabase.from("market_posts").select("comments_count").eq("id", postId).single();
+    await supabase.from("market_posts").update({ comments_count: (cur?.comments_count ?? 0) + 1 }).eq("id", postId);
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+export async function uploadMarketPostImage(file: File, userId: string): Promise<string | null> {
+  try {
+    const ext = file.name.split(".").pop() ?? "jpg";
+    const path = `market/${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage.from("chat-attachments").upload(path, file, { contentType: file.type, upsert: true });
+    if (error) return null;
+    const { data: urlData } = supabase.storage.from("chat-attachments").getPublicUrl(path);
+    return urlData?.publicUrl ?? null;
+  } catch {
+    return null;
+  }
+}
