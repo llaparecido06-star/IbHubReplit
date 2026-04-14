@@ -4982,17 +4982,26 @@ export async function createGroup(params: {
     const { data, error } = await supabase.from("groups").insert(params).select().single();
     if (error) { console.error("createGroup:", error); return null; }
     const group = data as Group;
-    // Create a linked conversation so group-chat works
-    await supabase.from("conversations").insert({
+    // Create a linked conversation so group-chat works (same UUID)
+    const { error: convErr } = await supabase.from("conversations").insert({
       id: group.id,
       is_group: true,
       name: group.name,
       created_at: group.created_at,
     });
-    await supabase.from("conversation_participants").insert({
+    if (convErr) {
+      console.error("createGroup: conversation insert failed:", convErr);
+      // Clean up — delete the group since the conversation didn't get created
+      await supabase.from("groups").delete().eq("id", group.id);
+      return null;
+    }
+    const { error: partErr } = await supabase.from("conversation_participants").insert({
       conversation_id: group.id,
       user_id: group.owner_id,
     });
+    if (partErr) {
+      console.warn("createGroup: participant insert failed (non-fatal):", partErr);
+    }
     return group;
   } catch (e) {
     console.error("createGroup:", e);
@@ -5016,6 +5025,32 @@ export async function deleteMyGroupMessages(groupId: string, userId: string): Pr
       .eq("sender_id", userId);
     return !error;
   } catch { return false; }
+}
+
+export async function clearGroupHistoryForUser(groupId: string, userId: string): Promise<string | null> {
+  try {
+    const clearedAt = new Date().toISOString();
+    const { error } = await supabase
+      .from("group_message_clears")
+      .upsert({ user_id: userId, conversation_id: groupId, cleared_at: clearedAt }, { onConflict: "user_id,conversation_id" });
+    if (error) { console.error("clearGroupHistoryForUser:", error); return null; }
+    return clearedAt;
+  } catch (e) {
+    console.error("clearGroupHistoryForUser:", e);
+    return null;
+  }
+}
+
+export async function fetchGroupHistoryClearedAt(groupId: string, userId: string): Promise<string | null> {
+  try {
+    const { data } = await supabase
+      .from("group_message_clears")
+      .select("cleared_at")
+      .eq("user_id", userId)
+      .eq("conversation_id", groupId)
+      .maybeSingle();
+    return (data as any)?.cleared_at ?? null;
+  } catch { return null; }
 }
 
 export async function joinGroup(groupId: string, userId: string): Promise<boolean> {

@@ -108,10 +108,6 @@ export default function GroupSettingsScreen() {
 
   const handleChangeAvatar = async () => {
     if (!isOwner) return;
-    if (Platform.OS === "web") {
-      Alert.alert("Web", "Troca de foto não disponível na versão web.");
-      return;
-    }
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
       Alert.alert("Permissão necessária", "Permita acesso à galeria de fotos.");

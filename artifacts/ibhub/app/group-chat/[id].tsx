@@ -1,4 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -95,8 +94,6 @@ export default function GroupChatScreen() {
     }
   }, []);
 
-  const CLEAR_KEY = (uid: string, gid: string) => `ibhub_group_cleared:${uid}:${gid}`;
-
   const load = useCallback(async () => {
     if (!id || !user?.id) { setLoading(false); return; }
 
@@ -105,7 +102,7 @@ export default function GroupChatScreen() {
       supabase.from("conversation_participants").select("user_id").eq("conversation_id", id),
       supabase.from("groups").select("name, avatar_url, owner_id").eq("id", id).maybeSingle(),
       API.fetchMessages(id, user.id),
-      AsyncStorage.getItem(CLEAR_KEY(user.id, id)),
+      API.fetchGroupHistoryClearedAt(id, user.id),
     ]);
 
     const convName = (convRes.data as any)?.name ?? (groupRes.data as any)?.name ?? "Grupo";
@@ -117,7 +114,7 @@ export default function GroupChatScreen() {
       owner_id: (groupRes.data as any)?.owner_id ?? "",
     });
 
-    // Filter out messages cleared by this user (local-only, doesn't affect other members)
+    // Filter out messages cleared by this user (server-side, persists across devices)
     const filtered = clearedAt
       ? msgs.filter(m => m.created_at > clearedAt)
       : msgs;
@@ -241,8 +238,26 @@ export default function GroupChatScreen() {
   // ── Audio recording ───────────────────────────────────────────────────────
 
   const startRecording = async () => {
+    // On web, recording via microphone is not supported — fall back to picking an audio file
     if (Platform.OS === "web") {
-      Alert.alert("Áudio", "Gravação de áudio não disponível na versão web.");
+      if (!user?.id || !id) return;
+      try {
+        const result = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true });
+        if (result.canceled || !result.assets?.length) return;
+        const asset = result.assets[0];
+        setUploading(true);
+        const url = await API.uploadChatMedia(id, asset.uri, asset.mimeType ?? "audio/mpeg");
+        setUploading(false);
+        if (!url) { Alert.alert("Erro", "Não foi possível enviar o áudio."); return; }
+        const saved = await API.sendMediaMessage(id, user.id, url, "audio");
+        if (saved) {
+          seenMsgIds.current.add(saved.id);
+          setMessages(prev => [...prev, saved]);
+        }
+      } catch {
+        setUploading(false);
+        Alert.alert("Erro", "Não foi possível enviar o arquivo de áudio.");
+      }
       return;
     }
     try {
@@ -376,16 +391,19 @@ export default function GroupChatScreen() {
     } else {
       Alert.alert(
         "Limpar meu histórico",
-        "Ocultar o histórico desta conversa para você? As mensagens continuarão visíveis para os outros membros.",
+        "Ocultar o histórico desta conversa para você em todos os seus dispositivos? As mensagens continuarão visíveis para os outros membros.",
         [
           { text: "Cancelar", style: "cancel" },
           {
             text: "Limpar", style: "destructive", onPress: async () => {
               if (!user?.id) return;
-              const clearedAt = new Date().toISOString();
-              await AsyncStorage.setItem(CLEAR_KEY(user.id, id), clearedAt);
-              setMessages([]);
-              seenMsgIds.current.clear();
+              const clearedAt = await API.clearGroupHistoryForUser(id, user.id);
+              if (clearedAt !== null) {
+                setMessages([]);
+                seenMsgIds.current.clear();
+              } else {
+                Alert.alert("Erro", "Não foi possível limpar o histórico.");
+              }
             },
           },
         ],

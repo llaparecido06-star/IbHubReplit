@@ -50,10 +50,6 @@ export default function NewGroupScreen() {
   const canCreate = name.trim().length > 0 && category !== null;
 
   const pickAvatar = async () => {
-    if (Platform.OS === "web") {
-      Alert.alert("Web", "Selecione a foto após criar o grupo nas configurações.");
-      return;
-    }
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
       Alert.alert("Permissão necessária", "Permita acesso à galeria de fotos.");
