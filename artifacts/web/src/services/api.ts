@@ -1656,15 +1656,30 @@ export async function createGroup(params: {
   description?: string;
   category: string;
   access: "aberto" | "fechado" | "restrito";
+  avatar_url?: string | null;
 }): Promise<Group | null> {
   try {
-    const { data, error } = await supabase
-      .from("groups")
-      .insert(params)
-      .select()
-      .single();
+    const { data, error } = await supabase.from("groups").insert(params).select().single();
     if (error) { console.warn("createGroup:", error); return null; }
-    return data as Group;
+    const group = data as Group;
+    // Create linked conversation (same UUID) so group-chat works
+    const { error: convErr } = await supabase.from("conversations").insert({
+      id: group.id,
+      is_group: true,
+      name: group.name,
+      created_at: group.created_at,
+    });
+    if (convErr) {
+      console.error("createGroup: conversation insert failed:", convErr);
+      await supabase.from("groups").delete().eq("id", group.id);
+      return null;
+    }
+    const { error: partErr } = await supabase.from("conversation_participants").insert({
+      conversation_id: group.id,
+      user_id: group.owner_id,
+    });
+    if (partErr) console.warn("createGroup: participant insert (non-fatal):", partErr);
+    return group;
   } catch (e) {
     console.warn("createGroup:", e);
     return null;

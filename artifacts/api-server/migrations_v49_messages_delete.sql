@@ -9,14 +9,20 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ─── 2. Allow group owners to delete all messages in their group conversation ──
+-- Requires: (a) the conversation exists AND is marked is_group=true, AND
+-- (b) the authenticated user is the owner of the groups row with the same ID.
+-- This prevents a malicious user from creating a groups row pointing at a
+-- non-group conversation to gain unintended delete rights.
 DO $$ BEGIN
   CREATE POLICY messages_delete_group_owner ON messages
     FOR DELETE
     USING (
       EXISTS (
-        SELECT 1 FROM groups
-        WHERE groups.id = messages.conversation_id
-          AND groups.owner_id = auth.uid()
+        SELECT 1
+        FROM groups g
+        JOIN conversations c ON c.id = g.id AND c.is_group = true
+        WHERE g.id = messages.conversation_id
+          AND g.owner_id = auth.uid()
       )
     );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
