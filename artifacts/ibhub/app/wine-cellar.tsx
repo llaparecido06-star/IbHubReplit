@@ -183,8 +183,13 @@ export default function WineCellarScreen() {
     return null;
   };
 
+  const canSave = wName.trim().length > 0 && wGrape.trim().length > 0 && wVintage.trim().length > 0 && wEan.trim().length > 0;
+
   const handleAdd = async () => {
     if (!wName.trim()) { Alert.alert("Atenção", "Informe o nome do vinho."); return; }
+    if (!wGrape.trim()) { Alert.alert("Atenção", "Informe a uva/casta do vinho."); return; }
+    if (!wVintage.trim()) { Alert.alert("Atenção", "Informe a safra do vinho."); return; }
+    if (!wEan.trim()) { Alert.alert("Atenção", "Informe o EAN/código de barras do vinho."); return; }
     if (!user?.id) return;
 
     const buyDate  = parseDateBR(wBuyDate);
@@ -217,26 +222,31 @@ export default function WineCellarScreen() {
     };
 
     setSaving(true);
-    if (editingId) {
-      const updated = await API.updateWineEntry(editingId, payload);
-      setSaving(false);
-      if (updated) {
-        setWines((prev) => prev.map((w) => w.id === editingId ? updated : w));
-        resetForm();
-        setShowForm(false);
+    try {
+      if (editingId) {
+        const updated = await API.updateWineEntry(editingId, payload);
+        setSaving(false);
+        if (updated) {
+          setWines((prev) => prev.map((w) => w.id === editingId ? updated : w));
+          resetForm();
+          setShowForm(false);
+        } else {
+          Alert.alert("Erro", "Não foi possível atualizar o vinho. Tente novamente.");
+        }
       } else {
-        Alert.alert("Erro", "Não foi possível atualizar o vinho. Tente novamente.");
+        const entry = await API.addWineEntry({ user_id: user.id, ...payload });
+        setSaving(false);
+        if (entry) {
+          setWines((prev) => [entry, ...prev]);
+          resetForm();
+          setShowForm(false);
+        } else {
+          Alert.alert("Erro", "Não foi possível salvar o vinho. Tente novamente.");
+        }
       }
-    } else {
-      const entry = await API.addWineEntry({ user_id: user.id, ...payload });
+    } catch (e) {
       setSaving(false);
-      if (entry) {
-        setWines((prev) => [entry, ...prev]);
-        resetForm();
-        setShowForm(false);
-      } else {
-        Alert.alert("Erro", "Não foi possível salvar o vinho. Tente novamente.");
-      }
+      Alert.alert("Erro", "Ocorreu um erro inesperado. Tente novamente.");
     }
   };
 
@@ -457,25 +467,27 @@ export default function WineCellarScreen() {
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={styles.formScroll} showsVerticalScrollIndicator={false}>
-            <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+            {/* Required fields notice */}
+            <Text style={[styles.fLabel, { color: colors.mutedForeground, marginBottom: -4 }]}>Campos obrigatórios: Nome, Uva, Safra e EAN</Text>
+            <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: wName.trim() ? colors.gold : colors.border, color: colors.foreground }]}
               placeholder="Nome do vinho *" placeholderTextColor={colors.mutedForeground} value={wName} onChangeText={setWName} />
+            <View style={styles.fRow}>
+              <TextInput style={[styles.fInput, styles.fHalf, { backgroundColor: "#fff", borderColor: wGrape.trim() ? colors.gold : colors.border, color: colors.foreground }]}
+                placeholder="Uva/Casta *" placeholderTextColor={colors.mutedForeground} value={wGrape} onChangeText={setWGrape} />
+              <TextInput style={[styles.fInput, styles.fHalf, { backgroundColor: "#fff", borderColor: wVintage.trim() ? colors.gold : colors.border, color: colors.foreground }]}
+                placeholder="Safra *" placeholderTextColor={colors.mutedForeground} value={wVintage} onChangeText={setWVintage} keyboardType="numeric" />
+            </View>
+            <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: wEan.trim() ? colors.gold : colors.border, color: colors.foreground }]}
+              placeholder="EAN / Código de barras (ex: 7896123456789) *" placeholderTextColor={colors.mutedForeground}
+              value={wEan} onChangeText={setWEan} keyboardType="numeric" />
             <View style={styles.fRow}>
               <TextInput style={[styles.fInput, styles.fHalf, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
                 placeholder="Produtor" placeholderTextColor={colors.mutedForeground} value={wProducer} onChangeText={setWProducer} />
               <TextInput style={[styles.fInput, styles.fHalf, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                placeholder="Safra" placeholderTextColor={colors.mutedForeground} value={wVintage} onChangeText={setWVintage} keyboardType="numeric" />
-            </View>
-            <View style={styles.fRow}>
-              <TextInput style={[styles.fInput, styles.fHalf, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                placeholder="Região" placeholderTextColor={colors.mutedForeground} value={wRegion} onChangeText={setWRegion} />
-              <TextInput style={[styles.fInput, styles.fHalf, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
                 placeholder="País" placeholderTextColor={colors.mutedForeground} value={wCountry} onChangeText={setWCountry} />
             </View>
             <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-              placeholder="Uva/Casta" placeholderTextColor={colors.mutedForeground} value={wGrape} onChangeText={setWGrape} />
-            <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-              placeholder="EAN / Código de barras (ex: 7896123456789)" placeholderTextColor={colors.mutedForeground}
-              value={wEan} onChangeText={setWEan} keyboardType="numeric" />
+              placeholder="Região" placeholderTextColor={colors.mutedForeground} value={wRegion} onChangeText={setWRegion} />
             <View style={styles.fRow}>
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={[styles.fLabel, { color: colors.mutedForeground }]}>Quantidade</Text>
@@ -530,9 +542,9 @@ export default function WineCellarScreen() {
             </TouchableOpacity>
             {/* Save button */}
             <TouchableOpacity
-              style={[styles.saveBtn, { backgroundColor: colors.gold }, saving && { opacity: 0.6 }]}
+              style={[styles.saveBtn, { backgroundColor: canSave && !saving ? colors.gold : "#ccc" }]}
               onPress={handleAdd}
-              disabled={saving}
+              disabled={!canSave || saving}
             >
               {saving ? (
                 <ActivityIndicator size="small" color="#fff" />

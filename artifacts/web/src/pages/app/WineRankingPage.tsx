@@ -44,11 +44,14 @@ function MedalIcon({ rank }: { rank: number }) {
   return <span style={{ fontSize: 15, fontWeight: 800, color: MUTED, minWidth: 24, textAlign: "center", display: "inline-block" }}>{rank}</span>;
 }
 
+type SortKey = "score" | "count" | "alpha";
+
 export default function WineRankingPage() {
   const [wines, setWines]       = useState<WineCommunityRating[]>([]);
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState("");
   const [filter, setFilter]     = useState<"todos" | "tinto" | "branco" | "espumante" | "rosé">("todos");
+  const [sortBy, setSortBy]     = useState<SortKey>("score");
 
   useEffect(() => {
     fetchWineCommunityRankings().then(data => {
@@ -57,12 +60,18 @@ export default function WineRankingPage() {
     });
   }, []);
 
-  const filtered = wines.filter(w => {
-    const q = search.toLowerCase();
-    const matchSearch = !q || w.name?.toLowerCase().includes(q) || w.producer?.toLowerCase().includes(q) || w.country?.toLowerCase().includes(q);
-    const matchFilter = filter === "todos" || w.wine_type?.toLowerCase().includes(filter);
-    return matchSearch && matchFilter;
-  });
+  const filtered = wines
+    .filter(w => {
+      const q = search.toLowerCase();
+      const matchSearch = !q || w.name?.toLowerCase().includes(q) || w.producer?.toLowerCase().includes(q) || w.country?.toLowerCase().includes(q);
+      const matchFilter = filter === "todos" || w.wine_type?.toLowerCase().includes(filter);
+      return matchSearch && matchFilter;
+    })
+    .sort((a, b) => {
+      if (sortBy === "alpha") return (a.name ?? "").localeCompare(b.name ?? "");
+      if (sortBy === "count") return (b.total_ratings ?? 0) - (a.total_ratings ?? 0);
+      return (b.avg_rating ?? 0) - (a.avg_rating ?? 0);
+    });
 
   return (
     <AppShell>
@@ -75,7 +84,7 @@ export default function WineRankingPage() {
           </div>
 
           {/* Filters */}
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -97,6 +106,17 @@ export default function WineRankingPage() {
                 </button>
               ))}
             </div>
+          </div>
+          {/* Sort options */}
+          <div style={{ display: "flex", gap: 8 }}>
+            <span style={{ fontSize: 12, color: MUTED, alignSelf: "center" }}>Ordenar:</span>
+            {([["score", "🏆 Maior Pontuação"], ["count", "📊 Mais Avaliados"], ["alpha", "🔤 Alfabética"]] as const).map(([key, label]) => (
+              <button key={key} onClick={() => setSortBy(key)} style={{
+                padding: "6px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                background: sortBy === key ? GOLD : WHITE, color: sortBy === key ? WHITE : MUTED,
+                border: `1px solid ${sortBy === key ? GOLD : BORDER}`,
+              }}>{label}</button>
+            ))}
           </div>
         </div>
 

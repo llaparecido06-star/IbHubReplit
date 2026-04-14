@@ -17,6 +17,19 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { createEvent } from "@/services/api";
 
+function maskDate(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0,2)}/${digits.slice(2)}`;
+  return `${digits.slice(0,2)}/${digits.slice(2,4)}/${digits.slice(4)}`;
+}
+
+function maskTime(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0,2)}:${digits.slice(2)}`;
+}
+
 function parseDateTime(date: string, time: string): string | null {
   const parts = date.split("/");
   if (parts.length !== 3) return null;
@@ -227,17 +240,21 @@ export default function NewEventScreen() {
                 placeholder="dd/mm/aaaa"
                 placeholderTextColor={colors.mutedForeground}
                 value={startDate}
-                onChangeText={setStartDate}
+                onChangeText={(t) => setStartDate(maskDate(t))}
+                keyboardType="numeric"
+                maxLength={10}
               />
             </View>
             <View style={[styles.field, { flex: 1 }]}>
               <Text style={[styles.label, { color: colors.navy }]}>Hora início *</Text>
               <TextInput
                 style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                placeholder="--:--"
+                placeholder="hh:mm"
                 placeholderTextColor={colors.mutedForeground}
                 value={startTime}
-                onChangeText={setStartTime}
+                onChangeText={(t) => setStartTime(maskTime(t))}
+                keyboardType="numeric"
+                maxLength={5}
               />
             </View>
           </View>
@@ -250,17 +267,21 @@ export default function NewEventScreen() {
                 placeholder="dd/mm/aaaa"
                 placeholderTextColor={colors.mutedForeground}
                 value={endDate}
-                onChangeText={setEndDate}
+                onChangeText={(t) => setEndDate(maskDate(t))}
+                keyboardType="numeric"
+                maxLength={10}
               />
             </View>
             <View style={[styles.field, { flex: 1 }]}>
               <Text style={[styles.label, { color: colors.navy }]}>Hora fim</Text>
               <TextInput
                 style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                placeholder="--:--"
+                placeholder="hh:mm"
                 placeholderTextColor={colors.mutedForeground}
                 value={endTime}
-                onChangeText={setEndTime}
+                onChangeText={(t) => setEndTime(maskTime(t))}
+                keyboardType="numeric"
+                maxLength={5}
               />
             </View>
           </View>

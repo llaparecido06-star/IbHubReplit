@@ -65,6 +65,7 @@ const emptyForm = () => ({
   region: "",
   country: "",
   grape: "",
+  ean: "",
   qty: "1",
   price: "",
   buy_date: "",
@@ -406,8 +407,13 @@ export default function AdegaPage() {
     return null;
   };
 
+  const canSave = form.name.trim().length > 0 && form.grape.trim().length > 0 && form.vintage.trim().length > 0 && form.ean.trim().length > 0;
+
   const handleAdd = async () => {
     if (!form.name.trim()) { alert("Informe o nome do vinho."); return; }
+    if (!form.grape.trim()) { alert("Informe a uva/casta do vinho."); return; }
+    if (!form.vintage.trim()) { alert("Informe a safra do vinho."); return; }
+    if (!form.ean.trim()) { alert("Informe o EAN/código de barras do vinho."); return; }
     if (!user?.id) return;
 
     const buyDate = parseDateBR(form.buy_date);
@@ -425,6 +431,7 @@ export default function AdegaPage() {
       region: form.region.trim() || null,
       country: form.country.trim() || null,
       grape: form.grape.trim() || null,
+      ean: form.ean.trim() || null,
       qty: Math.max(1, parseInt(form.qty) || 1),
       price: form.price.trim() ? parseFloat(form.price.replace(",", ".")) : null,
       buy_date: buyDate,
@@ -461,6 +468,7 @@ export default function AdegaPage() {
       region: wine.region ?? "",
       country: wine.country ?? "",
       grape: wine.grape ?? "",
+      ean: wine.ean ?? "",
       qty: String(wine.qty),
       price: wine.price != null ? String(wine.price) : "",
       buy_date: wine.buy_date ? wine.buy_date.split("T")[0] : "",
@@ -476,6 +484,9 @@ export default function AdegaPage() {
 
   const handleUpdate = async () => {
     if (!editingWine || !form.name.trim()) { alert("Informe o nome do vinho."); return; }
+    if (!form.grape.trim()) { alert("Informe a uva/casta do vinho."); return; }
+    if (!form.vintage.trim()) { alert("Informe a safra do vinho."); return; }
+    if (!form.ean.trim()) { alert("Informe o EAN/código de barras do vinho."); return; }
 
     const buyDate = parseDateBR(form.buy_date);
     const drinkBy = parseDateBR(form.drink_by);
@@ -491,6 +502,7 @@ export default function AdegaPage() {
       region: form.region.trim() || null,
       country: form.country.trim() || null,
       grape: form.grape.trim() || null,
+      ean: form.ean.trim() || null,
       qty: Math.max(1, parseInt(form.qty) || 1),
       price: form.price.trim() ? parseFloat(form.price.replace(",", ".")) : null,
       buy_date: buyDate,
@@ -754,21 +766,25 @@ export default function AdegaPage() {
               <button onClick={closeModal} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#aaa" }}>✕</button>
             </div>
             <div style={{ padding: "24px 28px 40px", display: "flex", flexDirection: "column", gap: 12 }}>
+              <small style={{ color: GOLD, fontSize: 11 }}>* Campos obrigatórios</small>
               <input
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder="Nome do vinho *"
-                style={inputStyle}
+                style={reqInputStyle}
               />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <input value={form.grape} onChange={(e) => setForm((f) => ({ ...f, grape: e.target.value }))} placeholder="Uva/Casta *" style={reqInputStyle} />
+                <input value={form.vintage} onChange={(e) => setForm((f) => ({ ...f, vintage: e.target.value }))} placeholder="Safra *" style={reqInputStyle} />
+              </div>
+              <input value={form.ean} onChange={(e) => setForm((f) => ({ ...f, ean: e.target.value }))} placeholder="EAN / Código de Barras *" style={reqInputStyle} />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <input value={form.producer} onChange={(e) => setForm((f) => ({ ...f, producer: e.target.value }))} placeholder="Produtor" style={inputStyle} />
-                <input value={form.vintage} onChange={(e) => setForm((f) => ({ ...f, vintage: e.target.value }))} placeholder="Safra" style={inputStyle} type="number" />
+                <input value={form.country} onChange={(e) => setForm((f) => ({ ...f, country: e.target.value }))} placeholder="País" style={inputStyle} />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <input value={form.region} onChange={(e) => setForm((f) => ({ ...f, region: e.target.value }))} placeholder="Região" style={inputStyle} />
-                <input value={form.country} onChange={(e) => setForm((f) => ({ ...f, country: e.target.value }))} placeholder="País" style={inputStyle} />
               </div>
-              <input value={form.grape} onChange={(e) => setForm((f) => ({ ...f, grape: e.target.value }))} placeholder="Uva/Casta" style={inputStyle} />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <input value={form.qty} onChange={(e) => setForm((f) => ({ ...f, qty: e.target.value }))} placeholder="Quantidade" type="number" style={inputStyle} />
                 <input value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} placeholder="Preço de compra (R$)" style={inputStyle} />
@@ -829,17 +845,18 @@ export default function AdegaPage() {
 
               <button
                 onClick={editingWine ? handleUpdate : handleAdd}
-                disabled={saving}
+                disabled={saving || !canSave}
                 style={{
                   padding: "14px 0",
-                  backgroundColor: saving ? "#ccc" : GOLD,
+                  backgroundColor: saving || !canSave ? "#ccc" : GOLD,
                   color: "#fff",
                   border: "none",
                   borderRadius: 12,
                   fontSize: 15,
                   fontWeight: 800,
-                  cursor: "pointer",
+                  cursor: saving || !canSave ? "not-allowed" : "pointer",
                   marginTop: 8,
+                  opacity: !canSave ? 0.7 : 1,
                 }}
               >{saving ? "Salvando..." : editingWine ? "✓ Atualizar Vinho" : "✓ Salvar Vinho"}</button>
             </div>
@@ -860,4 +877,9 @@ const inputStyle: React.CSSProperties = {
   backgroundColor: "#fff",
   boxSizing: "border-box",
   fontFamily: "inherit",
+};
+
+const reqInputStyle: React.CSSProperties = {
+  ...inputStyle,
+  border: `1px solid ${GOLD}`,
 };

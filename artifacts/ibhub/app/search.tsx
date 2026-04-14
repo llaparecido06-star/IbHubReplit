@@ -61,7 +61,6 @@ const FILTERS: { key: Filter; label: string; icon: keyof typeof Feather.glyphMap
   { key: "empresas",    label: "Empresas",  icon: "briefcase" },
   { key: "vagas",       label: "Vagas",     icon: "clipboard" },
   { key: "eventos",     label: "Eventos",   icon: "calendar" },
-  { key: "mercado",     label: "Mercado",   icon: "bar-chart-2" },
   { key: "grupos",      label: "Grupos",    icon: "users" },
 ];
 

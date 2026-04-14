@@ -1034,6 +1034,7 @@ export interface WineEntry {
   region?: string | null;
   country?: string | null;
   grape?: string | null;
+  ean?: string | null;
   qty: number;
   price?: number | null;
   buy_date?: string | null;

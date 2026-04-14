@@ -48,10 +48,13 @@ export default function WineRankingScreen() {
   // Se veio de um post de degustação, pré-filtra pelo EAN do vinho
   const initialEan = params.ean ?? "";
 
+  type SortKey = "score" | "alpha" | "count";
+
   const [ratings, setRatings]         = useState<API.WineCommunityRating[]>([]);
   const [loading, setLoading]         = useState(true);
   const [eanFilter, setEanFilter]     = useState(initialEan);
   const [searching, setSearching]     = useState(false);
+  const [sortBy, setSortBy]           = useState<SortKey>("score");
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -82,6 +85,18 @@ export default function WineRankingScreen() {
     setEanFilter("");
     load(undefined);
   };
+
+  const sortedRatings = [...ratings].sort((a, b) => {
+    if (sortBy === "alpha") return (a.name ?? "").localeCompare(b.name ?? "");
+    if (sortBy === "count") return Number(b.rating_count ?? 0) - Number(a.rating_count ?? 0);
+    return Number(b.avg_rating ?? 0) - Number(a.avg_rating ?? 0); // "score"
+  });
+
+  const SORT_OPTIONS: { key: typeof sortBy; label: string }[] = [
+    { key: "score", label: "Maior Pontuação" },
+    { key: "count", label: "Mais Avaliados" },
+    { key: "alpha", label: "Alfabética" },
+  ];
 
   const renderItem = ({ item, index }: { item: API.WineCommunityRating; index: number }) => (
     <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
@@ -154,6 +169,27 @@ export default function WineRankingScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Sort filters */}
+      {!loading && ratings.length > 0 && (
+        <View style={{ flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border }}>
+          {SORT_OPTIONS.map((opt) => (
+            <TouchableOpacity
+              key={opt.key}
+              onPress={() => setSortBy(opt.key)}
+              style={{
+                paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20,
+                backgroundColor: sortBy === opt.key ? colors.gold : "#f5f5f0",
+                borderWidth: 1, borderColor: sortBy === opt.key ? colors.gold : colors.border,
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: "700", color: sortBy === opt.key ? "#fff" : colors.mutedForeground }}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.gold} />
@@ -169,14 +205,14 @@ export default function WineRankingScreen() {
         </View>
       ) : (
         <FlatList
-          data={ratings}
+          data={sortedRatings}
           keyExtractor={(item) => item.ean}
           renderItem={renderItem}
           contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: bottomPad }}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
             <Text style={[styles.listHeader, { color: colors.mutedForeground }]}>
-              {ratings.length} {ratings.length === 1 ? "rótulo" : "rótulos"} com avaliação pública
+              {sortedRatings.length} {sortedRatings.length === 1 ? "rótulo" : "rótulos"} com avaliação pública
             </Text>
           }
         />

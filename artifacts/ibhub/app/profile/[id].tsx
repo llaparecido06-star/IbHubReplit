@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -53,6 +54,7 @@ export default function PublicProfileScreen() {
   const [mutuals, setMutuals]         = useState<{ id: string; full_name: string; avatar_url: string | null }[]>([]);
   const [resolvedId, setResolvedId]   = useState<string>(id ?? "");
   const [userListModal, setUserListModal] = useState<UserListType | null>(null);
+  const [selectedWine, setSelectedWine]   = useState<API.WineEntry | null>(null);
 
   const topPad   = insets.top;
   const navyBg   = (colors as any).navyLight ?? colors.navy;
@@ -428,7 +430,9 @@ export default function PublicProfileScreen() {
             ) : (
               <View style={{ padding: 16, rowGap: 10 }}>
                 {wineEntries.map(w => (
-                  <View key={w.id} style={[styles.wineCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <TouchableOpacity key={w.id} activeOpacity={0.8} onPress={() => setSelectedWine(w)}
+                    style={[styles.wineCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  >
                     <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.wineName, { color: colors.foreground }]}>{w.name}</Text>
@@ -452,7 +456,7 @@ export default function PublicProfileScreen() {
                         {[1,2,3,4,5].map(s => <Feather key={s} name="star" size={12} color={s <= w.rating ? colors.gold : colors.border} />)}
                       </View>
                     )}
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             )}
@@ -473,6 +477,64 @@ export default function PublicProfileScreen() {
         userId={resolvedId || null}
         onClose={() => setUserListModal(null)}
       />
+
+      {/* Wine Detail Modal */}
+      <Modal
+        visible={selectedWine !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedWine(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" }}>
+          <View style={[styles.wineModal, { backgroundColor: colors.background }]}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }}>🍷 Detalhes do Vinho</Text>
+              <TouchableOpacity onPress={() => setSelectedWine(null)}>
+                <Feather name="x" size={22} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            </View>
+            {selectedWine && (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <Text style={{ fontSize: 20, fontWeight: "800", color: colors.foreground, marginBottom: 4 }}>{selectedWine.name}</Text>
+                <View style={[styles.wineStatus, { backgroundColor: colors.gold + "20", alignSelf: "flex-start", marginBottom: 12 }]}>
+                  <Text style={[styles.wineStatusTxt, { color: colors.gold }]}>
+                    {selectedWine.status === "adega" ? "Na Adega" : selectedWine.status === "consumido" ? "Consumido" : selectedWine.status === "presenteado" ? "Presenteado" : "Wishlist"}
+                  </Text>
+                </View>
+                {[
+                  { label: "Produtor", value: selectedWine.producer },
+                  { label: "Uva/Casta", value: selectedWine.grape },
+                  { label: "Safra", value: selectedWine.vintage },
+                  { label: "Região", value: selectedWine.region },
+                  { label: "País", value: selectedWine.country },
+                  { label: "EAN", value: (selectedWine as any).ean },
+                  { label: "Quantidade", value: selectedWine.qty ? String(selectedWine.qty) : null },
+                  { label: "Preço", value: selectedWine.price != null ? `R$ ${Number(selectedWine.price).toFixed(2)}` : null },
+                  { label: "Local", value: selectedWine.storage },
+                ].filter(r => !!r.value).map(r => (
+                  <View key={r.label} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                    <Text style={{ fontSize: 13, color: colors.mutedForeground }}>{r.label}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>{r.value}</Text>
+                  </View>
+                ))}
+                {selectedWine.rating > 0 && (
+                  <View style={{ marginTop: 14 }}>
+                    <Text style={{ fontSize: 13, color: colors.mutedForeground, marginBottom: 6 }}>Avaliação</Text>
+                    <View style={{ flexDirection: "row", gap: 4 }}>
+                      {[1,2,3,4,5].map(s => <Feather key={s} name="star" size={20} color={s <= selectedWine.rating ? colors.gold : colors.border} />)}
+                    </View>
+                  </View>
+                )}
+                {selectedWine.notes && (
+                  <View style={{ marginTop: 14, backgroundColor: colors.card, borderRadius: 10, padding: 12 }}>
+                    <Text style={{ fontSize: 12, color: colors.mutedForeground, fontStyle: "italic" }}>"{selectedWine.notes}"</Text>
+                  </View>
+                )}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -571,4 +633,5 @@ const styles = StyleSheet.create({
   wineSub:      { fontSize: 12, marginTop: 1 },
   wineStatus:   { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   wineStatusTxt:{ fontSize: 11, fontWeight: "600" },
+  wineModal:    { borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 24, paddingBottom: 40, maxHeight: "85%" },
 });

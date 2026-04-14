@@ -16,6 +16,13 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { createOpportunity } from "@/services/api";
 
+function maskDate(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0,2)}/${digits.slice(2)}`;
+  return `${digits.slice(0,2)}/${digits.slice(2,4)}/${digits.slice(4)}`;
+}
+
 type Mode = "marketplace" | "vaga";
 
 const MARKET_CATS   = ["Vinho", "Insumo", "Equipamento", "Serviço", "Outros"];
@@ -180,7 +187,7 @@ export default function NewOpportunityScreen() {
               <TextInput style={[styles.input, styles.textarea, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder="Descreva os requisitos e benefícios..." placeholderTextColor={colors.mutedForeground} value={desc} onChangeText={setDesc} multiline numberOfLines={5} textAlignVertical="top" />
             </Field>
             <Field label="Validade (opcional)" colors={colors}>
-              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder="dd/mm/aaaa" placeholderTextColor={colors.mutedForeground} value={expiry} onChangeText={setExpiry} />
+              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder="dd/mm/aaaa" placeholderTextColor={colors.mutedForeground} value={expiry} onChangeText={(t) => setExpiry(maskDate(t))} keyboardType="numeric" maxLength={10} />
             </Field>
             <Field label="E-mail de contato" colors={colors}>
               <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder="rh@empresa.com" placeholderTextColor={colors.mutedForeground} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
@@ -207,7 +214,7 @@ export default function NewOpportunityScreen() {
               <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder="Ex: São Paulo, SP" placeholderTextColor={colors.mutedForeground} value={location} onChangeText={setLocation} />
             </Field>
             <Field label="Validade (opcional)" colors={colors}>
-              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder="dd/mm/aaaa" placeholderTextColor={colors.mutedForeground} value={expiry} onChangeText={setExpiry} />
+              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder="dd/mm/aaaa" placeholderTextColor={colors.mutedForeground} value={expiry} onChangeText={(t) => setExpiry(maskDate(t))} keyboardType="numeric" maxLength={10} />
             </Field>
             <Field label="E-mail de contato" colors={colors}>
               <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder="contato@empresa.com" placeholderTextColor={colors.mutedForeground} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />

@@ -89,7 +89,7 @@ export default function TabLayout() {
         options={{
           title: isCompany ? "Empresa" : "Perfil",
           tabBarIcon: ({ color }) => (
-            <Feather name={isCompany ? "briefcase" : "user"} size={22} color={color} />
+            <Feather name={isCompany ? "grid" : "user"} size={22} color={color} />
           ),
         }}
       />
