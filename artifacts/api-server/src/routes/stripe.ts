@@ -169,6 +169,32 @@ router.post("/stripe/create-checkout-session", async (req: Request, res: Respons
     return;
   }
 
+  const priceId = PRICE_IDS[plan];
+  if (!priceId || !priceId.startsWith("price_")) {
+    res.status(503).json({
+      error: `Configuração incompleta: o price ID para o plano "${plan}" não está configurado corretamente. ` +
+             `Configure a variável STRIPE_PRICE_${plan.toUpperCase()} com um ID válido do Stripe (começa com "price_").`
+    });
+    return;
+  }
+
+  // Detect test/live mode mismatch
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  const isTestKey = secretKey.startsWith("sk_test_");
+  const isTestPrice = priceId.includes("_test_");
+  if (isTestKey && !isTestPrice) {
+    res.status(503).json({
+      error: `Conflito de ambiente: STRIPE_SECRET_KEY está em modo teste (sk_test_) mas o price ID "${priceId}" não é de teste. Configure ambos no mesmo ambiente.`
+    });
+    return;
+  }
+  if (!isTestKey && isTestPrice) {
+    res.status(503).json({
+      error: `Conflito de ambiente: STRIPE_SECRET_KEY está em modo live mas o price ID "${priceId}" é de teste. Configure ambos no mesmo ambiente.`
+    });
+    return;
+  }
+
   const webBase = process.env.WEB_BASE_URL ?? "";
   const defaultSuccess = `${webBase}/assinar/sucesso?plano=${plan}`;
   const defaultCancel  = `${webBase}/assinar/cancelado?plano=${plan}`;
@@ -356,6 +382,34 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
   }
 
   res.json({ received: true });
+});
+
+// ─── GET /stripe/config-check (dev diagnostic) ───────────────────────────────
+router.get("/stripe/config-check", (_req: Request, res: Response) => {
+  const secretKey = process.env.STRIPE_SECRET_KEY ?? "";
+  const result: Record<string, { configured: boolean; valid_format: boolean; mode?: string; prefix?: string }> = {};
+
+  const mode = secretKey.startsWith("sk_test_") ? "test" : secretKey.startsWith("sk_live_") ? "live" : "unknown";
+
+  for (const [plan, envKey] of [
+    ["premium",   "STRIPE_PRICE_PREMIUM"],
+    ["exclusive", "STRIPE_PRICE_EXCLUSIVE"],
+    ["business",  "STRIPE_PRICE_BUSINESS"],
+  ] as [string, string][]) {
+    const val = process.env[envKey] ?? "";
+    result[plan] = {
+      configured: val.length > 0,
+      valid_format: val.startsWith("price_"),
+      mode: val.startsWith("price_test_") ? "test" : val.startsWith("price_live_") ? "live" : val.startsWith("price_") ? "unknown" : "n/a",
+      prefix: val.length > 0 ? val.slice(0, 12) + "…" : "(not set)",
+    };
+  }
+
+  res.json({
+    stripe_key_configured: secretKey.length > 0,
+    stripe_key_mode: mode,
+    prices: result,
+  });
 });
 
 export default router;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { createCheckoutSession } from "@/services/stripe";
@@ -88,11 +88,15 @@ export default function AssinarPage() {
   const [, setLocation] = useLocation();
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const autoTriggered = useRef(false);
 
   const currentPlan  = profile?.plan ?? "basico";
   const hasActiveSub = hasPlanAccess(profile);
 
-  async function handleAssinar(plan: Plan) {
+  async function handleAssinar(planId: string) {
+    const plan = PLANS.find(p => p.id === planId);
+    if (!plan) return;
+
     if (plan.id === "basico") {
       setError("O plano Básico é gratuito — não é necessária assinatura.");
       return;
@@ -110,12 +114,34 @@ export default function AssinarPage() {
       const { url } = await createCheckoutSession(session.access_token, plan.id);
       window.location.href = url;
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Erro ao iniciar checkout. Tente novamente.";
+      const raw = err instanceof Error ? err.message : "Erro ao iniciar checkout. Tente novamente.";
+      // Make Stripe config errors more actionable
+      const message = raw.toLowerCase().includes("no such price")
+        ? "Erro de configuração: price ID inválido no Stripe. Verifique as variáveis STRIPE_PRICE_* no painel."
+        : raw;
       setError(message);
     } finally {
       setLoading(null);
     }
   }
+
+  // Auto-trigger checkout when user returns from login with ?plano= in the URL
+  useEffect(() => {
+    if (autoTriggered.current) return;
+    if (!session) return; // wait until session is loaded
+
+    const params = new URLSearchParams(window.location.search);
+    const planoParam = params.get("plano");
+    if (!planoParam || planoParam === "basico") return;
+
+    const plan = PLANS.find(p => p.id === planoParam);
+    if (!plan) return;
+
+    autoTriggered.current = true;
+    // Clean the URL so a refresh doesn't re-trigger
+    window.history.replaceState({}, "", window.location.pathname);
+    handleAssinar(planoParam);
+  }, [session]);
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#f6f7f9", fontFamily: "Inter, sans-serif" }}>
@@ -228,7 +254,7 @@ export default function AssinarPage() {
                   </div>
                 ) : (
                   <button
-                    onClick={() => handleAssinar(plan)}
+                    onClick={() => handleAssinar(plan.id)}
                     disabled={isLoading || !!loading}
                     style={{
                       backgroundColor: isPaid ? GOLD : `${NAVY}12`,
