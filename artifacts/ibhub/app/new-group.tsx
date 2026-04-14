@@ -4,7 +4,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +14,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/context/AuthContext";
+import { createGroup } from "@/services/api";
 
 type AccessType = "aberto" | "fechado" | "restrito";
 
@@ -30,6 +31,8 @@ export default function NewGroupScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { profile, user } = useAuth();
+  const userId = profile?.id ?? user?.id ?? "";
 
   const [name, setName]         = useState("");
   const [category, setCategory] = useState<string | null>(null);
@@ -47,11 +50,24 @@ export default function NewGroupScreen() {
       Alert.alert("Atenção", "Preencha o nome e a categoria do grupo.");
       return;
     }
+    if (!userId) {
+      Alert.alert("Erro", "Você precisa estar autenticado.");
+      return;
+    }
     setLoading(true);
-    // Simulate async save
-    await new Promise((res) => setTimeout(res, 800));
+    const group = await createGroup({
+      owner_id: userId,
+      name: name.trim(),
+      description: desc.trim() || undefined,
+      category: category!,
+      access,
+    });
     setLoading(false);
-    Alert.alert("Grupo criado!", `"${name}" foi criado com sucesso.`, [
+    if (!group) {
+      Alert.alert("Erro", "Não foi possível criar o grupo. Verifique se a migração foi executada.");
+      return;
+    }
+    Alert.alert("Grupo criado! 🎉", `"${name}" foi criado com sucesso.`, [
       { text: "OK", onPress: () => router.back() },
     ]);
   };
@@ -73,7 +89,7 @@ export default function NewGroupScreen() {
           disabled={loading}
         >
           <Text style={[styles.createBtnText, { color: canCreate ? "#fff" : colors.mutedForeground }]}>
-            {loading ? "..." : "Criar"}
+            {loading ? "…" : "Criar"}
           </Text>
         </TouchableOpacity>
       </View>

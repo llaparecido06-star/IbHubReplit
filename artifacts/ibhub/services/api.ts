@@ -4796,3 +4796,79 @@ export async function updateApplicationStatus(
     return false;
   }
 }
+
+// ─── Groups ───────────────────────────────────────────────────────────────────
+
+export interface Group {
+  id: string;
+  owner_id: string;
+  name: string;
+  description?: string | null;
+  category: string;
+  access: "aberto" | "fechado" | "restrito";
+  avatar_url?: string | null;
+  created_at: string;
+  member_count?: number;
+  is_member?: boolean;
+  is_owner?: boolean;
+}
+
+export async function fetchGroups(userId: string): Promise<{ mine: Group[]; explore: Group[] }> {
+  try {
+    const [groupsRes, membershipsRes] = await Promise.all([
+      supabase.from("groups").select("*").order("created_at", { ascending: false }),
+      supabase.from("group_members").select("group_id, role").eq("user_id", userId),
+    ]);
+    if (groupsRes.error) throw groupsRes.error;
+    const membershipMap = new Map<string, string>(
+      (membershipsRes.data ?? []).map((m: any) => [m.group_id, m.role])
+    );
+    const groups = (groupsRes.data ?? []) as any[];
+    const countResults = await Promise.all(
+      groups.map(g =>
+        supabase.from("group_members").select("user_id", { count: "exact", head: true }).eq("group_id", g.id)
+      )
+    );
+    const enriched: Group[] = groups.map((g, i) => ({
+      ...g,
+      member_count: countResults[i].count ?? 0,
+      is_member: membershipMap.has(g.id),
+      is_owner: g.owner_id === userId,
+    }));
+    return { mine: enriched.filter(g => g.is_member), explore: enriched.filter(g => !g.is_member) };
+  } catch (e) {
+    console.warn("fetchGroups:", e);
+    return { mine: [], explore: [] };
+  }
+}
+
+export async function createGroup(params: {
+  owner_id: string;
+  name: string;
+  description?: string;
+  category: string;
+  access: "aberto" | "fechado" | "restrito";
+}): Promise<Group | null> {
+  try {
+    const { data, error } = await supabase.from("groups").insert(params).select().single();
+    if (error) { console.error("createGroup:", error); return null; }
+    return data as Group;
+  } catch (e) {
+    console.error("createGroup:", e);
+    return null;
+  }
+}
+
+export async function joinGroup(groupId: string, userId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("group_members").insert({ group_id: groupId, user_id: userId, role: "member" });
+    return !error;
+  } catch { return false; }
+}
+
+export async function leaveGroup(groupId: string, userId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("group_members").delete().eq("group_id", groupId).eq("user_id", userId);
+    return !error;
+  } catch { return false; }
+}
