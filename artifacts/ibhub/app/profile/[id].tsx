@@ -525,6 +525,20 @@ export default function PublicProfileScreen() {
                     </View>
                   </View>
                 )}
+                {selectedWine.score_100 != null && (
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                    <Text style={{ fontSize: 13, color: colors.mutedForeground }}>Pontuação</Text>
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: colors.gold }}>{selectedWine.score_100}/100</Text>
+                  </View>
+                )}
+                {(selectedWine.aroma || selectedWine.sabor || selectedWine.harmonizacao) && (
+                  <View style={{ marginTop: 14, backgroundColor: colors.card, borderRadius: 10, padding: 12, gap: 8 }}>
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: colors.foreground, marginBottom: 2 }}>Avaliação Sensorial</Text>
+                    {selectedWine.aroma ? <Text style={{ fontSize: 12, color: colors.mutedForeground }}>👃 <Text style={{ fontWeight: "600" }}>Aroma:</Text> {selectedWine.aroma}</Text> : null}
+                    {selectedWine.sabor ? <Text style={{ fontSize: 12, color: colors.mutedForeground }}>👅 <Text style={{ fontWeight: "600" }}>Sabor:</Text> {selectedWine.sabor}</Text> : null}
+                    {selectedWine.harmonizacao ? <Text style={{ fontSize: 12, color: colors.mutedForeground }}>🍽️ <Text style={{ fontWeight: "600" }}>Harmonização:</Text> {selectedWine.harmonizacao}</Text> : null}
+                  </View>
+                )}
                 {selectedWine.notes && (
                   <View style={{ marginTop: 14, backgroundColor: colors.card, borderRadius: 10, padding: 12 }}>
                     <Text style={{ fontSize: 12, color: colors.mutedForeground, fontStyle: "italic" }}>"{selectedWine.notes}"</Text>

@@ -19,9 +19,24 @@ alter table public.wine_cellar
 alter table public.wine_cellar
   add column if not exists ean text;
 
--- Índice parcial para buscas por EAN não nulo
+-- Índice para busca rápida por EAN
 create index if not exists idx_wine_cellar_ean on public.wine_cellar (ean)
   where ean is not null;
+
+-- Garantia de unicidade: um mesmo usuário não pode cadastrar o mesmo EAN duas vezes
+-- (permite múltiplas entradas de vinos diferentes sem EAN = null)
+create unique index if not exists uq_wine_cellar_user_ean
+  on public.wine_cellar (user_id, ean)
+  where ean is not null and ean <> '';
+
+-- Constraint de check: EAN deve ter pelo menos 8 dígitos quando informado
+-- (EAN-8 mínimo; EAN-13 é o padrão de vinhos importados)
+alter table public.wine_cellar
+  drop constraint if exists chk_wine_cellar_ean_format;
+
+alter table public.wine_cellar
+  add constraint chk_wine_cellar_ean_format
+    check (ean is null or ean = '' or length(trim(ean)) >= 8);
 
 -- Atualizar a RPC de ranking comunitário para incluir score_100 médio
 create or replace function public.wine_community_ratings(p_ean text default null)
