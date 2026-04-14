@@ -1,5 +1,214 @@
 import { supabase } from "@/lib/supabase";
 
+// ─── Feed / Posts ──────────────────────────────────────────────────────────────
+
+export interface Post {
+  id: string;
+  user_id: string;
+  company_page_id?: string | null;
+  content: string;
+  image_url?: string | null;
+  image_urls?: string[] | null;
+  video_url?: string | null;
+  likes_count: number;
+  comments_count: number;
+  shares_count: number;
+  view_count?: number;
+  is_liked?: boolean;
+  is_bookmarked?: boolean;
+  created_at: string;
+  hashtags?: string[];
+  location?: string | null;
+  author?: {
+    id: string;
+    full_name: string;
+    username: string;
+    avatar_url?: string | null;
+    headline?: string | null;
+    plan?: string;
+  };
+  company_page?: { id: string; name: string; avatar_url?: string | null } | null;
+}
+
+export interface SuggestedProfile {
+  id: string;
+  full_name: string;
+  username: string | null;
+  avatar_url: string | null;
+  headline: string | null;
+  plan: string;
+  connection_status: "none" | "pending" | "connected";
+}
+
+const POST_SELECT = `id, user_id, company_page_id, content, image_url, image_urls, video_url,
+  likes_count, comments_count, shares_count, view_count, location, hashtags, created_at`;
+
+async function _fetchProfilesMap(userIds: string[]): Promise<Map<string, any>> {
+  if (!userIds.length) return new Map();
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, full_name, username, avatar_url, position, company, plan")
+    .in("id", userIds);
+  return new Map((data ?? []).map((p: any) => [p.id, p]));
+}
+
+function _normalisePost(raw: any, profileMap: Map<string, any>): Post {
+  const p = profileMap.get(raw.user_id);
+  return {
+    ...raw,
+    author: p ? {
+      id: p.id,
+      full_name: p.full_name,
+      username: p.username,
+      avatar_url: p.avatar_url,
+      headline: [p.position, p.company].filter(Boolean).join(" · ") || null,
+      plan: p.plan ?? "gratuito",
+    } : undefined,
+  };
+}
+
+export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
+  try {
+    const { data, error } = await supabase
+      .from("posts")
+      .select(POST_SELECT)
+      .order("created_at", { ascending: false })
+      .limit(30);
+    if (error || !data || !data.length) return [];
+
+    const userIds = [...new Set(data.map((p: any) => p.user_id).filter(Boolean))] as string[];
+    const postIds = data.map((p: any) => p.id) as string[];
+
+    const [profileMap, likedRes, bookmarkRes] = await Promise.all([
+      _fetchProfilesMap(userIds),
+      supabase.from("likes").select("post_id").eq("user_id", currentUserId).is("company_page_id", null).in("post_id", postIds),
+      supabase.from("bookmarks").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
+    ]);
+
+    const likedIds = new Set((likedRes.data ?? []).map((l: any) => l.post_id));
+    const bookmarkedIds = new Set((bookmarkRes.data ?? []).map((b: any) => b.post_id));
+
+    return data.map((raw: any) => ({
+      ..._normalisePost(raw, profileMap),
+      is_liked: likedIds.has(raw.id),
+      is_bookmarked: bookmarkedIds.has(raw.id),
+    }));
+  } catch (e) {
+    console.warn("fetchFeedPosts:", e);
+    return [];
+  }
+}
+
+export async function createWebPost(params: {
+  user_id: string;
+  content: string;
+  image_url?: string | null;
+}): Promise<Post | null> {
+  try {
+    const { data, error } = await supabase
+      .from("posts")
+      .insert({ ...params, likes_count: 0, comments_count: 0, shares_count: 0, view_count: 0 })
+      .select(POST_SELECT)
+      .single();
+    if (error || !data) return null;
+    const profileMap = await _fetchProfilesMap([data.user_id]);
+    return _normalisePost(data, profileMap);
+  } catch (e) {
+    console.warn("createWebPost:", e);
+    return null;
+  }
+}
+
+export async function toggleLikePost(postId: string, userId: string, isLiked: boolean): Promise<boolean> {
+  try {
+    if (isLiked) {
+      await supabase.from("likes").delete().match({ post_id: postId, user_id: userId }).is("company_page_id", null);
+      await supabase.rpc("decrement_post_likes", { p_post_id: postId });
+    } else {
+      await supabase.from("likes").insert({ post_id: postId, user_id: userId });
+      await supabase.rpc("increment_post_likes", { p_post_id: postId });
+    }
+    return true;
+  } catch (e) {
+    console.warn("toggleLikePost:", e);
+    return false;
+  }
+}
+
+export async function fetchWebSuggestedConnections(currentUserId: string, limit = 5): Promise<SuggestedProfile[]> {
+  try {
+    const { data: conns } = await supabase
+      .from("connections")
+      .select("requester_id, receiver_id, status")
+      .or(`requester_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`);
+
+    const excludedIds = new Set<string>([currentUserId]);
+    const statusMap = new Map<string, "pending" | "connected">();
+    (conns ?? []).forEach((c: any) => {
+      const other = c.requester_id === currentUserId ? c.receiver_id : c.requester_id;
+      excludedIds.add(other);
+      statusMap.set(other, c.status === "accepted" ? "connected" : "pending");
+    });
+
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, full_name, username, avatar_url, position, company, plan")
+      .limit(60);
+
+    if (!profiles) return [];
+
+    return (profiles as any[])
+      .filter((p: any) => !excludedIds.has(p.id))
+      .slice(0, limit)
+      .map((p: any) => ({
+        id: p.id,
+        full_name: p.full_name,
+        username: p.username,
+        avatar_url: p.avatar_url,
+        headline: [p.position, p.company].filter(Boolean).join(" · ") || null,
+        plan: p.plan ?? "gratuito",
+        connection_status: statusMap.get(p.id) ?? "none",
+      }));
+  } catch (e) {
+    console.warn("fetchWebSuggestedConnections:", e);
+    return [];
+  }
+}
+
+export async function sendWebConnectionRequest(targetId: string, currentUserId: string): Promise<void> {
+  try {
+    await supabase.from("connections").upsert(
+      { requester_id: currentUserId, receiver_id: targetId, status: "pending" },
+      { onConflict: "requester_id,receiver_id" },
+    );
+  } catch (e) {
+    console.warn("sendWebConnectionRequest:", e);
+  }
+}
+
+export async function fetchProfileStats(userId: string): Promise<{ connections: number; followers: number; visits: number }> {
+  try {
+    const [connsRes, followsRes] = await Promise.all([
+      supabase
+        .from("connections")
+        .select("id", { count: "exact", head: true })
+        .or(`requester_id.eq.${userId},receiver_id.eq.${userId}`)
+        .eq("status", "accepted"),
+      supabase
+        .from("follows")
+        .select("id", { count: "exact", head: true })
+        .eq("following_id", userId),
+    ]);
+    return {
+      connections: connsRes.count ?? 0,
+      followers: followsRes.count ?? 0,
+      visits: 0,
+    };
+  } catch (e) {
+    return { connections: 0, followers: 0, visits: 0 };
+  }
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface AppOpportunity {
