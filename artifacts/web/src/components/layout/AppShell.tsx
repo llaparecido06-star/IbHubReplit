@@ -442,10 +442,14 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
           <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden", marginBottom: 12 }}>
             <div style={{ height: 56, background: "linear-gradient(135deg, #e8e0d0 0%, #d4c9a8 100%)" }} />
             <div style={{ padding: "0 16px 16px", marginTop: -22 }}>
-              <div style={{ marginBottom: 8 }}>
+              <div style={{ marginBottom: 8, cursor: "pointer" }} onClick={() => activeCompany ? setLocation(`/app/empresa/${activeCompany.id}`) : setLocation("/app/perfil")}>
                 <Avatar src={activeAvatar} name={activeName} size={44} />
               </div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: NAVY, marginBottom: 1 }}>{activeName}</div>
+              <div onClick={() => activeCompany ? setLocation(`/app/empresa/${activeCompany.id}`) : setLocation("/app/perfil")} style={{ fontSize: 14, fontWeight: 800, color: NAVY, marginBottom: 1, cursor: "pointer" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.textDecoration = "underline"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.textDecoration = "none"; }}>
+                {activeName}
+              </div>
               {username && !activeCompany && <div style={{ fontSize: 12, color: MUTED, marginBottom: 10 }}>{username}</div>}
               {activeCompany && <div style={{ fontSize: 12, color: MUTED, marginBottom: 10 }}>Página empresarial</div>}
 
@@ -465,12 +469,12 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
                   </button>
                   {companySwitchOpen && (
                     <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 6, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 100 }}>
-                      <button onClick={() => { setActiveCompany(null); setCompanySwitchOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: !activeCompany ? `${GOLD}12` : "none", border: "none", borderRadius: 7, padding: "8px 10px", cursor: "pointer", fontSize: 13, color: !activeCompany ? GOLD : NAVY, fontWeight: !activeCompany ? 700 : 500, fontFamily: "inherit" }}>
+                      <button onClick={() => { setActiveCompany(null); setCompanySwitchOpen(false); setLocation("/app/perfil"); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: !activeCompany ? `${GOLD}12` : "none", border: "none", borderRadius: 7, padding: "8px 10px", cursor: "pointer", fontSize: 13, color: !activeCompany ? GOLD : NAVY, fontWeight: !activeCompany ? 700 : 500, fontFamily: "inherit" }}>
                         <Avatar src={profile?.avatar_url} name={displayName} size={24} />
                         Meu Perfil
                       </button>
                       {companyPages.map(cp => (
-                        <button key={cp.id} onClick={() => { setActiveCompany(cp); setCompanySwitchOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: activeCompany?.id === cp.id ? `${GOLD}12` : "none", border: "none", borderRadius: 7, padding: "8px 10px", cursor: "pointer", fontSize: 13, color: activeCompany?.id === cp.id ? GOLD : NAVY, fontWeight: activeCompany?.id === cp.id ? 700 : 500, fontFamily: "inherit" }}>
+                        <button key={cp.id} onClick={() => { setActiveCompany(cp); setCompanySwitchOpen(false); setLocation(`/app/empresa/${cp.id}`); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: activeCompany?.id === cp.id ? `${GOLD}12` : "none", border: "none", borderRadius: 7, padding: "8px 10px", cursor: "pointer", fontSize: 13, color: activeCompany?.id === cp.id ? GOLD : NAVY, fontWeight: activeCompany?.id === cp.id ? 700 : 500, fontFamily: "inherit" }}>
                           <Avatar src={cp.avatar_url} name={cp.name} size={24} bg={GOLD} />
                           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cp.name}</span>
                         </button>

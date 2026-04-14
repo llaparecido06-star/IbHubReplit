@@ -624,6 +624,94 @@ export async function fetchPublicUserProfile(userId: string): Promise<UserProfil
   return fetchUserProfile(userId);
 }
 
+export interface CompanyPageFull {
+  id: string;
+  owner_id: string;
+  name: string;
+  username?: string | null;
+  avatar_url?: string | null;
+  bio?: string | null;
+  website?: string | null;
+  industry?: string | null;
+  location?: string | null;
+  plan?: string | null;
+  created_at?: string | null;
+}
+
+export async function fetchWebCompanyPageById(id: string): Promise<CompanyPageFull | null> {
+  try {
+    const { data, error } = await supabase
+      .from("company_pages")
+      .select("id, owner_id, name, username, avatar_url, bio, website, industry, location, plan, created_at")
+      .eq("id", id)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data as CompanyPageFull;
+  } catch (e) {
+    console.warn("fetchWebCompanyPageById:", e);
+    return null;
+  }
+}
+
+export async function fetchCompanyPostsWeb(companyId: string, currentUserId: string): Promise<Post[]> {
+  try {
+    const { data: rawPosts } = await supabase
+      .from("posts")
+      .select("id, user_id, company_page_id, content, image_url, video_url, created_at")
+      .eq("company_page_id", companyId)
+      .order("created_at", { ascending: false })
+      .limit(30);
+    if (!rawPosts) return [];
+
+    const authorIds = [...new Set((rawPosts as any[]).map((p: any) => p.user_id).filter(Boolean))];
+    let profileMap = new Map<string, any>();
+    if (authorIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url, headline, plan")
+        .in("id", authorIds);
+      profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+    }
+
+    const postIds = (rawPosts as any[]).map((p: any) => p.id);
+    const [likesRes, commentsRes, bookmarksRes] = await Promise.all([
+      supabase.from("likes").select("post_id, user_id, reaction_type").in("post_id", postIds),
+      supabase.from("comments").select("post_id").in("post_id", postIds),
+      supabase.from("bookmarks").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
+    ]);
+
+    const likesByPost  = new Map<string, any[]>();
+    const countByPost  = new Map<string, number>();
+    const commentCount = new Map<string, number>();
+    const bookmarkSet  = new Set<string>();
+
+    for (const l of (likesRes.data ?? []) as any[]) {
+      likesByPost.set(l.post_id, [...(likesByPost.get(l.post_id) ?? []), l]);
+      countByPost.set(l.post_id, (countByPost.get(l.post_id) ?? 0) + 1);
+    }
+    for (const c of (commentsRes.data ?? []) as any[]) {
+      commentCount.set(c.post_id, (commentCount.get(c.post_id) ?? 0) + 1);
+    }
+    for (const b of (bookmarksRes.data ?? []) as any[]) bookmarkSet.add(b.post_id);
+
+    return (rawPosts as any[]).map((p: any) => {
+      const myLike = (likesByPost.get(p.id) ?? []).find((l: any) => l.user_id === currentUserId);
+      return {
+        id: p.id, user_id: p.user_id, content: p.content,
+        image_url: p.image_url, video_url: p.video_url, created_at: p.created_at,
+        likes_count: countByPost.get(p.id) ?? 0,
+        comments_count: commentCount.get(p.id) ?? 0,
+        is_liked: !!myLike, reaction_type: myLike?.reaction_type ?? null,
+        is_bookmarked: bookmarkSet.has(p.id),
+        author: profileMap.get(p.user_id) ?? null,
+      };
+    });
+  } catch (e) {
+    console.warn("fetchCompanyPostsWeb:", e);
+    return [];
+  }
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface AppOpportunity {

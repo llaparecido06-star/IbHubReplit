@@ -17,6 +17,7 @@ import GruposPage from "@/pages/app/GruposPage";
 import ItensSalvosPage from "@/pages/app/ItensSalvosPage";
 import MeuPerfilPage from "@/pages/app/MeuPerfilPage";
 import PerfilUsuarioPage from "@/pages/app/PerfilUsuarioPage";
+import EmpresaPage from "@/pages/app/EmpresaPage";
 import EventoDetalhe from "@/pages/app/EventoDetalhe";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminUsuarios from "@/pages/admin/AdminUsuarios";
@@ -165,6 +166,9 @@ function Router() {
       </Route>
       <Route path="/app/usuario/:id">
         <PrivateRoute component={PerfilUsuarioPage} />
+      </Route>
+      <Route path="/app/empresa/:id">
+        <PrivateRoute component={EmpresaPage} />
       </Route>
       <Route path="/app">
         <PrivateRoute component={AppFeedPage} />
