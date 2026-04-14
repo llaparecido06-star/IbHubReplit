@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
-import { MARKET_FALLBACK, MarketOverview, MarketInfluencer, Period, fetchMarketOverview, fetchMarketPresentations, MarketPresentation } from "@/services/api";
+import { MARKET_FALLBACK, MarketOverview, Period, fetchMarketOverview, fetchMarketPresentations, MarketPresentation } from "@/services/api";
 
 const GOLD = "#c9a84c";
 const NAVY = "#0d1b2a";
@@ -98,54 +98,6 @@ function BarChart({ data }: { data: MarketOverview["chart_bar"] }) {
   );
 }
 
-function InfluencerRanking({ influencers }: { influencers: MarketInfluencer[] }) {
-  return (
-    <div style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-        <span>🌟</span>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0 }}>Referências do Setor</h3>
-        <span style={{ fontSize: 12, color: "#8a93a2", marginLeft: "auto" }}>Influenciadores e especialistas</span>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {influencers.map((inf) => (
-          <div
-            key={inf.rank}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 14,
-              padding: "12px 16px",
-              backgroundColor: inf.rank === 1 ? `${GOLD}0d` : "#f9fafb",
-              borderRadius: 10,
-              border: inf.rank === 1 ? `1px solid ${GOLD}33` : "1px solid transparent",
-            }}
-          >
-            <div style={{
-              width: 32, height: 32, borderRadius: "50%",
-              backgroundColor: inf.rank <= 3 ? GOLD : "#e8eaed",
-              color: inf.rank <= 3 ? "#fff" : "#8a93a2",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 13, fontWeight: 800, flexShrink: 0,
-            }}>
-              #{inf.rank}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{inf.name}</span>
-                <span style={{ fontSize: 12, color: GOLD, fontWeight: 600 }}>{inf.handle}</span>
-              </div>
-              <div style={{ fontSize: 12, color: "#8a93a2", marginTop: 2 }}>{inf.specialty}</div>
-            </div>
-            <div style={{ textAlign: "right", flexShrink: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{inf.reach}</div>
-              <div style={{ fontSize: 12, color: "#16a34a", fontWeight: 600 }}>{inf.engagement} eng.</div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 /* ─── Apresentações Panel ─────────────────── */
 function ApresentacoesPanel() {
@@ -409,8 +361,6 @@ export default function MercadoPage() {
               </div>
             </div>
 
-            {/* Influencers / Referências */}
-            <InfluencerRanking influencers={data.influencers} />
           </div>
         )}
       </div>

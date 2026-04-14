@@ -2,6 +2,8 @@ import { supabase } from "@/lib/supabase";
 
 // ─── Feed / Posts ──────────────────────────────────────────────────────────────
 
+export type ReactionType = "curtir" | "saude" | "destaque" | "incrivel";
+
 export interface Post {
   id: string;
   user_id: string;
@@ -15,6 +17,7 @@ export interface Post {
   shares_count: number;
   view_count?: number;
   is_liked?: boolean;
+  reaction_type?: ReactionType | null;
   is_bookmarked?: boolean;
   created_at: string;
   hashtags?: string[];
@@ -81,16 +84,17 @@ export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
 
     const [profileMap, likedRes, bookmarkRes] = await Promise.all([
       _fetchProfilesMap(userIds),
-      supabase.from("likes").select("post_id").eq("user_id", currentUserId).is("company_page_id", null).in("post_id", postIds),
+      supabase.from("likes").select("post_id, reaction_type").eq("user_id", currentUserId).is("company_page_id", null).in("post_id", postIds),
       supabase.from("bookmarks").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
     ]);
 
-    const likedIds = new Set((likedRes.data ?? []).map((l: any) => l.post_id));
+    const likedMap = new Map((likedRes.data ?? []).map((l: any) => [l.post_id, l.reaction_type ?? "curtir"]));
     const bookmarkedIds = new Set((bookmarkRes.data ?? []).map((b: any) => b.post_id));
 
     return data.map((raw: any) => ({
       ..._normalisePost(raw, profileMap),
-      is_liked: likedIds.has(raw.id),
+      is_liked: likedMap.has(raw.id),
+      reaction_type: likedMap.get(raw.id) ?? null,
       is_bookmarked: bookmarkedIds.has(raw.id),
     }));
   } catch (e) {
@@ -119,19 +123,199 @@ export async function createWebPost(params: {
   }
 }
 
-export async function toggleLikePost(postId: string, userId: string, isLiked: boolean): Promise<boolean> {
+export async function toggleLikePost(postId: string, userId: string, isLiked: boolean, reaction: ReactionType = "curtir"): Promise<boolean> {
   try {
     if (isLiked) {
       await supabase.from("likes").delete().match({ post_id: postId, user_id: userId }).is("company_page_id", null);
       await supabase.rpc("decrement_post_likes", { p_post_id: postId });
     } else {
-      await supabase.from("likes").insert({ post_id: postId, user_id: userId });
+      await supabase.from("likes").upsert({ post_id: postId, user_id: userId, reaction_type: reaction }, { onConflict: "post_id,user_id" });
       await supabase.rpc("increment_post_likes", { p_post_id: postId });
     }
     return true;
   } catch (e) {
     console.warn("toggleLikePost:", e);
     return false;
+  }
+}
+
+export async function changeReactionPost(postId: string, userId: string, reaction: ReactionType): Promise<boolean> {
+  try {
+    await supabase.from("likes").update({ reaction_type: reaction }).match({ post_id: postId, user_id: userId }).is("company_page_id", null);
+    return true;
+  } catch (e) {
+    console.warn("changeReactionPost:", e);
+    return false;
+  }
+}
+
+export async function toggleBookmarkPost(postId: string, userId: string, isBookmarked: boolean): Promise<boolean> {
+  try {
+    if (isBookmarked) {
+      await supabase.from("bookmarks").delete().match({ post_id: postId, user_id: userId });
+    } else {
+      await supabase.from("bookmarks").upsert({ post_id: postId, user_id: userId }, { onConflict: "post_id,user_id" });
+    }
+    return true;
+  } catch (e) {
+    console.warn("toggleBookmarkPost:", e);
+    return false;
+  }
+}
+
+export async function fetchSavedPosts(userId: string): Promise<Post[]> {
+  try {
+    const { data: bookmarks } = await supabase
+      .from("bookmarks")
+      .select("post_id")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(30);
+
+    if (!bookmarks || bookmarks.length === 0) return [];
+    const postIds = bookmarks.map((b: any) => b.post_id);
+
+    const { data } = await supabase
+      .from("posts")
+      .select(POST_SELECT)
+      .in("id", postIds)
+      .order("created_at", { ascending: false });
+
+    if (!data || !data.length) return [];
+    const userIds = [...new Set(data.map((p: any) => p.user_id).filter(Boolean))] as string[];
+    const profileMap = await _fetchProfilesMap(userIds);
+
+    return data.map((raw: any) => ({
+      ..._normalisePost(raw, profileMap),
+      is_bookmarked: true,
+    }));
+  } catch (e) {
+    console.warn("fetchSavedPosts:", e);
+    return [];
+  }
+}
+
+// ─── Wine Community Rankings ──────────────────────────────────────────────────
+
+export interface WineCommunityRating {
+  ean: string;
+  name: string;
+  producer: string | null;
+  vintage: string | null;
+  avg_rating: number;
+  rating_count: number;
+}
+
+export async function fetchWineCommunityRankings(): Promise<WineCommunityRating[]> {
+  try {
+    const { data, error } = await supabase.rpc("wine_community_ratings", { p_ean: null });
+    if (error) { console.warn("fetchWineCommunityRankings:", error); return []; }
+    return (data ?? []) as WineCommunityRating[];
+  } catch (e) {
+    console.warn("fetchWineCommunityRankings:", e);
+    return [];
+  }
+}
+
+// ─── Profile Stats & Lists ────────────────────────────────────────────────────
+
+export interface ProfilePerson {
+  id: string;
+  full_name: string;
+  username: string | null;
+  avatar_url: string | null;
+  headline: string | null;
+}
+
+export async function fetchConnectionsList(userId: string): Promise<ProfilePerson[]> {
+  try {
+    const { data } = await supabase
+      .from("connections")
+      .select("requester_id, receiver_id")
+      .or(`requester_id.eq.${userId},receiver_id.eq.${userId}`)
+      .eq("status", "accepted");
+    if (!data) return [];
+    const ids = data.map((c: any) => c.requester_id === userId ? c.receiver_id : c.requester_id);
+    if (!ids.length) return [];
+    const { data: profiles } = await supabase.from("profiles").select("id, full_name, username, avatar_url, position, company").in("id", ids);
+    return (profiles ?? []).map((p: any) => ({ id: p.id, full_name: p.full_name, username: p.username, avatar_url: p.avatar_url, headline: [p.position, p.company].filter(Boolean).join(" · ") || null }));
+  } catch (e) {
+    console.warn("fetchConnectionsList:", e);
+    return [];
+  }
+}
+
+export async function fetchFollowersList(userId: string): Promise<ProfilePerson[]> {
+  try {
+    const { data } = await supabase.from("follows").select("follower_id").eq("following_id", userId).limit(50);
+    if (!data || !data.length) return [];
+    const ids = data.map((f: any) => f.follower_id);
+    const { data: profiles } = await supabase.from("profiles").select("id, full_name, username, avatar_url, position, company").in("id", ids);
+    return (profiles ?? []).map((p: any) => ({ id: p.id, full_name: p.full_name, username: p.username, avatar_url: p.avatar_url, headline: [p.position, p.company].filter(Boolean).join(" · ") || null }));
+  } catch (e) {
+    console.warn("fetchFollowersList:", e);
+    return [];
+  }
+}
+
+export async function fetchFollowingList(userId: string): Promise<ProfilePerson[]> {
+  try {
+    const { data } = await supabase.from("follows").select("following_id").eq("follower_id", userId).limit(50);
+    if (!data || !data.length) return [];
+    const ids = data.map((f: any) => f.following_id);
+    const { data: profiles } = await supabase.from("profiles").select("id, full_name, username, avatar_url, position, company").in("id", ids);
+    return (profiles ?? []).map((p: any) => ({ id: p.id, full_name: p.full_name, username: p.username, avatar_url: p.avatar_url, headline: [p.position, p.company].filter(Boolean).join(" · ") || null }));
+  } catch (e) {
+    console.warn("fetchFollowingList:", e);
+    return [];
+  }
+}
+
+// ─── User Profile ────────────────────────────────────────────────────────────
+
+export interface UserProfile {
+  id: string;
+  full_name: string;
+  username: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  headline: string | null;
+  position: string | null;
+  company: string | null;
+  plan: string;
+  is_admin: boolean;
+  created_at: string;
+}
+
+export async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, full_name, username, avatar_url, bio, headline, position, company, plan, is_admin, created_at")
+      .eq("id", userId)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data as UserProfile;
+  } catch (e) {
+    console.warn("fetchUserProfile:", e);
+    return null;
+  }
+}
+
+export async function fetchUserPosts(userId: string): Promise<Post[]> {
+  try {
+    const { data, error } = await supabase
+      .from("posts")
+      .select(POST_SELECT)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (error || !data || !data.length) return [];
+    const profileMap = await _fetchProfilesMap([userId]);
+    return data.map((raw: any) => _normalisePost(raw, profileMap));
+  } catch (e) {
+    console.warn("fetchUserPosts:", e);
+    return [];
   }
 }
 
@@ -186,9 +370,9 @@ export async function sendWebConnectionRequest(targetId: string, currentUserId: 
   }
 }
 
-export async function fetchProfileStats(userId: string): Promise<{ connections: number; followers: number; visits: number }> {
+export async function fetchProfileStats(userId: string): Promise<{ connections: number; followers: number; following: number }> {
   try {
-    const [connsRes, followsRes] = await Promise.all([
+    const [connsRes, followersRes, followingRes] = await Promise.all([
       supabase
         .from("connections")
         .select("id", { count: "exact", head: true })
@@ -198,14 +382,18 @@ export async function fetchProfileStats(userId: string): Promise<{ connections: 
         .from("follows")
         .select("id", { count: "exact", head: true })
         .eq("following_id", userId),
+      supabase
+        .from("follows")
+        .select("id", { count: "exact", head: true })
+        .eq("follower_id", userId),
     ]);
     return {
       connections: connsRes.count ?? 0,
-      followers: followsRes.count ?? 0,
-      visits: 0,
+      followers: followersRes.count ?? 0,
+      following: followingRes.count ?? 0,
     };
   } catch (e) {
-    return { connections: 0, followers: 0, visits: 0 };
+    return { connections: 0, followers: 0, following: 0 };
   }
 }
 

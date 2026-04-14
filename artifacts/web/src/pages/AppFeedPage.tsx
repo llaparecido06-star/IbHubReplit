@@ -1,13 +1,18 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import {
   Post,
+  ReactionType,
   SuggestedProfile,
+  WineCommunityRating,
   fetchFeedPosts,
   toggleLikePost,
+  changeReactionPost,
+  toggleBookmarkPost,
   fetchWebSuggestedConnections,
   sendWebConnectionRequest,
+  fetchWineCommunityRankings,
 } from "@/services/api";
 
 const GOLD   = "#c9a84c";
@@ -87,17 +92,42 @@ const WineGlassIcon = () => (
   </svg>
 );
 
+/* ─── Reaction config ────────────────────── */
+const REACTIONS: { type: ReactionType; emoji: string; label: string; color: string }[] = [
+  { type: "curtir",   emoji: "👍", label: "Curtir",  color: "#1a56db" },
+  { type: "saude",    emoji: "🍷", label: "Saúde!",  color: "#c9a84c" },
+  { type: "destaque", emoji: "⭐", label: "Destaque!", color: "#f59e0b" },
+  { type: "incrivel", emoji: "🔥", label: "Incrível!", color: "#ef4444" },
+];
+
+function reactionLabel(r?: ReactionType | null): string {
+  if (!r) return "Curtir";
+  return REACTIONS.find(x => x.type === r)?.label ?? "Curtir";
+}
+function reactionEmoji(r?: ReactionType | null): string {
+  if (!r) return "";
+  return REACTIONS.find(x => x.type === r)?.emoji ?? "👍";
+}
+function reactionColor(r?: ReactionType | null): string {
+  if (!r) return MUTED;
+  return REACTIONS.find(x => x.type === r)?.color ?? MUTED;
+}
+
 /* ─── PostCard ───────────────────────────── */
 function PostCard({
   post,
   currentUserId,
   onLike,
+  onBookmark,
 }: {
   post: Post;
   currentUserId: string;
-  onLike: (id: string, liked: boolean) => void;
+  onLike: (id: string, isLiked: boolean, reaction: ReactionType) => void;
+  onBookmark: (id: string, isBookmarked: boolean) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  const pickerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const CUTOFF = 280;
   const content = post.content ?? "";
   const isLong = content.length > CUTOFF;
@@ -107,13 +137,23 @@ function PostCard({
   const authorName = post.author?.full_name ?? "Usuário";
   const badgeColor = planBadgeColor(post.author?.plan);
 
+  const startPicker = () => { pickerTimer.current = setTimeout(() => setShowPicker(true), 350); };
+  const cancelPicker = () => { if (pickerTimer.current) clearTimeout(pickerTimer.current); };
+  const hidePicker = () => { cancelPicker(); setShowPicker(false); };
+
+  const handleReact = (reaction: ReactionType) => {
+    hidePicker();
+    onLike(post.id, !!post.is_liked, reaction);
+  };
+
   return (
     <div style={{
       backgroundColor: WHITE,
       border: `1px solid ${BORDER}`,
       borderRadius: 14,
       marginBottom: 14,
-      overflow: "hidden",
+      overflow: "visible",
+      position: "relative",
     }}>
       {/* Wine badge */}
       {isWinePost && (
@@ -121,6 +161,7 @@ function PostCard({
           display: "flex", alignItems: "center", gap: 6,
           backgroundColor: `${GOLD}14`,
           borderBottom: `1px solid ${GOLD}30`,
+          borderRadius: "14px 14px 0 0",
           padding: "7px 16px",
         }}>
           <span style={{ fontSize: 14 }}>🍷</span>
@@ -176,11 +217,7 @@ function PostCard({
 
       {/* Image */}
       {post.image_url && (
-        <img
-          src={post.image_url}
-          alt=""
-          style={{ width: "100%", maxHeight: 480, objectFit: "cover", display: "block" }}
-        />
+        <img src={post.image_url} alt="" style={{ width: "100%", maxHeight: 480, objectFit: "cover", display: "block" }} />
       )}
       {post.image_urls && post.image_urls.length > 0 && !post.image_url && (
         <div style={{ display: "grid", gridTemplateColumns: post.image_urls.length === 1 ? "1fr" : "1fr 1fr", gap: 2 }}>
@@ -192,48 +229,85 @@ function PostCard({
 
       {/* Stats */}
       {(post.likes_count > 0 || post.comments_count > 0) && (
-        <div style={{
-          display: "flex", gap: 12, padding: "8px 16px",
-          fontSize: 12, color: MUTED, borderTop: `1px solid ${BORDER}`,
-        }}>
+        <div style={{ display: "flex", gap: 12, padding: "8px 16px", fontSize: 12, color: MUTED, borderTop: `1px solid ${BORDER}` }}>
           {post.likes_count > 0 && <span>👍 {post.likes_count}</span>}
           {post.comments_count > 0 && <span style={{ marginLeft: "auto" }}>{post.comments_count} comentário{post.comments_count !== 1 ? "s" : ""}</span>}
         </div>
       )}
 
       {/* Actions */}
-      <div style={{
-        display: "flex", borderTop: `1px solid ${BORDER}`,
-      }}>
-        {[
-          {
-            icon: <LikeIcon filled={!!post.is_liked} />,
-            label: post.is_liked ? "Curtido" : "Curtir",
-            color: post.is_liked ? GOLD : MUTED,
-            onClick: () => onLike(post.id, !!post.is_liked),
-          },
-          { icon: <CommentIcon />, label: "Comentar", color: MUTED, onClick: () => {} },
-          { icon: <ShareIcon />, label: "Compartilhar", color: MUTED, onClick: () => {} },
-          { icon: <BookmarkIcon filled={!!post.is_bookmarked} />, label: "", color: MUTED, onClick: () => {}, ml: true },
-        ].map((action, i) => (
+      <div style={{ display: "flex", borderTop: `1px solid ${BORDER}`, overflow: "visible", position: "relative" }}>
+
+        {/* Curtir — with reaction picker */}
+        <div style={{ position: "relative", flex: 1 }} onMouseLeave={hidePicker}>
+          {/* Reaction Picker */}
+          {showPicker && (
+            <div style={{
+              position: "absolute", bottom: "calc(100% + 6px)", left: 4,
+              background: WHITE, border: `1px solid ${BORDER}`,
+              borderRadius: 32, boxShadow: "0 4px 20px rgba(0,0,0,0.14)",
+              display: "flex", gap: 2, padding: "6px 8px", zIndex: 300,
+              whiteSpace: "nowrap",
+            }}>
+              {REACTIONS.map(r => (
+                <button
+                  key={r.type}
+                  onClick={() => handleReact(r.type)}
+                  title={r.label}
+                  style={{
+                    background: "none", border: "none", cursor: "pointer",
+                    fontSize: 22, lineHeight: 1, padding: "2px 4px",
+                    borderRadius: 8, transition: "transform 0.1s",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.35)"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }}
+                >
+                  <span>{r.emoji}</span>
+                  <span style={{ fontSize: 9, color: r.color, fontWeight: 700 }}>{r.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           <button
-            key={i}
-            onClick={action.onClick}
+            onMouseEnter={startPicker}
+            onMouseLeave={cancelPicker}
+            onClick={() => handleReact(post.reaction_type ?? "curtir")}
             style={{
-              flex: action.ml ? "0 0 auto" : 1,
-              marginLeft: action.ml ? "auto" : 0,
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-              background: "none", border: "none", cursor: "pointer",
-              padding: "10px 8px",
-              fontSize: 13, fontWeight: 600, color: action.color,
+              width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+              background: "none", border: "none", cursor: "pointer", padding: "10px 8px",
+              fontSize: 13, fontWeight: 600, color: post.is_liked ? reactionColor(post.reaction_type) : MUTED,
             }}
-            onMouseEnter={e => { e.currentTarget.style.backgroundColor = `${GOLD}0d`; }}
-            onMouseLeave={e => { e.currentTarget.style.backgroundColor = "transparent"; }}
+            onFocus={startPicker}
+            onBlur={hidePicker}
           >
-            {action.icon}
-            {action.label && <span>{action.label}</span>}
+            {post.is_liked ? (
+              <span style={{ fontSize: 15 }}>{reactionEmoji(post.reaction_type)}</span>
+            ) : (
+              <LikeIcon filled={false} />
+            )}
+            <span>{reactionLabel(post.reaction_type ?? (post.is_liked ? "curtir" : null))}</span>
           </button>
-        ))}
+        </div>
+
+        <button onClick={() => {}} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: "none", border: "none", cursor: "pointer", padding: "10px 8px", fontSize: 13, fontWeight: 600, color: MUTED }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}>
+          <CommentIcon /><span>Comentar</span>
+        </button>
+
+        <button onClick={() => {}} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: "none", border: "none", cursor: "pointer", padding: "10px 8px", fontSize: 13, fontWeight: 600, color: MUTED }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}>
+          <ShareIcon /><span>Compartilhar</span>
+        </button>
+
+        <button onClick={() => onBookmark(post.id, !!post.is_bookmarked)} style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", padding: "10px 12px", color: MUTED }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}>
+          <BookmarkIcon filled={!!post.is_bookmarked} />
+        </button>
       </div>
     </div>
   );
@@ -401,30 +475,35 @@ function ConnectBtn({ profile, onConnect }: { profile: SuggestedProfile; onConne
 }
 
 /* ─── WineRankingTeaser ──────────────────── */
-function WineRankingTeaser() {
+function WineRankingTeaser({ wines }: { wines: WineCommunityRating[] }) {
+  const top = (wines ?? []).slice(0, 3);
+  const medalColors = [GOLD, "#9ca3af", "#c97c42"];
+  const stars = (avg: number) => {
+    const s = Math.max(1, Math.min(5, Math.round(avg / 20)));
+    return "★".repeat(s) + "☆".repeat(5 - s);
+  };
+
   return (
     <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16, marginBottom: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <span style={{ fontSize: 18 }}>🍷</span>
         <h3 style={{ fontSize: 14, fontWeight: 800, color: NAVY, margin: 0 }}>Ranking da Comunidade</h3>
       </div>
-      {[
-        { pos: 1, name: "Barca Velha 2011", score: 97, region: "Douro" },
-        { pos: 2, name: "Cartuxa Pêra-Manca", score: 95, region: "Alentejo" },
-        { pos: 3, name: "Château Pichon 2019", score: 94, region: "Bordeaux" },
-      ].map(w => (
-        <div key={w.pos} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+      {top.length === 0 ? (
+        <div style={{ fontSize: 13, color: MUTED, textAlign: "center", padding: "12px 0" }}>Sem avaliações ainda</div>
+      ) : top.map((w, i) => (
+        <div key={w.ean} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
           <div style={{
             width: 24, height: 24, borderRadius: "50%",
-            backgroundColor: w.pos === 1 ? GOLD : w.pos === 2 ? "#9ca3af" : "#c97c42",
-            color: "#fff", fontSize: 11, fontWeight: 800,
+            backgroundColor: medalColors[i],
+            color: "#fff", fontSize: 10, fontWeight: 800,
             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-          }}>#{w.pos}</div>
+          }}>#{i + 1}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{w.name}</div>
-            <div style={{ fontSize: 11, color: MUTED }}>{w.region}</div>
+            <div style={{ fontSize: 10, color: GOLD, letterSpacing: 1 }}>{stars(w.avg_rating)}</div>
           </div>
-          <div style={{ fontSize: 12, fontWeight: 800, color: GOLD }}>{w.score}</div>
+          <div style={{ fontSize: 11, fontWeight: 800, color: GOLD }}>{w.rating_count}×</div>
         </div>
       ))}
       <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 10, textAlign: "center" }}>
@@ -457,6 +536,7 @@ export default function AppFeedPage() {
 
   const [posts, setPosts]             = useState<Post[]>([]);
   const [suggestions, setSuggestions] = useState<SuggestedProfile[]>([]);
+  const [wineRankings, setWineRankings] = useState<WineCommunityRating[]>([]);
   const [loading, setLoading]         = useState(true);
 
   const userId    = profile?.id ?? user?.id ?? "";
@@ -475,15 +555,43 @@ export default function AppFeedPage() {
   }, [userId]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { fetchWineCommunityRankings().then(setWineRankings); }, []);
 
-  const handleLike = useCallback(async (postId: string, isLiked: boolean) => {
+  const handleLike = useCallback(async (postId: string, isLiked: boolean, reaction: ReactionType = "curtir") => {
+    if (!userId) return;
+    if (isLiked) {
+      // Curtir novamente = descurtir
+      const currentPost = posts.find(p => p.id === postId);
+      if (currentPost?.reaction_type === reaction) {
+        setPosts(prev => prev.map(p =>
+          p.id === postId
+            ? { ...p, is_liked: false, reaction_type: null, likes_count: Math.max(0, p.likes_count - 1) }
+            : p
+        ));
+        await toggleLikePost(postId, userId, true);
+      } else {
+        // Mudar reação
+        setPosts(prev => prev.map(p =>
+          p.id === postId ? { ...p, reaction_type: reaction } : p
+        ));
+        await changeReactionPost(postId, userId, reaction);
+      }
+    } else {
+      setPosts(prev => prev.map(p =>
+        p.id === postId
+          ? { ...p, is_liked: true, reaction_type: reaction, likes_count: p.likes_count + 1 }
+          : p
+      ));
+      await toggleLikePost(postId, userId, false, reaction);
+    }
+  }, [userId, posts]);
+
+  const handleBookmark = useCallback(async (postId: string, isBookmarked: boolean) => {
     if (!userId) return;
     setPosts(prev => prev.map(p =>
-      p.id === postId
-        ? { ...p, is_liked: !isLiked, likes_count: isLiked ? Math.max(0, p.likes_count - 1) : p.likes_count + 1 }
-        : p
+      p.id === postId ? { ...p, is_bookmarked: !isBookmarked } : p
     ));
-    await toggleLikePost(postId, userId, isLiked);
+    await toggleBookmarkPost(postId, userId, isBookmarked);
   }, [userId]);
 
   const handleConnect = useCallback(async (targetId: string) => {
@@ -520,6 +628,7 @@ export default function AppFeedPage() {
                 post={post}
                 currentUserId={userId}
                 onLike={handleLike}
+                onBookmark={handleBookmark}
               />
             ))
           )}
@@ -528,7 +637,7 @@ export default function AppFeedPage() {
         {/* ── Right panel ─── */}
         <div style={{ width: 260, flexShrink: 0, display: "none" }} className="feed-right-panel">
           {suggestions.length > 0 && <SuggestionsPanel suggestions={suggestions.slice(0, 4)} onConnect={handleConnect} />}
-          <WineRankingTeaser />
+          <WineRankingTeaser wines={wineRankings} />
           <TrendingTopics />
         </div>
       </div>

@@ -4,7 +4,11 @@ import { useAuth } from "@/context/AuthContext";
 import {
   fetchProfileStats,
   fetchWebCompanyPages,
+  fetchConnectionsList,
+  fetchFollowersList,
+  fetchFollowingList,
   WebCompanyPage,
+  ProfilePerson,
   createWebPost,
 } from "@/services/api";
 
@@ -332,13 +336,14 @@ function CreatePostModal({ profile, userId, onClose, onCreated }: CreatePostModa
 export function AppShell({ children, onPostCreated }: { children: React.ReactNode; onPostCreated?: () => void }) {
   const { profile, user, signOut } = useAuth();
   const [location, setLocation] = useLocation();
-  const [stats, setStats]           = useState({ connections: 0, followers: 0, visits: 0 });
+  const [stats, setStats]           = useState({ connections: 0, followers: 0, following: 0 });
   const [companyPages, setCompanyPages] = useState<WebCompanyPage[]>([]);
   const [activeCompany, setActiveCompany] = useState<WebCompanyPage | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [userMenuOpen, setUserMenuOpen]   = useState(false);
   const [companySwitchOpen, setCompanySwitchOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [peopleModal, setPeopleModal] = useState<{ title: string; list: ProfilePerson[] } | null>(null);
 
   const displayName = profile?.full_name ?? user?.email?.split("@")[0] ?? "Usuário";
   const username    = profile?.username ? `@${profile.username}` : "";
@@ -353,6 +358,19 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
   const handleSignOut = async () => {
     await signOut();
     setLocation("/");
+  };
+
+  const openConnections = async () => {
+    const list = await fetchConnectionsList(userId);
+    setPeopleModal({ title: "Conexões", list });
+  };
+  const openFollowers = async () => {
+    const list = await fetchFollowersList(userId);
+    setPeopleModal({ title: "Seguidores", list });
+  };
+  const openFollowing = async () => {
+    const list = await fetchFollowingList(userId);
+    setPeopleModal({ title: "Seguindo", list });
   };
 
   const handlePostCreated = useCallback(() => {
@@ -465,12 +483,14 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
               {/* Stats */}
               <div style={{ display: "flex", borderTop: `1px solid ${BORDER}`, paddingTop: 10, gap: 0 }}>
                 {[
-                  { label: "Conexões", value: stats.connections },
-                  { label: "Seguidores", value: stats.followers },
-                  { label: "Visitas", value: stats.visits },
+                  { label: "Conexões", value: stats.connections, onClick: openConnections },
+                  { label: "Seguidores", value: stats.followers, onClick: openFollowers },
+                  { label: "Seguindo", value: stats.following, onClick: openFollowing },
                 ].map((s, i) => (
-                  <div key={s.label} style={{ flex: 1, textAlign: "center", borderRight: i < 2 ? `1px solid ${BORDER}` : "none" }}>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{s.value}</div>
+                  <div key={s.label} onClick={s.onClick} style={{ flex: 1, textAlign: "center", borderRight: i < 2 ? `1px solid ${BORDER}` : "none", cursor: "pointer", padding: "4px 0", borderRadius: 6, transition: "background 0.15s" }}
+                    onMouseEnter={e => (e.currentTarget.style.background = `${GOLD}15`)}
+                    onMouseLeave={e => (e.currentTarget.style.background = "none")}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: GOLD }}>{s.value}</div>
                     <div style={{ fontSize: 9, color: MUTED, marginTop: 1 }}>{s.label}</div>
                   </div>
                 ))}
@@ -532,6 +552,33 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
           onClose={() => setShowCreateModal(false)}
           onCreated={handlePostCreated}
         />
+      )}
+
+      {/* People List Modal */}
+      {peopleModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setPeopleModal(null)}>
+          <div style={{ background: WHITE, borderRadius: 16, padding: 24, minWidth: 340, maxWidth: 440, maxHeight: "70vh", overflow: "hidden", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <span style={{ fontSize: 16, fontWeight: 700, color: NAVY }}>{peopleModal.title}</span>
+              <button onClick={() => setPeopleModal(null)} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20 }}>×</button>
+            </div>
+            {peopleModal.list.length === 0 ? (
+              <div style={{ textAlign: "center", color: MUTED, fontSize: 14, padding: "24px 0" }}>Nenhuma pessoa encontrada.</div>
+            ) : (
+              <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
+                {peopleModal.list.map(p => (
+                  <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <Avatar src={p.avatar_url} name={p.full_name} size={40} />
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: NAVY }}>{p.full_name}</div>
+                      {p.headline && <div style={{ fontSize: 12, color: MUTED }}>{p.headline}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Click-away overlays */}
