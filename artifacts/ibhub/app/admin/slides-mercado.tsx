@@ -878,26 +878,26 @@ export default function AdminSlidesMercadoScreen() {
                               <Text style={[sec.itemTitle, { color: colors.navy }]}>{item.title as string}</Text>
                               <Text style={[sec.itemSub, { color: colors.mutedForeground }]}>{item.desc as string}</Text>
                               <Text style={[sec.itemBadge, { color: (item.pos as boolean) ? "#059669" : "#dc2626" }]}>
-                                {(item.pos as boolean) ? "+" : ""}{item.change}%
+                                {(item.pos as boolean) ? "+" : ""}{String(item.change)}%
                               </Text>
                             </>)}
                             {stype === "ranking" && (<>
-                              <Text style={[sec.itemTitle, { color: colors.navy }]}>#{item.rank} {item.name as string}</Text>
+                              <Text style={[sec.itemTitle, { color: colors.navy }]}>#{String(item.rank)} {item.name as string}</Text>
                               <Text style={[sec.itemSub, { color: colors.mutedForeground }]}>Volume: {item.volume as string}</Text>
-                              <Text style={[sec.itemBadge, { color: colors.mutedForeground }]}>{item.pct}%</Text>
+                              <Text style={[sec.itemBadge, { color: colors.mutedForeground }]}>{String(item.pct)}%</Text>
                             </>)}
                             {stype === "simples" && (<>
                               <Text style={[sec.itemTitle, { color: colors.navy }]}>{item.name as string}</Text>
                               <Text style={[sec.itemSub, { color: colors.mutedForeground }]}>Volume: {item.volume as string}</Text>
                               <Text style={[sec.itemBadge, { color: (item.change as number) >= 0 ? "#059669" : "#dc2626" }]}>
-                                {(item.change as number) >= 0 ? "+" : ""}{item.change}%
+                                {(item.change as number) >= 0 ? "+" : ""}{String(item.change)}%
                               </Text>
                             </>)}
                             {stype === "kpi" && (<>
                               <Text style={[sec.itemTitle, { color: colors.navy }]}>{item.label as string}</Text>
                               <Text style={[sec.itemSub, { color: colors.mutedForeground }]}>{item.value as string} · {item.period as string}</Text>
                               <Text style={[sec.itemBadge, { color: (item.change as number) >= 0 ? "#059669" : "#dc2626" }]}>
-                                {(item.change as number) >= 0 ? "+" : ""}{item.change}%
+                                {(item.change as number) >= 0 ? "+" : ""}{String(item.change)}%
                               </Text>
                             </>)}
                             {stype === "grafico" && (

@@ -968,6 +968,7 @@ export async function fetchCompanyPostsWeb(companyId: string, currentUserId: str
         image_url: p.image_url, video_url: p.video_url, created_at: p.created_at,
         likes_count: countByPost.get(p.id) ?? 0,
         comments_count: commentCount.get(p.id) ?? 0,
+        shares_count: p.shares_count ?? 0,
         is_liked: !!myLike, reaction_type: myLike?.reaction_type ?? null,
         is_bookmarked: bookmarkSet.has(p.id),
         author: profileMap.get(p.user_id) ?? null,

@@ -465,7 +465,6 @@ function SlideViewerModal({
           source={{ uri: item.url }}
           style={sliderStyles.slideImage}
           resizeMode="contain"
-          draggable={false}
         />
         <TouchableOpacity
           style={sliderStyles.slideOverlay}

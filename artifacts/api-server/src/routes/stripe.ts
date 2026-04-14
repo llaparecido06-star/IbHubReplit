@@ -78,7 +78,7 @@ function isAllowedReturnUrl(url: string | undefined): boolean {
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error("STRIPE_SECRET_KEY not configured");
-  return new Stripe(key, { apiVersion: "2024-06-20" });
+  return new Stripe(key, { apiVersion: "2026-03-25.dahlia" });
 }
 
 /** Resolve authenticated user ID from Bearer token */
@@ -318,7 +318,7 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
           const update: Record<string, unknown> = {
             stripe_subscription_id:     sub.id,
             stripe_subscription_status: sub.status,
-            stripe_current_period_end:  new Date(sub.current_period_end * 1000).toISOString(),
+            stripe_current_period_end:  new Date((sub as any).current_period_end * 1000).toISOString(),
           };
           if (plan) update.plan = plan;
           await supabaseAdmin.from("profiles").update(update).eq("id", userId);
@@ -336,7 +336,7 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
           const update: Record<string, unknown> = {
             stripe_subscription_id:     sub.id,
             stripe_subscription_status: sub.status,
-            stripe_current_period_end:  new Date(sub.current_period_end * 1000).toISOString(),
+            stripe_current_period_end:  new Date((sub as any).current_period_end * 1000).toISOString(),
           };
           if (plan) update.plan = plan;
           await supabaseAdmin.from("profiles").update(update).eq("id", userId);
@@ -352,7 +352,7 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
           await supabaseAdmin.from("profiles").update({
             plan:                       "basico",
             stripe_subscription_status: "canceled",
-            stripe_current_period_end:  new Date(sub.current_period_end * 1000).toISOString(),
+            stripe_current_period_end:  new Date((sub as any).current_period_end * 1000).toISOString(),
           }).eq("id", userId);
         }
         break;

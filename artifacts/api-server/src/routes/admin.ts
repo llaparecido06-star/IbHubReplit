@@ -614,11 +614,12 @@ router.post("/admin/broadcast-push", async (req: Request, res: Response) => {
 
   // Mark log entry as sent if logId provided
   if (logId) {
-    await supabaseAdmin
-      .from("push_notification_logs")
-      .update({ sent_at: new Date().toISOString(), recipients_count: sent })
-      .eq("id", logId)
-      .catch(() => {});
+    try {
+      await supabaseAdmin
+        .from("push_notification_logs")
+        .update({ sent_at: new Date().toISOString(), recipients_count: sent })
+        .eq("id", logId);
+    } catch (_) { /* ignore log update errors */ }
   }
 
   res.json({ success: true, sent, total: tokens.length });
