@@ -4,6 +4,7 @@ import usersRouter from "./users";
 import adminRouter from "./admin";
 import pushRouter from "./push";
 import stripeRouter from "./stripe";
+import presentationsRouter from "./presentations";
 
 const router: IRouter = Router();
 
@@ -12,5 +13,6 @@ router.use(usersRouter);
 router.use(adminRouter);
 router.use(pushRouter);
 router.use(stripeRouter);
+router.use(presentationsRouter);
 
 export default router;

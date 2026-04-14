@@ -36,6 +36,7 @@ const SECTIONS = [
       { icon: "calendar"     as const, label: "Eventos",           route: "/admin/eventos" },
       { icon: "shopping-bag" as const, label: "Marketplace",       route: "/admin/marketplace" },
       { icon: "bar-chart-2"  as const, label: "Mercado",            route: "/admin/slides-mercado" },
+      { icon: "layers"       as const, label: "Slides de Apres.",  route: "/admin/presentation-slides" },
       { icon: "shield"       as const, label: "Moderação",         route: "/admin/moderacao" },
     ],
   },

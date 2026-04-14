@@ -1,5 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import cron from "node-cron";
+import { dailyUnlockJob } from "./jobs/dailyUnlock.js";
 
 const rawPort = process.env["PORT"];
 
@@ -22,4 +24,16 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  // Schedule daily unlock job at 08:00 BRT (UTC-3 = 11:00 UTC)
+  cron.schedule("0 11 * * *", async () => {
+    logger.info("Running dailyUnlockJob (scheduled)");
+    try {
+      await dailyUnlockJob();
+    } catch (e) {
+      logger.error({ err: e }, "dailyUnlockJob failed");
+    }
+  });
+
+  logger.info("Daily unlock cron scheduled at 08:00 BRT (11:00 UTC)");
 });

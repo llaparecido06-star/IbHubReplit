@@ -2803,6 +2803,42 @@ export async function deleteMarketPresentation(id: string): Promise<boolean> {
   }
 }
 
+// ─── PRESENTATION SLIDES ─────────────────────────────────────────────────────
+
+export interface PresentationSlide {
+  slide_id: string;
+  sequence_order: number;
+  url: string | null;
+  locked: boolean;
+}
+
+export interface PresentationSlidesResult {
+  slides: PresentationSlide[];
+  total: number;
+  unlocked: number;
+}
+
+export async function fetchPresentationSlides(
+  presentationId: string,
+  token: string,
+): Promise<PresentationSlidesResult> {
+  try {
+    const res = await fetch(`${API_URL}/api/presentations/${presentationId}/slides`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return { slides: [], total: 0, unlocked: 0 };
+    const json = await res.json();
+    return {
+      slides: json.slides ?? [],
+      total: json.total ?? 0,
+      unlocked: json.unlocked ?? 0,
+    };
+  } catch (e) {
+    console.error("fetchPresentationSlides:", e);
+    return { slides: [], total: 0, unlocked: 0 };
+  }
+}
+
 // ─── MARKET PERMISSIONS ──────────────────────────────────────────────────────
 
 export interface MarketPermission {

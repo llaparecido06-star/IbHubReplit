@@ -16,7 +16,10 @@ import { Feather } from "@/components/ui/Icon";
 import AdminDrawer from "@/components/AdminDrawer";
 import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 import * as API from "@/services/api";
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 
 const ALL_GENERAL_FEATURES = [
   "Chat ilimitado",
@@ -41,6 +44,15 @@ const DEFAULT_PLANS = [
   { id: "executivo",    name: "Executivo",    subtitle: "Acesso completo a todas as funcionalidades",   price_cents: 49900, features: ALL_GENERAL_FEATURES, is_active: true, sort_order: 4 },
 ];
 
+type DeliveryStrategy = "RANDOM_DAILY" | "SEQUENTIAL_MONTHLY" | "FULL_ACCESS" | "NONE";
+
+const DELIVERY_STRATEGIES: { value: DeliveryStrategy; label: string; desc: string }[] = [
+  { value: "NONE",               label: "Nenhuma",              desc: "Sem desbloqueio automático" },
+  { value: "FULL_ACCESS",        label: "Acesso Total",         desc: "Todos os slides liberados imediatamente" },
+  { value: "SEQUENTIAL_MONTHLY", label: "Sequencial Mensal",    desc: "Libera progressivamente ao longo de 30 dias" },
+  { value: "RANDOM_DAILY",       label: "Aleatório Diário",     desc: "Libera 1 slide aleatório por dia" },
+];
+
 interface Plan {
   id: string;
   name: string;
@@ -49,6 +61,7 @@ interface Plan {
   features: string[];
   is_active: boolean;
   sort_order: number;
+  delivery_strategy?: DeliveryStrategy;
 }
 
 function centsToString(cents: number): string {
@@ -66,9 +79,22 @@ function toSlug(s: string): string {
   return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
 }
 
+async function updatePlanStrategy(token: string, planId: string, strategy: DeliveryStrategy): Promise<void> {
+  const res = await fetch(`${API_URL}/api/admin/update-plan-strategy`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ plan_id: planId, delivery_strategy: strategy }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `HTTP ${res.status}`);
+  }
+}
+
 export default function AdminPlanBuilderScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { session } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const [plans,   setPlans]   = useState<Plan[]>([]);
@@ -83,6 +109,7 @@ export default function AdminPlanBuilderScreen() {
   const [editSubtitle, setEditSubtitle]     = useState("");
   const [editPrice, setEditPrice]           = useState("");
   const [editFeatures, setEditFeatures]     = useState<string[]>([]);
+  const [editDelivery, setEditDelivery]     = useState<DeliveryStrategy>("NONE");
 
   const [marketPerms, setMarketPerms]       = useState<API.MarketPermission[]>([]);
   const [loadingMp, setLoadingMp]           = useState(true);
@@ -133,6 +160,7 @@ export default function AdminPlanBuilderScreen() {
     setEditSubtitle(plan.subtitle);
     setEditPrice(plan.price_cents === 0 ? "0" : (plan.price_cents / 100).toFixed(2).replace(".", ","));
     setEditFeatures([...plan.features]);
+    setEditDelivery((plan.delivery_strategy ?? "NONE") as DeliveryStrategy);
     setShowEditModal(true);
   };
 
@@ -142,6 +170,7 @@ export default function AdminPlanBuilderScreen() {
     setEditSubtitle("");
     setEditPrice("0");
     setEditFeatures([]);
+    setEditDelivery("NONE");
     setShowNewModal(true);
   };
 
@@ -161,6 +190,9 @@ export default function AdminPlanBuilderScreen() {
         .update({ name: editName, subtitle: editSubtitle, price_cents, features: editFeatures })
         .eq("id", editPlan.id);
       if (err) throw err;
+      if (session?.access_token) {
+        await updatePlanStrategy(session.access_token, editPlan.id, editDelivery);
+      }
       Alert.alert("Sucesso", "Plano atualizado.");
       setShowEditModal(false);
       void loadPlans();
@@ -181,6 +213,9 @@ export default function AdminPlanBuilderScreen() {
         .from("plans")
         .insert({ id: newId, name: editName, subtitle: editSubtitle, price_cents, features: editFeatures, is_active: true, sort_order: plans.length });
       if (err) throw err;
+      if (session?.access_token && editDelivery !== "NONE") {
+        await updatePlanStrategy(session.access_token, newId, editDelivery);
+      }
       Alert.alert("Sucesso", "Novo plano criado.");
       setShowNewModal(false);
       void loadPlans();
@@ -251,6 +286,29 @@ export default function AdminPlanBuilderScreen() {
                   onChangeText={setEditPrice}
                   keyboardType="decimal-pad"
                 />
+              </View>
+
+              {/* Delivery Strategy */}
+              <View style={styles.mField}>
+                <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>ESTRATÉGIA DE SLIDES</Text>
+                <View style={{ gap: 6, marginTop: 4 }}>
+                  {DELIVERY_STRATEGIES.map((ds) => {
+                    const active = editDelivery === ds.value;
+                    return (
+                      <TouchableOpacity
+                        key={ds.value}
+                        style={[styles.featureToggle, { borderColor: active ? "#8b5cf6" : colors.border, backgroundColor: active ? "#8b5cf610" : "transparent" }]}
+                        onPress={() => setEditDelivery(ds.value)}
+                      >
+                        <Feather name={active ? "check-circle" : "circle"} size={16} color={active ? "#8b5cf6" : colors.mutedForeground} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.featureToggleText, { color: active ? colors.navy : colors.foreground, flex: undefined }]}>{ds.label}</Text>
+                          <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 1 }}>{ds.desc}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
 
               {/* General features */}

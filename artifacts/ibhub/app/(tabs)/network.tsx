@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
+  FlatList,
   Image,
   Linking,
   Modal,
@@ -397,21 +399,183 @@ function KPICard({ kpi, colors }: { kpi: API.MarketKPI; colors: any }) {
   );
 }
 
-// ─── Apresentações Tab ────────────────────────────────────────────────────────
+// ─── Slide Viewer Modal ────────────────────────────────────────────────────────
 
-function ApresentacoesView({ colors, bottomPad }: { colors: any; bottomPad: number }) {
-  const [items, setItems] = useState<API.MarketPresentation[]>([]);
-  const [loading, setLoading] = useState(true);
+const SCREEN_W = Dimensions.get("window").width;
+
+function SlideViewerModal({
+  visible,
+  presentation,
+  onClose,
+  colors,
+  session,
+}: {
+  visible: boolean;
+  presentation: API.MarketPresentation | null;
+  onClose: () => void;
+  colors: any;
+  session: any;
+}) {
+  const [slides, setSlides]   = useState<API.PresentationSlide[]>([]);
+  const [total, setTotal]     = useState(0);
+  const [unlocked, setUnlocked] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [currentIdx, setCurrentIdx] = useState(0);
 
   useEffect(() => {
-    API.fetchMarketPresentations().then(data => {
-      setItems(data);
+    if (!visible || !presentation || !session?.access_token) return;
+    setLoading(true);
+    setCurrentIdx(0);
+    API.fetchPresentationSlides(presentation.id, session.access_token).then(result => {
+      setSlides(result.slides);
+      setTotal(result.total);
+      setUnlocked(result.unlocked);
       setLoading(false);
     });
-  }, []);
+  }, [visible, presentation, session]);
 
-  const openLink = (url: string) => {
-    Linking.openURL(url).catch(() => {});
+  const renderSlide = ({ item, index }: { item: API.PresentationSlide; index: number }) => {
+    if (item.locked || !item.url) {
+      return (
+        <View style={[sliderStyles.slide, { width: SCREEN_W }]}>
+          <View style={[sliderStyles.lockedSlide, { backgroundColor: colors.background }]}>
+            <View style={[sliderStyles.lockIconBox, { backgroundColor: colors.gold + "15" }]}>
+              <Feather name="lock" size={36} color={colors.gold} />
+            </View>
+            <Text style={[sliderStyles.lockedTitle, { color: colors.navy }]}>Conteúdo em breve</Text>
+            <Text style={[sliderStyles.lockedSub, { color: colors.mutedForeground }]}>
+              Este slide ainda não foi desbloqueado para o seu plano.
+            </Text>
+            <View style={[sliderStyles.lockedBadge, { backgroundColor: colors.gold + "15" }]}>
+              <Feather name="clock" size={13} color={colors.gold} />
+              <Text style={[sliderStyles.lockedBadgeText, { color: colors.gold }]}>Aguarde o desbloqueio</Text>
+            </View>
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <View style={[sliderStyles.slide, { width: SCREEN_W }]}>
+        <Image
+          source={{ uri: item.url }}
+          style={sliderStyles.slideImage}
+          resizeMode="contain"
+          draggable={false}
+        />
+        <TouchableOpacity
+          style={sliderStyles.slideOverlay}
+          activeOpacity={1}
+          onPress={() => {}}
+          onLongPress={() => {}}
+          delayLongPress={50}
+        />
+      </View>
+    );
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+      <View style={[sliderStyles.container, { backgroundColor: "#000" }]}>
+        {/* Header */}
+        <View style={[sliderStyles.modalHeader, { backgroundColor: "rgba(0,0,0,0.7)" }]}>
+          <TouchableOpacity onPress={onClose} style={sliderStyles.closeBtn}>
+            <Feather name="x" size={22} color="#fff" />
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <Text style={sliderStyles.modalTitle} numberOfLines={1}>{presentation?.title}</Text>
+            {total > 0 && (
+              <Text style={sliderStyles.slideCounter}>
+                {unlocked} de {total} slides disponíveis
+              </Text>
+            )}
+          </View>
+          <Text style={sliderStyles.pageIndicator}>
+            {slides.length > 0 ? `${currentIdx + 1}/${slides.length}` : ""}
+          </Text>
+        </View>
+
+        {loading ? (
+          <View style={sliderStyles.loadingBox}>
+            <ActivityIndicator size="large" color="#c9a84c" />
+            <Text style={{ color: "#fff", marginTop: 12, fontSize: 13 }}>Carregando slides...</Text>
+          </View>
+        ) : slides.length === 0 ? (
+          <View style={sliderStyles.loadingBox}>
+            <Feather name="image" size={48} color="#4b5563" />
+            <Text style={{ color: "#9ca3af", marginTop: 12, fontSize: 14, textAlign: "center" }}>
+              Nenhum slide disponível para esta apresentação.
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={slides}
+            keyExtractor={(item) => item.slide_id}
+            renderItem={renderSlide}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={(e) => {
+              const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+              setCurrentIdx(idx);
+            }}
+            getItemLayout={(_, index) => ({ length: SCREEN_W, offset: SCREEN_W * index, index })}
+            bounces={false}
+          />
+        )}
+      </View>
+    </Modal>
+  );
+}
+
+const sliderStyles = StyleSheet.create({
+  container:       { flex: 1, backgroundColor: "#000" },
+  modalHeader:     { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingTop: Platform.OS === "ios" ? 52 : 20, paddingBottom: 14 },
+  closeBtn:        { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
+  modalTitle:      { fontSize: 15, fontWeight: "700", color: "#fff" },
+  slideCounter:    { fontSize: 11, color: "#9ca3af", marginTop: 2 },
+  pageIndicator:   { fontSize: 13, color: "#9ca3af", fontWeight: "600" },
+  loadingBox:      { flex: 1, alignItems: "center", justifyContent: "center", gap: 8 },
+  slide:           { flex: 1, alignItems: "center", justifyContent: "center", position: "relative" },
+  slideImage:      { width: SCREEN_W, flex: 1 },
+  slideOverlay:    { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "transparent" },
+  lockedSlide:     { flex: 1, width: SCREEN_W, alignItems: "center", justifyContent: "center", gap: 14, padding: 32 },
+  lockIconBox:     { width: 80, height: 80, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  lockedTitle:     { fontSize: 20, fontWeight: "800" },
+  lockedSub:       { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  lockedBadge:     { flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  lockedBadgeText: { fontSize: 13, fontWeight: "600" },
+});
+
+// ─── Apresentações Tab ────────────────────────────────────────────────────────
+
+function ApresentacoesView({ colors, bottomPad, session }: { colors: any; bottomPad: number; session: any }) {
+  const [items, setItems]                   = useState<API.MarketPresentation[]>([]);
+  const [loading, setLoading]               = useState(true);
+  const [slideCounts, setSlideCounts]       = useState<Record<string, { total: number; unlocked: number }>>({});
+  const [viewerPresentation, setViewerPresentation] = useState<API.MarketPresentation | null>(null);
+  const [viewerVisible, setViewerVisible]   = useState(false);
+
+  useEffect(() => {
+    API.fetchMarketPresentations().then(async data => {
+      setItems(data);
+      setLoading(false);
+      if (session?.access_token && data.length > 0) {
+        const counts: Record<string, { total: number; unlocked: number }> = {};
+        await Promise.all(
+          data.map(async p => {
+            const result = await API.fetchPresentationSlides(p.id, session.access_token);
+            counts[p.id] = { total: result.total, unlocked: result.unlocked };
+          })
+        );
+        setSlideCounts(counts);
+      }
+    });
+  }, [session]);
+
+  const openPresentation = (p: API.MarketPresentation) => {
+    setViewerPresentation(p);
+    setViewerVisible(true);
   };
 
   if (loading) {
@@ -439,34 +603,60 @@ function ApresentacoesView({ colors, bottomPad }: { colors: any; bottomPad: numb
   }
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: bottomPad, rowGap: 14 }} showsVerticalScrollIndicator={false}>
-      {items.map(p => (
-        <TouchableOpacity
-          key={p.id}
-          style={[styles.presentCard, { backgroundColor: "#fff", borderColor: colors.border }]}
-          onPress={() => openLink(p.content_url)}
-          activeOpacity={0.82}
-        >
-          {p.cover_url ? (
-            <Image source={{ uri: p.cover_url }} style={styles.presentCover} resizeMode="cover" />
-          ) : (
-            <View style={[styles.presentCoverPlaceholder, { backgroundColor: colors.gold + "12" }]}>
-              <Feather name="monitor" size={32} color={colors.gold} />
-            </View>
-          )}
-          <View style={styles.presentBody}>
-            <Text style={[styles.presentTitle, { color: colors.navy }]}>{p.title}</Text>
-            {p.description ? (
-              <Text style={[styles.presentDesc, { color: colors.mutedForeground }]} numberOfLines={3}>{p.description}</Text>
-            ) : null}
-            <View style={styles.presentFooter}>
-              <Feather name="external-link" size={13} color={colors.gold} />
-              <Text style={[styles.presentLink, { color: colors.gold }]}>Abrir apresentação</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
+    <>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: bottomPad, rowGap: 14 }} showsVerticalScrollIndicator={false}>
+        {items.map(p => {
+          const counts = slideCounts[p.id];
+          return (
+            <TouchableOpacity
+              key={p.id}
+              style={[styles.presentCard, { backgroundColor: "#fff", borderColor: colors.border }]}
+              onPress={() => openPresentation(p)}
+              onLongPress={() => {}}
+              activeOpacity={0.82}
+            >
+              {p.cover_url ? (
+                <Image source={{ uri: p.cover_url }} style={styles.presentCover} resizeMode="cover" />
+              ) : (
+                <View style={[styles.presentCoverPlaceholder, { backgroundColor: colors.gold + "12" }]}>
+                  <Feather name="monitor" size={32} color={colors.gold} />
+                </View>
+              )}
+              <View style={styles.presentBody}>
+                <Text style={[styles.presentTitle, { color: colors.navy }]}>{p.title}</Text>
+                {p.description ? (
+                  <Text style={[styles.presentDesc, { color: colors.mutedForeground }]} numberOfLines={3}>{p.description}</Text>
+                ) : null}
+                <View style={styles.presentFooter}>
+                  {counts && counts.total > 0 ? (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
+                      <Feather name="layers" size={13} color={colors.gold} />
+                      <Text style={[styles.presentLink, { color: colors.gold }]}>
+                        {counts.unlocked} de {counts.total} slides disponíveis
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
+                      <Feather name="monitor" size={13} color={colors.gold} />
+                      <Text style={[styles.presentLink, { color: colors.gold }]}>Ver apresentação</Text>
+                    </View>
+                  )}
+                  <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+                </View>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      <SlideViewerModal
+        visible={viewerVisible}
+        presentation={viewerPresentation}
+        onClose={() => setViewerVisible(false)}
+        colors={colors}
+        session={session}
+      />
+    </>
   );
 }
 
@@ -493,7 +683,7 @@ function LockedSection({ title, icon, colors }: { title: string; icon: string; c
 export default function MercadoScreen() {
   const colors  = useColors();
   const insets  = useSafeAreaInsets();
-  const { user, profile } = useAuth();
+  const { user, profile, session } = useAuth();
 
   const [period,       setPeriod]       = useState<Period>("ano");
   const [mainTab,      setMainTab]      = useState<MercadoTab>("visao");
@@ -682,7 +872,7 @@ export default function MercadoScreen() {
           )}
         </ScrollView>
       ) : mainTab === "apresentacoes" ? (
-        <ApresentacoesView colors={colors} bottomPad={bottomPad} />
+        <ApresentacoesView colors={colors} bottomPad={bottomPad} session={session} />
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
 
