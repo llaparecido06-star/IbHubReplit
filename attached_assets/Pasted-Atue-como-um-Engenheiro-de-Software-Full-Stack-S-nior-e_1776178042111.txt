@@ -1,0 +1,41 @@
+Atue como um Engenheiro de Software Full-Stack Sênior especialista em React, Node.js e Supabase. 
+
+Estou desenvolvendo uma nova feature para minha plataforma chamada "IbHub". O objetivo é criar um sistema de "Drip Content" (entrega gradual de conteúdo) para a seção "Mercado > Apresentações". 
+
+Os materiais (apresentações) são compostos por imagens (exportadas do Canva) e o acesso a essas imagens varia de acordo com o plano do usuário. O sistema deve ser extremamente seguro: os usuários só podem visualizar as imagens virtualmente, sendo impossível fazer o download direto.
+
+Por favor, gere o código e as instruções detalhadas dividindo a solução nas 4 etapas abaixo:
+
+### ETAPA 1: Banco de Dados (Supabase SQL)
+Gere o script SQL para criar/atualizar as seguintes tabelas, incluindo RLS (Row Level Security) básico se necessário:
+1. `plans`: Deve conter as colunas `id`, `name`, e `delivery_strategy` (ex: 'RANDOM_DAILY', 'SEQUENTIAL_MONTHLY', 'FULL_ACCESS'). Esta é a base do nosso Plan Builder.
+2. `presentations`: `id`, `title`, `is_active`, `created_at`.
+3. `slides`: `id`, `presentation_id`, `storage_path` (caminho no bucket do Supabase), `sequence_order` (inteiro: 1, 2, 3...).
+4. `user_unlocked_slides`: `user_id`, `slide_id`, `unlocked_at`. Esta tabela registrará o histórico de destravamento.
+
+### ETAPA 2: Backend Node.js (Módulos de Planos e Cron Job)
+Crie a arquitetura do "Cérebro" da operação usando o padrão Strategy:
+1. Crie um objeto/serviço `DeliveryStrategies` contendo as regras de negócio:
+   - `RANDOM_DAILY` (Plano Profissional): A cada execução, encontra 1 slide da apresentação que o usuário ainda não possui na tabela `user_unlocked_slides` e faz o insert. Quando zerar os slides inéditos, não faz nada.
+   - `SEQUENTIAL_MONTHLY` (Plano Empresa): Uma lógica que calcula a cadência baseada em um ciclo de 30 dias. Fórmula: `Math.floor((dias_decorridos_do_ciclo / 30) * total_de_slides)`. O sistema deve destravar os slides sequencialmente (pelo `sequence_order`) até atingir o número alvo.
+   - `FULL_ACCESS` (Plano Top): Destrava todos os slides atrelados à apresentação de uma vez.
+2. Escreva o esboço de uma função `dailyUnlockJob()` (para rodar via Cron) que itera sobre os usuários ativos, lê o `delivery_strategy` do plano deles e executa a estratégia correspondente.
+3. Crie uma rota de API (`GET /api/presentations/:id/slides`) que:
+   - Verifique quais slides o usuário logado tem destravado.
+   - Acesse o Supabase Storage (em um bucket PRIVADO) e gere "Signed URLs" com expiração de 5 minutos para os `storage_path` permitidos.
+   - Retorne um array de URLs temporárias para o frontend.
+
+### ETAPA 3: Frontend Admin (Plan Builder & Upload)
+Forneça o código React para o painel de administração:
+1. Um formulário básico de "Plan Builder" que permita criar/editar um plano e selecionar em um dropdown qual `delivery_strategy` ele usará.
+2. Uma função de "Upload em Lote" onde o Admin seleciona múltiplas imagens (slides de uma apresentação do Canva). O código deve fazer o upload iterativo para o bucket privado do Supabase e criar os registros na tabela `slides`, definindo o `sequence_order` automaticamente pela ordem do array de arquivos.
+
+### ETAPA 4: Frontend Client (Mercado > Apresentações)
+Crie o componente React final que o cliente do IbHub acessa:
+1. Deve fazer um fetch na nossa API segura para pegar as Signed URLs.
+2. Deve renderizar as imagens (slides) com camadas rígidas de segurança no DOM:
+   - Desabilitar o clique direito (`onContextMenu={(e) => e.preventDefault()}`).
+   - Desabilitar o arrastar (`draggable={false}` e `onDragStart`).
+   - Adicionar uma `<div>` overlay absoluta, transparente e com z-index alto sobreposta à imagem, forçando com que qualquer clique do usuário seja interceptado pela div vazia e não pela tag `<img>`.
+
+Por favor, escreva o código de forma modular, limpa e comentada, explicando onde cada bloco deve ser inserido no projeto.
