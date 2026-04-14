@@ -2349,24 +2349,40 @@ export async function uploadChatMedia(
 ): Promise<string | null> {
   try {
     const safeMime = mimeType || "image/jpeg";
-    const ext = safeMime.includes("/") ? safeMime.split("/")[1]?.replace("jpeg", "jpg").replace("quicktime", "mov") ?? "jpg" : "jpg";
-    const path = `chat/${conversationId}/${Date.now()}.${ext}`;
+    const ext = safeMime.includes("/")
+      ? safeMime.split("/")[1]?.replace("jpeg", "jpg").replace("quicktime", "mov") ?? "jpg"
+      : "jpg";
+    const path = `chat/${conversationId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
 
-    // Use XMLHttpRequest to read binary — more reliable than fetch() for local file:// URIs in React Native
-    const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.onload  = () => resolve(xhr.response as ArrayBuffer);
-      xhr.onerror = () => reject(new Error("XHR read failed"));
-      xhr.responseType = "arraybuffer";
-      xhr.open("GET", uri);
-      xhr.send();
+    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+    const anonKey    = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+
+    // Get current session token for authenticated upload
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token ?? anonKey;
+
+    // FormData approach: React Native's native fetch handles local file:// and
+    // content:// URIs correctly when wrapped in FormData — most reliable cross-platform method
+    const formData = new FormData();
+    formData.append("file", { uri, type: safeMime, name: `upload.${ext}` } as any);
+
+    const uploadUrl = `${supabaseUrl}/storage/v1/object/chat-attachments/${path}`;
+    const res = await fetch(uploadUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: anonKey,
+        // Do NOT set Content-Type — let fetch set it with the boundary for multipart
+      },
+      body: formData,
     });
 
-    const { error } = await supabase.storage
-      .from("chat-attachments")
-      .upload(path, arrayBuffer, { contentType: safeMime, upsert: false });
+    if (!res.ok) {
+      const text = await res.text().catch(() => res.status.toString());
+      console.error("uploadChatMedia storage error:", text);
+      return null;
+    }
 
-    if (error) { console.error("uploadChatMedia:", error); return null; }
     const { data } = supabase.storage.from("chat-attachments").getPublicUrl(path);
     return data.publicUrl;
   } catch (e) {
