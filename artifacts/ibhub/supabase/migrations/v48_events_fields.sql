@@ -25,7 +25,7 @@ ALTER TABLE public.event_attendees ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN
   CREATE POLICY "event_attendees_select" ON public.event_attendees
-    FOR SELECT USING (true);
+    FOR SELECT USING (auth.uid() IS NOT NULL);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
