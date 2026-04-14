@@ -3606,13 +3606,29 @@ export async function fetchEvents(search = "", userId = ""): Promise<AppEvent[]>
 
     if (userId && events.length > 0) {
       const ids = events.map((e: any) => e.id);
-      const { data: attending } = await supabase
-        .from("event_attendees")
-        .select("event_id")
-        .eq("user_id", userId)
-        .in("event_id", ids);
-      const attendingSet = new Set((attending ?? []).map((a: any) => a.event_id));
+
+      const [attendingResult, profileResult] = await Promise.all([
+        supabase.from("event_attendees").select("event_id").eq("user_id", userId).in("event_id", ids),
+        supabase.from("profiles").select("position, areas_of_expertise").eq("id", userId).maybeSingle(),
+      ]);
+
+      const attendingSet = new Set((attendingResult.data ?? []).map((a: any) => a.event_id));
       events = events.map((e: any) => ({ ...e, is_attending: attendingSet.has(e.id) }));
+
+      const userPosition: string | null = profileResult.data?.position ?? null;
+      const userAreas: string[] = profileResult.data?.areas_of_expertise ?? [];
+
+      events = events.filter((e: any) => {
+        if (e.visibility !== "restrito") return true;
+        if (e.user_id === userId) return true;
+        const allowed: string[] = e.restricted_positions ?? [];
+        if (allowed.length === 0) return true;
+        if (userPosition && allowed.includes(userPosition)) return true;
+        if (userAreas.some((a: string) => allowed.includes(a))) return true;
+        return false;
+      });
+    } else {
+      events = events.filter((e: any) => e.visibility !== "restrito");
     }
 
     return events;
@@ -3674,7 +3690,7 @@ export async function fetchEventById(id: string): Promise<AppEvent | null> {
 export async function uploadEventImage(imageUri: string, userId: string): Promise<string | null> {
   try {
     const ext = imageUri.split(".").pop()?.toLowerCase() ?? "jpg";
-    const path = `events/${userId}/${Date.now()}.${ext}`;
+    const path = `${userId}/events/${Date.now()}.${ext}`;
     const response = await fetch(imageUri);
     const blob = await response.blob();
     const bytes = await new Promise<Uint8Array>((resolve, reject) => {

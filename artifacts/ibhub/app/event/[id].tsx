@@ -375,7 +375,7 @@ export default function EventScreen() {
               style={styles.organizerInfo}
               onPress={() =>
                 companyOrg
-                  ? router.push(`/company/${companyOrg.id}` as any)
+                  ? router.push(`/empresa/${companyOrg.id}` as any)
                   : router.push(`/profile/${event.user_id}` as any)
               }
               activeOpacity={0.7}
