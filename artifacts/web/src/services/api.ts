@@ -1444,6 +1444,18 @@ export async function fetchWineCellar(userId: string): Promise<WineEntry[]> {
   return data as WineEntry[];
 }
 
+export async function fetchPublicWineCellar(userId: string): Promise<WineEntry[]> {
+  const { data, error } = await supabase
+    .from("wine_cellar")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("is_private", false)
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return [];
+  return data as WineEntry[];
+}
+
 export async function addWineEntry(entry: Omit<WineEntry, "id" | "created_at">): Promise<WineEntry | null> {
   const { data, error } = await supabase
     .from("wine_cellar")

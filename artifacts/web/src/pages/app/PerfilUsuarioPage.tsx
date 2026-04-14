@@ -7,8 +7,10 @@ import {
   fetchUserPosts,
   fetchProfileStats,
   sendWebConnectionRequest,
+  fetchPublicWineCellar,
   UserProfile,
   Post,
+  WineEntry,
 } from "@/services/api";
 
 const GOLD   = "#c9a84c";
@@ -86,9 +88,11 @@ export default function PerfilUsuarioPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [loadingPosts, setLoadingPosts] = useState(true);
-  const [tab, setTab] = useState<"publicacoes" | "sobre">("publicacoes");
+  const [tab, setTab] = useState<"publicacoes" | "portfolio" | "sobre">("publicacoes");
   const [connecting, setConnecting] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [wines, setWines] = useState<WineEntry[]>([]);
+  const [selectedWine, setSelectedWine] = useState<WineEntry | null>(null);
 
   useEffect(() => {
     if (!targetId) return;
@@ -103,10 +107,12 @@ export default function PerfilUsuarioPage() {
       fetchPublicUserProfile(targetId),
       fetchProfileStats(targetId),
       fetchUserPosts(targetId),
-    ]).then(([prof, s, p]) => {
+      fetchPublicWineCellar(targetId),
+    ]).then(([prof, s, p, w]) => {
       setUserProfile(prof);
       setStats(s);
       setPosts(p);
+      setWines(w);
       setLoadingProfile(false);
       setLoadingPosts(false);
     });
@@ -213,8 +219,8 @@ export default function PerfilUsuarioPage() {
 
         {/* Tabs */}
         <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "0 4px", marginBottom: 16, display: "flex" }}>
-          {(["publicacoes", "sobre"] as const).map(t => {
-            const labels = { publicacoes: "Publicações", sobre: "Sobre" };
+          {(["publicacoes", "portfolio", "sobre"] as const).map(t => {
+            const labels = { publicacoes: "Publicações", portfolio: "Portfólio", sobre: "Sobre" };
             const active = tab === t;
             return (
               <button key={t} onClick={() => setTab(t)} style={{
@@ -244,6 +250,41 @@ export default function PerfilUsuarioPage() {
           ) : (
             posts.map(post => <MiniPostCard key={post.id} post={post} />)
           )
+        ) : tab === "portfolio" ? (
+          wines.length === 0 ? (
+            <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "48px 24px", textAlign: "center" }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🍷</div>
+              <h3 style={{ fontSize: 16, fontWeight: 800, color: NAVY, margin: "0 0 8px" }}>Nenhum vinho público ainda</h3>
+              <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>Este usuário ainda não compartilhou vinhos na adega.</p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {wines.map(wine => (
+                <div
+                  key={wine.id}
+                  onClick={() => setSelectedWine(wine)}
+                  style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "14px 16px", cursor: "pointer", display: "flex", flexDirection: "column", gap: 6 }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>{wine.name}</div>
+                      {(wine.producer || wine.vintage) && (
+                        <div style={{ fontSize: 12, color: MUTED }}>{[wine.producer, wine.vintage].filter(Boolean).join(" · ")}</div>
+                      )}
+                    </div>
+                    {wine.score_100 != null && (
+                      <div style={{ fontSize: 14, fontWeight: 900, color: GOLD, whiteSpace: "nowrap", marginLeft: 12 }}>{wine.score_100}/100</div>
+                    )}
+                  </div>
+                  {wine.rating > 0 && (
+                    <div style={{ fontSize: 13, color: GOLD }}>{"★".repeat(wine.rating)}{"☆".repeat(5 - wine.rating)}</div>
+                  )}
+                  {wine.grape && <div style={{ fontSize: 12, color: MUTED }}>🌿 {wine.grape}</div>}
+                  {wine.notes && <div style={{ fontSize: 12, color: MUTED, fontStyle: "italic" }}>"{wine.notes.slice(0, 80)}{wine.notes.length > 80 ? "…" : ""}"</div>}
+                </div>
+              ))}
+            </div>
+          )
         ) : (
           <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 20 }}>
             <h3 style={{ fontSize: 15, fontWeight: 800, color: NAVY, margin: "0 0 16px" }}>Sobre</h3>
@@ -263,6 +304,69 @@ export default function PerfilUsuarioPage() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Wine detail modal */}
+        {selectedWine && (
+          <div
+            onClick={() => setSelectedWine(null)}
+            style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{ backgroundColor: WHITE, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, width: "100%", maxWidth: 560, maxHeight: "80vh", overflowY: "auto" }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <div style={{ fontSize: 18, fontWeight: 900, color: NAVY }}>🍷 Detalhes do Vinho</div>
+                <button onClick={() => setSelectedWine(null)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: MUTED }}>×</button>
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: NAVY, marginBottom: 4 }}>{selectedWine.name}</div>
+              <div style={{ display: "inline-block", backgroundColor: `${GOLD}20`, color: GOLD, fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 100, marginBottom: 14 }}>
+                {selectedWine.status === "adega" ? "Na Adega" : selectedWine.status === "consumido" ? "Consumido" : selectedWine.status === "presenteado" ? "Presenteado" : "Wishlist"}
+              </div>
+              {[
+                { label: "Produtor", value: selectedWine.producer },
+                { label: "Uva/Casta", value: selectedWine.grape },
+                { label: "Safra", value: selectedWine.vintage },
+                { label: "Região", value: selectedWine.region },
+                { label: "País", value: selectedWine.country },
+                { label: "EAN", value: selectedWine.ean },
+                { label: "Quantidade", value: selectedWine.qty ? String(selectedWine.qty) : null },
+                { label: "Preço", value: selectedWine.price != null ? `R$ ${Number(selectedWine.price).toFixed(2)}` : null },
+                { label: "Local", value: selectedWine.storage },
+              ].filter(r => !!r.value).map(r => (
+                <div key={r.label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${BORDER}` }}>
+                  <span style={{ fontSize: 13, color: MUTED }}>{r.label}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: NAVY }}>{r.value}</span>
+                </div>
+              ))}
+              {selectedWine.rating > 0 && (
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ fontSize: 13, color: MUTED, marginBottom: 6 }}>Avaliação</div>
+                  <div style={{ fontSize: 20, color: GOLD }}>{"★".repeat(selectedWine.rating)}{"☆".repeat(5 - selectedWine.rating)}</div>
+                </div>
+              )}
+              {selectedWine.score_100 != null && (
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${BORDER}`, marginTop: 6 }}>
+                  <span style={{ fontSize: 13, color: MUTED }}>Pontuação</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: GOLD }}>{selectedWine.score_100}/100</span>
+                </div>
+              )}
+              {(selectedWine.aroma || selectedWine.sabor || selectedWine.harmonizacao) && (
+                <div style={{ backgroundColor: "#f9f9f7", borderRadius: 10, padding: 14, marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>Avaliação Sensorial</div>
+                  {selectedWine.aroma && <div style={{ fontSize: 12, color: MUTED }}>👃 <strong>Aroma:</strong> {selectedWine.aroma}</div>}
+                  {selectedWine.sabor && <div style={{ fontSize: 12, color: MUTED }}>👅 <strong>Sabor:</strong> {selectedWine.sabor}</div>}
+                  {selectedWine.harmonizacao && <div style={{ fontSize: 12, color: MUTED }}>🍽️ <strong>Harmonização:</strong> {selectedWine.harmonizacao}</div>}
+                </div>
+              )}
+              {selectedWine.notes && (
+                <div style={{ backgroundColor: "#f9f9f7", borderRadius: 10, padding: 14, marginTop: 14 }}>
+                  <div style={{ fontSize: 12, color: MUTED, fontStyle: "italic" }}>"{selectedWine.notes}"</div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
