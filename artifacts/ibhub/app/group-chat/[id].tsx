@@ -158,6 +158,15 @@ export default function GroupChatScreen() {
           }
         },
       )
+      .on("postgres_changes",
+        { event: "DELETE", schema: "public", table: "messages", filter: `conversation_id=eq.${id}` },
+        (payload) => {
+          const deletedId = (payload.old as { id?: string })?.id;
+          if (!deletedId) return;
+          seenMsgIds.current.delete(deletedId);
+          setMessages(prev => prev.filter(m => m.id !== deletedId));
+        },
+      )
       .subscribe();
 
     channelRef.current = ch;

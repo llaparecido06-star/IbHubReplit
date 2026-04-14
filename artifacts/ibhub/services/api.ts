@@ -5062,8 +5062,13 @@ export async function joinGroup(groupId: string, userId: string): Promise<boolea
 
 export async function leaveGroup(groupId: string, userId: string): Promise<boolean> {
   try {
-    const { error } = await supabase.from("group_members").delete().eq("group_id", groupId).eq("user_id", userId);
-    return !error;
+    const [{ error: gmErr }, { error: cpErr }] = await Promise.all([
+      supabase.from("group_members").delete().eq("group_id", groupId).eq("user_id", userId),
+      supabase.from("conversation_participants").delete().eq("conversation_id", groupId).eq("user_id", userId),
+    ]);
+    if (gmErr) console.warn("leaveGroup group_members:", gmErr);
+    if (cpErr) console.warn("leaveGroup conversation_participants:", cpErr);
+    return !gmErr;
   } catch { return false; }
 }
 
