@@ -1172,6 +1172,34 @@ export async function fetchOpportunityById(
   return result;
 }
 
+export async function createOpportunity(params: {
+  type: "marketplace" | "vaga";
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  company?: string | null;
+  location?: string | null;
+  price?: string | null;
+  salary?: string | null;
+  contract_type?: string | null;
+  contact_email?: string | null;
+  expires_at?: string | null;
+  created_by: string;
+}): Promise<AppOpportunity | null> {
+  try {
+    const { data, error } = await supabase
+      .from("opportunities")
+      .insert(params)
+      .select("id, type, title, description, category, company, location, price, salary, contract_type, contact_email, expires_at, created_at, created_by")
+      .single();
+    if (error) { console.error("createOpportunity:", error); return null; }
+    return data as AppOpportunity;
+  } catch (e) {
+    console.error("createOpportunity:", e);
+    return null;
+  }
+}
+
 export async function toggleSaveOpportunity(
   opportunityId: string,
   userId: string,

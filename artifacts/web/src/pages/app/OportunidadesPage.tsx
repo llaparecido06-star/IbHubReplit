@@ -10,6 +10,7 @@ import {
   toggleSaveOpportunity,
   registerForEvent,
   unregisterFromEvent,
+  createOpportunity,
 } from "@/services/api";
 
 const GOLD = "#c9a84c";
@@ -80,6 +81,46 @@ export default function OportunidadesPage() {
   const [vagasModalidade, setVagasModalidade] = useState<string | null>(null);
   const [vagasContrato, setVagasContrato] = useState<string | null>(null);
   const [eventoTipo, setEventoTipo] = useState<string | null>(null);
+
+  const [showCreate, setShowCreate] = useState(false);
+  const [createTab, setCreateTab] = useState<"marketplace" | "vaga">("marketplace");
+  const [creating, setCreating] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    title: "", description: "", category: "", company: "",
+    location: "", price: "", salary: "", contract_type: "",
+    contact_email: "", expires_at: "",
+  });
+
+  const resetCreateForm = () => setCreateForm({
+    title: "", description: "", category: "", company: "",
+    location: "", price: "", salary: "", contract_type: "",
+    contact_email: "", expires_at: "",
+  });
+
+  const handleCreate = async () => {
+    if (!user?.id || !createForm.title.trim()) return;
+    setCreating(true);
+    const result = await createOpportunity({
+      type: createTab,
+      title: createForm.title.trim(),
+      description: createForm.description.trim() || null,
+      category: createForm.category.trim() || null,
+      company: createForm.company.trim() || null,
+      location: createForm.location.trim() || null,
+      price: createTab === "marketplace" ? (createForm.price.trim() || null) : null,
+      salary: createTab === "vaga" ? (createForm.salary.trim() || null) : null,
+      contract_type: createTab === "vaga" ? (createForm.contract_type.trim() || null) : null,
+      contact_email: createForm.contact_email.trim() || null,
+      expires_at: createForm.expires_at ? new Date(createForm.expires_at).toISOString() : null,
+      created_by: user.id,
+    });
+    setCreating(false);
+    if (result) {
+      setShowCreate(false);
+      resetCreateForm();
+      loadData();
+    }
+  };
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -190,9 +231,17 @@ export default function OportunidadesPage() {
     <AppShell>
       <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 16px" }}>
         {/* Header */}
-        <div style={{ marginBottom: 20 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 900, color: NAVY, margin: 0 }}>Oportunidades</h1>
-          <p style={{ fontSize: 14, color: "#8a93a2", margin: "4px 0 0" }}>Marketplace, vagas e eventos do setor vitivinícola</p>
+        <div style={{ marginBottom: 20, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+          <div>
+            <h1 style={{ fontSize: 24, fontWeight: 900, color: NAVY, margin: 0 }}>Oportunidades</h1>
+            <p style={{ fontSize: 14, color: "#8a93a2", margin: "4px 0 0" }}>Marketplace, vagas e eventos do setor vitivinícola</p>
+          </div>
+          <button
+            onClick={() => { setShowCreate(true); setCreateTab(tab === "vagas" ? "vaga" : "marketplace"); }}
+            style={{ backgroundColor: GOLD, color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 14, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+          >
+            + Publicar
+          </button>
         </div>
 
         {/* Search */}
@@ -448,6 +497,151 @@ export default function OportunidadesPage() {
           </>
         )}
       </div>
+
+      {/* ── Criar Oportunidade Modal ── */}
+      {showCreate && (
+        <div
+          style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+          onClick={() => setShowCreate(false)}
+        >
+          <div
+            style={{ backgroundColor: "#fff", borderRadius: "22px 22px 0 0", width: "100%", maxWidth: 600, maxHeight: "90vh", overflowY: "auto" }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid #e8eaed", position: "sticky", top: 0, backgroundColor: "#fff", zIndex: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: NAVY }}>Publicar Oportunidade</h2>
+              <button onClick={() => setShowCreate(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#aaa" }}>✕</button>
+            </div>
+
+            <div style={{ padding: "20px 24px 40px", display: "flex", flexDirection: "column", gap: 14 }}>
+              {/* Type selector */}
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 700, color: NAVY, display: "block", marginBottom: 8 }}>Tipo *</label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {([["marketplace", "🛍️ Marketplace"], ["vaga", "💼 Vaga"]] as const).map(([key, label]) => (
+                    <button
+                      key={key}
+                      onClick={() => setCreateTab(key)}
+                      style={{
+                        flex: 1, padding: "10px 0", borderRadius: 10,
+                        border: `1.5px solid ${createTab === key ? GOLD : "#e8eaed"}`,
+                        backgroundColor: createTab === key ? `${GOLD}15` : "#fff",
+                        color: createTab === key ? GOLD : "#555",
+                        fontWeight: createTab === key ? 700 : 500, fontSize: 14, cursor: "pointer",
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Common fields */}
+              <input
+                placeholder="Título *"
+                value={createForm.title}
+                onChange={e => setCreateForm(f => ({ ...f, title: e.target.value }))}
+                style={{ width: "100%", padding: "10px 14px", border: "1px solid #e8eaed", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }}
+              />
+              <textarea
+                placeholder="Descrição (opcional)"
+                value={createForm.description}
+                onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))}
+                rows={3}
+                style={{ width: "100%", padding: "10px 14px", border: "1px solid #e8eaed", borderRadius: 10, fontSize: 14, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }}
+              />
+
+              {/* Marketplace fields */}
+              {createTab === "marketplace" && (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <input
+                      placeholder="Categoria (ex: Vinho)"
+                      value={createForm.category}
+                      onChange={e => setCreateForm(f => ({ ...f, category: e.target.value }))}
+                      style={{ padding: "10px 14px", border: "1px solid #e8eaed", borderRadius: 10, fontSize: 14, outline: "none" }}
+                    />
+                    <input
+                      placeholder="Preço (ex: R$ 89,90)"
+                      value={createForm.price}
+                      onChange={e => setCreateForm(f => ({ ...f, price: e.target.value }))}
+                      style={{ padding: "10px 14px", border: "1px solid #e8eaed", borderRadius: 10, fontSize: 14, outline: "none" }}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Vaga fields */}
+              {createTab === "vaga" && (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <input
+                      placeholder="Salário (ex: R$ 4.000–6.000)"
+                      value={createForm.salary}
+                      onChange={e => setCreateForm(f => ({ ...f, salary: e.target.value }))}
+                      style={{ padding: "10px 14px", border: "1px solid #e8eaed", borderRadius: 10, fontSize: 14, outline: "none" }}
+                    />
+                    <select
+                      value={createForm.contract_type}
+                      onChange={e => setCreateForm(f => ({ ...f, contract_type: e.target.value }))}
+                      style={{ padding: "10px 14px", border: "1px solid #e8eaed", borderRadius: 10, fontSize: 14, outline: "none", backgroundColor: "#fff", color: createForm.contract_type ? "#000" : "#aaa" }}
+                    >
+                      <option value="">Tipo de contrato</option>
+                      {CONTRATOS.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {/* Shared bottom fields */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <input
+                  placeholder="Empresa"
+                  value={createForm.company}
+                  onChange={e => setCreateForm(f => ({ ...f, company: e.target.value }))}
+                  style={{ padding: "10px 14px", border: "1px solid #e8eaed", borderRadius: 10, fontSize: 14, outline: "none" }}
+                />
+                <input
+                  placeholder="Localização"
+                  value={createForm.location}
+                  onChange={e => setCreateForm(f => ({ ...f, location: e.target.value }))}
+                  style={{ padding: "10px 14px", border: "1px solid #e8eaed", borderRadius: 10, fontSize: 14, outline: "none" }}
+                />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <input
+                  placeholder="E-mail de contato"
+                  value={createForm.contact_email}
+                  onChange={e => setCreateForm(f => ({ ...f, contact_email: e.target.value }))}
+                  style={{ padding: "10px 14px", border: "1px solid #e8eaed", borderRadius: 10, fontSize: 14, outline: "none" }}
+                />
+                <div>
+                  <label style={{ fontSize: 12, color: "#8a93a2", display: "block", marginBottom: 4 }}>Expira em</label>
+                  <input
+                    type="date"
+                    value={createForm.expires_at}
+                    onChange={e => setCreateForm(f => ({ ...f, expires_at: e.target.value }))}
+                    style={{ width: "100%", padding: "10px 14px", border: "1px solid #e8eaed", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }}
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={handleCreate}
+                disabled={!createForm.title.trim() || creating}
+                style={{
+                  padding: "14px 0", backgroundColor: !createForm.title.trim() || creating ? "#ccc" : GOLD,
+                  color: "#fff", border: "none", borderRadius: 12, fontSize: 15, fontWeight: 800,
+                  cursor: !createForm.title.trim() || creating ? "not-allowed" : "pointer", marginTop: 4,
+                }}
+              >
+                {creating ? "Publicando..." : "✓ Publicar oportunidade"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }
