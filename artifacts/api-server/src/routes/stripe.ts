@@ -20,6 +20,39 @@ const PRICE_IDS: Record<string, string> = {
   business:  process.env.STRIPE_PRICE_BUSINESS  ?? "",
 };
 
+/**
+ * Reverse map from Stripe price ID → internal plan name.
+ * Used to determine the plan from a subscription's line items (e.g. after a portal upgrade/downgrade).
+ * Populated lazily from the same env vars so they stay in sync.
+ */
+function buildPriceToplanMap(): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const [plan, priceId] of Object.entries(PRICE_IDS)) {
+    if (priceId) m.set(priceId, plan);
+  }
+  return m;
+}
+
+/**
+ * Determine the plan from a Stripe subscription's price items.
+ * Prefers metadata (set during checkout), falls back to price ID lookup.
+ * Returns null if no match is found.
+ */
+function resolvePlanFromSubscription(
+  sub: Stripe.Subscription,
+  priceToplan: Map<string, string>,
+): string | null {
+  const metaPlan = sub.metadata?.plan;
+  if (metaPlan) return metaPlan;
+
+  // Inspect subscription items for a known price ID
+  for (const item of sub.items.data) {
+    const plan = priceToplan.get(item.price.id);
+    if (plan) return plan;
+  }
+  return null;
+}
+
 // ─── Allowed return URL hosts (security: prevent open-redirect) ───────────────
 const ALLOWED_HOSTS: string[] = (() => {
   const webBase = process.env.WEB_BASE_URL ?? "";
@@ -243,28 +276,34 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
   try {
     switch (event.type) {
       case "checkout.session.completed": {
-        const sess    = event.data.object as Stripe.Checkout.Session;
-        const plan    = sess.metadata?.plan;
-        const custId  = typeof sess.customer === "string" ? sess.customer : undefined;
-        const userId  = await resolveUserId(sess.metadata?.supabase_user_id, custId);
-        if (userId && plan && sess.subscription) {
-          const stripe = getStripe();
-          const sub = await stripe.subscriptions.retrieve(sess.subscription as string);
-          await supabaseAdmin.from("profiles").update({
-            plan,
+        const sess        = event.data.object as Stripe.Checkout.Session;
+        const custId      = typeof sess.customer === "string" ? sess.customer : undefined;
+        const userId      = await resolveUserId(sess.metadata?.supabase_user_id, custId);
+        if (userId && sess.subscription) {
+          const stripe      = getStripe();
+          const priceToplan = buildPriceToplanMap();
+          // Expand items so we can resolve plan from price IDs (portal upgrades have no metadata)
+          const sub  = await stripe.subscriptions.retrieve(sess.subscription as string, {
+            expand: ["items.data.price"],
+          });
+          const plan = resolvePlanFromSubscription(sub, priceToplan);
+          const update: Record<string, unknown> = {
             stripe_subscription_id:     sub.id,
             stripe_subscription_status: sub.status,
             stripe_current_period_end:  new Date(sub.current_period_end * 1000).toISOString(),
-          }).eq("id", userId);
+          };
+          if (plan) update.plan = plan;
+          await supabaseAdmin.from("profiles").update(update).eq("id", userId);
         }
         break;
       }
 
       case "customer.subscription.updated": {
-        const sub    = event.data.object as Stripe.Subscription;
-        const custId = typeof sub.customer === "string" ? sub.customer : undefined;
-        const userId = await resolveUserId(sub.metadata?.supabase_user_id, custId);
-        const plan   = sub.metadata?.plan;
+        const sub         = event.data.object as Stripe.Subscription;
+        const custId      = typeof sub.customer === "string" ? sub.customer : undefined;
+        const userId      = await resolveUserId(sub.metadata?.supabase_user_id, custId);
+        const priceToplan = buildPriceToplanMap();
+        const plan        = resolvePlanFromSubscription(sub, priceToplan);
         if (userId) {
           const update: Record<string, unknown> = {
             stripe_subscription_id:     sub.id,
