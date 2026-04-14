@@ -484,6 +484,48 @@ export async function fetchMarketPresentations(): Promise<MarketPresentation[]> 
   }
 }
 
+export async function fetchAllMarketPresentations(): Promise<MarketPresentation[]> {
+  try {
+    const { data, error } = await supabase
+      .from("market_presentations")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error || !data) return [];
+    return data as MarketPresentation[];
+  } catch (e) {
+    console.warn("fetchAllMarketPresentations:", e);
+    return [];
+  }
+}
+
+export async function upsertMarketPresentation(
+  payload: Omit<MarketPresentation, "id" | "created_at" | "updated_at"> & { id?: string },
+): Promise<MarketPresentation | null> {
+  try {
+    const { data, error } = await supabase
+      .from("market_presentations")
+      .upsert({ ...payload, updated_at: new Date().toISOString() }, { onConflict: "id" })
+      .select()
+      .single();
+    if (error) { console.error("upsertMarketPresentation:", error); return null; }
+    return data as MarketPresentation;
+  } catch (e) {
+    console.error("upsertMarketPresentation:", e);
+    return null;
+  }
+}
+
+export async function deleteMarketPresentation(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("market_presentations").delete().eq("id", id);
+    if (error) { console.error("deleteMarketPresentation:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("deleteMarketPresentation:", e);
+    return false;
+  }
+}
+
 // ─── Conversations / Messages ─────────────────────────────────────────────────
 
 export interface WebConversation {

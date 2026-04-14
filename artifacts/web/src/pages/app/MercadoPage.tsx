@@ -3,7 +3,8 @@ import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/context/AuthContext";
 import {
   MARKET_FALLBACK, MarketOverview, Period, fetchMarketOverview,
-  fetchMarketPresentations, MarketPresentation,
+  fetchMarketPresentations, fetchAllMarketPresentations,
+  upsertMarketPresentation, deleteMarketPresentation, MarketPresentation,
   MarketPost, MarketComment, MarketPollOption,
   fetchMarketPosts, createMarketPost, toggleMarketPostLike,
   fetchMarketComments, addMarketComment, uploadMarketPostImage,
@@ -108,57 +109,164 @@ function BarChart({ data }: { data: MarketOverview["chart_bar"] }) {
 }
 
 /* ─── Apresentações Panel ─────────────────── */
-function ApresentacoesPanel() {
+
+const BLANK_PRES = { title: "", description: "", cover_url: "", content_url: "", published: true };
+
+function ApresentacoesPanel({ isAdmin }: { isAdmin: boolean }) {
   const [presentations, setPresentations] = useState<MarketPresentation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<Partial<MarketPresentation> | null>(null);
+  const [form, setForm] = useState(BLANK_PRES);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    fetchMarketPresentations().then(data => {
-      setPresentations(data);
-      setLoading(false);
-    });
-  }, []);
+  const reload = () => {
+    const fetch = isAdmin ? fetchAllMarketPresentations : fetchMarketPresentations;
+    fetch().then(data => { setPresentations(data); setLoading(false); });
+  };
 
-  if (loading) {
-    return <div style={{ textAlign: "center", padding: 60, color: MUTED }}>⏳ Carregando apresentações…</div>;
-  }
+  useEffect(() => { reload(); }, [isAdmin]);
 
-  if (presentations.length === 0) {
-    return (
-      <div style={{ textAlign: "center", padding: 60 }}>
-        <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
-        <h3 style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Nenhuma apresentação disponível</h3>
-        <p style={{ fontSize: 14, color: MUTED }}>As apresentações publicadas aparecerão aqui</p>
-      </div>
-    );
-  }
+  const openNew = () => { setEditing(null); setForm(BLANK_PRES); setShowForm(true); };
+  const openEdit = (p: MarketPresentation) => {
+    setEditing(p);
+    setForm({ title: p.title, description: p.description ?? "", cover_url: p.cover_url ?? "", content_url: p.content_url, published: p.published });
+    setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.title.trim() || !form.content_url.trim()) return;
+    setSaving(true);
+    await upsertMarketPresentation({ ...(editing?.id ? { id: editing.id } : {}), ...form });
+    setSaving(false);
+    setShowForm(false);
+    setLoading(true);
+    reload();
+  };
+
+  const handleDelete = async (p: MarketPresentation) => {
+    if (!window.confirm(`Excluir "${p.title}"?`)) return;
+    await deleteMarketPresentation(p.id);
+    setPresentations(prev => prev.filter(x => x.id !== p.id));
+  };
+
+  if (loading) return <div style={{ textAlign: "center", padding: 60, color: MUTED }}>⏳ Carregando apresentações…</div>;
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}>
-      {presentations.map(p => (
-        <div key={p.id} style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden" }}>
-          {p.cover_url ? (
-            <img src={p.cover_url} alt={p.title} style={{ width: "100%", height: 140, objectFit: "cover" }} />
-          ) : (
-            <div style={{ width: "100%", height: 140, backgroundColor: `${GOLD}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40 }}>📊</div>
-          )}
-          <div style={{ padding: "14px 16px 16px" }}>
-            <h3 style={{ fontSize: 14, fontWeight: 800, color: NAVY, margin: "0 0 6px", lineHeight: 1.4 }}>{p.title}</h3>
-            {p.description && <p style={{ fontSize: 12, color: MUTED, margin: "0 0 12px", lineHeight: 1.5 }}>{p.description.slice(0, 80)}{p.description.length > 80 ? "…" : ""}</p>}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 11, color: MUTED }}>{new Date(p.created_at).toLocaleDateString("pt-BR")}</span>
-              <a
-                href={p.content_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ fontSize: 12, fontWeight: 700, color: GOLD, textDecoration: "none", padding: "6px 14px", border: `1px solid ${GOLD}50`, borderRadius: 8 }}
+    <div>
+      {/* Admin toolbar */}
+      {isAdmin && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div style={{ fontSize: 13, color: MUTED }}>
+            {presentations.length} apresentação{presentations.length !== 1 ? "ões" : ""} (publicadas + rascunhos)
+          </div>
+          <button
+            onClick={openNew}
+            style={{ padding: "9px 20px", borderRadius: 10, backgroundColor: GOLD, border: "none", color: NAVY, fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontFamily: "inherit" }}
+          >
+            ＋ Nova apresentação
+          </button>
+        </div>
+      )}
+
+      {/* Form modal */}
+      {showForm && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ backgroundColor: WHITE, borderRadius: 16, padding: 28, width: "100%", maxWidth: 520, boxShadow: "0 8px 40px rgba(0,0,0,0.18)" }}>
+            <h3 style={{ fontSize: 17, fontWeight: 800, color: NAVY, margin: "0 0 20px" }}>{editing ? "Editar apresentação" : "Nova apresentação"}</h3>
+            {(["title", "description", "cover_url", "content_url"] as const).map((field) => (
+              <div key={field} style={{ marginBottom: 14 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: MUTED, marginBottom: 4 }}>
+                  {field === "title" ? "Título *" : field === "description" ? "Descrição" : field === "cover_url" ? "URL da capa" : "URL do conteúdo *"}
+                </label>
+                {field === "description" ? (
+                  <textarea
+                    value={(form as any)[field]}
+                    onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
+                    rows={3}
+                    style={{ width: "100%", padding: "9px 12px", border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 13, resize: "vertical", fontFamily: "inherit", boxSizing: "border-box", outline: "none" }}
+                    placeholder="Descrição da apresentação…"
+                  />
+                ) : (
+                  <input
+                    value={(form as any)[field]}
+                    onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
+                    style={{ width: "100%", padding: "9px 12px", border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", outline: "none" }}
+                    placeholder={field === "content_url" ? "https://…" : field === "cover_url" ? "https://…" : "Título da apresentação"}
+                  />
+                )}
+              </div>
+            ))}
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: NAVY, marginBottom: 20, cursor: "pointer" }}>
+              <input type="checkbox" checked={form.published} onChange={e => setForm(f => ({ ...f, published: e.target.checked }))} />
+              Publicada (visível para usuários)
+            </label>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button onClick={() => setShowForm(false)} style={{ padding: "9px 20px", borderRadius: 8, border: `1px solid ${BORDER}`, backgroundColor: WHITE, color: NAVY, fontSize: 13, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>
+                Cancelar
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={!form.title.trim() || !form.content_url.trim() || saving}
+                style={{ padding: "9px 20px", borderRadius: 8, backgroundColor: GOLD, border: "none", color: NAVY, fontWeight: 700, fontSize: 13, cursor: "pointer", opacity: (!form.title.trim() || !form.content_url.trim() || saving) ? 0.6 : 1, fontFamily: "inherit" }}
               >
-                Ver apresentação →
-              </a>
+                {saving ? "Salvando…" : "Salvar"}
+              </button>
             </div>
           </div>
         </div>
-      ))}
+      )}
+
+      {/* Empty state */}
+      {presentations.length === 0 && (
+        <div style={{ textAlign: "center", padding: 60 }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
+          <h3 style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Nenhuma apresentação disponível</h3>
+          <p style={{ fontSize: 14, color: MUTED }}>As apresentações publicadas aparecerão aqui</p>
+        </div>
+      )}
+
+      {/* Cards grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}>
+        {presentations.map(p => (
+          <div key={p.id} style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden", opacity: !p.published ? 0.65 : 1 }}>
+            {p.cover_url ? (
+              <img src={p.cover_url} alt={p.title} style={{ width: "100%", height: 140, objectFit: "cover" }} />
+            ) : (
+              <div style={{ width: "100%", height: 140, backgroundColor: `${GOLD}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40 }}>📊</div>
+            )}
+            <div style={{ padding: "14px 16px 16px" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 800, color: NAVY, margin: 0, lineHeight: 1.4, flex: 1 }}>{p.title}</h3>
+                {isAdmin && !p.published && (
+                  <span style={{ fontSize: 10, fontWeight: 700, color: MUTED, backgroundColor: "#f3f4f6", borderRadius: 6, padding: "2px 7px", flexShrink: 0 }}>Rascunho</span>
+                )}
+              </div>
+              {p.description && <p style={{ fontSize: 12, color: MUTED, margin: "0 0 12px", lineHeight: 1.5 }}>{p.description.slice(0, 80)}{p.description.length > 80 ? "…" : ""}</p>}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 11, color: MUTED }}>{new Date(p.created_at).toLocaleDateString("pt-BR")}</span>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {isAdmin && (
+                    <>
+                      <button onClick={() => openEdit(p)} style={{ fontSize: 12, fontWeight: 600, color: GOLD, background: "none", border: `1px solid ${GOLD}40`, borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontFamily: "inherit" }}>
+                        ✏️ Editar
+                      </button>
+                      <button onClick={() => handleDelete(p)} style={{ fontSize: 12, fontWeight: 600, color: "#dc2626", background: "none", border: "1px solid #fca5a540", borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontFamily: "inherit" }}>
+                        🗑️
+                      </button>
+                    </>
+                  )}
+                  {p.content_url && (
+                    <a href={p.content_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 700, color: GOLD, textDecoration: "none", padding: "5px 12px", border: `1px solid ${GOLD}50`, borderRadius: 7 }}>
+                      Ver →
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -704,7 +812,7 @@ export default function MercadoPage() {
 
         {/* Content */}
         {mainTab === "apresentacoes" ? (
-          <ApresentacoesPanel />
+          <ApresentacoesPanel isAdmin={profile?.is_admin ?? false} />
         ) : mainTab === "idealbi" ? (
           <IdealBIFeed
             userId={user?.id ?? ""}

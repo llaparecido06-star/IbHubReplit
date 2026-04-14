@@ -553,7 +553,8 @@ const sliderStyles = StyleSheet.create({
 
 // ─── Apresentações Tab ────────────────────────────────────────────────────────
 
-function ApresentacoesView({ colors, bottomPad, session }: { colors: any; bottomPad: number; session: any }) {
+function ApresentacoesView({ colors, bottomPad, session, isAdmin }: { colors: any; bottomPad: number; session: any; isAdmin?: boolean }) {
+  const router = useRouter();
   const [items, setItems]                   = useState<API.MarketPresentation[]>([]);
   const [loading, setLoading]               = useState(true);
   const [slideCounts, setSlideCounts]       = useState<Record<string, { total: number; unlocked: number }>>({});
@@ -609,6 +610,21 @@ function ApresentacoesView({ colors, bottomPad, session }: { colors: any; bottom
   return (
     <>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: bottomPad, rowGap: 14 }} showsVerticalScrollIndicator={false}>
+        {/* Admin shortcut */}
+        {isAdmin && (
+          <TouchableOpacity
+            onPress={() => router.push("/admin/slides-mercado" as any)}
+            style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.gold + "14", borderWidth: 1, borderColor: colors.gold + "40", borderRadius: 12, padding: 14, marginBottom: 4 }}
+            activeOpacity={0.8}
+          >
+            <Feather name="settings" size={18} color={colors.gold} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>Gerenciar Apresentações</Text>
+              <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 2 }}>Criar, editar e fazer upload de slides</Text>
+            </View>
+            <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        )}
         {items.map(p => {
           const counts = slideCounts[p.id];
           return (
@@ -1202,7 +1218,7 @@ export default function MercadoScreen() {
           bottomPad={bottomPad}
         />
       ) : mainTab === "apresentacoes" ? (
-        <ApresentacoesView colors={colors} bottomPad={bottomPad} session={session} />
+        <ApresentacoesView colors={colors} bottomPad={bottomPad} session={session} isAdmin={profile?.is_admin ?? false} />
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
 
