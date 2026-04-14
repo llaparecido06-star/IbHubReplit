@@ -1,7 +1,8 @@
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
+  Image,
   Platform,
   RefreshControl,
   ScrollView,
@@ -13,8 +14,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@/components/ui/Icon";
+import { Avatar } from "@/components/ui/Avatar";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/context/AuthContext";
 import { Group, fetchGroups, joinGroup, leaveGroup } from "@/services/api";
 
 type AccessType = "aberto" | "fechado" | "restrito";
@@ -37,6 +40,7 @@ export default function GroupsScreen() {
   const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [dbError, setDbError]       = useState(false);
+  const realtimeRef                 = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -57,6 +61,27 @@ export default function GroupsScreen() {
   }, [userId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Realtime: refresh list on group membership changes
+  useEffect(() => {
+    if (!userId || realtimeRef.current) return;
+    const ch = supabase
+      .channel(`groups-realtime:${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "group_members" }, () => {
+        load(true);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "groups" }, () => {
+        load(true);
+      })
+      .subscribe();
+    realtimeRef.current = ch;
+    return () => {
+      if (realtimeRef.current) {
+        supabase.removeChannel(realtimeRef.current);
+        realtimeRef.current = null;
+      }
+    };
+  }, [userId, load]);
 
   const onRefresh = () => { setRefreshing(true); load(true); };
 
@@ -236,7 +261,14 @@ function GroupCard({ group: g, colors, router, onLeave }: { group: Group; colors
     <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
       <View style={styles.cardTop}>
         <View style={styles.cardMeta}>
-          <Text style={[styles.cardName, { color: colors.navy }]}>{g.name}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 2 }}>
+            {g.avatar_url ? (
+              <Image source={{ uri: g.avatar_url }} style={styles.groupAvatar} />
+            ) : (
+              <Avatar name={g.name} size={38} />
+            )}
+            <Text style={[styles.cardName, { color: colors.navy }]}>{g.name}</Text>
+          </View>
           <View style={styles.cardChips}>
             <View style={[styles.chip2, { backgroundColor: colors.background }]}>
               <Text style={[styles.chip2Text, { color: colors.mutedForeground }]}>{g.category}</Text>
@@ -316,6 +348,7 @@ const styles = StyleSheet.create({
   cardDesc: { fontSize: 13, lineHeight: 18 },
   cardMembers: { flexDirection: "row", alignItems: "center", gap: 5 },
   cardMembersText: { fontSize: 12 },
+  groupAvatar: { width: 38, height: 38, borderRadius: 19 },
   empty: { alignItems: "center", paddingTop: 60, gap: 12, paddingHorizontal: 24 },
   emptyText: { fontSize: 15, textAlign: "center" },
 });

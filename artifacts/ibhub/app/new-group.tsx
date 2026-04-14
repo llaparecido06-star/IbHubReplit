@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -12,10 +13,12 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as ImagePicker from "expo-image-picker";
 import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
-import { createGroup } from "@/services/api";
+import { supabase } from "@/context/AuthContext";
+import { createGroup, uploadGroupAvatar } from "@/services/api";
 
 type AccessType = "aberto" | "fechado" | "restrito";
 
@@ -34,16 +37,38 @@ export default function NewGroupScreen() {
   const { profile, user } = useAuth();
   const userId = profile?.id ?? user?.id ?? "";
 
-  const [name, setName]         = useState("");
-  const [category, setCategory] = useState<string | null>(null);
-  const [desc, setDesc]         = useState("");
-  const [access, setAccess]     = useState<AccessType>("aberto");
-  const [loading, setLoading]   = useState(false);
+  const [name, setName]           = useState("");
+  const [category, setCategory]   = useState<string | null>(null);
+  const [desc, setDesc]           = useState("");
+  const [access, setAccess]       = useState<AccessType>("aberto");
+  const [loading, setLoading]     = useState(false);
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
   const canCreate = name.trim().length > 0 && category !== null;
+
+  const pickAvatar = async () => {
+    if (Platform.OS === "web") {
+      Alert.alert("Web", "Selecione a foto após criar o grupo nas configurações.");
+      return;
+    }
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permissão necessária", "Permita acesso à galeria de fotos.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setAvatarUri(result.assets[0].uri);
+    }
+  };
 
   const handleCreate = async () => {
     if (!canCreate) {
@@ -62,14 +87,20 @@ export default function NewGroupScreen() {
       category: category!,
       access,
     });
-    setLoading(false);
     if (!group) {
+      setLoading(false);
       Alert.alert("Erro", "Não foi possível criar o grupo. Verifique se a migração foi executada.");
       return;
     }
-    Alert.alert("Grupo criado! 🎉", `"${name}" foi criado com sucesso.`, [
-      { text: "OK", onPress: () => router.back() },
-    ]);
+    // Upload avatar if selected
+    if (avatarUri) {
+      const url = await uploadGroupAvatar(avatarUri, userId, group.id);
+      if (url) {
+        await supabase.from("groups").update({ avatar_url: url }).eq("id", group.id);
+      }
+    }
+    setLoading(false);
+    router.replace(`/group-chat/${group.id}` as any);
   };
 
   return (
@@ -98,6 +129,23 @@ export default function NewGroupScreen() {
         contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad }]}
         showsVerticalScrollIndicator={false}
       >
+        {/* Avatar picker */}
+        <View style={styles.avatarSection}>
+          <TouchableOpacity onPress={pickAvatar} style={styles.avatarWrap} activeOpacity={0.8}>
+            {avatarUri ? (
+              <Image source={{ uri: avatarUri }} style={styles.avatarImg} />
+            ) : (
+              <View style={[styles.avatarPlaceholder, { backgroundColor: colors.navy + "12", borderColor: colors.border }]}>
+                <Feather name="camera" size={24} color={colors.mutedForeground} />
+              </View>
+            )}
+            <View style={[styles.avatarBadge, { backgroundColor: colors.gold }]}>
+              <Feather name="camera" size={12} color="#fff" />
+            </View>
+          </TouchableOpacity>
+          <Text style={[styles.avatarHint, { color: colors.mutedForeground }]}>Foto do grupo (opcional)</Text>
+        </View>
+
         {/* Group name */}
         <View style={styles.field}>
           <Text style={[styles.fieldLabel, { color: colors.navy }]}>Nome do grupo *</Text>
@@ -196,11 +244,17 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1,
   },
-  cancelText: { fontSize: 15 },
+  cancelText:   { fontSize: 15 },
   headerTitle:  { fontSize: 17, fontWeight: "700" },
   createBtn:    { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
   createBtnText:{ fontSize: 14, fontWeight: "700" },
   scroll:       { padding: 16, gap: 24 },
+  avatarSection:{ alignItems: "center", paddingVertical: 8, gap: 8 },
+  avatarWrap:   { position: "relative" },
+  avatarImg:    { width: 80, height: 80, borderRadius: 40 },
+  avatarPlaceholder: { width: 80, height: 80, borderRadius: 40, borderWidth: 2, borderStyle: "dashed", alignItems: "center", justifyContent: "center" },
+  avatarBadge:  { position: "absolute", bottom: 0, right: 0, width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  avatarHint:   { fontSize: 13 },
   field:        { gap: 10 },
   fieldLabel:   { fontSize: 15, fontWeight: "700" },
   textInput: {

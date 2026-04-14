@@ -4950,21 +4950,61 @@ export async function fetchGroups(userId: string): Promise<{ mine: Group[]; expl
   }
 }
 
+export async function uploadGroupAvatar(imageUri: string, userId: string, groupId: string): Promise<string | null> {
+  try {
+    const ext = imageUri.split(".").pop()?.split("?")[0]?.toLowerCase() ?? "jpg";
+    const mime = ext === "png" ? "image/png" : "image/jpeg";
+    const filename = `${userId}/groups/${groupId}.${ext}`;
+    const response = await fetch(imageUri);
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    const { data, error } = await supabase.storage
+      .from("post-images")
+      .upload(filename, bytes, { contentType: mime, upsert: true });
+    if (error) { console.error("uploadGroupAvatar:", error); return null; }
+    const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(data.path);
+    return urlData.publicUrl ?? null;
+  } catch (e) {
+    console.error("uploadGroupAvatar:", e);
+    return null;
+  }
+}
+
 export async function createGroup(params: {
   owner_id: string;
   name: string;
   description?: string;
   category: string;
   access: "aberto" | "fechado" | "restrito";
+  avatar_url?: string | null;
 }): Promise<Group | null> {
   try {
     const { data, error } = await supabase.from("groups").insert(params).select().single();
     if (error) { console.error("createGroup:", error); return null; }
-    return data as Group;
+    const group = data as Group;
+    // Create a linked conversation so group-chat works
+    await supabase.from("conversations").insert({
+      id: group.id,
+      is_group: true,
+      name: group.name,
+      created_at: group.created_at,
+    });
+    await supabase.from("conversation_participants").insert({
+      conversation_id: group.id,
+      user_id: group.owner_id,
+    });
+    return group;
   } catch (e) {
     console.error("createGroup:", e);
     return null;
   }
+}
+
+export async function deleteGroupMessages(groupId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("messages").delete().eq("conversation_id", groupId);
+    return !error;
+  } catch { return false; }
 }
 
 export async function joinGroup(groupId: string, userId: string): Promise<boolean> {
