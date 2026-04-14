@@ -199,7 +199,14 @@ export default function GroupsScreen() {
                   <View key={g.id} style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
                     <View style={styles.cardTop}>
                       <View style={styles.cardMeta}>
-                        <Text style={[styles.cardName, { color: colors.navy }]}>{g.name}</Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 2 }}>
+                          {g.avatar_url ? (
+                            <Image source={{ uri: g.avatar_url }} style={styles.groupAvatar} />
+                          ) : (
+                            <Avatar name={g.name} size={38} />
+                          )}
+                          <Text style={[styles.cardName, { color: colors.navy }]}>{g.name}</Text>
+                        </View>
                         <View style={styles.cardChips}>
                           <View style={[styles.chip2, { backgroundColor: colors.background }]}>
                             <Text style={[styles.chip2Text, { color: colors.mutedForeground }]}>{g.category}</Text>

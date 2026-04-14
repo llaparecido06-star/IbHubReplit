@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -94,14 +95,17 @@ export default function GroupChatScreen() {
     }
   }, []);
 
+  const CLEAR_KEY = (uid: string, gid: string) => `ibhub_group_cleared:${uid}:${gid}`;
+
   const load = useCallback(async () => {
     if (!id || !user?.id) { setLoading(false); return; }
 
-    const [convRes, partRes, groupRes, msgs] = await Promise.all([
+    const [convRes, partRes, groupRes, msgs, clearedAt] = await Promise.all([
       supabase.from("conversations").select("id, name").eq("id", id).maybeSingle(),
       supabase.from("conversation_participants").select("user_id").eq("conversation_id", id),
       supabase.from("groups").select("name, avatar_url, owner_id").eq("id", id).maybeSingle(),
       API.fetchMessages(id, user.id),
+      AsyncStorage.getItem(CLEAR_KEY(user.id, id)),
     ]);
 
     const convName = (convRes.data as any)?.name ?? (groupRes.data as any)?.name ?? "Grupo";
@@ -113,9 +117,14 @@ export default function GroupChatScreen() {
       owner_id: (groupRes.data as any)?.owner_id ?? "",
     });
 
-    setMessages(msgs);
-    seenMsgIds.current = new Set(msgs.map(m => m.id));
-    await loadProfiles(msgs);
+    // Filter out messages cleared by this user (local-only, doesn't affect other members)
+    const filtered = clearedAt
+      ? msgs.filter(m => m.created_at > clearedAt)
+      : msgs;
+
+    setMessages(filtered);
+    seenMsgIds.current = new Set(filtered.map(m => m.id));
+    await loadProfiles(filtered);
 
     API.markConversationRead(id, user.id);
     setLoading(false);
@@ -367,18 +376,16 @@ export default function GroupChatScreen() {
     } else {
       Alert.alert(
         "Limpar meu histórico",
-        "Remover apenas as mensagens que você enviou neste grupo? Os outros membros não serão afetados.",
+        "Ocultar o histórico desta conversa para você? As mensagens continuarão visíveis para os outros membros.",
         [
           { text: "Cancelar", style: "cancel" },
           {
             text: "Limpar", style: "destructive", onPress: async () => {
               if (!user?.id) return;
-              const ok = await API.deleteMyGroupMessages(id, user.id);
-              if (ok) {
-                setMessages(prev => prev.filter(m => m.sender_id !== user.id));
-              } else {
-                Alert.alert("Erro", "Não foi possível limpar o histórico.");
-              }
+              const clearedAt = new Date().toISOString();
+              await AsyncStorage.setItem(CLEAR_KEY(user.id, id), clearedAt);
+              setMessages([]);
+              seenMsgIds.current.clear();
             },
           },
         ],
