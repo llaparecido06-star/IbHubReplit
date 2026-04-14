@@ -15,6 +15,8 @@ import {
   View,
 } from "react-native";
 import { Image } from "expo-image";
+import { Video, ResizeMode } from "expo-av";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@/components/ui/Icon";
@@ -723,14 +725,68 @@ function MarketCommentsList({ postId, userId, colors }: { postId: string; userId
   );
 }
 
-function MarketPostCardMobile({ post, userId, onLikeToggle, colors }: {
+function MarketPollMobile({ post: initialPost, userId, colors, onPollVote }: {
+  post: API.MarketPost; userId: string; colors: any;
+  onPollVote: (opts: API.MarketPollOption[], voteId: string) => void;
+}) {
+  const [post, setPost] = useState(initialPost);
+  const [voting, setVoting] = useState(false);
+  const opts = post.poll_options ?? [];
+  const total = opts.reduce((s, o) => s + o.votes_count, 0);
+
+  useEffect(() => { setPost(initialPost); }, [initialPost]);
+
+  const handleVote = async (optId: string) => {
+    if (voting || post.user_poll_vote === optId) return;
+    setVoting(true);
+    const updated = await API.voteOnMarketPoll(post.id, userId, optId);
+    if (updated) {
+      onPollVote(updated, optId);
+      setPost(p => ({ ...p, poll_options: updated, user_poll_vote: optId }));
+    }
+    setVoting(false);
+  };
+
+  return (
+    <View style={{ paddingHorizontal: 14, paddingBottom: 12, gap: 8 }}>
+      {opts.map(opt => {
+        const pct = total > 0 ? Math.round((opt.votes_count / total) * 100) : 0;
+        const voted = post.user_poll_vote === opt.id;
+        return (
+          <TouchableOpacity
+            key={opt.id}
+            onPress={() => handleVote(opt.id)}
+            disabled={voting}
+            style={{ borderRadius: 10, borderWidth: 1.5, borderColor: voted ? colors.gold : colors.border, overflow: "hidden" }}
+          >
+            <View style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${pct}%`, backgroundColor: voted ? colors.gold + "28" : "#f0f0ec" }} />
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 12, paddingVertical: 9 }}>
+              <Text style={{ fontSize: 13, fontWeight: voted ? "700" : "400", color: voted ? colors.navy : colors.foreground }}>
+                {voted ? "✓ " : ""}{opt.text}
+              </Text>
+              {post.user_poll_vote ? (
+                <Text style={{ fontSize: 12, fontWeight: "700", color: voted ? colors.gold : colors.mutedForeground }}>{pct}%</Text>
+              ) : null}
+            </View>
+          </TouchableOpacity>
+        );
+      })}
+      <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{total} voto{total !== 1 ? "s" : ""}</Text>
+    </View>
+  );
+}
+
+function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors }: {
   post: API.MarketPost; userId: string;
   onLikeToggle: (id: string, liked: boolean, count: number) => void;
   colors: ReturnType<typeof useColors>;
 }) {
+  const [post, setPost] = useState<API.MarketPost>(initialPost);
   const [showComments, setShowComments] = useState(false);
   const [liking, setLiking] = useState(false);
   const dateStr = new Date(post.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+
+  useEffect(() => { setPost(initialPost); }, [initialPost]);
 
   const handleLike = async () => {
     if (liking) return;
@@ -739,6 +795,13 @@ function MarketPostCardMobile({ post, userId, onLikeToggle, colors }: {
     onLikeToggle(post.id, newLiked, post.user_liked ? Math.max(0, post.likes_count - 1) : post.likes_count + 1);
     setLiking(false);
   };
+
+  const handlePollVote = (opts: API.MarketPollOption[], voteId: string) => {
+    setPost(p => ({ ...p, poll_options: opts, user_poll_vote: voteId }));
+  };
+
+  const hasMedia = !!(post.image_url || post.video_url);
+  const hasPoll  = !!(post.poll_options && post.poll_options.length > 0);
 
   return (
     <View style={{ marginHorizontal: 16, marginBottom: 14, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: "#fff", overflow: "hidden" }}>
@@ -755,11 +818,22 @@ function MarketPostCardMobile({ post, userId, onLikeToggle, colors }: {
           <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 1 }}>{dateStr}</Text>
         </View>
       </View>
-      <Text style={{ fontSize: 14, lineHeight: 21, color: colors.foreground, paddingHorizontal: 14, paddingBottom: post.image_url ? 10 : 14 }}>
+      <Text style={{ fontSize: 14, lineHeight: 21, color: colors.foreground, paddingHorizontal: 14, paddingBottom: hasMedia || hasPoll ? 10 : 14 }}>
         {post.content}
       </Text>
       {post.image_url ? (
         <Image source={{ uri: post.image_url }} style={{ width: "100%", height: 220 } as any} contentFit="cover" />
+      ) : null}
+      {post.video_url ? (
+        <Video
+          source={{ uri: post.video_url }}
+          useNativeControls
+          resizeMode={ResizeMode.CONTAIN}
+          style={{ width: "100%", height: 220, backgroundColor: "#000" } as any}
+        />
+      ) : null}
+      {hasPoll ? (
+        <MarketPollMobile post={post} userId={userId} colors={colors} onPollVote={handlePollVote} />
       ) : null}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: 1, borderTopColor: colors.border }}>
         <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5 }} onPress={handleLike}>
@@ -780,36 +854,92 @@ function MarketPostCardMobile({ post, userId, onLikeToggle, colors }: {
   );
 }
 
-function IdealBIFeedMobile({ userId, isAdmin, plan, colors, bottomPad }: {
-  userId: string; isAdmin: boolean; plan: string;
+function IdealBIFeedMobile({ userId, isAdmin, planFeatures, colors, bottomPad }: {
+  userId: string; isAdmin: boolean; planFeatures: string[];
   colors: ReturnType<typeof useColors>; bottomPad: number;
 }) {
   const router = useRouter();
   const [posts, setPosts] = useState<API.MarketPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [newContent, setNewContent] = useState("");
+  const [mediaUri, setMediaUri] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState<"image" | "video" | null>(null);
+  const [pollMode, setPollMode] = useState(false);
+  const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const [posting, setPosting] = useState(false);
-  const isSubscriber = plan !== "gratuito";
+
+  const hasAccess = planFeatures.includes("mercado:idealbi") || isAdmin;
 
   useEffect(() => {
-    if (!isSubscriber && !isAdmin) { setLoading(false); return; }
+    if (!hasAccess) { setLoading(false); return; }
     API.fetchMarketPosts(userId).then(p => { setPosts(p); setLoading(false); });
-  }, [isSubscriber, isAdmin, userId]);
+  }, [hasAccess, userId]);
 
   const handleLikeToggle = (id: string, liked: boolean, count: number) => {
     setPosts(prev => prev.map(p => p.id === id ? { ...p, user_liked: liked, likes_count: count } : p));
   };
 
+  const pickMedia = async (type: "image" | "video") => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: type === "image" ? ImagePicker.MediaTypeOptions.Images : ImagePicker.MediaTypeOptions.Videos,
+      quality: 0.8,
+      allowsEditing: false,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    setMediaUri(result.assets[0].uri);
+    setMediaType(type);
+  };
+
+  const resetForm = () => {
+    setNewContent(""); setMediaUri(null); setMediaType(null);
+    setPollMode(false); setPollOptions(["", ""]);
+  };
+
   const handlePost = async () => {
     const t = newContent.trim();
-    if (!t || !isAdmin) return;
+    if (!t || !isAdmin || posting) return;
     setPosting(true);
-    const post = await API.createMarketPost(userId, t, null);
-    if (post) { setPosts(prev => [post, ...prev]); setNewContent(""); }
+
+    let imageUrl: string | null = null;
+    let videoUrl: string | null = null;
+    let finalPollOptions: API.MarketPollOption[] | null = null;
+
+    if (mediaUri && mediaType) {
+      try {
+        const isImg = mediaType === "image";
+        const ext = mediaUri.split(".").pop()?.split("?")[0] ?? (isImg ? "jpg" : "mp4");
+        const mimeType = isImg ? `image/${ext === "png" ? "png" : "jpeg"}` : `video/${ext}`;
+        const fileName = `idealbi_${Date.now()}.${ext}`;
+        const blob = await (await fetch(mediaUri)).blob();
+        const b64: string = await new Promise((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () => resolve((fr.result as string).split(",")[1]);
+          fr.onerror = reject;
+          fr.readAsDataURL(blob);
+        });
+        const uploadUrl = await API.uploadMarketPostMediaBase64(b64, fileName, mimeType, userId);
+        if (uploadUrl) {
+          if (isImg) imageUrl = uploadUrl;
+          else videoUrl = uploadUrl;
+        }
+      } catch (_) {}
+    }
+
+    if (pollMode) {
+      const valid = pollOptions.filter(o => o.trim());
+      if (valid.length >= 2) {
+        finalPollOptions = valid.map((text, i) => ({ id: `opt_${i}`, text, votes_count: 0 }));
+      }
+    }
+
+    const post = await API.createMarketPost(userId, t, imageUrl, videoUrl, finalPollOptions);
+    if (post) { setPosts(prev => [post, ...prev]); resetForm(); }
     setPosting(false);
   };
 
-  if (!isSubscriber && !isAdmin) {
+  if (!hasAccess) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 16 }}>
         <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: "#c9a84c18", alignItems: "center", justifyContent: "center" }}>
@@ -817,7 +947,7 @@ function IdealBIFeedMobile({ userId, isAdmin, plan, colors, bottomPad }: {
         </View>
         <Text style={{ fontSize: 20, fontWeight: "800", color: colors.navy, textAlign: "center" }}>Ideal.BI Exclusivo</Text>
         <Text style={{ fontSize: 14, color: colors.mutedForeground, textAlign: "center", lineHeight: 21 }}>
-          Análises e insights exclusivos do mercado do vinho publicados pela Ideal.BI. Disponível nos planos Premium e superiores.
+          Análises e insights exclusivos do mercado do vinho publicados pela Ideal.BI. Disponível nos planos com acesso ao feed.
         </Text>
         <TouchableOpacity
           style={{ backgroundColor: colors.gold, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 12, alignItems: "center", marginTop: 8 }}
@@ -829,32 +959,100 @@ function IdealBIFeedMobile({ userId, isAdmin, plan, colors, bottomPad }: {
     );
   }
 
+  const AdminHeader = isAdmin ? (
+    <View style={{ marginHorizontal: 16, marginBottom: 14, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: "#fff", padding: 14, gap: 10 }}>
+      <Text style={{ fontSize: 14, fontWeight: "700", color: colors.navy }}>📡 Nova publicação Ideal.BI</Text>
+      <TextInput
+        value={newContent}
+        onChangeText={setNewContent}
+        placeholder="Escreva um insight ou análise..."
+        placeholderTextColor={colors.mutedForeground}
+        multiline
+        style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, fontSize: 14, color: colors.foreground, minHeight: 80, textAlignVertical: "top" }}
+      />
+
+      {/* Media preview */}
+      {mediaUri && mediaType === "image" ? (
+        <View style={{ position: "relative" }}>
+          <Image source={{ uri: mediaUri }} style={{ width: "100%", height: 180, borderRadius: 10 } as any} contentFit="cover" />
+          <TouchableOpacity onPress={() => { setMediaUri(null); setMediaType(null); }} style={{ position: "absolute", top: 6, right: 6, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 12, padding: 4 }}>
+            <Feather name="x" size={14} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      ) : null}
+      {mediaUri && mediaType === "video" ? (
+        <View style={{ position: "relative" }}>
+          <Video source={{ uri: mediaUri }} useNativeControls resizeMode={ResizeMode.CONTAIN} style={{ width: "100%", height: 180, borderRadius: 10, backgroundColor: "#000" } as any} />
+          <TouchableOpacity onPress={() => { setMediaUri(null); setMediaType(null); }} style={{ position: "absolute", top: 6, right: 6, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 12, padding: 4 }}>
+            <Feather name="x" size={14} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      {/* Poll builder */}
+      {pollMode ? (
+        <View style={{ borderRadius: 10, borderWidth: 1, borderColor: colors.border, padding: 12, backgroundColor: "#fafaf8", gap: 8 }}>
+          <Text style={{ fontSize: 12, fontWeight: "700", color: colors.gold }}>📊 Opções da enquete</Text>
+          {pollOptions.map((opt, i) => (
+            <View key={i} style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
+              <TextInput
+                value={opt}
+                onChangeText={v => setPollOptions(prev => prev.map((o, j) => j === i ? v : o))}
+                placeholder={`Opção ${i + 1}`}
+                placeholderTextColor={colors.mutedForeground}
+                style={{ flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, fontSize: 13, color: colors.foreground }}
+              />
+              {pollOptions.length > 2 ? (
+                <TouchableOpacity onPress={() => setPollOptions(prev => prev.filter((_, j) => j !== i))}>
+                  <Feather name="x" size={16} color={colors.mutedForeground} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ))}
+          {pollOptions.length < 5 ? (
+            <TouchableOpacity onPress={() => setPollOptions(prev => [...prev, ""])}>
+              <Text style={{ fontSize: 12, color: colors.gold, fontWeight: "600" }}>+ Adicionar opção</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
+
+      {/* Toolbar */}
+      <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+        <TouchableOpacity onPress={() => pickMedia("image")} style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
+          <Feather name="image" size={14} color={colors.mutedForeground} />
+          <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Imagem</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => pickMedia("video")} style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
+          <Feather name="video" size={14} color={colors.mutedForeground} />
+          <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Vídeo</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setPollMode(v => !v)}
+          style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: pollMode ? colors.gold : colors.border, backgroundColor: pollMode ? colors.gold + "15" : "transparent" }}
+        >
+          <Feather name="bar-chart-2" size={14} color={pollMode ? colors.gold : colors.mutedForeground} />
+          <Text style={{ fontSize: 12, color: pollMode ? colors.gold : colors.mutedForeground, fontWeight: pollMode ? "700" : "400" }}>Enquete</Text>
+        </TouchableOpacity>
+      </View>
+
+      <TouchableOpacity
+        style={{ backgroundColor: newContent.trim() ? colors.gold : colors.gold + "55", borderRadius: 10, paddingVertical: 12, alignItems: "center" }}
+        onPress={handlePost}
+        disabled={posting || !newContent.trim()}
+      >
+        <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>{posting ? "Publicando..." : "Publicar"}</Text>
+      </TouchableOpacity>
+    </View>
+  ) : null;
+
   return (
     <FlatList
       data={posts}
       keyExtractor={p => p.id}
       contentContainerStyle={{ paddingTop: 12, paddingBottom: bottomPad, flexGrow: 1 }}
       showsVerticalScrollIndicator={false}
-      ListHeaderComponent={isAdmin ? (
-        <View style={{ marginHorizontal: 16, marginBottom: 14, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: "#fff", padding: 14, gap: 10 }}>
-          <Text style={{ fontSize: 14, fontWeight: "700", color: colors.navy }}>📡 Nova publicação Ideal.BI</Text>
-          <TextInput
-            value={newContent}
-            onChangeText={setNewContent}
-            placeholder="Escreva um insight ou análise..."
-            placeholderTextColor={colors.mutedForeground}
-            multiline
-            style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, fontSize: 14, color: colors.foreground, minHeight: 80, textAlignVertical: "top" }}
-          />
-          <TouchableOpacity
-            style={{ backgroundColor: newContent.trim() ? colors.gold : colors.gold + "55", borderRadius: 10, paddingVertical: 12, alignItems: "center" }}
-            onPress={handlePost}
-            disabled={posting || !newContent.trim()}
-          >
-            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>{posting ? "Publicando..." : "Publicar"}</Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
+      ListHeaderComponent={AdminHeader}
       ListEmptyComponent={loading ? (
         <ActivityIndicator size="large" color={colors.gold} style={{ marginTop: 60 }} />
       ) : (
@@ -999,7 +1197,7 @@ export default function MercadoScreen() {
         <IdealBIFeedMobile
           userId={user?.id ?? ""}
           isAdmin={profile?.is_admin ?? false}
-          plan={profile?.plan ?? "gratuito"}
+          planFeatures={planFeatures ?? []}
           colors={colors}
           bottomPad={bottomPad}
         />

@@ -4,9 +4,10 @@ import { useAuth } from "@/context/AuthContext";
 import {
   MARKET_FALLBACK, MarketOverview, Period, fetchMarketOverview,
   fetchMarketPresentations, MarketPresentation,
-  MarketPost, MarketComment,
+  MarketPost, MarketComment, MarketPollOption,
   fetchMarketPosts, createMarketPost, toggleMarketPostLike,
   fetchMarketComments, addMarketComment, uploadMarketPostImage,
+  uploadMarketPostVideo, voteOnMarketPoll, fetchPlanFeatures,
 } from "@/services/api";
 
 const GOLD   = "#c9a84c";
@@ -241,13 +242,70 @@ function MarketPostComments({ postId, userId }: { postId: string; userId: string
   );
 }
 
-function MarketPostCard({ post, userId, isAdmin, onLikeToggle }: { post: MarketPost; userId: string; isAdmin: boolean; onLikeToggle: (id: string, liked: boolean, count: number) => void }) {
+function PollDisplay({ post, userId, onPollVote }: { post: MarketPost; userId: string; onPollVote: (id: string, opts: MarketPollOption[], voteId: string) => void }) {
+  const opts = post.poll_options ?? [];
+  const total = opts.reduce((s, o) => s + o.votes_count, 0);
+  const [voting, setVoting] = useState(false);
+
+  const handleVote = async (optId: string) => {
+    if (voting || post.user_poll_vote === optId) return;
+    setVoting(true);
+    const updated = await voteOnMarketPoll(post.id, userId, optId);
+    if (updated) onPollVote(post.id, updated, optId);
+    setVoting(false);
+  };
+
+  return (
+    <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+      {opts.map(opt => {
+        const pct = total > 0 ? Math.round((opt.votes_count / total) * 100) : 0;
+        const voted = post.user_poll_vote === opt.id;
+        return (
+          <button
+            key={opt.id}
+            onClick={() => handleVote(opt.id)}
+            disabled={voting}
+            style={{
+              position: "relative", overflow: "hidden", width: "100%", textAlign: "left",
+              padding: "10px 14px", border: `1.5px solid ${voted ? GOLD : BORDER}`,
+              borderRadius: 10, cursor: voting ? "not-allowed" : "pointer",
+              background: "transparent", fontFamily: "inherit",
+            }}
+          >
+            <div style={{
+              position: "absolute", top: 0, left: 0, height: "100%", width: `${pct}%`,
+              backgroundColor: voted ? `${GOLD}28` : "#f0f0ec", borderRadius: 10, transition: "width 0.4s",
+            }} />
+            <span style={{ position: "relative", fontSize: 13, fontWeight: voted ? 700 : 500, color: voted ? NAVY : "#444" }}>
+              {voted ? "✓ " : ""}{opt.text}
+            </span>
+            {post.user_poll_vote && (
+              <span style={{ position: "relative", float: "right", fontSize: 12, fontWeight: 700, color: voted ? GOLD : MUTED }}>
+                {pct}%
+              </span>
+            )}
+          </button>
+        );
+      })}
+      <div style={{ fontSize: 11, color: "#aaa" }}>{total} voto{total !== 1 ? "s" : ""}</div>
+    </div>
+  );
+}
+
+function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle }: { post: MarketPost; userId: string; isAdmin: boolean; onLikeToggle: (id: string, liked: boolean, count: number) => void }) {
+  const [post, setPost] = useState<MarketPost>(initialPost);
   const [showComments, setShowComments] = useState(false);
+
+  useEffect(() => { setPost(initialPost); }, [initialPost]);
 
   const handleLike = async () => {
     const newLiked = await toggleMarketPostLike(post.id, userId, post.user_liked);
     const delta = newLiked ? 1 : -1;
     onLikeToggle(post.id, newLiked, post.likes_count + delta);
+  };
+
+  const handlePollVote = (id: string, opts: MarketPollOption[], voteId: string) => {
+    setPost(p => ({ ...p, poll_options: opts, user_poll_vote: voteId }));
   };
 
   return (
@@ -275,6 +333,20 @@ function MarketPostCard({ post, userId, isAdmin, onLikeToggle }: { post: MarketP
       {/* Image */}
       {post.image_url && (
         <img src={post.image_url} alt="conteúdo" style={{ width: "100%", maxHeight: 400, objectFit: "cover" }} />
+      )}
+
+      {/* Video */}
+      {post.video_url && (
+        <video
+          src={post.video_url}
+          controls
+          style={{ width: "100%", maxHeight: 400, backgroundColor: "#000", display: "block" }}
+        />
+      )}
+
+      {/* Poll */}
+      {post.poll_options && post.poll_options.length > 0 && (
+        <PollDisplay post={post} userId={userId} onPollVote={handlePollVote} />
       )}
 
       {/* Actions */}
@@ -314,17 +386,22 @@ function MarketPostCard({ post, userId, isAdmin, onLikeToggle }: { post: MarketP
   );
 }
 
-function IdealBIFeed({ userId, isAdmin, plan }: { userId: string; isAdmin: boolean; plan: string }) {
+function IdealBIFeed({ userId, isAdmin, planFeatures }: { userId: string; isAdmin: boolean; planFeatures: string[] }) {
   const [posts, setPosts] = useState<MarketPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [newContent, setNewContent] = useState("");
   const [newImageFile, setNewImageFile] = useState<File | null>(null);
   const [newImagePreview, setNewImagePreview] = useState<string | null>(null);
+  const [newVideoFile, setNewVideoFile] = useState<File | null>(null);
+  const [newVideoPreview, setNewVideoPreview] = useState<string | null>(null);
+  const [pollMode, setPollMode] = useState(false);
+  const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const [submitting, setSubmitting] = useState(false);
   const imgRef = useRef<HTMLInputElement>(null);
+  const vidRef = useRef<HTMLInputElement>(null);
 
-  const isPaidPlan = plan !== "gratuito" && plan !== "";
+  const hasAccess = planFeatures.includes("mercado:idealbi") || isAdmin;
 
   useEffect(() => {
     fetchMarketPosts(userId).then(p => { setPosts(p); setLoading(false); });
@@ -334,25 +411,49 @@ function IdealBIFeed({ userId, isAdmin, plan }: { userId: string; isAdmin: boole
     const file = e.target.files?.[0];
     if (!file) return;
     setNewImageFile(file);
+    setNewVideoFile(null);
+    setNewVideoPreview(null);
     const reader = new FileReader();
     reader.onload = ev => setNewImagePreview(ev.target?.result as string);
     reader.readAsDataURL(file);
+  };
+
+  const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setNewVideoFile(file);
+    setNewImageFile(null);
+    setNewImagePreview(null);
+    const url = URL.createObjectURL(file);
+    setNewVideoPreview(url);
+  };
+
+  const resetForm = () => {
+    setCreating(false); setNewContent(""); setNewImageFile(null);
+    setNewImagePreview(null); setNewVideoFile(null); setNewVideoPreview(null);
+    setPollMode(false); setPollOptions(["", ""]);
   };
 
   const handleSubmit = async () => {
     if (!newContent.trim() || submitting) return;
     setSubmitting(true);
     let imageUrl: string | null = null;
-    if (newImageFile) {
-      imageUrl = await uploadMarketPostImage(newImageFile, userId);
+    let videoUrl: string | null = null;
+    let finalPollOptions: MarketPollOption[] | null = null;
+
+    if (newImageFile) imageUrl = await uploadMarketPostImage(newImageFile, userId);
+    if (newVideoFile) videoUrl = await uploadMarketPostVideo(newVideoFile, userId);
+    if (pollMode) {
+      const valid = pollOptions.filter(o => o.trim());
+      if (valid.length >= 2) {
+        finalPollOptions = valid.map((text, i) => ({ id: `opt_${i}`, text, votes_count: 0 }));
+      }
     }
-    const post = await createMarketPost(userId, newContent.trim(), imageUrl);
+
+    const post = await createMarketPost(userId, newContent.trim(), imageUrl, videoUrl, finalPollOptions);
     if (post) {
       setPosts(prev => [post, ...prev]);
-      setNewContent("");
-      setNewImageFile(null);
-      setNewImagePreview(null);
-      setCreating(false);
+      resetForm();
     }
     setSubmitting(false);
   };
@@ -361,7 +462,7 @@ function IdealBIFeed({ userId, isAdmin, plan }: { userId: string; isAdmin: boole
     setPosts(prev => prev.map(p => p.id === id ? { ...p, user_liked: liked, likes_count: count } : p));
   };
 
-  if (!isPaidPlan) {
+  if (!hasAccess) {
     return (
       <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 40, textAlign: "center" }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>📡</div>
@@ -416,19 +517,66 @@ function IdealBIFeed({ userId, isAdmin, plan }: { userId: string; isAdmin: boole
                 rows={4}
                 style={{ width: "100%", padding: "12px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, fontFamily: "inherit", resize: "vertical", outline: "none", boxSizing: "border-box" }}
               />
+
+              {/* Image preview */}
               {newImagePreview && (
                 <div style={{ position: "relative", marginTop: 8 }}>
                   <img src={newImagePreview} alt="preview" style={{ width: "100%", maxHeight: 240, objectFit: "cover", borderRadius: 10 }} />
                   <button onClick={() => { setNewImageFile(null); setNewImagePreview(null); }} style={{ position: "absolute", top: 6, right: 6, background: "rgba(0,0,0,0.6)", color: WHITE, border: "none", borderRadius: "50%", width: 24, height: 24, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
                 </div>
               )}
-              <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center" }}>
+
+              {/* Video preview */}
+              {newVideoPreview && (
+                <div style={{ position: "relative", marginTop: 8 }}>
+                  <video src={newVideoPreview} controls style={{ width: "100%", maxHeight: 240, borderRadius: 10, backgroundColor: "#000" }} />
+                  <button onClick={() => { setNewVideoFile(null); setNewVideoPreview(null); }} style={{ position: "absolute", top: 6, right: 6, background: "rgba(0,0,0,0.6)", color: WHITE, border: "none", borderRadius: "50%", width: 24, height: 24, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                </div>
+              )}
+
+              {/* Poll builder */}
+              {pollMode && (
+                <div style={{ marginTop: 12, padding: 14, border: `1px solid ${BORDER}`, borderRadius: 10, background: "#fafaf8" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: GOLD, marginBottom: 10 }}>📊 Opções da enquete</div>
+                  {pollOptions.map((opt, i) => (
+                    <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                      <input
+                        value={opt}
+                        onChange={e => setPollOptions(prev => prev.map((o, j) => j === i ? e.target.value : o))}
+                        placeholder={`Opção ${i + 1}`}
+                        style={{ flex: 1, padding: "7px 10px", border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none" }}
+                      />
+                      {pollOptions.length > 2 && (
+                        <button onClick={() => setPollOptions(prev => prev.filter((_, j) => j !== i))} style={{ padding: "0 8px", border: "none", background: "transparent", cursor: "pointer", color: MUTED, fontSize: 16 }}>×</button>
+                      )}
+                    </div>
+                  ))}
+                  {pollOptions.length < 5 && (
+                    <button onClick={() => setPollOptions(prev => [...prev, ""])} style={{ marginTop: 4, fontSize: 12, color: GOLD, border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>
+                      + Adicionar opção
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Toolbar */}
+              <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}>
                 <button onClick={() => imgRef.current?.click()} style={{ padding: "7px 14px", border: `1px solid ${BORDER}`, borderRadius: 8, backgroundColor: "transparent", color: MUTED, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
-                  🖼 Adicionar imagem
+                  🖼 Imagem
                 </button>
                 <input ref={imgRef} type="file" accept="image/*" onChange={handleImageChange} style={{ display: "none" }} />
+                <button onClick={() => vidRef.current?.click()} style={{ padding: "7px 14px", border: `1px solid ${BORDER}`, borderRadius: 8, backgroundColor: "transparent", color: MUTED, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
+                  🎬 Vídeo
+                </button>
+                <input ref={vidRef} type="file" accept="video/*" onChange={handleVideoChange} style={{ display: "none" }} />
+                <button
+                  onClick={() => setPollMode(v => !v)}
+                  style={{ padding: "7px 14px", border: `1px solid ${pollMode ? GOLD : BORDER}`, borderRadius: 8, backgroundColor: pollMode ? `${GOLD}15` : "transparent", color: pollMode ? GOLD : MUTED, fontSize: 13, cursor: "pointer", fontFamily: "inherit", fontWeight: pollMode ? 700 : 400 }}
+                >
+                  📊 Enquete
+                </button>
                 <div style={{ flex: 1 }} />
-                <button onClick={() => { setCreating(false); setNewContent(""); setNewImageFile(null); setNewImagePreview(null); }} style={{ padding: "7px 16px", border: `1px solid ${BORDER}`, borderRadius: 8, backgroundColor: "transparent", color: MUTED, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
+                <button onClick={resetForm} style={{ padding: "7px 16px", border: `1px solid ${BORDER}`, borderRadius: 8, backgroundColor: "transparent", color: MUTED, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
                   Cancelar
                 </button>
                 <button
@@ -476,6 +624,12 @@ export default function MercadoPage() {
   const [mainTab, setMainTab] = useState<MercadoTab>("visao");
   const [data, setData] = useState<MarketOverview>(MARKET_FALLBACK.ano);
   const [loading, setLoading] = useState(false);
+  const [planFeatures, setPlanFeatures] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!profile?.plan) return;
+    fetchPlanFeatures(profile.plan).then(f => setPlanFeatures(f));
+  }, [profile?.plan]);
 
   useEffect(() => {
     if (mainTab !== "visao") return;
@@ -555,7 +709,7 @@ export default function MercadoPage() {
           <IdealBIFeed
             userId={user?.id ?? ""}
             isAdmin={profile?.is_admin ?? false}
-            plan={profile?.plan ?? "gratuito"}
+            planFeatures={planFeatures}
           />
         ) : loading ? (
           <div style={{ textAlign: "center", padding: 60, color: "#aaa" }}>⏳ Carregando dados...</div>

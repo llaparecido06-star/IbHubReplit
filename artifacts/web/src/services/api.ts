@@ -1603,15 +1603,24 @@ export async function leaveGroup(groupId: string, userId: string): Promise<boole
 
 // ─── Ideal.BI Market Feed ───────────────────────────────────────────────────
 
+export interface MarketPollOption {
+  id: string;
+  text: string;
+  votes_count: number;
+}
+
 export interface MarketPost {
   id: string;
   content: string;
   image_url?: string | null;
+  video_url?: string | null;
+  poll_options?: MarketPollOption[] | null;
   created_at: string;
   author_id: string;
   likes_count: number;
   comments_count: number;
   user_liked: boolean;
+  user_poll_vote?: string | null;
   author?: {
     id: string;
     full_name?: string | null;
@@ -1637,11 +1646,10 @@ export async function fetchMarketPosts(userId?: string): Promise<MarketPost[]> {
   try {
     const { data, error } = await supabase
       .from("market_posts")
-      .select("id, content, image_url, created_at, author_id, likes_count, comments_count")
+      .select("id, content, image_url, video_url, poll_options, created_at, author_id, likes_count, comments_count")
       .order("created_at", { ascending: false })
       .limit(30);
-    if (error) return [];
-    if (!data || data.length === 0) return [];
+    if (error || !data || data.length === 0) return [];
 
     const authorIds = [...new Set(data.map((p: any) => p.author_id))];
     const { data: profiles } = await supabase
@@ -1651,17 +1659,25 @@ export async function fetchMarketPosts(userId?: string): Promise<MarketPost[]> {
     const profileMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p]));
 
     let likedSet = new Set<string>();
+    let pollVoteMap = new Map<string, string>();
     if (userId) {
       const { data: likes } = await supabase
         .from("market_post_likes")
         .select("post_id")
         .eq("user_id", userId);
       likedSet = new Set((likes ?? []).map((l: any) => l.post_id));
+
+      const { data: votes } = await supabase
+        .from("market_post_poll_votes")
+        .select("post_id, option_id")
+        .eq("user_id", userId);
+      pollVoteMap = new Map((votes ?? []).map((v: any) => [v.post_id, v.option_id]));
     }
 
     return data.map((p: any) => ({
       ...p,
       user_liked: likedSet.has(p.id),
+      user_poll_vote: pollVoteMap.get(p.id) ?? null,
       author: profileMap.get(p.author_id) ?? null,
     }));
   } catch {
@@ -1669,15 +1685,61 @@ export async function fetchMarketPosts(userId?: string): Promise<MarketPost[]> {
   }
 }
 
-export async function createMarketPost(authorId: string, content: string, imageUrl?: string | null): Promise<MarketPost | null> {
+export async function createMarketPost(
+  authorId: string,
+  content: string,
+  imageUrl?: string | null,
+  videoUrl?: string | null,
+  pollOptions?: MarketPollOption[] | null,
+): Promise<MarketPost | null> {
   try {
     const { data, error } = await supabase
       .from("market_posts")
-      .insert({ author_id: authorId, content, image_url: imageUrl ?? null, likes_count: 0, comments_count: 0 })
-      .select("id, content, image_url, created_at, author_id, likes_count, comments_count")
+      .insert({
+        author_id: authorId,
+        content,
+        image_url: imageUrl ?? null,
+        video_url: videoUrl ?? null,
+        poll_options: pollOptions && pollOptions.length > 0 ? pollOptions : null,
+        likes_count: 0,
+        comments_count: 0,
+      })
+      .select("id, content, image_url, video_url, poll_options, created_at, author_id, likes_count, comments_count")
       .single();
     if (error || !data) return null;
-    return { ...data, user_liked: false };
+    return { ...data, user_liked: false, user_poll_vote: null };
+  } catch {
+    return null;
+  }
+}
+
+export async function voteOnMarketPoll(postId: string, userId: string, optionId: string): Promise<MarketPollOption[] | null> {
+  try {
+    const { data: existing } = await supabase
+      .from("market_post_poll_votes")
+      .select("option_id")
+      .eq("post_id", postId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const { data: post } = await supabase.from("market_posts").select("poll_options").eq("id", postId).single();
+    if (!post) return null;
+    const opts: MarketPollOption[] = post.poll_options ?? [];
+
+    if (existing) {
+      const updated = opts.map((o: MarketPollOption) =>
+        o.id === existing.option_id ? { ...o, votes_count: Math.max(0, o.votes_count - 1) } :
+        o.id === optionId ? { ...o, votes_count: o.votes_count + 1 } : o
+      );
+      await supabase.from("market_post_poll_votes").update({ option_id: optionId }).eq("post_id", postId).eq("user_id", userId);
+      await supabase.from("market_posts").update({ poll_options: updated }).eq("id", postId);
+      return updated;
+    } else {
+      const updated = opts.map((o: MarketPollOption) => o.id === optionId ? { ...o, votes_count: o.votes_count + 1 } : o);
+      await supabase.from("market_post_poll_votes").insert({ post_id: postId, user_id: userId, option_id: optionId });
+      await supabase.from("market_posts").update({ poll_options: updated }).eq("id", postId);
+      return updated;
+    }
   } catch {
     return null;
   }
@@ -1751,5 +1813,32 @@ export async function uploadMarketPostImage(file: File, userId: string): Promise
     return urlData?.publicUrl ?? null;
   } catch {
     return null;
+  }
+}
+
+export async function uploadMarketPostVideo(file: File, userId: string): Promise<string | null> {
+  try {
+    const ext = file.name.split(".").pop() ?? "mp4";
+    const path = `market/video/${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage.from("chat-attachments").upload(path, file, { contentType: file.type, upsert: true });
+    if (error) return null;
+    const { data: urlData } = supabase.storage.from("chat-attachments").getPublicUrl(path);
+    return urlData?.publicUrl ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchPlanFeatures(planId: string): Promise<string[]> {
+  try {
+    const { data, error } = await supabase
+      .from("plans")
+      .select("features")
+      .eq("id", planId)
+      .maybeSingle();
+    if (error || !data) return [];
+    return (data.features ?? []) as string[];
+  } catch {
+    return [];
   }
 }
