@@ -690,6 +690,117 @@ export async function uploadChatAttachment(file: File, userId: string): Promise<
   }
 }
 
+// ─── Company Products (Portfolio) ─────────────────────────────────────────────
+
+export interface CompanyProduct {
+  id: string;
+  company_id: string;
+  name: string;
+  description: string | null;
+  price: string | null;
+  category: string;
+  image_url: string | null;
+  created_at: string;
+}
+
+export async function fetchCompanyProducts(companyId: string): Promise<CompanyProduct[]> {
+  try {
+    const { data, error } = await supabase
+      .from("company_products")
+      .select("*")
+      .eq("company_id", companyId)
+      .order("created_at", { ascending: false });
+    if (error) { console.error("fetchCompanyProducts:", error); return []; }
+    return (data ?? []) as CompanyProduct[];
+  } catch (e) {
+    console.error("fetchCompanyProducts:", e);
+    return [];
+  }
+}
+
+export async function createCompanyProduct(params: {
+  company_id: string;
+  name: string;
+  description?: string | null;
+  price?: string | null;
+  category: string;
+  image_url?: string | null;
+}): Promise<CompanyProduct | null> {
+  try {
+    const { data, error } = await supabase
+      .from("company_products")
+      .insert(params)
+      .select()
+      .single();
+    if (error) { console.error("createCompanyProduct:", error); return null; }
+    return data as CompanyProduct;
+  } catch (e) {
+    console.error("createCompanyProduct:", e);
+    return null;
+  }
+}
+
+export async function updateCompanyProduct(
+  productId: string,
+  updates: Partial<Pick<CompanyProduct, "name" | "description" | "price" | "category" | "image_url">>,
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("company_products")
+      .update(updates)
+      .eq("id", productId);
+    if (error) { console.error("updateCompanyProduct:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("updateCompanyProduct:", e);
+    return false;
+  }
+}
+
+export async function deleteCompanyProduct(productId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("company_products").delete().eq("id", productId);
+    if (error) { console.error("deleteCompanyProduct:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("deleteCompanyProduct:", e);
+    return false;
+  }
+}
+
+export async function uploadPortfolioImage(file: File, userId: string): Promise<string | null> {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token ?? "";
+
+    const fileBase64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve((reader.result as string).split(",")[1] ?? "");
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
+      ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
+
+    const res = await fetch(`${apiBase}/uploads/portfolio`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ fileBase64, fileName: file.name, mimeType: file.type || "image/jpeg", userId }),
+    });
+
+    if (!res.ok) return null;
+    const { url } = await res.json();
+    return url ?? null;
+  } catch (e) {
+    console.warn("uploadPortfolioImage:", e);
+    return null;
+  }
+}
+
 // ─── Company Pages ────────────────────────────────────────────────────────────
 
 export interface WebCompanyPage {

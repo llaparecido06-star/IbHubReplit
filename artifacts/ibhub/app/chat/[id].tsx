@@ -722,6 +722,39 @@ export default function ChatScreen() {
                 </View>
               ) : type === "audio" ? (
                 renderAudioBubble(item, isMe)
+              ) : item.content.startsWith("[attachment]:") ? (
+                (() => {
+                  const rest = item.content.slice("[attachment]:".length).trim();
+                  const [url, ...labelParts] = rest.split("|");
+                  const label = labelParts.join("|").trim() || "";
+                  const imgExts = ["jpg","jpeg","png","gif","webp","svg","avif"];
+                  const ext = (url?.split("?")[0].split(".").pop() ?? "").toLowerCase();
+                  const isImg = imgExts.includes(ext);
+                  return (
+                    <View>
+                      {isImg ? (
+                        <Image
+                          source={{ uri: url }}
+                          style={[st.mediaImage, { borderRadius: 10 }]}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 4 }}>
+                          <Feather name="paperclip" size={16} color={isMe ? "#fff" : colors.mutedForeground} />
+                          <Text style={[st.bubbleText, { color: isMe ? "#fff" : colors.foreground, flex: 1 }]} numberOfLines={1}>
+                            {label || "Anexo"}
+                          </Text>
+                        </View>
+                      )}
+                      {label && isImg && (
+                        <Text style={[st.bubbleText, { color: isMe ? "#ffffffcc" : colors.mutedForeground, fontSize: 11, marginTop: 4 }]}>{label}</Text>
+                      )}
+                      <Text style={[st.bubbleTime, { color: isMe ? "#ffffff66" : colors.mutedForeground }]}>
+                        {formatTime(item.created_at)}
+                      </Text>
+                    </View>
+                  );
+                })()
               ) : (
                 <>
                   <Text style={[st.bubbleText, { color: isMe ? "#fff" : colors.foreground }]}>{item.content}</Text>

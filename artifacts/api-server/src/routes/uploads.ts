@@ -77,4 +77,52 @@ router.post("/uploads/chat", async (req: Request, res: Response): Promise<void> 
   }
 });
 
+/**
+ * POST /api/uploads/portfolio
+ * Body: { fileBase64: string, fileName: string, mimeType: string, userId: string }
+ * Returns: { url: string }
+ */
+router.post("/uploads/portfolio", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { fileBase64, fileName, mimeType, userId } = req.body as {
+      fileBase64: string;
+      fileName: string;
+      mimeType: string;
+      userId: string;
+    };
+
+    if (!fileBase64 || !fileName || !userId) {
+      res.status(400).json({ error: "fileBase64, fileName and userId are required" });
+      return;
+    }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      res.status(401).json({ error: "Missing authorization header" });
+      return;
+    }
+
+    const PORTFOLIO_BUCKET = "chat-attachments";
+    const buffer = Buffer.from(fileBase64, "base64");
+    const ext    = fileName.split(".").pop() ?? "jpg";
+    const path   = `portfolio/${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+
+    const { error } = await supabaseAdmin.storage
+      .from(PORTFOLIO_BUCKET)
+      .upload(path, buffer, { contentType: mimeType || "image/jpeg", upsert: false });
+
+    if (error) {
+      console.error("portfolio upload error:", error);
+      res.status(500).json({ error: error.message });
+      return;
+    }
+
+    const { data } = supabaseAdmin.storage.from(PORTFOLIO_BUCKET).getPublicUrl(path);
+    res.json({ url: data.publicUrl });
+  } catch (err) {
+    console.error("uploads/portfolio:", err);
+    res.status(500).json({ error: "Upload failed" });
+  }
+});
+
 export default router;

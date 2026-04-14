@@ -2348,15 +2348,26 @@ export async function uploadChatMedia(
   mimeType: string,
 ): Promise<string | null> {
   try {
-    const safeMime = mimeType || "application/octet-stream";
-    const ext  = safeMime.includes("/") ? safeMime.split("/")[1]?.replace("jpeg", "jpg").replace("quicktime", "mov") ?? "bin" : "bin";
+    const safeMime = mimeType || "image/jpeg";
+    const ext = safeMime.includes("/") ? safeMime.split("/")[1]?.replace("jpeg", "jpg").replace("quicktime", "mov") ?? "jpg" : "jpg";
     const path = `chat/${conversationId}/${Date.now()}.${ext}`;
-    // Use blob() instead of arrayBuffer() to avoid OOM on large files
-    const resp = await fetch(uri);
-    const blob = await resp.blob();
-    const { error } = await supabase.storage.from("post-images").upload(path, blob, { contentType: safeMime, upsert: false });
+
+    // Use XMLHttpRequest to read binary — more reliable than fetch() for local file:// URIs in React Native
+    const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.onload  = () => resolve(xhr.response as ArrayBuffer);
+      xhr.onerror = () => reject(new Error("XHR read failed"));
+      xhr.responseType = "arraybuffer";
+      xhr.open("GET", uri);
+      xhr.send();
+    });
+
+    const { error } = await supabase.storage
+      .from("chat-attachments")
+      .upload(path, arrayBuffer, { contentType: safeMime, upsert: false });
+
     if (error) { console.error("uploadChatMedia:", error); return null; }
-    const { data } = supabase.storage.from("post-images").getPublicUrl(path);
+    const { data } = supabase.storage.from("chat-attachments").getPublicUrl(path);
     return data.publicUrl;
   } catch (e) {
     console.error("uploadChatMedia:", e);
