@@ -35,22 +35,24 @@ function buildPriceToplanMap(): Map<string, string> {
 
 /**
  * Determine the plan from a Stripe subscription's price items.
- * Prefers metadata (set during checkout), falls back to price ID lookup.
- * Returns null if no match is found.
+ *
+ * Priority:
+ *   1. Subscription item price IDs (always current after portal upgrade/downgrade)
+ *   2. metadata.plan (fallback only if no price match found — catches custom/one-off prices)
+ *
+ * Returns null if neither resolves to a known plan.
  */
 function resolvePlanFromSubscription(
   sub: Stripe.Subscription,
   priceToplan: Map<string, string>,
 ): string | null {
-  const metaPlan = sub.metadata?.plan;
-  if (metaPlan) return metaPlan;
-
-  // Inspect subscription items for a known price ID
+  // Primary: inspect subscription items — always reflects latest plan after portal changes
   for (const item of sub.items.data) {
     const plan = priceToplan.get(item.price.id);
     if (plan) return plan;
   }
-  return null;
+  // Fallback: metadata (set at checkout; may be stale after portal plan change)
+  return sub.metadata?.plan ?? null;
 }
 
 // ─── Allowed return URL hosts (security: prevent open-redirect) ───────────────

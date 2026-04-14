@@ -9,7 +9,15 @@
  * checking `profile.plan` directly.
  */
 
-import type { Profile } from "@/context/AuthContext";
+/**
+ * Minimal profile shape needed by entitlement helpers.
+ * Kept local to avoid circular imports with AuthContext.
+ */
+export interface EntitlementProfile {
+  plan?: string | null;
+  stripe_subscription_status?: string | null;
+  courtesy_until?: string | null;
+}
 
 export type EntitlementStatus =
   | "active"
@@ -26,10 +34,10 @@ export type EntitlementStatus =
  *   - "courtesy" → admin-granted access within the courtesy window
  *   - "free"     → no active paid access
  */
-export function getEntitlementStatus(profile: Profile | null): EntitlementStatus {
+export function getEntitlementStatus(profile: EntitlementProfile | null): EntitlementStatus {
   if (!profile) return "free";
 
-  const stripeStatus = profile.stripe_subscription_status;
+  const stripeStatus  = profile.stripe_subscription_status;
   const courtesyUntil = profile.courtesy_until;
 
   if (stripeStatus === "active")   return "active";
@@ -45,7 +53,7 @@ export function getEntitlementStatus(profile: Profile | null): EntitlementStatus
  * Returns true if the user has full paid access (active or courtesy).
  * Returns false for past_due and free.
  */
-export function hasPlanAccess(profile: Profile | null): boolean {
+export function hasPlanAccess(profile: EntitlementProfile | null): boolean {
   const status = getEntitlementStatus(profile);
   return status === "active" || status === "trialing" || status === "courtesy";
 }
@@ -63,7 +71,7 @@ const TIER_ORDER: Record<string, number> = {
   business:  3,
 };
 
-export function hasMinimumPlan(profile: Profile | null, requiredPlan: string): boolean {
+export function hasMinimumPlan(profile: EntitlementProfile | null, requiredPlan: string): boolean {
   if (!hasPlanAccess(profile)) return false;
   const userTier     = TIER_ORDER[profile?.plan ?? "basico"] ?? 0;
   const requiredTier = TIER_ORDER[requiredPlan] ?? 0;
