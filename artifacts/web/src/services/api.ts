@@ -209,6 +209,203 @@ export async function fetchProfileStats(userId: string): Promise<{ connections: 
   }
 }
 
+// ─── Market Presentations ─────────────────────────────────────────────────────
+
+export interface MarketPresentation {
+  id: string;
+  title: string;
+  description: string | null;
+  cover_url: string | null;
+  content_url: string;
+  published: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function fetchMarketPresentations(): Promise<MarketPresentation[]> {
+  try {
+    const { data, error } = await supabase
+      .from("market_presentations")
+      .select("*")
+      .eq("published", true)
+      .order("created_at", { ascending: false });
+    if (error || !data) return [];
+    return data as MarketPresentation[];
+  } catch (e) {
+    console.warn("fetchMarketPresentations:", e);
+    return [];
+  }
+}
+
+// ─── Conversations / Messages ─────────────────────────────────────────────────
+
+export interface WebConversation {
+  id: string;
+  is_group: boolean;
+  name: string | null;
+  last_message: string | null;
+  last_message_at: string | null;
+  unread_count: number;
+  participant: { id: string; full_name: string; avatar_url?: string | null } | null;
+}
+
+export interface WebMessage {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  content: string;
+  created_at: string;
+  sender?: { id: string; full_name: string; avatar_url?: string | null };
+}
+
+export async function fetchWebConversations(userId: string): Promise<WebConversation[]> {
+  try {
+    const { data: participations } = await supabase
+      .from("conversation_participants")
+      .select("conversation_id, accepted")
+      .eq("user_id", userId);
+
+    if (!participations || participations.length === 0) return [];
+
+    const convoIds = participations.map((p: any) => p.conversation_id);
+
+    const { data: convos } = await supabase
+      .from("conversations")
+      .select("id, is_group, name, created_at")
+      .in("id", convoIds)
+      .order("created_at", { ascending: false });
+
+    if (!convos) return [];
+
+    // For each conversation, get last message and other participants
+    const results: WebConversation[] = [];
+    for (const convo of convos as any[]) {
+      const [lastMsgRes, otherParticipantsRes] = await Promise.all([
+        supabase
+          .from("messages")
+          .select("content, created_at, sender_id")
+          .eq("conversation_id", convo.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from("conversation_participants")
+          .select("user_id")
+          .eq("conversation_id", convo.id)
+          .neq("user_id", userId)
+          .limit(1)
+          .maybeSingle(),
+      ]);
+
+      let participant = null;
+      if (otherParticipantsRes.data?.user_id) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("id, full_name, avatar_url")
+          .eq("id", otherParticipantsRes.data.user_id)
+          .maybeSingle();
+        participant = profile;
+      }
+
+      results.push({
+        id: convo.id,
+        is_group: convo.is_group,
+        name: convo.name,
+        last_message: lastMsgRes.data?.content ?? null,
+        last_message_at: lastMsgRes.data?.created_at ?? null,
+        unread_count: 0,
+        participant,
+      });
+    }
+
+    return results.sort((a, b) =>
+      (b.last_message_at ?? b.id).localeCompare(a.last_message_at ?? a.id)
+    );
+  } catch (e) {
+    console.warn("fetchWebConversations:", e);
+    return [];
+  }
+}
+
+export async function fetchWebMessages(conversationId: string): Promise<WebMessage[]> {
+  try {
+    const { data } = await supabase
+      .from("messages")
+      .select("id, conversation_id, sender_id, content, created_at")
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: true })
+      .limit(50);
+
+    if (!data || data.length === 0) return [];
+
+    const senderIds = [...new Set(data.map((m: any) => m.sender_id))] as string[];
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, full_name, avatar_url")
+      .in("id", senderIds);
+
+    const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+
+    return data.map((m: any) => ({
+      ...m,
+      sender: profileMap.get(m.sender_id) ?? null,
+    }));
+  } catch (e) {
+    console.warn("fetchWebMessages:", e);
+    return [];
+  }
+}
+
+export async function sendWebMessage(conversationId: string, senderId: string, content: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("messages").insert({
+      conversation_id: conversationId,
+      sender_id: senderId,
+      content,
+      message_type: "text",
+    });
+    return !error;
+  } catch (e) {
+    console.warn("sendWebMessage:", e);
+    return false;
+  }
+}
+
+// ─── Company Pages ────────────────────────────────────────────────────────────
+
+export interface WebCompanyPage {
+  id: string;
+  name: string;
+  avatar_url: string | null;
+  owner_id: string;
+}
+
+export async function fetchWebCompanyPages(userId: string): Promise<WebCompanyPage[]> {
+  try {
+    const [ownedRes, adminRes] = await Promise.all([
+      supabase.from("company_pages").select("id, name, avatar_url, owner_id").eq("owner_id", userId),
+      supabase.from("company_page_admins").select("company_id").eq("user_id", userId),
+    ]);
+
+    const adminIds = (adminRes.data ?? []).map((m: any) => m.company_id);
+    let adminPages: WebCompanyPage[] = [];
+    if (adminIds.length > 0) {
+      const { data } = await supabase
+        .from("company_pages")
+        .select("id, name, avatar_url, owner_id")
+        .in("id", adminIds);
+      adminPages = (data ?? []) as WebCompanyPage[];
+    }
+
+    const owned = (ownedRes.data ?? []) as WebCompanyPage[];
+    const ownedIds = new Set(owned.map((p) => p.id));
+    return [...owned, ...adminPages.filter((p) => !ownedIds.has(p.id))];
+  } catch (e) {
+    console.warn("fetchWebCompanyPages:", e);
+    return [];
+  }
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface AppOpportunity {

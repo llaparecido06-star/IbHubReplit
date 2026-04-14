@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
-import { MARKET_FALLBACK, MarketOverview, MarketInfluencer, Period, fetchMarketOverview } from "@/services/api";
+import { MARKET_FALLBACK, MarketOverview, MarketInfluencer, Period, fetchMarketOverview, fetchMarketPresentations, MarketPresentation } from "@/services/api";
 
 const GOLD = "#c9a84c";
 const NAVY = "#0d1b2a";
+const MUTED = "#7a8494";
+const BORDER = "#e8e8e3";
 
-type MercadoTab = "visao" | "top";
+type MercadoTab = "visao" | "top" | "apresentacoes";
 
 // ─── Simple SVG charts ────────────────────────────────────────────────────────
 
@@ -145,6 +147,62 @@ function InfluencerRanking({ influencers }: { influencers: MarketInfluencer[] })
   );
 }
 
+/* ─── Apresentações Panel ─────────────────── */
+function ApresentacoesPanel() {
+  const [presentations, setPresentations] = useState<MarketPresentation[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchMarketPresentations().then(data => {
+      setPresentations(data);
+      setLoading(false);
+    });
+  }, []);
+
+  if (loading) {
+    return <div style={{ textAlign: "center", padding: 60, color: MUTED }}>⏳ Carregando apresentações…</div>;
+  }
+
+  if (presentations.length === 0) {
+    return (
+      <div style={{ textAlign: "center", padding: 60 }}>
+        <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
+        <h3 style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Nenhuma apresentação disponível</h3>
+        <p style={{ fontSize: 14, color: MUTED }}>As apresentações publicadas aparecerão aqui</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}>
+      {presentations.map(p => (
+        <div key={p.id} style={{ backgroundColor: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden" }}>
+          {p.cover_url ? (
+            <img src={p.cover_url} alt={p.title} style={{ width: "100%", height: 140, objectFit: "cover" }} />
+          ) : (
+            <div style={{ width: "100%", height: 140, backgroundColor: `${GOLD}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40 }}>📊</div>
+          )}
+          <div style={{ padding: "14px 16px 16px" }}>
+            <h3 style={{ fontSize: 14, fontWeight: 800, color: NAVY, margin: "0 0 6px", lineHeight: 1.4 }}>{p.title}</h3>
+            {p.description && <p style={{ fontSize: 12, color: MUTED, margin: "0 0 12px", lineHeight: 1.5 }}>{p.description.slice(0, 80)}{p.description.length > 80 ? "…" : ""}</p>}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: MUTED }}>{new Date(p.created_at).toLocaleDateString("pt-BR")}</span>
+              <a
+                href={p.content_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontSize: 12, fontWeight: 700, color: GOLD, textDecoration: "none", padding: "6px 14px", border: `1px solid ${GOLD}50`, borderRadius: 8 }}
+              >
+                Ver apresentação →
+              </a>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function MercadoPage() {
   const [period, setPeriod] = useState<Period>("ano");
   const [mainTab, setMainTab] = useState<MercadoTab>("visao");
@@ -152,12 +210,13 @@ export default function MercadoPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    if (mainTab === "apresentacoes") return;
     setLoading(true);
     fetchMarketOverview(period).then((d) => {
       setData(d);
       setLoading(false);
     });
-  }, [period]);
+  }, [period, mainTab]);
 
   const PERIODS: { key: Period; label: string }[] = [
     { key: "mes", label: "Mês" },
@@ -166,8 +225,9 @@ export default function MercadoPage() {
   ];
 
   const TABS: { key: MercadoTab; label: string }[] = [
-    { key: "visao", label: "📊 Visão Geral" },
-    { key: "top", label: "🏆 Rankings" },
+    { key: "visao",          label: "📊 Visão Geral" },
+    { key: "top",            label: "🏆 Rankings" },
+    { key: "apresentacoes",  label: "📋 Apresentações" },
   ];
 
   return (
@@ -179,25 +239,27 @@ export default function MercadoPage() {
             <h1 style={{ fontSize: 24, fontWeight: 900, color: NAVY, margin: 0 }}>Mercado</h1>
             <p style={{ fontSize: 14, color: "#8a93a2", margin: "4px 0 0" }}>Dados e indicadores do setor vitivinícola brasileiro</p>
           </div>
-          {/* Period selector */}
-          <div style={{ display: "flex", gap: 6 }}>
-            {PERIODS.map((p) => (
-              <button
-                key={p.key}
-                onClick={() => setPeriod(p.key)}
-                style={{
-                  padding: "7px 16px",
-                  borderRadius: 20,
-                  border: `1px solid ${period === p.key ? GOLD : "#e8eaed"}`,
-                  backgroundColor: period === p.key ? GOLD : "#fff",
-                  color: period === p.key ? "#fff" : "#555",
-                  fontSize: 13,
-                  fontWeight: period === p.key ? 700 : 500,
-                  cursor: "pointer",
-                }}
-              >{p.label}</button>
-            ))}
-          </div>
+          {/* Period selector (hidden on Apresentações) */}
+          {mainTab !== "apresentacoes" && (
+            <div style={{ display: "flex", gap: 6 }}>
+              {PERIODS.map((p) => (
+                <button
+                  key={p.key}
+                  onClick={() => setPeriod(p.key)}
+                  style={{
+                    padding: "7px 16px",
+                    borderRadius: 20,
+                    border: `1px solid ${period === p.key ? GOLD : "#e8eaed"}`,
+                    backgroundColor: period === p.key ? GOLD : "#fff",
+                    color: period === p.key ? "#fff" : "#555",
+                    fontSize: 13,
+                    fontWeight: period === p.key ? 700 : 500,
+                    cursor: "pointer",
+                  }}
+                >{p.label}</button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Tabs */}
@@ -219,7 +281,9 @@ export default function MercadoPage() {
           ))}
         </div>
 
-        {loading ? (
+        {mainTab === "apresentacoes" ? (
+          <ApresentacoesPanel />
+        ) : loading ? (
           <div style={{ textAlign: "center", padding: 60, color: "#aaa" }}>⏳ Carregando dados...</div>
         ) : mainTab === "visao" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>

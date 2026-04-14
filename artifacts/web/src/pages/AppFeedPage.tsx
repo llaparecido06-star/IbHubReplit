@@ -1,11 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import {
   Post,
   SuggestedProfile,
   fetchFeedPosts,
-  createWebPost,
   toggleLikePost,
   fetchWebSuggestedConnections,
   sendWebConnectionRequest,
@@ -309,103 +308,39 @@ function SuggestionCard({
   );
 }
 
-/* ─── CreatePostBox ──────────────────────── */
-function CreatePostBox({
-  profile,
-  onSubmit,
-}: {
-  profile: { avatar_url?: string | null; full_name?: string | null };
-  onSubmit: (content: string) => Promise<void>;
-}) {
-  const [open, setOpen] = useState(false);
-  const [content, setContent] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const handleOpen = () => {
-    setOpen(true);
-    setTimeout(() => textareaRef.current?.focus(), 50);
-  };
-
-  const handleSubmit = async () => {
-    if (!content.trim() || submitting) return;
-    setSubmitting(true);
-    await onSubmit(content.trim());
-    setContent("");
-    setOpen(false);
-    setSubmitting(false);
-  };
-
-  const name = profile.full_name ?? "Usuário";
-
+/* ─── PostTrigger (opens global modal) ─── */
+function PostTrigger({ profile }: { profile: { avatar_url?: string | null; full_name?: string | null } | null }) {
+  const openModal = () => window.dispatchEvent(new CustomEvent("ibhub:openCreatePost"));
+  const name = profile?.full_name ?? "Usuário";
   return (
-    <div style={{
-      backgroundColor: WHITE,
-      border: `1px solid ${BORDER}`,
-      borderRadius: 14,
-      padding: 16,
-      marginBottom: 14,
-    }}>
-      {!open ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <Avatar src={profile.avatar_url} name={name} size={40} />
-          <button
-            onClick={handleOpen}
-            style={{
-              flex: 1, textAlign: "left", padding: "10px 16px",
-              backgroundColor: BG, border: `1px solid ${BORDER}`,
-              borderRadius: 24, fontSize: 14, color: MUTED,
-              cursor: "pointer", fontFamily: "inherit",
-            }}
-          >
-            O que está acontecendo no mundo do vinho?
+    <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 14, marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <Avatar src={profile?.avatar_url} name={name} size={40} />
+        <button onClick={openModal} style={{
+          flex: 1, textAlign: "left", padding: "10px 16px",
+          backgroundColor: BG, border: `1px solid ${BORDER}`,
+          borderRadius: 24, fontSize: 14, color: MUTED,
+          cursor: "pointer", fontFamily: "inherit",
+        }}>
+          O que está acontecendo no mundo do vinho?
+        </button>
+      </div>
+      <div style={{ display: "flex", gap: 4, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
+        {[
+          { label: "Foto",     icon: <ImageIcon />,    tab: "foto" },
+          { label: "Vídeo",    icon: <WineGlassIcon />, tab: "video" },
+          { label: "Enquete",  icon: null,              tab: "enquete" },
+          { label: "🍷 Vinho", icon: null,              tab: "vinho" },
+        ].map(item => (
+          <button key={item.label} onClick={openModal} style={{
+            display: "flex", alignItems: "center", gap: 5, padding: "5px 12px",
+            background: "none", border: `1px solid ${BORDER}`, borderRadius: 20,
+            fontSize: 12, color: MUTED, cursor: "pointer", fontFamily: "inherit",
+          }}>
+            {item.icon}{item.label}
           </button>
-        </div>
-      ) : (
-        <>
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-            <Avatar src={profile.avatar_url} name={name} size={40} />
-            <textarea
-              ref={textareaRef}
-              value={content}
-              onChange={e => setContent(e.target.value)}
-              placeholder="Compartilhe uma degustação, notícia ou oportunidade..."
-              rows={4}
-              style={{
-                flex: 1, border: "none", outline: "none", resize: "none",
-                fontSize: 14, color: NAVY, lineHeight: 1.65, fontFamily: "inherit",
-                backgroundColor: "transparent",
-              }}
-            />
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, borderTop: `1px solid ${BORDER}`, paddingTop: 12 }}>
-            <button style={{ background: "none", border: "none", cursor: "pointer", display: "flex", gap: 4, alignItems: "center", fontSize: 13, color: MUTED, padding: "4px 8px" }}>
-              <ImageIcon /><span>Foto</span>
-            </button>
-            <button style={{ background: "none", border: "none", cursor: "pointer", display: "flex", gap: 4, alignItems: "center", fontSize: 13, color: MUTED, padding: "4px 8px" }}>
-              <WineGlassIcon /><span>Degustação</span>
-            </button>
-            <div style={{ flex: 1 }} />
-            <button
-              onClick={() => { setOpen(false); setContent(""); }}
-              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: MUTED, padding: "4px 8px" }}
-            >Cancelar</button>
-            <button
-              onClick={handleSubmit}
-              disabled={!content.trim() || submitting}
-              style={{
-                backgroundColor: content.trim() ? GOLD : `${GOLD}55`,
-                color: NAVY, fontWeight: 800, fontSize: 13,
-                border: "none", borderRadius: 8, padding: "8px 20px",
-                cursor: content.trim() ? "pointer" : "default",
-                transition: "background 0.15s",
-              }}
-            >
-              {submitting ? "Publicando…" : "Publicar"}
-            </button>
-          </div>
-        </>
-      )}
+        ))}
+      </div>
     </div>
   );
 }
@@ -465,6 +400,57 @@ function ConnectBtn({ profile, onConnect }: { profile: SuggestedProfile; onConne
   );
 }
 
+/* ─── WineRankingTeaser ──────────────────── */
+function WineRankingTeaser() {
+  return (
+    <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16, marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <span style={{ fontSize: 18 }}>🍷</span>
+        <h3 style={{ fontSize: 14, fontWeight: 800, color: NAVY, margin: 0 }}>Ranking da Comunidade</h3>
+      </div>
+      {[
+        { pos: 1, name: "Barca Velha 2011", score: 97, region: "Douro" },
+        { pos: 2, name: "Cartuxa Pêra-Manca", score: 95, region: "Alentejo" },
+        { pos: 3, name: "Château Pichon 2019", score: 94, region: "Bordeaux" },
+      ].map(w => (
+        <div key={w.pos} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+          <div style={{
+            width: 24, height: 24, borderRadius: "50%",
+            backgroundColor: w.pos === 1 ? GOLD : w.pos === 2 ? "#9ca3af" : "#c97c42",
+            color: "#fff", fontSize: 11, fontWeight: 800,
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+          }}>#{w.pos}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{w.name}</div>
+            <div style={{ fontSize: 11, color: MUTED }}>{w.region}</div>
+          </div>
+          <div style={{ fontSize: 12, fontWeight: 800, color: GOLD }}>{w.score}</div>
+        </div>
+      ))}
+      <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 10, textAlign: "center" }}>
+        <button style={{ background: "none", border: "none", color: GOLD, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+          Ver ranking completo →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Trending Topics ────────────────────── */
+function TrendingTopics() {
+  const topics = ["#SustentabilidadeVinícola", "#Chardonnay2024", "#EnoturismoBrasil", "#TerroirSerrano", "#VinosNaturaes"];
+  return (
+    <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16, marginBottom: 12 }}>
+      <h3 style={{ fontSize: 14, fontWeight: 800, color: NAVY, margin: "0 0 12px" }}>📈 Em Alta</h3>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {topics.map(t => (
+          <button key={t} style={{ background: "none", border: "none", textAlign: "left", color: "#1a56db", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0 }}>{t}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ─── AppFeedPage ────────────────────────── */
 export default function AppFeedPage() {
   const { profile, user } = useAuth();
@@ -473,7 +459,7 @@ export default function AppFeedPage() {
   const [suggestions, setSuggestions] = useState<SuggestedProfile[]>([]);
   const [loading, setLoading]         = useState(true);
 
-  const userId   = profile?.id ?? user?.id ?? "";
+  const userId    = profile?.id ?? user?.id ?? "";
   const firstName = profile?.full_name?.split(" ")[0] ?? "Usuário";
 
   const load = useCallback(async () => {
@@ -500,41 +486,25 @@ export default function AppFeedPage() {
     await toggleLikePost(postId, userId, isLiked);
   }, [userId]);
 
-  const handleCreatePost = useCallback(async (content: string) => {
-    if (!userId) return;
-    const newPost = await createWebPost({ user_id: userId, content });
-    if (newPost) {
-      setPosts(prev => [{ ...newPost, author: {
-        id: profile?.id ?? userId,
-        full_name: profile?.full_name ?? "Eu",
-        username: profile?.username ?? "",
-        avatar_url: profile?.avatar_url,
-        headline: [profile?.position, profile?.company].filter(Boolean).join(" · ") || null,
-        plan: profile?.plan ?? "gratuito",
-      }}, ...prev]);
-    }
-  }, [userId, profile]);
-
   const handleConnect = useCallback(async (targetId: string) => {
     if (!userId) return;
     await sendWebConnectionRequest(targetId, userId);
   }, [userId]);
 
   return (
-    <AppShell>
+    <AppShell onPostCreated={load}>
       {/* Greeting */}
-      <div style={{ marginBottom: 16 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 900, color: NAVY, margin: "0 0 2px" }}>Olá, {firstName}</h1>
-        <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>Veja as últimas atualizações</p>
+      <div style={{ marginBottom: 14 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 900, color: NAVY, margin: "0 0 2px" }}>Olá, {firstName} 👋</h1>
+        <p style={{ fontSize: 13, color: MUTED, margin: 0 }}>Veja as últimas atualizações</p>
       </div>
 
-      {/* Two-column layout on wider screens */}
+      {/* Two-column layout */}
       <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
 
         {/* ── Feed column ─────────────────── */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Create post */}
-          <CreatePostBox profile={profile ?? {}} onSubmit={handleCreatePost} />
+          <PostTrigger profile={profile} />
 
           {loading ? (
             <div style={{ textAlign: "center", padding: 48, color: MUTED }}>
@@ -555,14 +525,16 @@ export default function AppFeedPage() {
           )}
         </div>
 
-        {/* ── Right panel (desktop only) ─── */}
-        <div style={{ width: 280, flexShrink: 0, display: "none" }} className="feed-right-panel">
-          <SuggestionsPanel suggestions={suggestions} onConnect={handleConnect} />
+        {/* ── Right panel ─── */}
+        <div style={{ width: 260, flexShrink: 0, display: "none" }} className="feed-right-panel">
+          {suggestions.length > 0 && <SuggestionsPanel suggestions={suggestions.slice(0, 4)} onConnect={handleConnect} />}
+          <WineRankingTeaser />
+          <TrendingTopics />
         </div>
       </div>
 
       <style>{`
-        @media (min-width: 900px) {
+        @media (min-width: 1024px) {
           .feed-right-panel { display: block !important; }
         }
       `}</style>

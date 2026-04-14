@@ -12,6 +12,8 @@ import OportunidadesPage from "@/pages/app/OportunidadesPage";
 import OportunidadeDetalhe from "@/pages/app/OportunidadeDetalhe";
 import AdegaPage from "@/pages/app/AdegaPage";
 import MercadoPage from "@/pages/app/MercadoPage";
+import MensagensPage from "@/pages/app/MensagensPage";
+import GruposPage from "@/pages/app/GruposPage";
 import EventoDetalhe from "@/pages/app/EventoDetalhe";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminUsuarios from "@/pages/admin/AdminUsuarios";
@@ -145,6 +147,12 @@ function Router() {
       </Route>
       <Route path="/app/mercado">
         <PrivateRoute component={MercadoPage} />
+      </Route>
+      <Route path="/app/mensagens">
+        <PrivateRoute component={MensagensPage} />
+      </Route>
+      <Route path="/app/grupos">
+        <PrivateRoute component={GruposPage} />
       </Route>
       <Route path="/app">
         <PrivateRoute component={AppFeedPage} />
