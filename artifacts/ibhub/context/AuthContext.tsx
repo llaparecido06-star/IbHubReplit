@@ -245,6 +245,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [fetchProfile, handleDeepLink]);
 
+  // ── Realtime: re-fetch profile when Stripe webhooks update subscription status ──
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channelId = `profile_stripe_${user.id}_${Math.random().toString(36).slice(2)}`;
+    const channel = supabase
+      .channel(channelId)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "profiles",
+          filter: `id=eq.${user.id}`,
+        },
+        () => {
+          fetchProfile(user.id).catch(() => {});
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, fetchProfile]);
+
   const clearRecovery = useCallback(() => setIsRecovering(false), []);
 
   const signIn = async (email: string, password: string) => {

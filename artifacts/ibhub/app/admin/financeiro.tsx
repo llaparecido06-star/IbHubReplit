@@ -40,6 +40,8 @@ interface SubscriberRow {
   username: string | null;
   plan: string;
   courtesy_until: string | null;
+  stripe_subscription_status: string | null;
+  stripe_current_period_end: string | null;
 }
 
 interface PlanRecord {
@@ -104,15 +106,26 @@ export default function AdminFinanceiroScreen() {
       const planPriceMap = new Map(planList.map((p) => [p.id, p.price_cents]));
       const now = new Date();
 
-      // Active via Stripe OR courtesy
-      const activeViaStripe   = profiles.filter((p) => (p as any).stripe_subscription_status === "active" || (p as any).stripe_subscription_status === "trialing");
-      const activeCourtesies  = profiles.filter((p) => p.courtesy_until && new Date(p.courtesy_until) > now);
-      const canceledThisMonth = profiles.filter((p) => (p as any).stripe_subscription_status === "canceled");
+      // Start of current calendar month (for cancellation counting)
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-      // MRR: based on Stripe-active subscribers' plan price
-      const mrr = activeViaStripe.reduce((sum, p) => {
-        return sum + (planPriceMap.get(p.plan) ?? 0);
-      }, 0);
+      const activeViaStripe  = profiles.filter((p) =>
+        p.stripe_subscription_status === "active" || p.stripe_subscription_status === "trialing",
+      );
+      const activeCourtesies = profiles.filter((p) =>
+        p.courtesy_until !== null && new Date(p.courtesy_until) > now,
+      );
+
+      // Canceled this month: stripe_current_period_end within the current calendar month
+      const canceledThisMonth = profiles.filter((p) => {
+        if (p.stripe_subscription_status !== "canceled") return false;
+        if (!p.stripe_current_period_end) return false;
+        const endDate = new Date(p.stripe_current_period_end);
+        return endDate >= startOfMonth && endDate <= now;
+      });
+
+      // MRR: Stripe-active subscribers' plan price
+      const mrr = activeViaStripe.reduce((sum, p) => sum + (planPriceMap.get(p.plan) ?? 0), 0);
 
       // Display list = Stripe subscribers + courtesy users (deduplicated)
       const displaySet = new Map<string, SubscriberRow>();

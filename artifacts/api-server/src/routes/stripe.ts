@@ -14,19 +14,31 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
 const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey);
 
 // ─── Stripe price IDs — set via env vars ──────────────────────────────────────
-// Create these products/prices in your Stripe dashboard and paste the IDs here.
 const PRICE_IDS: Record<string, string> = {
   premium:   process.env.STRIPE_PRICE_PREMIUM   ?? "",
   exclusive: process.env.STRIPE_PRICE_EXCLUSIVE ?? "",
   business:  process.env.STRIPE_PRICE_BUSINESS  ?? "",
 };
 
-// Map plan id → subscription_tier label stored in profiles
-const PLAN_TIER: Record<string, string> = {
-  premium:   "premium",
-  exclusive: "exclusive",
-  business:  "business",
-};
+// ─── Allowed return URL hosts (security: prevent open-redirect) ───────────────
+const ALLOWED_HOSTS: string[] = (() => {
+  const webBase = process.env.WEB_BASE_URL ?? "";
+  const hosts: string[] = [];
+  try {
+    if (webBase) hosts.push(new URL(webBase).hostname);
+  } catch { /* ignore */ }
+  return hosts;
+})();
+
+function isAllowedReturnUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    const { hostname } = new URL(url);
+    return ALLOWED_HOSTS.some((h) => hostname === h || hostname.endsWith(`.${h}`));
+  } catch {
+    return false;
+  }
+}
 
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -49,19 +61,27 @@ async function getUserId(req: Request, res: Response): Promise<string | null> {
   return data.user.id;
 }
 
+/** Profile row shape returned from Supabase select */
+interface ProfileRow {
+  stripe_customer_id: string | null;
+  full_name: string | null;
+}
+
 /** Get or create a Stripe customer for a user */
 async function getOrCreateCustomer(stripe: Stripe, userId: string, email: string | null): Promise<string> {
-  const { data: profile } = await supabaseAdmin
+  const { data } = await supabaseAdmin
     .from("profiles")
     .select("stripe_customer_id, full_name")
     .eq("id", userId)
     .maybeSingle();
 
-  if (profile?.stripe_customer_id) return profile.stripe_customer_id as string;
+  const profile = data as ProfileRow | null;
+
+  if (profile?.stripe_customer_id) return profile.stripe_customer_id;
 
   const customer = await stripe.customers.create({
     email: email ?? undefined,
-    name: (profile as any)?.full_name ?? undefined,
+    name: profile?.full_name ?? undefined,
     metadata: { supabase_user_id: userId },
   });
 
@@ -94,37 +114,42 @@ router.post("/stripe/create-checkout-session", async (req: Request, res: Respons
     return;
   }
 
+  const webBase = process.env.WEB_BASE_URL ?? "";
+  const defaultSuccess = `${webBase}/assinar/sucesso?plano=${plan}`;
+  const defaultCancel  = `${webBase}/assinar/cancelado?plano=${plan}`;
+
+  // Security: only allow return URLs pointing to our own domain
+  const resolvedSuccess = (successUrl && isAllowedReturnUrl(successUrl)) ? successUrl : defaultSuccess;
+  const resolvedCancel  = (cancelUrl  && isAllowedReturnUrl(cancelUrl))  ? cancelUrl  : defaultCancel;
+
   try {
     const stripe = getStripe();
 
-    // Get user email from auth
-    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
-    const email = authUser?.user?.email ?? null;
+    const { data: authData } = await supabaseAdmin.auth.admin.getUserById(userId);
+    const email = authData?.user?.email ?? null;
 
     const customerId = await getOrCreateCustomer(stripe, userId, email);
-
-    const webBase = process.env.WEB_BASE_URL ?? "";
-    const defaultSuccess = `${webBase}/assinar/sucesso?plano=${plan}`;
-    const defaultCancel  = `${webBase}/assinar/cancelado?plano=${plan}`;
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: "subscription",
       line_items: [{ price: PRICE_IDS[plan], quantity: 1 }],
-      success_url: successUrl ?? defaultSuccess,
-      cancel_url:  cancelUrl  ?? defaultCancel,
+      success_url: resolvedSuccess,
+      cancel_url:  resolvedCancel,
       metadata: { supabase_user_id: userId, plan },
       subscription_data: {
         metadata: { supabase_user_id: userId, plan },
       },
       allow_promotion_codes: true,
       locale: "pt-BR",
-      payment_method_types: ["card"],
+      // Omit payment_method_types to let Stripe show all enabled methods
+      // including card, Pix, and boleto (configured per-product in Stripe Dashboard)
     });
 
     res.json({ url: session.url });
-  } catch (e: any) {
-    res.status(500).json({ error: e?.message ?? "Erro ao criar sessão de checkout" });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Erro ao criar sessão de checkout";
+    res.status(500).json({ error: message });
   }
 });
 
@@ -138,36 +163,36 @@ router.post("/stripe/create-portal-session", async (req: Request, res: Response)
     return;
   }
 
+  const webBase = process.env.WEB_BASE_URL ?? "";
+
   try {
     const stripe = getStripe();
 
-    const { data: profile } = await supabaseAdmin
+    const { data } = await supabaseAdmin
       .from("profiles")
       .select("stripe_customer_id")
       .eq("id", userId)
       .maybeSingle();
 
-    const customerId = (profile as any)?.stripe_customer_id as string | null;
+    const customerId = (data as { stripe_customer_id: string | null } | null)?.stripe_customer_id;
     if (!customerId) {
       res.status(400).json({ error: "Nenhuma assinatura encontrada para este usuário." });
       return;
     }
 
-    const webBase = process.env.WEB_BASE_URL ?? "";
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,
       return_url: `${webBase}/minha-conta`,
     });
 
     res.json({ url: session.url });
-  } catch (e: any) {
-    res.status(500).json({ error: e?.message ?? "Erro ao abrir portal de assinatura" });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Erro ao abrir portal de assinatura";
+    res.status(500).json({ error: message });
   }
 });
 
 // ─── POST /stripe/webhook ─────────────────────────────────────────────────────
-// Stripe sends raw body; must be parsed before this handler runs.
-// In Express, mount with express.raw({ type: "application/json" }) for this route.
 router.post("/stripe/webhook", async (req: Request, res: Response) => {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!webhookSecret) {
@@ -179,8 +204,8 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
     return;
   }
 
-  const sig = req.headers["stripe-signature"] as string | undefined;
-  if (!sig) {
+  const sig = req.headers["stripe-signature"];
+  if (!sig || typeof sig !== "string") {
     res.status(400).json({ error: "Missing stripe-signature header" });
     return;
   }
@@ -189,8 +214,9 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
   try {
     const stripe = getStripe();
     event = stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret);
-  } catch (e: any) {
-    res.status(400).json({ error: `Webhook signature verification failed: ${e.message}` });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Signature verification failed";
+    res.status(400).json({ error: `Webhook signature verification failed: ${message}` });
     return;
   }
 
@@ -207,7 +233,7 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
             plan,
             stripe_subscription_id:     sub.id,
             stripe_subscription_status: sub.status,
-            stripe_current_period_end:  new Date((sub as any).current_period_end * 1000).toISOString(),
+            stripe_current_period_end:  new Date(sub.current_period_end * 1000).toISOString(),
           }).eq("id", userId);
         }
         break;
@@ -221,7 +247,7 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
           const update: Record<string, unknown> = {
             stripe_subscription_id:     sub.id,
             stripe_subscription_status: sub.status,
-            stripe_current_period_end:  new Date((sub as any).current_period_end * 1000).toISOString(),
+            stripe_current_period_end:  new Date(sub.current_period_end * 1000).toISOString(),
           };
           if (plan) update.plan = plan;
           await supabaseAdmin.from("profiles").update(update).eq("id", userId);
@@ -244,8 +270,8 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
 
       case "invoice.payment_failed": {
         const inv = event.data.object as Stripe.Invoice;
-        const customerId = inv.customer as string;
-        if (customerId) {
+        const customerId = inv.customer;
+        if (customerId && typeof customerId === "string") {
           await supabaseAdmin.from("profiles")
             .update({ stripe_subscription_status: "past_due" })
             .eq("stripe_customer_id", customerId);
@@ -253,8 +279,8 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
         break;
       }
     }
-  } catch (e: any) {
-    console.error("Stripe webhook handler error:", e);
+  } catch (err: unknown) {
+    console.error("Stripe webhook handler error:", err);
     res.status(500).json({ error: "Webhook handler error" });
     return;
   }
