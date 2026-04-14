@@ -64,6 +64,7 @@ export default function TabLayout() {
         name="network"
         options={{
           title: "Mercado",
+          href: isCompany ? null : undefined,
           tabBarIcon: ({ color }) => <Feather name="bar-chart-2" size={22} color={color} />,
         }}
       />

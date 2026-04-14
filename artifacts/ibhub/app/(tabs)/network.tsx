@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Dimensions,
   FlatList,
-  Image,
   Linking,
   Modal,
   Platform,
@@ -11,9 +10,12 @@ import {
   Share,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Image } from "expo-image";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@/components/ui/Icon";
 import {
@@ -28,14 +30,13 @@ import {
 } from "react-native-svg";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
-import { supabase } from "@/context/AuthContext";
 import { getEntitlementStatus } from "@/utils/entitlement";
 import * as API from "@/services/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Period    = "mes" | "trimestre" | "ano";
-type MercadoTab = "visao" | "apresentacoes" | "top";
+type MercadoTab = "visao" | "apresentacoes" | "idealbi";
 
 interface TooltipState {
   visible: boolean;
@@ -661,6 +662,221 @@ function ApresentacoesView({ colors, bottomPad, session }: { colors: any; bottom
   );
 }
 
+// ─── Ideal.BI Feed (Mobile) ───────────────────────────────────────────────────
+
+function IdealBIAvatar({ src, name, size = 36 }: { src?: string | null; name: string; size?: number }) {
+  const colors = useColors();
+  if (src) return <Image source={{ uri: src }} style={{ width: size, height: size, borderRadius: size / 2 } as any} contentFit="cover" />;
+  return (
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: colors.navyLight, alignItems: "center", justifyContent: "center" }}>
+      <Text style={{ color: "#fff", fontWeight: "800", fontSize: size * 0.4 }}>{(name ?? "?").charAt(0).toUpperCase()}</Text>
+    </View>
+  );
+}
+
+function MarketCommentsList({ postId, userId, colors }: { postId: string; userId: string; colors: ReturnType<typeof useColors> }) {
+  const [comments, setComments] = useState<API.MarketComment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    API.fetchMarketComments(postId).then(c => { setComments(c); setLoading(false); });
+  }, [postId]);
+
+  const send = async () => {
+    const t = text.trim();
+    if (!t || !userId) return;
+    setSending(true);
+    const c = await API.addMarketComment(postId, userId, t);
+    if (c) { setComments(prev => [...prev, c]); setText(""); }
+    setSending(false);
+  };
+
+  return (
+    <View style={{ marginTop: 8 }}>
+      {loading ? <ActivityIndicator size="small" color={colors.gold} /> : comments.map(c => (
+        <View key={c.id} style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
+          <IdealBIAvatar src={c.author?.avatar_url} name={c.author?.full_name ?? "U"} size={28} />
+          <View style={{ flex: 1, backgroundColor: colors.secondary, borderRadius: 10, padding: 8 }}>
+            <Text style={{ fontWeight: "700", fontSize: 12, color: colors.navy }}>{c.author?.full_name ?? "Usuário"}</Text>
+            <Text style={{ fontSize: 13, color: colors.foreground, marginTop: 2 }}>{c.content}</Text>
+          </View>
+        </View>
+      ))}
+      <View style={{ flexDirection: "row", gap: 8, marginTop: 4, alignItems: "center" }}>
+        <TextInput
+          value={text}
+          onChangeText={setText}
+          placeholder="Comentar..."
+          placeholderTextColor={colors.mutedForeground}
+          style={{ flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, fontSize: 13, color: colors.foreground }}
+          returnKeyType="send"
+          onSubmitEditing={send}
+          editable={!sending}
+        />
+        <TouchableOpacity onPress={send} disabled={sending || !text.trim()}>
+          <Feather name="send" size={18} color={text.trim() ? colors.gold : colors.mutedForeground} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+function MarketPostCardMobile({ post, userId, onLikeToggle, colors }: {
+  post: API.MarketPost; userId: string;
+  onLikeToggle: (id: string, liked: boolean, count: number) => void;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const [showComments, setShowComments] = useState(false);
+  const [liking, setLiking] = useState(false);
+  const dateStr = new Date(post.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+
+  const handleLike = async () => {
+    if (liking) return;
+    setLiking(true);
+    const newLiked = await API.toggleMarketPostLike(post.id, userId, post.user_liked);
+    onLikeToggle(post.id, newLiked, post.user_liked ? Math.max(0, post.likes_count - 1) : post.likes_count + 1);
+    setLiking(false);
+  };
+
+  return (
+    <View style={{ marginHorizontal: 16, marginBottom: 14, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: "#fff", overflow: "hidden" }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 14, paddingBottom: 10 }}>
+        <IdealBIAvatar src={post.author?.avatar_url} name={post.author?.full_name ?? "Ideal.BI"} size={40} />
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <Text style={{ fontWeight: "700", fontSize: 14, color: colors.navy }}>{post.author?.full_name ?? "Ideal.BI"}</Text>
+            <View style={{ backgroundColor: "#c9a84c22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+              <Text style={{ fontSize: 10, fontWeight: "700", color: colors.gold }}>📡 Ideal.BI</Text>
+            </View>
+          </View>
+          {post.author?.headline ? <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>{post.author.headline}</Text> : null}
+          <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 1 }}>{dateStr}</Text>
+        </View>
+      </View>
+      <Text style={{ fontSize: 14, lineHeight: 21, color: colors.foreground, paddingHorizontal: 14, paddingBottom: post.image_url ? 10 : 14 }}>
+        {post.content}
+      </Text>
+      {post.image_url ? (
+        <Image source={{ uri: post.image_url }} style={{ width: "100%", height: 220 } as any} contentFit="cover" />
+      ) : null}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: 1, borderTopColor: colors.border }}>
+        <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5 }} onPress={handleLike}>
+          <Feather name="heart" size={16} color={post.user_liked ? "#dc2626" : colors.mutedForeground} />
+          <Text style={{ fontSize: 13, color: post.user_liked ? "#dc2626" : colors.mutedForeground }}>{post.likes_count}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5 }} onPress={() => setShowComments(v => !v)}>
+          <Feather name="message-circle" size={16} color={colors.mutedForeground} />
+          <Text style={{ fontSize: 13, color: colors.mutedForeground }}>{post.comments_count}</Text>
+        </TouchableOpacity>
+      </View>
+      {showComments ? (
+        <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+          <MarketCommentsList postId={post.id} userId={userId} colors={colors} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function IdealBIFeedMobile({ userId, isAdmin, plan, colors, bottomPad }: {
+  userId: string; isAdmin: boolean; plan: string;
+  colors: ReturnType<typeof useColors>; bottomPad: number;
+}) {
+  const router = useRouter();
+  const [posts, setPosts] = useState<API.MarketPost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newContent, setNewContent] = useState("");
+  const [posting, setPosting] = useState(false);
+  const isSubscriber = plan !== "gratuito";
+
+  useEffect(() => {
+    if (!isSubscriber && !isAdmin) { setLoading(false); return; }
+    API.fetchMarketPosts(userId).then(p => { setPosts(p); setLoading(false); });
+  }, [isSubscriber, isAdmin, userId]);
+
+  const handleLikeToggle = (id: string, liked: boolean, count: number) => {
+    setPosts(prev => prev.map(p => p.id === id ? { ...p, user_liked: liked, likes_count: count } : p));
+  };
+
+  const handlePost = async () => {
+    const t = newContent.trim();
+    if (!t || !isAdmin) return;
+    setPosting(true);
+    const post = await API.createMarketPost(userId, t, null);
+    if (post) { setPosts(prev => [post, ...prev]); setNewContent(""); }
+    setPosting(false);
+  };
+
+  if (!isSubscriber && !isAdmin) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 16 }}>
+        <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: "#c9a84c18", alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ fontSize: 36 }}>📡</Text>
+        </View>
+        <Text style={{ fontSize: 20, fontWeight: "800", color: colors.navy, textAlign: "center" }}>Ideal.BI Exclusivo</Text>
+        <Text style={{ fontSize: 14, color: colors.mutedForeground, textAlign: "center", lineHeight: 21 }}>
+          Análises e insights exclusivos do mercado do vinho publicados pela Ideal.BI. Disponível nos planos Premium e superiores.
+        </Text>
+        <TouchableOpacity
+          style={{ backgroundColor: colors.gold, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 12, alignItems: "center", marginTop: 8 }}
+          onPress={() => router.push("/subscription")}
+        >
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Ver Planos</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <FlatList
+      data={posts}
+      keyExtractor={p => p.id}
+      contentContainerStyle={{ paddingTop: 12, paddingBottom: bottomPad, flexGrow: 1 }}
+      showsVerticalScrollIndicator={false}
+      ListHeaderComponent={isAdmin ? (
+        <View style={{ marginHorizontal: 16, marginBottom: 14, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: "#fff", padding: 14, gap: 10 }}>
+          <Text style={{ fontSize: 14, fontWeight: "700", color: colors.navy }}>📡 Nova publicação Ideal.BI</Text>
+          <TextInput
+            value={newContent}
+            onChangeText={setNewContent}
+            placeholder="Escreva um insight ou análise..."
+            placeholderTextColor={colors.mutedForeground}
+            multiline
+            style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, fontSize: 14, color: colors.foreground, minHeight: 80, textAlignVertical: "top" }}
+          />
+          <TouchableOpacity
+            style={{ backgroundColor: newContent.trim() ? colors.gold : colors.gold + "55", borderRadius: 10, paddingVertical: 12, alignItems: "center" }}
+            onPress={handlePost}
+            disabled={posting || !newContent.trim()}
+          >
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>{posting ? "Publicando..." : "Publicar"}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+      ListEmptyComponent={loading ? (
+        <ActivityIndicator size="large" color={colors.gold} style={{ marginTop: 60 }} />
+      ) : (
+        <View style={{ alignItems: "center", paddingTop: 60, gap: 12 }}>
+          <Text style={{ fontSize: 36 }}>📡</Text>
+          <Text style={{ fontSize: 15, color: colors.mutedForeground, textAlign: "center" }}>
+            {"Nenhuma publicação ainda.\nFique ligado para novidades da Ideal.BI."}
+          </Text>
+        </View>
+      )}
+      renderItem={({ item }) => (
+        <MarketPostCardMobile
+          post={item}
+          userId={userId}
+          onLikeToggle={handleLikeToggle}
+          colors={colors}
+        />
+      )}
+    />
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 function LockedSection({ title, icon, colors }: { title: string; icon: string; colors: any }) {
@@ -690,9 +906,7 @@ export default function MercadoScreen() {
   const [mainTab,      setMainTab]      = useState<MercadoTab>("visao");
   const [data,         setData]         = useState<API.MarketOverview>(FALLBACK.ano);
   const [loading,      setLoading]      = useState(false);
-  const [leaderboard,  setLeaderboard]  = useState<API.LeaderboardEntry[]>([]);
   const [planFeatures, setPlanFeatures] = useState<string[] | null>(null);
-  const [loadingTop,  setLoadingTop]  = useState(false);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
@@ -730,56 +944,6 @@ export default function MercadoScreen() {
     return planFeatures.includes(`mercado:${key}`);
   }, [planFeatures]);
 
-  const loadLeaderboard = useCallback(async () => {
-    setLoadingTop(true);
-    const result = await API.fetchLeaderboard();
-    setLeaderboard(result);
-    setLoadingTop(false);
-  }, []);
-
-  useEffect(() => {
-    if (mainTab === "top") loadLeaderboard();
-  }, [mainTab, loadLeaderboard]);
-
-  const mainTabRef = useRef(mainTab);
-  useEffect(() => { mainTabRef.current = mainTab; }, [mainTab]);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    const uid = Math.random().toString(36).slice(2, 8);
-    const channel = supabase
-      .channel(`network-connections-${user.id}_${uid}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "connections",
-          filter: `requester_id=eq.${user.id}`,
-        },
-        () => {
-          if (mainTabRef.current === "top") loadLeaderboard();
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "connections",
-          filter: `receiver_id=eq.${user.id}`,
-        },
-        () => {
-          if (mainTabRef.current === "top") loadLeaderboard();
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user?.id, loadLeaderboard]);
-
   const periods: { key: Period; label: string }[] = [
     { key: "mes",       label: "Último Mês"      },
     { key: "trimestre", label: "Trimestre (YTD)" },
@@ -816,7 +980,7 @@ export default function MercadoScreen() {
         {([
           { key: "visao",         label: "Visão Geral",   icon: "bar-chart-2" },
           { key: "apresentacoes", label: "Apresentações", icon: "monitor"     },
-          { key: "top",           label: "Top Perfis",    icon: "award"       },
+          { key: "idealbi",       label: "Ideal.BI",      icon: "radio"       },
         ] as { key: MercadoTab; label: string; icon: any }[]).map(t => (
           <TouchableOpacity
             key={t.key}
@@ -831,54 +995,14 @@ export default function MercadoScreen() {
         ))}
       </View>
 
-      {mainTab === "top" ? (
-        <ScrollView contentContainerStyle={{ paddingBottom: bottomPad, paddingTop: 8 }} showsVerticalScrollIndicator={false}>
-          <Text style={[styles.topTitle, { color: colors.navy }]}>🏆 Ranking Regional</Text>
-          <Text style={[styles.topSub, { color: colors.mutedForeground }]}>Perfis com mais seguidores na ibhub</Text>
-          {loadingTop ? (
-            <ActivityIndicator size="large" color={colors.gold} style={{ marginTop: 40 }} />
-          ) : leaderboard.length === 0 ? (
-            <View style={styles.topEmpty}>
-              <Text style={{ fontSize: 36 }}>🥂</Text>
-              <Text style={[styles.topEmptyText, { color: colors.mutedForeground }]}>Nenhum perfil encontrado ainda.</Text>
-            </View>
-          ) : (
-            leaderboard.map((entry, idx) => (
-              <View key={entry.id} style={[styles.leaderRow, { backgroundColor: "#fff", borderColor: colors.border }]}>
-                <View style={[styles.leaderRank, {
-                  backgroundColor: idx === 0 ? "#f59e0b" : idx === 1 ? "#94a3b8" : idx === 2 ? "#b87333" : colors.secondary,
-                }]}>
-                  <Text style={[styles.leaderRankText, { color: idx < 3 ? "#fff" : colors.navy }]}>
-                    {idx < 3 ? ["🥇","🥈","🥉"][idx] : `${idx + 1}`}
-                  </Text>
-                </View>
-                <View style={styles.leaderAvatar}>
-                  <View style={[styles.leaderAvatarCircle, { backgroundColor: colors.navyLight }]}>
-                    <Text style={{ color: "#fff", fontWeight: "800", fontSize: 16 }}>
-                      {(entry.full_name ?? "?").charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.leaderName, { color: colors.navy }]} numberOfLines={1}>{entry.full_name ?? "Usuário"}</Text>
-                  {entry.headline ? (
-                    <Text style={[styles.leaderHeadline, { color: colors.mutedForeground }]} numberOfLines={1}>{entry.headline}</Text>
-                  ) : null}
-                  {entry.location ? (
-                    <View style={styles.leaderLocRow}>
-                      <Feather name="map-pin" size={10} color={colors.mutedForeground} />
-                      <Text style={[styles.leaderLoc, { color: colors.mutedForeground }]}>{entry.location}</Text>
-                    </View>
-                  ) : null}
-                </View>
-                <View style={styles.leaderStats}>
-                  <Text style={[styles.leaderFollowers, { color: colors.gold }]}>{entry.followers_count}</Text>
-                  <Text style={[styles.leaderFollowersLabel, { color: colors.mutedForeground }]}>seguidores</Text>
-                </View>
-              </View>
-            ))
-          )}
-        </ScrollView>
+      {mainTab === "idealbi" ? (
+        <IdealBIFeedMobile
+          userId={user?.id ?? ""}
+          isAdmin={profile?.is_admin ?? false}
+          plan={profile?.plan ?? "gratuito"}
+          colors={colors}
+          bottomPad={bottomPad}
+        />
       ) : mainTab === "apresentacoes" ? (
         <ApresentacoesView colors={colors} bottomPad={bottomPad} session={session} />
       ) : (
