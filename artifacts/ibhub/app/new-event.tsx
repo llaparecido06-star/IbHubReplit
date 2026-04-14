@@ -18,24 +18,13 @@ import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { createEvent, uploadEventImage } from "@/services/api";
+import { maskDate, maskTime } from "@/utils/masks";
+import { useTranslation } from "react-i18next";
 
 const AREAS = [
   "Sommelier", "Comprador", "Importador", "Produtor",
   "Enólogo", "Consultor", "Investidor", "Entusiasta", "Outros",
 ];
-
-function maskDate(raw: string): string {
-  const digits = raw.replace(/\D/g, "").slice(0, 8);
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 4) return `${digits.slice(0,2)}/${digits.slice(2)}`;
-  return `${digits.slice(0,2)}/${digits.slice(2,4)}/${digits.slice(4)}`;
-}
-
-function maskTime(raw: string): string {
-  const digits = raw.replace(/\D/g, "").slice(0, 4);
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0,2)}:${digits.slice(2)}`;
-}
 
 function parseDateTime(date: string, time: string): string | null {
   const parts = date.split("/");
@@ -54,6 +43,7 @@ export default function NewEventScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, activeCompany } = useAuth();
+  const { t } = useTranslation();
 
   const [step, setStep] = useState(1);
 
@@ -86,7 +76,7 @@ export default function NewEventScreen() {
   const canNext1 = title.trim().length > 0 && startDate.length > 0 && startTime.length > 0;
 
   const handleNext = () => {
-    if (step === 1 && !canNext1) { Alert.alert("Atenção", "Preencha título, data e hora de início."); return; }
+    if (step === 1 && !canNext1) { Alert.alert(t("common.attention"), t("event.errors.fill_required")); return; }
     setStep((s) => s + 1);
   };
   const handleBack = () => {
@@ -120,9 +110,9 @@ export default function NewEventScreen() {
   };
 
   const handleCreate = async () => {
-    if (!user?.id) { Alert.alert("Erro", "Você precisa estar logado."); return; }
+    if (!user?.id) { Alert.alert(t("common.error"), t("event.errors.not_logged")); return; }
     const startIso = parseDateTime(startDate, startTime);
-    if (!startIso) { Alert.alert("Data inválida", "Use o formato DD/MM/AAAA para a data e HH:MM para o horário."); return; }
+    if (!startIso) { Alert.alert(t("event.errors.invalid_date"), t("event.errors.invalid_date")); return; }
     const endIso = endDate && endTime ? parseDateTime(endDate, endTime) : null;
     const cap = capacity ? parseInt(capacity, 10) : null;
     setCreating(true);
@@ -156,11 +146,11 @@ export default function NewEventScreen() {
     });
     setCreating(false);
     if (result) {
-      Alert.alert("Evento criado!", `"${title}" está visível na aba Oportunidades > Eventos.`, [
-        { text: "OK", onPress: () => router.replace(`/event/${result.id}` as any) },
+      Alert.alert(t("event.errors.created"), `"${title}" ${t("event.errors.created_msg")}`, [
+        { text: t("event.errors.ok"), onPress: () => router.replace(`/event/${result.id}` as any) },
       ]);
     } else {
-      Alert.alert("Erro", "Não foi possível criar o evento. Verifique os dados e tente novamente.");
+      Alert.alert(t("common.error"), t("event.errors.error_create"));
     }
   };
 
@@ -178,28 +168,30 @@ export default function NewEventScreen() {
     </View>
   );
 
+  const kavBehavior = Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined;
+
   if (!activeCompany) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center", padding: 32 }]}>
         <View style={{ paddingTop: topPad }}>
           <Feather name="lock" size={52} color={colors.gold} style={{ alignSelf: "center", marginBottom: 20 }} />
           <Text style={[{ fontSize: 22, fontWeight: "800", color: colors.navy, textAlign: "center", marginBottom: 12 }]}>
-            Exclusivo para Empresas
+            {t("event.exclusive.title")}
           </Text>
           <Text style={[{ fontSize: 15, color: colors.mutedForeground, textAlign: "center", lineHeight: 22, marginBottom: 28 }]}>
-            Somente empresas podem criar e promover eventos no ibhub. Crie sua página de empresa para ter acesso completo.
+            {t("event.exclusive.msg")}
           </Text>
           <TouchableOpacity
             style={[{ backgroundColor: colors.gold, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 24, alignItems: "center", marginBottom: 12 }]}
             onPress={() => router.replace("/manage-business-page" as any)}
           >
-            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Criar página de empresa</Text>
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>{t("event.exclusive.create_company")}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[{ borderRadius: 12, paddingVertical: 14, alignItems: "center" }]}
             onPress={() => router.back()}
           >
-            <Text style={{ color: colors.mutedForeground, fontSize: 15 }}>Voltar</Text>
+            <Text style={{ color: colors.mutedForeground, fontSize: 15 }}>{t("event.exclusive.back")}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -209,7 +201,7 @@ export default function NewEventScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={kavBehavior}
     >
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
@@ -217,12 +209,12 @@ export default function NewEventScreen() {
           <Feather name="arrow-left" size={20} color={colors.navy} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={[styles.headerTitle, { color: colors.navy }]}>Novo Evento</Text>
-          <Text style={[styles.headerStep, { color: colors.mutedForeground }]}>Etapa {step} de 3</Text>
+          <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("event.screen_title")}</Text>
+          <Text style={[styles.headerStep, { color: colors.mutedForeground }]}>{t("event.step")} {step} {t("event.of")} 3</Text>
         </View>
         {step < 3 ? (
           <TouchableOpacity onPress={handleNext} style={styles.nextRow}>
-            <Text style={[styles.nextText, { color: colors.gold }]}>Próximo</Text>
+            <Text style={[styles.nextText, { color: colors.gold }]}>{t("event.next")}</Text>
             <Feather name="arrow-right" size={16} color={colors.gold} />
           </TouchableOpacity>
         ) : (
@@ -231,7 +223,7 @@ export default function NewEventScreen() {
             onPress={handleCreate}
             disabled={creating}
           >
-            <Text style={styles.createBtnText}>{creating ? "..." : "Criar"}</Text>
+            <Text style={styles.createBtnText}>{creating ? t("event.creating") : t("event.create")}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -242,6 +234,7 @@ export default function NewEventScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: 16, rowGap: 20, paddingBottom: bottomPad }}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* ── Step 1 ── */}
         {step === 1 && <>
@@ -257,7 +250,7 @@ export default function NewEventScreen() {
               <>
                 <Feather name="image" size={32} color={colors.border} />
                 <Text style={[styles.coverPickerText, { color: colors.mutedForeground }]}>
-                  Toque para adicionar capa
+                  {t("event.cover_tap")}
                 </Text>
               </>
             )}
@@ -269,10 +262,10 @@ export default function NewEventScreen() {
           </TouchableOpacity>
 
           <View style={styles.field}>
-            <Text style={[styles.label, { color: colors.navy }]}>Título *</Text>
+            <Text style={[styles.label, { color: colors.navy }]}>{t("event.fields.title")}</Text>
             <TextInput
               style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-              placeholder='"Masterclass Pinot Noir"'
+              placeholder={t("event.fields.title_placeholder")}
               placeholderTextColor={colors.mutedForeground}
               value={title}
               onChangeText={setTitle}
@@ -280,10 +273,10 @@ export default function NewEventScreen() {
           </View>
 
           <View style={styles.field}>
-            <Text style={[styles.label, { color: colors.navy }]}>Descrição</Text>
+            <Text style={[styles.label, { color: colors.navy }]}>{t("event.fields.description")}</Text>
             <TextInput
               style={[styles.input, styles.textarea, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-              placeholder="Detalhes do evento..."
+              placeholder={t("event.fields.description_placeholder")}
               placeholderTextColor={colors.mutedForeground}
               value={desc}
               onChangeText={setDesc}
@@ -295,25 +288,25 @@ export default function NewEventScreen() {
 
           <View style={styles.row2}>
             <View style={[styles.field, { flex: 1 }]}>
-              <Text style={[styles.label, { color: colors.navy }]}>Data início *</Text>
+              <Text style={[styles.label, { color: colors.navy }]}>{t("event.fields.start_date")}</Text>
               <TextInput
                 style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                placeholder="dd/mm/aaaa"
+                placeholder={t("common.date_placeholder")}
                 placeholderTextColor={colors.mutedForeground}
                 value={startDate}
-                onChangeText={(t) => setStartDate(maskDate(t))}
+                onChangeText={(v) => setStartDate(maskDate(v))}
                 keyboardType="numeric"
                 maxLength={10}
               />
             </View>
             <View style={[styles.field, { flex: 1 }]}>
-              <Text style={[styles.label, { color: colors.navy }]}>Hora início *</Text>
+              <Text style={[styles.label, { color: colors.navy }]}>{t("event.fields.start_time")}</Text>
               <TextInput
                 style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                placeholder="hh:mm"
+                placeholder={t("common.time_placeholder")}
                 placeholderTextColor={colors.mutedForeground}
                 value={startTime}
-                onChangeText={(t) => setStartTime(maskTime(t))}
+                onChangeText={(v) => setStartTime(maskTime(v))}
                 keyboardType="numeric"
                 maxLength={5}
               />
@@ -322,25 +315,25 @@ export default function NewEventScreen() {
 
           <View style={styles.row2}>
             <View style={[styles.field, { flex: 1 }]}>
-              <Text style={[styles.label, { color: colors.navy }]}>Data fim</Text>
+              <Text style={[styles.label, { color: colors.navy }]}>{t("event.fields.end_date")}</Text>
               <TextInput
                 style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                placeholder="dd/mm/aaaa"
+                placeholder={t("common.date_placeholder")}
                 placeholderTextColor={colors.mutedForeground}
                 value={endDate}
-                onChangeText={(t) => setEndDate(maskDate(t))}
+                onChangeText={(v) => setEndDate(maskDate(v))}
                 keyboardType="numeric"
                 maxLength={10}
               />
             </View>
             <View style={[styles.field, { flex: 1 }]}>
-              <Text style={[styles.label, { color: colors.navy }]}>Hora fim</Text>
+              <Text style={[styles.label, { color: colors.navy }]}>{t("event.fields.end_time")}</Text>
               <TextInput
                 style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                placeholder="hh:mm"
+                placeholder={t("common.time_placeholder")}
                 placeholderTextColor={colors.mutedForeground}
                 value={endTime}
-                onChangeText={(t) => setEndTime(maskTime(t))}
+                onChangeText={(v) => setEndTime(maskTime(v))}
                 keyboardType="numeric"
                 maxLength={5}
               />
@@ -348,21 +341,21 @@ export default function NewEventScreen() {
           </View>
 
           <View style={styles.field}>
-            <Text style={[styles.label, { color: colors.navy }]}>Local</Text>
+            <Text style={[styles.label, { color: colors.navy }]}>{t("event.fields.local")}</Text>
             <View style={[styles.toggle, { backgroundColor: colors.background }]}>
-              {(["presencial", "online"] as LocalType[]).map((t) => (
+              {(["presencial", "online"] as LocalType[]).map((tp) => (
                 <TouchableOpacity
-                  key={t}
-                  style={[styles.toggleBtn, { backgroundColor: localType === t ? colors.gold : "transparent" }]}
-                  onPress={() => setLocalType(t)}
+                  key={tp}
+                  style={[styles.toggleBtn, { backgroundColor: localType === tp ? colors.gold : "transparent" }]}
+                  onPress={() => setLocalType(tp)}
                 >
                   <Feather
-                    name={t === "presencial" ? "map-pin" : "link"}
+                    name={tp === "presencial" ? "map-pin" : "link"}
                     size={14}
-                    color={localType === t ? "#fff" : colors.mutedForeground}
+                    color={localType === tp ? "#fff" : colors.mutedForeground}
                   />
-                  <Text style={[styles.toggleText, { color: localType === t ? "#fff" : colors.mutedForeground }]}>
-                    {t === "presencial" ? "Presencial" : "Online"}
+                  <Text style={[styles.toggleText, { color: localType === tp ? "#fff" : colors.mutedForeground }]}>
+                    {tp === "presencial" ? t("event.fields.presential") : t("event.fields.online")}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -371,10 +364,10 @@ export default function NewEventScreen() {
 
           {localType === "presencial" && (
             <View style={styles.field}>
-              <Text style={[styles.label, { color: colors.navy }]}>Endereço completo</Text>
+              <Text style={[styles.label, { color: colors.navy }]}>{t("event.fields.address")}</Text>
               <TextInput
                 style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                placeholder="Rua, número, cidade..."
+                placeholder={t("event.fields.address_placeholder")}
                 placeholderTextColor={colors.mutedForeground}
                 value={address}
                 onChangeText={setAddress}
@@ -404,7 +397,7 @@ export default function NewEventScreen() {
         {/* ── Step 2 ── */}
         {step === 2 && <>
           <View style={styles.field}>
-            <Text style={[styles.label, { color: colors.navy }]}>Tipo de Entrada</Text>
+            <Text style={[styles.label, { color: colors.navy }]}>{t("event.fields.entry_type")}</Text>
             <View style={{ gap: 10 }}>
               {([
                 { key: "gratuito",        label: "Gratuito",            desc: "Sem custo para participar",          disabled: false },
@@ -436,10 +429,10 @@ export default function NewEventScreen() {
 
           {entryType === "pago-externo" && (
             <View style={styles.field}>
-              <Text style={[styles.label, { color: colors.navy }]}>Link de venda</Text>
+              <Text style={[styles.label, { color: colors.navy }]}>{t("event.fields.pay_link")}</Text>
               <TextInput
                 style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                placeholder="https://..."
+                placeholder={t("event.fields.pay_link_placeholder")}
                 placeholderTextColor={colors.mutedForeground}
                 value={payLink}
                 onChangeText={setPayLink}
@@ -449,10 +442,10 @@ export default function NewEventScreen() {
           )}
 
           <View style={styles.field}>
-            <Text style={[styles.label, { color: colors.navy }]}>Capacidade máxima</Text>
+            <Text style={[styles.label, { color: colors.navy }]}>{t("event.fields.capacity")}</Text>
             <TextInput
               style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-              placeholder="Deixe vazio para ilimitado"
+              placeholder={t("event.fields.capacity_placeholder")}
               placeholderTextColor={colors.mutedForeground}
               value={capacity}
               onChangeText={setCapacity}
@@ -464,7 +457,7 @@ export default function NewEventScreen() {
         {/* ── Step 3 ── */}
         {step === 3 && <>
           <View style={styles.field}>
-            <Text style={[styles.label, { color: colors.navy }]}>Quem pode ver este evento?</Text>
+            <Text style={[styles.label, { color: colors.navy }]}>{t("event.fields.visibility")}</Text>
             <View style={{ gap: 10 }}>
               {([
                 { key: "publico",   label: "Público",            desc: "Visível para toda a rede e indexável na busca",      dot: "#22c55e", icon: "eye" },

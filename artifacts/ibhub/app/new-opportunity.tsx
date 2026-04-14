@@ -15,13 +15,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { createOpportunity } from "@/services/api";
-
-function maskDate(raw: string): string {
-  const digits = raw.replace(/\D/g, "").slice(0, 8);
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 4) return `${digits.slice(0,2)}/${digits.slice(2)}`;
-  return `${digits.slice(0,2)}/${digits.slice(2,4)}/${digits.slice(4)}`;
-}
+import { maskDate, maskCurrency, CURRENCIES, type Currency } from "@/utils/masks";
+import { useTranslation } from "react-i18next";
 
 type Mode = "marketplace" | "vaga";
 
@@ -34,6 +29,7 @@ export default function NewOpportunityScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, activeCompany } = useAuth();
+  const { t } = useTranslation();
   const isEmpresa = !!activeCompany;
 
   const [mode, setMode]         = useState<Mode>("vaga");
@@ -41,6 +37,7 @@ export default function NewOpportunityScreen() {
   const [category, setCategory] = useState<string | null>(null);
   const [desc, setDesc]         = useState("");
   const [price, setPrice]       = useState("");
+  const [priceCurrency, setPriceCurrency] = useState<Currency>("R$");
   const [location, setLocation] = useState("");
   const [expiry, setExpiry]     = useState("");
   const [email, setEmail]       = useState("");
@@ -55,15 +52,15 @@ export default function NewOpportunityScreen() {
   const canPublish = title.trim().length > 0 && category !== null;
 
   const handlePublish = async () => {
-    if (!user?.id) { Alert.alert("Erro", "Você precisa estar logado."); return; }
+    if (!user?.id) { Alert.alert(t("common.error"), t("opportunity.errors.not_logged")); return; }
     if (!isEmpresa) {
       Alert.alert(
-        "Apenas empresas podem publicar",
-        "Somente contas do tipo Empresa podem anunciar vagas e produtos. Acesse as configurações para alterar o tipo da sua conta.",
+        t("opportunity.errors.company_only_title"),
+        t("opportunity.errors.company_only_msg"),
       );
       return;
     }
-    if (!canPublish) { Alert.alert("Atenção", "Preencha o título e a categoria."); return; }
+    if (!canPublish) { Alert.alert(t("common.attention"), t("opportunity.errors.fill_required")); return; }
 
     setPublishing(true);
     try {
@@ -75,7 +72,7 @@ export default function NewOpportunityScreen() {
           description: desc.trim() || null,
           category,
           location: location.trim() || null,
-          price: mode === "marketplace" ? (price.trim() || null) : null,
+          price: mode === "marketplace" ? (price.trim() ? `${priceCurrency} ${price.trim()}` : null) : null,
           company: mode === "vaga" ? (company.trim() || null) : null,
           contract_type: mode === "vaga" ? (contract ?? null) : null,
           salary: mode === "vaga" ? (salary.trim() || null) : null,
@@ -87,12 +84,12 @@ export default function NewOpportunityScreen() {
 
       if (result) {
         Alert.alert(
-          mode === "marketplace" ? "Anúncio publicado!" : "Vaga publicada!",
-          `"${title}" já está visível na aba Oportunidades.`,
-          [{ text: "Ver publicação", onPress: () => router.replace(`/opportunity/${result.id}` as any) }],
+          mode === "marketplace" ? t("opportunity.errors.published_ad") : t("opportunity.errors.published_job"),
+          `"${title}" ${t("opportunity.errors.published_msg")}`,
+          [{ text: t("opportunity.errors.view_post"), onPress: () => router.replace(`/opportunity/${result.id}` as any) }],
         );
       } else {
-        Alert.alert("Erro", "Não foi possível publicar. Tente novamente.");
+        Alert.alert(t("common.error"), t("opportunity.errors.error_publish"));
       }
     } finally {
       setPublishing(false);
@@ -121,23 +118,45 @@ export default function NewOpportunityScreen() {
     </View>
   );
 
+  const CurrencyDropdown = ({ value, onChange }: { value: Currency; onChange: (c: Currency) => void }) => (
+    <View style={styles.currencyRow}>
+      {CURRENCIES.map((c) => (
+        <TouchableOpacity
+          key={c}
+          style={[
+            styles.currencyBtn,
+            { borderColor: value === c ? colors.gold : colors.border,
+              backgroundColor: value === c ? colors.gold + "18" : colors.card },
+          ]}
+          onPress={() => onChange(c)}
+        >
+          <Text style={[styles.currencyText, { color: value === c ? colors.gold : colors.mutedForeground, fontWeight: value === c ? "700" : "400" }]}>
+            {c}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
+  const kavBehavior = Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined;
+
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={kavBehavior}
     >
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
-          <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>Cancelar</Text>
+          <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>{t("opportunity.cancel")}</Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.navy }]}>Nova Oportunidade</Text>
+        <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("opportunity.screen_title")}</Text>
         <TouchableOpacity
           style={[styles.publishBtn, { backgroundColor: canPublish && !publishing ? colors.gold : colors.border }]}
           onPress={handlePublish}
           disabled={publishing || !canPublish}
         >
           <Text style={[styles.publishBtnText, { color: canPublish && !publishing ? "#fff" : colors.mutedForeground }]}>
-            {publishing ? "Publicando..." : "Publicar"}
+            {publishing ? t("opportunity.publishing") : t("opportunity.publish")}
           </Text>
         </TouchableOpacity>
       </View>
@@ -146,6 +165,7 @@ export default function NewOpportunityScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: 16, rowGap: 20, paddingBottom: bottomPad }}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Mode toggle */}
         <View style={[styles.toggle, { backgroundColor: colors.secondary, borderRadius: 12, padding: 4 }]}>
@@ -156,7 +176,7 @@ export default function NewOpportunityScreen() {
               onPress={() => { setMode(m); setCategory(null); }}
             >
               <Text style={[styles.toggleText, { color: mode === m ? "#fff" : colors.mutedForeground }]}>
-                {m === "marketplace" ? "Marketplace" : "Vaga de Emprego"}
+                {m === "marketplace" ? t("opportunity.mode_marketplace") : t("opportunity.mode_job")}
               </Text>
             </TouchableOpacity>
           ))}
@@ -165,32 +185,40 @@ export default function NewOpportunityScreen() {
         {/* ── Vaga de Emprego ── */}
         {mode === "vaga" && (
           <>
-            <Field label="Título da vaga *" colors={colors}>
-              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder="Ex: Sommelier Chefe" placeholderTextColor={colors.mutedForeground} value={title} onChangeText={setTitle} />
+            <Field label={t("opportunity.fields.job_title")} colors={colors}>
+              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder={t("opportunity.fields.job_title_placeholder")} placeholderTextColor={colors.mutedForeground} value={title} onChangeText={setTitle} />
             </Field>
-            <Field label="Categoria *" colors={colors}>
+            <Field label={t("opportunity.fields.category")} colors={colors}>
               <ChipSelector options={JOB_CATS} selected={category} onSelect={setCategory} />
             </Field>
-            <Field label="Empresa" colors={colors}>
-              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder="Nome da empresa" placeholderTextColor={colors.mutedForeground} value={company} onChangeText={setCompany} />
+            <Field label={t("opportunity.fields.company")} colors={colors}>
+              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder={t("opportunity.fields.company_placeholder")} placeholderTextColor={colors.mutedForeground} value={company} onChangeText={setCompany} />
             </Field>
-            <Field label="Tipo de contrato" colors={colors}>
+            <Field label={t("opportunity.fields.contract_type")} colors={colors}>
               <ChipSelector options={CONTRACT_TYPES} selected={contract} onSelect={setContract} />
             </Field>
-            <Field label="Salário / Remuneração" colors={colors}>
-              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder="Ex: R$ 8.000 – 12.000" placeholderTextColor={colors.mutedForeground} value={salary} onChangeText={setSalary} />
+            <Field label={t("opportunity.fields.salary")} colors={colors}>
+              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder={t("opportunity.fields.salary_placeholder")} placeholderTextColor={colors.mutedForeground} value={salary} onChangeText={setSalary} />
             </Field>
-            <Field label="Localização" colors={colors}>
-              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder="Ex: São Paulo, SP" placeholderTextColor={colors.mutedForeground} value={location} onChangeText={setLocation} />
+            <Field label={t("opportunity.fields.location")} colors={colors}>
+              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder={t("opportunity.fields.location_placeholder")} placeholderTextColor={colors.mutedForeground} value={location} onChangeText={setLocation} />
             </Field>
-            <Field label="Descrição" colors={colors}>
-              <TextInput style={[styles.input, styles.textarea, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder="Descreva os requisitos e benefícios..." placeholderTextColor={colors.mutedForeground} value={desc} onChangeText={setDesc} multiline numberOfLines={5} textAlignVertical="top" />
+            <Field label={t("opportunity.fields.description")} colors={colors}>
+              <TextInput style={[styles.input, styles.textarea, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder={t("opportunity.fields.description_placeholder_job")} placeholderTextColor={colors.mutedForeground} value={desc} onChangeText={setDesc} multiline numberOfLines={5} textAlignVertical="top" />
             </Field>
-            <Field label="Validade (opcional)" colors={colors}>
-              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder="dd/mm/aaaa" placeholderTextColor={colors.mutedForeground} value={expiry} onChangeText={(t) => setExpiry(maskDate(t))} keyboardType="numeric" maxLength={10} />
-            </Field>
-            <Field label="E-mail de contato" colors={colors}>
-              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder="rh@empresa.com" placeholderTextColor={colors.mutedForeground} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+    <Field label={t("opportunity.fields.expiry")} colors={colors}>
+      <TextInput
+        style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
+        placeholder={t("opportunity.fields.expiry_placeholder")}
+        placeholderTextColor={colors.mutedForeground}
+        value={expiry}
+        onChangeText={(v) => setExpiry(maskDate(v))}
+        keyboardType="numeric"
+        maxLength={10}
+      />
+    </Field>
+            <Field label={t("opportunity.fields.email")} colors={colors}>
+              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder={t("opportunity.fields.email_placeholder_job")} placeholderTextColor={colors.mutedForeground} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
             </Field>
           </>
         )}
@@ -198,26 +226,42 @@ export default function NewOpportunityScreen() {
         {/* ── Marketplace ── */}
         {mode === "marketplace" && (
           <>
-            <Field label="Título do anúncio *" colors={colors}>
-              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder='Ex: Malbec Gran Reserva 2022' placeholderTextColor={colors.mutedForeground} value={title} onChangeText={setTitle} />
+            <Field label={t("opportunity.fields.ad_title")} colors={colors}>
+              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder={t("opportunity.fields.ad_title_placeholder")} placeholderTextColor={colors.mutedForeground} value={title} onChangeText={setTitle} />
             </Field>
-            <Field label="Categoria *" colors={colors}>
+            <Field label={t("opportunity.fields.category")} colors={colors}>
               <ChipSelector options={MARKET_CATS} selected={category} onSelect={setCategory} />
             </Field>
-            <Field label="Descrição" colors={colors}>
-              <TextInput style={[styles.input, styles.textarea, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder="Descreva os detalhes..." placeholderTextColor={colors.mutedForeground} value={desc} onChangeText={setDesc} multiline numberOfLines={5} textAlignVertical="top" />
+            <Field label={t("opportunity.fields.description")} colors={colors}>
+              <TextInput style={[styles.input, styles.textarea, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder={t("opportunity.fields.description_placeholder_market")} placeholderTextColor={colors.mutedForeground} value={desc} onChangeText={setDesc} multiline numberOfLines={5} textAlignVertical="top" />
             </Field>
-            <Field label="Preço" colors={colors}>
-              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder="Ex: R$ 89/un" placeholderTextColor={colors.mutedForeground} value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
+            <Field label={t("opportunity.fields.price")} colors={colors}>
+              <CurrencyDropdown value={priceCurrency} onChange={setPriceCurrency} />
+              <TextInput
+                style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
+                placeholder="0,00"
+                placeholderTextColor={colors.mutedForeground}
+                value={price}
+                onChangeText={(v) => setPrice(maskCurrency(v))}
+                keyboardType="numeric"
+              />
             </Field>
-            <Field label="Localização" colors={colors}>
-              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder="Ex: São Paulo, SP" placeholderTextColor={colors.mutedForeground} value={location} onChangeText={setLocation} />
+            <Field label={t("opportunity.fields.location")} colors={colors}>
+              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder={t("opportunity.fields.location_placeholder")} placeholderTextColor={colors.mutedForeground} value={location} onChangeText={setLocation} />
             </Field>
-            <Field label="Validade (opcional)" colors={colors}>
-              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder="dd/mm/aaaa" placeholderTextColor={colors.mutedForeground} value={expiry} onChangeText={(t) => setExpiry(maskDate(t))} keyboardType="numeric" maxLength={10} />
-            </Field>
-            <Field label="E-mail de contato" colors={colors}>
-              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder="contato@empresa.com" placeholderTextColor={colors.mutedForeground} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+    <Field label={t("opportunity.fields.expiry")} colors={colors}>
+      <TextInput
+        style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
+        placeholder={t("opportunity.fields.expiry_placeholder")}
+        placeholderTextColor={colors.mutedForeground}
+        value={expiry}
+        onChangeText={(v) => setExpiry(maskDate(v))}
+        keyboardType="numeric"
+        maxLength={10}
+      />
+    </Field>
+            <Field label={t("opportunity.fields.email")} colors={colors}>
+              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder={t("opportunity.fields.email_placeholder_market")} placeholderTextColor={colors.mutedForeground} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
             </Field>
           </>
         )}
@@ -262,4 +306,7 @@ const styles = StyleSheet.create({
   chipWrap:       { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip:           { borderWidth: 1, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
   chipText:       { fontSize: 13 },
+  currencyRow:    { flexDirection: "row", gap: 8 },
+  currencyBtn:    { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
+  currencyText:   { fontSize: 13 },
 });

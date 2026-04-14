@@ -16,10 +16,11 @@ import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/context/AuthContext";
+import { useTranslation } from "react-i18next";
 
 type Filter =
   | "todos" | "pessoas" | "publicacoes" | "empresas"
-  | "vagas" | "eventos" | "mercado" | "grupos";
+  | "vagas" | "eventos" | "grupos";
 
 interface PersonResult {
   id: string; full_name: string | null; username: string | null;
@@ -39,9 +40,6 @@ interface VagaResult {
   company: string | null; location: string | null;
   contract_type: string | null; created_at: string;
 }
-interface MercadoResult {
-  id: string; title: string; description: string | null; cover_url: string | null;
-}
 interface GroupResult {
   id: string; name: string; description: string | null;
   members_count: number; category: string | null;
@@ -50,19 +48,8 @@ interface GroupResult {
 interface SearchResults {
   pessoas: PersonResult[]; publicacoes: PostResult[];
   empresas: PersonResult[]; vagas: VagaResult[];
-  eventos: EventResult[]; mercado: MercadoResult[];
-  grupos: GroupResult[];
+  eventos: EventResult[]; grupos: GroupResult[];
 }
-
-const FILTERS: { key: Filter; label: string; icon: keyof typeof Feather.glyphMap }[] = [
-  { key: "todos",       label: "Tudo",      icon: "globe" },
-  { key: "pessoas",     label: "Pessoas",   icon: "user" },
-  { key: "publicacoes", label: "Posts",     icon: "file-text" },
-  { key: "empresas",    label: "Empresas",  icon: "briefcase" },
-  { key: "vagas",       label: "Vagas",     icon: "clipboard" },
-  { key: "eventos",     label: "Eventos",   icon: "calendar" },
-  { key: "grupos",      label: "Grupos",    icon: "users" },
-];
 
 const PLAN_LABELS: Record<string, string> = {
   business: "Pro", exclusive: "Exclusivo", premium: "Premium",
@@ -84,7 +71,7 @@ function fmtDate(dateStr: string): string {
 
 const EMPTY: SearchResults = {
   pessoas: [], publicacoes: [], empresas: [],
-  vagas: [], eventos: [], mercado: [], grupos: [],
+  vagas: [], eventos: [], grupos: [],
 };
 
 export default function SearchScreen() {
@@ -93,6 +80,7 @@ export default function SearchScreen() {
   const { user } = useAuth();
   const insets   = useSafeAreaInsets();
   const inputRef = useRef<TextInput>(null);
+  const { t } = useTranslation();
 
   const [query,   setQuery]   = useState("");
   const [filter,  setFilter]  = useState<Filter>("todos");
@@ -102,41 +90,50 @@ export default function SearchScreen() {
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
+  const FILTERS: { key: Filter; label: string; icon: keyof typeof Feather.glyphMap }[] = [
+    { key: "todos",       label: t("search.filters.all"),       icon: "globe" },
+    { key: "pessoas",     label: t("search.filters.people"),    icon: "user" },
+    { key: "publicacoes", label: t("search.filters.posts"),     icon: "file-text" },
+    { key: "empresas",    label: t("search.filters.companies"), icon: "briefcase" },
+    { key: "vagas",       label: t("search.filters.jobs"),      icon: "clipboard" },
+    { key: "eventos",     label: t("search.filters.events"),    icon: "calendar" },
+    { key: "grupos",      label: t("search.filters.groups"),    icon: "users" },
+  ];
+
   const runSearch = useCallback(async (q: string, f: Filter) => {
     const trimmed = q.trim();
     if (!trimmed) { setResults(EMPTY); return; }
     setLoading(true);
-    const term  = `%${trimmed}%`;
     const myId  = user?.id ?? "";
     const isAll = f === "todos";
     const lim   = (full: number) => (isAll ? Math.ceil(full / 2) : full);
 
     try {
-      const [resP, resPub, resE, resV, resEv, resM, resG] = await Promise.all([
+      const [resP, resPub, resE, resV, resEv, resG] = await Promise.all([
         (isAll || f === "pessoas")
           ? supabase.from("profiles")
               .select("id, full_name, username, avatar_url, headline, plan")
-              .or(`full_name.ilike.${term},username.ilike.${term},headline.ilike.${term}`)
+              .or(`full_name.ilike.%${trimmed}%,username.ilike.%${trimmed}%,headline.ilike.%${trimmed}%`)
               .eq("profile_type", "pessoa").neq("id", myId).limit(lim(30))
           : Promise.resolve({ data: [] }),
 
         (isAll || f === "publicacoes")
           ? supabase.from("posts")
               .select("id, content, created_at, likes_count, comments_count, author:profiles!posts_user_id_fkey(id, full_name, avatar_url)")
-              .ilike("content", term).order("created_at", { ascending: false }).limit(lim(20))
+              .ilike("content", `%${trimmed}%`).order("created_at", { ascending: false }).limit(lim(20))
           : Promise.resolve({ data: [] }),
 
         (isAll || f === "empresas")
           ? supabase.from("profiles")
               .select("id, full_name, username, avatar_url, headline, plan")
-              .or(`full_name.ilike.${term},username.ilike.${term},headline.ilike.${term}`)
+              .or(`full_name.ilike.%${trimmed}%,username.ilike.%${trimmed}%,headline.ilike.%${trimmed}%`)
               .eq("profile_type", "empresa").limit(lim(20))
           : Promise.resolve({ data: [] }),
 
         (isAll || f === "vagas")
           ? supabase.from("opportunities")
               .select("id, title, description, company, location, contract_type, created_at")
-              .or(`title.ilike.${term},description.ilike.${term},company.ilike.${term},category.ilike.${term}`)
+              .or(`title.ilike.%${trimmed}%,description.ilike.%${trimmed}%,company.ilike.%${trimmed}%,category.ilike.%${trimmed}%`)
               .eq("type", "vaga").eq("is_active", true)
               .order("created_at", { ascending: false }).limit(lim(20))
           : Promise.resolve({ data: [] }),
@@ -144,32 +141,33 @@ export default function SearchScreen() {
         (isAll || f === "eventos")
           ? supabase.from("events")
               .select("id, title, description, start_date, location, entry_type")
-              .or(`title.ilike.${term},description.ilike.${term},location.ilike.${term}`)
+              .or(`title.ilike.%${trimmed}%,description.ilike.%${trimmed}%,location.ilike.%${trimmed}%`)
               .eq("is_active", true)
               .order("start_date", { ascending: true }).limit(lim(20))
-          : Promise.resolve({ data: [] }),
-
-        (isAll || f === "mercado")
-          ? supabase.from("market_presentations")
-              .select("id, title, description, cover_url")
-              .or(`title.ilike.${term},description.ilike.${term}`)
-              .eq("published", true).limit(lim(15))
           : Promise.resolve({ data: [] }),
 
         (isAll || f === "grupos")
           ? supabase.from("groups")
               .select("id, name, description, members_count, category")
-              .or(`name.ilike.${term},description.ilike.${term}`).limit(lim(20))
+              .or(`name.ilike.%${trimmed}%,description.ilike.%${trimmed}%`).limit(lim(20))
           : Promise.resolve({ data: [] }),
       ]);
 
+      const mappedPosts: PostResult[] = (resPub.data ?? []).map((p: any) => ({
+        id: p.id,
+        content: p.content,
+        created_at: p.created_at,
+        likes_count: p.likes_count,
+        comments_count: p.comments_count,
+        author: Array.isArray(p.author) ? p.author[0] : p.author,
+      }));
+
       setResults({
         pessoas:    (resP.data   ?? []) as PersonResult[],
-        publicacoes:(resPub.data ?? []) as PostResult[],
+        publicacoes: mappedPosts,
         empresas:   (resE.data   ?? []) as PersonResult[],
         vagas:      (resV.data   ?? []) as VagaResult[],
         eventos:    (resEv.data  ?? []) as EventResult[],
-        mercado:    (resM.data   ?? []) as MercadoResult[],
         grupos:     (resG.data   ?? []) as GroupResult[],
       });
     } catch {}
@@ -183,13 +181,13 @@ export default function SearchScreen() {
   }, [query, filter, runSearch]);
 
   useEffect(() => {
-    const t = setTimeout(() => inputRef.current?.focus(), 200);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => inputRef.current?.focus(), 200);
+    return () => clearTimeout(timer);
   }, []);
 
   const totalResults =
     results.pessoas.length + results.publicacoes.length + results.empresas.length +
-    results.vagas.length + results.eventos.length + results.mercado.length + results.grupos.length;
+    results.vagas.length + results.eventos.length + results.grupos.length;
 
   // ── Row renderers ────────────────────────────────────────────────────────────
 
@@ -292,21 +290,6 @@ export default function SearchScreen() {
     </TouchableOpacity>
   );
 
-  const MercadoRow = ({ item }: { item: MercadoResult }) => (
-    <TouchableOpacity style={[styles.row, { borderBottomColor: colors.border }]}>
-      <View style={[styles.iconCircle, { backgroundColor: "#10b98118" }]}>
-        <Feather name="bar-chart-2" size={20} color="#10b981" />
-      </View>
-      <View style={styles.rowBody}>
-        <Text style={[styles.rowName, { color: colors.foreground }]} numberOfLines={1}>{item.title}</Text>
-        {item.description ? (
-          <Text style={[styles.rowSub, { color: colors.mutedForeground }]} numberOfLines={2}>{item.description}</Text>
-        ) : null}
-      </View>
-      <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
-    </TouchableOpacity>
-  );
-
   const GroupRow = ({ item }: { item: GroupResult }) => (
     <TouchableOpacity style={[styles.row, { borderBottomColor: colors.border }]}>
       <View style={[styles.iconCircle, { backgroundColor: colors.navy + "14" }]}>
@@ -348,17 +331,17 @@ export default function SearchScreen() {
   const renderEmpty = () => (
     <View style={styles.emptyWrap}>
       <Feather name="search" size={48} color={colors.border} />
-      <Text style={[styles.emptyTitle, { color: colors.mutedForeground }]}>Buscar no ibhub</Text>
+      <Text style={[styles.emptyTitle, { color: colors.mutedForeground }]}>{t("search.empty_title")}</Text>
       <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-        Pesquise pessoas, vagas, eventos, publicações, mercado e muito mais.
+        {t("search.empty_sub")}
       </Text>
     </View>
   );
 
   const renderNoResults = () => (
     <View style={styles.emptyWrap}>
-      <Text style={[styles.emptyTitle, { color: colors.mutedForeground }]}>Nenhum resultado</Text>
-      <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>Tente outros termos de busca.</Text>
+      <Text style={[styles.emptyTitle, { color: colors.mutedForeground }]}>{t("search.no_results")}</Text>
+      <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>{t("search.no_results_sub")}</Text>
     </View>
   );
 
@@ -367,12 +350,12 @@ export default function SearchScreen() {
     if (loading) return <ActivityIndicator color={colors.gold} style={{ marginTop: 40 }} />;
     if (totalResults === 0) return renderNoResults();
 
-    const sections: JSX.Element[] = [];
+    const sections: React.ReactElement[] = [];
 
     if (results.pessoas.length > 0) {
       sections.push(
         <View key="pessoas">
-          <SectionHeader label="Pessoas" icon="user" count={results.pessoas.length} filterKey="pessoas" />
+          <SectionHeader label={t("search.filters.people")} icon="user" count={results.pessoas.length} filterKey="pessoas" />
           {results.pessoas.map(p => <PersonRow key={p.id} item={p} />)}
         </View>
       );
@@ -380,7 +363,7 @@ export default function SearchScreen() {
     if (results.empresas.length > 0) {
       sections.push(
         <View key="empresas">
-          <SectionHeader label="Empresas" icon="briefcase" count={results.empresas.length} filterKey="empresas" />
+          <SectionHeader label={t("search.filters.companies")} icon="briefcase" count={results.empresas.length} filterKey="empresas" />
           {results.empresas.map(p => <PersonRow key={p.id} item={p} />)}
         </View>
       );
@@ -388,7 +371,7 @@ export default function SearchScreen() {
     if (results.vagas.length > 0) {
       sections.push(
         <View key="vagas">
-          <SectionHeader label="Vagas" icon="clipboard" count={results.vagas.length} filterKey="vagas" />
+          <SectionHeader label={t("search.filters.jobs")} icon="clipboard" count={results.vagas.length} filterKey="vagas" />
           {results.vagas.map(v => <VagaRow key={v.id} item={v} />)}
         </View>
       );
@@ -396,23 +379,15 @@ export default function SearchScreen() {
     if (results.eventos.length > 0) {
       sections.push(
         <View key="eventos">
-          <SectionHeader label="Eventos" icon="calendar" count={results.eventos.length} filterKey="eventos" />
+          <SectionHeader label={t("search.filters.events")} icon="calendar" count={results.eventos.length} filterKey="eventos" />
           {results.eventos.map(e => <EventRow key={e.id} item={e} />)}
-        </View>
-      );
-    }
-    if (results.mercado.length > 0) {
-      sections.push(
-        <View key="mercado">
-          <SectionHeader label="Mercado" icon="bar-chart-2" count={results.mercado.length} filterKey="mercado" />
-          {results.mercado.map(m => <MercadoRow key={m.id} item={m} />)}
         </View>
       );
     }
     if (results.publicacoes.length > 0) {
       sections.push(
         <View key="publicacoes">
-          <SectionHeader label="Publicações" icon="file-text" count={results.publicacoes.length} filterKey="publicacoes" />
+          <SectionHeader label={t("search.filters.posts")} icon="file-text" count={results.publicacoes.length} filterKey="publicacoes" />
           {results.publicacoes.map(p => <PostRow key={p.id} item={p} />)}
         </View>
       );
@@ -420,7 +395,7 @@ export default function SearchScreen() {
     if (results.grupos.length > 0) {
       sections.push(
         <View key="grupos">
-          <SectionHeader label="Grupos" icon="users" count={results.grupos.length} filterKey="grupos" />
+          <SectionHeader label={t("search.filters.groups")} icon="users" count={results.grupos.length} filterKey="grupos" />
           {results.grupos.map(g => <GroupRow key={g.id} item={g} />)}
         </View>
       );
@@ -438,7 +413,6 @@ export default function SearchScreen() {
     if (filter === "publicacoes") return results.publicacoes.length? <>{results.publicacoes.map(p => <PostRow   key={p.id} item={p} />)}</> : renderNoResults();
     if (filter === "vagas")       return results.vagas.length      ? <>{results.vagas.map(v      => <VagaRow   key={v.id} item={v} />)}</> : renderNoResults();
     if (filter === "eventos")     return results.eventos.length    ? <>{results.eventos.map(e    => <EventRow  key={e.id} item={e} />)}</> : renderNoResults();
-    if (filter === "mercado")     return results.mercado.length    ? <>{results.mercado.map(m    => <MercadoRow key={m.id} item={m} />)}</> : renderNoResults();
     if (filter === "grupos")      return results.grupos.length     ? <>{results.grupos.map(g     => <GroupRow  key={g.id} item={g} />)}</> : renderNoResults();
     return null;
   };
@@ -455,7 +429,7 @@ export default function SearchScreen() {
           <TextInput
             ref={inputRef}
             style={[styles.input, { color: colors.foreground }]}
-            placeholder="Buscar em todo o ibhub..."
+            placeholder={t("search.placeholder")}
             placeholderTextColor={colors.mutedForeground}
             value={query}
             onChangeText={setQuery}
