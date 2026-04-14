@@ -243,7 +243,7 @@ export default function GruposPage() {
   const [showCreate, setShowCreate] = useState(false);
 
   const load = useCallback(async () => {
-    if (!userId) return;
+    if (!userId) { setLoading(false); return; }
     setLoading(true);
     try {
       const { mine: m, explore: e } = await fetchGroups(userId);

@@ -167,7 +167,7 @@ export default function ItensSalvosPage() {
   const userId = profile?.id ?? user?.id ?? "";
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) { setLoading(false); return; }
     fetchSavedPosts(userId).then(data => {
       setPosts(data);
       setLoading(false);

@@ -132,7 +132,7 @@ export default function MeuPerfilPage() {
   const memberSince = (profile as any)?.created_at ? new Date((profile as any).created_at).getFullYear() : null;
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) { setLoadingPosts(false); return; }
     fetchProfileStats(userId).then(setStats);
     fetchUserPosts(userId).then(data => { setPosts(data); setLoadingPosts(false); });
   }, [userId]);

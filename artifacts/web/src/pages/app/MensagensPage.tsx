@@ -129,7 +129,7 @@ export default function MensagensPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) { setLoading(false); return; }
     fetchWebConversations(userId).then(data => {
       setConversations(data);
       setLoading(false);

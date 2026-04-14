@@ -534,12 +534,33 @@ export async function fetchWebConversations(userId: string): Promise<WebConversa
 
 export async function fetchWebMessages(conversationId: string): Promise<WebMessage[]> {
   try {
+    // Try the SECURITY DEFINER RPC first (bypasses RLS so all participants see all messages)
+    const { data: rpcData, error: rpcError } = await supabase
+      .rpc("get_conversation_messages", { p_conversation_id: conversationId });
+
+    if (!rpcError && rpcData) {
+      return (rpcData as any[]).map((m) => ({
+        id:              m.id,
+        conversation_id: m.conversation_id,
+        sender_id:       m.sender_id,
+        content:         m.content,
+        created_at:      m.created_at,
+        sender: {
+          id:         m.sender_id,
+          full_name:  m.sender_name  ?? null,
+          avatar_url: m.sender_avatar ?? null,
+        },
+      }));
+    }
+
+    // Fallback: direct query (may only return messages where sender_id = current user due to RLS)
+    console.warn("get_conversation_messages RPC unavailable, using direct query:", rpcError?.message);
     const { data } = await supabase
       .from("messages")
       .select("id, conversation_id, sender_id, content, created_at")
       .eq("conversation_id", conversationId)
       .order("created_at", { ascending: true })
-      .limit(50);
+      .limit(200);
 
     if (!data || data.length === 0) return [];
 

@@ -544,7 +544,7 @@ function TrendingTopics() {
 
 /* ─── AppFeedPage ────────────────────────── */
 export default function AppFeedPage() {
-  const { profile, user } = useAuth();
+  const { profile, user, loading: authLoading } = useAuth();
 
   const [posts, setPosts]             = useState<Post[]>([]);
   const [suggestions, setSuggestions] = useState<SuggestedProfile[]>([]);
@@ -555,7 +555,10 @@ export default function AppFeedPage() {
   const firstName = profile?.full_name?.split(" ")[0] ?? "Usuário";
 
   const load = useCallback(async () => {
-    if (!userId) return;
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const [postsData, suggsData] = await Promise.all([
       fetchFeedPosts(userId),
@@ -566,7 +569,11 @@ export default function AppFeedPage() {
     setLoading(false);
   }, [userId]);
 
-  useEffect(() => { load(); }, [load]);
+  // Wait for auth to finish loading before fetching feed data
+  useEffect(() => {
+    if (!authLoading) load();
+  }, [load, authLoading]);
+
   useEffect(() => { fetchWineCommunityRankings().then(setWineRankings); }, []);
 
   const handleLike = useCallback(async (postId: string, isLiked: boolean, reaction: ReactionType = "curtir") => {
