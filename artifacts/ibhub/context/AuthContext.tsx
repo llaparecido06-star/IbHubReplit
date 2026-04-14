@@ -51,6 +51,12 @@ interface Profile {
   certifications?: string[] | null;
   subscription_tier?: string | null;
   is_public?: boolean;
+  // Stripe
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
+  stripe_subscription_status?: string | null;
+  stripe_current_period_end?: string | null;
+  courtesy_until?: string | null;
 }
 
 interface ActiveCompany {

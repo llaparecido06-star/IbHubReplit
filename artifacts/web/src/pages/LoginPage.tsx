@@ -22,7 +22,9 @@ export default function LoginPage() {
       setError("E-mail ou senha incorretos");
       setLoading(false);
     } else {
-      setLocation("/app");
+      const redirect = sessionStorage.getItem("redirect_after_login");
+      sessionStorage.removeItem("redirect_after_login");
+      setLocation(redirect ?? "/app");
     }
   };
 

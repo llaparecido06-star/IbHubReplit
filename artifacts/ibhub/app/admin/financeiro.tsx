@@ -89,7 +89,7 @@ export default function AdminFinanceiroScreen() {
       const [profilesRes, plansRes] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, full_name, username, plan, courtesy_until")
+          .select("id, full_name, username, plan, courtesy_until, stripe_subscription_status, stripe_current_period_end")
           .neq("plan", null),
         supabase
           .from("plans")
@@ -97,31 +97,36 @@ export default function AdminFinanceiroScreen() {
           .eq("is_active", true),
       ]);
 
-      const profiles: SubscriberRow[] = profilesRes.data ?? [];
+      const profiles: SubscriberRow[] = (profilesRes.data ?? []) as SubscriberRow[];
       const planList: PlanRecord[] = plansRes.data ?? [];
       setPlans(planList);
 
       const planPriceMap = new Map(planList.map((p) => [p.id, p.price_cents]));
-
       const now = new Date();
-      const paidPlans = ["profissional", "basico", "empresa", "executivo"];
-      const paidProfiles = profiles.filter((p) => paidPlans.includes(p.plan));
-      const activeCourtesies = profiles.filter(
-        (p) => p.courtesy_until && new Date(p.courtesy_until) > now
-      );
 
-      const mrr = paidProfiles.reduce((sum, p) => {
+      // Active via Stripe OR courtesy
+      const activeViaStripe   = profiles.filter((p) => (p as any).stripe_subscription_status === "active" || (p as any).stripe_subscription_status === "trialing");
+      const activeCourtesies  = profiles.filter((p) => p.courtesy_until && new Date(p.courtesy_until) > now);
+      const canceledThisMonth = profiles.filter((p) => (p as any).stripe_subscription_status === "canceled");
+
+      // MRR: based on Stripe-active subscribers' plan price
+      const mrr = activeViaStripe.reduce((sum, p) => {
         return sum + (planPriceMap.get(p.plan) ?? 0);
       }, 0);
 
+      // Display list = Stripe subscribers + courtesy users (deduplicated)
+      const displaySet = new Map<string, SubscriberRow>();
+      [...activeViaStripe, ...activeCourtesies].forEach((p) => displaySet.set(p.id, p));
+      const displaySubscribers = Array.from(displaySet.values());
+
       setKpis({
         mrr,
-        activeSubscribers: paidProfiles.length,
+        activeSubscribers: activeViaStripe.length,
         activeCourtesies: activeCourtesies.length,
-        cancellations: 0,
+        cancellations: canceledThisMonth.length,
       });
 
-      setSubscribers(paidProfiles);
+      setSubscribers(displaySubscribers);
     } catch (e) {
       console.error("loadData financeiro:", e);
     } finally {
@@ -193,9 +198,9 @@ export default function AdminFinanceiroScreen() {
 
   const kpiCards = [
     { icon: "dollar-sign" as const, iconColor: "#059669", iconBg: "#d1fae5", trendIcon: "arrow-up-right" as const, trendColor: "#059669", label: "MRR (Receita Mensal)", value: formatMRR(kpis.mrr) },
-    { icon: "users" as const,       iconColor: "#3b82f6", iconBg: "#dbeafe", trendIcon: "arrow-up-right" as const, trendColor: "#059669", label: "Assinantes Ativos",   value: String(kpis.activeSubscribers) },
+    { icon: "users" as const,       iconColor: "#3b82f6", iconBg: "#dbeafe", trendIcon: "arrow-up-right" as const, trendColor: "#059669", label: "Assinantes Stripe Ativos", value: String(kpis.activeSubscribers) },
     { icon: "gift" as const,        iconColor: "#c9a84c", iconBg: "#fef9ee", trendIcon: null,               trendColor: "",          label: "Cortesias Ativas",       value: String(kpis.activeCourtesies) },
-    { icon: "trending-down" as const, iconColor: "#dc2626", iconBg: "#fee2e2", trendIcon: "arrow-down-right" as const, trendColor: "#dc2626", label: "Cancelamentos",  value: "0" },
+    { icon: "trending-down" as const, iconColor: "#dc2626", iconBg: "#fee2e2", trendIcon: "arrow-down-right" as const, trendColor: "#dc2626", label: "Cancelamentos",  value: String(kpis.cancellations) },
   ];
 
   return (

@@ -17,6 +17,10 @@ import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminUsuarios from "@/pages/admin/AdminUsuarios";
 import AdminModeracao from "@/pages/admin/AdminModeracao";
 import AdminNotificacoes from "@/pages/admin/AdminNotificacoes";
+import AssinarPage from "@/pages/AssinarPage";
+import AssinarSucessoPage from "@/pages/AssinarSucessoPage";
+import AssinarCanceladoPage from "@/pages/AssinarCanceladoPage";
+import MinhaContaPage from "@/pages/MinhaContaPage";
 import NotFound from "@/pages/not-found";
 import { AdminShell } from "@/components/layout/AdminShell";
 import { useEffect } from "react";
@@ -144,6 +148,16 @@ function Router() {
       </Route>
       <Route path="/app">
         <PrivateRoute component={AppFeedPage} />
+      </Route>
+
+      {/* Subscription & account */}
+      <Route path="/assinar/sucesso" component={AssinarSucessoPage} />
+      <Route path="/assinar/cancelado" component={AssinarCanceladoPage} />
+      <Route path="/assinar">
+        <AssinarPage />
+      </Route>
+      <Route path="/minha-conta">
+        <PrivateRoute component={MinhaContaPage} />
       </Route>
 
       {/* Admin routes */}

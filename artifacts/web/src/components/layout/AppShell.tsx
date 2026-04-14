@@ -103,14 +103,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               ⚙️ Admin
             </button>
           )}
-          <span style={{ fontSize: 13, color: "rgba(255,255,255,0.6)" }}>{displayName}</span>
-          <div style={{
-            width: 34, height: 34, borderRadius: "50%",
-            backgroundColor: "#722f37",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 14, fontWeight: 800, color: "#fff",
-            cursor: "pointer",
-          }}>{initial}</div>
+          <button
+            onClick={() => setLocation("/assinar")}
+            style={{
+              background: "none",
+              border: "1px solid rgba(201,168,76,0.4)",
+              borderRadius: 8,
+              padding: "6px 12px",
+              color: GOLD,
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Planos
+          </button>
+          <div
+            onClick={() => setLocation("/minha-conta")}
+            style={{
+              width: 34, height: 34, borderRadius: "50%",
+              backgroundColor: "#722f37",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 14, fontWeight: 800, color: "#fff",
+              cursor: "pointer",
+              title: displayName,
+            }}
+          >{initial}</div>
           <button
             onClick={handleSignOut}
             style={{
