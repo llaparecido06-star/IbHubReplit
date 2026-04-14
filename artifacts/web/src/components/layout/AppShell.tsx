@@ -341,7 +341,6 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
   const [activeCompany, setActiveCompany] = useState<WebCompanyPage | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [userMenuOpen, setUserMenuOpen]   = useState(false);
-  const [companySwitchOpen, setCompanySwitchOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [peopleModal, setPeopleModal] = useState<{ title: string; list: ProfilePerson[] } | null>(null);
 
@@ -410,22 +409,113 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
 
         <button style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, display: "flex", alignItems: "center", padding: 4 }}>{I.bell}</button>
 
+        {/* ── Profile / Company dropdown ── */}
         <div style={{ position: "relative" }}>
-          <button onClick={() => setUserMenuOpen(!userMenuOpen)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-            <Avatar src={activeAvatar} name={activeName} size={32} />
+          <button
+            onClick={() => setUserMenuOpen(!userMenuOpen)}
+            style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "2px 4px", borderRadius: 8 }}
+          >
+            <Avatar src={activeAvatar} name={activeName} size={34} />
             {I.chevDown}
           </button>
+
           {userMenuOpen && (
-            <div style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 8, minWidth: 180, boxShadow: "0 4px 24px rgba(0,0,0,0.1)", zIndex: 300 }}>
-              <div style={{ padding: "8px 12px", borderBottom: `1px solid ${BORDER}`, marginBottom: 4 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{displayName}</div>
-                {username && <div style={{ fontSize: 12, color: MUTED }}>{username}</div>}
+            <div style={{
+              position: "absolute", right: 0, top: "calc(100% + 8px)",
+              backgroundColor: WHITE, border: `1px solid ${BORDER}`,
+              borderRadius: 12, minWidth: 230,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.13)", zIndex: 300,
+              overflow: "hidden",
+            }}>
+              {/* ── Perfil Pessoal ── */}
+              <div style={{ padding: "4px 4px 0" }}>
+                <button
+                  onClick={() => { setActiveCompany(null); setUserMenuOpen(false); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10, width: "100%",
+                    padding: "10px 12px", border: "none", borderRadius: 8, cursor: "pointer", textAlign: "left",
+                    backgroundColor: !activeCompany ? `${GOLD}12` : "transparent",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  <Avatar src={profile?.avatar_url} name={displayName} size={36} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: !activeCompany ? GOLD : NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayName}</div>
+                    <div style={{ fontSize: 11, color: MUTED }}>Perfil pessoal</div>
+                  </div>
+                  {!activeCompany && <span style={{ color: GOLD, fontSize: 14 }}>✓</span>}
+                </button>
               </div>
-              {[{ label: "Minha conta", path: "/minha-conta" }, { label: "Planos & Assinatura", path: "/assinar" }].map(({ label, path }) => (
-                <button key={path} onClick={() => { setUserMenuOpen(false); setLocation(path); }} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "8px 12px", fontSize: 13, color: NAVY, cursor: "pointer", borderRadius: 6 }}>{label}</button>
-              ))}
-              <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: 4, paddingTop: 4 }}>
-                <button onClick={handleSignOut} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "8px 12px", fontSize: 13, color: "#e53e3e", cursor: "pointer", borderRadius: 6 }}>Sair</button>
+
+              {/* ── Perfil Empresarial ── */}
+              {companyPages.length > 0 && (
+                <div style={{ padding: "0 4px" }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: MUTED, letterSpacing: 0.8, padding: "8px 12px 4px", textTransform: "uppercase" }}>
+                    Perfil Empresarial
+                  </div>
+                  {companyPages.map(cp => (
+                    <button
+                      key={cp.id}
+                      onClick={() => { setActiveCompany(cp); setUserMenuOpen(false); setLocation(`/app/empresa/${cp.id}`); }}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 10, width: "100%",
+                        padding: "8px 12px", border: "none", borderRadius: 8, cursor: "pointer", textAlign: "left",
+                        backgroundColor: activeCompany?.id === cp.id ? `${GOLD}12` : "transparent",
+                        fontFamily: "inherit",
+                      }}
+                    >
+                      <Avatar src={cp.avatar_url} name={cp.name} size={32} bg={GOLD} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: activeCompany?.id === cp.id ? GOLD : NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cp.name}</div>
+                        <div style={{ fontSize: 11, color: MUTED }}>Página empresarial</div>
+                      </div>
+                      {activeCompany?.id === cp.id && <span style={{ color: GOLD, fontSize: 14 }}>✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* ── Links ── */}
+              <div style={{ borderTop: `1px solid ${BORDER}`, margin: "4px 0", padding: "4px 4px 0" }}>
+                {[
+                  { label: "Meu Perfil",           path: "/app/perfil",   emoji: "👤" },
+                  { label: "Configurações",         path: "/minha-conta",  emoji: "⚙️" },
+                  { label: "Planos e assinaturas",  path: "/assinar",      emoji: "💎" },
+                ].map(({ label, path, emoji }) => (
+                  <button
+                    key={path}
+                    onClick={() => { setUserMenuOpen(false); setLocation(path); }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10, width: "100%",
+                      padding: "9px 12px", border: "none", borderRadius: 8, cursor: "pointer",
+                      fontSize: 13, color: NAVY, textAlign: "left", fontFamily: "inherit",
+                      backgroundColor: "transparent",
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = BG)}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}
+                  >
+                    <span style={{ fontSize: 15, width: 20, textAlign: "center" }}>{emoji}</span>
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* ── Sair ── */}
+              <div style={{ borderTop: `1px solid ${BORDER}`, padding: "4px 4px 4px" }}>
+                <button
+                  onClick={() => { setUserMenuOpen(false); handleSignOut(); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10, width: "100%",
+                    padding: "9px 12px", border: "none", borderRadius: 8, cursor: "pointer",
+                    fontSize: 13, color: "#e53e3e", textAlign: "left", fontFamily: "inherit",
+                    backgroundColor: "transparent",
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = "#fff5f5")}
+                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}
+                >
+                  <span style={{ fontSize: 15, width: 20, textAlign: "center" }}>🚪</span>
+                  Sair
+                </button>
               </div>
             </div>
           )}
@@ -452,37 +542,6 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
               </div>
               {username && !activeCompany && <div style={{ fontSize: 12, color: MUTED, marginBottom: 10 }}>{username}</div>}
               {activeCompany && <div style={{ fontSize: 12, color: MUTED, marginBottom: 10 }}>Página empresarial</div>}
-
-              {/* Company switcher */}
-              {companyPages.length > 0 && (
-                <div style={{ position: "relative", marginBottom: 10 }}>
-                  <button onClick={() => setCompanySwitchOpen(!companySwitchOpen)} style={{
-                    display: "flex", alignItems: "center", gap: 6, width: "100%",
-                    backgroundColor: BG, border: `1px solid ${BORDER}`, borderRadius: 8,
-                    padding: "6px 10px", cursor: "pointer", fontSize: 12, color: MUTED, fontFamily: "inherit",
-                  }}>
-                    {I.company}
-                    <span style={{ flex: 1, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {activeCompany ? activeCompany.name : "Meu Perfil"}
-                    </span>
-                    {I.chevDown}
-                  </button>
-                  {companySwitchOpen && (
-                    <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 6, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 100 }}>
-                      <button onClick={() => { setActiveCompany(null); setCompanySwitchOpen(false); setLocation("/app/perfil"); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: !activeCompany ? `${GOLD}12` : "none", border: "none", borderRadius: 7, padding: "8px 10px", cursor: "pointer", fontSize: 13, color: !activeCompany ? GOLD : NAVY, fontWeight: !activeCompany ? 700 : 500, fontFamily: "inherit" }}>
-                        <Avatar src={profile?.avatar_url} name={displayName} size={24} />
-                        Meu Perfil
-                      </button>
-                      {companyPages.map(cp => (
-                        <button key={cp.id} onClick={() => { setActiveCompany(cp); setCompanySwitchOpen(false); setLocation(`/app/empresa/${cp.id}`); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: activeCompany?.id === cp.id ? `${GOLD}12` : "none", border: "none", borderRadius: 7, padding: "8px 10px", cursor: "pointer", fontSize: 13, color: activeCompany?.id === cp.id ? GOLD : NAVY, fontWeight: activeCompany?.id === cp.id ? 700 : 500, fontFamily: "inherit" }}>
-                          <Avatar src={cp.avatar_url} name={cp.name} size={24} bg={GOLD} />
-                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cp.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
 
               {/* Stats */}
               <div style={{ display: "flex", borderTop: `1px solid ${BORDER}`, paddingTop: 10, gap: 0 }}>
@@ -585,9 +644,9 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
         </div>
       )}
 
-      {/* Click-away overlays */}
-      {(userMenuOpen || companySwitchOpen) && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 199 }} onClick={() => { setUserMenuOpen(false); setCompanySwitchOpen(false); }} />
+      {/* Click-away overlay */}
+      {userMenuOpen && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 199 }} onClick={() => setUserMenuOpen(false)} />
       )}
     </div>
   );
