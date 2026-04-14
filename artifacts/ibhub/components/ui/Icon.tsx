@@ -228,6 +228,9 @@ export function Feather({ name, size = 24, color = "#000", style, strokeWidth = 
   return <LucideIcon size={size} color={color} style={style} strokeWidth={strokeWidth} />;
 }
 
+// Expose glyphMap so code that uses `keyof typeof Feather.glyphMap` gets string type
+Feather.glyphMap = FEATHER_MAP as Record<string, React.ComponentType<any>>;
+
 export function MaterialCommunityIcons({ name, size = 24, color = "#000", style }: IconProps) {
   const entry = MCI_MAP[name];
   if (!entry) {

@@ -13,9 +13,52 @@ import { ActivityIndicator, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { AuthProvider, useAuth } from "@/context/AuthContext";
-import { UnreadProvider } from "@/context/UnreadContext";
+import { AuthProvider, useAuth, supabase } from "@/context/AuthContext";
+import { UnreadProvider, useUnread } from "@/context/UnreadContext";
 import { SidebarNav, useIsDesktop } from "@/components/ui/SidebarNav";
+
+// ── Background unread badge syncer ──────────────────────────────────────────
+function UnreadSyncer() {
+  const { user } = useAuth();
+  const { refreshUnread } = useUnread();
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    // Initial fetch
+    refreshUnread(user.id);
+
+    // Refresh every 60 seconds
+    timerRef.current = setInterval(() => refreshUnread(user.id), 60_000);
+
+    // Realtime: any new message → re-count
+    if (!channelRef.current) {
+      channelRef.current = supabase
+        .channel(`unread-syncer:${user.id}`)
+        .on("postgres_changes",
+          { event: "INSERT", schema: "public", table: "messages" },
+          () => { refreshUnread(user.id); },
+        )
+        .on("postgres_changes",
+          { event: "UPDATE", schema: "public", table: "conversation_participants", filter: `user_id=eq.${user.id}` },
+          () => { refreshUnread(user.id); },
+        )
+        .subscribe();
+    }
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [user?.id, refreshUnread]);
+
+  return null;
+}
 
 SplashScreen.preventAutoHideAsync();
 
@@ -61,16 +104,24 @@ function AuthenticatedLayout() {
 
   if (isDesktop) {
     return (
-      <View style={{ flex: 1, flexDirection: "row" }}>
-        <SidebarNav />
-        <View style={{ flex: 1 }}>
-          {stack}
+      <>
+        <UnreadSyncer />
+        <View style={{ flex: 1, flexDirection: "row" }}>
+          <SidebarNav />
+          <View style={{ flex: 1 }}>
+            {stack}
+          </View>
         </View>
-      </View>
+      </>
     );
   }
 
-  return stack;
+  return (
+    <>
+      <UnreadSyncer />
+      {stack}
+    </>
+  );
 }
 
 function RootLayoutNav() {
