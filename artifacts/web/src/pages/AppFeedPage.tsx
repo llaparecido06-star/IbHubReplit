@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import {
@@ -133,9 +134,14 @@ function PostCard({
   const isLong = content.length > CUTOFF;
   const displayContent = isLong && !expanded ? content.slice(0, CUTOFF).trimEnd() + "…" : content;
 
+  const [, setLocation] = useLocation();
   const isWinePost = /^⭐/.test(content) && /Pontuação/.test(content);
   const authorName = post.author?.full_name ?? "Usuário";
   const badgeColor = planBadgeColor(post.author?.plan);
+  const goToAuthor = () => {
+    if (post.author?.id && post.author.id !== currentUserId) setLocation(`/app/usuario/${post.author.id}`);
+    else if (post.author?.id === currentUserId) setLocation("/app/perfil");
+  };
 
   const startPicker = () => { pickerTimer.current = setTimeout(() => setShowPicker(true), 350); };
   const cancelPicker = () => { if (pickerTimer.current) clearTimeout(pickerTimer.current); };
@@ -171,10 +177,16 @@ function PostCard({
 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "14px 16px 10px" }}>
-        <Avatar src={post.author?.avatar_url} name={authorName} size={42} />
+        <div onClick={goToAuthor} style={{ cursor: "pointer" }}>
+          <Avatar src={post.author?.avatar_url} name={authorName} size={42} />
+        </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{authorName}</span>
+            <span onClick={goToAuthor} style={{ fontSize: 14, fontWeight: 800, color: NAVY, cursor: "pointer" }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.textDecoration = "underline"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.textDecoration = "none"; }}>
+              {authorName}
+            </span>
             {badgeColor && (
               <span style={{
                 fontSize: 10, fontWeight: 700, color: WHITE,

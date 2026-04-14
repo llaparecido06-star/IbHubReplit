@@ -370,7 +370,12 @@ export async function sendWebConnectionRequest(targetId: string, currentUserId: 
   }
 }
 
-export async function fetchProfileStats(userId: string): Promise<{ connections: number; followers: number; following: number }> {
+const _statsCache = new Map<string, { data: { connections: number; followers: number; following: number }; ts: number }>();
+const STATS_TTL = 5 * 60 * 1000;
+
+export async function fetchProfileStats(userId: string, forceRefresh = false): Promise<{ connections: number; followers: number; following: number }> {
+  const cached = _statsCache.get(userId);
+  if (!forceRefresh && cached && Date.now() - cached.ts < STATS_TTL) return cached.data;
   try {
     const [connsRes, followersRes, followingRes] = await Promise.all([
       supabase
@@ -387,14 +392,20 @@ export async function fetchProfileStats(userId: string): Promise<{ connections: 
         .select("id", { count: "exact", head: true })
         .eq("follower_id", userId),
     ]);
-    return {
+    const data = {
       connections: connsRes.count ?? 0,
       followers: followersRes.count ?? 0,
       following: followingRes.count ?? 0,
     };
+    _statsCache.set(userId, { data, ts: Date.now() });
+    return data;
   } catch (e) {
-    return { connections: 0, followers: 0, following: 0 };
+    return cached?.data ?? { connections: 0, followers: 0, following: 0 };
   }
+}
+
+export function invalidateStatsCache(userId: string) {
+  _statsCache.delete(userId);
 }
 
 // ─── Market Presentations ─────────────────────────────────────────────────────
@@ -448,66 +459,72 @@ export interface WebMessage {
 
 export async function fetchWebConversations(userId: string): Promise<WebConversation[]> {
   try {
-    const { data: participations } = await supabase
-      .from("conversation_participants")
-      .select("conversation_id, accepted")
-      .eq("user_id", userId);
+    // Use SECURITY DEFINER RPC to bypass RLS on conversation_participants (same as mobile)
+    const [participantsRes, convosRes] = await Promise.all([
+      supabase.rpc("get_my_conversations_participants", { p_user_id: userId }),
+      supabase
+        .from("conversation_participants")
+        .select("conversation_id, accepted, last_read_at, conversation:conversations(id, is_group, name, created_at)")
+        .eq("user_id", userId),
+    ]);
 
-    if (!participations || participations.length === 0) return [];
+    if (convosRes.error || !convosRes.data) return [];
 
-    const convoIds = participations.map((p: any) => p.conversation_id);
+    const participantMap = new Map<string, { other_user_id: string | null }>();
+    for (const row of (participantsRes.data ?? []) as any[]) {
+      participantMap.set(row.conversation_id, { other_user_id: row.other_user_id ?? null });
+    }
 
-    const { data: convos } = await supabase
-      .from("conversations")
-      .select("id, is_group, name, created_at")
-      .in("id", convoIds)
-      .order("created_at", { ascending: false });
+    const allOtherIds = [...new Set(
+      [...participantMap.values()].map(v => v.other_user_id).filter(Boolean) as string[]
+    )];
 
-    if (!convos) return [];
+    let profileMap = new Map<string, any>();
+    if (allOtherIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url")
+        .in("id", allOtherIds);
+      profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+    }
 
-    // For each conversation, get last message and other participants
     const results: WebConversation[] = [];
-    for (const convo of convos as any[]) {
-      const [lastMsgRes, otherParticipantsRes] = await Promise.all([
-        supabase
-          .from("messages")
-          .select("content, created_at, sender_id")
-          .eq("conversation_id", convo.id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        supabase
-          .from("conversation_participants")
-          .select("user_id")
-          .eq("conversation_id", convo.id)
-          .neq("user_id", userId)
-          .limit(1)
-          .maybeSingle(),
-      ]);
+    for (const row of convosRes.data as any[]) {
+      const convo = row.conversation;
+      if (!convo) continue;
 
-      let participant = null;
-      if (otherParticipantsRes.data?.user_id) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("id, full_name, avatar_url")
-          .eq("id", otherParticipantsRes.data.user_id)
-          .maybeSingle();
-        participant = profile;
-      }
+      const pInfo = participantMap.get(convo.id);
+      const participant = pInfo?.other_user_id ? (profileMap.get(pInfo.other_user_id) ?? null) : null;
+
+      const lastMsgRes = await supabase
+        .from("messages")
+        .select("content, created_at, message_type")
+        .eq("conversation_id", convo.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const lastMsg = lastMsgRes.data;
+      const lastContent =
+        lastMsg?.message_type === "image" ? "📷 Foto"
+        : lastMsg?.message_type === "video" ? "🎬 Vídeo"
+        : lastMsg?.message_type === "audio" ? "🎤 Áudio"
+        : lastMsg?.message_type === "file"  ? "📎 Arquivo"
+        : (lastMsg?.content ?? null);
 
       results.push({
         id: convo.id,
         is_group: convo.is_group,
         name: convo.name,
-        last_message: lastMsgRes.data?.content ?? null,
-        last_message_at: lastMsgRes.data?.created_at ?? null,
+        last_message: lastContent,
+        last_message_at: lastMsg?.created_at ?? convo.created_at,
         unread_count: 0,
         participant,
       });
     }
 
-    return results.sort((a, b) =>
-      (b.last_message_at ?? b.id).localeCompare(a.last_message_at ?? a.id)
+    return results.sort(
+      (a, b) => new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime()
     );
   } catch (e) {
     console.warn("fetchWebConversations:", e);
@@ -570,28 +587,41 @@ export interface WebCompanyPage {
 
 export async function fetchWebCompanyPages(userId: string): Promise<WebCompanyPage[]> {
   try {
-    const [ownedRes, adminRes] = await Promise.all([
-      supabase.from("company_pages").select("id, name, avatar_url, owner_id").eq("owner_id", userId),
-      supabase.from("company_page_admins").select("company_id").eq("user_id", userId),
-    ]);
-
-    const adminIds = (adminRes.data ?? []).map((m: any) => m.company_id);
-    let adminPages: WebCompanyPage[] = [];
-    if (adminIds.length > 0) {
-      const { data } = await supabase
-        .from("company_pages")
-        .select("id, name, avatar_url, owner_id")
-        .in("id", adminIds);
-      adminPages = (data ?? []) as WebCompanyPage[];
-    }
+    // Fetch pages where user is owner
+    const ownedRes = await supabase
+      .from("company_pages")
+      .select("id, name, avatar_url, owner_id")
+      .eq("owner_id", userId);
 
     const owned = (ownedRes.data ?? []) as WebCompanyPage[];
+
+    // Try to fetch pages where user is admin (table may not exist)
+    let adminPages: WebCompanyPage[] = [];
+    try {
+      const adminRes = await supabase
+        .from("company_page_admins")
+        .select("company_id")
+        .eq("user_id", userId);
+      const adminIds = (adminRes.data ?? []).map((m: any) => m.company_id).filter(Boolean);
+      if (adminIds.length > 0) {
+        const { data } = await supabase
+          .from("company_pages")
+          .select("id, name, avatar_url, owner_id")
+          .in("id", adminIds);
+        adminPages = (data ?? []) as WebCompanyPage[];
+      }
+    } catch (_) {}
+
     const ownedIds = new Set(owned.map((p) => p.id));
     return [...owned, ...adminPages.filter((p) => !ownedIds.has(p.id))];
   } catch (e) {
     console.warn("fetchWebCompanyPages:", e);
     return [];
   }
+}
+
+export async function fetchPublicUserProfile(userId: string): Promise<UserProfile | null> {
+  return fetchUserProfile(userId);
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────

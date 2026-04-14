@@ -57,11 +57,13 @@ function BookmarkFilledIcon() {
   );
 }
 
-function SavedPostCard({ post, onRemove, onLike }: {
+function SavedPostCard({ post, onRemove, onLike, currentUserId }: {
   post: Post;
   onRemove: (id: string) => void;
   onLike: (id: string, isLiked: boolean, reaction: ReactionType) => void;
+  currentUserId: string;
 }) {
+  const [, setLocation] = useLocation();
   const [expanded, setExpanded] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -69,6 +71,10 @@ function SavedPostCard({ post, onRemove, onLike }: {
   const isLong = content.length > 280;
   const displayContent = isLong && !expanded ? content.slice(0, 280).trimEnd() + "…" : content;
   const authorName = post.author?.full_name ?? "Usuário";
+  const goToAuthor = () => {
+    if (post.author?.id && post.author.id !== currentUserId) setLocation(`/app/usuario/${post.author.id}`);
+    else if (post.author?.id === currentUserId) setLocation("/app/perfil");
+  };
 
   const startPicker = () => { timer.current = setTimeout(() => setShowPicker(true), 350); };
   const cancelPicker = () => { if (timer.current) clearTimeout(timer.current); };
@@ -79,9 +85,15 @@ function SavedPostCard({ post, onRemove, onLike }: {
     <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, marginBottom: 14, overflow: "visible", position: "relative" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "14px 16px 10px" }}>
-        <Avatar src={post.author?.avatar_url} name={authorName} size={42} />
+        <div onClick={goToAuthor} style={{ cursor: "pointer" }}>
+          <Avatar src={post.author?.avatar_url} name={authorName} size={42} />
+        </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{authorName}</div>
+          <span onClick={goToAuthor} style={{ fontSize: 14, fontWeight: 800, color: NAVY, cursor: "pointer", display: "inline-block" }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.textDecoration = "underline"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.textDecoration = "none"; }}>
+            {authorName}
+          </span>
           {post.author?.headline && <div style={{ fontSize: 12, color: MUTED, marginTop: 1 }}>{post.author.headline}</div>}
           <div style={{ fontSize: 11, color: "#b0b7c3", marginTop: 2 }}>{timeAgo(post.created_at)}</div>
         </div>
@@ -212,7 +224,7 @@ export default function ItensSalvosPage() {
         <div>
           <div style={{ fontSize: 13, color: MUTED, marginBottom: 14 }}>{posts.length} item{posts.length !== 1 ? "s" : ""} salvo{posts.length !== 1 ? "s" : ""}</div>
           {posts.map(post => (
-            <SavedPostCard key={post.id} post={post} onRemove={handleRemove} onLike={handleLike} />
+            <SavedPostCard key={post.id} post={post} onRemove={handleRemove} onLike={handleLike} currentUserId={userId} />
           ))}
         </div>
       )}
