@@ -599,21 +599,43 @@ export async function sendWebMessage(conversationId: string, senderId: string, c
 
 export async function uploadChatAttachment(file: File, userId: string): Promise<string | null> {
   try {
-    const ext      = file.name.split(".").pop() ?? "bin";
-    const filename = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-    const path     = `chat/${userId}/${filename}`;
-    const { error } = await supabase.storage.from("chat-attachments").upload(path, file, { upsert: false });
-    if (!error) {
-      const { data } = supabase.storage.from("chat-attachments").getPublicUrl(path);
-      return data.publicUrl;
+    // Get the current session token so the API server can verify the user
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token ?? "";
+
+    // Convert file to base64 via FileReader
+    const fileBase64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve((reader.result as string).split(",")[1] ?? "");
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
+      ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
+
+    const res = await fetch(`${apiBase}/uploads/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        fileBase64,
+        fileName: file.name,
+        mimeType: file.type || "application/octet-stream",
+        userId,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.warn("uploadChatAttachment API error:", err);
+      return null;
     }
-    // Fallback: use the existing "cvs" bucket
-    console.warn("chat-attachments bucket missing, falling back to cvs:", error.message);
-    const fallbackPath = `chat-${userId}-${filename}`;
-    const { error: e2, data } = await supabase.storage.from("cvs").upload(fallbackPath, file, { upsert: false });
-    if (e2 || !data) { console.warn("uploadChatAttachment fallback failed:", e2); return null; }
-    const { data: d2 } = supabase.storage.from("cvs").getPublicUrl(fallbackPath);
-    return d2.publicUrl;
+
+    const { url } = await res.json();
+    return url ?? null;
   } catch (e) {
     console.warn("uploadChatAttachment:", e);
     return null;

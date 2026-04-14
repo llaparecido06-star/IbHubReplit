@@ -30,8 +30,10 @@ app.use(cors());
 // Stripe webhook must receive the raw body for signature verification
 app.use("/api/stripe/webhook", express.raw({ type: "application/json" }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Increase limit for chat file uploads (base64 encoded, so 50MB file ≈ 70MB JSON)
+app.use("/api/uploads", express.json({ limit: "75mb" }));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "75mb" }));
 
 app.use("/api", router);
 
