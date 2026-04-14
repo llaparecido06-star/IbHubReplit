@@ -1,7 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
-import { fetchWebConversations, fetchWebMessages, sendWebMessage, WebConversation, WebMessage } from "@/services/api";
+import {
+  fetchWebConversations,
+  fetchWebMessages,
+  sendWebMessage,
+  uploadChatAttachment,
+  WebConversation,
+  WebMessage,
+} from "@/services/api";
 
 const GOLD   = "#c9a84c";
 const NAVY   = "#0d1b2a";
@@ -9,6 +16,50 @@ const WHITE  = "#ffffff";
 const BG     = "#f5f5f0";
 const BORDER = "#e8e8e3";
 const MUTED  = "#7a8494";
+
+const IMG_EXTS = ["jpg", "jpeg", "png", "gif", "webp", "svg", "avif"];
+function isImageUrl(url: string) {
+  try {
+    const ext = url.split("?")[0].split(".").pop()?.toLowerCase() ?? "";
+    return IMG_EXTS.includes(ext);
+  } catch { return false; }
+}
+
+function isAttachmentMsg(content: string) {
+  return content.startsWith("[attachment]:") || content.startsWith("http");
+}
+
+function parseAttachment(content: string): { url: string; label?: string } | null {
+  if (content.startsWith("[attachment]:")) {
+    const rest = content.slice("[attachment]:".length).trim();
+    const [url, ...labelParts] = rest.split("|");
+    return { url: url.trim(), label: labelParts.join("|").trim() || undefined };
+  }
+  if (content.startsWith("http")) return { url: content };
+  return null;
+}
+
+function AttachmentBubble({ url, label, isMe }: { url: string; label?: string; isMe: boolean }) {
+  if (isImageUrl(url)) {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
+        <img src={url} alt={label ?? "imagem"} style={{ maxWidth: "100%", maxHeight: 220, borderRadius: 10, display: "block", cursor: "zoom-in" }} />
+        {label && <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>{label}</div>}
+      </a>
+    );
+  }
+  const filename = label ?? url.split("/").pop() ?? "arquivo";
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer"
+      style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", backgroundColor: isMe ? "rgba(255,255,255,0.15)" : BG, borderRadius: 10, textDecoration: "none", border: `1px solid ${BORDER}` }}>
+      <span style={{ fontSize: 20 }}>📎</span>
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: isMe ? NAVY : NAVY }}>{filename}</div>
+        <div style={{ fontSize: 11, color: MUTED }}>Clique para baixar</div>
+      </div>
+    </a>
+  );
+}
 
 function Avatar({ src, name, size = 40 }: { src?: string | null; name: string; size?: number }) {
   if (src) return <img src={src} alt={name} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
@@ -34,6 +85,29 @@ function timeAgo(iso: string): string {
   return `${d}d`;
 }
 
+// ── Icons ──────────────────────────────────────────────────────────────────────
+function SendIcon({ size = 18, color = WHITE }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} fill="none" viewBox="0 0 24 24" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+    </svg>
+  );
+}
+function ClipIcon({ size = 18, color = MUTED }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} fill="none" viewBox="0 0 24 24" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+    </svg>
+  );
+}
+function XIcon({ size = 14, color = MUTED }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} fill="none" viewBox="0 0 24 24" stroke={color} strokeWidth="2.5" strokeLinecap="round">
+      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>
+  );
+}
+
 export default function MensagensPage() {
   const { profile, user } = useAuth();
   const userId = profile?.id ?? user?.id ?? "";
@@ -45,7 +119,14 @@ export default function MensagensPage() {
   const [loading, setLoading]             = useState(true);
   const [sending, setSending]             = useState(false);
   const [search, setSearch]               = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Attachment state
+  const [attachFile, setAttachFile]       = useState<File | null>(null);
+  const [attachPreview, setAttachPreview] = useState<string | null>(null);
+  const [uploading, setUploading]         = useState(false);
+
+  const bottomRef  = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!userId) return;
@@ -66,20 +147,61 @@ export default function MensagensPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAttachFile(file);
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = ev => setAttachPreview(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setAttachPreview(null);
+    }
+    e.target.value = "";
+  };
+
+  const clearAttach = () => {
+    setAttachFile(null);
+    setAttachPreview(null);
+  };
+
   const handleSend = async () => {
-    if (!newMsg.trim() || !selected || !userId || sending) return;
+    if ((!newMsg.trim() && !attachFile) || !selected || !userId || sending || uploading) return;
     setSending(true);
-    const ok = await sendWebMessage(selected.id, userId, newMsg.trim());
-    if (ok) {
-      setMessages(prev => [...prev, {
-        id: `tmp-${Date.now()}`,
-        conversation_id: selected.id,
-        sender_id: userId,
-        content: newMsg.trim(),
-        created_at: new Date().toISOString(),
-        sender: { id: userId, full_name: profile?.full_name ?? "Eu", avatar_url: profile?.avatar_url },
-      }]);
-      setNewMsg("");
+
+    let content = newMsg.trim();
+
+    if (attachFile) {
+      setUploading(true);
+      const url = await uploadChatAttachment(attachFile, userId);
+      setUploading(false);
+      if (url) {
+        const label = attachFile.name;
+        const attachContent = `[attachment]:${url}|${label}`;
+        if (content) {
+          await sendWebMessage(selected.id, userId, content);
+          content = attachContent;
+        } else {
+          content = attachContent;
+        }
+      }
+      clearAttach();
+    }
+
+    if (content) {
+      const ok = await sendWebMessage(selected.id, userId, content);
+      if (ok) {
+        setMessages(prev => [...prev, {
+          id: `tmp-${Date.now()}`,
+          conversation_id: selected.id,
+          sender_id: userId,
+          content,
+          created_at: new Date().toISOString(),
+          sender: { id: userId, full_name: profile?.full_name ?? "Eu", avatar_url: profile?.avatar_url },
+        }]);
+        setNewMsg("");
+      }
     }
     setSending(false);
   };
@@ -89,16 +211,29 @@ export default function MensagensPage() {
     return name.toLowerCase().includes(search.toLowerCase());
   });
 
-  const getConvoName = (c: WebConversation) => c.name ?? c.participant?.full_name ?? "Conversa";
+  const getConvoName   = (c: WebConversation) => c.name ?? c.participant?.full_name ?? "Conversa";
   const getConvoAvatar = (c: WebConversation) => c.participant?.avatar_url ?? null;
+
+  const busy = sending || uploading;
+  const canSend = (newMsg.trim().length > 0 || attachFile !== null) && !busy;
 
   return (
     <AppShell>
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+        style={{ display: "none" }}
+        onChange={handleFileChange}
+      />
+
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
         <h1 style={{ fontSize: 22, fontWeight: 900, color: NAVY, marginBottom: 16 }}>Mensagens</h1>
 
         <div style={{ display: "flex", height: "calc(100vh - 180px)", backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, overflow: "hidden" }}>
-          {/* ── Sidebar: conversation list ── */}
+
+          {/* ── Sidebar ── */}
           <div style={{ width: 280, flexShrink: 0, borderRight: `1px solid ${BORDER}`, display: "flex", flexDirection: "column" }}>
             <div style={{ padding: "12px 12px 8px" }}>
               <input
@@ -159,7 +294,7 @@ export default function MensagensPage() {
           </div>
 
           {/* ── Message thread ── */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
             {!selected ? (
               <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: MUTED }}>
                 <div style={{ fontSize: 48, marginBottom: 12 }}>💬</div>
@@ -169,7 +304,7 @@ export default function MensagensPage() {
             ) : (
               <>
                 {/* Thread header */}
-                <div style={{ padding: "14px 18px", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ padding: "14px 18px", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
                   <Avatar src={getConvoAvatar(selected)} name={getConvoName(selected)} size={38} />
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{getConvoName(selected)}</div>
@@ -184,6 +319,7 @@ export default function MensagensPage() {
                   )}
                   {messages.map(msg => {
                     const isMe = msg.sender_id === userId;
+                    const attach = parseAttachment(msg.content);
                     return (
                       <div key={msg.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", gap: 8 }}>
                         {!isMe && <Avatar src={msg.sender?.avatar_url} name={msg.sender?.full_name ?? "?"} size={30} />}
@@ -193,12 +329,16 @@ export default function MensagensPage() {
                           )}
                           <div style={{
                             backgroundColor: isMe ? GOLD : BG,
-                            color: isMe ? NAVY : NAVY,
+                            color: NAVY,
                             borderRadius: isMe ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                            padding: "10px 14px", fontSize: 13, lineHeight: 1.55,
+                            padding: attach ? "8px" : "10px 14px",
+                            fontSize: 13, lineHeight: 1.55,
                             border: isMe ? "none" : `1px solid ${BORDER}`,
                           }}>
-                            {msg.content}
+                            {attach
+                              ? <AttachmentBubble url={attach.url} label={attach.label} isMe={isMe} />
+                              : msg.content
+                            }
                           </div>
                           <div style={{ fontSize: 10, color: MUTED, marginTop: 3, textAlign: isMe ? "right" : "left" }}>
                             {timeAgo(msg.created_at)}
@@ -211,28 +351,72 @@ export default function MensagensPage() {
                   <div ref={bottomRef} />
                 </div>
 
-                {/* Input */}
-                <div style={{ padding: "12px 18px", borderTop: `1px solid ${BORDER}`, display: "flex", gap: 10 }}>
+                {/* Attachment preview */}
+                {attachFile && (
+                  <div style={{ padding: "8px 18px 0", flexShrink: 0 }}>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 8, backgroundColor: BG, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "8px 12px", maxWidth: "100%" }}>
+                      {attachPreview ? (
+                        <img src={attachPreview} alt="preview" style={{ width: 44, height: 44, borderRadius: 6, objectFit: "cover" }} />
+                      ) : (
+                        <span style={{ fontSize: 22 }}>📎</span>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{attachFile.name}</div>
+                        <div style={{ fontSize: 11, color: MUTED }}>{(attachFile.size / 1024).toFixed(0)} KB</div>
+                      </div>
+                      <button onClick={clearAttach} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
+                        <XIcon size={14} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Input bar */}
+                <div style={{ padding: "10px 18px 14px", borderTop: `1px solid ${BORDER}`, display: "flex", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
+                  {/* Clip / Attach */}
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    title="Anexar arquivo"
+                    style={{
+                      flexShrink: 0, width: 40, height: 40, border: `1px solid ${BORDER}`,
+                      borderRadius: 20, backgroundColor: WHITE, cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      color: attachFile ? GOLD : MUTED,
+                      outline: "none",
+                    }}
+                  >
+                    <ClipIcon size={18} color={attachFile ? GOLD : MUTED} />
+                  </button>
+
+                  {/* Text input */}
                   <input
                     value={newMsg}
                     onChange={e => setNewMsg(e.target.value)}
                     onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                    placeholder="Escreva uma mensagem..."
+                    placeholder="Escreva uma mensagem…"
                     style={{
-                      flex: 1, border: `1px solid ${BORDER}`, borderRadius: 24, padding: "10px 16px",
-                      fontSize: 14, outline: "none", fontFamily: "inherit",
+                      flex: 1, border: `1px solid ${BORDER}`, borderRadius: 24,
+                      padding: "10px 16px", fontSize: 14, outline: "none", fontFamily: "inherit",
                     }}
                   />
+
+                  {/* Send */}
                   <button
                     onClick={handleSend}
-                    disabled={!newMsg.trim() || sending}
+                    disabled={!canSend}
+                    title="Enviar"
                     style={{
-                      backgroundColor: newMsg.trim() ? GOLD : `${GOLD}55`,
-                      border: "none", borderRadius: 24, padding: "10px 20px",
-                      color: NAVY, fontWeight: 800, fontSize: 14, cursor: newMsg.trim() ? "pointer" : "default",
+                      flexShrink: 0, width: 40, height: 40, border: "none", borderRadius: 20,
+                      backgroundColor: canSend ? GOLD : `${GOLD}40`,
+                      cursor: canSend ? "pointer" : "default",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      outline: "none",
                     }}
                   >
-                    Enviar
+                    {busy
+                      ? <span style={{ fontSize: 14 }}>⏳</span>
+                      : <SendIcon size={16} color={canSend ? NAVY : "#999"} />
+                    }
                   </button>
                 </div>
               </>
