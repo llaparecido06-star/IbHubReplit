@@ -2352,39 +2352,50 @@ export async function uploadChatMedia(
     const ext = safeMime.includes("/")
       ? safeMime.split("/")[1]?.replace("jpeg", "jpg").replace("quicktime", "mov") ?? "jpg"
       : "jpg";
-    const path = `chat/${conversationId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const fileName = `upload_${Date.now()}.${ext}`;
 
-    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-    const anonKey    = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
-
-    // Get current session token for authenticated upload
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL!;
     const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token ?? anonKey;
+    const token = sessionData?.session?.access_token;
+    const userId = sessionData?.session?.user?.id;
+    if (!token || !userId) return null;
 
-    // FormData approach: React Native's native fetch handles local file:// and
-    // content:// URIs correctly when wrapped in FormData — most reliable cross-platform method
-    const formData = new FormData();
-    formData.append("file", { uri, type: safeMime, name: `upload.${ext}` } as any);
+    // Read the local file URI as a blob then convert to base64.
+    // This is the most reliable approach in React Native without expo-file-system:
+    // fetch() handles file://, content:// and ph:// URIs natively.
+    const fileResponse = await fetch(uri);
+    const blob = await fileResponse.blob();
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        // result = "data:<mime>;base64,<data>" — extract only the data part
+        const b64 = result.split(",")[1];
+        if (b64) resolve(b64);
+        else reject(new Error("FileReader empty result"));
+      };
+      reader.onerror = () => reject(new Error("FileReader failed"));
+      reader.readAsDataURL(blob);
+    });
 
-    const uploadUrl = `${supabaseUrl}/storage/v1/object/chat-attachments/${path}`;
-    const res = await fetch(uploadUrl, {
+    // POST to API server which uses service role key — bypasses Supabase RLS
+    const res = await fetch(`${apiUrl}/uploads/chat`, {
       method: "POST",
       headers: {
+        "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
-        apikey: anonKey,
-        // Do NOT set Content-Type — let fetch set it with the boundary for multipart
       },
-      body: formData,
+      body: JSON.stringify({ fileBase64: base64, fileName, mimeType: safeMime, userId }),
     });
 
     if (!res.ok) {
       const text = await res.text().catch(() => res.status.toString());
-      console.error("uploadChatMedia storage error:", text);
+      console.error("uploadChatMedia API error:", text);
       return null;
     }
 
-    const { data } = supabase.storage.from("chat-attachments").getPublicUrl(path);
-    return data.publicUrl;
+    const json = await res.json();
+    return json.url ?? null;
   } catch (e) {
     console.error("uploadChatMedia:", e);
     return null;
