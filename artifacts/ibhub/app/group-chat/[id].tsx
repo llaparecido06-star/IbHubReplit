@@ -341,26 +341,49 @@ export default function GroupChatScreen() {
     );
   };
 
+  const isGroupOwner = !!user?.id && user.id === groupInfo.owner_id;
+
   const handleDeleteMessages = () => {
     setMenuVisible(false);
-    Alert.alert(
-      "Apagar mensagens",
-      "Apagar todas as mensagens do grupo? Esta ação não pode ser desfeita.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Apagar", style: "destructive", onPress: async () => {
-            const ok = await API.deleteGroupMessages(id);
-            if (ok) {
-              setMessages([]);
-              seenMsgIds.current.clear();
-            } else {
-              Alert.alert("Erro", "Não foi possível apagar as mensagens.");
-            }
+    if (isGroupOwner) {
+      Alert.alert(
+        "Apagar todas as mensagens",
+        "Apagar permanentemente todas as mensagens do grupo para todos os membros? Esta ação não pode ser desfeita.",
+        [
+          { text: "Cancelar", style: "cancel" },
+          {
+            text: "Apagar tudo", style: "destructive", onPress: async () => {
+              const ok = await API.deleteGroupMessages(id);
+              if (ok) {
+                setMessages([]);
+                seenMsgIds.current.clear();
+              } else {
+                Alert.alert("Erro", "Não foi possível apagar as mensagens.");
+              }
+            },
           },
-        },
-      ],
-    );
+        ],
+      );
+    } else {
+      Alert.alert(
+        "Limpar meu histórico",
+        "Remover apenas as mensagens que você enviou neste grupo? Os outros membros não serão afetados.",
+        [
+          { text: "Cancelar", style: "cancel" },
+          {
+            text: "Limpar", style: "destructive", onPress: async () => {
+              if (!user?.id) return;
+              const ok = await API.deleteMyGroupMessages(id, user.id);
+              if (ok) {
+                setMessages(prev => prev.filter(m => m.sender_id !== user.id));
+              } else {
+                Alert.alert("Erro", "Não foi possível limpar o histórico.");
+              }
+            },
+          },
+        ],
+      );
+    }
   };
 
   // ── Reactions ─────────────────────────────────────────────────────────────
@@ -655,15 +678,13 @@ export default function GroupChatScreen() {
               <Text style={[styles.menuItemText, { color: colors.navy }]}>Configurações</Text>
             </TouchableOpacity>
             <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-            {user?.id === groupInfo.owner_id && (
-              <>
-                <TouchableOpacity style={styles.menuItem} onPress={handleDeleteMessages}>
-                  <Feather name="trash-2" size={18} color="#dc2626" />
-                  <Text style={[styles.menuItemText, { color: "#dc2626" }]}>Apagar mensagens</Text>
-                </TouchableOpacity>
-                <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-              </>
-            )}
+            <TouchableOpacity style={styles.menuItem} onPress={handleDeleteMessages}>
+              <Feather name="trash-2" size={18} color="#dc2626" />
+              <Text style={[styles.menuItemText, { color: "#dc2626" }]}>
+                {isGroupOwner ? "Apagar todas as mensagens" : "Limpar meu histórico"}
+              </Text>
+            </TouchableOpacity>
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity style={styles.menuItem} onPress={handleLeaveGroup}>
               <Feather name="log-out" size={18} color="#dc2626" />
               <Text style={[styles.menuItemText, { color: "#dc2626" }]}>Sair do grupo</Text>

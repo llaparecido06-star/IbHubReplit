@@ -5007,6 +5007,17 @@ export async function deleteGroupMessages(groupId: string): Promise<boolean> {
   } catch { return false; }
 }
 
+export async function deleteMyGroupMessages(groupId: string, userId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("messages")
+      .delete()
+      .eq("conversation_id", groupId)
+      .eq("sender_id", userId);
+    return !error;
+  } catch { return false; }
+}
+
 export async function joinGroup(groupId: string, userId: string): Promise<boolean> {
   try {
     const { error } = await supabase.from("group_members").insert({ group_id: groupId, user_id: userId, role: "member" });
