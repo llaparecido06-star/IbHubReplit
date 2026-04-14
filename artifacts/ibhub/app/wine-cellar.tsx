@@ -62,6 +62,7 @@ export default function WineCellarScreen() {
   const [filter, setFilter]         = useState<FilterKey>("todos");
   const [search, setSearch]         = useState("");
   const [showForm, setShowForm]     = useState(false);
+  const [editingId, setEditingId]   = useState<string | null>(null);
 
   // Form state
   const [wName, setWName]           = useState("");
@@ -143,9 +144,31 @@ export default function WineCellarScreen() {
   useEffect(() => { load(); }, [load]);
 
   const resetForm = () => {
+    setEditingId(null);
     setWName(""); setWProducer(""); setWVintage(""); setWRegion(""); setWCountry("");
     setWGrape(""); setWEan(""); setWQty("1"); setWPrice(""); setWBuyDate(""); setWDrinkBy("");
     setWStorage(""); setWNotes(""); setWRating(0); setWStatus("adega"); setWPrivate(true);
+  };
+
+  const handleEditPress = (wine: API.WineEntry) => {
+    setEditingId(wine.id);
+    setWName(wine.name);
+    setWProducer(wine.producer ?? "");
+    setWVintage(wine.vintage ?? "");
+    setWRegion(wine.region ?? "");
+    setWCountry(wine.country ?? "");
+    setWGrape(wine.grape ?? "");
+    setWEan(wine.ean ?? "");
+    setWQty(String(wine.qty));
+    setWPrice(wine.price != null ? String(wine.price) : "");
+    setWBuyDate(wine.buy_date ?? "");
+    setWDrinkBy(wine.drink_by ?? "");
+    setWStorage(wine.storage ?? "");
+    setWNotes(wine.notes ?? "");
+    setWRating(wine.rating);
+    setWStatus(wine.status);
+    setWPrivate(wine.is_private);
+    setShowForm(true);
   };
 
   const parseDateBR = (str: string): string | null => {
@@ -174,9 +197,7 @@ export default function WineCellarScreen() {
       Alert.alert("Data inválida", "Informe 'beber até' no formato dd/mm/aaaa."); return;
     }
 
-    setSaving(true);
-    const entry = await API.addWineEntry({
-      user_id: user.id,
+    const payload = {
       name: wName.trim(),
       producer: wProducer.trim() || null,
       vintage: wVintage.trim() || null,
@@ -193,14 +214,29 @@ export default function WineCellarScreen() {
       rating: wRating,
       status: wStatus,
       is_private: wPrivate,
-    });
-    setSaving(false);
-    if (entry) {
-      setWines((prev) => [entry, ...prev]);
-      resetForm();
-      setShowForm(false);
+    };
+
+    setSaving(true);
+    if (editingId) {
+      const updated = await API.updateWineEntry(editingId, payload);
+      setSaving(false);
+      if (updated) {
+        setWines((prev) => prev.map((w) => w.id === editingId ? updated : w));
+        resetForm();
+        setShowForm(false);
+      } else {
+        Alert.alert("Erro", "Não foi possível atualizar o vinho. Tente novamente.");
+      }
     } else {
-      Alert.alert("Erro", "Não foi possível salvar o vinho. Tente novamente.");
+      const entry = await API.addWineEntry({ user_id: user.id, ...payload });
+      setSaving(false);
+      if (entry) {
+        setWines((prev) => [entry, ...prev]);
+        resetForm();
+        setShowForm(false);
+      } else {
+        Alert.alert("Erro", "Não foi possível salvar o vinho. Tente novamente.");
+      }
     }
   };
 
@@ -379,6 +415,9 @@ export default function WineCellarScreen() {
                   <TouchableOpacity onPress={() => handleShareWine(wine)} style={{ padding: 4 }}>
                     <Feather name="share-2" size={15} color={colors.mutedForeground} />
                   </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleEditPress(wine)} style={{ padding: 4, marginLeft: 2 }}>
+                    <Feather name="edit-2" size={15} color={colors.mutedForeground} />
+                  </TouchableOpacity>
                   <TouchableOpacity onPress={() => handleDelete(wine.id, wine.name)} style={{ padding: 4, marginLeft: 2 }}>
                     <Feather name="trash-2" size={15} color={colors.mutedForeground} />
                   </TouchableOpacity>
@@ -409,11 +448,11 @@ export default function WineCellarScreen() {
       </ScrollView>
 
       {/* Add Wine form modal */}
-      <Modal visible={showForm} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowForm(false)}>
+      <Modal visible={showForm} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { resetForm(); setShowForm(false); }}>
         <View style={[styles.formContainer, { backgroundColor: colors.background }]}>
           <View style={[styles.formHeader, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
-            <Text style={[styles.formTitle, { color: colors.navy }]}>Adicionar Vinho</Text>
-            <TouchableOpacity onPress={() => setShowForm(false)}>
+            <Text style={[styles.formTitle, { color: colors.navy }]}>{editingId ? "Editar Vinho" : "Adicionar Vinho"}</Text>
+            <TouchableOpacity onPress={() => { resetForm(); setShowForm(false); }}>
               <Feather name="x" size={22} color={colors.navy} />
             </TouchableOpacity>
           </View>
@@ -500,7 +539,7 @@ export default function WineCellarScreen() {
               ) : (
                 <Feather name="check" size={18} color="#fff" />
               )}
-              <Text style={styles.saveBtnText}>{saving ? "Salvando..." : "Salvar Vinho"}</Text>
+              <Text style={styles.saveBtnText}>{saving ? "Salvando..." : editingId ? "Salvar Alterações" : "Salvar Vinho"}</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
