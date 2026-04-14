@@ -423,33 +423,37 @@ export default function AdegaPage() {
     if (form.drink_by.trim() && !drinkBy) { alert("'Beber até' inválido. Use dd/mm/aaaa."); return; }
 
     setSaving(true);
-    const entry = await addWineEntry({
-      user_id: user.id,
-      name: form.name.trim(),
-      producer: form.producer.trim() || null,
-      vintage: form.vintage.trim() || null,
-      region: form.region.trim() || null,
-      country: form.country.trim() || null,
-      grape: form.grape.trim() || null,
-      ean: form.ean.trim() || null,
-      qty: Math.max(1, parseInt(form.qty) || 1),
-      price: form.price.trim() ? parseFloat(form.price.replace(",", ".")) : null,
-      buy_date: buyDate,
-      drink_by: drinkBy,
-      storage: form.storage.trim() || null,
-      notes: form.notes.trim() || null,
-      rating: form.rating,
-      status: form.status,
-      is_private: form.is_private,
-    });
-    setSaving(false);
-
-    if (entry) {
-      setWines((prev) => [entry, ...prev]);
-      setForm(emptyForm());
-      setShowForm(false);
-    } else {
-      alert("Não foi possível salvar o vinho. Tente novamente.");
+    try {
+      const entry = await addWineEntry({
+        user_id: user.id,
+        name: form.name.trim(),
+        producer: form.producer.trim() || null,
+        vintage: form.vintage.trim() || null,
+        region: form.region.trim() || null,
+        country: form.country.trim() || null,
+        grape: form.grape.trim() || null,
+        ean: form.ean.trim() || null,
+        qty: Math.max(1, parseInt(form.qty) || 1),
+        price: form.price.trim() ? parseFloat(form.price.replace(",", ".")) : null,
+        buy_date: buyDate,
+        drink_by: drinkBy,
+        storage: form.storage.trim() || null,
+        notes: form.notes.trim() || null,
+        rating: form.rating,
+        status: form.status,
+        is_private: form.is_private,
+      });
+      if (entry) {
+        setWines((prev) => [entry, ...prev]);
+        setForm(emptyForm());
+        setShowForm(false);
+      } else {
+        alert("Não foi possível salvar o vinho. Tente novamente.");
+      }
+    } catch {
+      alert("Erro inesperado. Tente novamente.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -513,15 +517,20 @@ export default function AdegaPage() {
       status: form.status,
       is_private: form.is_private,
     };
-    const ok = await updateWineEntry(editingWine.id, patch);
-    setSaving(false);
-    if (ok) {
-      setWines((prev) => prev.map((w) => w.id === editingWine.id ? { ...w, ...patch } : w));
-      setEditingWine(null);
-      setForm(emptyForm());
-      setShowForm(false);
-    } else {
-      alert("Não foi possível atualizar o vinho. Tente novamente.");
+    try {
+      const ok = await updateWineEntry(editingWine.id, patch);
+      if (ok) {
+        setWines((prev) => prev.map((w) => w.id === editingWine.id ? { ...w, ...patch } : w));
+        setEditingWine(null);
+        setForm(emptyForm());
+        setShowForm(false);
+      } else {
+        alert("Não foi possível atualizar o vinho. Tente novamente.");
+      }
+    } catch {
+      alert("Erro inesperado. Tente novamente.");
+    } finally {
+      setSaving(false);
     }
   };
 

@@ -1,0 +1,25 @@
+Atue como um desenvolvedor Full-stack Sênior especialista em arquitetura de permissões. Preciso conectar e validar as lógicas do nosso painel Admin com o Front-end/Back-end do app.
+
+Regra Global de Teste: O erro foi encontrado no Android, mas ao corrigir, verifique e garanta que funcione perfeitamente no iOS e na versão WEB.
+
+Tarefas CRM e Moderação:
+
+Mudança de Plano Manual (Cortesia): No CRM de Usuários, ao clicar em um usuário, adicione a funcionalidade de editar manualmente o plano dele. Deve haver uma opção para aplicar "Cortesia" (ignora a validação de pagamento do Stripe/gateway e libera o acesso premium instantaneamente) ou rebaixar para "Gratuito".
+
+Ações de Punição: A função "Banir Usuário" deve deslogar a pessoa imediatamente e impedir novos logins. "Aplicar Shadowban" deve ocultar os posts dela dos feeds públicos, mas sem que ela perceba.
+
+Certificações: Remova a aba de "Aprovar Certificações" (o próprio usuário insere direto no perfil agora). Mantenha apenas "Denúncias".
+
+Tarefas Plan Builder (Obrigatório Refletir no App):
+
+Efetivação das Permissões (O Bug Principal): Atualmente, as funções marcadas como liberadas no Plan Builder não estão liberando o acesso real no aplicativo. Crie um Hook ou Middleware de permissões global. O Front-end DEVE ler o array/lista de features liberadas no plano ativo do usuário. Exemplo: se no Plan Builder o plano "Profissional" tem a flag "KPIs de Mercado", o app deve verificar hasFeature('kpis_de_mercado') antes de renderizar a tela. Se não tiver, bloqueie com um Paywall.
+
+Estratégia de Slides: A regra de liberação ("Acesso Total", "Sequencial Mensal" ou "Aleatório Diário") configurada no plano deve ser rigidamente aplicada na visualização das Apresentações de Mercado do usuário.
+
+Tarefas Sistema e Feature Flags:
+
+Feature Flags em Tempo Real: Conecte os toggles de "Configurações do Sistema" diretamente à UI do app via listeners realtime. Desligou "Enquetes" no Admin, o botão de criar enquete some no app na mesma hora.
+
+Modo Manutenção: Se ativado, derrube todas as sessões ativas (exceto ADMIN) e exiba tela de "Voltamos já".
+
+Comunicação: Garanta que a "Nova Notificação" dispare via Push (Firebase/Expo) e que o campo Deep Link funcione corretamente.
