@@ -2644,6 +2644,7 @@ export interface WineEntry {
   region?: string | null;
   country?: string | null;
   grape?: string | null;
+  ean?: string | null;
   qty: number;
   price?: number | null;
   buy_date?: string | null;
@@ -2655,6 +2656,15 @@ export interface WineEntry {
   is_private: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface WineCommunityRating {
+  ean: string;
+  name: string;
+  producer: string | null;
+  vintage: string | null;
+  avg_rating: number;
+  rating_count: number;
 }
 
 export async function fetchWineCellar(userId: string): Promise<WineEntry[]> {
@@ -2730,6 +2740,24 @@ export async function deleteWineEntry(id: string): Promise<boolean> {
   } catch (e) {
     console.error("deleteWineEntry:", e);
     return false;
+  }
+}
+
+/**
+ * Busca o ranking comunitário de vinhos via RPC `wine_community_ratings`.
+ * Vinhos ordenados por nota média desc.
+ * @param ean - Se fornecido, retorna apenas o card daquele EAN específico.
+ */
+export async function fetchWineCommunityRatings(ean?: string): Promise<WineCommunityRating[]> {
+  try {
+    const { data, error } = await supabase.rpc("wine_community_ratings", {
+      p_ean: ean ?? null,
+    });
+    if (error) { console.warn("fetchWineCommunityRatings:", error); return []; }
+    return (data ?? []) as WineCommunityRating[];
+  } catch (e) {
+    console.warn("fetchWineCommunityRatings:", e);
+    return [];
   }
 }
 

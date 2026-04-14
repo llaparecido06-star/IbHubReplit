@@ -70,6 +70,7 @@ export default function WineCellarScreen() {
   const [wRegion, setWRegion]       = useState("");
   const [wCountry, setWCountry]     = useState("");
   const [wGrape, setWGrape]         = useState("");
+  const [wEan, setWEan]             = useState("");
   const [wQty, setWQty]             = useState("1");
   const [wPrice, setWPrice]         = useState("");
   const [wBuyDate, setWBuyDate]     = useState("");
@@ -143,7 +144,7 @@ export default function WineCellarScreen() {
 
   const resetForm = () => {
     setWName(""); setWProducer(""); setWVintage(""); setWRegion(""); setWCountry("");
-    setWGrape(""); setWQty("1"); setWPrice(""); setWBuyDate(""); setWDrinkBy("");
+    setWGrape(""); setWEan(""); setWQty("1"); setWPrice(""); setWBuyDate(""); setWDrinkBy("");
     setWStorage(""); setWNotes(""); setWRating(0); setWStatus("adega"); setWPrivate(true);
   };
 
@@ -182,6 +183,7 @@ export default function WineCellarScreen() {
       region: wRegion.trim() || null,
       country: wCountry.trim() || null,
       grape: wGrape.trim() || null,
+      ean: wEan.trim() || null,
       qty: Math.max(1, parseInt(wQty) || 1),
       price: wPrice.trim() ? parseFloat(wPrice.replace(",", ".")) : null,
       buy_date: buyDate,
@@ -261,13 +263,22 @@ export default function WineCellarScreen() {
             <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>Gerencie sua adega pessoal</Text>
           </View>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.addBtn, { backgroundColor: colors.gold }]}
-          onPress={() => setShowForm(true)}
-        >
-          <Feather name="plus" size={15} color="#fff" />
-          <Text style={styles.addBtnText}>Adicionar</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <TouchableOpacity
+            style={[styles.addBtn, { backgroundColor: colors.navy + "14", borderWidth: 1, borderColor: colors.navy + "20" }]}
+            onPress={() => router.push("/wine-ranking" as any)}
+          >
+            <Feather name="bar-chart-2" size={15} color={colors.navy} />
+            <Text style={[styles.addBtnText, { color: colors.navy }]}>Ranking</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.addBtn, { backgroundColor: colors.gold }]}
+            onPress={() => setShowForm(true)}
+          >
+            <Feather name="plus" size={15} color="#fff" />
+            <Text style={styles.addBtnText}>Adicionar</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
@@ -377,6 +388,12 @@ export default function WineCellarScreen() {
                   <Text style={[styles.wineMetaText, { color: colors.mutedForeground }]}>{wine.qty}x</Text>
                   {wine.price != null && <Text style={[styles.wineMetaText, { color: colors.gold }]}>R$ {Number(wine.price).toFixed(2)}</Text>}
                   {wine.is_private && <Feather name="eye-off" size={12} color={colors.mutedForeground} />}
+                  {wine.ean && (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                      <Feather name="tag" size={11} color={colors.mutedForeground} />
+                      <Text style={[styles.wineMetaText, { color: colors.mutedForeground }]}>{wine.ean}</Text>
+                    </View>
+                  )}
                 </View>
                 {wine.rating > 0 && (
                   <View style={{ flexDirection: "row", gap: 2 }}>
@@ -417,6 +434,9 @@ export default function WineCellarScreen() {
             </View>
             <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
               placeholder="Uva/Casta" placeholderTextColor={colors.mutedForeground} value={wGrape} onChangeText={setWGrape} />
+            <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+              placeholder="EAN / Código de barras (ex: 7896123456789)" placeholderTextColor={colors.mutedForeground}
+              value={wEan} onChangeText={setWEan} keyboardType="numeric" />
             <View style={styles.fRow}>
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={[styles.fLabel, { color: colors.mutedForeground }]}>Quantidade</Text>
