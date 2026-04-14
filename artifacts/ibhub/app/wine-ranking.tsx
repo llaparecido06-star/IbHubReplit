@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -43,10 +43,14 @@ export default function WineRankingScreen() {
   const colors  = useColors();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
+  const params  = useLocalSearchParams<{ ean?: string }>();
+
+  // Se veio de um post de degustação, pré-filtra pelo EAN do vinho
+  const initialEan = params.ean ?? "";
 
   const [ratings, setRatings]         = useState<API.WineCommunityRating[]>([]);
   const [loading, setLoading]         = useState(true);
-  const [eanFilter, setEanFilter]     = useState("");
+  const [eanFilter, setEanFilter]     = useState(initialEan);
   const [searching, setSearching]     = useState(false);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
@@ -64,7 +68,11 @@ export default function WineRankingScreen() {
     setSearching(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    // Carrega com o EAN inicial (vindo de um post) ou sem filtro
+    load(initialEan || undefined);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSearch = () => {
     load(eanFilter.trim() || undefined);
@@ -106,7 +114,9 @@ export default function WineRankingScreen() {
           <Feather name="arrow-left" size={22} color={colors.navy} />
           <View>
             <Text style={[styles.headerTitle, { color: colors.navy }]}>Ranking de Vinhos</Text>
-            <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>Notas da comunidade ibhub</Text>
+            <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
+              {initialEan ? `EAN ${initialEan}` : "Notas da comunidade ibhub"}
+            </Text>
           </View>
         </TouchableOpacity>
       </View>

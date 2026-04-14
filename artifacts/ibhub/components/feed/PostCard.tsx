@@ -208,6 +208,12 @@ function detectPostType(content: string): "wine" | "poll" | "text" {
   return "text";
 }
 
+/** Extrai o EAN do conteúdo de um post de degustação, se presente. */
+function extractEanFromContent(content: string): string | null {
+  const match = content.match(/🏷️ EAN: (\d+)/);
+  return match ? match[1] : null;
+}
+
 function PlanBadge({ plan, colors }: { plan?: string; colors: any }) {
   if (!plan || plan === "basico") return null;
   const map: Record<string, { label: string; color: string }> = {
@@ -352,6 +358,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
   const isLiked      = post.is_liked      ?? false;
   const isBookmarked = post.is_bookmarked ?? false;
   const postType     = detectPostType(post.content ?? "");
+  const wineEan      = postType === "wine" ? extractEanFromContent(post.content ?? "") : null;
   const isLong       = (post.content?.length ?? 0) > CONTENT_CUTOFF;
   const displayContent = isLong && !expanded
     ? (post.content ?? "").slice(0, CONTENT_CUTOFF).trimEnd() + "…"
@@ -504,10 +511,19 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
     <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
 
       {postType === "wine" && (
-        <View style={[styles.wineBadge, { backgroundColor: colors.gold + "18" }]}>
+        <TouchableOpacity
+          style={[styles.wineBadge, { backgroundColor: colors.gold + "18" }]}
+          onPress={() => router.push({ pathname: "/wine-ranking" as any, params: wineEan ? { ean: wineEan } : {} })}
+          activeOpacity={0.75}
+        >
           <Text style={styles.wineBadgeIcon}>🍷</Text>
           <Text style={[styles.wineBadgeText, { color: colors.gold }]}>Avaliação de Vinho</Text>
-        </View>
+          {wineEan ? (
+            <Text style={[styles.wineBadgeText, { color: colors.gold, opacity: 0.7 }]}>· Ver ranking ↗</Text>
+          ) : (
+            <Text style={[styles.wineBadgeText, { color: colors.gold, opacity: 0.7 }]}>· Ranking comunitário ↗</Text>
+          )}
+        </TouchableOpacity>
       )}
 
       <View style={styles.header}>
