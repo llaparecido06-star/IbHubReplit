@@ -5055,8 +5055,12 @@ export async function fetchGroupHistoryClearedAt(groupId: string, userId: string
 
 export async function joinGroup(groupId: string, userId: string): Promise<boolean> {
   try {
-    const { error } = await supabase.from("group_members").insert({ group_id: groupId, user_id: userId, role: "member" });
-    return !error;
+    const [{ error: gmErr }, { error: cpErr }] = await Promise.all([
+      supabase.from("group_members").insert({ group_id: groupId, user_id: userId, role: "member" }),
+      supabase.from("conversation_participants").upsert({ conversation_id: groupId, user_id: userId }, { onConflict: "conversation_id,user_id", ignoreDuplicates: true }),
+    ]);
+    if (cpErr) console.warn("joinGroup conversation_participants:", cpErr);
+    return !gmErr;
   } catch { return false; }
 }
 

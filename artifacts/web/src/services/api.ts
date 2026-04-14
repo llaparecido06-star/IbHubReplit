@@ -1673,10 +1673,12 @@ export async function createGroup(params: {
 
 export async function joinGroup(groupId: string, userId: string): Promise<boolean> {
   try {
-    const { error } = await supabase
-      .from("group_members")
-      .insert({ group_id: groupId, user_id: userId, role: "member" });
-    return !error;
+    const [{ error: gmErr }, { error: cpErr }] = await Promise.all([
+      supabase.from("group_members").insert({ group_id: groupId, user_id: userId, role: "member" }),
+      supabase.from("conversation_participants").upsert({ conversation_id: groupId, user_id: userId }, { onConflict: "conversation_id,user_id", ignoreDuplicates: true }),
+    ]);
+    if (cpErr) console.warn("joinGroup conversation_participants:", cpErr);
+    return !gmErr;
   } catch {
     return false;
   }
@@ -1684,12 +1686,13 @@ export async function joinGroup(groupId: string, userId: string): Promise<boolea
 
 export async function leaveGroup(groupId: string, userId: string): Promise<boolean> {
   try {
-    const { error } = await supabase
-      .from("group_members")
-      .delete()
-      .eq("group_id", groupId)
-      .eq("user_id", userId);
-    return !error;
+    const [{ error: gmErr }, { error: cpErr }] = await Promise.all([
+      supabase.from("group_members").delete().eq("group_id", groupId).eq("user_id", userId),
+      supabase.from("conversation_participants").delete().eq("conversation_id", groupId).eq("user_id", userId),
+    ]);
+    if (gmErr) console.warn("leaveGroup group_members:", gmErr);
+    if (cpErr) console.warn("leaveGroup conversation_participants:", cpErr);
+    return !gmErr;
   } catch {
     return false;
   }
