@@ -8,6 +8,7 @@ import {
   SuggestedProfile,
   WineCommunityRating,
   fetchFeedPosts,
+  fetchCompanyFeedPosts,
   toggleLikePost,
   changeReactionPost,
   toggleBookmarkPost,
@@ -544,7 +545,7 @@ function TrendingTopics() {
 
 /* ─── AppFeedPage ────────────────────────── */
 export default function AppFeedPage() {
-  const { profile, user, loading: authLoading } = useAuth();
+  const { profile, user, loading: authLoading, activeCompany } = useAuth();
 
   const [posts, setPosts]             = useState<Post[]>([]);
   const [suggestions, setSuggestions] = useState<SuggestedProfile[]>([]);
@@ -553,6 +554,7 @@ export default function AppFeedPage() {
 
   const userId    = profile?.id ?? user?.id ?? "";
   const firstName = profile?.full_name?.split(" ")[0] ?? "Usuário";
+  const companyId = activeCompany?.id ?? null;
 
   const load = useCallback(async () => {
     if (!userId) {
@@ -560,16 +562,20 @@ export default function AppFeedPage() {
       return;
     }
     setLoading(true);
-    const [postsData, suggsData] = await Promise.all([
-      fetchFeedPosts(userId),
-      fetchWebSuggestedConnections(userId, 5),
-    ]);
-    setPosts(postsData);
-    setSuggestions(suggsData);
+    if (companyId) {
+      const postsData = await fetchCompanyFeedPosts(companyId, userId);
+      setPosts(postsData);
+    } else {
+      const [postsData, suggsData] = await Promise.all([
+        fetchFeedPosts(userId),
+        fetchWebSuggestedConnections(userId, 5),
+      ]);
+      setPosts(postsData);
+      setSuggestions(suggsData);
+    }
     setLoading(false);
-  }, [userId]);
+  }, [userId, companyId]);
 
-  // Wait for auth to finish loading before fetching feed data
   useEffect(() => {
     if (!authLoading) load();
   }, [load, authLoading]);
@@ -579,7 +585,6 @@ export default function AppFeedPage() {
   const handleLike = useCallback(async (postId: string, isLiked: boolean, reaction: ReactionType = "curtir") => {
     if (!userId) return;
     if (isLiked) {
-      // Curtir novamente = descurtir
       const currentPost = posts.find(p => p.id === postId);
       if (currentPost?.reaction_type === reaction) {
         setPosts(prev => prev.map(p =>
@@ -587,13 +592,12 @@ export default function AppFeedPage() {
             ? { ...p, is_liked: false, reaction_type: null, likes_count: Math.max(0, p.likes_count - 1) }
             : p
         ));
-        await toggleLikePost(postId, userId, true);
+        await toggleLikePost(postId, userId, true, reaction, companyId);
       } else {
-        // Mudar reação
         setPosts(prev => prev.map(p =>
           p.id === postId ? { ...p, reaction_type: reaction } : p
         ));
-        await changeReactionPost(postId, userId, reaction);
+        await changeReactionPost(postId, userId, reaction, companyId);
       }
     } else {
       setPosts(prev => prev.map(p =>
@@ -601,9 +605,9 @@ export default function AppFeedPage() {
           ? { ...p, is_liked: true, reaction_type: reaction, likes_count: p.likes_count + 1 }
           : p
       ));
-      await toggleLikePost(postId, userId, false, reaction);
+      await toggleLikePost(postId, userId, false, reaction, companyId);
     }
-  }, [userId, posts]);
+  }, [userId, posts, companyId]);
 
   const handleBookmark = useCallback(async (postId: string, isBookmarked: boolean) => {
     if (!userId) return;
@@ -620,11 +624,25 @@ export default function AppFeedPage() {
 
   return (
     <AppShell onPostCreated={load}>
-      {/* Greeting */}
-      <div style={{ marginBottom: 14 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 900, color: NAVY, margin: "0 0 2px" }}>Olá, {firstName} 👋</h1>
-        <p style={{ fontSize: 13, color: MUTED, margin: 0 }}>Veja as últimas atualizações</p>
-      </div>
+      {/* Greeting / Company Banner */}
+      {activeCompany ? (
+        <div style={{ marginBottom: 14, backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", gap: 12 }}>
+          {activeCompany.avatar_url
+            ? <img src={activeCompany.avatar_url} alt={activeCompany.name} style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+            : <div style={{ width: 44, height: 44, borderRadius: "50%", backgroundColor: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 800, color: WHITE, flexShrink: 0 }}>{activeCompany.name[0]}</div>
+          }
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, letterSpacing: 0.5, textTransform: "uppercase" }}>Modo Empresa Ativo</div>
+            <h1 style={{ fontSize: 18, fontWeight: 900, color: NAVY, margin: "2px 0 0" }}>{activeCompany.name}</h1>
+            <p style={{ fontSize: 12, color: MUTED, margin: 0 }}>Você está publicando, curtindo e interagindo como esta empresa</p>
+          </div>
+        </div>
+      ) : (
+        <div style={{ marginBottom: 14 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 900, color: NAVY, margin: "0 0 2px" }}>Olá, {firstName} 👋</h1>
+          <p style={{ fontSize: 13, color: MUTED, margin: 0 }}>Veja as últimas atualizações</p>
+        </div>
+      )}
 
       {/* Two-column layout */}
       <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
@@ -639,7 +657,15 @@ export default function AppFeedPage() {
               Carregando feed…
             </div>
           ) : posts.length === 0 ? (
-            <WelcomeCard suggestions={suggestions} onConnect={handleConnect} />
+            activeCompany ? (
+              <div style={{ textAlign: "center", padding: 48, color: MUTED, backgroundColor: WHITE, borderRadius: 14, border: `1px solid ${BORDER}` }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>🏢</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Nenhuma publicação ainda</div>
+                <div style={{ fontSize: 13 }}>Publique o primeiro post como <strong>{activeCompany.name}</strong>!</div>
+              </div>
+            ) : (
+              <WelcomeCard suggestions={suggestions} onConnect={handleConnect} />
+            )
           ) : (
             posts.map(post => (
               <PostCard
@@ -653,12 +679,14 @@ export default function AppFeedPage() {
           )}
         </div>
 
-        {/* ── Right panel ─── */}
-        <div style={{ width: 260, flexShrink: 0, display: "none" }} className="feed-right-panel">
-          {suggestions.length > 0 && <SuggestionsPanel suggestions={suggestions.slice(0, 4)} onConnect={handleConnect} />}
-          <WineRankingTeaser wines={wineRankings} />
-          <TrendingTopics />
-        </div>
+        {/* ── Right panel ─── (only in personal mode) */}
+        {!activeCompany && (
+          <div style={{ width: 260, flexShrink: 0, display: "none" }} className="feed-right-panel">
+            {suggestions.length > 0 && <SuggestionsPanel suggestions={suggestions.slice(0, 4)} onConnect={handleConnect} />}
+            <WineRankingTeaser wines={wineRankings} />
+            <TrendingTopics />
+          </div>
+        )}
       </div>
 
       <style>{`

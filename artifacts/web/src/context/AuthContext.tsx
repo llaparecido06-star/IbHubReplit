@@ -2,6 +2,15 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
+export interface ActiveCompany {
+  id: string;
+  name: string;
+  avatar_url?: string | null;
+  description?: string | null;
+  website?: string | null;
+  industry?: string | null;
+}
+
 interface Profile {
   id: string;
   user_id: string | null;
@@ -32,6 +41,8 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  activeCompany: ActiveCompany | null;
+  setActiveCompany: (company: ActiveCompany | null) => void;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
   signInWithGoogle: () => Promise<{ error: string | null }>;
@@ -54,6 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null);
 
   const fetchProfile = useCallback(async (userId: string) => {
     try {
@@ -168,6 +180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={{
       session, user, profile, loading,
+      activeCompany, setActiveCompany,
       signIn, signUp, signInWithGoogle, signOut,
       resetPassword, updatePassword,
       refreshProfile, refreshProfileByUserId, patchProfile,

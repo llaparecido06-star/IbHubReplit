@@ -231,7 +231,7 @@ function CreateGroupModal({ userId, onClose, onCreated }: CreateGroupModalProps)
 }
 
 export default function GruposPage() {
-  const { profile, user } = useAuth();
+  const { profile, user, activeCompany } = useAuth();
   const userId = profile?.id ?? user?.id ?? "";
 
   const [mine, setMine]       = useState<Group[]>([]);
@@ -286,11 +286,27 @@ export default function GruposPage() {
   return (
     <AppShell>
       <div style={{ maxWidth: 860, margin: "0 auto" }}>
+        {/* Company mode banner */}
+        {activeCompany && (
+          <div style={{ marginBottom: 16, backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+            {activeCompany.avatar_url
+              ? <img src={activeCompany.avatar_url} alt={activeCompany.name} style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }} />
+              : <div style={{ width: 36, height: 36, borderRadius: "50%", backgroundColor: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: WHITE }}>{activeCompany.name[0]}</div>
+            }
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, letterSpacing: 0.5, textTransform: "uppercase" }}>Modo Empresa</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>Grupos de {activeCompany.name}</div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 900, color: NAVY, margin: "0 0 4px" }}>Grupos</h1>
-            <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>Comunidades de profissionais do vinho</p>
+            <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>
+              {activeCompany ? `Grupos em que ${activeCompany.name} participa` : "Comunidades de profissionais do vinho"}
+            </p>
           </div>
           <button onClick={() => setShowCreate(true)} style={{
             backgroundColor: GOLD, color: WHITE, fontWeight: 800, fontSize: 13,

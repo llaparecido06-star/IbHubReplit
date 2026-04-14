@@ -70,7 +70,7 @@ const emptyForm = () => ({
 });
 
 export default function AdegaPage() {
-  const { user } = useAuth();
+  const { user, activeCompany } = useAuth();
 
   const [wines, setWines] = useState<WineEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -240,11 +240,30 @@ export default function AdegaPage() {
   return (
     <AppShell>
       <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 16px" }}>
+        {/* Company mode banner */}
+        {activeCompany && (
+          <div style={{ marginBottom: 20, backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+            {activeCompany.avatar_url
+              ? <img src={activeCompany.avatar_url} alt={activeCompany.name} style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} />
+              : <div style={{ width: 40, height: 40, borderRadius: "50%", backgroundColor: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color: "#fff" }}>{activeCompany.name[0]}</div>
+            }
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, letterSpacing: 0.5, textTransform: "uppercase" }}>Modo Empresa</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>Portfólio de {activeCompany.name}</div>
+              <div style={{ fontSize: 12, color: "#8a93a2" }}>Gerencie os vinhos e produtos da empresa</div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
           <div>
-            <h1 style={{ fontSize: 24, fontWeight: 900, color: NAVY, margin: 0 }}>🍷 Adega</h1>
-            <p style={{ fontSize: 14, color: "#8a93a2", margin: "4px 0 0" }}>Gerencie seu inventário de vinhos</p>
+            <h1 style={{ fontSize: 24, fontWeight: 900, color: NAVY, margin: 0 }}>
+              {activeCompany ? "🏢 Portfólio" : "🍷 Adega"}
+            </h1>
+            <p style={{ fontSize: 14, color: "#8a93a2", margin: "4px 0 0" }}>
+              {activeCompany ? `Inventário de vinhos de ${activeCompany.name}` : "Gerencie seu inventário de vinhos"}
+            </p>
           </div>
           <button
             onClick={() => setShowForm(true)}

@@ -109,7 +109,7 @@ function XIcon({ size = 14, color = MUTED }: { size?: number; color?: string }) 
 }
 
 export default function MensagensPage() {
-  const { profile, user } = useAuth();
+  const { profile, user, activeCompany } = useAuth();
   const userId = profile?.id ?? user?.id ?? "";
 
   const [conversations, setConversations] = useState<WebConversation[]>([]);
@@ -229,7 +229,23 @@ export default function MensagensPage() {
       />
 
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
-        <h1 style={{ fontSize: 22, fontWeight: 900, color: NAVY, marginBottom: 16 }}>Mensagens</h1>
+        {/* Company mode banner */}
+        {activeCompany && (
+          <div style={{ marginBottom: 14, backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+            {activeCompany.avatar_url
+              ? <img src={activeCompany.avatar_url} alt={activeCompany.name} style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }} />
+              : <div style={{ width: 36, height: 36, borderRadius: "50%", backgroundColor: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: WHITE }}>{activeCompany.name[0]}</div>
+            }
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, letterSpacing: 0.5, textTransform: "uppercase" }}>Modo Empresa</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>Chat de {activeCompany.name}</div>
+            </div>
+          </div>
+        )}
+
+        <h1 style={{ fontSize: 22, fontWeight: 900, color: NAVY, marginBottom: 16 }}>
+          {activeCompany ? "Chat da Empresa" : "Mensagens"}
+        </h1>
 
         <div style={{ display: "flex", height: "calc(100vh - 180px)", backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, overflow: "hidden" }}>
 

@@ -74,11 +74,14 @@ type PostTab = "texto" | "foto" | "video" | "enquete" | "vinho";
 interface CreatePostModalProps {
   profile: { id: string; full_name?: string | null; avatar_url?: string | null; username?: string | null };
   userId: string;
+  companyPageId?: string | null;
+  companyName?: string | null;
+  companyAvatar?: string | null;
   onClose: () => void;
   onCreated: () => void;
 }
 
-function CreatePostModal({ profile, userId, onClose, onCreated }: CreatePostModalProps) {
+function CreatePostModal({ profile, userId, companyPageId, companyName, companyAvatar, onClose, onCreated }: CreatePostModalProps) {
   const [tab, setTab]           = useState<PostTab>("texto");
   const [content, setContent]   = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -100,7 +103,8 @@ function CreatePostModal({ profile, userId, onClose, onCreated }: CreatePostModa
   const [wineScore, setWineScore] = useState(80);
   const [wineNotes, setWineNotes] = useState("");
 
-  const name = profile.full_name ?? "Usuário";
+  const name = companyPageId ? (companyName ?? "Empresa") : (profile.full_name ?? "Usuário");
+  const avatarSrc = companyPageId ? companyAvatar : profile.avatar_url;
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -144,7 +148,11 @@ function CreatePostModal({ profile, userId, onClose, onCreated }: CreatePostModa
   const handleSubmit = async () => {
     if (!canSubmit() || submitting) return;
     setSubmitting(true);
-    await createWebPost({ user_id: userId, content: buildContent() });
+    await createWebPost({
+      user_id: userId,
+      content: buildContent(),
+      company_page_id: companyPageId ?? null,
+    });
     setSubmitting(false);
     onCreated();
     onClose();
@@ -180,10 +188,13 @@ function CreatePostModal({ profile, userId, onClose, onCreated }: CreatePostModa
 
         {/* Author row */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 20px 0" }}>
-          <Avatar src={profile.avatar_url} name={name} size={44} />
+          <Avatar src={avatarSrc} name={name} size={44} bg={companyPageId ? "#c9a84c" : "#722f37"} />
           <div>
             <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{name}</div>
-            {profile.username && <div style={{ fontSize: 12, color: MUTED }}>@{profile.username}</div>}
+            {companyPageId
+              ? <div style={{ fontSize: 12, color: "#c9a84c", fontWeight: 600 }}>Publicando como empresa ✦</div>
+              : profile.username && <div style={{ fontSize: 12, color: MUTED }}>@{profile.username}</div>
+            }
           </div>
         </div>
 
@@ -332,13 +343,13 @@ function CreatePostModal({ profile, userId, onClose, onCreated }: CreatePostModa
   );
 }
 
+
 /* ─── AppShell ───────────────────────────── */
 export function AppShell({ children, onPostCreated }: { children: React.ReactNode; onPostCreated?: () => void }) {
-  const { profile, user, signOut } = useAuth();
+  const { profile, user, signOut, activeCompany, setActiveCompany } = useAuth();
   const [location, setLocation] = useLocation();
   const [stats, setStats]           = useState({ connections: 0, followers: 0, following: 0 });
   const [companyPages, setCompanyPages] = useState<WebCompanyPage[]>([]);
-  const [activeCompany, setActiveCompany] = useState<WebCompanyPage | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [userMenuOpen, setUserMenuOpen]   = useState(false);
   const [search, setSearch] = useState("");
@@ -385,6 +396,14 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
 
   const activeName   = activeCompany ? activeCompany.name : displayName;
   const activeAvatar = activeCompany ? activeCompany.avatar_url : profile?.avatar_url;
+
+  const currentNavItems = activeCompany ? [
+    { path: "/app",               label: "Feed da Empresa",   icon: I.home },
+    { path: "/app/mensagens",     label: "Chat da Empresa",   icon: I.msg },
+    { path: "/app/grupos",        label: "Grupos",            icon: I.group },
+    { path: "/app/adega",         label: "Portfólio",         icon: I.wine },
+    { path: `/app/empresa/${activeCompany.id}`, label: "Perfil da Empresa", icon: I.company },
+  ] : NAV_ITEMS;
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: BG, fontFamily: "'Inter', -apple-system, sans-serif" }}>
@@ -528,12 +547,24 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
         {/* ── Sidebar ──────────────────────── */}
         <aside style={{ width: 250, flexShrink: 0, position: "sticky", top: 76, maxHeight: "calc(100vh - 96px)", overflowY: "auto" }}>
 
+          {/* ── Company mode banner ── */}
+          {activeCompany && (
+            <div style={{ backgroundColor: `${GOLD}15`, border: `1px solid ${GOLD}40`, borderRadius: 12, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", gap: 10 }}>
+              <Avatar src={activeCompany.avatar_url} name={activeCompany.name} size={36} bg={GOLD} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 1 }}>Modo Empresa</div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{activeCompany.name}</div>
+              </div>
+              <button onClick={() => setActiveCompany(null)} title="Voltar ao perfil pessoal" style={{ background: "none", border: `1px solid ${GOLD}60`, borderRadius: 6, padding: "3px 7px", fontSize: 11, color: GOLD, cursor: "pointer", flexShrink: 0, fontFamily: "inherit" }}>Sair</button>
+            </div>
+          )}
+
           {/* Profile card */}
           <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden", marginBottom: 12 }}>
-            <div style={{ height: 56, background: "linear-gradient(135deg, #e8e0d0 0%, #d4c9a8 100%)" }} />
+            <div style={{ height: 56, background: activeCompany ? `linear-gradient(135deg, ${GOLD}30 0%, ${GOLD}10 100%)` : "linear-gradient(135deg, #e8e0d0 0%, #d4c9a8 100%)" }} />
             <div style={{ padding: "0 16px 16px", marginTop: -22 }}>
               <div style={{ marginBottom: 8, cursor: "pointer" }} onClick={() => activeCompany ? setLocation(`/app/empresa/${activeCompany.id}`) : setLocation("/app/perfil")}>
-                <Avatar src={activeAvatar} name={activeName} size={44} />
+                <Avatar src={activeAvatar} name={activeName} size={44} bg={activeCompany ? GOLD : "#722f37"} />
               </div>
               <div onClick={() => activeCompany ? setLocation(`/app/empresa/${activeCompany.id}`) : setLocation("/app/perfil")} style={{ fontSize: 14, fontWeight: 800, color: NAVY, marginBottom: 1, cursor: "pointer" }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.textDecoration = "underline"; }}
@@ -541,29 +572,38 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
                 {activeName}
               </div>
               {username && !activeCompany && <div style={{ fontSize: 12, color: MUTED, marginBottom: 10 }}>{username}</div>}
-              {activeCompany && <div style={{ fontSize: 12, color: MUTED, marginBottom: 10 }}>Página empresarial</div>}
+              {activeCompany && <div style={{ fontSize: 12, color: GOLD, fontWeight: 600, marginBottom: 10 }}>Página empresarial ✦</div>}
 
               {/* Stats */}
-              <div style={{ display: "flex", borderTop: `1px solid ${BORDER}`, paddingTop: 10, gap: 0 }}>
-                {[
-                  { label: "Conexões", value: stats.connections, onClick: openConnections },
-                  { label: "Seguidores", value: stats.followers, onClick: openFollowers },
-                  { label: "Seguindo", value: stats.following, onClick: openFollowing },
-                ].map((s, i) => (
-                  <div key={s.label} onClick={s.onClick} style={{ flex: 1, textAlign: "center", borderRight: i < 2 ? `1px solid ${BORDER}` : "none", cursor: "pointer", padding: "4px 0", borderRadius: 6, transition: "background 0.15s" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = `${GOLD}15`)}
-                    onMouseLeave={e => (e.currentTarget.style.background = "none")}>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: GOLD }}>{s.value}</div>
-                    <div style={{ fontSize: 9, color: MUTED, marginTop: 1 }}>{s.label}</div>
-                  </div>
-                ))}
-              </div>
+              {!activeCompany && (
+                <div style={{ display: "flex", borderTop: `1px solid ${BORDER}`, paddingTop: 10, gap: 0 }}>
+                  {[
+                    { label: "Conexões", value: stats.connections, onClick: openConnections },
+                    { label: "Seguidores", value: stats.followers, onClick: openFollowers },
+                    { label: "Seguindo", value: stats.following, onClick: openFollowing },
+                  ].map((s, i) => (
+                    <div key={s.label} onClick={s.onClick} style={{ flex: 1, textAlign: "center", borderRight: i < 2 ? `1px solid ${BORDER}` : "none", cursor: "pointer", padding: "4px 0", borderRadius: 6, transition: "background 0.15s" }}
+                      onMouseEnter={e => (e.currentTarget.style.background = `${GOLD}15`)}
+                      onMouseLeave={e => (e.currentTarget.style.background = "none")}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: GOLD }}>{s.value}</div>
+                      <div style={{ fontSize: 9, color: MUTED, marginTop: 1 }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {activeCompany && (
+                <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 10 }}>
+                  <button onClick={() => setLocation(`/app/empresa/${activeCompany.id}`)} style={{ width: "100%", padding: "7px 0", border: `1px solid ${GOLD}60`, borderRadius: 8, fontSize: 12, fontWeight: 700, color: GOLD, background: `${GOLD}10`, cursor: "pointer", fontFamily: "inherit" }}>
+                    Ver Perfil da Empresa
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Nav + Criar publicação */}
           <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "8px 0", marginBottom: 12 }}>
-            {NAV_ITEMS.map((item) => {
+            {currentNavItems.map((item) => {
               const active = isActive(location, item.path);
               return (
                 <button key={item.path} onClick={() => setLocation(item.path)} style={{
@@ -585,22 +625,24 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
                 fontWeight: 800, fontSize: 14, border: "none", borderRadius: 10, cursor: "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
               }}>
-                <span style={{ fontSize: 16 }}>+</span> Criar publicação
+                <span style={{ fontSize: 16 }}>+</span> {activeCompany ? "Publicar como Empresa" : "Criar publicação"}
               </button>
             </div>
           </div>
 
-          {/* Bottom links */}
-          <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "4px 0" }}>
-            {[
-              { label: "Itens salvos",  icon: I.save,     path: "/app/salvos" },
-              { label: "Configurações", icon: I.settings,  path: "/minha-conta" },
-            ].map(({ label, icon, path }) => (
-              <button key={label} onClick={() => setLocation(path)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, color: MUTED, textAlign: "left" }}>
-                {icon}{label}
-              </button>
-            ))}
-          </div>
+          {/* Bottom links - only in personal mode */}
+          {!activeCompany && (
+            <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "4px 0" }}>
+              {[
+                { label: "Itens salvos",  icon: I.save,     path: "/app/salvos" },
+                { label: "Configurações", icon: I.settings,  path: "/minha-conta" },
+              ].map(({ label, icon, path }) => (
+                <button key={label} onClick={() => setLocation(path)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, color: MUTED, textAlign: "left" }}>
+                  {icon}{label}
+                </button>
+              ))}
+            </div>
+          )}
         </aside>
 
         {/* ── Main ─────────────────────────── */}
@@ -612,6 +654,9 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
         <CreatePostModal
           profile={profile}
           userId={userId}
+          companyPageId={activeCompany?.id ?? null}
+          companyName={activeCompany?.name ?? null}
+          companyAvatar={activeCompany?.avatar_url ?? null}
           onClose={() => setShowCreateModal(false)}
           onCreated={handlePostCreated}
         />

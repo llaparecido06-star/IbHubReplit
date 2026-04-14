@@ -107,6 +107,7 @@ export async function createWebPost(params: {
   user_id: string;
   content: string;
   image_url?: string | null;
+  company_page_id?: string | null;
 }): Promise<Post | null> {
   try {
     const { data, error } = await supabase
@@ -123,14 +124,57 @@ export async function createWebPost(params: {
   }
 }
 
-export async function toggleLikePost(postId: string, userId: string, isLiked: boolean, reaction: ReactionType = "curtir"): Promise<boolean> {
+export async function fetchCompanyFeedPosts(companyPageId: string, currentUserId: string): Promise<Post[]> {
   try {
-    if (isLiked) {
-      await supabase.from("likes").delete().match({ post_id: postId, user_id: userId }).is("company_page_id", null);
-      await supabase.rpc("decrement_post_likes", { p_post_id: postId });
+    const { data, error } = await supabase
+      .from("posts")
+      .select(POST_SELECT)
+      .eq("company_page_id", companyPageId)
+      .order("created_at", { ascending: false })
+      .limit(30);
+    if (error || !data || !data.length) return [];
+    const userIds = [...new Set(data.map((p: any) => p.user_id).filter(Boolean))] as string[];
+    const postIds = data.map((p: any) => p.id) as string[];
+    const [profileMap, likedRes] = await Promise.all([
+      _fetchProfilesMap(userIds),
+      supabase.from("likes").select("post_id, reaction_type").eq("company_page_id", companyPageId).in("post_id", postIds),
+    ]);
+    const likedMap = new Map((likedRes.data ?? []).map((l: any) => [l.post_id, l.reaction_type ?? "curtir"]));
+    return data.map((raw: any) => ({
+      ..._normalisePost(raw, profileMap),
+      is_liked: likedMap.has(raw.id),
+      reaction_type: likedMap.get(raw.id) ?? null,
+    }));
+  } catch (e) {
+    console.warn("fetchCompanyFeedPosts:", e);
+    return [];
+  }
+}
+
+export async function toggleLikePost(
+  postId: string,
+  userId: string,
+  isLiked: boolean,
+  reaction: ReactionType = "curtir",
+  companyPageId?: string | null,
+): Promise<boolean> {
+  try {
+    if (companyPageId) {
+      if (isLiked) {
+        await supabase.from("likes").delete().match({ post_id: postId, company_page_id: companyPageId });
+        await supabase.rpc("decrement_post_likes", { p_post_id: postId });
+      } else {
+        await supabase.from("likes").upsert({ post_id: postId, user_id: userId, company_page_id: companyPageId, reaction_type: reaction }, { onConflict: "post_id,company_page_id" });
+        await supabase.rpc("increment_post_likes", { p_post_id: postId });
+      }
     } else {
-      await supabase.from("likes").upsert({ post_id: postId, user_id: userId, reaction_type: reaction }, { onConflict: "post_id,user_id" });
-      await supabase.rpc("increment_post_likes", { p_post_id: postId });
+      if (isLiked) {
+        await supabase.from("likes").delete().match({ post_id: postId, user_id: userId }).is("company_page_id", null);
+        await supabase.rpc("decrement_post_likes", { p_post_id: postId });
+      } else {
+        await supabase.from("likes").upsert({ post_id: postId, user_id: userId, reaction_type: reaction }, { onConflict: "post_id,user_id" });
+        await supabase.rpc("increment_post_likes", { p_post_id: postId });
+      }
     }
     return true;
   } catch (e) {
@@ -139,9 +183,13 @@ export async function toggleLikePost(postId: string, userId: string, isLiked: bo
   }
 }
 
-export async function changeReactionPost(postId: string, userId: string, reaction: ReactionType): Promise<boolean> {
+export async function changeReactionPost(postId: string, userId: string, reaction: ReactionType, companyPageId?: string | null): Promise<boolean> {
   try {
-    await supabase.from("likes").update({ reaction_type: reaction }).match({ post_id: postId, user_id: userId }).is("company_page_id", null);
+    if (companyPageId) {
+      await supabase.from("likes").update({ reaction_type: reaction }).match({ post_id: postId, company_page_id: companyPageId });
+    } else {
+      await supabase.from("likes").update({ reaction_type: reaction }).match({ post_id: postId, user_id: userId }).is("company_page_id", null);
+    }
     return true;
   } catch (e) {
     console.warn("changeReactionPost:", e);
