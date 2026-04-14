@@ -507,7 +507,7 @@ export default function PublicProfileScreen() {
                   { label: "Safra", value: selectedWine.vintage },
                   { label: "Região", value: selectedWine.region },
                   { label: "País", value: selectedWine.country },
-                  { label: "EAN", value: (selectedWine as any).ean },
+                  { label: "EAN", value: selectedWine.ean },
                   { label: "Quantidade", value: selectedWine.qty ? String(selectedWine.qty) : null },
                   { label: "Preço", value: selectedWine.price != null ? `R$ ${Number(selectedWine.price).toFixed(2)}` : null },
                   { label: "Local", value: selectedWine.storage },

@@ -1,0 +1,33 @@
+Atue como um Arquiteto de Software e Especialista em Cybersegurança. O aplicativo está funcional, mas precisamos prepará-lo para produção ("Go-Live"), garantindo segurança de dados, alta performance e compliance com a App Store e Google Play.
+
+Regra Global de Teste: O erro foi encontrado no Android, mas ao corrigir, verifique e garanta que funcione perfeitamente no iOS e na versão WEB.
+
+Tarefa 1: Segurança de Banco de Dados (Auditoria RLS do Supabase)
+Revise as lógicas de chamada do banco. Precisamos garantir que o Front-end não consiga burlar regras vitais:
+
+Um usuário comum NUNCA pode ter acesso de escrita/leitura nas tabelas de gestão do Admin (ex: planos, configurações de sistema, dados de outros usuários no CRM).
+
+Um usuário só pode editar ou deletar os próprios posts, comentários e perfil.
+
+Se houver alguma falha de RLS (Row Level Security) identificada no código atual, gere o script SQL para eu aplicar no Supabase bloqueando o acesso indevido.
+
+Tarefa 2: Performance e Otimização de Dados
+
+Paginação (Infinite Scroll): Verifique os Feeds (Principal e Ideal.BI), listas de Eventos, Vagas e Ranking de Vinhos. Não carregue todos os dados de uma vez. Implemente paginação (ex: carregar 15 itens por vez, carregando mais ao dar scroll até o final da tela).
+
+Compressão de Imagens: Ao fazer upload de fotos (perfil, posts, adega, marketplace), o app DEVE comprimir a imagem no lado do cliente antes de enviar para o Supabase Storage, limitando o tamanho para economizar banda e armazenamento.
+
+Tarefa 3: Prevenção de Quebras (Tratamento de Erros)
+
+Adicione Loading States (esqueletos ou spinners) em todos os botões de ação pesada (ex: salvar vinho, publicar post, confirmar presença). O usuário não pode clicar duas vezes e duplicar o envio porque o app demorou a responder.
+
+Se a internet do usuário cair ou o servidor demorar, exiba um Toast/Alerta amigável ("Verifique sua conexão") em vez de a tela ficar presa ou fechar o app.
+
+Tarefa 4: Compliance com Apple App Store (Regras Obrigatórias)
+Para a Apple não rejeitar o app, verifique se temos as seguintes funções OBRIGATÓRIAS ativas e visíveis:
+
+Botão de "Excluir Minha Conta" (deve apagar os dados do usuário ou anonimizá-los no DB).
+
+Botão de "Denunciar Post/Usuário" (vinculado àquela nossa tela de Moderação no painel Admin).
+
+Botão de "Bloquear Usuário" (para não ver mais os posts ou receber mensagens daquela pessoa).

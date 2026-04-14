@@ -70,6 +70,7 @@ export default function CreatePostScreen() {
   // Tasting note state
   const [tastingWine, setTastingWine]         = useState("");
   const [tastingProducer, setTastingProducer] = useState("");
+  const [tastingGrape, setTastingGrape]       = useState("");
   const [tastingVintage, setTastingVintage]   = useState("");
   const [tastingEan, setTastingEan]           = useState("");
   const [tastingScore, setTastingScore]       = useState("");
@@ -156,6 +157,7 @@ export default function CreatePostScreen() {
     const lines: string[] = [];
     lines.push(`🍷 Degustação: ${tastingWine.trim()}`);
     if (tastingProducer.trim()) lines.push(`🏠 Produtor: ${tastingProducer.trim()}`);
+    if (tastingGrape.trim())    lines.push(`🌿 Uva/Casta: ${tastingGrape.trim()}`);
     if (tastingVintage.trim())  lines.push(`📅 Safra: ${tastingVintage.trim()}`);
     if (tastingEan.trim())      lines.push(`🏷️ EAN: ${tastingEan.trim()}`);
     if (tastingScore)           lines.push(`⭐ Pontuação: ${tastingScore}/100`);
@@ -182,7 +184,7 @@ export default function CreatePostScreen() {
     if (mode === "normal") {
       finalContent = content.trim();
     } else {
-      if (!tastingWine.trim()) return;
+      if (!tastingWine.trim() || !tastingGrape.trim() || !tastingVintage.trim() || !tastingEan.trim()) return;
       finalContent = buildTastingContent();
     }
     if (!finalContent) return;
@@ -223,7 +225,7 @@ export default function CreatePostScreen() {
             vintage: tastingVintage.trim() || null,
             region: null,
             country: null,
-            grape: null,
+            grape: tastingGrape.trim() || null,
             ean: tastingEan.trim(),
             qty: 1,
             price: null,
@@ -248,7 +250,7 @@ export default function CreatePostScreen() {
 
   const canPost = mode === "normal"
     ? content.trim().length > 0 && !posting
-    : tastingWine.trim().length > 0 && !posting;
+    : tastingWine.trim().length > 0 && tastingGrape.trim().length > 0 && tastingVintage.trim().length > 0 && tastingEan.trim().length > 0 && !posting;
 
   const charCount = content.length;
   const maxChars = 1000;
@@ -431,8 +433,9 @@ export default function CreatePostScreen() {
               </View>
             </View>
 
+            <Text style={{ fontSize: 10, color: colors.gold, marginBottom: -4 }}>* Campos obrigatórios para publicar</Text>
             <TextInput
-              style={[styles.tastingInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: "#fff" }]}
+              style={[styles.tastingInput, { borderColor: colors.gold + "80", color: colors.foreground, backgroundColor: "#fff" }]}
               placeholder="Nome do vinho *"
               placeholderTextColor={colors.mutedForeground}
               value={tastingWine}
@@ -441,28 +444,38 @@ export default function CreatePostScreen() {
             />
             <View style={styles.tastingRow}>
               <TextInput
+                style={[styles.tastingInput, { flex: 1, borderColor: colors.gold + "80", color: colors.foreground, backgroundColor: "#fff" }]}
+                placeholder="Uva/Casta *"
+                placeholderTextColor={colors.mutedForeground}
+                value={tastingGrape}
+                onChangeText={setTastingGrape}
+              />
+              <TextInput
+                style={[styles.tastingInput, { width: 80, borderColor: colors.gold + "80", color: colors.foreground, backgroundColor: "#fff" }]}
+                placeholder="Safra *"
+                placeholderTextColor={colors.mutedForeground}
+                value={tastingVintage}
+                onChangeText={(t) => setTastingVintage(t.replace(/\D/g, "").slice(0, 4))}
+                keyboardType="numeric"
+                maxLength={4}
+              />
+            </View>
+            <View style={styles.tastingRow}>
+              <TextInput
                 style={[styles.tastingInput, { flex: 1, borderColor: colors.border, color: colors.foreground, backgroundColor: "#fff" }]}
                 placeholder="Produtor"
                 placeholderTextColor={colors.mutedForeground}
                 value={tastingProducer}
                 onChangeText={setTastingProducer}
               />
-              <TextInput
-                style={[styles.tastingInput, { width: 80, borderColor: colors.border, color: colors.foreground, backgroundColor: "#fff" }]}
-                placeholder="Safra"
-                placeholderTextColor={colors.mutedForeground}
-                value={tastingVintage}
-                onChangeText={setTastingVintage}
-                keyboardType="numeric"
-              />
             </View>
 
-            {/* EAN — alimenta o ranking comunitário automaticamente quando publicado com pontuação */}
-            <View style={[styles.eanRow, { borderColor: tastingEan.trim() ? colors.gold + "60" : colors.border, backgroundColor: "#fff" }]}>
+            {/* EAN — required for ranking; always shows gold border */}
+            <View style={[styles.eanRow, { borderColor: colors.gold + "80", backgroundColor: "#fff" }]}>
               <Feather name="tag" size={15} color={tastingEan.trim() ? colors.gold : colors.mutedForeground} />
               <TextInput
                 style={[styles.tastingInput, { flex: 1, borderWidth: 0, paddingHorizontal: 0, paddingVertical: 0, backgroundColor: "transparent", color: colors.foreground }]}
-                placeholder="EAN / Código de barras (ex: 7896123456789)"
+                placeholder="EAN / Código de barras * (ex: 7896123456789)"
                 placeholderTextColor={colors.mutedForeground}
                 value={tastingEan}
                 onChangeText={setTastingEan}
