@@ -67,6 +67,26 @@ interface ProfileRow {
   full_name: string | null;
 }
 
+/**
+ * Resolve user ID from metadata (primary) or by looking up stripe_customer_id (fallback).
+ * This handles manually-created subscriptions that lack the supabase_user_id metadata.
+ */
+async function resolveUserId(
+  userIdFromMeta: string | undefined,
+  customerId: string | undefined,
+): Promise<string | null> {
+  if (userIdFromMeta) return userIdFromMeta;
+  if (!customerId) return null;
+
+  const { data } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .eq("stripe_customer_id", customerId)
+    .maybeSingle();
+
+  return (data as { id: string } | null)?.id ?? null;
+}
+
 /** Get or create a Stripe customer for a user */
 async function getOrCreateCustomer(stripe: Stripe, userId: string, email: string | null): Promise<string> {
   const { data } = await supabaseAdmin
@@ -223,12 +243,13 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
   try {
     switch (event.type) {
       case "checkout.session.completed": {
-        const session = event.data.object as Stripe.Checkout.Session;
-        const userId = session.metadata?.supabase_user_id;
-        const plan   = session.metadata?.plan;
-        if (userId && plan && session.subscription) {
+        const sess    = event.data.object as Stripe.Checkout.Session;
+        const plan    = sess.metadata?.plan;
+        const custId  = typeof sess.customer === "string" ? sess.customer : undefined;
+        const userId  = await resolveUserId(sess.metadata?.supabase_user_id, custId);
+        if (userId && plan && sess.subscription) {
           const stripe = getStripe();
-          const sub = await stripe.subscriptions.retrieve(session.subscription as string);
+          const sub = await stripe.subscriptions.retrieve(sess.subscription as string);
           await supabaseAdmin.from("profiles").update({
             plan,
             stripe_subscription_id:     sub.id,
@@ -240,8 +261,9 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
       }
 
       case "customer.subscription.updated": {
-        const sub = event.data.object as Stripe.Subscription;
-        const userId = sub.metadata?.supabase_user_id;
+        const sub    = event.data.object as Stripe.Subscription;
+        const custId = typeof sub.customer === "string" ? sub.customer : undefined;
+        const userId = await resolveUserId(sub.metadata?.supabase_user_id, custId);
         const plan   = sub.metadata?.plan;
         if (userId) {
           const update: Record<string, unknown> = {
@@ -256,25 +278,32 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
       }
 
       case "customer.subscription.deleted": {
-        const sub = event.data.object as Stripe.Subscription;
-        const userId = sub.metadata?.supabase_user_id;
+        const sub    = event.data.object as Stripe.Subscription;
+        const custId = typeof sub.customer === "string" ? sub.customer : undefined;
+        const userId = await resolveUserId(sub.metadata?.supabase_user_id, custId);
         if (userId) {
           await supabaseAdmin.from("profiles").update({
             plan:                       "basico",
             stripe_subscription_status: "canceled",
-            stripe_current_period_end:  null,
+            stripe_current_period_end:  new Date(sub.current_period_end * 1000).toISOString(),
           }).eq("id", userId);
         }
         break;
       }
 
       case "invoice.payment_failed": {
-        const inv = event.data.object as Stripe.Invoice;
-        const customerId = inv.customer;
-        if (customerId && typeof customerId === "string") {
+        const inv      = event.data.object as Stripe.Invoice;
+        const custId   = typeof inv.customer === "string" ? inv.customer : undefined;
+        const userId   = await resolveUserId(undefined, custId);
+        if (userId) {
           await supabaseAdmin.from("profiles")
             .update({ stripe_subscription_status: "past_due" })
-            .eq("stripe_customer_id", customerId);
+            .eq("id", userId);
+        } else if (custId) {
+          // Fallback: update by customer ID directly (profile may not have id indexed yet)
+          await supabaseAdmin.from("profiles")
+            .update({ stripe_subscription_status: "past_due" })
+            .eq("stripe_customer_id", custId);
         }
         break;
       }

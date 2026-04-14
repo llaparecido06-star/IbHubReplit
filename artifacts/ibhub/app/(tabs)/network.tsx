@@ -29,6 +29,7 @@ import {
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/context/AuthContext";
+import { getEntitlementStatus } from "@/utils/entitlement";
 import * as API from "@/services/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -711,11 +712,18 @@ export default function MercadoScreen() {
   useEffect(() => { loadPeriod(period); }, [period, loadPeriod]);
 
   useEffect(() => {
+    // Only load plan features when the user has an active entitlement.
+    // past_due users lose feature access until they update their payment method.
+    const entitle = getEntitlementStatus(profile);
+    if (entitle === "past_due" || entitle === "free") {
+      setPlanFeatures([]);
+      return;
+    }
     const planId = profile?.plan ?? "gratuito";
     API.fetchPlanFeatures(planId).then(feats => {
       setPlanFeatures(feats);
     }).catch(() => setPlanFeatures([]));
-  }, [profile?.plan]);
+  }, [profile?.plan, profile?.stripe_subscription_status, profile?.courtesy_until]);
 
   const can = useCallback((key: string): boolean => {
     if (planFeatures === null) return true;

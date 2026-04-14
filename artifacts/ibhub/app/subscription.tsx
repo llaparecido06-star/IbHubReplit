@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { getEntitlementStatus } from "@/utils/entitlement";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -97,18 +98,17 @@ export default function SubscriptionScreen() {
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
-  const currentPlan      = profile?.plan ?? "basico";
-  const stripeStatus     = (profile as any)?.stripe_subscription_status as string | null;
-  const courtesyUntil    = (profile as any)?.courtesy_until as string | null;
-  const periodEnd        = (profile as any)?.stripe_current_period_end as string | null;
-  const hasActiveSub     = stripeStatus === "active" || stripeStatus === "trialing";
-  const isPastDue        = stripeStatus === "past_due";
-  const isCourtesy       = !!courtesyUntil && new Date(courtesyUntil) > new Date();
-  const webBase          = getWebBaseUrl();
+  const currentPlan   = profile?.plan ?? "basico";
+  const periodEnd     = profile?.stripe_current_period_end ?? null;
+  const courtesyUntil = profile?.courtesy_until ?? null;
+  const webBase       = getWebBaseUrl();
 
-  const statusKey = isPastDue ? "past_due"
-    : isCourtesy  ? "courtesy"
-    : stripeStatus ?? (currentPlan !== "basico" ? "active" : "");
+  const entitleStatus = getEntitlementStatus(profile);
+  const hasActiveSub  = entitleStatus === "active" || entitleStatus === "trialing" || entitleStatus === "courtesy";
+  const isPastDue     = entitleStatus === "past_due";
+  const isCourtesy    = entitleStatus === "courtesy";
+
+  const statusKey = (entitleStatus !== "free" ? entitleStatus : null) ?? "";
   const statusCfg = statusKey ? STATUS_CONFIG[statusKey] : null;
 
   // Re-fetch profile when app comes back to foreground (after browser payment)

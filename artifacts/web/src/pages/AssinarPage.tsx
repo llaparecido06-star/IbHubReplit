@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { createCheckoutSession } from "@/services/stripe";
+import { hasPlanAccess } from "@/utils/entitlement";
 
 const NAVY  = "#0d1b2a";
 const GOLD  = "#c9a84c";
@@ -88,10 +89,8 @@ export default function AssinarPage() {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const currentPlan = profile?.plan ?? "basico";
-  const hasActiveSub =
-    (profile as any)?.stripe_subscription_status === "active" ||
-    (profile as any)?.stripe_subscription_status === "trialing";
+  const currentPlan  = profile?.plan ?? "basico";
+  const hasActiveSub = hasPlanAccess(profile);
 
   async function handleAssinar(plan: Plan) {
     if (plan.id === "basico") {
@@ -110,8 +109,9 @@ export default function AssinarPage() {
     try {
       const { url } = await createCheckoutSession(session.access_token, plan.id);
       window.location.href = url;
-    } catch (e: any) {
-      setError(e.message ?? "Erro ao iniciar checkout. Tente novamente.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro ao iniciar checkout. Tente novamente.";
+      setError(message);
     } finally {
       setLoading(null);
     }

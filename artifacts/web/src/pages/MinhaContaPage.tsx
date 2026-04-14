@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { createPortalSession } from "@/services/stripe";
 import { AppShell } from "@/components/layout/AppShell";
+import { getEntitlementStatus } from "@/utils/entitlement";
 
 const NAVY  = "#0d1b2a";
 const GOLD  = "#c9a84c";
@@ -28,12 +29,13 @@ export default function MinhaContaPage() {
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalError, setPortalError] = useState<string | null>(null);
 
-  const plan = profile?.plan ?? "basico";
-  const stripeStatus = (profile as any)?.stripe_subscription_status ?? null;
-  const periodEnd: string | null = (profile as any)?.stripe_current_period_end ?? null;
-  const status = stripeStatus ? STATUS_LABELS[stripeStatus] ?? STATUS_LABELS.inactive : STATUS_LABELS.inactive;
-  const hasActiveSub = stripeStatus === "active" || stripeStatus === "trialing";
-  const isPastDue = stripeStatus === "past_due";
+  const plan           = profile?.plan ?? "basico";
+  const entitleStatus  = getEntitlementStatus(profile);
+  const stripeStatus   = profile?.stripe_subscription_status ?? null;
+  const periodEnd      = profile?.stripe_current_period_end ?? null;
+  const status         = stripeStatus ? STATUS_LABELS[stripeStatus] ?? STATUS_LABELS.inactive : STATUS_LABELS.inactive;
+  const hasActiveSub   = entitleStatus === "active" || entitleStatus === "trialing" || entitleStatus === "courtesy";
+  const isPastDue      = entitleStatus === "past_due";
 
   async function handlePortal() {
     if (!session) return;
@@ -42,8 +44,9 @@ export default function MinhaContaPage() {
     try {
       const { url } = await createPortalSession(session.access_token);
       window.location.href = url;
-    } catch (e: any) {
-      setPortalError(e.message ?? "Erro ao abrir portal de assinatura.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro ao abrir portal de assinatura.";
+      setPortalError(message);
     } finally {
       setPortalLoading(false);
     }
