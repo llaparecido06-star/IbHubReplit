@@ -132,6 +132,12 @@ export default function NewEventScreen() {
       imageUrl = await uploadEventImage(coverUri, user.id);
     }
 
+    if (visibility === "restrito" && restrictedPositions.length === 0) {
+      setCreating(false);
+      Alert.alert("Atenção", "Selecione ao menos um cargo permitido para eventos restritos, ou escolha outra visibilidade.");
+      return;
+    }
+
     const result = await createEvent({
       user_id: user.id,
       title: title.trim(),
@@ -145,7 +151,7 @@ export default function NewEventScreen() {
       entry_type: entryType,
       capacity: cap && !isNaN(cap) ? cap : null,
       visibility,
-      restricted_positions: visibility === "restrito" && restrictedPositions.length > 0 ? restrictedPositions : null,
+      restricted_positions: visibility === "restrito" ? restrictedPositions : null,
       pay_link: entryType !== "gratuito" ? (payLink.trim() || null) : null,
     });
     setCreating(false);
