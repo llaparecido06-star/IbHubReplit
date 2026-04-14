@@ -22,7 +22,7 @@ import { Feather } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { createPost, uploadPostImage, uploadPostVideo } from "@/services/api";
+import { createPost, uploadPostImage, uploadPostVideo, addWineEntry } from "@/services/api";
 
 const HASHTAG_SUGGESTIONS = [
   "vinho", "sommelier", "enologia", "degustação",
@@ -68,14 +68,15 @@ export default function CreatePostScreen() {
   const [gpsLoading, setGpsLoading]         = useState(false);
 
   // Tasting note state
-  const [tastingWine, setTastingWine]   = useState("");
+  const [tastingWine, setTastingWine]         = useState("");
   const [tastingProducer, setTastingProducer] = useState("");
   const [tastingVintage, setTastingVintage]   = useState("");
-  const [tastingScore, setTastingScore]   = useState("");
-  const [tastingAroma, setTastingAroma]   = useState("");
-  const [tastingFlavor, setTastingFlavor] = useState("");
-  const [tastingPair, setTastingPair]     = useState("");
-  const [tastingNotes, setTastingNotes]   = useState("");
+  const [tastingEan, setTastingEan]           = useState("");
+  const [tastingScore, setTastingScore]       = useState("");
+  const [tastingAroma, setTastingAroma]       = useState("");
+  const [tastingFlavor, setTastingFlavor]     = useState("");
+  const [tastingPair, setTastingPair]         = useState("");
+  const [tastingNotes, setTastingNotes]       = useState("");
   const [showScorePicker, setShowScorePicker] = useState(false);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -156,12 +157,23 @@ export default function CreatePostScreen() {
     lines.push(`🍷 Degustação: ${tastingWine.trim()}`);
     if (tastingProducer.trim()) lines.push(`🏠 Produtor: ${tastingProducer.trim()}`);
     if (tastingVintage.trim())  lines.push(`📅 Safra: ${tastingVintage.trim()}`);
+    if (tastingEan.trim())      lines.push(`🏷️ EAN: ${tastingEan.trim()}`);
     if (tastingScore)           lines.push(`⭐ Pontuação: ${tastingScore}/100`);
     if (tastingAroma.trim())    lines.push(`👃 Aroma: ${tastingAroma.trim()}`);
     if (tastingFlavor.trim())   lines.push(`👅 Sabor: ${tastingFlavor.trim()}`);
     if (tastingPair.trim())     lines.push(`🍽️ Harmonização: ${tastingPair.trim()}`);
     if (tastingNotes.trim())    lines.push(`📝 Notas: ${tastingNotes.trim()}`);
     return lines.join("\n");
+  };
+
+  /**
+   * Converts a 100-point wine score to a 1–5 star rating.
+   * Used when inserting the tasting note into the community ranking.
+   */
+  const scoreToStars = (score: string): number => {
+    const n = parseInt(score, 10);
+    if (isNaN(n)) return 0;
+    return Math.max(1, Math.min(5, Math.round(n / 20)));
   };
 
   const handlePost = async () => {
@@ -198,6 +210,34 @@ export default function CreatePostScreen() {
         hashtags: hashtags.length > 0 ? hashtags : undefined,
         company_page_id: companyPageId ?? null,
       });
+
+      // Se a degustação tem EAN + pontuação, insere na adega como pública
+      // para alimentar o ranking comunitário automaticamente.
+      if (mode === "degustacao" && tastingEan.trim() && tastingScore) {
+        const stars = scoreToStars(tastingScore);
+        if (stars > 0) {
+          await addWineEntry({
+            user_id: user.id,
+            name: tastingWine.trim(),
+            producer: tastingProducer.trim() || null,
+            vintage: tastingVintage.trim() || null,
+            region: null,
+            country: null,
+            grape: null,
+            ean: tastingEan.trim(),
+            qty: 1,
+            price: null,
+            buy_date: null,
+            drink_by: null,
+            storage: null,
+            notes: tastingNotes.trim() || null,
+            rating: stars,
+            status: "consumido",
+            is_private: false,
+          });
+        }
+      }
+
       router.back();
     } catch (e) {
       console.error("handlePost:", e);
@@ -417,6 +457,24 @@ export default function CreatePostScreen() {
               />
             </View>
 
+            {/* EAN — alimenta o ranking comunitário automaticamente quando publicado com pontuação */}
+            <View style={[styles.eanRow, { borderColor: tastingEan.trim() ? colors.gold + "60" : colors.border, backgroundColor: "#fff" }]}>
+              <Feather name="tag" size={15} color={tastingEan.trim() ? colors.gold : colors.mutedForeground} />
+              <TextInput
+                style={[styles.tastingInput, { flex: 1, borderWidth: 0, paddingHorizontal: 0, paddingVertical: 0, backgroundColor: "transparent", color: colors.foreground }]}
+                placeholder="EAN / Código de barras (ex: 7896123456789)"
+                placeholderTextColor={colors.mutedForeground}
+                value={tastingEan}
+                onChangeText={setTastingEan}
+                keyboardType="numeric"
+              />
+            </View>
+            {tastingEan.trim().length > 0 && (
+              <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: -8 }}>
+                🏆 Com EAN + pontuação, sua avaliação entra automaticamente no ranking comunitário.
+              </Text>
+            )}
+
             {/* Score picker */}
             <TouchableOpacity
               style={[styles.scorePicker, { borderColor: tastingScore ? colors.gold : colors.border, backgroundColor: "#fff" }]}
@@ -551,6 +609,7 @@ const styles = StyleSheet.create({
   tastingInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 },
   tastingRow: { flexDirection: "row", gap: 10 },
   tastingTextarea: { height: 80 },
+  eanRow: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
   scorePicker: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1.5, borderRadius: 10, padding: 14 },
   scorePickerLabel: { fontSize: 11, marginBottom: 2 },
   scorePickerValue: { fontSize: 14, fontWeight: "600" },
