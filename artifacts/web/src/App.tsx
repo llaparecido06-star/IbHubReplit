@@ -14,11 +14,23 @@ import AdegaPage from "@/pages/app/AdegaPage";
 import MercadoPage from "@/pages/app/MercadoPage";
 import MensagensPage from "@/pages/app/MensagensPage";
 import GruposPage from "@/pages/app/GruposPage";
+import GrupoChatPage from "@/pages/app/GrupoChatPage";
 import ItensSalvosPage from "@/pages/app/ItensSalvosPage";
 import MeuPerfilPage from "@/pages/app/MeuPerfilPage";
 import PerfilUsuarioPage from "@/pages/app/PerfilUsuarioPage";
 import EmpresaPage from "@/pages/app/EmpresaPage";
 import EventoDetalhe from "@/pages/app/EventoDetalhe";
+import NotificacoesPage from "@/pages/app/NotificacoesPage";
+import BuscaPage from "@/pages/app/BuscaPage";
+import WineRankingPage from "@/pages/app/WineRankingPage";
+import ConexoesPage from "@/pages/app/ConexoesPage";
+import PostDetalhePage from "@/pages/app/PostDetalhePage";
+import CertificacoesPage from "@/pages/app/CertificacoesPage";
+import UsuariosBloqueadosPage from "@/pages/app/UsuariosBloqueadosPage";
+import AnalyticsPage from "@/pages/app/AnalyticsPage";
+import ReferralPage from "@/pages/app/ReferralPage";
+import GerenciarEmpresaPage from "@/pages/app/GerenciarEmpresaPage";
+import MeusEventosPage from "@/pages/app/MeusEventosPage";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminUsuarios from "@/pages/admin/AdminUsuarios";
 import AdminModeracao from "@/pages/admin/AdminModeracao";
@@ -155,8 +167,44 @@ function Router() {
       <Route path="/app/mensagens">
         <PrivateRoute component={MensagensPage} />
       </Route>
+      <Route path="/app/grupos/:id">
+        <PrivateRoute component={GrupoChatPage} />
+      </Route>
       <Route path="/app/grupos">
         <PrivateRoute component={GruposPage} />
+      </Route>
+      <Route path="/app/notificacoes">
+        <PrivateRoute component={NotificacoesPage} />
+      </Route>
+      <Route path="/app/busca">
+        <PrivateRoute component={BuscaPage} />
+      </Route>
+      <Route path="/app/ranking-vinho">
+        <PrivateRoute component={WineRankingPage} />
+      </Route>
+      <Route path="/app/conexoes">
+        <PrivateRoute component={ConexoesPage} />
+      </Route>
+      <Route path="/app/posts/:id">
+        <PrivateRoute component={PostDetalhePage} />
+      </Route>
+      <Route path="/app/certificacoes">
+        <PrivateRoute component={CertificacoesPage} />
+      </Route>
+      <Route path="/app/bloqueados">
+        <PrivateRoute component={UsuariosBloqueadosPage} />
+      </Route>
+      <Route path="/app/analytics">
+        <PrivateRoute component={AnalyticsPage} />
+      </Route>
+      <Route path="/app/indicacoes">
+        <PrivateRoute component={ReferralPage} />
+      </Route>
+      <Route path="/app/empresa/:id/editar">
+        <PrivateRoute component={GerenciarEmpresaPage} />
+      </Route>
+      <Route path="/app/meus-eventos">
+        <PrivateRoute component={MeusEventosPage} />
       </Route>
       <Route path="/app/salvos">
         <PrivateRoute component={ItensSalvosPage} />

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import {
@@ -47,7 +48,8 @@ function GroupCard({ group, userId, onJoin, onLeave }: {
   onJoin: (id: string) => void;
   onLeave: (id: string) => void;
 }) {
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy]     = useState(false);
+  const [, setLocation]     = useLocation();
   const color = getCategoryColor(group.category);
 
   const handleJoin = async () => {
@@ -100,6 +102,12 @@ function GroupCard({ group, userId, onJoin, onLeave }: {
                   ⭐ Criador
                 </span>
               )}
+              <button
+                onClick={() => setLocation(`/app/grupos/${group.id}`)}
+                style={{ fontSize: 12, fontWeight: 700, padding: "5px 12px", borderRadius: 8, border: "none", backgroundColor: NAVY, color: "#fff", cursor: "pointer" }}
+              >
+                💬 Chat
+              </button>
               <button onClick={handleLeave} disabled={busy} style={{
                 fontSize: 11, fontWeight: 700, padding: "5px 12px", borderRadius: 8,
                 border: `1px solid ${BORDER}`, backgroundColor: "#f5f5f0", color: MUTED, cursor: "pointer",

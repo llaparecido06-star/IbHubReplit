@@ -132,8 +132,8 @@ export default function EmpresaPage() {
                 <Avatar src={company.avatar_url} name={company.name} size={80} bg={GOLD} />
               </div>
               {isOwner && (
-                <button style={{ padding: "8px 18px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", backgroundColor: WHITE, color: NAVY, marginBottom: 4 }}>
-                  Editar página
+                <button onClick={() => setLocation(`/app/empresa/${companyId}/editar`)} style={{ padding: "8px 18px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", backgroundColor: WHITE, color: NAVY, marginBottom: 4 }}>
+                  ✏️ Editar página
                 </button>
               )}
             </div>

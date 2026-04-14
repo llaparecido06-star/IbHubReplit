@@ -42,12 +42,13 @@ const I = {
 };
 
 const NAV_ITEMS = [
-  { path: "/app",               label: "Feed",         icon: I.home },
-  { path: "/app/mercado",       label: "Mercado",      icon: I.market },
-  { path: "/app/oportunidades", label: "Oportunidades", icon: I.brief },
-  { path: "/app/mensagens",     label: "Mensagens",    icon: I.msg },
-  { path: "/app/grupos",        label: "Grupos",       icon: I.group },
-  { path: "/app/adega",         label: "Adega",        icon: I.wine },
+  { path: "/app",               label: "Feed",           icon: I.home },
+  { path: "/app/mercado",       label: "Mercado",        icon: I.market },
+  { path: "/app/oportunidades", label: "Oportunidades",  icon: I.brief },
+  { path: "/app/mensagens",     label: "Mensagens",      icon: I.msg },
+  { path: "/app/grupos",        label: "Grupos",         icon: I.group },
+  { path: "/app/adega",         label: "Adega",          icon: I.wine },
+  { path: "/app/notificacoes",  label: "Notificações",   icon: I.bell },
 ];
 
 function isActive(current: string, path: string) {
@@ -414,9 +415,20 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
       }}>
         <span style={{ fontSize: 18, fontWeight: 900, color: GOLD, cursor: "pointer", flexShrink: 0, letterSpacing: -0.3 }} onClick={() => setLocation("/app")}>ibhub</span>
 
-        <div style={{ flex: 1, maxWidth: 400, display: "flex", alignItems: "center", gap: 8, backgroundColor: "#f2f2ed", borderRadius: 24, padding: "7px 14px" }}>
+        <div
+          style={{ flex: 1, maxWidth: 400, display: "flex", alignItems: "center", gap: 8, backgroundColor: "#f2f2ed", borderRadius: 24, padding: "7px 14px", cursor: "text" }}
+          onClick={() => setLocation("/app/busca")}
+        >
           {I.search}
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar pessoas, empresas, hashtags..." style={{ border: "none", background: "none", outline: "none", fontSize: 13, color: NAVY, width: "100%" }} />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && search.trim()) setLocation("/app/busca"); }}
+            onClick={e => { e.stopPropagation(); setLocation("/app/busca"); }}
+            placeholder="Buscar pessoas, empresas, hashtags..."
+            readOnly
+            style={{ border: "none", background: "none", outline: "none", fontSize: 13, color: NAVY, width: "100%", cursor: "pointer" }}
+          />
         </div>
 
         <div style={{ flex: 1 }} />
@@ -425,7 +437,7 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
           <button onClick={() => setLocation("/admin")} style={{ background: "none", border: `1px solid ${GOLD}55`, borderRadius: 7, padding: "5px 10px", fontSize: 12, fontWeight: 700, color: GOLD, cursor: "pointer" }}>⚙ Admin</button>
         )}
 
-        <button style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, display: "flex", alignItems: "center", padding: 4 }}>{I.bell}</button>
+        <button onClick={() => setLocation("/app/notificacoes")} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, display: "flex", alignItems: "center", padding: 4 }} title="Notificações">{I.bell}</button>
 
         {/* ── Profile / Company dropdown ── */}
         <div style={{ position: "relative" }}>
@@ -633,8 +645,16 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
           {!activeCompany && (
             <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "4px 0" }}>
               {[
-                { label: "Itens salvos",  icon: I.save,     path: "/app/salvos" },
-                { label: "Configurações", icon: I.settings,  path: "/minha-conta" },
+                { label: "Itens salvos",        icon: I.save,     path: "/app/salvos" },
+                { label: "Ranking de Vinho",    icon: I.star,     path: "/app/ranking-vinho" },
+                { label: "Buscar pessoas",      icon: I.search,   path: "/app/busca" },
+                { label: "Conexões",            icon: I.group,    path: "/app/conexoes" },
+                { label: "Analytics",           icon: "📊",       path: "/app/analytics" },
+                { label: "Indicações",          icon: "🎁",       path: "/app/indicacoes" },
+                { label: "Meus Eventos",        icon: "📅",       path: "/app/meus-eventos" },
+                { label: "Certificações",       icon: "🏅",       path: "/app/certificacoes" },
+                { label: "Usuários Bloqueados", icon: "🚫",       path: "/app/bloqueados" },
+                { label: "Configurações",       icon: I.settings,  path: "/minha-conta" },
               ].map(({ label, icon, path }) => (
                 <button key={label} onClick={() => setLocation(path)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, color: MUTED, textAlign: "left" }}>
                   {icon}{label}

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
+import StoriesBar from "@/components/stories/StoriesBar";
 import {
   Post,
   ReactionType,
@@ -304,7 +305,7 @@ function PostCard({
           </button>
         </div>
 
-        <button onClick={() => {}} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: "none", border: "none", cursor: "pointer", padding: "10px 8px", fontSize: 13, fontWeight: 600, color: MUTED }}
+        <button onClick={() => setLocation(`/app/posts/${post.id}`)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: "none", border: "none", cursor: "pointer", padding: "10px 8px", fontSize: 13, fontWeight: 600, color: MUTED }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}>
           <CommentIcon /><span>Comentar</span>
@@ -649,6 +650,7 @@ export default function AppFeedPage() {
 
         {/* ── Feed column ─────────────────── */}
         <div style={{ flex: 1, minWidth: 0 }}>
+          {!activeCompany && <StoriesBar userId={userId} />}
           <PostTrigger profile={profile} />
 
           {loading ? (

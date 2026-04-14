@@ -1885,3 +1885,515 @@ export async function fetchPlanFeatures(planId: string): Promise<string[]> {
     return [];
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NOTIFICATIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface WebNotification {
+  id: string;
+  user_id: string;
+  actor_id?: string | null;
+  type: string;
+  post_id?: string | null;
+  message?: string | null;
+  read: boolean;
+  created_at: string;
+  actor?: { id: string; full_name: string; avatar_url?: string | null } | null;
+  connection_id?: string | null;
+  connection_status?: "pending" | "accepted" | "rejected" | null;
+}
+
+export async function fetchWebNotifications(userId: string): Promise<WebNotification[]> {
+  try {
+    const { data, error } = await supabase
+      .from("notifications")
+      .select("id, user_id, actor_id, type, post_id, message, read, created_at, connection_id, connection_status")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(60);
+    if (error || !data) return [];
+
+    const actorIds = [...new Set((data as any[]).filter(n => n.actor_id).map((n: any) => n.actor_id as string))];
+    let actorMap: Map<string, { id: string; full_name: string; avatar_url?: string | null }> = new Map();
+    if (actorIds.length > 0) {
+      const { data: actors } = await supabase.from("profiles").select("id, full_name, avatar_url").in("id", actorIds);
+      if (actors) for (const a of actors as any[]) actorMap.set(a.id, a);
+    }
+
+    return (data as any[]).map(n => ({ ...n, actor: n.actor_id ? (actorMap.get(n.actor_id) ?? null) : null })) as WebNotification[];
+  } catch (e) {
+    console.warn("fetchWebNotifications:", e);
+    return [];
+  }
+}
+
+export async function markWebNotificationRead(notifId: string): Promise<void> {
+  await supabase.from("notifications").update({ read: true }).eq("id", notifId);
+}
+
+export async function markAllWebNotificationsRead(userId: string): Promise<void> {
+  await supabase.from("notifications").update({ read: true }).eq("user_id", userId).eq("read", false);
+}
+
+export async function acceptWebConnectionRequest(connectionId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("connections").update({ status: "accepted" }).eq("id", connectionId);
+    return !error;
+  } catch { return false; }
+}
+
+export async function rejectWebConnectionRequest(connectionId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("connections").update({ status: "rejected" }).eq("id", connectionId);
+    return !error;
+  } catch { return false; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// USER SEARCH
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface WebSearchProfile {
+  id: string;
+  full_name: string;
+  username?: string | null;
+  avatar_url?: string | null;
+  headline?: string | null;
+  plan?: string | null;
+  profile_type?: string | null;
+}
+
+export async function searchWebProfiles(query: string, currentUserId: string, limit = 20): Promise<WebSearchProfile[]> {
+  if (!query.trim()) return [];
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, full_name, username, avatar_url, position, company, plan, profile_type")
+      .neq("id", currentUserId)
+      .or(`full_name.ilike.%${query}%,username.ilike.%${query}%`)
+      .limit(limit);
+    if (error || !data) return [];
+    return (data as any[]).map(p => ({
+      ...p,
+      headline: [p.position, p.company].filter(Boolean).join(" · ") || null,
+    }));
+  } catch { return []; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GROUP CHAT INFO
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface WebGroupInfo {
+  id: string;
+  name: string | null;
+  member_count: number;
+}
+
+// ─── Post Detail + Comments ──────────────────────────────────────────────────
+
+export interface AppComment {
+  id: string;
+  post_id: string;
+  parent_comment_id?: string | null;
+  user_id: string;
+  content: string;
+  created_at: string;
+  likes_count?: number;
+  is_liked?: boolean;
+  author?: { id: string; full_name: string; avatar_url?: string | null } | null;
+  replies?: AppComment[];
+}
+
+export async function fetchPostById(postId: string, currentUserId?: string): Promise<Post | null> {
+  try {
+    const { data, error } = await supabase
+      .from("posts")
+      .select(`${POST_SELECT}`)
+      .eq("id", postId)
+      .maybeSingle();
+    if (error || !data) return null;
+    const profileMap = await _fetchProfilesMap([data.user_id]);
+    const post = _normalisePost(data, profileMap);
+    if (currentUserId) {
+      const [likeRes, bookRes] = await Promise.all([
+        supabase.from("reactions").select("reaction_type").eq("post_id", postId).eq("user_id", currentUserId).maybeSingle(),
+        supabase.from("bookmarks").select("post_id").eq("post_id", postId).eq("user_id", currentUserId).maybeSingle(),
+      ]);
+      return { ...post, is_liked: !!likeRes.data, reaction_type: (likeRes.data as any)?.reaction_type ?? null, is_bookmarked: !!bookRes.data };
+    }
+    return post;
+  } catch (e) {
+    console.warn("fetchPostById:", e);
+    return null;
+  }
+}
+
+export async function fetchPostComments(postId: string, currentUserId?: string): Promise<AppComment[]> {
+  try {
+    const { data, error } = await supabase
+      .from("comments")
+      .select("id, post_id, parent_comment_id, user_id, content, created_at, likes_count")
+      .eq("post_id", postId)
+      .order("created_at", { ascending: true });
+    if (error || !data || data.length === 0) return [];
+    const userIds = [...new Set((data as any[]).map((c: any) => c.user_id).filter(Boolean))];
+    const profileMap = await _fetchProfilesMap(userIds);
+    let likedSet = new Set<string>();
+    if (currentUserId) {
+      const { data: likes } = await supabase.from("comment_likes").select("comment_id").eq("user_id", currentUserId).in("comment_id", (data as any[]).map((c: any) => c.id));
+      likedSet = new Set((likes ?? []).map((l: any) => l.comment_id));
+    }
+    const flat: AppComment[] = (data as any[]).map((c: any) => {
+      const p = profileMap.get(c.user_id);
+      return { ...c, likes_count: c.likes_count ?? 0, is_liked: likedSet.has(c.id), author: p ? { id: p.id, full_name: p.full_name, avatar_url: p.avatar_url ?? null } : null, replies: [] };
+    });
+    const byId = new Map(flat.map(c => [c.id, c]));
+    const roots: AppComment[] = [];
+    for (const c of flat) {
+      if (c.parent_comment_id && byId.has(c.parent_comment_id)) {
+        byId.get(c.parent_comment_id)!.replies!.push(c);
+      } else {
+        roots.push(c);
+      }
+    }
+    return roots;
+  } catch (e) {
+    console.warn("fetchPostComments:", e);
+    return [];
+  }
+}
+
+export async function addPostComment(postId: string, userId: string, content: string, parentId?: string): Promise<AppComment | null> {
+  try {
+    const { data, error } = await supabase.from("comments").insert({
+      post_id: postId,
+      user_id: userId,
+      content,
+      parent_comment_id: parentId ?? null,
+    }).select("id, post_id, parent_comment_id, user_id, content, created_at, likes_count").single();
+    if (error || !data) return null;
+    const profileMap = await _fetchProfilesMap([userId]);
+    const p = profileMap.get(userId);
+    return { ...data as any, likes_count: 0, is_liked: false, author: p ? { id: p.id, full_name: p.full_name, avatar_url: p.avatar_url ?? null } : null, replies: [] };
+  } catch (e) {
+    console.warn("addPostComment:", e);
+    return null;
+  }
+}
+
+// ─── Blocked Users ───────────────────────────────────────────────────────────
+
+export interface BlockedUser {
+  id: string;
+  full_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+}
+
+export async function fetchBlockedUsers(userId: string): Promise<BlockedUser[]> {
+  try {
+    const { data, error } = await supabase.from("user_blocks").select("blocked_id").eq("blocker_id", userId).order("created_at", { ascending: false });
+    if (error || !data || data.length === 0) return [];
+    const blockedIds = (data as any[]).map((r: any) => r.blocked_id).filter(Boolean);
+    const profileMap = await _fetchProfilesMap(blockedIds);
+    return blockedIds.map(id => {
+      const p = profileMap.get(id) as any;
+      return { id, full_name: p?.full_name ?? null, username: p?.username ?? null, avatar_url: p?.avatar_url ?? null };
+    });
+  } catch (e) {
+    console.warn("fetchBlockedUsers:", e);
+    return [];
+  }
+}
+
+export async function unblockUser(blockerId: string, blockedId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("user_blocks").delete().match({ blocker_id: blockerId, blocked_id: blockedId });
+    return !error;
+  } catch { return false; }
+}
+
+// ─── Certifications ──────────────────────────────────────────────────────────
+
+export interface CertificationRequest {
+  id: string;
+  user_id: string;
+  certification_name: string;
+  issuing_body?: string | null;
+  issue_date?: string | null;
+  expiry_date?: string | null;
+  proof_url?: string | null;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+}
+
+export async function fetchMyCertificationRequests(userId: string): Promise<CertificationRequest[]> {
+  try {
+    const { data, error } = await supabase.from("certification_requests").select("*").eq("user_id", userId).order("created_at", { ascending: false });
+    if (error || !data) return [];
+    return data as CertificationRequest[];
+  } catch (e) {
+    console.warn("fetchMyCertificationRequests:", e);
+    return [];
+  }
+}
+
+export async function submitCertificationRequest(params: {
+  user_id: string;
+  certification_name: string;
+  issuing_body?: string;
+  issue_date?: string;
+  expiry_date?: string;
+  proof_url?: string;
+}): Promise<CertificationRequest | null> {
+  try {
+    const { data, error } = await supabase.from("certification_requests").insert(params).select().single();
+    if (error || !data) return null;
+    return data as CertificationRequest;
+  } catch (e) {
+    console.warn("submitCertificationRequest:", e);
+    return null;
+  }
+}
+
+// ─── Stories / Momentos ─────────────────────────────────────────────────────
+
+export interface WebStory {
+  id: string;
+  user_id: string;
+  image_url?: string | null;
+  text?: string | null;
+  created_at: string;
+  expires_at: string;
+  author?: { id: string; full_name: string; avatar_url?: string | null } | null;
+  viewed?: boolean;
+}
+
+export interface WebStoryGroup {
+  userId: string;
+  author: { id: string; full_name: string; avatar_url?: string | null };
+  stories: WebStory[];
+  hasUnseen: boolean;
+}
+
+export async function fetchWebStories(currentUserId: string): Promise<WebStoryGroup[]> {
+  try {
+    const now = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("stories")
+      .select("id, user_id, image_url, text, created_at, expires_at")
+      .gte("expires_at", now)
+      .order("created_at", { ascending: false });
+    if (error || !data || data.length === 0) return [];
+    const userIds = [...new Set((data as any[]).map((s: any) => s.user_id))];
+    const profileMap = await _fetchProfilesMap(userIds);
+    let seenSet = new Set<string>();
+    if (currentUserId) {
+      const { data: seen } = await supabase.from("story_views").select("story_id").eq("viewer_id", currentUserId);
+      seenSet = new Set((seen ?? []).map((v: any) => v.story_id));
+    }
+    const groupMap = new Map<string, WebStoryGroup>();
+    for (const s of data as any[]) {
+      const p = profileMap.get(s.user_id);
+      if (!p) continue;
+      if (!groupMap.has(s.user_id)) {
+        groupMap.set(s.user_id, { userId: s.user_id, author: { id: p.id, full_name: p.full_name, avatar_url: p.avatar_url ?? null }, stories: [], hasUnseen: false });
+      }
+      const story: WebStory = { ...s, viewed: seenSet.has(s.id), author: { id: p.id, full_name: p.full_name, avatar_url: p.avatar_url ?? null } };
+      const grp = groupMap.get(s.user_id)!;
+      grp.stories.push(story);
+      if (!seenSet.has(s.id)) grp.hasUnseen = true;
+    }
+    return [...groupMap.values()];
+  } catch (e) {
+    console.warn("fetchWebStories:", e);
+    return [];
+  }
+}
+
+export async function markStoryViewed(storyId: string, viewerId: string): Promise<void> {
+  try {
+    await supabase.from("story_views").upsert({ story_id: storyId, viewer_id: viewerId }, { onConflict: "story_id,viewer_id" });
+  } catch { }
+}
+
+export async function createWebStory(params: { user_id: string; text?: string; image_url?: string }): Promise<WebStory | null> {
+  try {
+    const expires_at = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabase.from("stories").insert({ ...params, expires_at }).select().single();
+    if (error || !data) return null;
+    return data as WebStory;
+  } catch (e) {
+    console.warn("createWebStory:", e);
+    return null;
+  }
+}
+
+// ─── Company Page Edit ───────────────────────────────────────────────────────
+
+export async function updateCompanyPage(
+  companyId: string,
+  updates: Partial<Pick<CompanyPageFull, "name" | "bio" | "website" | "industry" | "location" | "username">>
+): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("company_pages").update(updates).eq("id", companyId);
+    return !error;
+  } catch (e) {
+    console.warn("updateCompanyPage:", e);
+    return false;
+  }
+}
+
+// ─── Events CRUD ─────────────────────────────────────────────────────────────
+
+export async function fetchMyEvents(userId: string): Promise<AppEvent[]> {
+  try {
+    const { data, error } = await supabase
+      .from("events")
+      .select("id, title, description, start_date, end_date, location, location_type, entry_type, price, cover_image_url, max_attendees, attendees_count, created_by, created_at")
+      .eq("created_by", userId)
+      .order("start_date", { ascending: false });
+    if (error || !data) return [];
+    return data as AppEvent[];
+  } catch (e) {
+    console.warn("fetchMyEvents:", e);
+    return [];
+  }
+}
+
+export async function createEvent(params: {
+  title: string;
+  description?: string;
+  start_date: string;
+  end_date?: string;
+  location?: string;
+  location_type?: "online" | "presencial";
+  entry_type?: "gratuito" | "pago";
+  price?: number;
+  max_attendees?: number;
+  created_by: string;
+}): Promise<AppEvent | null> {
+  try {
+    const { data, error } = await supabase.from("events").insert(params).select().single();
+    if (error || !data) return null;
+    return data as AppEvent;
+  } catch (e) {
+    console.warn("createEvent:", e);
+    return null;
+  }
+}
+
+export async function deleteEvent(eventId: string, userId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("events").delete().eq("id", eventId).eq("created_by", userId);
+    return !error;
+  } catch (e) {
+    console.warn("deleteEvent:", e);
+    return false;
+  }
+}
+
+// ─── User Analytics ─────────────────────────────────────────────────────────
+
+export interface UserAnalytics {
+  totalLikes: number;
+  totalComments: number;
+  totalShares: number;
+  totalPosts: number;
+  followersCount: number;
+  topPosts: Array<{ id: string; content: string; likes_count: number; comments_count: number; shares_count: number }>;
+}
+
+export async function fetchUserAnalytics(userId: string): Promise<UserAnalytics> {
+  try {
+    const [postsRes, profileRes] = await Promise.all([
+      supabase.from("posts").select("id, content, likes_count, comments_count, shares_count").eq("user_id", userId),
+      supabase.from("profiles").select("followers_count").eq("id", userId).single(),
+    ]);
+    const posts: any[] = postsRes.data ?? [];
+    const followersCount: number = (profileRes.data as any)?.followers_count ?? 0;
+    const totalLikes = posts.reduce((s, p) => s + (p.likes_count ?? 0), 0);
+    const totalComments = posts.reduce((s, p) => s + (p.comments_count ?? 0), 0);
+    const totalShares = posts.reduce((s, p) => s + (p.shares_count ?? 0), 0);
+    const topPosts = [...posts].sort((a, b) => (b.likes_count ?? 0) - (a.likes_count ?? 0)).slice(0, 5);
+    return { totalLikes, totalComments, totalShares, totalPosts: posts.length, followersCount, topPosts };
+  } catch (e) {
+    console.warn("fetchUserAnalytics:", e);
+    return { totalLikes: 0, totalComments: 0, totalShares: 0, totalPosts: 0, followersCount: 0, topPosts: [] };
+  }
+}
+
+// ─── Referral ────────────────────────────────────────────────────────────────
+
+export interface ReferralRankEntry {
+  id: string;
+  full_name: string;
+  username: string | null;
+  avatar_url: string | null;
+  invite_count: number;
+  rank: number;
+}
+
+function _deriveReferralCode(userId: string): string {
+  return userId.replace(/-/g, "").slice(0, 8).toUpperCase();
+}
+
+export async function ensureReferralCode(userId: string): Promise<string> {
+  try {
+    const { data } = await supabase.from("profiles").select("referral_code").eq("id", userId).single();
+    if ((data as any)?.referral_code) return (data as any).referral_code;
+    const code = _deriveReferralCode(userId);
+    await supabase.from("profiles").update({ referral_code: code }).eq("id", userId);
+    return code;
+  } catch (e) {
+    console.warn("ensureReferralCode:", e);
+    return _deriveReferralCode(userId);
+  }
+}
+
+export async function fetchMyReferralCount(userId: string): Promise<number> {
+  try {
+    const { count } = await supabase.from("profiles").select("id", { count: "exact", head: true }).eq("invited_by_id", userId);
+    return count ?? 0;
+  } catch { return 0; }
+}
+
+export async function fetchReferralLeaderboard(limit = 20): Promise<ReferralRankEntry[]> {
+  try {
+    const { data } = await supabase.from("profiles").select("invited_by_id").not("invited_by_id", "is", null);
+    const counts: Record<string, number> = {};
+    for (const row of data ?? []) {
+      if (row.invited_by_id) counts[row.invited_by_id] = (counts[row.invited_by_id] ?? 0) + 1;
+    }
+    const topIds = Object.entries(counts).sort(([, a], [, b]) => b - a).slice(0, limit).map(([id]) => id);
+    if (!topIds.length) return [];
+    const { data: profiles } = await supabase.from("profiles").select("id, full_name, username, avatar_url").in("id", topIds);
+    const countMap = new Map(Object.entries(counts));
+    return (profiles ?? [])
+      .map((p: any, i: number) => ({ id: p.id, full_name: p.full_name ?? "Usuário", username: p.username ?? null, avatar_url: p.avatar_url ?? null, invite_count: countMap.get(p.id) ?? 0, rank: i + 1 }))
+      .sort((a, b) => b.invite_count - a.invite_count)
+      .map((e, i) => ({ ...e, rank: i + 1 }));
+  } catch (e) {
+    console.warn("fetchReferralLeaderboard:", e);
+    return [];
+  }
+}
+
+// ─── Group Chat Utilities ────────────────────────────────────────────────────
+
+export async function fetchWebGroupInfo(groupId: string): Promise<WebGroupInfo | null> {
+  try {
+    const [convRes, partRes] = await Promise.all([
+      supabase.from("conversations").select("id, name").eq("id", groupId).maybeSingle(),
+      supabase.from("conversation_participants").select("user_id").eq("conversation_id", groupId),
+    ]);
+    if (!convRes.data) return null;
+    return {
+      id: (convRes.data as any).id,
+      name: (convRes.data as any).name,
+      member_count: (partRes.data ?? []).length,
+    };
+  } catch { return null; }
+}

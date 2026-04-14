@@ -51,9 +51,32 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 | `/` | `LandingPage.tsx` | Hero, About, Features, Plans, CTA, Footer |
 | `/login` | `LoginPage.tsx` | Email/senha + Google OAuth |
 | `/cadastro` | `CadastroPage.tsx` | Registro 3 etapas (dados → áreas → plano) |
-| `/recuperar-senha` | `RecuperarSenhaPage.tsx` | Reset de senha por email |
-| `/redefinir-senha` | `RedefinirSenhaPage.tsx` | Definir nova senha |
-| `/app` | `AppFeedPage.tsx` | Placeholder autenticado (feed virá na próxima tarefa) |
+| `/app` | `AppFeedPage.tsx` | Feed com Stories, posts, reações, comentários |
+| `/app/mercado` | `MercadoPage.tsx` | Feed Ideal.BI (premium), criação de posts |
+| `/app/mensagens` | `MensagensPage.tsx` | Lista de conversas + chat direto |
+| `/app/grupos` | `GruposPage.tsx` | Grupos da comunidade |
+| `/app/grupos/:id` | `GrupoChatPage.tsx` | Chat em grupo com Supabase realtime |
+| `/app/oportunidades` | `OportunidadesPage.tsx` | Vagas e eventos |
+| `/app/oportunidades/:id` | `OportunidadeDetalhe.tsx` | Detalhe de oportunidade |
+| `/app/eventos/:id` | `EventoDetalhe.tsx` | Detalhe de evento |
+| `/app/meus-eventos` | `MeusEventosPage.tsx` | Gerenciar eventos criados + criar novo |
+| `/app/perfil` | `MeuPerfilPage.tsx` | Perfil próprio com edição |
+| `/app/usuario/:id` | `PerfilUsuarioPage.tsx` | Perfil de outro usuário |
+| `/app/empresa/:id` | `EmpresaPage.tsx` | Página pública de empresa |
+| `/app/empresa/:id/editar` | `GerenciarEmpresaPage.tsx` | Editar página de empresa (owner only) |
+| `/app/adega` | `AdegaPage.tsx` | Adega virtual com EAN barcode |
+| `/app/ranking-vinho` | `WineRankingPage.tsx` | Ranking de vinhos da comunidade |
+| `/app/notificacoes` | `NotificacoesPage.tsx` | Central de notificações |
+| `/app/busca` | `BuscaPage.tsx` | Busca de pessoas e conteúdo |
+| `/app/conexoes` | `ConexoesPage.tsx` | Rede: conexões, seguidores, seguindo |
+| `/app/posts/:id` | `PostDetalhePage.tsx` | Detalhe de post com comentários threaded |
+| `/app/salvos` | `ItensSalvosPage.tsx` | Posts salvos |
+| `/app/analytics` | `AnalyticsPage.tsx` | Analytics pessoal de engajamento |
+| `/app/indicacoes` | `ReferralPage.tsx` | Programa de indicação + ranking |
+| `/app/certificacoes` | `CertificacoesPage.tsx` | Gerenciar certificações profissionais |
+| `/app/bloqueados` | `UsuariosBloqueadosPage.tsx` | Usuários bloqueados |
+| `/assinar` | `AssinarPage.tsx` | Planos + Stripe checkout |
+| `/minha-conta` | `MinhaContaPage.tsx` | Configurações da conta |
 
 ## Arquivos Importantes
 
