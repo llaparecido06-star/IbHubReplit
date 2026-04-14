@@ -76,11 +76,15 @@ export default function WineCellarScreen() {
   const [wPrice, setWPrice]         = useState("");
   const [wBuyDate, setWBuyDate]     = useState("");
   const [wDrinkBy, setWDrinkBy]     = useState("");
-  const [wStorage, setWStorage]     = useState("");
-  const [wNotes, setWNotes]         = useState("");
-  const [wRating, setWRating]       = useState(0);
-  const [wStatus, setWStatus]       = useState<WineStatus>("adega");
-  const [wPrivate, setWPrivate]     = useState(true);
+  const [wStorage, setWStorage]       = useState("");
+  const [wNotes, setWNotes]           = useState("");
+  const [wAroma, setWAroma]           = useState("");
+  const [wSabor, setWSabor]           = useState("");
+  const [wHarmonizacao, setWHarmonizacao] = useState("");
+  const [wScore100, setWScore100]     = useState("");
+  const [wRating, setWRating]         = useState(0);
+  const [wStatus, setWStatus]         = useState<WineStatus>("adega");
+  const [wPrivate, setWPrivate]       = useState(true);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -147,7 +151,8 @@ export default function WineCellarScreen() {
     setEditingId(null);
     setWName(""); setWProducer(""); setWVintage(""); setWRegion(""); setWCountry("");
     setWGrape(""); setWEan(""); setWQty("1"); setWPrice(""); setWBuyDate(""); setWDrinkBy("");
-    setWStorage(""); setWNotes(""); setWRating(0); setWStatus("adega"); setWPrivate(true);
+    setWStorage(""); setWNotes(""); setWAroma(""); setWSabor(""); setWHarmonizacao(""); setWScore100("");
+    setWRating(0); setWStatus("adega"); setWPrivate(true);
   };
 
   const handleEditPress = (wine: API.WineEntry) => {
@@ -165,6 +170,10 @@ export default function WineCellarScreen() {
     setWDrinkBy(wine.drink_by ?? "");
     setWStorage(wine.storage ?? "");
     setWNotes(wine.notes ?? "");
+    setWAroma(wine.aroma ?? "");
+    setWSabor(wine.sabor ?? "");
+    setWHarmonizacao(wine.harmonizacao ?? "");
+    setWScore100(wine.score_100 != null ? String(wine.score_100) : "");
     setWRating(wine.rating);
     setWStatus(wine.status);
     setWPrivate(wine.is_private);
@@ -216,6 +225,10 @@ export default function WineCellarScreen() {
       drink_by: drinkBy,
       storage: wStorage.trim() || null,
       notes: wNotes.trim() || null,
+      aroma: wAroma.trim() || null,
+      sabor: wSabor.trim() || null,
+      harmonizacao: wHarmonizacao.trim() || null,
+      score_100: wScore100.trim() ? Math.max(0, Math.min(100, parseInt(wScore100) || 0)) : null,
       rating: wRating,
       status: wStatus,
       is_private: wPrivate,
@@ -513,6 +526,19 @@ export default function WineCellarScreen() {
               placeholder="Local de armazenamento" placeholderTextColor={colors.mutedForeground} value={wStorage} onChangeText={setWStorage} />
             <TextInput style={[styles.fInput, styles.fTextarea, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
               placeholder="Notas de degustação" placeholderTextColor={colors.mutedForeground} value={wNotes} onChangeText={setWNotes} multiline textAlignVertical="top" />
+            {/* Sensory Tasting Fields */}
+            <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, gap: 8 }}>
+              <Text style={[styles.fLabel, { color: colors.foreground, fontWeight: "700" }]}>Avaliação Sensorial</Text>
+              <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+                placeholder="Aroma (ex: frutado, floral, amadeirado)" placeholderTextColor={colors.mutedForeground} value={wAroma} onChangeText={setWAroma} />
+              <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+                placeholder="Sabor / Paladar (ex: encorpado, taninos macios)" placeholderTextColor={colors.mutedForeground} value={wSabor} onChangeText={setWSabor} />
+              <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+                placeholder="Harmonização (ex: carnes vermelhas, queijos)" placeholderTextColor={colors.mutedForeground} value={wHarmonizacao} onChangeText={setWHarmonizacao} />
+              <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+                placeholder="Pontuação 0–100" placeholderTextColor={colors.mutedForeground} value={wScore100}
+                onChangeText={(v) => setWScore100(v.replace(/\D/g, "").slice(0, 3))} keyboardType="numeric" />
+            </View>
             {/* Rating */}
             <View style={{ gap: 6 }}>
               <Text style={[styles.fLabel, { color: colors.foreground }]}>Avaliação:</Text>

@@ -250,8 +250,14 @@ export interface WineCommunityRating {
   name: string;
   producer: string | null;
   vintage: string | null;
+  grape: string | null;
+  region?: string | null;
+  country?: string | null;
+  wine_type?: string | null;
+  image_url?: string | null;
   avg_rating: number;
-  rating_count: number;
+  avg_score: number | null;
+  total_ratings: number;
 }
 
 export async function fetchWineCommunityRankings(): Promise<WineCommunityRating[]> {
@@ -1041,6 +1047,10 @@ export interface WineEntry {
   drink_by?: string | null;
   storage?: string | null;
   notes?: string | null;
+  aroma?: string | null;
+  sabor?: string | null;
+  harmonizacao?: string | null;
+  score_100?: number | null;
   rating: number;
   status: "adega" | "consumido" | "presenteado" | "wishlist";
   is_private: boolean;

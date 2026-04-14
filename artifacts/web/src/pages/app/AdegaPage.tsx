@@ -72,6 +72,10 @@ const emptyForm = () => ({
   drink_by: "",
   storage: "",
   notes: "",
+  aroma: "",
+  sabor: "",
+  harmonizacao: "",
+  score_100: "" as string,
   rating: 0,
   status: "adega" as WineStatus,
   is_private: true,
@@ -439,6 +443,10 @@ export default function AdegaPage() {
         drink_by: drinkBy,
         storage: form.storage.trim() || null,
         notes: form.notes.trim() || null,
+        aroma: form.aroma.trim() || null,
+        sabor: form.sabor.trim() || null,
+        harmonizacao: form.harmonizacao.trim() || null,
+        score_100: form.score_100 ? Math.max(0, Math.min(100, parseInt(form.score_100) || 0)) : null,
         rating: form.rating,
         status: form.status,
         is_private: form.is_private,
@@ -479,6 +487,10 @@ export default function AdegaPage() {
       drink_by: wine.drink_by ? wine.drink_by.split("T")[0] : "",
       storage: wine.storage ?? "",
       notes: wine.notes ?? "",
+      aroma: wine.aroma ?? "",
+      sabor: wine.sabor ?? "",
+      harmonizacao: wine.harmonizacao ?? "",
+      score_100: wine.score_100 != null ? String(wine.score_100) : "",
       rating: wine.rating,
       status: wine.status as WineStatus,
       is_private: wine.is_private,
@@ -513,6 +525,10 @@ export default function AdegaPage() {
       drink_by: drinkBy,
       storage: form.storage.trim() || null,
       notes: form.notes.trim() || null,
+      aroma: form.aroma.trim() || null,
+      sabor: form.sabor.trim() || null,
+      harmonizacao: form.harmonizacao.trim() || null,
+      score_100: form.score_100 ? Math.max(0, Math.min(100, parseInt(form.score_100) || 0)) : null,
       rating: form.rating,
       status: form.status,
       is_private: form.is_private,
@@ -816,6 +832,40 @@ export default function AdegaPage() {
                 rows={3}
                 style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }}
               />
+
+              <div style={{ borderTop: `1px solid #e8eaed`, paddingTop: 12, marginTop: 4 }}>
+                <label style={{ fontSize: 13, fontWeight: 700, color: NAVY, display: "block", marginBottom: 10 }}>Avaliação Sensorial</label>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <input
+                    value={form.aroma}
+                    onChange={(e) => setForm((f) => ({ ...f, aroma: e.target.value }))}
+                    placeholder="Aroma (ex: frutado, floral, amadeirado)"
+                    style={inputStyle}
+                  />
+                  <input
+                    value={form.sabor}
+                    onChange={(e) => setForm((f) => ({ ...f, sabor: e.target.value }))}
+                    placeholder="Sabor / Paladar (ex: encorpado, taninos macios)"
+                    style={inputStyle}
+                  />
+                  <input
+                    value={form.harmonizacao}
+                    onChange={(e) => setForm((f) => ({ ...f, harmonizacao: e.target.value }))}
+                    placeholder="Harmonização (ex: carnes vermelhas, queijos)"
+                    style={inputStyle}
+                  />
+                  <input
+                    value={form.score_100}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/\D/g, "").slice(0, 3);
+                      setForm((f) => ({ ...f, score_100: v }));
+                    }}
+                    placeholder="Pontuação 0–100"
+                    inputMode="numeric"
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
 
               <div>
                 <label style={{ fontSize: 13, fontWeight: 600, color: NAVY, display: "block", marginBottom: 8 }}>Avaliação:</label>

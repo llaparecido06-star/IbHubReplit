@@ -88,7 +88,7 @@ export default function WineRankingScreen() {
 
   const sortedRatings = [...ratings].sort((a, b) => {
     if (sortBy === "alpha") return (a.name ?? "").localeCompare(b.name ?? "");
-    if (sortBy === "count") return Number(b.rating_count ?? 0) - Number(a.rating_count ?? 0);
+    if (sortBy === "count") return Number(b.total_ratings ?? 0) - Number(a.total_ratings ?? 0);
     return Number(b.avg_rating ?? 0) - Number(a.avg_rating ?? 0); // "score"
   });
 
@@ -112,7 +112,7 @@ export default function WineRankingScreen() {
         <Text style={[styles.wineSub, { color: colors.mutedForeground }]} numberOfLines={1}>
           {[item.producer, item.vintage].filter(Boolean).join(" · ") || "Produtor desconhecido"}
         </Text>
-        <StarRow avg={Number(item.avg_rating)} count={Number(item.rating_count)} />
+        <StarRow avg={Number(item.avg_rating)} count={Number(item.total_ratings)} />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
           <Feather name="tag" size={11} color={colors.mutedForeground} />
           <Text style={[styles.eanText, { color: colors.mutedForeground }]}>EAN {item.ean}</Text>

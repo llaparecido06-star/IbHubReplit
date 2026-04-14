@@ -517,7 +517,7 @@ function WineRankingTeaser({ wines }: { wines: WineCommunityRating[] }) {
             <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{w.name}</div>
             <div style={{ fontSize: 10, color: GOLD, letterSpacing: 1 }}>{stars(w.avg_rating)}</div>
           </div>
-          <div style={{ fontSize: 11, fontWeight: 800, color: GOLD }}>{w.rating_count}×</div>
+          <div style={{ fontSize: 11, fontWeight: 800, color: GOLD }}>{w.total_ratings}×</div>
         </div>
       ))}
       <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 10, textAlign: "center" }}>
