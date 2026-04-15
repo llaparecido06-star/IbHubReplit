@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import { supabase } from "@/lib/supabase";
@@ -28,8 +28,13 @@ export default function CertificacoesPage() {
   const { profile, patchProfile } = useAuth();
 
   const [certs, setCerts] = useState<string[]>(
-    Array.isArray(profile?.certifications) ? profile.certifications : []
+    Array.isArray(profile?.certifications) ? (profile.certifications as string[]) : []
   );
+
+  useEffect(() => {
+    setCerts(Array.isArray(profile?.certifications) ? (profile.certifications as string[]) : []);
+  }, [profile?.certifications]);
+
   const [showForm, setShowForm]     = useState(false);
   const [selected, setSelected]     = useState("");
   const [customCert, setCustomCert] = useState("");

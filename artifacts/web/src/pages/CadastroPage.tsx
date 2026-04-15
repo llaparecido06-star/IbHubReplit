@@ -6,8 +6,9 @@ import { supabase } from "@/lib/supabase";
 const TOTAL_STEPS = 3;
 
 const AREAS = [
-  "Sommelier", "Comprador", "Importador", "Produtor",
-  "Enólogo", "Consultor", "Investidor", "Entusiasta", "Outros",
+  "Sommelier", "Produtor", "Importador", "Exportador", "Distribuidor",
+  "Enoturismo", "Marketing", "Jornalismo", "Educação", "Consultoria",
+  "Enólogo", "Restaurateur", "Investidor", "Entusiasta", "Outros",
 ];
 
 const PLANS = [

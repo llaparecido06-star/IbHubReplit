@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { createPortalSession } from "@/services/stripe";
@@ -77,9 +77,11 @@ function Toggle({ label, desc, value, onChange }: { label: string; desc?: string
 }
 
 export default function MinhaContaPage() {
-  const { session, profile, signOut } = useAuth();
+  const { session, profile, signOut, patchProfile } = useAuth();
   const [, setLocation] = useLocation();
   const [activeSection, setActiveSection] = useState<Section>("perfil");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   // Subscription
   const [portalLoading, setPortalLoading] = useState(false);
@@ -138,18 +140,33 @@ export default function MinhaContaPage() {
     }
   }
 
+  async function handleAvatarUpload(file: File) {
+    if (!profile?.id || avatarUploading) return;
+    const ext = file.name.split(".").pop() ?? "jpg";
+    const path = `${profile.id}/${Date.now()}.${ext}`;
+    setAvatarUploading(true);
+    try {
+      const buf = await file.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      const { error: upErr } = await supabase.storage.from("avatars").upload(path, bytes, { contentType: file.type, upsert: true });
+      if (upErr) { console.error("avatar upload:", upErr); return; }
+      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
+      const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+      await supabase.from("profiles").update({ avatar_url: publicUrl }).or(`id.eq.${profile.id},user_id.eq.${profile.id}`);
+      patchProfile({ avatar_url: publicUrl });
+    } finally {
+      setAvatarUploading(false);
+    }
+  }
+
   async function handleSavePerfil() {
     if (!profile?.id) return;
     setSaving(true);
-    const { error } = await supabase.from("profiles").update({
-      full_name: fullName,
-      bio,
-      headline,
-      position,
-      company,
-    }).eq("id", profile.id);
+    const patch = { full_name: fullName, bio, headline, position, company };
+    const { error } = await supabase.from("profiles").update(patch).or(`id.eq.${profile.id},user_id.eq.${profile.id}`);
     setSaving(false);
     if (!error) {
+      patchProfile(patch);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     }
@@ -163,12 +180,27 @@ export default function MinhaContaPage() {
           <SectionTitle title="Informações de Perfil" />
           {/* Avatar */}
           <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
-            <div style={{ width: 64, height: 64, borderRadius: "50%", backgroundColor: "#722f37", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 900, color: WHITE }}>
-              {(profile?.full_name ?? "U")[0].toUpperCase()}
+            <div style={{ width: 64, height: 64, borderRadius: "50%", overflow: "hidden", backgroundColor: "#722f37", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 900, color: WHITE, flexShrink: 0 }}>
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                (profile?.full_name ?? "U")[0].toUpperCase()
+              )}
             </div>
             <div>
-              <button style={{ fontSize: 13, fontWeight: 700, color: GOLD, backgroundColor: `${GOLD}12`, border: `1px solid ${GOLD}40`, borderRadius: 8, padding: "7px 16px", cursor: "pointer" }}>
-                Alterar foto
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarUpload(f); e.target.value = ""; }}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={avatarUploading}
+                style={{ fontSize: 13, fontWeight: 700, color: GOLD, backgroundColor: `${GOLD}12`, border: `1px solid ${GOLD}40`, borderRadius: 8, padding: "7px 16px", cursor: avatarUploading ? "not-allowed" : "pointer", opacity: avatarUploading ? 0.6 : 1 }}
+              >
+                {avatarUploading ? "Enviando…" : "Alterar foto"}
               </button>
               <div style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>JPG, PNG ou GIF • Max 5 MB</div>
             </div>

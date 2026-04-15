@@ -356,13 +356,14 @@ export interface UserProfile {
   plan: string;
   is_admin: boolean;
   created_at: string;
+  certifications?: string[] | null;
 }
 
 export async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
   try {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, full_name, username, avatar_url, bio, headline, position, company, plan, is_admin, created_at")
+      .select("id, full_name, username, avatar_url, bio, headline, position, company, plan, is_admin, created_at, certifications")
       .eq("id", userId)
       .maybeSingle();
     if (error || !data) return null;
