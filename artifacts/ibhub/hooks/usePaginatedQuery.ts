@@ -14,10 +14,11 @@ export interface UsePaginatedQueryResult<T> {
 
 /**
  * Generic infinite-scroll pagination hook.
+ * T must have an `id` field for deduplication.
  * Screens call `refresh()` on mount and `loadMore()` from `onEndReached`.
  * The fetcher receives (offset, limit) and returns an array of items.
  */
-export function usePaginatedQuery<T>(
+export function usePaginatedQuery<T extends { id: string }>(
   fetcher: (offset: number, limit: number) => Promise<T[]>,
   pageSize: number = DEFAULT_PAGE_SIZE,
 ): UsePaginatedQueryResult<T> {
@@ -38,7 +39,7 @@ export function usePaginatedQuery<T>(
     offsetRef.current = 0;
     try {
       const data = await fetcherRef.current(0, pageSize);
-      setItems(data as T[]);
+      setItems(data);
       setHasMore(data.length >= pageSize);
       offsetRef.current = data.length;
     } catch (e) {
@@ -56,9 +57,8 @@ export function usePaginatedQuery<T>(
     fetcherRef.current(offsetRef.current, pageSize).then((data) => {
       if (data.length > 0) {
         setItems((prev) => {
-          const existingIds = new Set((prev as any[]).map((item: any) => item.id));
-          const fresh = (data as any[]).filter((item: any) => !existingIds.has(item.id));
-          return [...prev, ...(fresh as T[])];
+          const existingIds = new Set(prev.map((item) => item.id));
+          return [...prev, ...data.filter((item) => !existingIds.has(item.id))];
         });
         offsetRef.current += data.length;
       }

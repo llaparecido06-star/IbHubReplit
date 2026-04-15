@@ -3814,19 +3814,14 @@ export async function uploadEventImage(imageUri: string, userId: string): Promis
 
 export async function uploadOpportunityImage(uri: string, userId: string): Promise<string | null> {
   try {
-    const ext = uri.split(".").pop()?.toLowerCase() ?? "jpg";
-    const path = `${userId}/opportunities/${Date.now()}.${ext}`;
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    const bytes = await new Promise<Uint8Array>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
-      reader.onerror = reject;
-      reader.readAsArrayBuffer(blob);
-    });
+    const compressed = await compressPostImage(uri);
+    const path = `${userId}/opportunities/${Date.now()}.jpg`;
+    const response = await fetch(compressed);
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
     const { data, error } = await supabase.storage
       .from("post-images")
-      .upload(path, bytes, { contentType: `image/${ext === "jpg" ? "jpeg" : ext}`, upsert: true });
+      .upload(path, bytes, { contentType: "image/jpeg", upsert: true });
     if (error) { console.error("uploadOpportunityImage:", error); return null; }
     const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(data.path);
     return urlData.publicUrl;
@@ -4558,18 +4553,16 @@ export async function uploadProductImage(productId: string, uri: string): Promis
     const userId = session?.user?.id;
     if (!userId) { console.error("uploadProductImage: no session"); return null; }
 
-    const rawExt = (uri.split(".").pop()?.split("?")[0] ?? "jpg").toLowerCase();
-    const safeExt = ["jpg", "jpeg", "png", "webp"].includes(rawExt) ? rawExt : "jpg";
-    const mime = safeExt === "png" ? "image/png" : safeExt === "webp" ? "image/webp" : "image/jpeg";
-    const path = `${userId}/product-images/${productId}.${safeExt}`;
+    const compressed = await compressLogoImage(uri);
+    const path = `${userId}/product-images/${productId}.jpg`;
 
-    const response = await fetch(uri);
+    const response = await fetch(compressed);
     const arrayBuffer = await response.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
 
     const { error } = await supabase.storage
       .from("post-images")
-      .upload(path, bytes, { contentType: mime, upsert: true });
+      .upload(path, bytes, { contentType: "image/jpeg", upsert: true });
 
     if (error) { console.error("uploadProductImage:", error); return null; }
 
