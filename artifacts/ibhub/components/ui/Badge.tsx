@@ -2,7 +2,7 @@ import React from "react";
 import { StyleSheet, Text, View, ViewStyle } from "react-native";
 import { useColors } from "@/hooks/useColors";
 
-type BadgeVariant = "default" | "gold" | "wine" | "success" | "warning";
+type BadgeVariant = "default" | "gold" | "wine" | "success" | "warning" | "navy";
 
 interface BadgeProps {
   label: string;
@@ -20,6 +20,7 @@ export function Badge({ label, variant = "default", size = "sm", style }: BadgeP
     wine: { bg: colors.wine + "22", text: colors.wine },
     success: { bg: "#27ae6022", text: "#27ae60" },
     warning: { bg: "#f39c1222", text: "#f39c12" },
+    navy: { bg: "#0d1b2a18", text: "#0d1b2a" },
   };
 
   const cfg = variantConfig[variant];

@@ -352,10 +352,20 @@ export default function PublicProfileScreen() {
             </View>
           )}
 
-          {/* Tags */}
+          {/* Areas of expertise */}
           {(userProfile.areas_of_expertise ?? []).length > 0 && (
             <View style={styles.tags}>
               {(userProfile.areas_of_expertise ?? []).map(a => <Badge key={a} label={a} variant="gold" />)}
+            </View>
+          )}
+
+          {/* Certifications */}
+          {Array.isArray(userProfile.certifications) && (userProfile.certifications ?? []).length > 0 && (
+            <View style={{ marginTop: 10 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#7a8494', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>Certificações</Text>
+              <View style={styles.tags}>
+                {(userProfile.certifications ?? []).map((cert: string) => <Badge key={cert} label={cert} variant="navy" />)}
+              </View>
             </View>
           )}
         </View>
