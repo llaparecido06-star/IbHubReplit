@@ -2273,17 +2273,9 @@ export async function getOrCreateDirectConversation(userId1: string, userId2: st
       )
       .eq("status", "accepted");
 
-    // Company page owners always receive messages directly (no request flow for them)
-    let recipientIsCompanyOwner = false;
-    if (!forceAccepted) {
-      const { count: cpCount } = await supabase
-        .from("company_pages")
-        .select("id", { count: "exact", head: true })
-        .eq("owner_id", userId2);
-      recipientIsCompanyOwner = (cpCount ?? 0) > 0;
-    }
-
-    const recipientAccepted = forceAccepted || (connCheck.count ?? 0) > 0 || recipientIsCompanyOwner;
+    // Auto-accept only when explicitly requested (company-context flows pass forceAccepted=true)
+    // Personal DMs to company owners still follow normal request rules unless forceAccepted is set
+    const recipientAccepted = forceAccepted || (connCheck.count ?? 0) > 0;
 
     // Generate UUID client-side to avoid the RLS SELECT-after-INSERT issue
     // (convos_select requires being a participant, but participants don't exist yet at INSERT time)
