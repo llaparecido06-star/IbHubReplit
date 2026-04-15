@@ -146,6 +146,10 @@ export default function FeedScreen() {
   const [wineName, setWineName]                     = useState("");
   const [wineSafra, setWineSafra]                   = useState("");
   const [wineEan, setWineEan]                       = useState("");
+  const [wineGrape, setWineGrape]                   = useState("");
+  const [wineRegion, setWineRegion]                 = useState("");
+  const [wineProducer, setWineProducer]             = useState("");
+  const [wineCountry, setWineCountry]               = useState("");
   const [wineStars, setWineStars]                   = useState(4);
   const [wineScore, setWineScore]                   = useState(85);
   const [selectedTags, setSelectedTags]             = useState<string[]>([]);
@@ -604,17 +608,25 @@ export default function FeedScreen() {
   const handlePublishWine = async () => {
     setShowWineReview(false);
     if (!wineName.trim() || !user?.id) {
-      setWineName(""); setWineSafra(""); setWineEan(""); setWineStars(4); setWineScore(85);
+      setWineName(""); setWineSafra(""); setWineEan(""); setWineGrape(""); setWineRegion("");
+      setWineProducer(""); setWineCountry(""); setWineStars(4); setWineScore(85);
       setSelectedTags([]); setWineHarmonizacao(""); setWineObs(""); setWineImageUri(null);
       return;
     }
 
     const stars = "⭐".repeat(wineStars);
+    const metaLine = [
+      wineGrape.trim()    ? `🍇 ${wineGrape.trim()}`    : "",
+      wineSafra.trim()    ? `📅 ${wineSafra.trim()}`     : "",
+      wineProducer.trim() ? `🏭 ${wineProducer.trim()}`  : "",
+      wineRegion.trim()   ? `📍 ${wineRegion.trim()}`    : "",
+      wineCountry.trim()  ? `🌍 ${wineCountry.trim()}`   : "",
+    ].filter(Boolean).join(" · ");
     const tags = selectedTags.length > 0 ? `\n🍷 Notas: ${selectedTags.join(", ")}` : "";
     const harmonizacao = wineHarmonizacao.trim() ? `\n🍽️ Harmonização: ${wineHarmonizacao.trim()}` : "";
     const obs = wineObs.trim() ? `\n📝 ${wineObs.trim()}` : "";
     const eanLine = wineEan.trim() ? `\n🏷️ EAN: ${wineEan.trim()}` : "";
-    const content = `${stars} ${wineName.trim()}${wineSafra ? ` (${wineSafra})` : ""}\n📊 Pontuação: ${wineScore}/100${tags}${harmonizacao}${eanLine}${obs}`;
+    const content = `${stars} ${wineName.trim()}\n${metaLine ? metaLine + "\n" : ""}📊 Pontuação: ${wineScore}/100${tags}${harmonizacao}${eanLine}${obs}`;
 
     let uploadedImageUrl: string | null = null;
     if (wineImageUri) {
@@ -665,6 +677,10 @@ export default function FeedScreen() {
       name: wineName.trim(),
       vintage: wineSafra.trim() || null,
       ean: wineEan.trim() || null,
+      grape: wineGrape.trim() || null,
+      region: wineRegion.trim() || null,
+      producer: wineProducer.trim() || null,
+      country: wineCountry.trim() || null,
       rating: wineStars,
       score_100: wineScore,
       harmonizacao: wineHarmonizacao.trim() || null,
@@ -674,7 +690,8 @@ export default function FeedScreen() {
       is_private: false,
     }).catch(() => { /* silently ignore — post already created */ });
 
-    setWineName(""); setWineSafra(""); setWineEan(""); setWineStars(4); setWineScore(85);
+    setWineName(""); setWineSafra(""); setWineEan(""); setWineGrape(""); setWineRegion("");
+    setWineProducer(""); setWineCountry(""); setWineStars(4); setWineScore(85);
     setSelectedTags([]); setWineHarmonizacao(""); setWineObs(""); setWineImageUri(null);
   };
 
@@ -1299,12 +1316,27 @@ export default function FeedScreen() {
                 </TouchableOpacity>
               )}
 
-              {/* Nome + Safra */}
+              {/* Nome do vinho */}
               <View>
-                <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>NOME DO VINHO / SAFRA</Text>
-                <View style={styles.wineNameRow}>
-                  <TextInput style={[styles.wineNameInput, { flex: 2, borderColor: colors.border, color: colors.foreground }]} placeholder="Ex: Casillero del Diablo" placeholderTextColor={colors.mutedForeground} value={wineName} onChangeText={setWineName} />
-                  <TextInput style={[styles.wineNameInput, { flex: 1, borderColor: colors.border, color: colors.foreground }]} placeholder="2020" placeholderTextColor={colors.mutedForeground} value={wineSafra} onChangeText={setWineSafra} keyboardType="number-pad" />
+                <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>NOME DO VINHO *</Text>
+                <TextInput
+                  style={[styles.wineInput, { borderColor: colors.border, color: colors.foreground }]}
+                  placeholder="Ex: Casillero del Diablo"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={wineName}
+                  onChangeText={setWineName}
+                />
+              </View>
+
+              {/* Uva + Safra */}
+              <View style={styles.wineNameRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>UVA / CASTA</Text>
+                  <TextInput style={[styles.wineNameInput, { borderColor: colors.border, color: colors.foreground }]} placeholder="Ex: Cabernet Sauvignon" placeholderTextColor={colors.mutedForeground} value={wineGrape} onChangeText={setWineGrape} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>SAFRA</Text>
+                  <TextInput style={[styles.wineNameInput, { borderColor: colors.border, color: colors.foreground }]} placeholder="2020" placeholderTextColor={colors.mutedForeground} value={wineSafra} onChangeText={setWineSafra} keyboardType="number-pad" />
                 </View>
               </View>
 
@@ -1331,6 +1363,30 @@ export default function FeedScreen() {
                 <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 4 }}>
                   Usado no ranking comunitário de vinhos · Opcional
                 </Text>
+              </View>
+
+              {/* Produtor + País */}
+              <View style={styles.wineNameRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>PRODUTOR</Text>
+                  <TextInput style={[styles.wineNameInput, { borderColor: colors.border, color: colors.foreground }]} placeholder="Ex: Concha y Toro" placeholderTextColor={colors.mutedForeground} value={wineProducer} onChangeText={setWineProducer} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>PAÍS</Text>
+                  <TextInput style={[styles.wineNameInput, { borderColor: colors.border, color: colors.foreground }]} placeholder="Ex: Chile" placeholderTextColor={colors.mutedForeground} value={wineCountry} onChangeText={setWineCountry} />
+                </View>
+              </View>
+
+              {/* Região */}
+              <View>
+                <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>REGIÃO</Text>
+                <TextInput
+                  style={[styles.wineInput, { borderColor: colors.border, color: colors.foreground }]}
+                  placeholder="Ex: Vale Central, Mendoza, Douro..."
+                  placeholderTextColor={colors.mutedForeground}
+                  value={wineRegion}
+                  onChangeText={setWineRegion}
+                />
               </View>
 
               {/* Stars */}
