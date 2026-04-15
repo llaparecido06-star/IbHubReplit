@@ -84,7 +84,7 @@ export default function FeedScreen() {
   const feedOffsetRef = useRef(0);
   const isLoadingMoreRef = useRef(false);
   const isPostingRef = useRef(false);
-  const likingPostIdsRef = useRef<Set<string>>(new Set());
+  const [likingPostIds, setLikingPostIds] = useState<Set<string>>(new Set());
   const [isPublishing, setIsPublishing] = useState(false);
   const FEED_PAGE_SIZE = 15;
 
@@ -809,12 +809,13 @@ export default function FeedScreen() {
             post={item}
             currentUserId={user?.id}
             isVisible={visiblePostIds.has(item.id)}
+            isLiking={likingPostIds.has(item.id)}
             onLike={async (id) => {
-              if (likingPostIdsRef.current.has(id)) return;
+              if (likingPostIds.has(id)) return;
               const post = posts.find(p => p.id === id);
               if (!post || !user?.id) return;
               const wasLiked = post.is_liked ?? false;
-              likingPostIdsRef.current.add(id);
+              setLikingPostIds(prev => new Set([...prev, id]));
               setPosts(prev => prev.map(p => p.id === id
                 ? { ...p, is_liked: !wasLiked, likes_count: wasLiked ? p.likes_count - 1 : p.likes_count + 1 }
                 : p));
@@ -824,10 +825,10 @@ export default function FeedScreen() {
                   ? { ...p, is_liked: wasLiked, likes_count: wasLiked ? p.likes_count + 1 : p.likes_count - 1 }
                   : p));
               }
-              likingPostIdsRef.current.delete(id);
+              setLikingPostIds(prev => { const s = new Set(prev); s.delete(id); return s; });
             }}
             onReact={async (id, reaction) => {
-              if (likingPostIdsRef.current.has(id)) return;
+              if (likingPostIds.has(id)) return;
               const post = posts.find(p => p.id === id);
               if (!post || !user?.id) return;
               const prevReaction = post.reaction_type ?? null;
@@ -835,7 +836,7 @@ export default function FeedScreen() {
               const prevCount = post.likes_count;
               const isSameReaction = prevReaction === reaction;
               const wasLiked = !!(prevIsLiked || prevReaction);
-              likingPostIdsRef.current.add(id);
+              setLikingPostIds(prev => new Set([...prev, id]));
               setPosts(prev => prev.map(p => {
                 if (p.id !== id) return p;
                 return {
@@ -853,7 +854,7 @@ export default function FeedScreen() {
                   p.id !== id ? p : { ...p, is_liked: prevIsLiked, reaction_type: prevReaction, likes_count: prevCount }
                 ));
               }
-              likingPostIdsRef.current.delete(id);
+              setLikingPostIds(prev => { const s = new Set(prev); s.delete(id); return s; });
             }}
             onBookmark={(id) => {
               const post = posts.find(p => p.id === id);

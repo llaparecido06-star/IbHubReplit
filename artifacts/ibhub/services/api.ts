@@ -11,7 +11,8 @@ function isNetworkError(e: unknown): boolean {
     msg.includes("failed to fetch") ||
     msg.includes("networkerror") ||
     msg.includes("etimedout") ||
-    msg.includes("econnrefused")
+    msg.includes("econnrefused") ||
+    msg.includes("verifique sua conex")
   );
 }
 
@@ -19,10 +20,7 @@ async function guardedFetch(input: RequestInfo, init?: RequestInit): Promise<Res
   try {
     return await fetch(input, init);
   } catch (e: unknown) {
-    if (isNetworkError(e)) {
-      throw new Error("Verifique sua conexão e tente novamente.");
-    }
-    throw e;
+    throw new Error("Verifique sua conexão e tente novamente.");
   }
 }
 
@@ -4502,6 +4500,7 @@ export async function createCompanyProduct(params: {
     if (error) { console.error("createCompanyProduct:", error); return null; }
     return data as CompanyProduct;
   } catch (e) {
+    if (isNetworkError(e)) throw e;
     console.error("createCompanyProduct:", e);
     return null;
   }
@@ -4519,6 +4518,7 @@ export async function updateCompanyProduct(
     if (error) { console.error("updateCompanyProduct:", error); return false; }
     return true;
   } catch (e) {
+    if (isNetworkError(e)) throw e;
     console.error("updateCompanyProduct:", e);
     return false;
   }
@@ -4574,6 +4574,7 @@ export async function deleteCompanyProduct(productId: string): Promise<boolean> 
     if (error) { console.error("deleteCompanyProduct:", error); return false; }
     return true;
   } catch (e) {
+    if (isNetworkError(e)) throw e;
     console.error("deleteCompanyProduct:", e);
     return false;
   }

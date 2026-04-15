@@ -37,6 +37,7 @@ import {
   getOrCreateDirectConversation,
 } from "@/services/api";
 import { Post } from "@/components/feed/PostCard";
+import { friendlyErrorMessage } from "@/hooks/useAsyncAction";
 
 type CompanyTab  = "publicacoes" | "portfolio" | "painel";
 type ProductCat  = "produto" | "vinho" | "acessorio" | "servico";
@@ -272,53 +273,60 @@ export default function EmpresaScreen() {
     if (!pName.trim()) { Alert.alert("Atenção", "Informe o nome do produto."); return; }
     if (!id) return;
     setSavingProduct(true);
+    try {
+      let imageUrl: string | null | undefined = undefined;
 
-    let imageUrl: string | null | undefined = undefined;
-
-    if (pImageChanged && pImageUri) {
-      setUploadingProductImg(true);
-      const tempId = editingProduct?.id ?? `tmp-${Date.now()}`;
-      const uploaded = await uploadProductImage(tempId, pImageUri);
-      setUploadingProductImg(false);
-      if (uploaded) { imageUrl = uploaded; }
-    }
-
-    if (editingProduct) {
-      const ok = await updateCompanyProduct(editingProduct.id, {
-        name:        pName.trim(),
-        description: pDesc || null,
-        price:       pPrice || null,
-        category:    pCat,
-        ...(imageUrl !== undefined ? { image_url: imageUrl } : {}),
-      });
-      if (ok) {
-        setProducts((prev) => prev.map((p) =>
-          p.id === editingProduct.id
-            ? { ...p, name: pName, desc: pDesc, price: pPrice, cat: pCat, image_url: imageUrl !== undefined ? imageUrl : p.image_url }
-            : p
-        ));
-      } else {
-        Alert.alert("Erro", "Não foi possível atualizar o produto.");
+      if (pImageChanged && pImageUri) {
+        setUploadingProductImg(true);
+        try {
+          const tempId = editingProduct?.id ?? `tmp-${Date.now()}`;
+          const uploaded = await uploadProductImage(tempId, pImageUri);
+          if (uploaded) { imageUrl = uploaded; }
+        } finally {
+          setUploadingProductImg(false);
+        }
       }
-    } else {
-      const created = await createCompanyProduct({
-        company_id:  id,
-        name:        pName.trim(),
-        description: pDesc || null,
-        price:       pPrice || null,
-        category:    pCat,
-        image_url:   imageUrl ?? null,
-      });
-      if (created) {
-        setProducts((prev) => [toLocalProduct(created), ...prev]);
-      } else {
-        Alert.alert("Erro", "Não foi possível criar o produto.");
-      }
-    }
 
-    setSavingProduct(false);
-    resetProductForm();
-    setShowProductForm(false);
+      if (editingProduct) {
+        const ok = await updateCompanyProduct(editingProduct.id, {
+          name:        pName.trim(),
+          description: pDesc || null,
+          price:       pPrice || null,
+          category:    pCat,
+          ...(imageUrl !== undefined ? { image_url: imageUrl } : {}),
+        });
+        if (ok) {
+          setProducts((prev) => prev.map((p) =>
+            p.id === editingProduct.id
+              ? { ...p, name: pName, desc: pDesc, price: pPrice, cat: pCat, image_url: imageUrl !== undefined ? imageUrl : p.image_url }
+              : p
+          ));
+        } else {
+          Alert.alert("Erro", "Não foi possível atualizar o produto.");
+        }
+      } else {
+        const created = await createCompanyProduct({
+          company_id:  id,
+          name:        pName.trim(),
+          description: pDesc || null,
+          price:       pPrice || null,
+          category:    pCat,
+          image_url:   imageUrl ?? null,
+        });
+        if (created) {
+          setProducts((prev) => [toLocalProduct(created), ...prev]);
+        } else {
+          Alert.alert("Erro", "Não foi possível criar o produto.");
+        }
+      }
+
+      resetProductForm();
+      setShowProductForm(false);
+    } catch (e: unknown) {
+      Alert.alert("Erro", friendlyErrorMessage(e));
+    } finally {
+      setSavingProduct(false);
+    }
   };
 
   const openEditProduct = (p: LocalProduct) => {
@@ -332,16 +340,20 @@ export default function EmpresaScreen() {
     setShowProductForm(true);
   };
 
-  const handleDeleteProduct = async (productId: string) => {
+  const handleDeleteProduct = (productId: string) => {
     Alert.alert("Remover produto", "Deseja remover este produto?", [
       { text: "Cancelar", style: "cancel" },
       {
         text: "Remover", style: "destructive", onPress: async () => {
-          const ok = await deleteCompanyProduct(productId);
-          if (ok) {
-            setProducts((prev) => prev.filter((x) => x.id !== productId));
-          } else {
-            Alert.alert("Erro", "Não foi possível remover o produto.");
+          try {
+            const ok = await deleteCompanyProduct(productId);
+            if (ok) {
+              setProducts((prev) => prev.filter((x) => x.id !== productId));
+            } else {
+              Alert.alert("Erro", "Não foi possível remover o produto.");
+            }
+          } catch (e: unknown) {
+            Alert.alert("Erro", friendlyErrorMessage(e));
           }
         },
       },

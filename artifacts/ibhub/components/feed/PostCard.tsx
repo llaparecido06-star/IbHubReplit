@@ -187,6 +187,7 @@ interface PostCardProps {
   onComment?: (postId: string) => void;
   onVote?: (postId: string, optionIndex: number) => void;
   onViewLikes?: (postId: string) => void;
+  isLiking?: boolean;
 }
 
 function fmtCount(n: number): string {
@@ -305,7 +306,7 @@ function ReactionPicker({
   );
 }
 
-export function PostCard({ post, currentUserId, isVisible = false, onLike, onReact, onBookmark, onComment, onVote, onHide, onBlock, onViewLikes }: PostCardProps) {
+export function PostCard({ post, currentUserId, isVisible = false, onLike, onReact, onBookmark, onComment, onVote, onHide, onBlock, onViewLikes, isLiking = false }: PostCardProps) {
   const colors = useColors();
   const router = useRouter();
   const { user } = useAuth();
@@ -744,23 +745,28 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
 
         <TouchableOpacity
           style={styles.action}
-          onPress={handleLike}
-          onLongPress={handleLongPress}
+          onPress={isLiking ? undefined : handleLike}
+          onLongPress={isLiking ? undefined : handleLongPress}
           delayLongPress={450}
-          activeOpacity={0.7}
+          activeOpacity={isLiking ? 1 : 0.7}
+          disabled={isLiking}
         >
-          <Animated.View style={{ transform: [{ scale: likeScale }] }}>
-            {likeButtonIcon ? (
-              <Text style={{ fontSize: 20 }}>{likeButtonIcon}</Text>
-            ) : (
-              <AntDesign
-                name="heart"
-                size={22}
-                color={likeButtonColor}
-              />
-            )}
-          </Animated.View>
-          <Text style={[styles.actionLabel, { color: (isLiked || reactionInfo) ? "#e74c3c" : colors.mutedForeground, fontWeight: (isLiked || reactionInfo) ? "700" : "400" }]}>
+          {isLiking ? (
+            <ActivityIndicator size="small" color={colors.mutedForeground} />
+          ) : (
+            <Animated.View style={{ transform: [{ scale: likeScale }] }}>
+              {likeButtonIcon ? (
+                <Text style={{ fontSize: 20 }}>{likeButtonIcon}</Text>
+              ) : (
+                <AntDesign
+                  name="heart"
+                  size={22}
+                  color={likeButtonColor}
+                />
+              )}
+            </Animated.View>
+          )}
+          <Text style={[styles.actionLabel, { color: (isLiked || reactionInfo) ? "#e74c3c" : colors.mutedForeground, fontWeight: (isLiked || reactionInfo) ? "700" : "400", opacity: isLiking ? 0.5 : 1 }]}>
             {likeButtonLabel}
           </Text>
         </TouchableOpacity>
