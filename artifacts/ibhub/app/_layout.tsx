@@ -16,8 +16,10 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AuthProvider, useAuth, supabase } from "@/context/AuthContext";
 import { PermissionsProvider } from "@/context/PermissionsContext";
+import { FeatureFlagsProvider, useFeatureFlags } from "@/context/FeatureFlagsContext";
 import { UnreadProvider, useUnread } from "@/context/UnreadContext";
 import { SidebarNav, useIsDesktop } from "@/components/ui/SidebarNav";
+import * as SafeNotifications from "@/utils/safeNotifications";
 
 // ── Background unread badge syncer ──────────────────────────────────────────
 function UnreadSyncer() {
@@ -29,13 +31,9 @@ function UnreadSyncer() {
   useEffect(() => {
     if (!user?.id) return;
 
-    // Initial fetch
     refreshUnread(user.id);
-
-    // Refresh every 60 seconds
     timerRef.current = setInterval(() => refreshUnread(user.id), 60_000);
 
-    // Realtime: any new message → re-count
     if (!channelRef.current) {
       channelRef.current = supabase
         .channel(`unread-syncer:${user.id}`)
@@ -62,6 +60,70 @@ function UnreadSyncer() {
   return null;
 }
 
+// ── Push notification deep-link handler ──────────────────────────────────────
+function PushNotificationHandler() {
+  const router = useRouter();
+  const { user, profile } = useAuth();
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    // Register push token when user signs in
+    const registerToken = async () => {
+      try {
+        const { status } = await SafeNotifications.requestPermissionsAsync();
+        if (status !== "granted") return;
+        const tokenResult = await SafeNotifications.getExpoPushTokenAsync();
+        const token = tokenResult.data;
+        if (!token) return;
+        await supabase
+          .from("push_tokens")
+          .upsert({ user_id: user.id, token }, { onConflict: "user_id,token" });
+      } catch {
+        // Push not available in this environment (Expo Go)
+      }
+    };
+
+    registerToken();
+
+    // Listen for notification taps (deep link navigation)
+    const sub = SafeNotifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data ?? {};
+      const deepLink = (data as { deepLink?: string }).deepLink;
+      if (deepLink && typeof deepLink === "string") {
+        try {
+          router.push(deepLink as any);
+        } catch {
+          // Invalid deep link — silently ignore
+        }
+      }
+    });
+
+    return () => sub.remove();
+  }, [user?.id]);
+
+  return null;
+}
+
+// ── Maintenance mode guard ────────────────────────────────────────────────────
+function MaintenanceGuard() {
+  const { isEnabled } = useFeatureFlags();
+  const { profile, session } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!session) return;
+    if (profile?.is_admin) return;
+    if (isEnabled("manutencao")) {
+      supabase.auth.signOut().then(() => {
+        router.replace("/maintenance" as any);
+      });
+    }
+  }, [isEnabled("manutencao"), profile?.is_admin, session]);
+
+  return null;
+}
+
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
@@ -73,6 +135,7 @@ function AuthenticatedLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="social-complete" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="maintenance" options={{ headerShown: false }} />
       <Stack.Screen name="create-post" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
       <Stack.Screen name="search" options={{ animation: "slide_from_bottom" }} />
       <Stack.Screen name="wine-cellar" options={{ animation: "slide_from_right" }} />
@@ -108,6 +171,8 @@ function AuthenticatedLayout() {
     return (
       <>
         <UnreadSyncer />
+        <PushNotificationHandler />
+        <MaintenanceGuard />
         <View style={{ flex: 1, flexDirection: "row" }}>
           <SidebarNav />
           <View style={{ flex: 1 }}>
@@ -121,6 +186,8 @@ function AuthenticatedLayout() {
   return (
     <>
       <UnreadSyncer />
+      <PushNotificationHandler />
+      <MaintenanceGuard />
       {stack}
     </>
   );
@@ -128,6 +195,7 @@ function AuthenticatedLayout() {
 
 function RootLayoutNav() {
   const { session, loading, isRecovering, needsProfileCompletion } = useAuth();
+  const { isEnabled } = useFeatureFlags();
   const router = useRouter();
   const didNavigateIn = useRef(false);
 
@@ -136,7 +204,12 @@ function RootLayoutNav() {
 
     if (!session) {
       didNavigateIn.current = false;
-      router.replace("/(auth)/login" as any);
+      // If maintenance mode is on and there's no session, show maintenance screen
+      if (isEnabled("manutencao")) {
+        router.replace("/maintenance" as any);
+      } else {
+        router.replace("/(auth)/login" as any);
+      }
     } else if (needsProfileCompletion) {
       router.replace("/social-complete" as any);
     } else if (!didNavigateIn.current) {
@@ -166,6 +239,7 @@ function RootLayoutNav() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" redirect />
+        <Stack.Screen name="maintenance" options={{ headerShown: false }} />
         <Stack.Screen name="terms-of-use" options={{ animation: "slide_from_right" }} />
         <Stack.Screen name="privacy-policy" options={{ animation: "slide_from_right" }} />
       </Stack>
@@ -204,11 +278,13 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <AuthProvider>
-            <PermissionsProvider>
-              <UnreadProvider>
-                <RootLayoutNav />
-              </UnreadProvider>
-            </PermissionsProvider>
+            <FeatureFlagsProvider>
+              <PermissionsProvider>
+                <UnreadProvider>
+                  <RootLayoutNav />
+                </UnreadProvider>
+              </PermissionsProvider>
+            </FeatureFlagsProvider>
           </AuthProvider>
         </GestureHandlerRootView>
       </QueryClientProvider>

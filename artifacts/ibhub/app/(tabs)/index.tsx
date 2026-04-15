@@ -31,6 +31,7 @@ import { LikesModal } from "@/components/feed/LikesModal";
 import { StoryBar } from "@/components/feed/StoryBar";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
+import { useFeatureFlags } from "@/context/FeatureFlagsContext";
 import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
 import type { SuggestedProfile } from "@/services/api";
@@ -72,6 +73,7 @@ export default function FeedScreen() {
   const colors = useColors();
   const router = useRouter();
   const { user, profile, activeCompany, setActiveCompany } = useAuth();
+  const { isEnabled: isFlagEnabled } = useFeatureFlags();
   const insets = useSafeAreaInsets();
 
   const [posts, setPosts] = useState<Post[]>([]);
@@ -645,8 +647,8 @@ export default function FeedScreen() {
         </View>
       </View>
 
-      {/* Stories / Momentos */}
-      <StoryBar />
+      {/* Stories / Momentos — hidden when 'stories' feature flag is off */}
+      {isFlagEnabled("stories") && <StoryBar />}
 
       {/* Greeting */}
       <View style={[styles.greeting, { backgroundColor: "#fff" }]}>
@@ -1076,10 +1078,12 @@ export default function FeedScreen() {
                 <Feather name="video" size={18} color={postVideoUri ? colors.gold : postImageUris.length > 0 ? colors.mutedForeground : colors.foreground} />
                 <Text style={[styles.toolbarLabel, { color: postVideoUri ? colors.gold : postImageUris.length > 0 ? colors.mutedForeground : colors.foreground }]}>Vídeo</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.toolbarBtn} onPress={() => setPostMode(postMode === "poll" ? "text" : "poll")}>
-                <Feather name="bar-chart-2" size={18} color={postMode === "poll" ? colors.gold : colors.foreground} />
-                <Text style={[styles.toolbarLabel, { color: postMode === "poll" ? colors.gold : colors.foreground }]}>Enquete</Text>
-              </TouchableOpacity>
+              {isFlagEnabled("enquetes") && (
+                <TouchableOpacity style={styles.toolbarBtn} onPress={() => setPostMode(postMode === "poll" ? "text" : "poll")}>
+                  <Feather name="bar-chart-2" size={18} color={postMode === "poll" ? colors.gold : colors.foreground} />
+                  <Text style={[styles.toolbarLabel, { color: postMode === "poll" ? colors.gold : colors.foreground }]}>Enquete</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={styles.toolbarBtn}
                 onPress={() => setShowLocationInput(v => !v)}

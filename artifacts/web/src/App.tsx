@@ -1,3 +1,4 @@
+import React from "react";
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
@@ -42,6 +43,8 @@ import AssinarCanceladoPage from "@/pages/AssinarCanceladoPage";
 import MinhaContaPage from "@/pages/MinhaContaPage";
 import NotFound from "@/pages/not-found";
 import { AdminShell } from "@/components/layout/AdminShell";
+import { FeatureFlagsProvider, useFeatureFlags } from "@/context/FeatureFlagsContext";
+import MaintenancePage from "@/pages/MaintenancePage";
 import { useEffect } from "react";
 
 const queryClient = new QueryClient();
@@ -124,8 +127,20 @@ function AdminNotFound() {
   );
 }
 
+function MaintenanceGuard({ children }: { children: React.ReactNode }) {
+  const { isEnabled, isLoading } = useFeatureFlags();
+  const { profile, loading } = useAuth();
+
+  if (loading || isLoading) return null;
+  if (isEnabled("manutencao") && !profile?.is_admin) {
+    return <MaintenancePage />;
+  }
+  return <>{children}</>;
+}
+
 function Router() {
   return (
+    <MaintenanceGuard>
     <Switch>
       <Route path="/">
         <PublicOnlyRoute component={LandingPage} showWhileLoading />
@@ -253,6 +268,7 @@ function Router() {
 
       <Route component={NotFound} />
     </Switch>
+    </MaintenanceGuard>
   );
 }
 
@@ -260,11 +276,13 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <PermissionsProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Router />
-          </WouterRouter>
-        </PermissionsProvider>
+        <FeatureFlagsProvider>
+          <PermissionsProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <Router />
+            </WouterRouter>
+          </PermissionsProvider>
+        </FeatureFlagsProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

@@ -1,0 +1,92 @@
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { supabase } from "@/lib/supabase";
+
+interface FeatureFlagsContextValue {
+  flags: Record<string, boolean>;
+  isEnabled: (key: string) => boolean;
+  isLoading: boolean;
+}
+
+const FeatureFlagsContext = createContext<FeatureFlagsContextValue>({
+  flags: {},
+  isEnabled: () => true,
+  isLoading: true,
+});
+
+const FLAG_KEYS = ["enquetes", "stories", "manutencao"];
+
+export function FeatureFlagsProvider({ children }: { children: React.ReactNode }) {
+  const [flags, setFlags] = useState<Record<string, boolean>>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  const loadFlags = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("feature_flags")
+      .select("key, enabled")
+      .in("key", FLAG_KEYS);
+    if (error) {
+      setIsLoading(false);
+      return;
+    }
+    const map: Record<string, boolean> = {};
+    for (const f of FLAG_KEYS) {
+      const found = (data ?? []).find((d: { key: string; enabled: boolean }) => d.key === f);
+      map[f] = found ? found.enabled : false;
+    }
+    setFlags(map);
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadFlags();
+  }, [loadFlags]);
+
+  useEffect(() => {
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+
+    const channel = supabase
+      .channel("web-feature-flags-global")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "feature_flags" },
+        (payload) => {
+          const row = (payload.new ?? payload.old ?? {}) as { key?: string; enabled?: boolean };
+          if (row.key && FLAG_KEYS.includes(row.key)) {
+            setFlags((prev) => ({ ...prev, [row.key!]: !!row.enabled }));
+          }
+        },
+      )
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, []);
+
+  const isEnabled = useCallback(
+    (key: string): boolean => {
+      if (isLoading) return true;
+      return flags[key] ?? false;
+    },
+    [flags, isLoading],
+  );
+
+  return (
+    <FeatureFlagsContext.Provider value={{ flags, isEnabled, isLoading }}>
+      {children}
+    </FeatureFlagsContext.Provider>
+  );
+}
+
+export function useFeatureFlags() {
+  return useContext(FeatureFlagsContext);
+}

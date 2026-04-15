@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
+import { useFeatureFlags } from "@/context/FeatureFlagsContext";
 import { AppShell } from "@/components/layout/AppShell";
 import StoriesBar from "@/components/stories/StoriesBar";
 import { supabase } from "@/lib/supabase";
@@ -436,6 +437,7 @@ function SuggestionCard({
 /* ─── PostTrigger (opens global modal) ─── */
 function PostTrigger({ profile }: { profile: { avatar_url?: string | null; full_name?: string | null } | null }) {
   const openModal = () => window.dispatchEvent(new CustomEvent("ibhub:openCreatePost"));
+  const { isEnabled: isFlagEnabled } = useFeatureFlags();
   const name = profile?.full_name ?? "Usuário";
   return (
     <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 14, marginBottom: 14 }}>
@@ -454,7 +456,7 @@ function PostTrigger({ profile }: { profile: { avatar_url?: string | null; full_
         {[
           { label: "Foto",     icon: <ImageIcon />,    tab: "foto" },
           { label: "Vídeo",    icon: <WineGlassIcon />, tab: "video" },
-          { label: "Enquete",  icon: null,              tab: "enquete" },
+          ...(isFlagEnabled("enquetes") ? [{ label: "Enquete", icon: null as React.ReactNode, tab: "enquete" }] : []),
           { label: "🍷 Vinho", icon: null,              tab: "vinho" },
         ].map(item => (
           <button key={item.label} onClick={openModal} style={{
@@ -584,6 +586,7 @@ function TrendingTopics() {
 /* ─── AppFeedPage ────────────────────────── */
 export default function AppFeedPage() {
   const { profile, user, loading: authLoading, activeCompany } = useAuth();
+  const { isEnabled: isFlagEnabled } = useFeatureFlags();
 
   const [posts, setPosts]             = useState<Post[]>([]);
   const [suggestions, setSuggestions] = useState<SuggestedProfile[]>([]);
@@ -733,7 +736,7 @@ export default function AppFeedPage() {
 
         {/* ── Feed column ─────────────────── */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          {!activeCompany && <StoriesBar userId={userId} />}
+          {!activeCompany && isFlagEnabled("stories") && <StoriesBar userId={userId} />}
           <PostTrigger profile={profile} />
 
           {loading ? (
