@@ -45,6 +45,9 @@ export const addNotificationReceivedListener = (
   return { remove: () => {} };
 };
 
+export const getLastNotificationResponseAsync = (): Promise<NotificationResponse | null> =>
+  Promise.resolve(null);
+
 export const SchedulableTriggerInputTypes: Record<string, string> = {
   DATE: "date",
 };

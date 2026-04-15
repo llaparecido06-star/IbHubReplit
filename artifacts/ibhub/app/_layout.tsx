@@ -7,7 +7,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useRouter, type Href } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useRef } from "react";
 import { ActivityIndicator, View } from "react-native";
@@ -61,9 +61,15 @@ function UnreadSyncer() {
 }
 
 // ── Push notification deep-link handler ──────────────────────────────────────
+function navigateDeepLink(router: ReturnType<typeof useRouter>, deepLink: string) {
+  // Only allow absolute paths starting with "/" to prevent open redirects
+  if (!deepLink.startsWith("/")) return;
+  router.push(deepLink as Href);
+}
+
 function PushNotificationHandler() {
   const router = useRouter();
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
 
   useEffect(() => {
     if (!user?.id) return;
@@ -84,18 +90,31 @@ function PushNotificationHandler() {
       }
     };
 
-    registerToken();
+    // Handle cold-start: app was launched by tapping a notification
+    const handleLastResponse = async () => {
+      try {
+        const response = await SafeNotifications.getLastNotificationResponseAsync();
+        if (response) {
+          const data = response.notification.request.content.data ?? {};
+          const deepLink = (data as { deepLink?: string }).deepLink;
+          if (deepLink && typeof deepLink === "string") {
+            navigateDeepLink(router, deepLink);
+          }
+        }
+      } catch {
+        // Not available in Expo Go
+      }
+    };
 
-    // Listen for notification taps (deep link navigation)
+    registerToken();
+    handleLastResponse();
+
+    // Listen for notification taps while app is foregrounded/backgrounded
     const sub = SafeNotifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data ?? {};
       const deepLink = (data as { deepLink?: string }).deepLink;
       if (deepLink && typeof deepLink === "string") {
-        try {
-          router.push(deepLink as any);
-        } catch {
-          // Invalid deep link — silently ignore
-        }
+        navigateDeepLink(router, deepLink);
       }
     });
 

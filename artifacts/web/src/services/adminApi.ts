@@ -62,6 +62,7 @@ export interface BroadcastParams {
   title: string;
   body: string;
   segment: "all" | "profissional" | "empresarial" | "premium" | "basico";
+  deepLink?: string;
 }
 
 export interface NotificationLog {
@@ -263,5 +264,27 @@ export async function sendBroadcastNotification(params: BroadcastParams): Promis
     };
   } catch {
     return { success: false, message: "Erro de rede ao enviar notificação." };
+  }
+}
+
+export async function sendBroadcastPush(params: BroadcastParams): Promise<{ success: boolean; message?: string }> {
+  try {
+    const res = await adminFetch("/admin/broadcast-push", {
+      method: "POST",
+      body: JSON.stringify({
+        title: params.title,
+        body: params.body,
+        segment: params.segment,
+        deepLink: params.deepLink ?? null,
+      }),
+    });
+    const json = await res.json() as { success?: boolean; sent?: number; total?: number; error?: string };
+    if (!res.ok) return { success: false, message: json.error ?? "Erro ao enviar push." };
+    return {
+      success: true,
+      message: `Push enviado para ${json.sent ?? 0}/${json.total ?? 0} dispositivo(s).`,
+    };
+  } catch {
+    return { success: false, message: "Erro de rede ao enviar push." };
   }
 }

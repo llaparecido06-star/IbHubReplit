@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { AdminShell } from "@/components/layout/AdminShell";
 import {
   fetchNotificationLogs,
-  sendBroadcastNotification,
+  sendBroadcastPush,
   NotificationLog,
 } from "@/services/adminApi";
 
@@ -23,6 +23,7 @@ export default function AdminNotificacoes() {
 
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [deepLink, setDeepLink] = useState("");
   const [segment, setSegment] = useState<"all" | "profissional" | "empresarial" | "premium" | "basico">("all");
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ success: boolean; message?: string } | null>(null);
@@ -39,16 +40,23 @@ export default function AdminNotificacoes() {
   const handleSend = async () => {
     if (!title.trim()) { alert("Informe o título da notificação."); return; }
     if (!body.trim()) { alert("Informe o corpo da notificação."); return; }
-    if (!confirm(`Enviar notificação para: ${SEGMENTS.find((s) => s.key === segment)?.label}?`)) return;
+    if (deepLink.trim() && !deepLink.trim().startsWith("/")) { alert("O deep link deve começar com '/' (ex: /mercado)."); return; }
+    if (!confirm(`Enviar push para: ${SEGMENTS.find((s) => s.key === segment)?.label}?`)) return;
 
     setSending(true);
     setSendResult(null);
-    const result = await sendBroadcastNotification({ title: title.trim(), body: body.trim(), segment });
+    const result = await sendBroadcastPush({
+      title: title.trim(),
+      body: body.trim(),
+      segment,
+      deepLink: deepLink.trim() || undefined,
+    });
     setSending(false);
     setSendResult(result);
     if (result.success) {
       setTitle("");
       setBody("");
+      setDeepLink("");
       load();
     }
   };
@@ -63,7 +71,7 @@ export default function AdminNotificacoes() {
           {/* Compose */}
           <div>
             <div style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 14, padding: 24, marginBottom: 20 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 800, color: NAVY, margin: "0 0 20px" }}>📢 Nova Notificação</h3>
+              <h3 style={{ fontSize: 16, fontWeight: 800, color: NAVY, margin: "0 0 20px" }}>📲 Broadcast Push</h3>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <div>
@@ -104,6 +112,17 @@ export default function AdminNotificacoes() {
                   <div style={{ fontSize: 11, color: "#aaa", textAlign: "right", marginTop: 3 }}>{body.length}/240</div>
                 </div>
 
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Deep Link <span style={{ fontWeight: 400, color: "#aaa" }}>(opcional)</span></label>
+                  <input
+                    value={deepLink}
+                    onChange={(e) => setDeepLink(e.target.value)}
+                    placeholder="Ex: /mercado ou /(tabs)/chat"
+                    style={inputSt}
+                  />
+                  <div style={{ fontSize: 11, color: "#8a93a2", marginTop: 4 }}>Ao tocar na notificação, o app navega para essa tela</div>
+                </div>
+
                 {sendResult && (
                   <div style={{
                     padding: 14,
@@ -131,7 +150,7 @@ export default function AdminNotificacoes() {
                     fontWeight: 800,
                     cursor: "pointer",
                   }}
-                >{sending ? "Enviando..." : "📤 Enviar Notificação"}</button>
+                >{sending ? "Enviando..." : "📲 Enviar Push"}</button>
               </div>
             </div>
 
