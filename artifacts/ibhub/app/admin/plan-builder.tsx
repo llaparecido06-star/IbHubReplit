@@ -59,6 +59,7 @@ interface Plan {
   is_active: boolean;
   sort_order: number;
   delivery_strategy?: DeliveryStrategy;
+  stripe_price_id?: string | null;
 }
 
 function centsToString(cents: number): string {
@@ -95,6 +96,7 @@ export default function AdminPlanBuilderScreen() {
   const [editPrice, setEditPrice]           = useState("");
   const [editFeatures, setEditFeatures]     = useState<string[]>([]);
   const [editDelivery, setEditDelivery]     = useState<DeliveryStrategy>("NONE");
+  const [editStripeId, setEditStripeId]     = useState("");
 
   const [marketPerms, setMarketPerms]       = useState<API.MarketPermission[]>([]);
   const [loadingMp, setLoadingMp]           = useState(true);
@@ -146,6 +148,7 @@ export default function AdminPlanBuilderScreen() {
     setEditPrice(plan.price_cents === 0 ? "0" : (plan.price_cents / 100).toFixed(2).replace(".", ","));
     setEditFeatures([...plan.features]);
     setEditDelivery((plan.delivery_strategy ?? "NONE") as DeliveryStrategy);
+    setEditStripeId(plan.stripe_price_id ?? "");
     setShowEditModal(true);
   };
 
@@ -156,6 +159,7 @@ export default function AdminPlanBuilderScreen() {
     setEditPrice("0");
     setEditFeatures([]);
     setEditDelivery("NONE");
+    setEditStripeId("");
     setShowNewModal(true);
   };
 
@@ -170,9 +174,10 @@ export default function AdminPlanBuilderScreen() {
     setSaving(true);
     try {
       const price_cents = parsePriceString(editPrice);
+      const stripeId = editStripeId.trim() || null;
       const { error: err } = await supabase
         .from("plans")
-        .update({ name: editName, subtitle: editSubtitle, price_cents, features: editFeatures, delivery_strategy: editDelivery })
+        .update({ name: editName, subtitle: editSubtitle, price_cents, features: editFeatures, delivery_strategy: editDelivery, stripe_price_id: stripeId })
         .eq("id", editPlan.id);
       if (err) throw err;
       Alert.alert("Sucesso", "Plano atualizado.");
@@ -191,9 +196,10 @@ export default function AdminPlanBuilderScreen() {
     try {
       const price_cents = parsePriceString(editPrice);
       const newId = toSlug(editName) || `plano_${Date.now()}`;
+      const stripeId = editStripeId.trim() || null;
       const { error: err } = await supabase
         .from("plans")
-        .insert({ id: newId, name: editName, subtitle: editSubtitle, price_cents, features: editFeatures, delivery_strategy: editDelivery, is_active: true, sort_order: plans.length });
+        .insert({ id: newId, name: editName, subtitle: editSubtitle, price_cents, features: editFeatures, delivery_strategy: editDelivery, stripe_price_id: stripeId, is_active: true, sort_order: plans.length });
       if (err) throw err;
       Alert.alert("Sucesso", "Novo plano criado.");
       setShowNewModal(false);
@@ -265,6 +271,22 @@ export default function AdminPlanBuilderScreen() {
                   onChangeText={setEditPrice}
                   keyboardType="decimal-pad"
                 />
+              </View>
+
+              <View style={styles.mField}>
+                <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>STRIPE PRICE ID</Text>
+                <TextInput
+                  style={[styles.mInput, { borderColor: colors.border, color: colors.foreground, fontFamily: "monospace" }]}
+                  placeholder="price_1AbCdEfGhIjKlMnOpQrStUv"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={editStripeId}
+                  onChangeText={setEditStripeId}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 4 }}>
+                  Deixe em branco para planos gratuitos. Encontre em Stripe → Products → seu produto → Price ID.
+                </Text>
               </View>
 
               {/* Delivery Strategy */}

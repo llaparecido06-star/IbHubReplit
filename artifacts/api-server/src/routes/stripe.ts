@@ -13,22 +13,42 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
 });
 const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey);
 
-// ─── Stripe price IDs — set via env vars ──────────────────────────────────────
-const PRICE_IDS: Record<string, string> = {
+// ─── Stripe price IDs — read from plans table (stripe_price_id column) ────────
+// Env vars (STRIPE_PRICE_*) are kept as a legacy fallback for plans that were
+// configured before the stripe_price_id column was added to the plans table.
+const LEGACY_PRICE_IDS: Record<string, string> = {
   premium:   process.env.STRIPE_PRICE_PREMIUM   ?? "",
   exclusive: process.env.STRIPE_PRICE_EXCLUSIVE ?? "",
   business:  process.env.STRIPE_PRICE_BUSINESS  ?? "",
 };
 
+/** Fetch all plans that have a stripe_price_id set, returns map planId→priceId */
+async function fetchPlanPriceIds(): Promise<Map<string, string>> {
+  const m = new Map<string, string>();
+  // Merge legacy env vars first (lower priority)
+  for (const [plan, priceId] of Object.entries(LEGACY_PRICE_IDS)) {
+    if (priceId) m.set(plan, priceId);
+  }
+  // DB values override env vars
+  const { data } = await supabaseAdmin
+    .from("plans")
+    .select("id, stripe_price_id")
+    .not("stripe_price_id", "is", null);
+  for (const row of (data ?? []) as { id: string; stripe_price_id: string | null }[]) {
+    if (row.stripe_price_id) m.set(row.id, row.stripe_price_id);
+  }
+  return m;
+}
+
 /**
  * Reverse map from Stripe price ID → internal plan name.
- * Used to determine the plan from a subscription's line items (e.g. after a portal upgrade/downgrade).
- * Populated lazily from the same env vars so they stay in sync.
+ * Used by webhooks to identify which plan a payment was for.
  */
-function buildPriceToplanMap(): Map<string, string> {
+async function buildPriceToplanMap(): Promise<Map<string, string>> {
+  const planPrices = await fetchPlanPriceIds();
   const m = new Map<string, string>();
-  for (const [plan, priceId] of Object.entries(PRICE_IDS)) {
-    if (priceId) m.set(priceId, plan);
+  for (const [planId, priceId] of planPrices) {
+    m.set(priceId, planId);
   }
   return m;
 }
@@ -159,8 +179,8 @@ router.post("/stripe/create-checkout-session", async (req: Request, res: Respons
     cancelUrl?: string;
   };
 
-  if (!plan || !PRICE_IDS[plan]) {
-    res.status(400).json({ error: `Plano inválido. Use: ${Object.keys(PRICE_IDS).join(", ")}` });
+  if (!plan) {
+    res.status(400).json({ error: "Plano não informado." });
     return;
   }
 
@@ -169,11 +189,12 @@ router.post("/stripe/create-checkout-session", async (req: Request, res: Respons
     return;
   }
 
-  const priceId = PRICE_IDS[plan];
+  const planPrices = await fetchPlanPriceIds();
+  const priceId = planPrices.get(plan);
   if (!priceId || !priceId.startsWith("price_")) {
     res.status(503).json({
-      error: `Configuração incompleta: o price ID para o plano "${plan}" não está configurado corretamente. ` +
-             `Configure a variável STRIPE_PRICE_${plan.toUpperCase()} com um ID válido do Stripe (começa com "price_").`
+      error: `Configuração incompleta: nenhum Stripe Price ID configurado para o plano "${plan}". ` +
+             `Abra o Plan Builder, edite o plano e cole o Price ID (começa com "price_") no campo Stripe Price ID.`
     });
     return;
   }
@@ -309,7 +330,7 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
         const userId      = await resolveUserId(sess.metadata?.supabase_user_id, custId);
         if (userId && sess.subscription) {
           const stripe      = getStripe();
-          const priceToplan = buildPriceToplanMap();
+          const priceToplan = await buildPriceToplanMap();
           // Expand items so we can resolve plan from price IDs (portal upgrades have no metadata)
           const sub  = await stripe.subscriptions.retrieve(sess.subscription as string, {
             expand: ["items.data.price"],
@@ -330,7 +351,7 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
         const sub         = event.data.object as Stripe.Subscription;
         const custId      = typeof sub.customer === "string" ? sub.customer : undefined;
         const userId      = await resolveUserId(sub.metadata?.supabase_user_id, custId);
-        const priceToplan = buildPriceToplanMap();
+        const priceToplan = await buildPriceToplanMap();
         const plan        = resolvePlanFromSubscription(sub, priceToplan);
         if (userId) {
           const update: Record<string, unknown> = {
@@ -385,23 +406,20 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
 });
 
 // ─── GET /stripe/config-check (dev diagnostic) ───────────────────────────────
-router.get("/stripe/config-check", (_req: Request, res: Response) => {
+router.get("/stripe/config-check", async (_req: Request, res: Response) => {
   const secretKey = process.env.STRIPE_SECRET_KEY ?? "";
-  const result: Record<string, { configured: boolean; valid_format: boolean; mode?: string; prefix?: string }> = {};
-
   const mode = secretKey.startsWith("sk_test_") ? "test" : secretKey.startsWith("sk_live_") ? "live" : "unknown";
 
-  for (const [plan, envKey] of [
-    ["premium",   "STRIPE_PRICE_PREMIUM"],
-    ["exclusive", "STRIPE_PRICE_EXCLUSIVE"],
-    ["business",  "STRIPE_PRICE_BUSINESS"],
-  ] as [string, string][]) {
-    const val = process.env[envKey] ?? "";
-    result[plan] = {
-      configured: val.length > 0,
-      valid_format: val.startsWith("price_"),
-      mode: val.startsWith("price_test_") ? "test" : val.startsWith("price_live_") ? "live" : val.startsWith("price_") ? "unknown" : "n/a",
-      prefix: val.length > 0 ? val.slice(0, 12) + "…" : "(not set)",
+  const planPrices = await fetchPlanPriceIds();
+  const result: Record<string, { configured: boolean; valid_format: boolean; source: string; prefix: string }> = {};
+
+  for (const [planId, priceId] of planPrices) {
+    const fromLegacy = !!LEGACY_PRICE_IDS[planId] && LEGACY_PRICE_IDS[planId] === priceId;
+    result[planId] = {
+      configured: true,
+      valid_format: priceId.startsWith("price_"),
+      source: fromLegacy ? "env_var" : "plan_builder",
+      prefix: priceId.slice(0, 14) + "…",
     };
   }
 
