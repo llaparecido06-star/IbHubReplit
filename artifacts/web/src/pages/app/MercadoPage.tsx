@@ -623,8 +623,9 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
   }, []);
 
   useEffect(() => {
+    if (!hasAccess) { setLoading(false); return; }
     fetchMarketPosts(userId).then(p => { setPosts(p); setLoading(false); });
-  }, [userId]);
+  }, [userId, hasAccess]);
 
   useEffect(() => {
     const uid = Math.random().toString(36).slice(2, 8);

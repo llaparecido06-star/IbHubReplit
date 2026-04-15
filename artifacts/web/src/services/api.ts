@@ -1828,12 +1828,17 @@ export interface MarketComment {
 
 export async function fetchMarketPosts(userId?: string): Promise<MarketPost[]> {
   try {
-    const { data, error } = await supabase
-      .from("market_posts")
-      .select("id, content, image_url, video_url, poll_options, created_at, author_id, likes_count, comments_count")
-      .order("created_at", { ascending: false })
-      .limit(30);
-    if (error || !data || data.length === 0) return [];
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
+      ?? `${window.location.origin}/api`;
+    const session = await supabase.auth.getSession();
+    const token = session?.data?.session?.access_token;
+    const res = await fetch(`${apiBase}/market/posts?limit=30`, {
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    const data: any[] = json.posts ?? [];
+    if (data.length === 0) return [];
 
     const authorIds = [...new Set(data.map((p: any) => p.author_id))];
     const { data: profiles } = await supabase
