@@ -562,18 +562,21 @@ export async function deleteMarketPresentation(id: string): Promise<boolean> {
   }
 }
 
-export async function triggerPresentationAccess(presentationId: string): Promise<void> {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) return;
-    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
-      ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
-    await fetch(`${apiBase}/presentations/${presentationId}/access`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
-  } catch {
+export async function triggerPresentationAccess(presentationId: string): Promise<{ ok: boolean; reason?: string }> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) return { ok: false, reason: "unauthenticated" };
+  const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
+    ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
+  const res = await fetch(`${apiBase}/presentations/${presentationId}/access`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+  if (res.status === 403) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    return { ok: false, reason: body.error ?? "plan_required" };
   }
+  if (!res.ok) return { ok: false, reason: "server_error" };
+  return { ok: true };
 }
 
 // ─── Conversations / Messages ─────────────────────────────────────────────────

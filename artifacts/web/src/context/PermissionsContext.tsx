@@ -71,6 +71,8 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
       channelRef.current = null;
     }
 
+    const planId = profile.plan ?? "gratuito";
+
     const channel = supabase
       .channel(`web-permissions:${profile.id}`)
       .on(
@@ -87,6 +89,18 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
           loadFeatures(merged as typeof profile);
         },
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "plans",
+          filter: `id=eq.${planId}`,
+        },
+        () => {
+          loadFeatures(profile);
+        },
+      )
       .subscribe();
 
     channelRef.current = channel;
@@ -97,7 +111,7 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
         channelRef.current = null;
       }
     };
-  }, [profile?.id]);
+  }, [profile?.id, profile?.plan]);
 
   const hasFeature = useCallback(
     (key: string): boolean => {

@@ -123,6 +123,8 @@ function ApresentacoesPanel({ isAdmin }: { isAdmin: boolean }) {
   const [editing, setEditing] = useState<Partial<MarketPresentation> | null>(null);
   const [form, setForm] = useState(BLANK_PRES);
   const [saving, setSaving] = useState(false);
+  const [accessingId, setAccessingId] = useState<string | null>(null);
+  const [blockedId, setBlockedId] = useState<string | null>(null);
 
   const reload = () => {
     const fetch = isAdmin ? fetchAllMarketPresentations : fetchMarketPresentations;
@@ -261,15 +263,36 @@ function ApresentacoesPanel({ isAdmin }: { isAdmin: boolean }) {
                     </>
                   )}
                   {p.content_url && (
-                    <button
-                      onClick={() => {
-                        triggerPresentationAccess(p.id).catch(() => {});
-                        window.open(p.content_url, "_blank", "noopener,noreferrer");
-                      }}
-                      style={{ fontSize: 12, fontWeight: 700, color: GOLD, background: "none", border: `1px solid ${GOLD}50`, borderRadius: 7, padding: "5px 12px", cursor: "pointer", fontFamily: "inherit" }}
-                    >
-                      Ver →
-                    </button>
+                    blockedId === p.id ? (
+                      <span
+                        onClick={() => setBlockedId(null)}
+                        style={{ fontSize: 11, fontWeight: 700, color: "#dc2626", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 7, padding: "5px 10px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
+                        title="Clique para fechar"
+                      >
+                        🔒 Plano necessário
+                      </span>
+                    ) : (
+                      <button
+                        disabled={accessingId === p.id}
+                        onClick={async () => {
+                          setBlockedId(null);
+                          setAccessingId(p.id);
+                          try {
+                            const result = await triggerPresentationAccess(p.id);
+                            if (result.ok) {
+                              window.open(p.content_url, "_blank", "noopener,noreferrer");
+                            } else {
+                              setBlockedId(p.id);
+                            }
+                          } finally {
+                            setAccessingId(null);
+                          }
+                        }}
+                        style={{ fontSize: 12, fontWeight: 700, color: GOLD, background: "none", border: `1px solid ${GOLD}50`, borderRadius: 7, padding: "5px 12px", cursor: accessingId === p.id ? "default" : "pointer", fontFamily: "inherit", opacity: accessingId === p.id ? 0.6 : 1 }}
+                      >
+                        {accessingId === p.id ? "…" : "Ver →"}
+                      </button>
+                    )
                   )}
                 </div>
               </div>
