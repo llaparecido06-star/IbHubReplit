@@ -5305,34 +5305,38 @@ export async function fetchMarketPosts(userId?: string, offset = 0, limit = 15):
     const data = json.posts ?? [];
     if (data.length === 0) return [];
 
-    const authorIds = [...new Set(data.map((p: any) => p.author_id))];
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, user_id, full_name, avatar_url, headline")
-      .in("user_id", authorIds);
-    const profileMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p]));
+    // All market posts are attributed to the Ideal.BI company page, regardless of who created them.
+    // Fetch the company page by name to get its real avatar and name.
+    const [likesRes, votesRes, companyRes] = await Promise.all([
+      userId
+        ? supabase.from("market_post_likes").select("post_id").eq("user_id", userId)
+        : Promise.resolve({ data: [] }),
+      userId
+        ? supabase.from("market_post_poll_votes").select("post_id, option_id").eq("user_id", userId)
+        : Promise.resolve({ data: [] }),
+      supabase
+        .from("company_pages")
+        .select("id, name, avatar_url")
+        .ilike("name", "Ideal.BI")
+        .maybeSingle(),
+    ]);
 
-    let likedSet = new Set<string>();
-    let pollVoteMap = new Map<string, string>();
-    if (userId) {
-      const { data: likes } = await supabase
-        .from("market_post_likes")
-        .select("post_id")
-        .eq("user_id", userId);
-      likedSet = new Set((likes ?? []).map((l: any) => l.post_id));
+    const likedSet    = new Set(((likesRes as any).data ?? []).map((l: any) => l.post_id as string));
+    const pollVoteMap = new Map(((votesRes as any).data ?? []).map((v: any) => [v.post_id as string, v.option_id as string]));
 
-      const { data: votes } = await supabase
-        .from("market_post_poll_votes")
-        .select("post_id, option_id")
-        .eq("user_id", userId);
-      pollVoteMap = new Map((votes ?? []).map((v: any) => [v.post_id, v.option_id]));
-    }
+    const company = (companyRes as any).data as { id: string; name: string; avatar_url: string | null } | null;
+    const idealbiAuthor = {
+      id:         company?.id ?? "idealbi",
+      full_name:  company?.name ?? "Ideal.BI",
+      avatar_url: company?.avatar_url ?? null,
+      headline:   "Inteligência de Mercado do Vinho",
+    };
 
     return data.map((p: any) => ({
       ...p,
-      user_liked: likedSet.has(p.id),
+      user_liked:    likedSet.has(p.id),
       user_poll_vote: pollVoteMap.get(p.id) ?? null,
-      author: profileMap.get(p.author_id) ?? null,
+      author:        idealbiAuthor,
     }));
   } catch { return []; }
 }

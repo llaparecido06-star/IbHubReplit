@@ -875,15 +875,15 @@ function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors 
   return (
     <View style={{ marginHorizontal: 16, marginBottom: 14, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: "#fff", overflow: "hidden" }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 14, paddingBottom: 10 }}>
-        <IdealBIAvatar src={post.author?.avatar_url} name={post.author?.full_name ?? "Ideal.BI"} size={40} />
+        <IdealBIAvatar src={post.author?.avatar_url} name="Ideal.BI" size={40} />
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <Text style={{ fontWeight: "700", fontSize: 14, color: colors.navy }}>{post.author?.full_name ?? "Ideal.BI"}</Text>
+            <Text style={{ fontWeight: "700", fontSize: 14, color: colors.navy }}>Ideal.BI</Text>
             <View style={{ backgroundColor: "#c9a84c22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-              <Text style={{ fontSize: 10, fontWeight: "700", color: colors.gold }}>📡 Ideal.BI</Text>
+              <Text style={{ fontSize: 10, fontWeight: "700", color: colors.gold }}>📡 Feed Exclusivo</Text>
             </View>
           </View>
-          {post.author?.headline ? <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>{post.author.headline}</Text> : null}
+          <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>Inteligência de Mercado do Vinho</Text>
           <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 1 }}>{dateStr}</Text>
         </View>
       </View>
