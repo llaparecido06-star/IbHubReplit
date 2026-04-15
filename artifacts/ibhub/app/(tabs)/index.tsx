@@ -145,6 +145,7 @@ export default function FeedScreen() {
   // Wine review state
   const [wineName, setWineName]                     = useState("");
   const [wineSafra, setWineSafra]                   = useState("");
+  const [wineEan, setWineEan]                       = useState("");
   const [wineStars, setWineStars]                   = useState(4);
   const [wineScore, setWineScore]                   = useState(85);
   const [selectedTags, setSelectedTags]             = useState<string[]>([]);
@@ -603,7 +604,7 @@ export default function FeedScreen() {
   const handlePublishWine = async () => {
     setShowWineReview(false);
     if (!wineName.trim() || !user?.id) {
-      setWineName(""); setWineSafra(""); setWineStars(4); setWineScore(85);
+      setWineName(""); setWineSafra(""); setWineEan(""); setWineStars(4); setWineScore(85);
       setSelectedTags([]); setWineHarmonizacao(""); setWineObs(""); setWineImageUri(null);
       return;
     }
@@ -612,7 +613,8 @@ export default function FeedScreen() {
     const tags = selectedTags.length > 0 ? `\n🍷 Notas: ${selectedTags.join(", ")}` : "";
     const harmonizacao = wineHarmonizacao.trim() ? `\n🍽️ Harmonização: ${wineHarmonizacao.trim()}` : "";
     const obs = wineObs.trim() ? `\n📝 ${wineObs.trim()}` : "";
-    const content = `${stars} ${wineName.trim()}${wineSafra ? ` (${wineSafra})` : ""}\n📊 Pontuação: ${wineScore}/100${tags}${harmonizacao}${obs}`;
+    const eanLine = wineEan.trim() ? `\n🏷️ EAN: ${wineEan.trim()}` : "";
+    const content = `${stars} ${wineName.trim()}${wineSafra ? ` (${wineSafra})` : ""}\n📊 Pontuação: ${wineScore}/100${tags}${harmonizacao}${eanLine}${obs}`;
 
     let uploadedImageUrl: string | null = null;
     if (wineImageUri) {
@@ -657,7 +659,22 @@ export default function FeedScreen() {
       Alert.alert("Erro ao publicar", "Não foi possível criar o post. Verifique sua conexão e tente novamente.");
     }
 
-    setWineName(""); setWineSafra(""); setWineStars(4); setWineScore(85);
+    // Save to wine_cellar (is_private=false → contribui para o ranking comunitário por EAN)
+    API.addWineEntry({
+      user_id: user.id,
+      name: wineName.trim(),
+      vintage: wineSafra.trim() || null,
+      ean: wineEan.trim() || null,
+      rating: wineStars,
+      score_100: wineScore,
+      harmonizacao: wineHarmonizacao.trim() || null,
+      notes: wineObs.trim() || null,
+      qty: 1,
+      status: "consumido",
+      is_private: false,
+    }).catch(() => { /* silently ignore — post already created */ });
+
+    setWineName(""); setWineSafra(""); setWineEan(""); setWineStars(4); setWineScore(85);
     setSelectedTags([]); setWineHarmonizacao(""); setWineObs(""); setWineImageUri(null);
   };
 
@@ -1290,6 +1307,32 @@ export default function FeedScreen() {
                   <TextInput style={[styles.wineNameInput, { flex: 1, borderColor: colors.border, color: colors.foreground }]} placeholder="2020" placeholderTextColor={colors.mutedForeground} value={wineSafra} onChangeText={setWineSafra} keyboardType="number-pad" />
                 </View>
               </View>
+
+              {/* EAN */}
+              <View>
+                <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>EAN / CÓDIGO DE BARRAS</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: colors.border, borderRadius: 10, backgroundColor: "#fafaf8", paddingHorizontal: 12 }}>
+                  <MaterialCommunityIcons name="barcode" size={20} color={colors.gold} style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: 10 }}
+                    placeholder="Ex: 7896123456789 (EAN-13)"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={wineEan}
+                    onChangeText={v => setWineEan(v.replace(/\D/g, "").slice(0, 14))}
+                    keyboardType="number-pad"
+                    maxLength={14}
+                  />
+                  {wineEan.length > 0 && (
+                    <TouchableOpacity onPress={() => setWineEan("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Feather name="x" size={14} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+                <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 4 }}>
+                  Usado no ranking comunitário de vinhos · Opcional
+                </Text>
+              </View>
+
               {/* Stars */}
               <View>
                 <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>NOTA VISUAL</Text>
