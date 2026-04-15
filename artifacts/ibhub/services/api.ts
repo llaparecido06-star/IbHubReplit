@@ -1795,7 +1795,8 @@ export async function dispatchPushToConversation(
 ): Promise<void> {
   if (!API_URL) return;
   try {
-    // Get all participants except sender
+    // Get all participants except sender (user can only read own participants via RLS,
+    // but conversation_participants SELECT allows members to see co-members)
     const { data: participants } = await supabase
       .from("conversation_participants")
       .select("user_id")
@@ -1803,23 +1804,21 @@ export async function dispatchPushToConversation(
       .neq("user_id", senderId);
 
     if (!participants || participants.length === 0) return;
-    const recipientIds = participants.map((p: any) => p.user_id);
+    const recipientUserIds = participants.map((p: any) => p.user_id);
 
-    // Fetch their push tokens
-    const { data: tokenRows } = await supabase
-      .from("push_tokens")
-      .select("token")
-      .in("user_id", recipientIds);
-
-    if (!tokenRows || tokenRows.length === 0) return;
-    const tokens = tokenRows.map((r: any) => r.token).filter(Boolean);
-    if (tokens.length === 0) return;
+    // Use JWT-authenticated server-side lookup: server uses service role to fetch
+    // push tokens so the client never needs cross-user push_tokens SELECT access.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
 
     await fetch(`${API_URL}/push/send`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
       body: JSON.stringify({
-        tokens,
+        recipientUserIds,
         title: senderName,
         body: messageBody,
         data: { conversationId },

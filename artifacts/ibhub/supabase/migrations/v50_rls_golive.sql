@@ -4,14 +4,17 @@
 -- Idempotent: all policies use DROP IF EXISTS + CREATE
 -- ═══════════════════════════════════════════════════════════════════════════════
 
--- ─── 1. FIX: notifications INSERT — restrict to own actor_id ─────────────────
+-- ─── 1. FIX: notifications INSERT — disable direct client inserts ────────────
 -- Previous policy: with check (true) → any user could forge notifications
--- for any recipient. SECURITY DEFINER triggers are unaffected (bypass RLS).
+-- targeting any recipient (arbitrary user_id). Legitimate inserts come ONLY from:
+--   a) SECURITY DEFINER triggers (bypass RLS entirely)
+--   b) Service-role API calls (bypass RLS entirely)
+-- No client code should ever insert directly, so block all authenticated inserts.
 drop policy if exists "notif_insert" on public.notifications;
 create policy "notif_insert"
   on public.notifications for insert
   to authenticated
-  with check (auth.uid() = actor_id);
+  with check (false);
 
 
 -- ─── 2. FIX: feature_flags SELECT — allow unauthenticated reads ──────────────
@@ -231,13 +234,19 @@ as $$
 declare
   caller_is_admin boolean;
 begin
-  -- Determine if the caller is an admin (read from OLD row to avoid recursion)
+  -- Service-role and backend calls have no JWT (auth.uid() IS NULL).
+  -- These are trusted (Stripe webhooks, admin API routes) — allow all changes.
+  if auth.uid() is null then
+    return NEW;
+  end if;
+
+  -- Determine if the calling user is an admin.
   select is_admin into caller_is_admin
   from public.profiles
   where id = auth.uid();
 
   if caller_is_admin is not true then
-    -- Reset protected columns to their old values
+    -- Non-admin users: silently reset all protected columns to their old values.
     NEW.is_admin                    := OLD.is_admin;
     NEW.plan                        := OLD.plan;
     NEW.stripe_customer_id          := OLD.stripe_customer_id;
@@ -267,15 +276,29 @@ create trigger profiles_privilege_escalation_guard
 
 
 -- ─── Summary of fixes applied ─────────────────────────────────────────────────
--- ✓ notifications.notif_insert: restricted to actor_id = current user
+-- ✓ notifications.notif_insert: now `with check (false)` — all inserts go through
+--     SECURITY DEFINER triggers or service role; direct client inserts blocked
 -- ✓ feature_flags.ff_select_all: public read (allows pre-login maintenance check)
 -- ✓ feature_flags.ff_delete_admin: added
 -- ✓ market_posts: RLS enabled with auth SELECT + admin/author WRITE
 -- ✓ market_post_likes: RLS enabled with auth SELECT + self INSERT/DELETE
 -- ✓ market_post_comments: RLS enabled with auth SELECT + author WRITE
--- ✓ notification_broadcasts: table created if missing + admin-only RLS
+-- ✓ notification_broadcasts: table created (schema matches admin.ts) + admin-only RLS
 -- ✓ opportunity_applications: DELETE policy added (self-withdrawal)
 -- ✓ support_messages: admin SELECT added
 -- ✓ bug_reports: admin SELECT added
 -- ✓ profiles: BEFORE UPDATE trigger prevents non-admin privilege escalation
---            (is_admin, plan, stripe_*, courtesy_until, is_banned, is_shadowbanned)
+--     (is_admin, plan, stripe_*, courtesy_until, is_banned, is_shadowbanned)
+--     Trigger bypasses when auth.uid() IS NULL (service-role / Stripe webhook calls)
+--
+-- ─── Related code fixes (not SQL) ────────────────────────────────────────────
+-- ✓ api-server/routes/push.ts: added JWT auth guard + server-side push_tokens lookup
+--     via service role (client no longer needs cross-user push_tokens SELECT)
+-- ✓ ibhub/services/api.ts: dispatchPushToConversation uses recipientUserIds (server
+--     looks up tokens) instead of reading push_tokens directly on the client
+--
+-- ─── Storage buckets verified (no changes needed) ────────────────────────────
+-- post-images: auth.uid()::text = foldername(name)[1]  ✓ (migrations_v2.sql)
+-- stories:     auth.uid()::text = foldername(name)[1]  ✓ (migrations_v34_storage_rls)
+-- cvs:         auth.uid()::text = foldername(name)[2]  ✓ (migrations_v34_storage_rls)
+-- pslides:     admin-only INSERT/DELETE                 ✓ (migrations_v40_drip_content)

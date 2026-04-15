@@ -1,7 +1,16 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
+import { createClient } from "@supabase/supabase-js";
 import { logger } from "../lib/logger";
+import { resolveUserId } from "../lib/planCheck.js";
 
 const router = Router();
+
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
+  auth: { autoRefreshToken: false, persistSession: false },
+});
 
 interface ExpoPushMessage {
   to: string;
@@ -39,33 +48,48 @@ async function sendExpoPushNotifications(messages: ExpoPushMessage[]): Promise<v
 
 /**
  * POST /api/push/send
- * Body: { tokens: string[], title: string, body: string, data?: object }
+ * Requires authentication (Bearer token).
  *
- * Called by the mobile app when a new message is sent, to dispatch
- * push notifications to the recipient's registered Expo push tokens.
- * Only sends if recipient is not currently in the conversation
- * (indicated by the activeConversationId field from client).
+ * Body (option A — direct tokens): { tokens: string[], title, body, data?, activeConversationId? }
+ * Body (option B — server-side lookup): { recipientUserIds: string[], title, body, data?, activeConversationId? }
+ *
+ * Option B is preferred: the server looks up push tokens via service role so
+ * clients never need RLS access to other users' push_tokens rows.
  */
-router.post("/push/send", async (req, res) => {
-  const { tokens, title, body, data, activeConversationId } = req.body as {
+router.post("/push/send", async (req: Request, res: Response): Promise<void> => {
+  const callerId = await resolveUserId(req, res);
+  if (!callerId) return;
+
+  const { tokens: rawTokens, recipientUserIds, title, body, data, activeConversationId } = req.body as {
     tokens?: string[];
+    recipientUserIds?: string[];
     title?: string;
     body?: string;
     data?: Record<string, unknown>;
     activeConversationId?: string;
   };
 
-  if (!tokens || !Array.isArray(tokens) || tokens.length === 0) {
-    return res.status(400).json({ error: "tokens array is required" });
+  let validTokens: string[] = [];
+
+  if (recipientUserIds && Array.isArray(recipientUserIds) && recipientUserIds.length > 0) {
+    // Server-side token lookup via service role — clients never need push_tokens SELECT
+    const { data: tokenRows } = await supabaseAdmin
+      .from("push_tokens")
+      .select("token")
+      .in("user_id", recipientUserIds);
+    validTokens = (tokenRows ?? [])
+      .map((r: { token: string }) => r.token)
+      .filter((t: string) => typeof t === "string" && t.startsWith("ExponentPushToken["));
+  } else if (rawTokens && Array.isArray(rawTokens)) {
+    // Legacy path: client supplies tokens directly (still validated)
+    validTokens = rawTokens.filter(
+      (t) => typeof t === "string" && t.startsWith("ExponentPushToken["),
+    );
   }
 
-  // Filter out invalid tokens
-  const validTokens = tokens.filter(
-    (t) => typeof t === "string" && t.startsWith("ExponentPushToken["),
-  );
-
   if (validTokens.length === 0) {
-    return res.status(200).json({ sent: 0, skipped: "no valid expo push tokens" });
+    res.status(200).json({ sent: 0, skipped: "no valid expo push tokens" });
+    return;
   }
 
   const messages: ExpoPushMessage[] = validTokens.map((token) => ({
@@ -77,8 +101,8 @@ router.post("/push/send", async (req, res) => {
   }));
 
   await sendExpoPushNotifications(messages);
-  logger.info({ count: messages.length }, "Push notifications dispatched");
-  return res.json({ sent: messages.length });
+  logger.info({ count: messages.length, caller: callerId }, "Push notifications dispatched");
+  res.json({ sent: messages.length });
 });
 
 export default router;
