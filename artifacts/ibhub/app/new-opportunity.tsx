@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -12,9 +13,11 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as ImagePicker from "expo-image-picker";
+import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
-import { createOpportunity } from "@/services/api";
+import { createOpportunity, uploadOpportunityImage } from "@/services/api";
 import { maskDate, maskCurrency, CURRENCIES, type Currency } from "@/utils/masks";
 import { useTranslation } from "react-i18next";
 
@@ -44,12 +47,32 @@ export default function NewOpportunityScreen() {
   const [company, setCompany]   = useState("");
   const [salary, setSalary]     = useState("");
   const [contract, setContract] = useState<string | null>(null);
+  const [coverUri, setCoverUri] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
   const canPublish = title.trim().length > 0 && category !== null;
+
+  const pickCoverImage = async () => {
+    if (Platform.OS !== "web") {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permissão necessária", "Autorize o acesso à galeria para selecionar uma imagem.");
+        return;
+      }
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets.length > 0) {
+      setCoverUri(result.assets[0].uri);
+    }
+  };
 
   const handlePublish = async () => {
     if (!user?.id) { Alert.alert(t("common.error"), t("opportunity.errors.not_logged")); return; }
@@ -64,6 +87,13 @@ export default function NewOpportunityScreen() {
 
     setPublishing(true);
     try {
+      let coverImageUrl: string | null = null;
+      if (coverUri && mode === "marketplace") {
+        coverImageUrl = await uploadOpportunityImage(coverUri, user.id);
+      }
+
+      const companyName = isEmpresa ? activeCompany!.name : (company.trim() || null);
+
       const result = await createOpportunity(
         {
           created_by: user.id,
@@ -73,7 +103,9 @@ export default function NewOpportunityScreen() {
           category,
           location: location.trim() || null,
           price: mode === "marketplace" ? (price.trim() ? `${priceCurrency} ${price.trim()}` : null) : null,
-          company: mode === "vaga" ? (company.trim() || null) : null,
+          cover_image_url: coverImageUrl,
+          company: mode === "vaga" ? (companyName ?? null) : null,
+          company_page_id: activeCompany?.id ?? null,
           contract_type: mode === "vaga" ? (contract ?? null) : null,
           salary: mode === "vaga" ? (salary.trim() || null) : null,
           contact_email: email.trim() || null,
@@ -173,7 +205,7 @@ export default function NewOpportunityScreen() {
             <TouchableOpacity
               key={m}
               style={[styles.toggleBtn, { backgroundColor: mode === m ? colors.gold : "transparent" }]}
-              onPress={() => { setMode(m); setCategory(null); }}
+              onPress={() => { setMode(m); setCategory(null); setCoverUri(null); }}
             >
               <Text style={[styles.toggleText, { color: mode === m ? "#fff" : colors.mutedForeground }]}>
                 {m === "marketplace" ? t("opportunity.mode_marketplace") : t("opportunity.mode_job")}
@@ -192,7 +224,17 @@ export default function NewOpportunityScreen() {
               <ChipSelector options={JOB_CATS} selected={category} onSelect={setCategory} />
             </Field>
             <Field label={t("opportunity.fields.company")} colors={colors}>
-              <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder={t("opportunity.fields.company_placeholder")} placeholderTextColor={colors.mutedForeground} value={company} onChangeText={setCompany} />
+              {isEmpresa ? (
+                <View style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 8 }]}>
+                  <Feather name="briefcase" size={14} color={colors.gold} />
+                  <Text style={{ color: colors.navy, fontSize: 14, fontWeight: "600", flex: 1 }}>
+                    {activeCompany!.name}
+                  </Text>
+                  <Feather name="lock" size={12} color={colors.mutedForeground} />
+                </View>
+              ) : (
+                <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder={t("opportunity.fields.company_placeholder")} placeholderTextColor={colors.mutedForeground} value={company} onChangeText={setCompany} />
+              )}
             </Field>
             <Field label={t("opportunity.fields.contract_type")} colors={colors}>
               <ChipSelector options={CONTRACT_TYPES} selected={contract} onSelect={setContract} />
@@ -206,17 +248,17 @@ export default function NewOpportunityScreen() {
             <Field label={t("opportunity.fields.description")} colors={colors}>
               <TextInput style={[styles.input, styles.textarea, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder={t("opportunity.fields.description_placeholder_job")} placeholderTextColor={colors.mutedForeground} value={desc} onChangeText={setDesc} multiline numberOfLines={5} textAlignVertical="top" />
             </Field>
-    <Field label={t("opportunity.fields.expiry")} colors={colors}>
-      <TextInput
-        style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
-        placeholder={t("opportunity.fields.expiry_placeholder")}
-        placeholderTextColor={colors.mutedForeground}
-        value={expiry}
-        onChangeText={(v) => setExpiry(maskDate(v))}
-        keyboardType="numeric"
-        maxLength={10}
-      />
-    </Field>
+            <Field label={t("opportunity.fields.expiry")} colors={colors}>
+              <TextInput
+                style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
+                placeholder={t("opportunity.fields.expiry_placeholder")}
+                placeholderTextColor={colors.mutedForeground}
+                value={expiry}
+                onChangeText={(v) => setExpiry(maskDate(v))}
+                keyboardType="numeric"
+                maxLength={10}
+              />
+            </Field>
             <Field label={t("opportunity.fields.email")} colors={colors}>
               <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder={t("opportunity.fields.email_placeholder_job")} placeholderTextColor={colors.mutedForeground} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
             </Field>
@@ -226,6 +268,29 @@ export default function NewOpportunityScreen() {
         {/* ── Marketplace ── */}
         {mode === "marketplace" && (
           <>
+            {/* Cover image picker */}
+            <TouchableOpacity
+              style={[styles.coverPicker, { borderColor: colors.border }]}
+              onPress={pickCoverImage}
+              activeOpacity={0.8}
+            >
+              {coverUri ? (
+                <Image source={{ uri: coverUri }} style={styles.coverImage} resizeMode="cover" />
+              ) : (
+                <>
+                  <Feather name="image" size={28} color={colors.border} />
+                  <Text style={[styles.coverPickerText, { color: colors.mutedForeground }]}>
+                    Toque para adicionar uma foto do produto
+                  </Text>
+                </>
+              )}
+              {coverUri && (
+                <View style={styles.coverOverlay}>
+                  <Feather name="edit-2" size={14} color="#fff" />
+                </View>
+              )}
+            </TouchableOpacity>
+
             <Field label={t("opportunity.fields.ad_title")} colors={colors}>
               <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder={t("opportunity.fields.ad_title_placeholder")} placeholderTextColor={colors.mutedForeground} value={title} onChangeText={setTitle} />
             </Field>
@@ -249,17 +314,17 @@ export default function NewOpportunityScreen() {
             <Field label={t("opportunity.fields.location")} colors={colors}>
               <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder={t("opportunity.fields.location_placeholder")} placeholderTextColor={colors.mutedForeground} value={location} onChangeText={setLocation} />
             </Field>
-    <Field label={t("opportunity.fields.expiry")} colors={colors}>
-      <TextInput
-        style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
-        placeholder={t("opportunity.fields.expiry_placeholder")}
-        placeholderTextColor={colors.mutedForeground}
-        value={expiry}
-        onChangeText={(v) => setExpiry(maskDate(v))}
-        keyboardType="numeric"
-        maxLength={10}
-      />
-    </Field>
+            <Field label={t("opportunity.fields.expiry")} colors={colors}>
+              <TextInput
+                style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
+                placeholder={t("opportunity.fields.expiry_placeholder")}
+                placeholderTextColor={colors.mutedForeground}
+                value={expiry}
+                onChangeText={(v) => setExpiry(maskDate(v))}
+                keyboardType="numeric"
+                maxLength={10}
+              />
+            </Field>
             <Field label={t("opportunity.fields.email")} colors={colors}>
               <TextInput style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]} placeholder={t("opportunity.fields.email_placeholder_market")} placeholderTextColor={colors.mutedForeground} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
             </Field>
@@ -290,23 +355,27 @@ function parseExpiry(str: string): string | null {
 }
 
 const styles = StyleSheet.create({
-  container:      { flex: 1 },
-  header:         { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
-  cancelText:     { fontSize: 15 },
-  headerTitle:    { fontSize: 17, fontWeight: "700" },
-  publishBtn:     { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-  publishBtnText: { fontSize: 14, fontWeight: "700" },
-  toggle:         { flexDirection: "row" },
-  toggleBtn:      { flex: 1, paddingVertical: 10, alignItems: "center", borderRadius: 10 },
-  toggleText:     { fontSize: 14, fontWeight: "600" },
-  field:          { gap: 8 },
-  label:          { fontSize: 15, fontWeight: "700" },
-  input:          { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 },
-  textarea:       { height: 120, textAlignVertical: "top" },
-  chipWrap:       { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip:           { borderWidth: 1, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
-  chipText:       { fontSize: 13 },
-  currencyRow:    { flexDirection: "row", gap: 8 },
-  currencyBtn:    { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
-  currencyText:   { fontSize: 13 },
+  container:       { flex: 1 },
+  header:          { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
+  cancelText:      { fontSize: 15 },
+  headerTitle:     { fontSize: 17, fontWeight: "700" },
+  publishBtn:      { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  publishBtnText:  { fontSize: 14, fontWeight: "700" },
+  toggle:          { flexDirection: "row" },
+  toggleBtn:       { flex: 1, paddingVertical: 10, alignItems: "center", borderRadius: 10 },
+  toggleText:      { fontSize: 14, fontWeight: "600" },
+  field:           { gap: 8 },
+  label:           { fontSize: 15, fontWeight: "700" },
+  input:           { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 },
+  textarea:        { height: 120, textAlignVertical: "top" },
+  chipWrap:        { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip:            { borderWidth: 1, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  chipText:        { fontSize: 13 },
+  currencyRow:     { flexDirection: "row", gap: 8 },
+  currencyBtn:     { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
+  currencyText:    { fontSize: 13 },
+  coverPicker:     { height: 160, borderWidth: 1.5, borderStyle: "dashed", borderRadius: 12, alignItems: "center", justifyContent: "center", gap: 10, overflow: "hidden" },
+  coverImage:      { width: "100%", height: "100%", position: "absolute" },
+  coverPickerText: { fontSize: 13, textAlign: "center" },
+  coverOverlay:    { position: "absolute", bottom: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 16, padding: 6 },
 });

@@ -26,6 +26,7 @@ import {
   applyToJob,
   expressInterest,
   fetchOpportunityById,
+  getOrCreateDirectConversation,
   trackOpportunityView,
   uploadCV,
 } from "@/services/api";
@@ -107,7 +108,24 @@ export default function OpportunityDetailScreen() {
       if (ok) {
         closeSheet();
         setOpp((prev) => prev ? { ...prev, is_applied: true, applications_count: (prev.applications_count ?? 0) + 1 } : prev);
-        Alert.alert("Candidatura enviada!", "O recrutador foi notificado da sua candidatura.");
+        Alert.alert(
+          "Candidatura enviada!",
+          "O recrutador foi notificado. Deseja abrir uma conversa com a empresa?",
+          [
+            { text: "Depois", style: "cancel" },
+            {
+              text: "Abrir Chat",
+              onPress: async () => {
+                const convoId = await getOrCreateDirectConversation(user.id, opp.created_by, true);
+                if (convoId) {
+                  const cpId = opp.company_page_id;
+                  const route = cpId ? `/chat/${convoId}?companyId=${cpId}` : `/chat/${convoId}`;
+                  router.push(route as any);
+                }
+              },
+            },
+          ],
+        );
       } else {
         Alert.alert("Erro", "Não foi possível enviar a candidatura. Você já se candidatou?");
       }

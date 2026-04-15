@@ -143,6 +143,7 @@ export default function NewEventScreen() {
       visibility,
       restricted_positions: visibility === "restrito" ? restrictedPositions : null,
       pay_link: entryType !== "gratuito" ? (payLink.trim() || null) : null,
+      company_page_id: activeCompany?.id ?? null,
     });
     setCreating(false);
     if (result) {

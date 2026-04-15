@@ -38,7 +38,7 @@ import {
 } from "@/services/api";
 import { Post } from "@/components/feed/PostCard";
 
-type CompanyTab  = "publicacoes" | "portfolio";
+type CompanyTab  = "publicacoes" | "portfolio" | "painel";
 type ProductCat  = "produto" | "vinho" | "acessorio" | "servico";
 type SortKey     = "data" | "preco" | "categoria";
 
@@ -116,6 +116,12 @@ export default function EmpresaScreen() {
 
   const [showFab, setShowFab] = useState(false);
 
+  // Analytics (Painel)
+  const [analyticsLoaded, setAnalyticsLoaded] = useState(false);
+  const [followersCount, setFollowersCount] = useState<number | null>(null);
+  const [vacanciesCount, setVacanciesCount] = useState<number | null>(null);
+  const [marketCount, setMarketCount] = useState<number | null>(null);
+
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
@@ -160,7 +166,20 @@ export default function EmpresaScreen() {
   useEffect(() => {
     if (activeTab === "publicacoes") { loadPosts(); }
     if (activeTab === "portfolio")   { loadProducts(); }
-  }, [activeTab, loadPosts, loadProducts]);
+    if (activeTab === "painel" && !analyticsLoaded && id) {
+      (async () => {
+        const [fRes, vRes, mRes] = await Promise.all([
+          supabase.from("company_follows").select("id", { count: "exact", head: true }).eq("company_id", id),
+          supabase.from("opportunities").select("id", { count: "exact", head: true }).eq("company_page_id", id).eq("type", "vaga").eq("is_active", true),
+          supabase.from("opportunities").select("id", { count: "exact", head: true }).eq("company_page_id", id).eq("type", "marketplace").eq("is_active", true),
+        ]);
+        setFollowersCount(fRes.count ?? 0);
+        setVacanciesCount(vRes.count ?? 0);
+        setMarketCount(mRes.count ?? 0);
+        setAnalyticsLoaded(true);
+      })();
+    }
+  }, [activeTab, loadPosts, loadProducts, analyticsLoaded, id]);
 
   // ── Realtime: posts, likes and comments for this company ──
   useEffect(() => {
@@ -488,6 +507,7 @@ export default function EmpresaScreen() {
           {([
             { key: "publicacoes", label: "PUBLICAÇÕES" },
             { key: "portfolio",   label: "PORTIFÓLIO" },
+            ...(isManager ? [{ key: "painel" as CompanyTab, label: "PAINEL" }] : []),
           ] as { key: CompanyTab; label: string }[]).map((t) => (
             <TouchableOpacity
               key={t.key}
@@ -641,6 +661,68 @@ export default function EmpresaScreen() {
                 </View>
               ))
             )}
+          </View>
+        )}
+
+        {/* ── Painel (managers only) ── */}
+        {activeTab === "painel" && isManager && (
+          <View style={{ padding: 16, gap: 16 }}>
+            {/* Quick actions */}
+            <TouchableOpacity
+              style={[styles.panelManageBtn, { backgroundColor: colors.navy }]}
+              onPress={() => router.push(`/manage-business-page?id=${id}` as any)}
+            >
+              <Feather name="settings" size={16} color="#fff" />
+              <Text style={styles.panelManageBtnText}>Gerenciar Página da Empresa</Text>
+              <Feather name="chevron-right" size={16} color="#fff" />
+            </TouchableOpacity>
+
+            {/* Analytics grid */}
+            <View style={[styles.analyticsCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+              <Text style={[styles.analyticsTitle, { color: colors.navy }]}>Resumo da Empresa</Text>
+              <View style={styles.analyticsGrid}>
+                {[
+                  { label: "Seguidores",   value: followersCount,  icon: "users" },
+                  { label: "Publicações",  value: posts.length,    icon: "file-text" },
+                  { label: "Produtos",     value: products.length, icon: "package" },
+                  { label: "Vagas abertas", value: vacanciesCount,  icon: "briefcase" },
+                  { label: "Marketplace",  value: marketCount,     icon: "shopping-bag" },
+                ].map((stat) => (
+                  <View key={stat.label} style={[styles.analyticsStat, { backgroundColor: colors.background, borderRadius: 10 }]}>
+                    <Feather name={stat.icon as any} size={20} color={colors.gold} />
+                    <Text style={[styles.analyticsStatValue, { color: colors.navy }]}>
+                      {stat.value === null ? "—" : String(stat.value)}
+                    </Text>
+                    <Text style={[styles.analyticsStatLabel, { color: colors.mutedForeground }]}>{stat.label}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            {/* New content shortcuts */}
+            <View style={[styles.analyticsCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+              <Text style={[styles.analyticsTitle, { color: colors.navy }]}>Publicar Conteúdo</Text>
+              <View style={{ gap: 10 }}>
+                {[
+                  { label: "Nova Publicação",  icon: "edit",         route: "/create-post" },
+                  { label: "Nova Vaga",        icon: "briefcase",    route: "/new-opportunity" },
+                  { label: "Novo Anúncio",     icon: "shopping-bag", route: "/new-opportunity" },
+                  { label: "Novo Evento",      icon: "calendar",     route: "/new-event" },
+                ].map((action) => (
+                  <TouchableOpacity
+                    key={action.label}
+                    style={[styles.panelActionRow, { borderColor: colors.border }]}
+                    onPress={() => router.push(action.route as any)}
+                  >
+                    <View style={[styles.panelActionIcon, { backgroundColor: colors.gold + "18" }]}>
+                      <Feather name={action.icon as any} size={16} color={colors.gold} />
+                    </View>
+                    <Text style={[styles.panelActionLabel, { color: colors.navy }]}>{action.label}</Text>
+                    <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
           </View>
         )}
 
@@ -823,4 +905,16 @@ const styles = StyleSheet.create({
   fabMenuItem: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
   fabMenuText: { fontSize: 14, fontWeight: "500" },
   fabMenuDivider: { height: 1 },
+  // Painel / Analytics
+  panelManageBtn: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 12 },
+  panelManageBtnText: { flex: 1, color: "#fff", fontSize: 14, fontWeight: "700" },
+  analyticsCard: { borderRadius: 12, borderWidth: 1, padding: 16, gap: 14 },
+  analyticsTitle: { fontSize: 15, fontWeight: "700" },
+  analyticsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  analyticsStat: { width: "46%", padding: 14, alignItems: "center", gap: 6 },
+  analyticsStatValue: { fontSize: 24, fontWeight: "800" },
+  analyticsStatLabel: { fontSize: 12, textAlign: "center" },
+  panelActionRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderBottomWidth: 1 },
+  panelActionIcon: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  panelActionLabel: { flex: 1, fontSize: 14, fontWeight: "600" },
 });

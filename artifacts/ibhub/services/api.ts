@@ -3059,6 +3059,8 @@ export interface AppOpportunity {
   price?: string | null;
   cover_image_url?: string | null;
   company?: string | null;
+  company_page_id?: string | null;
+  company_page?: { id: string; name: string; avatar_url?: string | null } | null;
   contract_type?: string | null;
   salary?: string | null;
   contact_email?: string | null;
@@ -3083,7 +3085,7 @@ export async function fetchOpportunities(
       .from("opportunities")
       .select(`
         id, created_by, type, title, description, category, location, price, cover_image_url,
-        company, contract_type, salary, contact_email, expires_at, is_active, created_at,
+        company, company_page_id, contract_type, salary, contact_email, expires_at, is_active, created_at,
         interests_count, applications_count
       `)
       .eq("is_active", true)
@@ -3160,16 +3162,21 @@ export async function fetchOpportunityById(
   try {
     const { data, error } = await supabase
       .from("opportunities")
-      .select(`id, created_by, type, title, description, category, location, price,
-        company, contract_type, salary, contact_email, expires_at, is_active, created_at`)
+      .select(`id, created_by, type, title, description, category, location, price, cover_image_url,
+        company, company_page_id, contract_type, salary, contact_email, expires_at, is_active, created_at`)
       .eq("id", id)
       .single();
 
     if (error || !data) return null;
 
     const creatorId = (data as any).created_by;
-    const creatorMap = creatorId ? await fetchCommentProfilesForIds([creatorId]) : new Map();
+    const companyPageId = (data as any).company_page_id;
+    const [creatorMap, companyMap] = await Promise.all([
+      creatorId ? fetchCommentProfilesForIds([creatorId]) : Promise.resolve(new Map()),
+      companyPageId ? fetchCompanyPagesForIds([companyPageId]) : Promise.resolve(new Map()),
+    ]);
     (data as any).creator = creatorId ? (creatorMap.get(creatorId) ?? null) : null;
+    (data as any).company_page = companyPageId ? (companyMap.get(companyPageId) ?? null) : null;
 
     const isVaga = (data as any).type === "vaga";
 
@@ -3667,6 +3674,30 @@ export async function uploadEventImage(imageUri: string, userId: string): Promis
   }
 }
 
+export async function uploadOpportunityImage(uri: string, userId: string): Promise<string | null> {
+  try {
+    const ext = uri.split(".").pop()?.toLowerCase() ?? "jpg";
+    const path = `${userId}/opportunities/${Date.now()}.${ext}`;
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    const bytes = await new Promise<Uint8Array>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(blob);
+    });
+    const { data, error } = await supabase.storage
+      .from("post-images")
+      .upload(path, bytes, { contentType: `image/${ext === "jpg" ? "jpeg" : ext}`, upsert: true });
+    if (error) { console.error("uploadOpportunityImage:", error); return null; }
+    const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(data.path);
+    return urlData.publicUrl;
+  } catch (e) {
+    console.error("uploadOpportunityImage:", e);
+    return null;
+  }
+}
+
 export async function createEvent(params: {
   user_id: string;
   title: string;
@@ -3682,6 +3713,7 @@ export async function createEvent(params: {
   capacity?: number | null;
   visibility?: string;
   pay_link?: string | null;
+  company_page_id?: string | null;
 }): Promise<AppEvent | null> {
   try {
     const { data, error } = await supabase
