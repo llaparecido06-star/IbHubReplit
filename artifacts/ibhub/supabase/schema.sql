@@ -468,6 +468,9 @@ create policy "reports_insert" on public.reports for insert with check (
     (post_id is null and reported_user_id is not null)
   )
 );
+create policy "reports_select_own" on public.reports for select using (
+  auth.uid() = reported_by
+);
 create policy "reports_select_admin" on public.reports for select using (
   exists (select 1 from public.profiles where id = auth.uid() and is_admin = true)
 );
