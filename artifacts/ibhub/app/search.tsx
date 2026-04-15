@@ -16,8 +16,10 @@ import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/context/AuthContext";
-import { fetchShadowbannedIds } from "@/services/api";
+import { fetchProfilesForIds } from "@/services/api";
 import { useTranslation } from "react-i18next";
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 
 type Filter =
   | "todos" | "pessoas" | "publicacoes" | "empresas"
@@ -110,16 +112,26 @@ export default function SearchScreen() {
     const lim   = (full: number) => (isAll ? Math.ceil(full / 2) : full);
 
     try {
-      // Server-side shadowban filter for posts search
-      const shadowbannedIds = (isAll || f === "publicacoes") ? await fetchShadowbannedIds(myId) : [];
-      let searchPostsQuery = supabase.from("posts")
-        .select("id, content, created_at, likes_count, comments_count, author:profiles!posts_user_id_fkey(id, full_name, avatar_url)")
-        .ilike("content", `%${trimmed}%`)
-        .order("created_at", { ascending: false })
-        .limit(lim(20));
-      if (shadowbannedIds.length > 0) {
-        searchPostsQuery = searchPostsQuery.not("user_id", "in", `(${shadowbannedIds.map(id => `"${id}"`).join(",")})`);
-      }
+      // Authoritative post search: call API server so shadowban is enforced server-side.
+      const searchPostsViaApi = async (): Promise<{ data: any[] }> => {
+        if (!trimmed) return { data: [] };
+        const session = (await supabase.auth.getSession()).data.session;
+        if (!session?.access_token) return { data: [] };
+        const params = new URLSearchParams({ q: trimmed, limit: String(lim(20)) });
+        const res = await fetch(`${API_URL}/search/posts?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!res.ok) return { data: [] };
+        const { posts: rawPosts } = await res.json() as { posts: any[] };
+        if (!rawPosts?.length) return { data: [] };
+        const userIds = [...new Set(rawPosts.map((p: any) => p.user_id as string).filter(Boolean))];
+        const profileMap = await fetchProfilesForIds(userIds);
+        const enriched = rawPosts.map((p: any) => {
+          const profile = p.user_id ? profileMap.get(p.user_id) : undefined;
+          return { ...p, author: profile ? { id: profile.id, full_name: profile.full_name, avatar_url: profile.avatar_url } : null };
+        });
+        return { data: enriched };
+      };
 
       const [resP, resPub, resE, resV, resEv, resG] = await Promise.all([
         (isAll || f === "pessoas")
@@ -129,7 +141,7 @@ export default function SearchScreen() {
               .eq("profile_type", "pessoa").neq("id", myId).limit(lim(30))
           : Promise.resolve({ data: [] }),
 
-        (isAll || f === "publicacoes") ? searchPostsQuery : Promise.resolve({ data: [] }),
+        (isAll || f === "publicacoes") ? searchPostsViaApi() : Promise.resolve({ data: [] }),
 
         (isAll || f === "empresas")
           ? supabase.from("profiles")

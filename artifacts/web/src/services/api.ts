@@ -56,16 +56,6 @@ async function _fetchProfilesMap(userIds: string[]): Promise<Map<string, any>> {
   return new Map((data ?? []).map((p: any) => [p.id, p]));
 }
 
-/** Returns profile IDs where is_shadowbanned=true, excluding excludeUserId. */
-async function _fetchShadowbannedIds(excludeUserId?: string): Promise<string[]> {
-  const { data } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("is_shadowbanned", true);
-  return (data ?? [])
-    .map((p: { id: string }) => p.id)
-    .filter((id) => id !== excludeUserId);
-}
 
 function _normalisePost(raw: any, profileMap: Map<string, any>): Post {
   const p = profileMap.get(raw.user_id);

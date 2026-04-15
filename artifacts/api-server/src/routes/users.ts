@@ -110,4 +110,65 @@ router.get("/feed/posts", async (req: Request, res: Response) => {
   res.json({ posts: posts ?? [] });
 });
 
+/**
+ * GET /search/posts?q=...&limit=N
+ * Authoritative server-side post search with shadowban filtering.
+ * Admin client used only for banned IDs; post queries use user JWT to respect RLS.
+ */
+router.get("/search/posts", async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    res.status(401).json({ error: "Missing authorization" });
+    return;
+  }
+  const token = authHeader.slice(7);
+  const { data: userData, error: userError } = await supabaseAnon.auth.getUser(token);
+  if (userError || !userData?.user) {
+    res.status(401).json({ error: "Invalid or expired token" });
+    return;
+  }
+  const currentUserId = userData.user.id;
+  const q = (req.query.q as string | undefined)?.trim() ?? "";
+  const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+
+  if (!q) {
+    res.json({ posts: [] });
+    return;
+  }
+
+  // Fetch shadowbanned IDs using admin client (authoritative, server-side).
+  const { data: shadowbanned } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .eq("is_shadowbanned", true);
+  const bannedIds = (shadowbanned ?? [])
+    .map((p: { id: string }) => p.id)
+    .filter((id: string) => id !== currentUserId);
+
+  // User-scoped client to respect RLS.
+  const userClient = createClient(supabaseUrl!, supabaseAnonKey!, {
+    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+
+  let postsQuery = userClient
+    .from("posts")
+    .select("id, user_id, company_page_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count, view_count, location, hashtags, poll, created_at")
+    .ilike("content", `%${q}%`)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (bannedIds.length > 0) {
+    postsQuery = postsQuery.not("user_id", "in", `(${bannedIds.map((id: string) => `"${id}"`).join(",")})`);
+  }
+
+  const { data: posts, error: postsError } = await postsQuery;
+  if (postsError) {
+    res.status(500).json({ error: postsError.message });
+    return;
+  }
+
+  res.json({ posts: posts ?? [] });
+});
+
 export default router;

@@ -339,7 +339,11 @@ router.post("/admin/ban-user", async (req: Request, res: Response) => {
 
   // Revoke all active sessions for the user via Supabase Auth
   const banDuration = ban ? "876600h" : "none";
-  await supabaseAdmin.auth.admin.updateUserById(userId, { ban_duration: banDuration });
+  const { error: authErr } = await supabaseAdmin.auth.admin.updateUserById(userId, { ban_duration: banDuration });
+  if (authErr) {
+    res.status(500).json({ error: `Auth session revocation failed: ${authErr.message}` });
+    return;
+  }
 
   res.json({ success: true });
 });
