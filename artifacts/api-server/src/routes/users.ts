@@ -96,30 +96,28 @@ router.delete("/users/me", async (req: Request, res: Response) => {
 
   // ── 2. Delete database rows (fail-logged; CASCADE handles any leftovers) ─
   // Leaf rows first to avoid FK constraint violations.
-  // Supabase resolves (never rejects) with { error } — check the error field.
-  type SupabaseResult = { error: { message: string } | null };
-  const DB_OPS: Array<[string, Promise<SupabaseResult>]> = [
-    ["comment_likes",           supabaseAdmin.from("comment_likes").delete().eq("user_id", userId)],
-    ["likes",                   supabaseAdmin.from("likes").delete().eq("user_id", userId)],
-    ["bookmarks",               supabaseAdmin.from("bookmarks").delete().eq("user_id", userId)],
-    ["notification_preferences",supabaseAdmin.from("notification_preferences").delete().eq("user_id", userId)],
-    ["wine_cellar",             supabaseAdmin.from("wine_cellar").delete().eq("user_id", userId)],
-    ["post_hidden",             supabaseAdmin.from("post_hidden").delete().eq("user_id", userId)],
-    ["user_blocks",             supabaseAdmin.from("user_blocks").delete().or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`)],
-    ["comments",                supabaseAdmin.from("comments").delete().eq("user_id", userId)],
-    ["stories",                 supabaseAdmin.from("stories").delete().eq("user_id", userId)],
-    ["posts",                   supabaseAdmin.from("posts").delete().eq("user_id", userId)],
-  ];
-  const dbResults = await Promise.all(
-    DB_OPS.map(async ([table, promise]) => {
-      try {
-        const { error } = await promise;
-        return error ? `delete ${table}: ${error.message}` : null;
-      } catch (e: unknown) {
-        return `delete ${table}: ${e instanceof Error ? e.message : String(e)}`;
-      }
-    })
-  );
+  // Supabase resolves (never rejects) — check { error } in the resolved value.
+  async function deleteTable(table: string, query: () => Promise<{ error: { message: string } | null }>): Promise<string | null> {
+    try {
+      const { error } = await query();
+      return error ? `delete ${table}: ${error.message}` : null;
+    } catch (e: unknown) {
+      return `delete ${table}: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  }
+
+  const dbResults = await Promise.all([
+    deleteTable("comment_likes",            () => supabaseAdmin.from("comment_likes").delete().eq("user_id", userId)),
+    deleteTable("likes",                    () => supabaseAdmin.from("likes").delete().eq("user_id", userId)),
+    deleteTable("bookmarks",               () => supabaseAdmin.from("bookmarks").delete().eq("user_id", userId)),
+    deleteTable("notification_preferences", () => supabaseAdmin.from("notification_preferences").delete().eq("user_id", userId)),
+    deleteTable("wine_cellar",             () => supabaseAdmin.from("wine_cellar").delete().eq("user_id", userId)),
+    deleteTable("post_hidden",             () => supabaseAdmin.from("post_hidden").delete().eq("user_id", userId)),
+    deleteTable("user_blocks",             () => supabaseAdmin.from("user_blocks").delete().or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`)),
+    deleteTable("comments",                () => supabaseAdmin.from("comments").delete().eq("user_id", userId)),
+    deleteTable("stories",                 () => supabaseAdmin.from("stories").delete().eq("user_id", userId)),
+    deleteTable("posts",                   () => supabaseAdmin.from("posts").delete().eq("user_id", userId)),
+  ]);
   const dbWarnings = dbResults.filter((w): w is string => w !== null);
 
   // ── 3. Anonymize profile ─────────────────────────────────────────────────

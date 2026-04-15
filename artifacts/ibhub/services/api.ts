@@ -28,7 +28,7 @@ async function guardedFetch(input: RequestInfo, init?: RequestInit): Promise<Res
   }
 }
 
-export async function deleteAccount(token: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteAccount(token: string): Promise<{ success: boolean; warnings?: string[]; error?: string }> {
   try {
     const res = await fetch(`${API_URL}/users/me`, {
       method: "DELETE",
@@ -39,7 +39,7 @@ export async function deleteAccount(token: string): Promise<{ success: boolean; 
     });
     const json = await res.json();
     if (!res.ok) return { success: false, error: json.error ?? "Erro ao excluir conta." };
-    return { success: true };
+    return { success: true, warnings: json.warnings ?? [] };
   } catch (e) {
     console.error("deleteAccount:", e);
     return { success: false, error: "Erro de conexão. Tente novamente." };

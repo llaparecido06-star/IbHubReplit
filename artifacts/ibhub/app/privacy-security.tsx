@@ -123,6 +123,9 @@ export default function PrivacySecurityScreen() {
                         Alert.alert("Erro", result.error ?? "Não foi possível excluir a conta.");
                         return;
                       }
+                      if (result.warnings && result.warnings.length > 0) {
+                        console.warn("[deleteAccount] partial cleanup warnings:", result.warnings);
+                      }
                       await supabase.auth.signOut();
                       router.replace("/");
                     } finally {

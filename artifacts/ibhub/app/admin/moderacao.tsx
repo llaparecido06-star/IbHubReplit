@@ -74,7 +74,7 @@ export default function AdminModeracaoScreen() {
               setActionLoading(null);
               return;
             }
-            const deleted = await API.deletePost(report.post_id);
+            const deleted = report.post_id ? await API.deletePost(report.post_id) : true;
             if (!deleted) {
               Alert.alert("Atenção", "Status da denúncia atualizado, mas não foi possível remover a publicação. Verifique suas permissões.");
             }
