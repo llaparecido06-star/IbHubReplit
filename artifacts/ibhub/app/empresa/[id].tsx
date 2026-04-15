@@ -121,6 +121,8 @@ export default function EmpresaScreen() {
   const [followersCount, setFollowersCount] = useState<number | null>(null);
   const [vacanciesCount, setVacanciesCount] = useState<number | null>(null);
   const [marketCount, setMarketCount] = useState<number | null>(null);
+  const [viewsCount, setViewsCount] = useState<number | null>(null);
+  const [engagementCount, setEngagementCount] = useState<number | null>(null);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -168,18 +170,29 @@ export default function EmpresaScreen() {
     if (activeTab === "portfolio")   { loadProducts(); }
     if (activeTab === "painel" && !analyticsLoaded && id) {
       (async () => {
-        const [fRes, vRes, mRes] = await Promise.all([
+        const ownerId = companyPage?.owner_id ?? null;
+        const since7 = new Date(); since7.setDate(since7.getDate() - 7);
+        const since7Str = since7.toISOString().split("T")[0];
+
+        const [fRes, vRes, mRes, viewsRes, likesRes, commentsRes] = await Promise.all([
           supabase.from("company_follows").select("id", { count: "exact", head: true }).eq("company_id", id),
           supabase.from("opportunities").select("id", { count: "exact", head: true }).eq("company_page_id", id).eq("type", "vaga").eq("is_active", true),
           supabase.from("opportunities").select("id", { count: "exact", head: true }).eq("company_page_id", id).eq("type", "marketplace").eq("is_active", true),
+          ownerId
+            ? supabase.from("profile_views").select("id", { count: "exact", head: true }).eq("profile_id", ownerId).gte("viewed_at", since7Str)
+            : Promise.resolve({ count: 0 }),
+          supabase.from("likes").select("id", { count: "exact", head: true }).eq("company_page_id", id),
+          supabase.from("comments").select("id", { count: "exact", head: true }).eq("company_page_id", id),
         ]);
         setFollowersCount(fRes.count ?? 0);
         setVacanciesCount(vRes.count ?? 0);
         setMarketCount(mRes.count ?? 0);
+        setViewsCount((viewsRes as any).count ?? 0);
+        setEngagementCount(((likesRes.count ?? 0) + (commentsRes.count ?? 0)));
         setAnalyticsLoaded(true);
       })();
     }
-  }, [activeTab, loadPosts, loadProducts, analyticsLoaded, id]);
+  }, [activeTab, loadPosts, loadProducts, analyticsLoaded, id, companyPage]);
 
   // ── Realtime: posts, likes and comments for this company ──
   useEffect(() => {
@@ -682,11 +695,12 @@ export default function EmpresaScreen() {
               <Text style={[styles.analyticsTitle, { color: colors.navy }]}>Resumo da Empresa</Text>
               <View style={styles.analyticsGrid}>
                 {[
-                  { label: "Seguidores",   value: followersCount,  icon: "users" },
-                  { label: "Publicações",  value: posts.length,    icon: "file-text" },
-                  { label: "Produtos",     value: products.length, icon: "package" },
-                  { label: "Vagas abertas", value: vacanciesCount,  icon: "briefcase" },
-                  { label: "Marketplace",  value: marketCount,     icon: "shopping-bag" },
+                  { label: "Seguidores",      value: followersCount,    icon: "users" },
+                  { label: "Publicações",     value: posts.length,      icon: "file-text" },
+                  { label: "Visitas (7d)",    value: viewsCount,        icon: "eye" },
+                  { label: "Engajamento",     value: engagementCount,   icon: "heart" },
+                  { label: "Vagas abertas",   value: vacanciesCount,    icon: "briefcase" },
+                  { label: "Marketplace",     value: marketCount,       icon: "shopping-bag" },
                 ].map((stat) => (
                   <View key={stat.label} style={[styles.analyticsStat, { backgroundColor: colors.background, borderRadius: 10 }]}>
                     <Feather name={stat.icon as any} size={20} color={colors.gold} />

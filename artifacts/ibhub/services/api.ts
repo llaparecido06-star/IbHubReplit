@@ -3263,6 +3263,27 @@ export async function uploadCV(uri: string, userId: string): Promise<string | nu
   }
 }
 
+export async function fetchUserLastCV(userId: string): Promise<{ url: string; name: string } | null> {
+  try {
+    const { data, error } = await supabase
+      .from("job_applications")
+      .select("cv_url, created_at")
+      .eq("applicant_id", userId)
+      .not("cv_url", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !data?.cv_url) return null;
+    const segments = data.cv_url.split("/");
+    const rawName = decodeURIComponent(segments[segments.length - 1] ?? "curriculo.pdf");
+    const name = rawName.split("?")[0] ?? rawName;
+    return { url: data.cv_url, name };
+  } catch (e) {
+    console.error("fetchUserLastCV:", e);
+    return null;
+  }
+}
+
 export async function applyToJob(
   opportunityId: string,
   applicantId: string,

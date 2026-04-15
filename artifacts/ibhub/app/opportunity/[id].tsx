@@ -27,6 +27,7 @@ import {
   applyToJob,
   expressInterest,
   fetchOpportunityById,
+  fetchUserLastCV,
   getOrCreateDirectConversation,
   sendMessage,
   trackOpportunityView,
@@ -56,6 +57,8 @@ export default function OpportunityDetailScreen() {
   const [message, setMessage]       = useState("");
   const [cvName, setCvName]         = useState<string | null>(null);
   const [cvUri, setCvUri]           = useState<string | null>(null);
+  const [savedCv, setSavedCv]       = useState<{ url: string; name: string } | null>(null);
+  const [usingSavedCv, setUsingSavedCv] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Animated bottom sheet
@@ -63,6 +66,12 @@ export default function OpportunityDetailScreen() {
   const openSheet = () => {
     setShowApply(true);
     Animated.timing(slideAnim, { toValue: 0, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    // Auto-load saved CV from last application
+    if (user?.id && !savedCv) {
+      fetchUserLastCV(user.id).then((cv) => {
+        if (cv) { setSavedCv(cv); setUsingSavedCv(true); }
+      });
+    }
   };
   const closeSheet = () => {
     Animated.timing(slideAnim, { toValue: 400, duration: 260, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => setShowApply(false));
@@ -103,10 +112,18 @@ export default function OpportunityDetailScreen() {
     setSubmitting(true);
     try {
       let cvUrl: string | null = null;
-      let cvFileName: string | null = cvName;
+      let cvFileName: string | null = null;
+
       if (cvUri) {
+        // User picked a new CV — upload it
         cvUrl = await uploadCV(cvUri, user.id);
+        cvFileName = cvName;
+      } else if (usingSavedCv && savedCv) {
+        // Auto-use previously saved CV
+        cvUrl = savedCv.url;
+        cvFileName = savedCv.name;
       }
+
       const ok = await applyToJob(opp.id, user.id, cvUrl, message.trim() || null);
       if (!ok) {
         Alert.alert("Erro", "Não foi possível enviar a candidatura. Você já se candidatou?");
@@ -369,26 +386,44 @@ export default function OpportunityDetailScreen() {
                 <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Enviar candidatura</Text>
                 <Text style={[styles.sheetSub, { color: colors.mutedForeground }]}>{opp.title}</Text>
 
-                {/* CV picker */}
-                <TouchableOpacity
-                  style={[styles.cvPicker, { borderColor: cvName ? colors.gold : colors.border, backgroundColor: colors.background }]}
-                  onPress={handlePickCV}
-                >
-                  <Feather name="paperclip" size={18} color={cvName ? colors.gold : colors.mutedForeground} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.cvLabel, { color: cvName ? colors.gold : colors.mutedForeground }]}>
-                      {cvName ?? "Anexar currículo (PDF ou Word)"}
-                    </Text>
-                    {!cvName && (
-                      <Text style={[styles.cvHint, { color: colors.mutedForeground }]}>Opcional — máx. 5 MB</Text>
-                    )}
-                  </View>
-                  {cvName && (
-                    <Pressable onPress={() => { setCvName(null); setCvUri(null); }}>
-                      <Feather name="x" size={16} color={colors.mutedForeground} />
+                {/* CV — saved or new */}
+                {savedCv && !cvUri ? (
+                  <View style={[styles.cvPicker, { borderColor: usingSavedCv ? colors.gold : colors.border, backgroundColor: colors.background }]}>
+                    <Feather name="file-text" size={18} color={colors.gold} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.cvLabel, { color: colors.gold }]}>
+                        {usingSavedCv ? "Currículo salvo" : "Trocar currículo"}
+                      </Text>
+                      <Text style={[styles.cvHint, { color: colors.mutedForeground }]} numberOfLines={1}>{savedCv.name}</Text>
+                    </View>
+                    <Pressable onPress={handlePickCV} style={{ padding: 4 }}>
+                      <Feather name="refresh-cw" size={14} color={colors.mutedForeground} />
                     </Pressable>
-                  )}
-                </TouchableOpacity>
+                    <Pressable onPress={() => setUsingSavedCv(!usingSavedCv)} style={{ padding: 4 }}>
+                      <Feather name={usingSavedCv ? "check-circle" : "circle"} size={16} color={usingSavedCv ? colors.gold : colors.mutedForeground} />
+                    </Pressable>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.cvPicker, { borderColor: cvName ? colors.gold : colors.border, backgroundColor: colors.background }]}
+                    onPress={handlePickCV}
+                  >
+                    <Feather name="paperclip" size={18} color={cvName ? colors.gold : colors.mutedForeground} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.cvLabel, { color: cvName ? colors.gold : colors.mutedForeground }]}>
+                        {cvName ?? "Anexar currículo (PDF ou Word)"}
+                      </Text>
+                      {!cvName && (
+                        <Text style={[styles.cvHint, { color: colors.mutedForeground }]}>Opcional — máx. 5 MB</Text>
+                      )}
+                    </View>
+                    {cvName && (
+                      <Pressable onPress={() => { setCvName(null); setCvUri(null); }}>
+                        <Feather name="x" size={16} color={colors.mutedForeground} />
+                      </Pressable>
+                    )}
+                  </TouchableOpacity>
+                )}
 
                 {/* Message */}
                 <TextInput
