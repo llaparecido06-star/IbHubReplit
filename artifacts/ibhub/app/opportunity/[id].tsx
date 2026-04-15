@@ -137,22 +137,22 @@ export default function OpportunityDetailScreen() {
       const convoId = await getOrCreateDirectConversation(user.id, chatTargetId, true);
       if (convoId) {
         const cpId = opp.company_page_id ?? null;
-        // Send standardized application text
+        // Send standardized application text — sender is the applicant, no companyPageId
         const appMsg = [
           `Me candidatei na sua vaga **${opp.title}**${cvUrl ? " e meu currículo abaixo" : ""}.`,
           message.trim() ? `\n\n${message.trim()}` : "",
         ].join("");
-        await sendMessage(convoId, user.id, appMsg, { companyPageId: cpId });
+        await sendMessage(convoId, user.id, appMsg);
 
         // If CV attached, also send as file message so recruiter can download
         if (cvUrl && cvFileName) {
           await sendMessage(convoId, user.id, cvFileName, {
             message_type: "file",
             metadata: { file_url: cvUrl, file_name: cvFileName, file_type: "document" },
-            companyPageId: cpId,
           });
         }
 
+        // Route with companyId for UI context (recruiter side), but sender is always the applicant
         const route = cpId ? `/chat/${convoId}?companyId=${cpId}` : `/chat/${convoId}`;
         router.push(route as any);
       } else {
