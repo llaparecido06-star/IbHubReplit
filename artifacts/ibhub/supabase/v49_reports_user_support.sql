@@ -32,3 +32,8 @@ create policy "reports_insert" on public.reports
       (post_id is null and reported_user_id is not null)
     )
   );
+
+-- Allow users to read their own submitted reports (required for "Minhas Denúncias")
+drop policy if exists "reports_select_own" on public.reports;
+create policy "reports_select_own" on public.reports
+  for select using (auth.uid() = reported_by);

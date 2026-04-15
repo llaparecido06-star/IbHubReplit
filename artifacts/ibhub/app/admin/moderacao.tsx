@@ -110,9 +110,13 @@ export default function AdminModeracaoScreen() {
             setActionLoading(report.id);
             try {
               await banUser(report.reported_user_id!, true);
-              await API.updateReportStatus(report.id, "approved");
-              setReports((prev) => prev.filter((r) => r.id !== report.id));
-              Alert.alert("Sucesso", `${name} foi banido.`);
+              const statusOk = await API.updateReportStatus(report.id, "approved");
+              if (!statusOk) {
+                Alert.alert("Atenção", `${name} foi banido, mas o status da denúncia não pôde ser atualizado.`);
+              } else {
+                setReports((prev) => prev.filter((r) => r.id !== report.id));
+                Alert.alert("Sucesso", `${name} foi banido.`);
+              }
             } catch (e: unknown) {
               Alert.alert("Erro", e instanceof Error ? e.message : "Não foi possível banir o usuário.");
             } finally {
@@ -139,9 +143,13 @@ export default function AdminModeracaoScreen() {
             setActionLoading(report.id);
             try {
               await shadowbanUser(report.reported_user_id!, true);
-              await API.updateReportStatus(report.id, "approved");
-              setReports((prev) => prev.filter((r) => r.id !== report.id));
-              Alert.alert("Sucesso", `Shadowban aplicado em ${name}.`);
+              const statusOk = await API.updateReportStatus(report.id, "approved");
+              if (!statusOk) {
+                Alert.alert("Atenção", `Shadowban aplicado em ${name}, mas o status da denúncia não pôde ser atualizado.`);
+              } else {
+                setReports((prev) => prev.filter((r) => r.id !== report.id));
+                Alert.alert("Sucesso", `Shadowban aplicado em ${name}.`);
+              }
             } catch (e: unknown) {
               Alert.alert("Erro", e instanceof Error ? e.message : "Não foi possível aplicar shadowban.");
             } finally {
