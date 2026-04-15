@@ -74,7 +74,7 @@ export function FeatureFlagsProvider({ children }: { children: React.ReactNode }
 
   const isEnabled = useCallback(
     (key: string): boolean => {
-      if (isLoading) return true;
+      if (isLoading) return false;
       return flags[key] ?? false;
     },
     [flags, isLoading],

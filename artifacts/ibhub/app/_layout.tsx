@@ -107,19 +107,21 @@ function PushNotificationHandler() {
 
 // ── Maintenance mode guard ────────────────────────────────────────────────────
 function MaintenanceGuard() {
-  const { isEnabled } = useFeatureFlags();
+  const { isEnabled, isLoading: flagsLoading } = useFeatureFlags();
   const { profile, session } = useAuth();
   const router = useRouter();
+  const manutencao = isEnabled("manutencao");
 
   useEffect(() => {
+    if (flagsLoading) return;
     if (!session) return;
     if (profile?.is_admin) return;
-    if (isEnabled("manutencao")) {
+    if (manutencao) {
       supabase.auth.signOut().then(() => {
         router.replace("/maintenance" as any);
       });
     }
-  }, [isEnabled("manutencao"), profile?.is_admin, session]);
+  }, [manutencao, flagsLoading, profile?.is_admin, session]);
 
   return null;
 }
@@ -195,17 +197,18 @@ function AuthenticatedLayout() {
 
 function RootLayoutNav() {
   const { session, loading, isRecovering, needsProfileCompletion } = useAuth();
-  const { isEnabled } = useFeatureFlags();
+  const { isEnabled, isLoading: flagsLoading } = useFeatureFlags();
   const router = useRouter();
   const didNavigateIn = useRef(false);
+  const manutencao = isEnabled("manutencao");
 
   useEffect(() => {
-    if (loading || isRecovering) return;
+    if (loading || isRecovering || flagsLoading) return;
 
     if (!session) {
       didNavigateIn.current = false;
       // If maintenance mode is on and there's no session, show maintenance screen
-      if (isEnabled("manutencao")) {
+      if (manutencao) {
         router.replace("/maintenance" as any);
       } else {
         router.replace("/(auth)/login" as any);
@@ -216,7 +219,7 @@ function RootLayoutNav() {
       didNavigateIn.current = true;
       setTimeout(() => router.replace("/(tabs)" as any), 80);
     }
-  }, [session, loading, isRecovering, needsProfileCompletion]);
+  }, [session, loading, isRecovering, needsProfileCompletion, manutencao, flagsLoading]);
 
   if (loading) {
     return (

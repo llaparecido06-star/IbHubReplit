@@ -45,6 +45,7 @@ import NotFound from "@/pages/not-found";
 import { AdminShell } from "@/components/layout/AdminShell";
 import { FeatureFlagsProvider, useFeatureFlags } from "@/context/FeatureFlagsContext";
 import MaintenancePage from "@/pages/MaintenancePage";
+import { supabase } from "@/lib/supabase";
 import { useEffect } from "react";
 
 const queryClient = new QueryClient();
@@ -129,10 +130,20 @@ function AdminNotFound() {
 
 function MaintenanceGuard({ children }: { children: React.ReactNode }) {
   const { isEnabled, isLoading } = useFeatureFlags();
-  const { profile, loading } = useAuth();
+  const { profile, loading, session } = useAuth();
+  const manutencao = isEnabled("manutencao");
+
+  useEffect(() => {
+    if (loading || isLoading) return;
+    if (!session) return;
+    if (profile?.is_admin) return;
+    if (manutencao) {
+      supabase.auth.signOut();
+    }
+  }, [manutencao, isLoading, loading, session, profile?.is_admin]);
 
   if (loading || isLoading) return null;
-  if (isEnabled("manutencao") && !profile?.is_admin) {
+  if (manutencao && !profile?.is_admin) {
     return <MaintenancePage />;
   }
   return <>{children}</>;
