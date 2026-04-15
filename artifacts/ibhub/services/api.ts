@@ -672,12 +672,7 @@ export async function updateProfile(
   payload: UpdateProfilePayload,
 ): Promise<boolean> {
   try {
-    // `areas_of_expertise` is the app-side name; the actual DB column is `areas`
-    const { areas_of_expertise, ...rest } = payload as any;
-    const dbPayload: Record<string, unknown> = { ...rest };
-    if (areas_of_expertise !== undefined) {
-      dbPayload.areas = areas_of_expertise;
-    }
+    const dbPayload: Record<string, unknown> = { ...(payload as any) };
     const { error } = await supabase
       .from("profiles")
       .update(dbPayload)

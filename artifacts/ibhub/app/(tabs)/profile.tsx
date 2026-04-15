@@ -743,8 +743,8 @@ export default function ProfileScreen() {
       !!profile.headline,
       !!profile.bio,
       !!profile.avatar_url,
-      !!profile.location,
       !!(profile.areas_of_expertise ?? []).length,
+      !!(profile.certifications && (profile.certifications as string[]).length > 0),
       !!profile.company || !!profile.position,
     ];
     return Math.round((fields.filter(Boolean).length / fields.length) * 100);
@@ -1029,9 +1029,9 @@ export default function ProfileScreen() {
               <View style={[styles.completionFill, { width: `${completion}%` as any, backgroundColor: colors.gold }]} />
             </View>
             <Text style={[styles.completionHint, { color: colors.mutedForeground }]}>
-              {completion < 50 ? "Adicione bio, foto e localização para ter mais visibilidade." :
-               completion < 80 ? "Quase lá! Adicione áreas de expertise e empresa." :
-               "Adicione uma informação final para completar 100%."}
+              {completion < 50 ? "Adicione bio, foto e áreas de atuação para ter mais visibilidade." :
+               completion < 80 ? "Quase lá! Adicione certificações, empresa ou cargo." :
+               "Adicione uma certificação ou área de atuação para completar 100%."}
             </Text>
           </TouchableOpacity>
         )}
