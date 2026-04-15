@@ -445,15 +445,29 @@ create policy "cert_requests_update_admin" on public.certification_requests for 
 
 -- ─── REPORTS ─────────────────────────────────────────────────────────────────
 create table if not exists public.reports (
-  id            uuid primary key default gen_random_uuid(),
-  post_id       uuid not null references public.posts(id) on delete cascade,
-  reported_by   uuid not null references public.profiles(id) on delete cascade,
-  reason        text not null,
-  status        text not null default 'pending' check (status in ('pending','approved','rejected')),
-  created_at    timestamptz not null default now()
+  id                uuid primary key default gen_random_uuid(),
+  -- post_id XOR reported_user_id must be non-null (enforced by constraint below)
+  post_id           uuid references public.posts(id) on delete cascade,
+  reported_user_id  uuid references public.profiles(id) on delete cascade,
+  reported_by       uuid not null references public.profiles(id) on delete cascade,
+  reason            text not null,
+  status            text not null default 'pending' check (status in ('pending','approved','rejected')),
+  created_at        timestamptz not null default now(),
+  constraint reports_target_check check (
+    (post_id is not null and reported_user_id is null)
+    or
+    (post_id is null and reported_user_id is not null)
+  )
 );
 alter table public.reports enable row level security;
-create policy "reports_insert" on public.reports for insert with check (auth.uid() = reported_by);
+create policy "reports_insert" on public.reports for insert with check (
+  auth.uid() = reported_by
+  and (
+    (post_id is not null and reported_user_id is null)
+    or
+    (post_id is null and reported_user_id is not null)
+  )
+);
 create policy "reports_select_admin" on public.reports for select using (
   exists (select 1 from public.profiles where id = auth.uid() and is_admin = true)
 );

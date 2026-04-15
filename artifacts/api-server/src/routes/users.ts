@@ -42,26 +42,38 @@ router.delete("/users/me", async (req: Request, res: Response) => {
 
   // ── 1. Delete Storage objects ────────────────────────────────────────────
   // All user-owned media is stored under a {userId}/ prefix in each bucket.
-  // We list each bucket folder and bulk-delete before removing the auth record.
+  // Paginate with offset to handle users with >1000 files per bucket.
   const STORAGE_BUCKETS = ["avatars", "post-images", "post-videos", "stories"] as const;
+
+  async function deleteStorageBucket(bucket: string): Promise<void> {
+    const PAGE = 1000;
+    let offset = 0;
+    for (;;) {
+      const { data: files, error: listErr } = await supabaseAdmin.storage
+        .from(bucket)
+        .list(userId, { limit: PAGE, offset });
+      if (listErr) {
+        storageWarnings.push(`list ${bucket} offset=${offset}: ${listErr.message}`);
+        break;
+      }
+      if (!files || files.length === 0) break;
+      const paths = files.map((f: { name: string }) => `${userId}/${f.name}`);
+      const { error: removeErr } = await supabaseAdmin.storage
+        .from(bucket)
+        .remove(paths);
+      if (removeErr) {
+        storageWarnings.push(`remove ${bucket}: ${removeErr.message}`);
+        break;
+      }
+      if (files.length < PAGE) break;
+      offset += PAGE;
+    }
+  }
+
   await Promise.all(
     STORAGE_BUCKETS.map(async (bucket) => {
       try {
-        const { data: files, error: listErr } = await supabaseAdmin.storage
-          .from(bucket)
-          .list(userId, { limit: 1000 });
-        if (listErr) {
-          storageWarnings.push(`list ${bucket}: ${listErr.message}`);
-          return;
-        }
-        if (!files || files.length === 0) return;
-        const paths = files.map((f: { name: string }) => `${userId}/${f.name}`);
-        const { error: removeErr } = await supabaseAdmin.storage
-          .from(bucket)
-          .remove(paths);
-        if (removeErr) {
-          storageWarnings.push(`remove ${bucket}: ${removeErr.message}`);
-        }
+        await deleteStorageBucket(bucket);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         storageWarnings.push(`${bucket}: ${msg}`);
