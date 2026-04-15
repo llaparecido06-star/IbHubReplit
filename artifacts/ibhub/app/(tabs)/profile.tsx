@@ -1,8 +1,9 @@
 import { useRouter, useFocusEffect } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -22,8 +23,10 @@ import { Avatar } from "@/components/ui/Avatar";
 import { useAuth, supabase } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { friendlyErrorMessage } from "@/hooks/useAsyncAction";
+import * as ImagePicker from "expo-image-picker";
 import {
   CompanyPage,
+  CompanyProduct,
   FollowProfile,
   SuggestedProfile,
   WineEntry,
@@ -35,6 +38,15 @@ import {
   fetchCompanyPosts,
   fetchBookmarkedPosts,
   fetchWineCellar,
+  fetchCompanyProducts,
+  createCompanyProduct,
+  updateCompanyProduct,
+  deleteCompanyProduct,
+  uploadProductImage,
+  checkIsFollowingCompany,
+  toggleCompanyFollow,
+  checkUserCompanyRole,
+  getOrCreateDirectConversation,
   sendConnectionRequest,
   toggleLike,
   toggleBookmark,
@@ -52,29 +64,239 @@ import { UserListModal, UserListType } from "@/components/profile/UserListModal"
 
 type StatModal = UserListType | null;
 
-// ── Company Profile Proxy ─────────────────────────────────────────────────────
-// Rendered in the profile tab when a company identity is active.
-function EmpresaProfileProxy({
-  companyId, colors, router, insets, topPad, bottomPad,
-}: {
-  companyId: string;
-  colors: ReturnType<typeof useColors>;
-  router: ReturnType<typeof useRouter>;
-  insets: { top: number; bottom: number };
-  topPad: number;
-  bottomPad: number;
-}) {
-  const { activeCompany, setActiveCompany, user: authUser } = useAuth();
-  const [company, setCompany]     = React.useState<CompanyPage | null>(null);
-  const [loading, setLoading]     = React.useState(true);
-  const [postCount, setPostCount] = React.useState(0);
+// ── Types for EmpresaTabPage ───────────────────────────────────────────────────
+type EmpresaTabKey  = "publicacoes" | "portfolio" | "painel";
+type ProductCat     = "produto" | "vinho" | "acessorio" | "servico";
+type EmpresaSortKey = "data" | "preco" | "categoria";
 
-  React.useEffect(() => {
-    fetchCompanyPageById(companyId).then(c => { setCompany(c); setLoading(false); });
-    fetchCompanyPosts(companyId, authUser?.id, activeCompany?.id ?? null).then(p => setPostCount(p.length)).catch(() => {});
-  }, [companyId]);
+interface LocalProduct {
+  id: string; name: string; desc?: string; price?: string;
+  cat: ProductCat; image_url?: string | null;
+}
 
-  if (loading) {
+const EMPRESA_PRODUCT_CATS: { key: ProductCat; label: string }[] = [
+  { key: "produto",   label: "Produto" },
+  { key: "vinho",     label: "Vinho" },
+  { key: "acessorio", label: "Acessório" },
+  { key: "servico",   label: "Serviço" },
+];
+
+const EMPRESA_SORT_OPTIONS: { key: EmpresaSortKey; label: string }[] = [
+  { key: "data",      label: "Data" },
+  { key: "preco",     label: "Preço" },
+  { key: "categoria", label: "Categoria" },
+];
+
+function toLocalProduct(p: CompanyProduct): LocalProduct {
+  return { id: p.id, name: p.name, desc: p.description ?? undefined, price: p.price ?? undefined, cat: (p.category as ProductCat) ?? "produto", image_url: p.image_url };
+}
+
+// ── EmpresaTabPage ─────────────────────────────────────────────────────────────
+// Full empresa profile rendered as a tab (no back button, tab bar visible).
+function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; topPad: number; bottomPad: number }) {
+  const colors  = useColors();
+  const router  = useRouter();
+  const { user, activeCompany, setActiveCompany } = useAuth();
+
+  const [companyPage,      setCompanyPage]      = useState<CompanyPage | null>(null);
+  const [companyLoading,   setCompanyLoading]   = useState(true);
+  const [isManager,        setIsManager]        = useState(false);
+  const [userRole,         setUserRole]         = useState<string | null>(null);
+  const [activeTab,        setActiveTab]        = useState<EmpresaTabKey>("publicacoes");
+
+  const [posts,            setPosts]            = useState<Post[]>([]);
+  const [postsLoading,     setPostsLoading]     = useState(false);
+  const [postsLoaded,      setPostsLoaded]      = useState(false);
+
+  const [products,         setProducts]         = useState<LocalProduct[]>([]);
+  const [productsLoading,  setProductsLoading]  = useState(false);
+  const [productsLoaded,   setProductsLoaded]   = useState(false);
+  const [productSearch,    setProductSearch]    = useState("");
+  const [sortBy,           setSortBy]           = useState<EmpresaSortKey>("data");
+  const [filterCat,        setFilterCat]        = useState<ProductCat | "todos">("todos");
+  const [showProductForm,  setShowProductForm]  = useState(false);
+  const [selectedProduct,  setSelectedProduct]  = useState<LocalProduct | null>(null);
+  const [editingProduct,   setEditingProduct]   = useState<LocalProduct | null>(null);
+  const [savingProduct,    setSavingProduct]    = useState(false);
+  const [deletingId,       setDeletingId]       = useState<string | null>(null);
+
+  const [pName,  setPName]  = useState("");
+  const [pDesc,  setPDesc]  = useState("");
+  const [pPrice, setPPrice] = useState("");
+  const [pCat,   setPCat]   = useState<ProductCat>("produto");
+  const [pImg,   setPImg]   = useState<string | null>(null);
+  const [pImgChanged, setPImgChanged] = useState(false);
+  const [uploadingImg, setUploadingImg] = useState(false);
+
+  const [showFab,          setShowFab]          = useState(false);
+  const [analyticsLoaded,  setAnalyticsLoaded]  = useState(false);
+  const [followersCount,   setFollowersCount]   = useState<number | null>(null);
+  const [vacanciesCount,   setVacanciesCount]   = useState<number | null>(null);
+  const [marketCount,      setMarketCount]      = useState<number | null>(null);
+  const [viewsCount,       setViewsCount]       = useState<number | null>(null);
+  const [engagementCount,  setEngagementCount]  = useState<number | null>(null);
+
+  // ── Load company ───────────────────────────────────────────────────────────
+  const loadCompany = useCallback(async () => {
+    if (!companyId) return;
+    setCompanyLoading(true);
+    const page = await fetchCompanyPageById(companyId);
+    setCompanyPage(page);
+    if (user?.id && page) {
+      const roleInfo = await checkUserCompanyRole(companyId, user.id);
+      setIsManager(roleInfo.isOwner || roleInfo.role !== null);
+      setUserRole(roleInfo.role);
+    }
+    setCompanyLoading(false);
+  }, [companyId, user?.id]);
+
+  const loadPosts = useCallback(async () => {
+    if (!companyId || postsLoaded) return;
+    setPostsLoading(true);
+    const data = await fetchCompanyPosts(companyId, user?.id, activeCompany?.id ?? null);
+    setPosts(data); setPostsLoaded(true); setPostsLoading(false);
+  }, [companyId, user?.id, activeCompany?.id, postsLoaded]);
+
+  const loadProducts = useCallback(async () => {
+    if (!companyId || productsLoaded) return;
+    setProductsLoading(true);
+    const data = await fetchCompanyProducts(companyId);
+    setProducts(data.map(toLocalProduct)); setProductsLoaded(true); setProductsLoading(false);
+  }, [companyId, productsLoaded]);
+
+  useEffect(() => { loadCompany(); }, [loadCompany]);
+  useEffect(() => {
+    if (activeTab === "publicacoes") loadPosts();
+    if (activeTab === "portfolio")   loadProducts();
+    if (activeTab === "painel" && !analyticsLoaded && companyId) {
+      (async () => {
+        const since7 = new Date(); since7.setDate(since7.getDate() - 7);
+        const since7Str = since7.toISOString().split("T")[0];
+        const ownerId = companyPage?.owner_id ?? null;
+        const [fRes, vRes, mRes, likesRes, commentsRes] = await Promise.all([
+          supabase.from("company_follows").select("id", { count: "exact", head: true }).eq("company_id", companyId),
+          supabase.from("opportunities").select("id", { count: "exact", head: true }).eq("company_page_id", companyId).eq("type", "vaga").eq("is_active", true),
+          supabase.from("opportunities").select("id", { count: "exact", head: true }).eq("company_page_id", companyId).eq("type", "marketplace").eq("is_active", true),
+          supabase.from("likes").select("id", { count: "exact", head: true }).eq("company_page_id", companyId),
+          supabase.from("comments").select("id", { count: "exact", head: true }).eq("company_page_id", companyId),
+        ]);
+        let views = 0;
+        if (ownerId) {
+          const { count } = await supabase.from("profile_views").select("id", { count: "exact", head: true }).eq("profile_id", ownerId).gte("viewed_at", since7Str);
+          views = count ?? 0;
+        }
+        setFollowersCount(fRes.count ?? 0); setVacanciesCount(vRes.count ?? 0);
+        setMarketCount(mRes.count ?? 0); setViewsCount(views);
+        setEngagementCount((likesRes.count ?? 0) + (commentsRes.count ?? 0));
+        setAnalyticsLoaded(true);
+      })();
+    }
+  }, [activeTab, loadPosts, loadProducts, analyticsLoaded, companyId, companyPage]);
+
+  // ── Realtime ───────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!companyId) return;
+    const uid = Math.random().toString(36).slice(2, 8);
+    const ch = supabase.channel(`company-tab-${companyId}-${uid}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts", filter: `company_page_id=eq.${companyId}` }, async (payload) => {
+        const { fetchPostById } = await import("@/services/api");
+        const full = await fetchPostById((payload.new as any).id, user?.id);
+        if (full) setPosts(prev => prev.some(p => p.id === full.id) ? prev : [full, ...prev]);
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "likes" }, (payload) => {
+        const pid = (payload.new as any)?.post_id;
+        if (pid) setPosts(prev => prev.map(p => p.id === pid ? { ...p, likes_count: p.likes_count + 1 } : p));
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "likes" }, (payload) => {
+        const pid = (payload.old as any)?.post_id;
+        if (pid) setPosts(prev => prev.map(p => p.id === pid ? { ...p, likes_count: Math.max(0, p.likes_count - 1) } : p));
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "comments" }, (payload) => {
+        const pid = (payload.new as any)?.post_id;
+        if (pid) setPosts(prev => prev.map(p => p.id === pid ? { ...p, comments_count: p.comments_count + 1 } : p));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [companyId, user?.id]);
+
+  // ── Product helpers ────────────────────────────────────────────────────────
+  const resetForm = () => { setPName(""); setPDesc(""); setPPrice(""); setPCat("produto"); setPImg(null); setPImgChanged(false); setEditingProduct(null); };
+  const openEdit  = (p: LocalProduct) => { setEditingProduct(p); setPName(p.name); setPDesc(p.desc ?? ""); setPPrice(p.price ?? ""); setPCat(p.cat); setPImg(p.image_url ?? null); setPImgChanged(false); setShowProductForm(true); };
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") { Alert.alert("Permissão necessária", "Precisamos de acesso à sua galeria."); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+    if (!result.canceled && result.assets[0]) { setPImg(result.assets[0].uri); setPImgChanged(true); }
+  };
+
+  const handleSaveProduct = async () => {
+    if (!pName.trim()) { Alert.alert("Atenção", "Informe o nome do produto."); return; }
+    setSavingProduct(true);
+    try {
+      let imageUrl: string | null | undefined = undefined;
+      if (pImgChanged && pImg) {
+        setUploadingImg(true);
+        try { const u = await uploadProductImage(editingProduct?.id ?? `tmp-${Date.now()}`, pImg); if (u) imageUrl = u; } finally { setUploadingImg(false); }
+      }
+      if (editingProduct) {
+        const ok = await updateCompanyProduct(editingProduct.id, { name: pName.trim(), description: pDesc || null, price: pPrice || null, category: pCat, ...(imageUrl !== undefined ? { image_url: imageUrl } : {}) });
+        if (ok) setProducts(prev => prev.map(p => p.id === editingProduct.id ? { ...p, name: pName, desc: pDesc, price: pPrice, cat: pCat, image_url: imageUrl !== undefined ? imageUrl : p.image_url } : p));
+        else Alert.alert("Erro", "Não foi possível atualizar o produto.");
+      } else {
+        const created = await createCompanyProduct({ company_id: companyId, name: pName.trim(), description: pDesc || null, price: pPrice || null, category: pCat, image_url: imageUrl ?? null });
+        if (created) setProducts(prev => [toLocalProduct(created), ...prev]);
+        else Alert.alert("Erro", "Não foi possível criar o produto.");
+      }
+      resetForm(); setShowProductForm(false);
+    } catch (e: unknown) { Alert.alert("Erro", friendlyErrorMessage(e)); } finally { setSavingProduct(false); }
+  };
+
+  const handleDeleteProduct = (productId: string) => {
+    Alert.alert("Remover produto", "Deseja remover este produto?", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Remover", style: "destructive", onPress: async () => {
+        setDeletingId(productId);
+        try { const ok = await deleteCompanyProduct(productId); if (ok) setProducts(prev => prev.filter(x => x.id !== productId)); else Alert.alert("Erro", "Não foi possível remover."); }
+        catch (e: unknown) { Alert.alert("Erro", friendlyErrorMessage(e)); } finally { setDeletingId(null); }
+      }},
+    ]);
+  };
+
+  const handleLikePost = async (post: Post) => {
+    if (!user?.id) return;
+    const wasLiked = post.is_liked ?? false;
+    const prevCount = post.likes_count;
+    setPosts(prev => prev.map(p => p.id === post.id ? { ...p, is_liked: !wasLiked, likes_count: wasLiked ? p.likes_count - 1 : p.likes_count + 1 } : p));
+    try {
+      const ok = await toggleLike(post.id, user.id, wasLiked, activeCompany?.id);
+      if (!ok) { setPosts(prev => prev.map(p => p.id === post.id ? { ...p, is_liked: wasLiked, likes_count: prevCount } : p)); Alert.alert("Erro", "Não foi possível curtir."); }
+    } catch (e: unknown) { setPosts(prev => prev.map(p => p.id === post.id ? { ...p, is_liked: wasLiked, likes_count: prevCount } : p)); }
+  };
+
+  const handleBookmarkPost = async (post: Post) => {
+    if (!user?.id) return;
+    const wasBookmarked = post.is_bookmarked ?? false;
+    setPosts(prev => prev.map(p => p.id === post.id ? { ...p, is_bookmarked: !wasBookmarked } : p));
+    await toggleBookmark(post.id, user.id, wasBookmarked);
+  };
+
+  // ── Derived ────────────────────────────────────────────────────────────────
+  const catCounts: Record<string, number> = {};
+  products.forEach(p => { catCounts[p.cat] = (catCounts[p.cat] ?? 0) + 1; });
+  const filteredProducts = products.filter(p => {
+    if (filterCat !== "todos" && p.cat !== filterCat) return false;
+    if (productSearch && !p.name.toLowerCase().includes(productSearch.toLowerCase())) return false;
+    return true;
+  });
+
+  const companyName    = companyPage?.name      ?? "Empresa";
+  const companyIndustry = companyPage?.industry  ?? null;
+  const companyBio     = companyPage?.bio        ?? null;
+  const companyLogo    = companyPage?.avatar_url ?? null;
+  const nameInitial    = companyName.charAt(0).toUpperCase();
+
+  if (companyLoading) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
         <ActivityIndicator size="large" color={colors.gold} />
@@ -82,17 +304,25 @@ function EmpresaProfileProxy({
     );
   }
 
-  const c = company;
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ paddingBottom: bottomPad }}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Header */}
-      <View style={{ paddingTop: topPad + 14, paddingHorizontal: 16, paddingBottom: 14, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <Text style={{ fontSize: 18, fontWeight: "800", color: colors.navy }}>Modo Empresa</Text>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* ── Header (no back button) ── */}
+      <View style={{ paddingTop: topPad + 14, paddingHorizontal: 16, paddingBottom: 14, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+          {companyLogo ? (
+            <Image source={{ uri: companyLogo }} style={{ width: 28, height: 28, borderRadius: 6 }} />
+          ) : (
+            <View style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 13, fontWeight: "800", color: colors.gold }}>{nameInitial}</Text>
+            </View>
+          )}
+          <Text style={{ fontSize: 18, fontWeight: "700", color: colors.navy, flex: 1 }} numberOfLines={1}>{companyName}</Text>
+        </View>
+        {isManager ? (
+          <TouchableOpacity style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.gold, alignItems: "center", justifyContent: "center" }} onPress={() => setShowFab(true)}>
+            <Feather name="plus" size={18} color="#fff" />
+          </TouchableOpacity>
+        ) : (
           <TouchableOpacity
             style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}
             onPress={() => setActiveCompany(null)}
@@ -100,64 +330,282 @@ function EmpresaProfileProxy({
             <Feather name="user" size={13} color={colors.mutedForeground} />
             <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Perfil pessoal</Text>
           </TouchableOpacity>
+        )}
+      </View>
+
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
+        {/* ── Company card ── */}
+        <View style={{ padding: 20, alignItems: "center", gap: 10, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: "#fff" }}>
+          {companyLogo ? (
+            <Image source={{ uri: companyLogo }} style={{ width: 80, height: 80, borderRadius: 12 }} />
+          ) : (
+            <View style={{ width: 80, height: 80, borderRadius: 12, backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 32, fontWeight: "800", color: colors.gold }}>{nameInitial}</Text>
+            </View>
+          )}
+          <Text style={{ fontSize: 22, fontWeight: "800", color: colors.navy }}>{companyName}</Text>
+          {companyIndustry ? (
+            <View style={{ backgroundColor: colors.gold + "18", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 }}>
+              <Text style={{ fontSize: 13, fontWeight: "600", color: colors.gold }}>{companyIndustry}</Text>
+            </View>
+          ) : null}
+          {companyBio ? <Text style={{ fontSize: 14, lineHeight: 20, textAlign: "center", color: colors.foreground }}>{companyBio}</Text> : null}
+
+          {isManager ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, width: "100%" }}>
+              <View style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, borderRadius: 20, backgroundColor: colors.navy + "12" }}>
+                <Feather name={userRole === "owner" ? "shield" : "user-check"} size={12} color={colors.navy} />
+                <Text style={{ fontSize: 12, fontWeight: "600", color: colors.navy }}>
+                  {userRole === "owner" ? "Proprietário" : userRole === "editor" ? "Editor" : userRole === "moderador" ? "Moderador" : "Admin"}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20, backgroundColor: colors.gold }}
+                onPress={() => router.push(`/manage-business-page?id=${companyId}` as any)}
+              >
+                <Feather name="settings" size={13} color="#fff" />
+                <Text style={{ color: "#fff", fontSize: 13, fontWeight: "700" }}>Gerenciar</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </View>
 
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
-          <Avatar uri={c?.avatar_url} name={c?.name ?? "Empresa"} size={72} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 20, fontWeight: "800", color: colors.navy }}>{c?.name ?? "Empresa"}</Text>
-            {!!c?.industry && <Text style={{ fontSize: 13, color: colors.gold, fontWeight: "600", marginTop: 2 }}>{c.industry}</Text>}
-            {!!c?.location && <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 2 }}>{c.location}</Text>}
+        {/* ── Tabs ── */}
+        <View style={{ flexDirection: "row", borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: "#fff" }}>
+          {([
+            { key: "publicacoes" as EmpresaTabKey, label: "PUBLICAÇÕES" },
+            { key: "portfolio"   as EmpresaTabKey, label: "PORTIFÓLIO" },
+            ...(isManager ? [{ key: "painel" as EmpresaTabKey, label: "PAINEL" }] : []),
+          ]).map(t => (
+            <TouchableOpacity
+              key={t.key}
+              style={{ flex: 1, alignItems: "center", paddingVertical: 14, borderBottomWidth: activeTab === t.key ? 2 : 0, borderBottomColor: colors.gold }}
+              onPress={() => setActiveTab(t.key)}
+            >
+              <Text style={{ fontSize: 11, fontWeight: "800", letterSpacing: 0.5, color: activeTab === t.key ? colors.gold : colors.mutedForeground }}>{t.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* ── Publicações ── */}
+        {activeTab === "publicacoes" && (
+          <View>
+            {postsLoading ? <ActivityIndicator color={colors.gold} style={{ marginTop: 40 }} /> :
+             posts.length === 0 ? (
+              <View style={{ alignItems: "center", paddingVertical: 48, gap: 10 }}>
+                <Feather name="file-text" size={32} color={colors.mutedForeground} />
+                <Text style={{ fontSize: 13, color: colors.mutedForeground }}>Nenhuma publicação ainda</Text>
+              </View>
+            ) : posts.map(post => (
+              <View key={post.id} style={{ backgroundColor: "#fff", padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 10 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  {companyLogo ? <Image source={{ uri: companyLogo }} style={{ width: 40, height: 40, borderRadius: 20 }} /> :
+                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" }}><Text style={{ fontSize: 16, fontWeight: "800", color: colors.gold }}>{nameInitial}</Text></View>}
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: "700", color: colors.navy }}>{companyName}</Text>
+                    <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{new Date(post.created_at).toLocaleDateString("pt-BR")}</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 14, lineHeight: 21, color: colors.foreground }}>{post.content}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 20, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border }}>
+                  <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5 }} onPress={() => handleLikePost(post)}>
+                    <Feather name="heart" size={17} color={post.is_liked ? "#e11d48" : colors.mutedForeground} />
+                    <Text style={{ fontSize: 13, color: post.is_liked ? "#e11d48" : colors.mutedForeground }}>{post.likes_count}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                    <Feather name="message-circle" size={17} color={colors.mutedForeground} />
+                    <Text style={{ fontSize: 13, color: colors.mutedForeground }}>{post.comments_count}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5 }} onPress={() => handleBookmarkPost(post)}>
+                    <Feather name="bookmark" size={17} color={post.is_bookmarked ? colors.gold : colors.mutedForeground} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5, marginLeft: "auto" as any }} onPress={() => router.push(`/post/${post.id}` as any)}>
+                    <Feather name="external-link" size={17} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
           </View>
-        </View>
-
-        {!!c?.bio && (
-          <Text style={{ fontSize: 14, color: colors.foreground, marginTop: 12, lineHeight: 20 }}>{c.bio}</Text>
         )}
 
-        <View style={{ flexDirection: "row", marginTop: 16, gap: 8 }}>
-          <TouchableOpacity
-            style={{ flex: 1, backgroundColor: colors.gold, paddingVertical: 10, borderRadius: 10, alignItems: "center" }}
-            onPress={() => router.push(`/empresa/${companyId}` as any)}
-          >
-            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>Ver Perfil Completo</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={{ paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: "center" }}
-            onPress={() => router.push(`/manage-business-page?id=${companyId}` as any)}
-          >
-            <Feather name="edit-2" size={16} color={colors.navy} />
-          </TouchableOpacity>
-        </View>
-      </View>
+        {/* ── Portfólio ── */}
+        {activeTab === "portfolio" && (
+          <View style={{ padding: 16, rowGap: 14 }}>
+            {isManager ? (
+              <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 13, borderRadius: 10, backgroundColor: colors.gold }}
+                onPress={() => { resetForm(); setShowProductForm(true); }}>
+                <Feather name="plus" size={16} color="#fff" />
+                <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>Adicionar Produto</Text>
+              </TouchableOpacity>
+            ) : null}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: "#fff" }}>
+              <Feather name="search" size={14} color={colors.mutedForeground} />
+              <TextInput style={{ flex: 1, fontSize: 14, color: colors.foreground }} placeholder="Buscar produto..." placeholderTextColor={colors.mutedForeground} value={productSearch} onChangeText={setProductSearch} />
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {EMPRESA_SORT_OPTIONS.map(s => (
+                <TouchableOpacity key={s.key} style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, backgroundColor: sortBy === s.key ? colors.gold : "#fff", borderColor: sortBy === s.key ? colors.gold : colors.border }} onPress={() => setSortBy(s.key)}>
+                  <Text style={{ fontSize: 13, color: sortBy === s.key ? "#fff" : colors.mutedForeground }}>{s.label}</Text>
+                </TouchableOpacity>
+              ))}
+              <View style={{ width: 1, marginHorizontal: 4, backgroundColor: colors.border }} />
+              {([{ key: "todos" as const, label: "Todos" }, ...EMPRESA_PRODUCT_CATS.filter(c => catCounts[c.key])]).map(c => (
+                <TouchableOpacity key={c.key} style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, backgroundColor: filterCat === c.key ? colors.navy + "18" : "#fff", borderColor: colors.border }} onPress={() => setFilterCat(c.key as any)}>
+                  <Text style={{ fontSize: 13, color: colors.navy }}>{c.label}{c.key !== "todos" && catCounts[c.key] ? ` (${catCounts[c.key]})` : ""}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            {productsLoading ? <ActivityIndicator color={colors.gold} style={{ marginTop: 20 }} /> :
+             filteredProducts.length === 0 ? (
+              <View style={{ alignItems: "center", paddingVertical: 40, gap: 10 }}>
+                <Feather name="package" size={32} color={colors.border} />
+                <Text style={{ fontSize: 14, color: colors.mutedForeground }}>Nenhum produto cadastrado</Text>
+              </View>
+            ) : filteredProducts.map(p => (
+              <TouchableOpacity key={p.id} style={{ flexDirection: "row", borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: "hidden", backgroundColor: "#fff" }}
+                onPress={() => !isManager && setSelectedProduct(p)} activeOpacity={isManager ? 1 : 0.75}>
+                <View style={{ width: 90, height: 90, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
+                  {p.image_url ? <Image source={{ uri: p.image_url }} style={{ width: 90, height: 90 }} /> : <Feather name="package" size={28} color={colors.border} />}
+                </View>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: colors.navy, flexShrink: 1, padding: 10, paddingBottom: 0 }} numberOfLines={2}>{p.name}</Text>
+                  <View style={{ marginHorizontal: 10, alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10, backgroundColor: colors.gold + "18" }}>
+                    <Text style={{ fontSize: 11, fontWeight: "600", color: colors.gold }}>{EMPRESA_PRODUCT_CATS.find(c => c.key === p.cat)?.label}</Text>
+                  </View>
+                  {p.price ? <Text style={{ fontSize: 14, fontWeight: "700", color: colors.gold, paddingHorizontal: 10 }}>{p.price}</Text> : null}
+                  {isManager ? (
+                    <View style={{ flexDirection: "row", gap: 16, paddingHorizontal: 10, paddingBottom: 10, paddingTop: 4 }}>
+                      <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5 }} onPress={() => openEdit(p)}>
+                        <Feather name="edit-2" size={14} color={colors.navy} /><Text style={{ fontSize: 13, color: colors.navy }}>Editar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5, opacity: deletingId === p.id ? 0.5 : 1 }} onPress={() => handleDeleteProduct(p.id)} disabled={!!deletingId}>
+                        {deletingId === p.id ? <ActivityIndicator size={14} color="#dc2626" /> : <Feather name="trash-2" size={14} color="#dc2626" />}
+                        <Text style={{ fontSize: 13, color: "#dc2626" }}>{deletingId === p.id ? "Removendo..." : "Remover"}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : <Text style={{ fontSize: 13, color: colors.gold, marginTop: 4, paddingHorizontal: 10 }}>Ver detalhes →</Text>}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
-      {/* Quick actions */}
-      <View style={{ padding: 16, gap: 10 }}>
-        <Text style={{ fontSize: 13, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Ações rápidas</Text>
-        {[
-          { icon: "briefcase", label: "Publicações", sub: `${postCount} posts`, onPress: () => router.push(`/empresa/${companyId}` as any) },
-          { icon: "grid",      label: "Portfólio",   sub: "Produtos e serviços", onPress: () => router.push(`/empresa/${companyId}` as any) },
-          { icon: "bar-chart-2", label: "Analytics", sub: "Visualizações e engajamento", onPress: () => router.push(`/empresa/${companyId}` as any) },
-          { icon: "plus-circle", label: "Nova Vaga / Anúncio", sub: "Publicar oportunidade", onPress: () => router.push("/new-opportunity" as any) },
-          { icon: "calendar",  label: "Criar Evento", sub: "Organizar um evento", onPress: () => router.push("/new-event" as any) },
-        ].map(item => (
-          <TouchableOpacity
-            key={item.label}
-            style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 14, backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: colors.border }}
-            onPress={item.onPress}
-          >
-            <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: colors.gold + "18", alignItems: "center", justifyContent: "center" }}>
-              <Feather name={item.icon as any} size={18} color={colors.gold} />
+        {/* ── Painel ── */}
+        {activeTab === "painel" && isManager && (
+          <View style={{ padding: 16, gap: 16 }}>
+            <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 12, backgroundColor: colors.navy }}
+              onPress={() => router.push(`/manage-business-page?id=${companyId}` as any)}>
+              <Feather name="settings" size={16} color="#fff" />
+              <Text style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: "700" }}>Gerenciar Página da Empresa</Text>
+              <Feather name="chevron-right" size={16} color="#fff" />
+            </TouchableOpacity>
+
+            {/* Voltar ao perfil pessoal */}
+            <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: "#fff" }}
+              onPress={() => setActiveCompany(null)}>
+              <Feather name="user" size={16} color={colors.navy} />
+              <Text style={{ flex: 1, color: colors.navy, fontSize: 14, fontWeight: "700" }}>Voltar ao perfil pessoal</Text>
+              <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+            </TouchableOpacity>
+
+            <View style={{ borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 16, gap: 14, backgroundColor: "#fff" }}>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.navy }}>Resumo da Empresa</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                {[
+                  { label: "Seguidores",    value: followersCount,   icon: "users" },
+                  { label: "Publicações",   value: posts.length,     icon: "file-text" },
+                  { label: "Visitas (7d)",  value: viewsCount,       icon: "eye" },
+                  { label: "Engajamento",   value: engagementCount,  icon: "heart" },
+                  { label: "Vagas abertas", value: vacanciesCount,   icon: "briefcase" },
+                  { label: "Marketplace",   value: marketCount,      icon: "shopping-bag" },
+                ].map(stat => (
+                  <View key={stat.label} style={{ width: "46%", padding: 14, alignItems: "center", gap: 6, backgroundColor: colors.background, borderRadius: 10 }}>
+                    <Feather name={stat.icon as any} size={20} color={colors.gold} />
+                    <Text style={{ fontSize: 24, fontWeight: "800", color: colors.navy }}>{stat.value === null ? "—" : String(stat.value)}</Text>
+                    <Text style={{ fontSize: 12, textAlign: "center", color: colors.mutedForeground }}>{stat.label}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.navy }}>{item.label}</Text>
-              <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>{item.sub}</Text>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Product Form Modal */}
+      <Modal visible={showProductForm} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowProductForm(false)}>
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: "#fff" }}>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: colors.navy }}>{editingProduct ? "Editar Produto" : "Adicionar Produto"}</Text>
+            <TouchableOpacity onPress={() => setShowProductForm(false)}><Feather name="x" size={22} color={colors.navy} /></TouchableOpacity>
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, rowGap: 14 }}>
+            <TextInput style={{ borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }} placeholder="Nome do produto" placeholderTextColor={colors.mutedForeground} value={pName} onChangeText={setPName} />
+            <TextInput style={{ borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, height: 80, textAlignVertical: "top", backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }} placeholder="Descrição" placeholderTextColor={colors.mutedForeground} value={pDesc} onChangeText={setPDesc} multiline textAlignVertical="top" />
+            <TextInput style={{ borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }} placeholder="Preço (ex: R$ 150,00)" placeholderTextColor={colors.mutedForeground} value={pPrice} onChangeText={setPPrice} />
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {EMPRESA_PRODUCT_CATS.map(c => (
+                <TouchableOpacity key={c.key} style={{ borderWidth: 1, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: pCat === c.key ? colors.gold : "#fff", borderColor: pCat === c.key ? colors.gold : colors.border }} onPress={() => setPCat(c.key)}>
+                  <Text style={{ fontSize: 13, color: pCat === c.key ? "#fff" : colors.foreground }}>{c.label}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
-            <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-          </TouchableOpacity>
-        ))}
-      </View>
-    </ScrollView>
+            <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14 }} onPress={pickImage} disabled={uploadingImg}>
+              {pImg ? <Image source={{ uri: pImg }} style={{ width: 36, height: 36, borderRadius: 6 }} /> : <Feather name="image" size={16} color={colors.mutedForeground} />}
+              <Text style={{ fontSize: 14, color: colors.mutedForeground }}>{pImg ? "Trocar foto" : "Adicionar foto"}</Text>
+            </TouchableOpacity>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <TouchableOpacity style={{ flex: 1, alignItems: "center", paddingVertical: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.border }} onPress={() => { resetForm(); setShowProductForm(false); }}>
+                <Text style={{ fontSize: 15, color: colors.foreground }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={{ flex: 1, alignItems: "center", paddingVertical: 14, borderRadius: 10, backgroundColor: savingProduct ? colors.gold + "88" : colors.gold }} onPress={handleSaveProduct} disabled={savingProduct}>
+                <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>{savingProduct ? "Salvando..." : "Salvar"}</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Product detail modal */}
+      <Modal visible={!!selectedProduct} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSelectedProduct(null)}>
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: "#fff" }}>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: colors.navy }} numberOfLines={1}>{selectedProduct?.name ?? ""}</Text>
+            <TouchableOpacity onPress={() => setSelectedProduct(null)}><Feather name="x" size={22} color={colors.navy} /></TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
+            {selectedProduct?.image_url && <Image source={{ uri: selectedProduct.image_url }} style={{ width: "100%", height: 220, borderRadius: 12 }} resizeMode="cover" />}
+            <View style={{ gap: 8 }}>
+              {selectedProduct?.cat && (
+                <View style={{ alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10, backgroundColor: colors.gold + "18" }}>
+                  <Text style={{ fontSize: 11, fontWeight: "600", color: colors.gold }}>{EMPRESA_PRODUCT_CATS.find(c => c.key === selectedProduct.cat)?.label}</Text>
+                </View>
+              )}
+              {selectedProduct?.price && <Text style={{ fontSize: 20, fontWeight: "700", color: colors.gold }}>{selectedProduct.price}</Text>}
+              {selectedProduct?.desc && <Text style={{ fontSize: 14, color: colors.foreground, lineHeight: 22 }}>{selectedProduct.desc}</Text>}
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* FAB menu */}
+      <Modal visible={showFab} transparent animationType="fade" onRequestClose={() => setShowFab(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.2)", justifyContent: "flex-start", alignItems: "flex-end", paddingTop: topPad + 60, paddingRight: 16 }} onPress={() => setShowFab(false)}>
+          <View style={{ borderRadius: 14, overflow: "hidden", elevation: 8, shadowOpacity: 0.15, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, minWidth: 180, backgroundColor: "#fff" }}>
+            <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14 }} onPress={() => { setShowFab(false); router.push("/create-post" as any); }}>
+              <Feather name="file-text" size={16} color={colors.navy} /><Text style={{ fontSize: 14, fontWeight: "500", color: colors.navy }}>Nova Publicação</Text>
+            </TouchableOpacity>
+            <View style={{ height: 1, backgroundColor: colors.border }} />
+            <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14 }} onPress={() => { setShowFab(false); resetForm(); setShowProductForm(true); }}>
+              <Feather name="package" size={16} color={colors.navy} /><Text style={{ fontSize: 14, fontWeight: "500", color: colors.navy }}>Novo Produto</Text>
+            </TouchableOpacity>
+            <View style={{ height: 1, backgroundColor: colors.border }} />
+            <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14 }} onPress={() => { setShowFab(false); setActiveCompany(null); }}>
+              <Feather name="user" size={16} color={colors.navy} /><Text style={{ fontSize: 14, fontWeight: "500", color: colors.navy }}>Perfil pessoal</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+    </View>
   );
 }
 
@@ -253,15 +701,6 @@ export default function ProfileScreen() {
   useFocusEffect(useCallback(() => { refreshCompanyPages(); }, [refreshCompanyPages]));
   // Also reload when switching identity (activeCompany change)
   useEffect(() => { refreshCompanyPages(); }, [refreshCompanyPages, activeCompany]);
-  // Go directly to the empresa profile page — skip the "Modo Empresa" intermediary screen
-  const didRedirectRef = useRef(false);
-  useFocusEffect(useCallback(() => {
-    if (activeCompany?.id && !didRedirectRef.current) {
-      didRedirectRef.current = true;
-      router.push(`/empresa/${activeCompany.id}` as any);
-    }
-    return () => { didRedirectRef.current = false; };
-  }, [activeCompany?.id]));
 
   // Realtime: remove accepted connections from suggestions
   useEffect(() => {
@@ -442,7 +881,7 @@ export default function ProfileScreen() {
   const wineTotal    = wineEntries.length;
 
   if (activeCompany) {
-    return <EmpresaProfileProxy companyId={activeCompany.id} colors={colors} router={router} insets={insets} topPad={topPad} bottomPad={bottomPad} />;
+    return <EmpresaTabPage companyId={activeCompany.id} topPad={topPad} bottomPad={bottomPad} />;
   }
 
   if (profile?.profile_type === "empresa") {
