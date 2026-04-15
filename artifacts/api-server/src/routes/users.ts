@@ -38,51 +38,86 @@ router.delete("/users/me", async (req: Request, res: Response) => {
   }
 
   const userId = userData.user.id;
+  const storageWarnings: string[] = [];
 
-  // Explicitly delete / anonymize all user data before removing the auth record.
-  // Order matters: delete child rows before parent rows to avoid FK violations.
-  // Failures are logged but do not abort the deletion — the auth.users cascade
-  // will clean up any remaining FK-linked rows.
-  await Promise.allSettled([
+  // ── 1. Delete Storage objects ────────────────────────────────────────────
+  // All user-owned media is stored under a {userId}/ prefix in each bucket.
+  // We list each bucket folder and bulk-delete before removing the auth record.
+  const STORAGE_BUCKETS = ["avatars", "post-images", "post-videos", "stories"] as const;
+  await Promise.all(
+    STORAGE_BUCKETS.map(async (bucket) => {
+      try {
+        const { data: files, error: listErr } = await supabaseAdmin.storage
+          .from(bucket)
+          .list(userId, { limit: 1000 });
+        if (listErr) {
+          storageWarnings.push(`list ${bucket}: ${listErr.message}`);
+          return;
+        }
+        if (!files || files.length === 0) return;
+        const paths = files.map((f: { name: string }) => `${userId}/${f.name}`);
+        const { error: removeErr } = await supabaseAdmin.storage
+          .from(bucket)
+          .remove(paths);
+        if (removeErr) {
+          storageWarnings.push(`remove ${bucket}: ${removeErr.message}`);
+        }
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        storageWarnings.push(`${bucket}: ${msg}`);
+      }
+    })
+  );
+
+  // ── 2. Delete database rows (fail-logged; CASCADE handles any leftovers) ─
+  // Leaf rows first to avoid FK constraint violations.
+  const dbResults = await Promise.allSettled([
     supabaseAdmin.from("comment_likes").delete().eq("user_id", userId),
     supabaseAdmin.from("likes").delete().eq("user_id", userId),
     supabaseAdmin.from("bookmarks").delete().eq("user_id", userId),
     supabaseAdmin.from("notification_preferences").delete().eq("user_id", userId),
-  ]);
-
-  await Promise.allSettled([
-    supabaseAdmin.from("comments").delete().eq("user_id", userId),
-    supabaseAdmin.from("stories").delete().eq("user_id", userId),
     supabaseAdmin.from("wine_cellar").delete().eq("user_id", userId),
     supabaseAdmin.from("post_hidden").delete().eq("user_id", userId),
     supabaseAdmin.from("user_blocks").delete().or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`),
-  ]);
-
-  await Promise.allSettled([
+    supabaseAdmin.from("comments").delete().eq("user_id", userId),
+    supabaseAdmin.from("stories").delete().eq("user_id", userId),
     supabaseAdmin.from("posts").delete().eq("user_id", userId),
   ]);
+  const dbWarnings = dbResults
+    .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+    .map((r) => String(r.reason));
 
-  // Anonymize profile before auth user deletion
-  await supabaseAdmin
+  // ── 3. Anonymize profile ─────────────────────────────────────────────────
+  const { error: profileErr } = await supabaseAdmin
     .from("profiles")
     .update({
       full_name: "Conta Removida",
-      username: null,
-      bio: null,
+      username:  null,
+      bio:       null,
       avatar_url: null,
-      headline: null,
-      location: null,
-      phone: null,
+      headline:  null,
+      location:  null,
+      phone:     null,
     })
     .eq("id", userId);
 
+  if (profileErr) {
+    // Non-fatal — CASCADE will remove the profile row when auth user is deleted.
+    storageWarnings.push(`profile anonymize: ${profileErr.message}`);
+  }
+
+  // ── 4. Delete auth user (CASCADE handles remaining FK rows) ──────────────
   const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
   if (deleteError) {
     res.status(500).json({ error: deleteError.message ?? "Failed to delete user" });
     return;
   }
 
-  res.status(200).json({ success: true });
+  const allWarnings = [...storageWarnings, ...dbWarnings];
+  res.status(200).json({
+    success: true,
+    ...(allWarnings.length > 0 ? { warnings: allWarnings } : {}),
+  });
 });
 
 /**

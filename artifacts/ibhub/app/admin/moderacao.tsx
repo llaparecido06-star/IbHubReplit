@@ -16,6 +16,7 @@ import AdminDrawer from "@/components/AdminDrawer";
 import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
 import type { AppReport } from "@/services/api";
+import { banUser, shadowbanUser } from "@/services/admin-api";
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -94,6 +95,64 @@ export default function AdminModeracaoScreen() {
     setActionLoading(null);
   };
 
+  const handleBanReportedUser = async (report: AppReport) => {
+    if (!report.reported_user_id) return;
+    const name = report.reported_user?.full_name ?? report.reported_user_id.slice(0, 8);
+    Alert.alert(
+      "Banir usuário",
+      `Banir ${name}? O usuário perderá acesso imediatamente.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Banir",
+          style: "destructive",
+          onPress: async () => {
+            setActionLoading(report.id);
+            try {
+              await banUser(report.reported_user_id!, true);
+              await API.updateReportStatus(report.id, "approved");
+              setReports((prev) => prev.filter((r) => r.id !== report.id));
+              Alert.alert("Sucesso", `${name} foi banido.`);
+            } catch (e: unknown) {
+              Alert.alert("Erro", e instanceof Error ? e.message : "Não foi possível banir o usuário.");
+            } finally {
+              setActionLoading(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleShadowbanReportedUser = async (report: AppReport) => {
+    if (!report.reported_user_id) return;
+    const name = report.reported_user?.full_name ?? report.reported_user_id.slice(0, 8);
+    Alert.alert(
+      "Shadowban",
+      `Aplicar shadowban em ${name}? Seus posts ficarão invisíveis para outros usuários.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Shadowban",
+          style: "destructive",
+          onPress: async () => {
+            setActionLoading(report.id);
+            try {
+              await shadowbanUser(report.reported_user_id!, true);
+              await API.updateReportStatus(report.id, "approved");
+              setReports((prev) => prev.filter((r) => r.id !== report.id));
+              Alert.alert("Sucesso", `Shadowban aplicado em ${name}.`);
+            } catch (e: unknown) {
+              Alert.alert("Erro", e instanceof Error ? e.message : "Não foi possível aplicar shadowban.");
+            } finally {
+              setActionLoading(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
@@ -134,72 +193,121 @@ export default function AdminModeracaoScreen() {
             <Text style={[{ fontSize: 13, color: colors.mutedForeground }]}>
               {reports.length} denúncia{reports.length !== 1 ? "s" : ""} pendente{reports.length !== 1 ? "s" : ""}
             </Text>
-            {reports.map((report) => (
-              <View key={report.id} style={[styles.reportCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-                <View style={styles.reportCardHeader}>
-                  <View style={[styles.flagIcon, { backgroundColor: "#fef2f2" }]}>
-                    <Feather name="flag" size={14} color="#dc2626" />
+            {reports.map((report) => {
+              const isUserReport = !!report.reported_user_id && !report.post_id;
+              const isLoading = actionLoading === report.id;
+              return (
+                <View key={report.id} style={[styles.reportCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                  <View style={styles.reportCardHeader}>
+                    <View style={[styles.flagIcon, { backgroundColor: isUserReport ? "#fffbeb" : "#fef2f2" }]}>
+                      <Feather name={isUserReport ? "user-x" : "flag"} size={14} color={isUserReport ? "#d97706" : "#dc2626"} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.reportReason, { color: "#0d1b2a" }]} numberOfLines={1}>
+                        {report.reason}
+                      </Text>
+                      <Text style={[styles.reportMeta, { color: colors.mutedForeground }]}>
+                        {isUserReport ? "Denúncia de usuário · " : "Denúncia de post · "}{timeAgo(report.created_at)}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.reportReason, { color: "#0d1b2a" }]} numberOfLines={1}>
-                      {report.reason}
-                    </Text>
-                    <Text style={[styles.reportMeta, { color: colors.mutedForeground }]}>
-                      {timeAgo(report.created_at)}
-                    </Text>
-                  </View>
-                </View>
 
-                {report.post && (
-                  <View style={[styles.postPreview, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                    <Text style={[styles.postPreviewText, { color: "#374151" }]} numberOfLines={3}>
-                      {report.post.content ?? "(sem conteúdo)"}
-                    </Text>
-                    <Text style={[styles.postPreviewId, { color: colors.mutedForeground }]}>
-                      Post ID: {report.post_id.slice(0, 8)}…
-                    </Text>
-                  </View>
-                )}
+                  {isUserReport && report.reported_user && (
+                    <View style={[styles.postPreview, { backgroundColor: "#fffbeb", borderColor: "#fde68a" }]}>
+                      <Text style={[styles.postPreviewText, { color: "#374151", fontWeight: "600" }]}>
+                        Usuário denunciado: {report.reported_user.full_name ?? "—"}
+                      </Text>
+                      <Text style={[styles.postPreviewId, { color: colors.mutedForeground }]}>
+                        ID: {report.reported_user_id!.slice(0, 8)}…
+                      </Text>
+                    </View>
+                  )}
 
-                <Text style={[styles.reporterText, { color: colors.mutedForeground }]}>
-                  Denunciado por:{" "}
-                  <Text style={{ fontWeight: "600", color: "#374151" }}>
-                    {report.reporter?.full_name ?? report.reported_by.slice(0, 8)}
+                  {!isUserReport && report.post && (
+                    <View style={[styles.postPreview, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                      <Text style={[styles.postPreviewText, { color: "#374151" }]} numberOfLines={3}>
+                        {report.post.content ?? "(sem conteúdo)"}
+                      </Text>
+                      <Text style={[styles.postPreviewId, { color: colors.mutedForeground }]}>
+                        Post ID: {report.post_id!.slice(0, 8)}…
+                      </Text>
+                    </View>
+                  )}
+
+                  <Text style={[styles.reporterText, { color: colors.mutedForeground }]}>
+                    Denunciado por:{" "}
+                    <Text style={{ fontWeight: "600", color: "#374151" }}>
+                      {report.reporter?.full_name ?? report.reported_by.slice(0, 8)}
+                    </Text>
                   </Text>
-                </Text>
 
-                <View style={styles.reportActions}>
-                  <TouchableOpacity
-                    style={[styles.rejectBtn, { borderColor: colors.border }]}
-                    onPress={() => handleReject(report)}
-                    disabled={actionLoading === report.id}
-                  >
-                    {actionLoading === report.id ? (
-                      <ActivityIndicator size="small" color="#6b7280" />
-                    ) : (
+                  <View style={styles.reportActions}>
+                    <TouchableOpacity
+                      style={[styles.rejectBtn, { borderColor: colors.border }]}
+                      onPress={() => handleReject(report)}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <ActivityIndicator size="small" color="#6b7280" />
+                      ) : (
+                        <>
+                          <Feather name="x-circle" size={14} color="#6b7280" />
+                          <Text style={[styles.rejectBtnText, { color: "#6b7280" }]}>Ignorar</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+
+                    {isUserReport ? (
                       <>
-                        <Feather name="x-circle" size={14} color="#6b7280" />
-                        <Text style={[styles.rejectBtnText, { color: "#6b7280" }]}>Ignorar</Text>
+                        <TouchableOpacity
+                          style={[styles.approveBtn, { backgroundColor: "#d97706" }]}
+                          onPress={() => handleShadowbanReportedUser(report)}
+                          disabled={isLoading}
+                        >
+                          {isLoading ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                          ) : (
+                            <>
+                              <Feather name="eye-off" size={14} color="#fff" />
+                              <Text style={styles.approveBtnText}>Shadowban</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.approveBtn, { backgroundColor: "#dc2626" }]}
+                          onPress={() => handleBanReportedUser(report)}
+                          disabled={isLoading}
+                        >
+                          {isLoading ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                          ) : (
+                            <>
+                              <Feather name="slash" size={14} color="#fff" />
+                              <Text style={styles.approveBtnText}>Banir</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
                       </>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.approveBtn, { backgroundColor: "#dc2626" }]}
-                    onPress={() => handleApprove(report)}
-                    disabled={actionLoading === report.id}
-                  >
-                    {actionLoading === report.id ? (
-                      <ActivityIndicator size="small" color="#fff" />
                     ) : (
-                      <>
-                        <Feather name="trash-2" size={14} color="#fff" />
-                        <Text style={styles.approveBtnText}>Remover post</Text>
-                      </>
+                      <TouchableOpacity
+                        style={[styles.approveBtn, { backgroundColor: "#dc2626" }]}
+                        onPress={() => handleApprove(report)}
+                        disabled={isLoading}
+                      >
+                        {isLoading ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <>
+                            <Feather name="trash-2" size={14} color="#fff" />
+                            <Text style={styles.approveBtnText}>Remover post</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
                     )}
-                  </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         )}
       </ScrollView>

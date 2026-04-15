@@ -2108,13 +2108,15 @@ export interface AppReportReporter {
 
 export interface AppReport {
   id: string;
-  post_id: string;
+  post_id: string | null;
+  reported_user_id?: string | null;
   reported_by: string;
   reason: string;
   status: "pending" | "approved" | "rejected";
   created_at: string;
   reporter?: AppReportReporter | null;
   post?: AppReportPost | null;
+  reported_user?: AppReportReporter | null;
 }
 
 export async function createReport(params: {
@@ -2229,17 +2231,20 @@ export async function fetchPendingReports(): Promise<AppReport[]> {
   try {
     const { data, error } = await supabase
       .from("reports")
-      .select("id, post_id, reported_by, reason, status, created_at")
+      .select("id, post_id, reported_user_id, reported_by, reason, status, created_at")
       .eq("status", "pending")
       .order("created_at", { ascending: false });
 
     if (error || !data || data.length === 0) return [];
 
     const reporterIds = [...new Set((data as any[]).map(r => r.reported_by).filter(Boolean))];
+    const reportedUserIds = [...new Set((data as any[]).map(r => r.reported_user_id).filter(Boolean))];
     const postIds = [...new Set((data as any[]).map(r => r.post_id).filter(Boolean))];
 
+    const allProfileIds = [...new Set([...reporterIds, ...reportedUserIds])];
+
     const [profileMap, postsRes] = await Promise.all([
-      fetchCommentProfilesForIds(reporterIds),
+      fetchCommentProfilesForIds(allProfileIds),
       postIds.length > 0
         ? supabase.from("posts").select("id, content, user_id").in("id", postIds)
         : Promise.resolve({ data: [] }),
@@ -2248,8 +2253,9 @@ export async function fetchPendingReports(): Promise<AppReport[]> {
 
     return (data as any[]).map(r => ({
       ...r,
-      reporter: r.reported_by ? (profileMap.get(r.reported_by) ?? null) : null,
-      post: r.post_id ? (postMap.get(r.post_id) ?? null) : null,
+      reporter:      r.reported_by      ? (profileMap.get(r.reported_by)      ?? null) : null,
+      reported_user: r.reported_user_id ? (profileMap.get(r.reported_user_id) ?? null) : null,
+      post:          r.post_id          ? (postMap.get(r.post_id)              ?? null) : null,
     })) as unknown as AppReport[];
   } catch (e) {
     console.warn("fetchPendingReports:", e);
