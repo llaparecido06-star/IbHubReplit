@@ -61,7 +61,7 @@ export interface ModerationPost {
 export interface BroadcastParams {
   title: string;
   body: string;
-  segment: "all" | "profissional" | "empresarial" | "premium" | "basico";
+  segment: "all" | "gratuito" | "basico" | "profissional" | "empresarial" | "premium";
   deepLink?: string;
 }
 

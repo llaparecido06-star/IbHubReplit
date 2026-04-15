@@ -143,7 +143,8 @@ function MaintenanceGuard({ children }: { children: React.ReactNode }) {
   }, [manutencao, isLoading, loading, session, profile?.is_admin]);
 
   if (loading || isLoading) return null;
-  if (manutencao && !profile?.is_admin) {
+  // Only block authenticated non-admin users — unauthenticated users always reach login
+  if (manutencao && session && !profile?.is_admin) {
     return <MaintenancePage />;
   }
   return <>{children}</>;

@@ -1,6 +1,8 @@
-// expo-notifications was removed from Expo Go in SDK 53.
-// All functions below are no-op stubs that keep the app running in Expo Go.
-// In a production development build, replace this file with the real module.
+// Thin wrapper around expo-notifications that gracefully degrades in Expo Go
+// (expo-notifications is unavailable in Expo Go SDK 53+).
+// In real dev-client / production builds, real expo-notifications is used.
+
+import * as Notifications from "expo-notifications";
 
 type PermissionResult = { status: string };
 type Subscription = { remove: () => void };
@@ -14,40 +16,92 @@ type NotificationResponse = {
   };
 };
 
-export const getPermissionsAsync = (): Promise<PermissionResult> =>
-  Promise.resolve({ status: "unavailable" });
+export const getPermissionsAsync = async (): Promise<PermissionResult> => {
+  try {
+    return await Notifications.getPermissionsAsync();
+  } catch {
+    return { status: "unavailable" };
+  }
+};
 
-export const requestPermissionsAsync = (): Promise<PermissionResult> =>
-  Promise.resolve({ status: "denied" });
+export const requestPermissionsAsync = async (): Promise<PermissionResult> => {
+  try {
+    return await Notifications.requestPermissionsAsync();
+  } catch {
+    return { status: "denied" };
+  }
+};
 
-export const getExpoPushTokenAsync = (_options?: { projectId?: string }): Promise<{ data: string | null }> =>
-  Promise.resolve({ data: null });
+export const getExpoPushTokenAsync = async (
+  options?: { projectId?: string },
+): Promise<{ data: string | null }> => {
+  try {
+    const result = await Notifications.getExpoPushTokenAsync(options);
+    return { data: result.data ?? null };
+  } catch {
+    return { data: null };
+  }
+};
 
-export const scheduleNotificationAsync = (_config: unknown): Promise<string | null> =>
-  Promise.resolve(null);
-
-export const cancelAllScheduledNotificationsAsync = (): Promise<void> =>
-  Promise.resolve();
-
-export const setNotificationHandler = (_handler: unknown): void => {
-  // no-op in Expo Go
+export const getLastNotificationResponseAsync = async (): Promise<NotificationResponse | null> => {
+  try {
+    const response = await Notifications.getLastNotificationResponseAsync();
+    return response as NotificationResponse | null;
+  } catch {
+    return null;
+  }
 };
 
 export const addNotificationResponseReceivedListener = (
-  _handler: (response: NotificationResponse) => void,
+  handler: (response: NotificationResponse) => void,
 ): Subscription => {
-  return { remove: () => {} };
+  try {
+    return Notifications.addNotificationResponseReceivedListener(
+      handler as (response: Notifications.NotificationResponse) => void,
+    );
+  } catch {
+    return { remove: () => {} };
+  }
 };
 
 export const addNotificationReceivedListener = (
-  _handler: (notification: unknown) => void,
+  handler: (notification: unknown) => void,
 ): Subscription => {
-  return { remove: () => {} };
+  try {
+    return Notifications.addNotificationReceivedListener(
+      handler as (notification: Notifications.Notification) => void,
+    );
+  } catch {
+    return { remove: () => {} };
+  }
 };
 
-export const getLastNotificationResponseAsync = (): Promise<NotificationResponse | null> =>
-  Promise.resolve(null);
-
-export const SchedulableTriggerInputTypes: Record<string, string> = {
-  DATE: "date",
+export const setNotificationHandler = (
+  handler: Notifications.NotificationHandler | null,
+): void => {
+  try {
+    Notifications.setNotificationHandler(handler);
+  } catch {
+    // unavailable in Expo Go
+  }
 };
+
+export const scheduleNotificationAsync = async (_config: unknown): Promise<string | null> => {
+  try {
+    return await Notifications.scheduleNotificationAsync(
+      _config as Notifications.NotificationRequestInput,
+    );
+  } catch {
+    return null;
+  }
+};
+
+export const cancelAllScheduledNotificationsAsync = async (): Promise<void> => {
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+  } catch {
+    // unavailable in Expo Go
+  }
+};
+
+export const SchedulableTriggerInputTypes = Notifications.SchedulableTriggerInputTypes;

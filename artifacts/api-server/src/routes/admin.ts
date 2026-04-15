@@ -604,15 +604,22 @@ router.post("/admin/broadcast-push", async (req: Request, res: Response) => {
     .select("token, user_id, profiles!inner(plan)")
     .not("token", "is", null);
 
-  // Filter by plan if not "Todos os usuários"
+  // Filter by plan — clients pass the actual plan column value or "all"
+  // Accepts both English plan keys ("gratuito", "basico", etc.) and legacy Portuguese labels
   const planMap: Record<string, string> = {
-    "Gratuito": "free",
+    "gratuito": "gratuito",
+    "basico": "basico",
+    "profissional": "profissional",
+    "empresarial": "empresarial",
+    "premium": "premium",
+    // Legacy Portuguese label support (mobile admin screen)
+    "Gratuito": "gratuito",
     "Básico": "basico",
-    "Empresa": "empresa",
-    "Executivo": "executivo",
     "Profissional": "profissional",
+    "Empresa": "empresarial",
+    "Premium": "premium",
   };
-  if (segment && segment !== "Todos os usuários" && planMap[segment]) {
+  if (segment && segment !== "all" && segment !== "Todos os usuários" && planMap[segment]) {
     tokenQuery = tokenQuery.eq("profiles.plan", planMap[segment]);
   }
 

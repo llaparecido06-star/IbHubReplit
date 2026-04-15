@@ -11,10 +11,11 @@ const NAVY = "#0d1b2a";
 
 const SEGMENTS = [
   { key: "all", label: "Todos os usuários" },
+  { key: "gratuito", label: "Plano Gratuito" },
+  { key: "basico", label: "Plano Básico" },
   { key: "profissional", label: "Plano Profissional" },
   { key: "empresarial", label: "Plano Empresarial" },
   { key: "premium", label: "Plano Premium" },
-  { key: "basico", label: "Plano Básico" },
 ];
 
 export default function AdminNotificacoes() {
@@ -24,7 +25,7 @@ export default function AdminNotificacoes() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [deepLink, setDeepLink] = useState("");
-  const [segment, setSegment] = useState<"all" | "profissional" | "empresarial" | "premium" | "basico">("all");
+  const [segment, setSegment] = useState<"all" | "gratuito" | "basico" | "profissional" | "empresarial" | "premium">("all");
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ success: boolean; message?: string } | null>(null);
 
@@ -78,7 +79,7 @@ export default function AdminNotificacoes() {
                   <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Segmento de destinatários</label>
                   <select
                     value={segment}
-                    onChange={(e) => setSegment(e.target.value as "all" | "profissional" | "empresarial" | "premium" | "basico")}
+                    onChange={(e) => setSegment(e.target.value as "all" | "gratuito" | "basico" | "profissional" | "empresarial" | "premium")}
                     style={{ width: "100%", padding: "10px 12px", border: "1px solid #e8eaed", borderRadius: 10, fontSize: 14, outline: "none" }}
                   >
                     {SEGMENTS.map((s) => (

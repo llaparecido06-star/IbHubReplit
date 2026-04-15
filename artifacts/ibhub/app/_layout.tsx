@@ -226,12 +226,8 @@ function RootLayoutNav() {
 
     if (!session) {
       didNavigateIn.current = false;
-      // If maintenance mode is on and there's no session, show maintenance screen
-      if (manutencao) {
-        router.replace("/maintenance" as any);
-      } else {
-        router.replace("/(auth)/login" as any);
-      }
+      // Unauthenticated users always go to login (admins must be able to sign in)
+      router.replace("/(auth)/login" as any);
     } else if (needsProfileCompletion) {
       router.replace("/social-complete" as any);
     } else if (!didNavigateIn.current) {
