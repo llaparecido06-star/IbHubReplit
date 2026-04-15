@@ -107,6 +107,7 @@ export default function EmpresaScreen() {
   const [selectedProduct, setSelectedProduct] = useState<LocalProduct | null>(null);
   const [editingProduct, setEditingProduct]   = useState<LocalProduct | null>(null);
   const [savingProduct, setSavingProduct]     = useState(false);
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
 
   const [pName, setPName]   = useState("");
   const [pDesc, setPDesc]   = useState("");
@@ -345,6 +346,7 @@ export default function EmpresaScreen() {
       { text: "Cancelar", style: "cancel" },
       {
         text: "Remover", style: "destructive", onPress: async () => {
+          setDeletingProductId(productId);
           try {
             const ok = await deleteCompanyProduct(productId);
             if (ok) {
@@ -354,6 +356,8 @@ export default function EmpresaScreen() {
             }
           } catch (e: unknown) {
             Alert.alert("Erro", friendlyErrorMessage(e));
+          } finally {
+            setDeletingProductId(null);
           }
         },
       },
@@ -697,9 +701,17 @@ export default function EmpresaScreen() {
                           <Feather name="edit-2" size={14} color={colors.navy} />
                           <Text style={[styles.productActionText, { color: colors.navy }]}>Editar</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.productActionBtn} onPress={() => handleDeleteProduct(p.id)}>
-                          <Feather name="trash-2" size={14} color="#dc2626" />
-                          <Text style={[styles.productActionText, { color: "#dc2626" }]}>Remover</Text>
+                        <TouchableOpacity
+                          style={[styles.productActionBtn, deletingProductId === p.id && { opacity: 0.5 }]}
+                          onPress={() => handleDeleteProduct(p.id)}
+                          disabled={!!deletingProductId}
+                        >
+                          {deletingProductId === p.id
+                            ? <ActivityIndicator size={14} color="#dc2626" />
+                            : <Feather name="trash-2" size={14} color="#dc2626" />}
+                          <Text style={[styles.productActionText, { color: "#dc2626" }]}>
+                            {deletingProductId === p.id ? "Removendo..." : "Remover"}
+                          </Text>
                         </TouchableOpacity>
                       </View>
                     ) : (

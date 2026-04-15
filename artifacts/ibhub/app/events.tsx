@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
+  Alert,
   FlatList,
   Platform,
   Pressable,
@@ -63,9 +64,14 @@ export default function EventsScreen() {
   const toggleRSVP = async (id: string) => {
     if (loadingRsvpId) return;
     setLoadingRsvpId(id);
-    await new Promise<void>((resolve) => setTimeout(resolve, 350));
-    setEvents((prev) => prev.map((e) => e.id === id ? { ...e, is_rsvp: !e.is_rsvp, attendees: e.is_rsvp ? e.attendees - 1 : e.attendees + 1 } : e));
-    setLoadingRsvpId(null);
+    try {
+      await new Promise<void>((resolve) => setTimeout(resolve, 350));
+      setEvents((prev) => prev.map((e) => e.id === id ? { ...e, is_rsvp: !e.is_rsvp, attendees: e.is_rsvp ? e.attendees - 1 : e.attendees + 1 } : e));
+    } catch {
+      Alert.alert("Erro de Conexão", "Verifique sua conexão e tente novamente.");
+    } finally {
+      setLoadingRsvpId(null);
+    }
   };
 
   return (

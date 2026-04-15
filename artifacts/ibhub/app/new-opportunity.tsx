@@ -21,7 +21,7 @@ import { useAuth } from "@/context/AuthContext";
 import { usePermissions } from "@/context/PermissionsContext";
 import { PaywallScreen } from "@/components/ui/PaywallScreen";
 import { createOpportunity, uploadOpportunityImage } from "@/services/api";
-import { friendlyErrorMessage } from "@/hooks/useAsyncAction";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { maskDate, maskCurrency, CURRENCIES, type Currency } from "@/utils/masks";
 import { useTranslation } from "react-i18next";
 
@@ -53,7 +53,43 @@ export default function NewOpportunityScreen() {
   const [salary, setSalary]     = useState("");
   const [contract, setContract] = useState<string | null>(null);
   const [coverUri, setCoverUri] = useState<string | null>(null);
-  const [publishing, setPublishing] = useState(false);
+
+  const { execute: executePublish, isLoading: publishing } = useAsyncAction(async () => {
+    if (!user?.id) { Alert.alert(t("common.error"), t("opportunity.errors.not_logged")); return; }
+    let coverImageUrl: string | null = null;
+    if (coverUri && mode === "marketplace") {
+      coverImageUrl = await uploadOpportunityImage(coverUri, user.id);
+    }
+    const companyName = isEmpresa ? activeCompany!.name : (company.trim() || null);
+    const result = await createOpportunity(
+      {
+        created_by: user.id,
+        type: mode === "vaga" ? "vaga" : "marketplace",
+        title: title.trim(),
+        description: desc.trim() || null,
+        category,
+        location: location.trim() || null,
+        price: mode === "marketplace" ? (price.trim() ? `${priceCurrency} ${price.trim()}` : null) : null,
+        cover_image_url: coverImageUrl,
+        company: mode === "vaga" ? (companyName ?? null) : null,
+        company_page_id: activeCompany?.id ?? null,
+        contract_type: mode === "vaga" ? (contract ?? null) : null,
+        salary: mode === "vaga" ? (salary.trim() || null) : null,
+        contact_email: email.trim() || null,
+        expires_at: expiry.trim() ? parseExpiry(expiry) : null,
+      },
+      user.id,
+    );
+    if (result) {
+      Alert.alert(
+        mode === "marketplace" ? t("opportunity.errors.published_ad") : t("opportunity.errors.published_job"),
+        `"${title}" ${t("opportunity.errors.published_msg")}`,
+        [{ text: t("opportunity.errors.view_post"), onPress: () => router.replace(`/opportunity/${result.id}` as any) }],
+      );
+    } else {
+      Alert.alert(t("common.error"), t("opportunity.errors.error_publish"));
+    }
+  });
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -79,60 +115,13 @@ export default function NewOpportunityScreen() {
     }
   };
 
-  const handlePublish = async () => {
-    if (!user?.id) { Alert.alert(t("common.error"), t("opportunity.errors.not_logged")); return; }
+  const handlePublish = () => {
     if (!isEmpresa) {
-      Alert.alert(
-        t("opportunity.errors.company_only_title"),
-        t("opportunity.errors.company_only_msg"),
-      );
+      Alert.alert(t("opportunity.errors.company_only_title"), t("opportunity.errors.company_only_msg"));
       return;
     }
     if (!canPublish) { Alert.alert(t("common.attention"), t("opportunity.errors.fill_required")); return; }
-
-    setPublishing(true);
-    try {
-      let coverImageUrl: string | null = null;
-      if (coverUri && mode === "marketplace") {
-        coverImageUrl = await uploadOpportunityImage(coverUri, user.id);
-      }
-
-      const companyName = isEmpresa ? activeCompany!.name : (company.trim() || null);
-
-      const result = await createOpportunity(
-        {
-          created_by: user.id,
-          type: mode === "vaga" ? "vaga" : "marketplace",
-          title: title.trim(),
-          description: desc.trim() || null,
-          category,
-          location: location.trim() || null,
-          price: mode === "marketplace" ? (price.trim() ? `${priceCurrency} ${price.trim()}` : null) : null,
-          cover_image_url: coverImageUrl,
-          company: mode === "vaga" ? (companyName ?? null) : null,
-          company_page_id: activeCompany?.id ?? null,
-          contract_type: mode === "vaga" ? (contract ?? null) : null,
-          salary: mode === "vaga" ? (salary.trim() || null) : null,
-          contact_email: email.trim() || null,
-          expires_at: expiry.trim() ? parseExpiry(expiry) : null,
-        },
-        user.id,
-      );
-
-      if (result) {
-        Alert.alert(
-          mode === "marketplace" ? t("opportunity.errors.published_ad") : t("opportunity.errors.published_job"),
-          `"${title}" ${t("opportunity.errors.published_msg")}`,
-          [{ text: t("opportunity.errors.view_post"), onPress: () => router.replace(`/opportunity/${result.id}` as any) }],
-        );
-      } else {
-        Alert.alert(t("common.error"), t("opportunity.errors.error_publish"));
-      }
-    } catch (e: unknown) {
-      Alert.alert(t("common.error"), friendlyErrorMessage(e));
-    } finally {
-      setPublishing(false);
-    }
+    executePublish();
   };
 
   const ChipSelector = ({
