@@ -380,6 +380,7 @@ export default function EmpresaScreen() {
   const handleLikePost = async (post: Post) => {
     if (!user?.id) return;
     const wasLiked = post.is_liked ?? false;
+    const prevCount = post.likes_count;
     setPosts((prev) =>
       prev.map((p) =>
         p.id === post.id
@@ -387,13 +388,19 @@ export default function EmpresaScreen() {
           : p
       )
     );
-    const ok = await toggleLike(post.id, user.id, wasLiked, activeCompany?.id);
-    if (!ok) {
+    try {
+      const ok = await toggleLike(post.id, user.id, wasLiked, activeCompany?.id);
+      if (!ok) {
+        setPosts((prev) =>
+          prev.map((p) => p.id === post.id ? { ...p, is_liked: wasLiked, likes_count: prevCount } : p)
+        );
+        Alert.alert("Erro", "Não foi possível curtir. Tente novamente.");
+      }
+    } catch (e: unknown) {
       setPosts((prev) =>
-        prev.map((p) =>
-          p.id === post.id ? { ...p, is_liked: wasLiked, likes_count: wasLiked ? p.likes_count + 1 : p.likes_count - 1 } : p
-        )
+        prev.map((p) => p.id === post.id ? { ...p, is_liked: wasLiked, likes_count: prevCount } : p)
       );
+      Alert.alert("Erro de Conexão", friendlyErrorMessage(e));
     }
   };
 
