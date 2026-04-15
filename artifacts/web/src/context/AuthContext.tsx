@@ -28,6 +28,7 @@ interface Profile {
   invited_by_id: string | null;
   is_admin: boolean;
   is_banned: boolean;
+  certifications?: string[] | null;
   // Stripe
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
