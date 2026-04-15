@@ -275,27 +275,56 @@ create trigger profiles_privilege_escalation_guard
 -- pnl_insert_admin: with check (exists (select 1 from profiles where id = auth.uid() and is_admin = true))
 
 
--- ─── Summary of fixes applied ─────────────────────────────────────────────────
--- ✓ notifications.notif_insert: now `with check (false)` — all inserts go through
---     SECURITY DEFINER triggers or service role; direct client inserts blocked
--- ✓ feature_flags.ff_select_all: public read (allows pre-login maintenance check)
--- ✓ feature_flags.ff_delete_admin: added
--- ✓ market_posts: RLS enabled with auth SELECT + admin/author WRITE
--- ✓ market_post_likes: RLS enabled with auth SELECT + self INSERT/DELETE
--- ✓ market_post_comments: RLS enabled with auth SELECT + author WRITE
--- ✓ notification_broadcasts: table created (schema matches admin.ts) + admin-only RLS
--- ✓ opportunity_applications: DELETE policy added (self-withdrawal)
--- ✓ support_messages: admin SELECT added
--- ✓ bug_reports: admin SELECT added
--- ✓ profiles: BEFORE UPDATE trigger prevents non-admin privilege escalation
---     (is_admin, plan, stripe_*, courtesy_until, is_banned, is_shadowbanned)
---     Trigger bypasses when auth.uid() IS NULL (service-role / Stripe webhook calls)
+-- ─── 12. DOCUMENTED EXCEPTION: plans — intentional public SELECT ──────────────
+-- The `plans` table (defined in migrations_v11.sql) has:
+--   plans_select:        using (true)              → public read  [INTENTIONAL]
+--   plans_insert_admin:  admin only                → protected ✓
+--   plans_update_admin:  admin only                → protected ✓
+--   plans_delete_admin:  admin only                → protected ✓
 --
+-- REASON: The pricing/plans page is shown to all visitors (authenticated and
+-- anonymous) before they sign up. Public SELECT is a PRODUCT REQUIREMENT and
+-- NOT a security risk — the table contains only non-sensitive commercial data
+-- (names, prices, feature lists). Write operations remain strictly admin-only.
+-- No change to plans policies is required.
+
+
+-- ─── Summary / Audit Matrix ──────────────────────────────────────────────────
+--
+-- TABLE                  | SELECT          | INSERT           | UPDATE  | DELETE
+-- -----------------------|-----------------|------------------|---------|--------
+-- notifications          | own user_id     | FALSE (blocked)  | own     | —
+-- feature_flags          | public (true)   | admin only       | admin   | admin
+-- market_posts           | authenticated   | admin only       | admin   | owner|admin
+-- market_post_likes      | authenticated   | self (user_id)   | —       | self
+-- market_post_comments   | authenticated   | self (author_id) | self    | self|admin
+-- notification_broadcasts| admin only      | admin only       | —       | admin
+-- opportunity_applications| self|creator  | self             | —       | self ← ADDED
+-- support_messages       | self|admin ←FIX | self             | —       | —
+-- bug_reports            | self|admin ←FIX | self             | —       | —
+-- profiles               | public          | self             | self|adm| —  + trigger
+-- plans                  | public [INTENT] | admin only       | admin   | admin
+-- push_notification_logs | admin only      | admin only (v13) | —       | —
+-- push_tokens            | own user_id     | self upsert      | self    | self
+--
+-- ─── Verification queries (run after migration to confirm) ───────────────────
+-- Execute in Supabase SQL Editor to confirm all policies are in place:
+
+select tablename, policyname, cmd, roles, qual, with_check
+from pg_policies
+where tablename in (
+  'notifications', 'feature_flags', 'market_posts', 'market_post_likes',
+  'market_post_comments', 'notification_broadcasts', 'opportunity_applications',
+  'support_messages', 'bug_reports', 'profiles', 'plans',
+  'push_notification_logs', 'push_tokens'
+)
+order by tablename, cmd;
+
 -- ─── Related code fixes (not SQL) ────────────────────────────────────────────
--- ✓ api-server/routes/push.ts: added JWT auth guard + server-side push_tokens lookup
---     via service role (client no longer needs cross-user push_tokens SELECT)
--- ✓ ibhub/services/api.ts: dispatchPushToConversation uses recipientUserIds (server
---     looks up tokens) instead of reading push_tokens directly on the client
+-- ✓ api-server/routes/push.ts: JWT auth guard + participant verification +
+--     server-side push_tokens lookup via service role + rate limiting (20/min)
+-- ✓ ibhub/services/api.ts: dispatchPushToConversation sends conversationId only;
+--     server resolves participants and tokens server-side
 --
 -- ─── Storage buckets verified (no changes needed) ────────────────────────────
 -- post-images: auth.uid()::text = foldername(name)[1]  ✓ (migrations_v2.sql)
