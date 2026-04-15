@@ -103,6 +103,7 @@ export default function EmpresaScreen() {
   const [sortBy, setSortBy]             = useState<SortKey>("data");
   const [filterCat, setFilterCat]       = useState<ProductCat | "todos">("todos");
   const [showProductForm, setShowProductForm] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<CompanyProduct | null>(null);
   const [editingProduct, setEditingProduct]   = useState<LocalProduct | null>(null);
   const [savingProduct, setSavingProduct]     = useState(false);
 
@@ -650,7 +651,12 @@ export default function EmpresaScreen() {
               </View>
             ) : (
               filteredProducts.map((p) => (
-                <View key={p.id} style={[styles.productCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                <TouchableOpacity
+                  key={p.id}
+                  style={[styles.productCard, { backgroundColor: "#fff", borderColor: colors.border }]}
+                  onPress={() => !isManager && setSelectedProduct(p)}
+                  activeOpacity={isManager ? 1 : 0.75}
+                >
                   <View style={[styles.productImgWrap, { backgroundColor: colors.background }]}>
                     {p.image_url ? (
                       <Image source={{ uri: p.image_url }} style={styles.productImg} />
@@ -677,9 +683,11 @@ export default function EmpresaScreen() {
                           <Text style={[styles.productActionText, { color: "#dc2626" }]}>Remover</Text>
                         </TouchableOpacity>
                       </View>
-                    ) : null}
+                    ) : (
+                      <Text style={[styles.productActionText, { color: colors.gold, marginTop: 4 }]}>Ver detalhes →</Text>
+                    )}
                   </View>
-                </View>
+                </TouchableOpacity>
               ))
             )}
           </View>
@@ -812,6 +820,54 @@ export default function EmpresaScreen() {
                 <Text style={styles.formSaveBtnText}>{savingProduct ? "Salvando..." : "Salvar"}</Text>
               </TouchableOpacity>
             </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Product detail modal (non-managers) */}
+      <Modal visible={!!selectedProduct} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSelectedProduct(null)}>
+        <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+          <View style={[styles.formHeader, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+            <Text style={[styles.formTitle, { color: colors.navy }]} numberOfLines={1}>{selectedProduct?.name ?? ""}</Text>
+            <TouchableOpacity onPress={() => setSelectedProduct(null)}>
+              <Feather name="x" size={22} color={colors.navy} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
+            {selectedProduct?.image_url && (
+              <Image source={{ uri: selectedProduct.image_url }} style={{ width: "100%", height: 220, borderRadius: 12 }} resizeMode="cover" />
+            )}
+            <View style={{ gap: 8 }}>
+              {selectedProduct?.category && (
+                <View style={[styles.catBadgeSmall, { backgroundColor: colors.gold + "18", alignSelf: "flex-start" }]}>
+                  <Text style={[styles.catBadgeSmallText, { color: colors.gold }]}>
+                    {PRODUCT_CATS.find((c) => c.key === selectedProduct.category)?.label ?? selectedProduct.category}
+                  </Text>
+                </View>
+              )}
+              {selectedProduct?.price && (
+                <Text style={[styles.productPrice, { fontSize: 20 }]}>{selectedProduct.price}</Text>
+              )}
+              {selectedProduct?.description && (
+                <Text style={{ fontSize: 14, color: colors.foreground, lineHeight: 22 }}>{selectedProduct.description}</Text>
+              )}
+            </View>
+            {user?.id && companyPage?.owner_id && user.id !== companyPage.owner_id && (
+              <TouchableOpacity
+                style={[styles.formSaveBtn, { backgroundColor: colors.navy, marginTop: 8 }]}
+                onPress={async () => {
+                  if (!user?.id || !companyPage?.owner_id) return;
+                  const convoId = await getOrCreateDirectConversation(user.id, companyPage.owner_id, true);
+                  if (convoId) {
+                    setSelectedProduct(null);
+                    router.push(`/chat/${convoId}?companyId=${companyPage.id}` as any);
+                  }
+                }}
+              >
+                <Feather name="message-circle" size={16} color="#fff" />
+                <Text style={[styles.formSaveBtnText, { marginLeft: 8 }]}>Entrar em contato</Text>
+              </TouchableOpacity>
+            )}
           </ScrollView>
         </View>
       </Modal>

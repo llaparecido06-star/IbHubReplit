@@ -130,9 +130,13 @@ function PostCard({
 
   const [, setLocation] = useLocation();
   const isWinePost = /^⭐/.test(content) && /Pontuação/.test(content);
-  const authorName = post.author?.full_name ?? "Usuário";
-  const badgeColor = planBadgeColor(post.author?.plan);
+  const companyPage = post.company_page ?? null;
+  const authorName = companyPage ? companyPage.name : (post.author?.full_name ?? "Usuário");
+  const authorAvatar = companyPage ? companyPage.avatar_url : post.author?.avatar_url;
+  const badgeColor = companyPage ? GOLD : planBadgeColor(post.author?.plan);
+  const badgeLabel = companyPage ? "Empresa" : (post.author?.plan ? post.author.plan.charAt(0).toUpperCase() + post.author.plan.slice(1) : null);
   const goToAuthor = () => {
+    if (companyPage) { setLocation(`/app/empresa/${companyPage.id}`); return; }
     if (post.author?.id && post.author.id !== currentUserId) setLocation(`/app/usuario/${post.author.id}`);
     else if (post.author?.id === currentUserId) setLocation("/app/perfil");
   };
@@ -172,7 +176,7 @@ function PostCard({
       {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "14px 16px 10px" }}>
         <div onClick={goToAuthor} style={{ cursor: "pointer" }}>
-          <Avatar src={post.author?.avatar_url} name={authorName} size={42} />
+          <Avatar src={authorAvatar} name={authorName} size={42} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -181,16 +185,16 @@ function PostCard({
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.textDecoration = "none"; }}>
               {authorName}
             </span>
-            {badgeColor && (
+            {badgeColor && badgeLabel && (
               <span style={{
                 fontSize: 10, fontWeight: 700, color: WHITE,
                 backgroundColor: badgeColor, padding: "1px 6px", borderRadius: 100,
               }}>
-                {(post.author?.plan ?? "").charAt(0).toUpperCase() + (post.author?.plan ?? "").slice(1)}
+                {badgeLabel}
               </span>
             )}
           </div>
-          {post.author?.headline && (
+          {!companyPage && post.author?.headline && (
             <div style={{ fontSize: 12, color: MUTED, marginTop: 1 }} title={post.author.headline}>
               {post.author.headline}
             </div>

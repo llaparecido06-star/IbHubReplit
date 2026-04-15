@@ -70,8 +70,11 @@ function SavedPostCard({ post, onRemove, onLike, currentUserId }: {
   const content = post.content ?? "";
   const isLong = content.length > 280;
   const displayContent = isLong && !expanded ? content.slice(0, 280).trimEnd() + "…" : content;
-  const authorName = post.author?.full_name ?? "Usuário";
+  const companyPage = post.company_page ?? null;
+  const authorName = companyPage ? companyPage.name : (post.author?.full_name ?? "Usuário");
+  const authorAvatar = companyPage ? companyPage.avatar_url : post.author?.avatar_url;
   const goToAuthor = () => {
+    if (companyPage) { setLocation(`/app/empresa/${companyPage.id}`); return; }
     if (post.author?.id && post.author.id !== currentUserId) setLocation(`/app/usuario/${post.author.id}`);
     else if (post.author?.id === currentUserId) setLocation("/app/perfil");
   };
@@ -86,7 +89,7 @@ function SavedPostCard({ post, onRemove, onLike, currentUserId }: {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "14px 16px 10px" }}>
         <div onClick={goToAuthor} style={{ cursor: "pointer" }}>
-          <Avatar src={post.author?.avatar_url} name={authorName} size={42} />
+          <Avatar src={authorAvatar} name={authorName} size={42} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <span onClick={goToAuthor} style={{ fontSize: 14, fontWeight: 800, color: NAVY, cursor: "pointer", display: "inline-block" }}
@@ -94,7 +97,7 @@ function SavedPostCard({ post, onRemove, onLike, currentUserId }: {
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.textDecoration = "none"; }}>
             {authorName}
           </span>
-          {post.author?.headline && <div style={{ fontSize: 12, color: MUTED, marginTop: 1 }}>{post.author.headline}</div>}
+          {!companyPage && post.author?.headline && <div style={{ fontSize: 12, color: MUTED, marginTop: 1 }}>{post.author.headline}</div>}
           <div style={{ fontSize: 11, color: "#b0b7c3", marginTop: 2 }}>{timeAgo(post.created_at)}</div>
         </div>
         <button onClick={() => onRemove(post.id)} title="Remover dos salvos" style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}>

@@ -2273,16 +2273,17 @@ export async function getOrCreateDirectConversation(userId1: string, userId2: st
       )
       .eq("status", "accepted");
 
-    let eitherIsCompanyOwner = false;
+    // Company page owners always receive messages directly (no request flow for them)
+    let recipientIsCompanyOwner = false;
     if (!forceAccepted) {
       const { count: cpCount } = await supabase
         .from("company_pages")
         .select("id", { count: "exact", head: true })
-        .or(`owner_id.eq.${userId2},owner_id.eq.${userId1}`);
-      eitherIsCompanyOwner = (cpCount ?? 0) > 0;
+        .eq("owner_id", userId2);
+      recipientIsCompanyOwner = (cpCount ?? 0) > 0;
     }
 
-    const recipientAccepted = forceAccepted || (connCheck.count ?? 0) > 0 || eitherIsCompanyOwner;
+    const recipientAccepted = forceAccepted || (connCheck.count ?? 0) > 0 || recipientIsCompanyOwner;
 
     // Generate UUID client-side to avoid the RLS SELECT-after-INSERT issue
     // (convos_select requires being a participant, but participants don't exist yet at INSERT time)
