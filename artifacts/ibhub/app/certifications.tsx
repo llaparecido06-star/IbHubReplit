@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Platform,
   ScrollView,
@@ -93,7 +94,15 @@ export default function CertificationsScreen() {
     ]);
   };
 
-  if (!permLoading && !hasFeature("Upload Certificados")) {
+  if (permLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
+        <ActivityIndicator color={colors.gold} size="large" />
+      </View>
+    );
+  }
+
+  if (!hasFeature("Upload Certificados")) {
     return (
       <PaywallScreen
         featureName="Upload de Certificados"

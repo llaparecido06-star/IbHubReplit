@@ -59,22 +59,20 @@ router.get("/presentations/:id/slides", async (req: Request, res: Response) => {
     .eq("id", userId)
     .maybeSingle();
 
-  const typedProfile2 = profile as { plan?: string; is_admin?: boolean; courtesy_until?: string | null } | null;
-  const isAdmin = !!typedProfile2?.is_admin;
-  const isCourtesy2 = !!typedProfile2?.courtesy_until && new Date(typedProfile2.courtesy_until) > new Date();
+  const caller = profile as { plan?: string; is_admin?: boolean; courtesy_until?: string | null } | null;
+  const isAdmin = !!caller?.is_admin;
+  const isCourtesy = !!caller?.courtesy_until && new Date(caller.courtesy_until) > new Date();
 
-  // Server-side feature gate: non-admin, non-courtesy users must have a plan with mercado features
-  if (!isAdmin && !isCourtesy2) {
-    const planId2 = typedProfile2?.plan ?? "gratuito";
-    const { data: planFeatures } = await supabaseAdmin
+  // Server-side feature gate: non-admin, non-courtesy users must have the mercado:apresentacoes plan feature
+  if (!isAdmin && !isCourtesy) {
+    const callerPlanId = caller?.plan ?? "gratuito";
+    const { data: callerPlan } = await supabaseAdmin
       .from("plans")
       .select("features")
-      .eq("id", planId2)
+      .eq("id", callerPlanId)
       .maybeSingle();
-    const features = (planFeatures as { features?: string[] } | null)?.features ?? [];
-    // Only users with the exact "mercado:apresentacoes" plan feature may access presentation slides.
-    const hasPresentationsAccess = features.includes("mercado:apresentacoes");
-    if (!hasPresentationsAccess) {
+    const callerFeatures = (callerPlan as { features?: string[] } | null)?.features ?? [];
+    if (!callerFeatures.includes("mercado:apresentacoes")) {
       res.status(403).json({ error: "Plano atual não inclui acesso às apresentações de mercado." });
       return;
     }
@@ -114,10 +112,10 @@ router.get("/presentations/:id/slides", async (req: Request, res: Response) => {
 
   let unlockedSlideIds: Set<string>;
 
-  if (isAdmin || isCourtesy2) {
+  if (isAdmin || isCourtesy) {
     unlockedSlideIds = new Set(slides.map((s) => s.id));
   } else {
-    const planId = typedProfile2?.plan ?? "gratuito";
+    const planId = caller?.plan ?? "gratuito";
     const { data: planData } = await supabaseAdmin
       .from("plans")
       .select("delivery_strategy")
@@ -184,24 +182,25 @@ router.post("/presentations/:id/access", async (req: Request, res: Response) => 
     return;
   }
 
-  const typedProfile = profile as { id: string; plan?: string; is_admin?: boolean; stripe_subscription_status?: string; courtesy_until?: string | null; created_at: string };
+  const accessorProfile = profile as { id: string; plan?: string; is_admin?: boolean; courtesy_until?: string | null; created_at: string };
 
-  if (typedProfile.is_admin) {
+  if (accessorProfile.is_admin) {
     res.json({ ok: true, applied: false, reason: "admin" });
     return;
   }
 
-  // Server-side feature gate: check exact presentations feature key unless user has courtesy
-  const isCourtesyCheck = !!typedProfile.courtesy_until && new Date(typedProfile.courtesy_until) > new Date();
-  if (!isCourtesyCheck) {
-    const planId3 = typedProfile.plan ?? "gratuito";
-    const { data: planFeatures3 } = await supabaseAdmin
+  const accessorPlanId = accessorProfile.plan ?? "gratuito";
+  const accessorIsCourtesy = !!accessorProfile.courtesy_until && new Date(accessorProfile.courtesy_until) > new Date();
+
+  // Server-side feature gate: exact mercado:apresentacoes required unless courtesy
+  if (!accessorIsCourtesy) {
+    const { data: accessorPlan } = await supabaseAdmin
       .from("plans")
       .select("features")
-      .eq("id", planId3)
+      .eq("id", accessorPlanId)
       .maybeSingle();
-    const features3 = (planFeatures3 as { features?: string[] } | null)?.features ?? [];
-    if (!features3.includes("mercado:apresentacoes")) {
+    const accessorFeatures = (accessorPlan as { features?: string[] } | null)?.features ?? [];
+    if (!accessorFeatures.includes("mercado:apresentacoes")) {
       res.status(403).json({ error: "Plano atual não inclui acesso às apresentações de mercado." });
       return;
     }
@@ -211,10 +210,10 @@ router.post("/presentations/:id/access", async (req: Request, res: Response) => 
   type DS = "FULL_ACCESS" | "SEQUENTIAL_MONTHLY" | "RANDOM_DAILY" | "NONE";
 
   let strategy: DS;
-  if (isCourtesyCheck) {
+  if (accessorIsCourtesy) {
     strategy = "FULL_ACCESS";
   } else {
-    const planId = typedProfile.plan ?? "gratuito";
+    const planId = accessorPlanId;
     const { data: planData } = await supabaseAdmin
       .from("plans")
       .select("delivery_strategy")
@@ -248,7 +247,7 @@ router.post("/presentations/:id/access", async (req: Request, res: Response) => 
 
   await applyDeliveryStrategy(
     userId,
-    { id: typedProfile.id, plan: typedProfile.plan ?? "gratuito", created_at: typedProfile.created_at },
+    { id: accessorProfile.id, plan: accessorProfile.plan ?? "gratuito", created_at: accessorProfile.created_at },
     strategy,
     presentationId,
     slides,

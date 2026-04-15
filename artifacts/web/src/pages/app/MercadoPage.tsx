@@ -770,6 +770,7 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
 
 export default function MercadoPage() {
   const { profile, user } = useAuth();
+  const { hasFeature, isLoading: permLoading } = usePermissions();
   const [period, setPeriod] = useState<Period>("ano");
   const [mainTab, setMainTab] = useState<MercadoTab>("visao");
   const [data, setData] = useState<MarketOverview>(MARKET_FALLBACK.ano);
@@ -847,7 +848,24 @@ export default function MercadoPage() {
 
         {/* Content */}
         {mainTab === "apresentacoes" ? (
-          <ApresentacoesPanel isAdmin={profile?.is_admin ?? false} />
+          permLoading ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 200 }}>
+              <div style={{ width: 32, height: 32, borderRadius: "50%", border: "3px solid #c9a84c", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+            </div>
+          ) : !hasFeature("mercado:apresentacoes") && !(profile?.is_admin) ? (
+            <div style={{ textAlign: "center", padding: "60px 20px" }}>
+              <div style={{ fontSize: 44, marginBottom: 16 }}>🔒</div>
+              <h3 style={{ fontSize: 18, fontWeight: 800, color: "#0d1b2a", marginBottom: 8 }}>Apresentações de Mercado</h3>
+              <p style={{ fontSize: 14, color: "#7a8494", maxWidth: 400, margin: "0 auto 20px" }}>
+                Acesse relatórios e apresentações exclusivos do mercado vitivinícola. Disponível nos planos com acesso ao mercado de dados.
+              </p>
+              <a href="/assinar" style={{ display: "inline-block", padding: "10px 24px", backgroundColor: "#c9a84c", color: "#0d1b2a", borderRadius: 10, fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
+                Ver Planos
+              </a>
+            </div>
+          ) : (
+            <ApresentacoesPanel isAdmin={profile?.is_admin ?? false} />
+          )
         ) : mainTab === "idealbi" ? (
           <IdealBIFeed
             userId={user?.id ?? ""}

@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
   KeyboardAvoidingView,
@@ -102,7 +103,15 @@ export default function NewGroupScreen() {
     router.replace(`/group-chat/${group.id}` as any);
   };
 
-  if (!permLoading && !hasFeature("Criar Grupos")) {
+  if (permLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
+        <ActivityIndicator color={colors.gold} size="large" />
+      </View>
+    );
+  }
+
+  if (!hasFeature("Criar Grupos")) {
     return (
       <PaywallScreen
         featureName="Criar Grupos"

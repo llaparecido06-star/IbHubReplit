@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
   KeyboardAvoidingView,
@@ -175,7 +176,15 @@ export default function NewOpportunityScreen() {
 
   const kavBehavior = Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined;
 
-  if (!permLoading && !hasFeature("Publicar Vagas")) {
+  if (permLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
+        <ActivityIndicator color={colors.gold} size="large" />
+      </View>
+    );
+  }
+
+  if (!hasFeature("Publicar Vagas")) {
     return (
       <PaywallScreen
         featureName="Publicar Vagas e Ofertas"

@@ -113,7 +113,15 @@ export default function AnalyticsScreen() {
     { icon: "message-circle", label: "COMENTÁRIOS",        value: a?.totalComments ?? 0,   iconColor: colors.mutedForeground },
   ];
 
-  if (!permLoading && !hasFeature("Relatórios Detalhados")) {
+  if (permLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
+        <ActivityIndicator color={colors.gold} size="large" />
+      </View>
+    );
+  }
+
+  if (!hasFeature("Relatórios Detalhados")) {
     return (
       <PaywallScreen
         featureName="Relatórios Detalhados"

@@ -65,7 +65,17 @@ export default function GerenciarEmpresaPage() {
 
   const { hasFeature, isLoading: permLoading } = usePermissions();
 
-  if (!permLoading && !hasFeature("Criar Página Empresa")) {
+  if (permLoading) {
+    return (
+      <AppShell>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300 }}>
+          <div style={{ width: 32, height: 32, borderRadius: "50%", border: "3px solid #c9a84c", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (!hasFeature("Criar Página Empresa")) {
     return (
       <AppShell>
         <PaywallPage
