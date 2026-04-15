@@ -5373,7 +5373,22 @@ export async function createMarketPost(
     });
     if (!res.ok) return null;
     const body = await res.json() as { post: MarketPost };
-    return { ...body.post, user_liked: false, user_poll_vote: null };
+    const newPost = body.post;
+
+    // Resolve the Ideal.BI company page so the card shows the correct avatar immediately,
+    // without waiting for a full feed refresh.
+    let author: MarketPost["author"];
+    try {
+      const companyQuery = newPost.company_page_id
+        ? supabase.from("company_pages").select("id, name, avatar_url").eq("id", newPost.company_page_id).maybeSingle()
+        : supabase.from("company_pages").select("id, name, avatar_url").ilike("name", "Ideal.BI").order("created_at", { ascending: true }).limit(1).maybeSingle();
+      const { data: company } = await companyQuery;
+      if (company) {
+        author = { id: (company as any).id, full_name: (company as any).name, avatar_url: (company as any).avatar_url, headline: "Inteligência de Mercado do Vinho" };
+      }
+    } catch { /* keep author undefined — card gracefully falls back */ }
+
+    return { ...newPost, user_liked: false, user_poll_vote: null, author };
   } catch { return null; }
 }
 
