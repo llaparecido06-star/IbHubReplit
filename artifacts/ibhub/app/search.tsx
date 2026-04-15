@@ -118,7 +118,7 @@ export default function SearchScreen() {
         .order("created_at", { ascending: false })
         .limit(lim(20));
       if (shadowbannedIds.length > 0) {
-        searchPostsQuery = searchPostsQuery.not("user_id", "in", `(${shadowbannedIds.join(",")})`);
+        searchPostsQuery = searchPostsQuery.not("user_id", "in", `(${shadowbannedIds.map(id => `"${id}"`).join(",")})`);
       }
 
       const [resP, resPub, resE, resV, resEv, resG] = await Promise.all([

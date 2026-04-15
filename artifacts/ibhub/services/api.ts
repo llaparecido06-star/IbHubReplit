@@ -180,7 +180,7 @@ export async function fetchFeedPosts(currentUserId: string, activeCompanyId?: st
       .limit(30);
 
     if (shadowbannedIds.length > 0) {
-      postsQuery = postsQuery.not("user_id", "in", `(${shadowbannedIds.join(",")})`);
+      postsQuery = postsQuery.not("user_id", "in", `(${shadowbannedIds.map(id => `"${id}"`).join(",")})`);
     }
 
     const { data, error } = await postsQuery;
@@ -437,7 +437,7 @@ export async function fetchNewPostsSince(since: string, currentUserId: string, a
       .limit(20);
 
     if (shadowbannedIds.length > 0) {
-      newPostsQuery = newPostsQuery.not("user_id", "in", `(${shadowbannedIds.join(",")})`);
+      newPostsQuery = newPostsQuery.not("user_id", "in", `(${shadowbannedIds.map(id => `"${id}"`).join(",")})`);
     }
 
     const { data, error } = await newPostsQuery;

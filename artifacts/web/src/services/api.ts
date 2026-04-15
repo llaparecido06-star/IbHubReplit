@@ -77,6 +77,7 @@ function _normalisePost(raw: any, profileMap: Map<string, any>): Post {
       avatar_url: p.avatar_url,
       headline: [p.position, p.company].filter(Boolean).join(" · ") || null,
       plan: p.plan ?? "gratuito",
+      is_shadowbanned: p.is_shadowbanned ?? false,
     } : undefined,
   };
 }
@@ -93,7 +94,7 @@ export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
       .limit(30);
 
     if (shadowbannedIds.length > 0) {
-      postsQuery = postsQuery.not("user_id", "in", `(${shadowbannedIds.join(",")})`);
+      postsQuery = postsQuery.not("user_id", "in", `(${shadowbannedIds.map(id => `"${id}"`).join(",")})`);
     }
 
     const { data, error } = await postsQuery;

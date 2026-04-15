@@ -290,6 +290,8 @@ export default function FeedScreen() {
         if (raw.user_id === user.id) return; // our own post is already added optimistically
         const full = await API.fetchPostById(raw.id, user.id);
         if (!full) return;
+        // Skip posts from shadowbanned users (server-side shadowban enforcement for realtime path)
+        if ((full.author as any)?.is_shadowbanned) return;
         setPosts(prev => {
           if (prev.some(p => p.id === full.id)) return prev;
           setNewPosts(np => [...np, full]);

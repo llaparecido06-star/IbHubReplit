@@ -635,6 +635,8 @@ export default function AppFeedPage() {
         }
         const full = await fetchPostById(raw.id, userId);
         if (!full) return;
+        // Skip posts from shadowbanned users (server-side shadowban enforcement for realtime path)
+        if ((full.author as any)?.is_shadowbanned) return;
         setPosts(prev => {
           if (prev.some(p => p.id === full.id)) return prev;
           return [full, ...prev];
