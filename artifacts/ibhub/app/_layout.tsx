@@ -7,6 +7,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import Constants from "expo-constants";
 import { Stack, useRouter, usePathname, type Href } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useRef } from "react";
@@ -79,7 +80,12 @@ function PushNotificationHandler() {
       try {
         const { status } = await SafeNotifications.requestPermissionsAsync();
         if (status !== "granted") return;
-        const tokenResult = await SafeNotifications.getExpoPushTokenAsync();
+        // Pass projectId when available (required in standalone/EAS builds)
+        const projectId = (Constants.expoConfig?.extra as Record<string, unknown> | undefined)
+          ?.eas?.projectId as string | undefined;
+        const tokenResult = await SafeNotifications.getExpoPushTokenAsync(
+          projectId ? { projectId } : undefined,
+        );
         const token = tokenResult.data;
         if (!token) return;
         await supabase
@@ -127,12 +133,14 @@ function PushNotificationHandler() {
 // ── Maintenance mode guard ────────────────────────────────────────────────────
 function MaintenanceGuard() {
   const { isEnabled, isLoading: flagsLoading } = useFeatureFlags();
-  const { profile, session } = useAuth();
+  const { profile, session, loading: authLoading } = useAuth();
   const router = useRouter();
   const manutencao = isEnabled("manutencao");
 
   useEffect(() => {
-    if (flagsLoading) return;
+    // Wait for both feature flags and auth/profile to finish loading before acting.
+    // This prevents premature sign-out while profile.is_admin is still being fetched.
+    if (flagsLoading || authLoading) return;
     if (!session) return;
     if (profile?.is_admin) return;
     if (manutencao) {
@@ -140,7 +148,7 @@ function MaintenanceGuard() {
         router.replace("/maintenance" as any);
       });
     }
-  }, [manutencao, flagsLoading, profile?.is_admin, session]);
+  }, [manutencao, flagsLoading, authLoading, profile?.is_admin, session]);
 
   return null;
 }
