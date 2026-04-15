@@ -15,7 +15,7 @@ import {
   View,
 } from "react-native";
 import { Image } from "expo-image";
-import { Video, ResizeMode } from "expo-av";
+import { useVideoPlayer, VideoView } from "expo-video";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -154,6 +154,32 @@ const FALLBACK: Record<Period, API.MarketOverview> = {
     updated_at: "",
   },
 };
+
+// ─── Inline video players (hooks must live at component level) ────────────────
+
+function NetworkPostVideo({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri, (p) => { p.loop = false; });
+  return (
+    <VideoView
+      player={player}
+      nativeControls
+      contentFit="contain"
+      style={{ width: "100%", height: 220, backgroundColor: "#000" } as any}
+    />
+  );
+}
+
+function NetworkMediaPreview({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri, (p) => { p.loop = false; });
+  return (
+    <VideoView
+      player={player}
+      nativeControls
+      contentFit="contain"
+      style={{ width: "100%", height: 180, borderRadius: 10, backgroundColor: "#000" } as any}
+    />
+  );
+}
 
 // ─── Area Chart with Tooltips ─────────────────────────────────────────────────
 
@@ -868,12 +894,7 @@ function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors 
         <Image source={{ uri: post.image_url }} style={{ width: "100%", height: 220 } as any} contentFit="cover" />
       ) : null}
       {post.video_url ? (
-        <Video
-          source={{ uri: post.video_url }}
-          useNativeControls
-          resizeMode={ResizeMode.CONTAIN}
-          style={{ width: "100%", height: 220, backgroundColor: "#000" } as any}
-        />
+        <NetworkPostVideo uri={post.video_url} />
       ) : null}
       {hasPoll ? (
         <MarketPollMobile post={post} userId={userId} colors={colors} onPollVote={handlePollVote} />
@@ -1031,7 +1052,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
       ) : null}
       {mediaUri && mediaType === "video" ? (
         <View style={{ position: "relative" }}>
-          <Video source={{ uri: mediaUri }} useNativeControls resizeMode={ResizeMode.CONTAIN} style={{ width: "100%", height: 180, borderRadius: 10, backgroundColor: "#000" } as any} />
+          <NetworkMediaPreview uri={mediaUri} />
           <TouchableOpacity onPress={() => { setMediaUri(null); setMediaType(null); }} style={{ position: "absolute", top: 6, right: 6, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 12, padding: 4 }}>
             <Feather name="x" size={14} color="#fff" />
           </TouchableOpacity>

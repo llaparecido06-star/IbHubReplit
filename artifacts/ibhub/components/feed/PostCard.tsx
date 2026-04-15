@@ -1,7 +1,7 @@
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { Video, ResizeMode } from "expo-av";
+import { useVideoPlayer, VideoView } from "expo-video";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -83,44 +83,50 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CONTENT_CUTOFF = 220;
 
 function VideoPlayer({ videoUrl, isVisible }: { videoUrl: string; isVisible: boolean }) {
-  const videoRef = useRef<Video>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const player = useVideoPlayer({ uri: videoUrl }, (p) => {
+    p.loop = true;
+    p.muted = true;
+  });
 
   useEffect(() => {
-    if (!videoRef.current) return;
     if (isVisible) {
-      videoRef.current.playAsync().catch(() => {});
+      player.play();
     } else {
-      videoRef.current.pauseAsync().catch(() => {});
+      player.pause();
     }
-  }, [isVisible]);
+  }, [isVisible, player]);
 
-  const togglePlay = async () => {
-    if (!videoRef.current) return;
-    if (isPlaying) {
-      await videoRef.current.pauseAsync();
+  useEffect(() => {
+    const statusSub = player.addListener("statusChange", ({ status }) => {
+      setIsLoading(status === "loading");
+    });
+    const playingSub = player.addListener("playingChange", ({ isPlaying: playing }) => {
+      setIsPlaying(playing);
+    });
+    return () => {
+      statusSub.remove();
+      playingSub.remove();
+    };
+  }, [player]);
+
+  const togglePlay = () => {
+    if (player.playing) {
+      player.pause();
     } else {
-      await videoRef.current.playAsync();
+      player.play();
     }
   };
 
   return (
     <View style={videoStyles.container}>
-      <Video
-        ref={videoRef}
-        source={{ uri: videoUrl }}
+      <VideoView
+        player={player}
+        contentFit="cover"
         style={videoStyles.video}
-        resizeMode={ResizeMode.COVER}
-        isMuted
-        isLooping
-        shouldPlay={isVisible}
-        onPlaybackStatusUpdate={(status) => {
-          if (status.isLoaded) {
-            setIsPlaying(status.isPlaying);
-            setIsLoading(false);
-          }
-        }}
+        allowsFullscreen={false}
       />
       {isLoading && (
         <View style={videoStyles.loadingOverlay}>

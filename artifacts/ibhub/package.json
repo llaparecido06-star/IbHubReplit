@@ -57,10 +57,12 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",
+    "expo-audio": "^1.1.1",
     "expo-av": "~16.0.8",
     "expo-document-picker": "^14.0.8",
     "expo-image-manipulator": "^14.0.8",
     "expo-notifications": "^0.32.16",
+    "expo-video": "^3.0.16",
     "i18next": "^26.0.4",
     "lucide-react-native": "^1.7.0",
     "react-i18next": "^17.0.2",

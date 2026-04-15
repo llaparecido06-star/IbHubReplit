@@ -69,7 +69,9 @@
         {
           "locationWhenInUsePermission": "O ibhub usa sua localização para preencher automaticamente o campo de localização ao criar uma publicação."
         }
-      ]
+      ],
+      "expo-video",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,

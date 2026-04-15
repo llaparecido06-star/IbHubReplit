@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import { Video, ResizeMode } from "expo-av";
+import { useVideoPlayer, VideoView } from "expo-video";
 import { useRouter, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -50,6 +50,19 @@ const SENSORY_TAGS = [
 
 
 
+
+/* ── Video preview component (expo-video hook must live at component level) ── */
+function VideoPreview({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri, (p) => { p.loop = false; });
+  return (
+    <VideoView
+      player={player}
+      nativeControls
+      contentFit="cover"
+      style={{ width: "100%", height: 200, borderRadius: 12 }}
+    />
+  );
+}
 
 /* ── Stars component ── */
 function StarRating({ value, onChange }: { value: number; onChange: (v: number) => void }) {
@@ -1161,13 +1174,7 @@ export default function FeedScreen() {
             {postVideoUri && (
               <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
                 <View style={{ position: "relative" }}>
-                  <Video
-                    source={{ uri: postVideoUri }}
-                    style={{ width: "100%", height: 200, borderRadius: 12 }}
-                    resizeMode={ResizeMode.COVER}
-                    useNativeControls
-                    isLooping={false}
-                  />
+                  <VideoPreview uri={postVideoUri} />
                   <TouchableOpacity
                     style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 14, padding: 5 }}
                     onPress={() => setPostVideoUri(null)}

@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image } from "expo-image";
-import { Video, ResizeMode } from "expo-av";
+import { useVideoPlayer, VideoView } from "expo-video";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -32,6 +32,13 @@ const { width: SCREEN_W } = Dimensions.get("window");
 
 // Flatten threaded comments for FlatList: [root, reply, reply, root, reply, ...]
 type FlatItem = AppComment & { isReply: boolean; depth: number };
+function PostDetailVideo({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri, (p) => { p.loop = true; });
+  return (
+    <VideoView player={player} nativeControls contentFit="cover" style={{ width: "100%", height: "100%" }} />
+  );
+}
+
 function flattenComments(roots: AppComment[]): FlatItem[] {
   const result: FlatItem[] = [];
   for (const root of roots) {
@@ -463,13 +470,7 @@ export default function PostDetailScreen() {
                 {/* Video */}
                 {post.video_url && (
                   <View style={{ marginTop: 8, width: "100%", height: SCREEN_W * 0.56, borderRadius: 12, overflow: "hidden", backgroundColor: "#000" }}>
-                    <Video
-                      source={{ uri: post.video_url }}
-                      style={{ width: "100%", height: "100%" }}
-                      resizeMode={ResizeMode.COVER}
-                      useNativeControls
-                      isLooping
-                    />
+                    <PostDetailVideo uri={post.video_url} />
                   </View>
                 )}
 

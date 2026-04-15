@@ -1,7 +1,7 @@
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { Image } from "expo-image";
-import { Video, ResizeMode } from "expo-av";
+import { useVideoPlayer, VideoView } from "expo-video";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -47,6 +47,11 @@ const SCORE_LABELS: Record<string, string> = {
   "100": "100 — Perfeito",
 };
 const SCORE_OPTIONS = ["", "50", "60", "70", "75", "80", "85", "88", "90", "92", "95", "98", "100"];
+
+function AutoPlayVideoPreview({ uri, style }: { uri: string; style?: object }) {
+  const player = useVideoPlayer(uri, (p) => { p.loop = true; p.muted = true; p.play(); });
+  return <VideoView player={player} contentFit="cover" style={style as any} />;
+}
 
 export default function CreatePostScreen() {
   const colors = useColors();
@@ -364,14 +369,7 @@ export default function CreatePostScreen() {
 
             {videoUri && (
               <View style={[styles.videoPreviewWrap, { borderRadius: colors.radius ?? 10 }]}>
-                <Video
-                  source={{ uri: videoUri }}
-                  style={styles.videoPreview}
-                  resizeMode={ResizeMode.COVER}
-                  isMuted
-                  isLooping
-                  shouldPlay
-                />
+                <AutoPlayVideoPreview uri={videoUri} style={styles.videoPreview} />
                 <TouchableOpacity style={styles.removeThumb} onPress={removeVideo}>
                   <Feather name="x" size={12} color="#ffffff" />
                 </TouchableOpacity>

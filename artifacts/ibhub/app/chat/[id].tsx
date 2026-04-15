@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Audio } from "expo-av";
+import { useAudioRecorder, requestRecordingPermissionsAsync, setAudioModeAsync, RecordingPresets } from "expo-audio";
 import * as DocumentPicker from "expo-document-picker";
 import * as Haptics from "expo-haptics";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -95,7 +95,7 @@ export default function ChatScreen() {
   const [isConversationAccepted, setIsConversationAccepted] = useState(true);
 
   // Audio recording
-  const [recording,       setRecording]       = useState<Audio.Recording | null>(null);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording,     setIsRecording]      = useState(false);
   const [recordingMs,     setRecordingMs]      = useState(0);
   const recordingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -464,13 +464,10 @@ export default function ChatScreen() {
   const startRecording = async () => {
     if (Platform.OS === "web") { Alert.alert("Áudio", "Gravação de áudio não disponível na versão web."); return; }
     try {
-      const { granted } = await Audio.requestPermissionsAsync();
+      const { granted } = await requestRecordingPermissionsAsync();
       if (!granted) { Alert.alert("Permissão necessária", "Permita o acesso ao microfone."); return; }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording: rec } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY,
-      );
-      setRecording(rec);
+      await setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      await audioRecorder.record();
       setIsRecording(true);
       setRecordingMs(0);
       recordingTimer.current = setInterval(() => setRecordingMs(prev => prev + 1000), 1000);
@@ -480,14 +477,13 @@ export default function ChatScreen() {
   };
 
   const stopRecording = async () => {
-    if (!recording || !user?.id || !id) return;
+    if (!isRecording || !user?.id || !id) return;
     if (recordingTimer.current) clearInterval(recordingTimer.current);
     setIsRecording(false);
     try {
-      await recording.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-      const uri = recording.getURI();
-      setRecording(null);
+      await audioRecorder.stop();
+      await setAudioModeAsync({ allowsRecordingIOS: false });
+      const uri = audioRecorder.uri;
       if (!uri) return;
       setUploading(true);
       const url = await API.uploadChatMedia(id, uri, "audio/m4a");
@@ -501,18 +497,16 @@ export default function ChatScreen() {
       }
     } catch {
       setUploading(false);
-      setRecording(null);
       Alert.alert("Erro", "Não foi possível processar o áudio.");
     }
   };
 
   const cancelRecording = async () => {
-    if (!recording) return;
+    if (!isRecording) return;
     if (recordingTimer.current) clearInterval(recordingTimer.current);
     setIsRecording(false);
-    try { await recording.stopAndUnloadAsync(); } catch {}
-    await Audio.setAudioModeAsync({ allowsRecordingIOS: false }).catch(() => {});
-    setRecording(null);
+    try { await audioRecorder.stop(); } catch {}
+    await setAudioModeAsync({ allowsRecordingIOS: false }).catch(() => {});
     setRecordingMs(0);
   };
 

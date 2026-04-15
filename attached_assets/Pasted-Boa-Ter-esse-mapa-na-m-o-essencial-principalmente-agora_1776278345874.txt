@@ -1,0 +1,60 @@
+Boa! Ter esse mapa na mão é essencial, principalmente agora que o app está em produção e você precisa escolher as batalhas para não explodir os créditos do Replit/Cursor.
+
+Aqui está o resumo executivo de toda a nossa maratona de correção e estruturação, dividido por frentes de ataque. Use essa lista como o seu Checklist de Revisão:
+
+📱 1. UI Global, Máscaras e Buscas
+Teclado: Correção do teclado cobrindo os campos nas telas de Vagas, Eventos e Marketplace.
+
+Máscaras: Padronização de Data (DD/MM/AAAA), Hora (HH:MM) e inclusão de seletor de Moeda (R$, USD, EUR) antes de valores financeiros (0.000,00).
+
+Busca Global: Correção para encontrar Empresas e Grupos, e remoção da aba "Mercado" da pesquisa.
+
+Menu & i18n: Troca do ícone de Empresas no menu inferior e ativação de traduções (ES, EN, FR, IT).
+
+🍷 2. Domínio de Vinhos, Adega e Ranking
+Obrigatoriedade EAN: Nome, Uva, Safra e EAN como chaves principais na avaliação. O EAN passa a ser o coração do banco de dados de vinhos.
+
+Mescla de Telas: Unificação dos recursos de "Avaliar Vinho" com "Acrescentar na Adega".
+
+Ranking: Tela não pode ficar vazia por padrão; adição de filtros (Ordem Alfabética, Nº de Avaliações, Pontuação).
+
+Fix Adega: Correção do loop infinito ao adicionar vinho e ajustes visuais (ícone de consumidos, botão fora da tela).
+
+Portfólio: Abertura da ficha completa do vinho ao clicar nele no portfólio do usuário.
+
+💬 3. Engajamento, Feeds e Realtime
+Notificações & Realtime: Comentários atualizando na hora e criação do sistema global de Push (curtidas, comentários, conexões, seguidores).
+
+Feed Geral: Correção de imagens sumindo, liberação de vídeos, reações com emojis visuais e datas relativas (ex: "há 5 min").
+
+Botão Compartilhar: Ajuste para enviar no chat interno ou link externo (fechado para login).
+
+Feed Ideal.BI (Mercado): Vinculação do feed corporativo ao perfil da empresa, puxando foto/nome real de quem comenta e habilitando vídeos/realtime igual ao feed comum.
+
+🏢 4. Modo Empresa (B2B), Vagas e Marketplace
+Separação PF x PJ: Postagens e Vagas feitas por empresas não podem puxar os dados do usuário pessoal.
+
+Chat Direto: Fim da "solicitação de mensagem" para empresas; contato direto liberado.
+
+Marketplace: Inclusão de fotos nos produtos e link direto para negociação no chat.
+
+Vagas Blindadas: Nome da empresa pré-preenchido (sem poder trocar). Ao aplicar, o sistema envia uma mensagem + CV automaticamente no chat da empresa.
+
+UI Corporativa: Painel na aba principal e criação de área de "Analytics" (que não existia).
+
+📅 5. Eventos, Grupos e Perfil
+Eventos: Organizador não pode confirmar presença no próprio evento. Listagem visual de quem confirmou. Eventos online com link oculto e eventos restritos integrados aos cargos do sistema.
+
+Grupos: Abertura automática ao criar, menu de 3 pontinhos (sair/apagar mensagens), foto de perfil para o grupo, gravador de voz e envio de arquivos no chat.
+
+Perfil: Atualização da foto em realtime, correção ortográfica ("restaurante") e liberação para o usuário adicionar múltiplas certificações sem precisar de aprovação do Admin.
+
+⚙️ 6. Painel Admin e Plan Builder (A Sala de Comando)
+CRM & Cortesias: Poder para aplicar "Cortesia" (mudar plano manualmente burlando o pagamento), além de Banir (deslogar) ou dar Shadowban (ocultar posts).
+
+Plan Builder REAL: Criação do middleware que realmente bloqueia o usuário no app (Paywall) se ele tentar acessar uma função (ex: Gráficos ou Feed Ideal) que não está no plano dele. Estratégia de slides (sequencial/aleatório) aplicada à força.
+
+Feature Flags: Integração dos botões de "Configurações" direto na UI do app. Se desligar "Enquetes" ou ligar "Modo Manutenção", reflete para o usuário instantaneamente.
+
+🛡️ 7. Blindagem e Lançamento (Opcional/Futuro)
+Auditoria RLS (banco de dados), paginação de dados (infinite scroll), compressão de imagens antes do upload, loading states para evitar cliques duplos, e as regras rígidas da Apple (botões de excluir conta e denunciar).
