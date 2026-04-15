@@ -12,9 +12,10 @@ import {
 const GOLD = "#c9a84c";
 const NAVY = "#0d1b2a";
 
-const PLANS = ["basico", "profissional", "empresarial", "premium"];
+const PLANS = ["gratuito", "basico", "profissional", "empresarial", "premium"];
 
 const planColor: Record<string, { bg: string; color: string }> = {
+  gratuito: { bg: "#f5f5f5", color: "#9ca3af" },
   basico: { bg: "#f2f3f5", color: "#8a93a2" },
   profissional: { bg: "#ede9fe", color: "#6d28d9" },
   empresarial: { bg: "#dcfce7", color: "#16a34a" },

@@ -44,6 +44,8 @@ interface AuthContextType {
   loading: boolean;
   activeCompany: ActiveCompany | null;
   setActiveCompany: (company: ActiveCompany | null) => void;
+  suspensionMsg: string | null;
+  clearSuspensionMsg: () => void;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
   signInWithGoogle: () => Promise<{ error: string | null }>;
@@ -67,6 +69,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null);
+  const [suspensionMsg, setSuspensionMsg] = useState<string | null>(null);
+  const clearSuspensionMsg = useCallback(() => setSuspensionMsg(null), []);
 
   const fetchProfile = useCallback(async (userId: string) => {
     try {
@@ -123,6 +127,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => { subscription.unsubscribe(); };
   }, [fetchProfile]);
+
+  // Realtime: detect when admin bans the current user and force sign-out
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`ban-watcher-${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${user.id}` },
+        async (payload) => {
+          const updated = payload.new as { is_banned?: boolean };
+          if (updated.is_banned === true) {
+            setSuspensionMsg("Sua conta foi suspensa. Entre em contato com o suporte.");
+            await supabase.auth.signOut();
+          }
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -201,6 +225,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider value={{
       session, user, profile, loading,
       activeCompany, setActiveCompany,
+      suspensionMsg, clearSuspensionMsg,
       signIn, signUp, signInWithGoogle, signOut,
       resetPassword, updatePassword,
       refreshProfile, refreshProfileByUserId, patchProfile,

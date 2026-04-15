@@ -16,6 +16,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/context/AuthContext";
+import { fetchShadowbannedIds } from "@/services/api";
 import { useTranslation } from "react-i18next";
 
 type Filter =
@@ -109,6 +110,17 @@ export default function SearchScreen() {
     const lim   = (full: number) => (isAll ? Math.ceil(full / 2) : full);
 
     try {
+      // Server-side shadowban filter for posts search
+      const shadowbannedIds = (isAll || f === "publicacoes") ? await fetchShadowbannedIds(myId) : [];
+      let searchPostsQuery = supabase.from("posts")
+        .select("id, content, created_at, likes_count, comments_count, author:profiles!posts_user_id_fkey(id, full_name, avatar_url)")
+        .ilike("content", `%${trimmed}%`)
+        .order("created_at", { ascending: false })
+        .limit(lim(20));
+      if (shadowbannedIds.length > 0) {
+        searchPostsQuery = searchPostsQuery.not("user_id", "in", `(${shadowbannedIds.join(",")})`);
+      }
+
       const [resP, resPub, resE, resV, resEv, resG] = await Promise.all([
         (isAll || f === "pessoas")
           ? supabase.from("profiles")
@@ -117,11 +129,7 @@ export default function SearchScreen() {
               .eq("profile_type", "pessoa").neq("id", myId).limit(lim(30))
           : Promise.resolve({ data: [] }),
 
-        (isAll || f === "publicacoes")
-          ? supabase.from("posts")
-              .select("id, content, created_at, likes_count, comments_count, author:profiles!posts_user_id_fkey(id, full_name, avatar_url)")
-              .ilike("content", `%${trimmed}%`).order("created_at", { ascending: false }).limit(lim(20))
-          : Promise.resolve({ data: [] }),
+        (isAll || f === "publicacoes") ? searchPostsQuery : Promise.resolve({ data: [] }),
 
         (isAll || f === "empresas")
           ? supabase.from("profiles")

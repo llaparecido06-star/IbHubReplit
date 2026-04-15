@@ -25,7 +25,7 @@ import {
 } from "@/services/admin-api";
 
 const AVATAR_COLORS = ["#0d1b2a", "#1e3a5f", "#7c3aed", "#e11d48", "#059669", "#374151", "#1e3a5f"];
-const PLANS = ["basico", "profissional", "empresarial", "premium"] as const;
+const PLANS = ["gratuito", "basico", "profissional", "empresarial", "premium"] as const;
 
 function getInitial(name: string | null, email: string | null): string {
   const str = name ?? email ?? "?";

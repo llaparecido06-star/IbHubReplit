@@ -245,7 +245,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [fetchProfile, handleDeepLink]);
 
-  // ── Realtime: re-fetch profile when Stripe webhooks update subscription status ──
+  // ── Realtime: re-fetch profile on Stripe/plan changes; force sign-out if banned ──
   useEffect(() => {
     if (!user?.id) return;
 
@@ -260,7 +260,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           table: "profiles",
           filter: `id=eq.${user.id}`,
         },
-        () => {
+        async (payload) => {
+          const updated = payload.new as { is_banned?: boolean };
+          if (updated.is_banned === true) {
+            // Store flag so login screen can display the suspension message
+            await AsyncStorage.setItem("account_suspended", "true");
+            await supabase.auth.signOut();
+            return;
+          }
           fetchProfile(user.id).catch(() => {});
         },
       )

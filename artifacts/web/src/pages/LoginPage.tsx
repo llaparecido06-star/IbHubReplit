@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 
 export default function LoginPage() {
-  const { signIn, signInWithGoogle } = useAuth();
+  const { signIn, signInWithGoogle, suspensionMsg, clearSuspensionMsg } = useAuth();
   const [, setLocation] = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -11,6 +11,14 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Show suspension message when redirected here after forced sign-out
+  useEffect(() => {
+    if (suspensionMsg) {
+      setError(suspensionMsg);
+      clearSuspensionMsg();
+    }
+  }, [suspensionMsg, clearSuspensionMsg]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

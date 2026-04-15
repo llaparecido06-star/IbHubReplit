@@ -1,6 +1,7 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -29,12 +30,26 @@ export default function LoginScreen() {
   const [socialLoading, setSocialLoading] = useState<"google" | "apple" | null>(null);
   const [error, setError]               = useState<string | null>(null);
 
+  // Show suspension message when redirected here after forced sign-out
+  useEffect(() => {
+    AsyncStorage.getItem("account_suspended").then((val) => {
+      if (val === "true") {
+        setError("Sua conta foi suspensa. Entre em contato com o suporte.");
+        AsyncStorage.removeItem("account_suspended");
+      }
+    });
+  }, []);
+
   const handleLogin = async () => {
     if (!email || !password) { setError("Preencha todos os campos"); return; }
     setLoading(true);
     setError(null);
     const { error: err } = await signIn(email, password);
-    if (err) setError("Email ou senha incorretos");
+    if (err) {
+      setError(err.toLowerCase().includes("suspensa") || err.toLowerCase().includes("suspen")
+        ? err
+        : "Email ou senha incorretos");
+    }
     setLoading(false);
   };
 

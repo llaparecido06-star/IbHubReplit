@@ -55,6 +55,17 @@ async function _fetchProfilesMap(userIds: string[]): Promise<Map<string, any>> {
   return new Map((data ?? []).map((p: any) => [p.id, p]));
 }
 
+/** Returns profile IDs where is_shadowbanned=true, excluding excludeUserId. */
+async function _fetchShadowbannedIds(excludeUserId?: string): Promise<string[]> {
+  const { data } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("is_shadowbanned", true);
+  return (data ?? [])
+    .map((p: { id: string }) => p.id)
+    .filter((id) => id !== excludeUserId);
+}
+
 function _normalisePost(raw: any, profileMap: Map<string, any>): Post {
   const p = profileMap.get(raw.user_id);
   return {
@@ -72,11 +83,20 @@ function _normalisePost(raw: any, profileMap: Map<string, any>): Post {
 
 export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
   try {
-    const { data, error } = await supabase
+    // Server-side shadowban filter: DB itself excludes shadowbanned users' posts
+    const shadowbannedIds = await _fetchShadowbannedIds(currentUserId);
+
+    let postsQuery = supabase
       .from("posts")
       .select(POST_SELECT)
       .order("created_at", { ascending: false })
       .limit(30);
+
+    if (shadowbannedIds.length > 0) {
+      postsQuery = postsQuery.not("user_id", "in", `(${shadowbannedIds.join(",")})`);
+    }
+
+    const { data, error } = await postsQuery;
     if (error || !data || !data.length) return [];
 
     const userIds = [...new Set(data.map((p: any) => p.user_id).filter(Boolean))] as string[];
@@ -91,13 +111,7 @@ export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
     const likedMap = new Map((likedRes.data ?? []).map((l: any) => [l.post_id, l.reaction_type ?? "curtir"]));
     const bookmarkedIds = new Set((bookmarkRes.data ?? []).map((b: any) => b.post_id));
 
-    const visibleData = data.filter((raw: any) => {
-      if (raw.user_id === currentUserId) return true;
-      const profile = profileMap.get(raw.user_id);
-      return !profile?.is_shadowbanned;
-    });
-
-    return visibleData.map((raw: any) => ({
+    return data.map((raw: any) => ({
       ..._normalisePost(raw, profileMap),
       is_liked: likedMap.has(raw.id),
       reaction_type: likedMap.get(raw.id) ?? null,

@@ -378,7 +378,7 @@ router.post("/admin/change-plan", async (req: Request, res: Response) => {
     return;
   }
 
-  const VALID_PLANS = ["basico", "profissional", "empresarial", "premium"];
+  const VALID_PLANS = ["gratuito", "basico", "profissional", "empresarial", "premium"];
   if (!VALID_PLANS.includes(plan)) {
     res.status(400).json({ error: `Invalid plan. Valid values: ${VALID_PLANS.join(", ")}` });
     return;
