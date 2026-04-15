@@ -188,7 +188,7 @@ router.post("/presentations/:id/access", async (req: Request, res: Response) => 
     return;
   }
 
-  const accessorProfile = profile as { id: string; plan?: string; is_admin?: boolean; courtesy_until?: string | null; created_at: string };
+  const accessorProfile = profile as { id: string; plan?: string; is_admin?: boolean; stripe_subscription_status?: string | null; courtesy_until?: string | null; created_at: string };
 
   if (accessorProfile.is_admin) {
     res.json({ ok: true, applied: false, reason: "admin" });

@@ -5227,21 +5227,21 @@ export async function createMarketPost(
   pollOptions?: MarketPollOption[] | null,
 ): Promise<MarketPost | null> {
   try {
-    const { data, error } = await supabase
-      .from("market_posts")
-      .insert({
-        author_id: authorId,
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return null;
+    const res = await fetch(`${API_URL}/market/posts`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
         content,
         image_url: imageUrl ?? null,
         video_url: videoUrl ?? null,
         poll_options: pollOptions && pollOptions.length > 0 ? pollOptions : null,
-        likes_count: 0,
-        comments_count: 0,
-      })
-      .select("id, content, image_url, video_url, poll_options, created_at, author_id, likes_count, comments_count")
-      .single();
-    if (error || !data) return null;
-    return { ...data, user_liked: false, user_poll_vote: null };
+      }),
+    });
+    if (!res.ok) return null;
+    const body = await res.json() as { post: MarketPost };
+    return { ...body.post, user_liked: false, user_poll_vote: null };
   } catch { return null; }
 }
 

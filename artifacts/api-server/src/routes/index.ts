@@ -6,6 +6,7 @@ import pushRouter from "./push";
 import stripeRouter from "./stripe";
 import presentationsRouter from "./presentations";
 import uploadsRouter from "./uploads";
+import marketRouter from "./market";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(pushRouter);
 router.use(stripeRouter);
 router.use(presentationsRouter);
 router.use(uploadsRouter);
+router.use(marketRouter);
 
 export default router;

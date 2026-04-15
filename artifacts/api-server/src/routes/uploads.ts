@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
+import { resolveUserId, requirePlanFeature } from "../lib/planCheck.js";
 
 const router: IRouter = Router();
 
@@ -84,23 +85,26 @@ router.post("/uploads/chat", async (req: Request, res: Response): Promise<void> 
  */
 router.post("/uploads/portfolio", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { fileBase64, fileName, mimeType, userId } = req.body as {
+    const authUserId = await resolveUserId(req, res);
+    if (!authUserId) return;
+
+    const { fileBase64, fileName, mimeType } = req.body as {
       fileBase64: string;
       fileName: string;
       mimeType: string;
-      userId: string;
+      userId?: string;
     };
 
-    if (!fileBase64 || !fileName || !userId) {
-      res.status(400).json({ error: "fileBase64, fileName and userId are required" });
+    if (!fileBase64 || !fileName) {
+      res.status(400).json({ error: "fileBase64 and fileName are required" });
       return;
     }
 
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith("Bearer ")) {
-      res.status(401).json({ error: "Missing authorization header" });
-      return;
-    }
+    const userId = authUserId;
+
+    // Gate portfolio/certification uploads behind the plan feature
+    const allowed = await requirePlanFeature(req, res, userId, "Upload Certificados");
+    if (!allowed) return;
 
     const PORTFOLIO_BUCKET = "chat-attachments";
     const buffer = Buffer.from(fileBase64, "base64");

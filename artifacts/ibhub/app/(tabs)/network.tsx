@@ -33,6 +33,7 @@ import {
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { usePermissions } from "@/context/PermissionsContext";
+import { PaywallScreen } from "@/components/ui/PaywallScreen";
 import * as API from "@/services/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -557,6 +558,9 @@ const sliderStyles = StyleSheet.create({
 
 function ApresentacoesView({ colors, bottomPad, session, isAdmin }: { colors: any; bottomPad: number; session: any; isAdmin?: boolean }) {
   const router = useRouter();
+  const { hasFeature, isLoading: permLoading } = usePermissions();
+  const hasAccess = hasFeature("mercado:apresentacoes") || !!isAdmin;
+
   const [items, setItems]                   = useState<API.MarketPresentation[]>([]);
   const [loading, setLoading]               = useState(true);
   const [slideCounts, setSlideCounts]       = useState<Record<string, { total: number; unlocked: number }>>({});
@@ -564,6 +568,7 @@ function ApresentacoesView({ colors, bottomPad, session, isAdmin }: { colors: an
   const [viewerVisible, setViewerVisible]   = useState(false);
 
   useEffect(() => {
+    if (!hasAccess) { setLoading(false); return; }
     API.fetchMarketPresentations().then(async data => {
       setItems(data);
       setLoading(false);
@@ -578,12 +583,30 @@ function ApresentacoesView({ colors, bottomPad, session, isAdmin }: { colors: an
         setSlideCounts(counts);
       }
     });
-  }, [session]);
+  }, [hasAccess, session]);
 
   const openPresentation = (p: API.MarketPresentation) => {
     setViewerPresentation(p);
     setViewerVisible(true);
   };
+
+  if (permLoading) {
+    return (
+      <View style={styles.apresentacoesEmpty}>
+        <ActivityIndicator size="large" color={colors.gold} />
+      </View>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <PaywallScreen
+        featureName="Apresentações de Mercado"
+        description="Acesse relatórios e apresentações exclusivos do mercado vitivinícola, com slides desbloqueados progressivamente conforme seu plano."
+        requiredPlan="Profissional"
+      />
+    );
+  }
 
   if (loading) {
     return (
