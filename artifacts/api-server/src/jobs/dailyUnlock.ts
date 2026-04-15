@@ -1,7 +1,7 @@
-import { supabaseAdmin, applyDeliveryStrategy, type DeliveryStrategy } from "../lib/deliveryStrategies.js";
+import { supabaseAdmin, applyDeliveryStrategy, type DeliveryStrategy, type PresentationGroup } from "../lib/deliveryStrategies.js";
 
 export async function dailyUnlockJob(): Promise<void> {
-  console.info("[dailyUnlockJob] Starting daily slide unlock...");
+  console.info("[dailyUnlockJob] Starting daily presentation unlock...");
 
   const { data: profiles, error: profilesErr } = await supabaseAdmin
     .from("profiles")
@@ -31,32 +31,39 @@ export async function dailyUnlockJob(): Promise<void> {
 
   const { data: presentations, error: presErr } = await supabaseAdmin
     .from("market_presentations")
-    .select("id")
-    .eq("published", true);
+    .select("id, created_at")
+    .eq("published", true)
+    .order("created_at", { ascending: true });
 
   if (presErr || !presentations || presentations.length === 0) {
     console.info("[dailyUnlockJob] No active presentations.");
     return;
   }
 
-  const presentationIds = (presentations as { id: string }[]).map((p) => p.id);
+  const presentationIds = (presentations as { id: string; created_at: string }[]).map((p) => p.id);
 
   const { data: allSlides, error: slidesErr } = await supabaseAdmin
     .from("slides")
     .select("id, presentation_id, sequence_order")
-    .in("presentation_id", presentationIds);
+    .in("presentation_id", presentationIds)
+    .order("sequence_order", { ascending: true });
 
   if (slidesErr || !allSlides) {
     console.warn("[dailyUnlockJob] Failed to fetch slides:", slidesErr?.message);
     return;
   }
 
-  const slidesByPresentation = new Map<string, typeof allSlides>();
+  const slidesByPresentation = new Map<string, { id: string; presentation_id: string; sequence_order: number }[]>();
   for (const slide of allSlides as { id: string; presentation_id: string; sequence_order: number }[]) {
     const arr = slidesByPresentation.get(slide.presentation_id) ?? [];
     arr.push(slide);
     slidesByPresentation.set(slide.presentation_id, arr);
   }
+
+  const allPresentationGroups: PresentationGroup[] = presentationIds.map((pid) => ({
+    id: pid,
+    slides: slidesByPresentation.get(pid) ?? [],
+  }));
 
   let processed = 0;
   let errors = 0;
@@ -65,15 +72,12 @@ export async function dailyUnlockJob(): Promise<void> {
     const strategy = planStrategyMap.get(profile.plan) ?? "NONE";
     if (strategy === "NONE") continue;
 
-    for (const presentationId of presentationIds) {
-      const slides = slidesByPresentation.get(presentationId) ?? [];
-      try {
-        await applyDeliveryStrategy(profile.id, profile, strategy, presentationId, slides);
-        processed++;
-      } catch (e) {
-        errors++;
-        console.error(`[dailyUnlockJob] Error for user ${profile.id} presentation ${presentationId}:`, e);
-      }
+    try {
+      await applyDeliveryStrategy(profile.id, profile, strategy, allPresentationGroups);
+      processed++;
+    } catch (e) {
+      errors++;
+      console.error(`[dailyUnlockJob] Error for user ${profile.id}:`, e);
     }
   }
 

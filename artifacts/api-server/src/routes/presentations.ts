@@ -224,44 +224,57 @@ router.post("/presentations/:id/access", async (req: Request, res: Response) => 
   if (accessorIsCourtesy) {
     strategy = "FULL_ACCESS";
   } else {
-    const planId = accessorPlanId;
     const { data: planData } = await supabaseAdmin
       .from("plans")
       .select("delivery_strategy")
-      .eq("id", planId)
+      .eq("id", accessorPlanId)
       .maybeSingle();
     strategy = (((planData as { delivery_strategy?: string } | null)?.delivery_strategy) ?? "NONE") as DS;
   }
 
   // RANDOM_DAILY is managed exclusively by the daily cron job (once-per-day guarantee).
-  // Applying it on every access would unlock a new slide on every open, violating the intent.
+  // Applying it on every access would unlock a new presentation on every open, violating the intent.
   if (strategy === "RANDOM_DAILY") {
     res.json({ ok: true, applied: false, reason: "random_daily_deferred_to_cron" });
     return;
   }
 
-  const { data: slidesRaw } = await supabaseAdmin
-    .from("slides")
-    .select("id, sequence_order")
-    .eq("presentation_id", presentationId)
-    .order("sequence_order", { ascending: true });
+  // Fetch ALL published presentations (sorted by created_at asc = canonical order)
+  const { data: allPresentations } = await supabaseAdmin
+    .from("market_presentations")
+    .select("id, created_at")
+    .eq("published", true)
+    .order("created_at", { ascending: true });
 
-  if (!slidesRaw || slidesRaw.length === 0) {
-    res.json({ ok: true, applied: false, reason: "no_slides" });
+  if (!allPresentations || allPresentations.length === 0) {
+    res.json({ ok: true, applied: false, reason: "no_presentations" });
     return;
   }
 
-  const slides = (slidesRaw as { id: string; sequence_order: number }[]).map(s => ({
-    ...s,
-    presentation_id: presentationId,
+  const presIds = (allPresentations as { id: string }[]).map((p) => p.id);
+  const { data: allSlidesRaw } = await supabaseAdmin
+    .from("slides")
+    .select("id, presentation_id, sequence_order")
+    .in("presentation_id", presIds)
+    .order("sequence_order", { ascending: true });
+
+  const slidesByPres = new Map<string, { id: string; presentation_id: string; sequence_order: number }[]>();
+  for (const s of (allSlidesRaw ?? []) as { id: string; presentation_id: string; sequence_order: number }[]) {
+    const arr = slidesByPres.get(s.presentation_id) ?? [];
+    arr.push(s);
+    slidesByPres.set(s.presentation_id, arr);
+  }
+
+  const presentationGroups = presIds.map((pid) => ({
+    id: pid,
+    slides: slidesByPres.get(pid) ?? [],
   }));
 
   await applyDeliveryStrategy(
     userId,
     { id: accessorProfile.id, plan: accessorProfile.plan ?? "gratuito", created_at: accessorProfile.created_at },
     strategy,
-    presentationId,
-    slides,
+    presentationGroups,
   );
 
   res.json({ ok: true, applied: true, strategy });
