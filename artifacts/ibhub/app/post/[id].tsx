@@ -242,39 +242,46 @@ export default function PostDetailScreen() {
         if (c.id !== commentId) return c;
         return { ...c, is_liked: !wasLiked, likes_count: (c.likes_count ?? 0) + (wasLiked ? -1 : 1) };
       });
+    const revert = (list: AppComment[]): AppComment[] =>
+      list.map(c => c.id !== commentId ? c : { ...c, is_liked: wasLiked, likes_count: (c.likes_count ?? 0) + (wasLiked ? 1 : -1) });
+
+    const applyToComments = (fn: (l: AppComment[]) => AppComment[]) => {
+      if (isReply && parentId) {
+        setComments(prev => prev.map(c => c.id === parentId ? { ...c, replies: fn(c.replies ?? []) } : c));
+      } else {
+        setComments(prev => fn(prev));
+      }
+    };
 
     // Optimistic update
-    if (isReply && parentId) {
-      setComments(prev => prev.map(c =>
-        c.id === parentId ? { ...c, replies: applyToggle(c.replies ?? []) } : c
-      ));
-    } else {
-      setComments(prev => applyToggle(prev));
-    }
+    applyToComments(applyToggle);
 
-    const ok = await API.toggleCommentLike(commentId, user.id, wasLiked);
-    if (!ok) {
-      // Revert on failure
-      const revert = (list: AppComment[]): AppComment[] =>
-        list.map(c => c.id !== commentId ? c : { ...c, is_liked: wasLiked, likes_count: (c.likes_count ?? 0) + (wasLiked ? 1 : -1) });
-      if (isReply && parentId) {
-        setComments(prev => prev.map(c =>
-          c.id === parentId ? { ...c, replies: revert(c.replies ?? []) } : c
-        ));
-      } else {
-        setComments(prev => revert(prev));
+    try {
+      const ok = await API.toggleCommentLike(commentId, user.id, wasLiked);
+      if (!ok) {
+        applyToComments(revert);
+        Alert.alert("Erro", "Não foi possível curtir o comentário. Tente novamente.");
       }
+    } catch (e: unknown) {
+      applyToComments(revert);
+      Alert.alert("Erro de Conexão", friendlyErrorMessage(e));
     }
   };
 
   const handleLikePost = async () => {
     if (!post || !user?.id) return;
     const wasLiked = post.is_liked ?? false;
+    const prevCount = post.likes_count;
     setPost(p => p ? { ...p, is_liked: !wasLiked, likes_count: wasLiked ? p.likes_count - 1 : p.likes_count + 1 } : p);
-    const ok = await API.toggleLike(post.id, user.id, wasLiked, activeCompany?.id);
-    if (!ok) {
-      // Revert on failure
-      setPost(p => p ? { ...p, is_liked: wasLiked, likes_count: wasLiked ? p.likes_count + 1 : p.likes_count - 1 } : p);
+    try {
+      const ok = await API.toggleLike(post.id, user.id, wasLiked, activeCompany?.id);
+      if (!ok) {
+        setPost(p => p ? { ...p, is_liked: wasLiked, likes_count: prevCount } : p);
+        Alert.alert("Erro", "Não foi possível curtir. Tente novamente.");
+      }
+    } catch (e: unknown) {
+      setPost(p => p ? { ...p, is_liked: wasLiked, likes_count: prevCount } : p);
+      Alert.alert("Erro de Conexão", friendlyErrorMessage(e));
     }
   };
 

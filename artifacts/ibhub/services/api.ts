@@ -17,10 +17,14 @@ function isNetworkError(e: unknown): boolean {
 }
 
 async function guardedFetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
   try {
-    return await fetch(input, init);
+    return await fetch(input, { ...init, signal: controller.signal });
   } catch (e: unknown) {
     throw new Error("Verifique sua conexão e tente novamente.");
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -1559,6 +1563,7 @@ export async function toggleCommentLike(commentId: string, userId: string, isCur
       return true;
     }
   } catch (e) {
+    if (isNetworkError(e)) throw e;
     console.warn("toggleCommentLike:", e);
     return false;
   }

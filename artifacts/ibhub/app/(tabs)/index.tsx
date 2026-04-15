@@ -81,6 +81,7 @@ export default function FeedScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [feedNetworkError, setFeedNetworkError] = useState(false);
   const [hasMoreFeed, setHasMoreFeed] = useState(true);
   const feedOffsetRef = useRef(0);
   const isLoadingMoreRef = useRef(false);
@@ -157,6 +158,7 @@ export default function FeedScreen() {
   const loadPosts = useCallback(async () => {
     feedOffsetRef.current = 0;
     isLoadingMoreRef.current = false;
+    setFeedNetworkError(false);
     // Try real Supabase data first
     if (user?.id) {
       try {
@@ -170,7 +172,9 @@ export default function FeedScreen() {
           setLoading(false);
           return;
         }
-      } catch {}
+      } catch {
+        setFeedNetworkError(true);
+      }
     }
     // Fallback: cached (only real posts, strip any legacy mock posts)
     try {
@@ -214,9 +218,12 @@ export default function FeedScreen() {
         feedOffsetRef.current += more.length;
       }
       setHasMoreFeed(more.length >= FEED_PAGE_SIZE);
-    } catch {}
-    setLoadingMore(false);
-    isLoadingMoreRef.current = false;
+    } catch {
+      Alert.alert("Erro de Conexão", "Verifique sua conexão e tente novamente.");
+    } finally {
+      setLoadingMore(false);
+      isLoadingMoreRef.current = false;
+    }
   }, [user?.id, activeCompany?.id, hasMoreFeed]);
 
   const loadSuggestions = useCallback(async () => {
@@ -293,7 +300,9 @@ export default function FeedScreen() {
           setRefreshing(false);
           return;
         }
-      } catch {}
+      } catch {
+        Alert.alert("Erro de Conexão", "Verifique sua conexão e tente novamente.");
+      }
     }
     await AsyncStorage.removeItem(STORAGE_KEY);
     setPosts([]);
@@ -800,6 +809,14 @@ export default function FeedScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {feedNetworkError && (
+        <View style={{ backgroundColor: "#c0392b", paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <Text style={{ color: "#fff", fontSize: 13, flex: 1 }}>Sem conexão — mostrando dados em cache</Text>
+          <TouchableOpacity onPress={() => setFeedNetworkError(false)}>
+            <Text style={{ color: "#fff", fontSize: 16, fontWeight: "bold", paddingLeft: 12 }}>×</Text>
+          </TouchableOpacity>
+        </View>
+      )}
       <FlatList
         ref={flatListRef}
         style={{ flex: 1 }}
