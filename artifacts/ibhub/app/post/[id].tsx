@@ -1,10 +1,14 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { Image } from "expo-image";
+import { Video, ResizeMode } from "expo-av";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -20,16 +24,9 @@ import * as API from "@/services/api";
 import type { AppComment } from "@/services/api";
 import { Post } from "@/components/feed/PostCard";
 import { LikesModal } from "@/components/feed/LikesModal";
+import { formatRelativeDate } from "@/utils/dateUtils";
 
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "agora";
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h`;
-  return `${Math.floor(hrs / 24)}d`;
-}
+const { width: SCREEN_W } = Dimensions.get("window");
 
 // Flatten threaded comments for FlatList: [root, reply, reply, root, reply, ...]
 type FlatItem = AppComment & { isReply: boolean; depth: number };
@@ -303,7 +300,7 @@ export default function PostDetailScreen() {
           </View>
 
           <View style={styles.commentActions}>
-            <Text style={[styles.commentTime, { color: colors.mutedForeground }]}>{timeAgo(item.created_at)}</Text>
+            <Text style={[styles.commentTime, { color: colors.mutedForeground }]}>{formatRelativeDate(item.created_at)}</Text>
 
             {/* Like comment */}
             <TouchableOpacity
@@ -402,6 +399,44 @@ export default function PostDetailScreen() {
 
                 {/* Content */}
                 <Text style={[styles.postContentPreview, { color: colors.foreground }]}>{post.content}</Text>
+
+                {/* Images */}
+                {(() => {
+                  const rawUrls = post.image_urls;
+                  const imageUrls: string[] = Array.isArray(rawUrls) && rawUrls.length > 0
+                    ? rawUrls
+                    : post.image_url ? [post.image_url] : [];
+                  if (imageUrls.length === 0) return null;
+                  if (imageUrls.length === 1) {
+                    return (
+                      <Image
+                        source={{ uri: imageUrls[0] }}
+                        style={{ width: "100%", height: SCREEN_W * 0.56, borderRadius: 12, marginTop: 8 }}
+                        contentFit="cover"
+                      />
+                    );
+                  }
+                  return (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }} contentContainerStyle={{ gap: 8 }}>
+                      {imageUrls.map((uri, i) => (
+                        <Image key={i} source={{ uri }} style={{ width: SCREEN_W - 80, height: (SCREEN_W - 80) * 0.6, borderRadius: 12 }} contentFit="cover" />
+                      ))}
+                    </ScrollView>
+                  );
+                })()}
+
+                {/* Video */}
+                {post.video_url && (
+                  <View style={{ marginTop: 8, width: "100%", height: SCREEN_W * 0.56, borderRadius: 12, overflow: "hidden", backgroundColor: "#000" }}>
+                    <Video
+                      source={{ uri: post.video_url }}
+                      style={{ width: "100%", height: "100%" }}
+                      resizeMode={ResizeMode.COVER}
+                      useNativeControls
+                      isLooping
+                    />
+                  </View>
+                )}
 
                 {/* Actions */}
                 <View style={styles.postActions}>

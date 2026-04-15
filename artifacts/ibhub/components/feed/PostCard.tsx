@@ -9,6 +9,7 @@ import {
   Animated,
   Dimensions,
   FlatList,
+  Linking,
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -21,6 +22,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { formatRelativeDate } from "@/utils/dateUtils";
 import { AntDesign, Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
@@ -186,18 +188,6 @@ interface PostCardProps {
   onViewLikes?: (postId: string) => void;
 }
 
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "agora";
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h`;
-  const days = Math.floor(hrs / 24);
-  if (days < 7) return `${days}d`;
-  return `${Math.floor(days / 7)}sem`;
-}
-
 function fmtCount(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return String(n);
@@ -324,6 +314,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
   const [reportSending, setReportSending]       = useState(false);
   const [expanded, setExpanded]                 = useState(false);
   const [showReactions, setShowReactions]       = useState(false);
+  const [showShareSheet, setShowShareSheet]     = useState(false);
   const [showShareChat, setShowShareChat]       = useState(false);
   const [conversations, setConversations]       = useState<AppConversation[]>([]);
   const [loadingConvos, setLoadingConvos]       = useState(false);
@@ -552,7 +543,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
             ) : null}
             <View style={styles.metaRow}>
               <Text style={[styles.timeAgo, { color: colors.mutedForeground }]}>
-                {timeAgo(post.created_at)}
+                {formatRelativeDate(post.created_at)}
               </Text>
               {post.location ? (
                 <>
@@ -778,7 +769,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
           <Text style={[styles.actionLabel, { color: colors.mutedForeground }]}>Comentar</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.action} onPress={openShareToChat} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.action} onPress={() => setShowShareSheet(true)} activeOpacity={0.7}>
           <MaterialCommunityIcons name="share-variant-outline" size={22} color={colors.mutedForeground} />
           <Text style={[styles.actionLabel, { color: colors.mutedForeground }]}>Compartilhar</Text>
         </TouchableOpacity>
@@ -851,6 +842,88 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
               <Text style={[styles.menuText, { color: "#dc2626" }]}>Bloquear usuário</Text>
             </TouchableOpacity>
           </View>
+        </Pressable>
+      </Modal>
+
+      {/* ── Share Options Sheet ── */}
+      <Modal visible={showShareSheet} transparent animationType="slide" onRequestClose={() => setShowShareSheet(false)}>
+        <Pressable style={shareStyles.overlay} onPress={() => setShowShareSheet(false)}>
+          <Pressable style={[shareStyles.sheet, { backgroundColor: "#fff" }]}>
+            <View style={[shareStyles.handle, { backgroundColor: "#e5e7eb" }]} />
+            <Text style={[shareStyles.title, { color: "#0d1b2a" }]}>Compartilhar</Text>
+
+            <TouchableOpacity
+              style={shareOptionStyles.option}
+              onPress={() => { setShowShareSheet(false); openShareToChat(); }}
+            >
+              <View style={[shareOptionStyles.iconWrap, { backgroundColor: "#e0f2fe" }]}>
+                <Feather name="send" size={20} color="#0284c7" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={shareOptionStyles.label}>Enviar no chat</Text>
+                <Text style={shareOptionStyles.sub}>Envie para uma conversa existente</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={shareOptionStyles.option}
+              onPress={async () => {
+                setShowShareSheet(false);
+                const postUrl = `https://ibhub.app/post/${post.id}`;
+                const text = `Veja esta publicação no ibhub:\n\n${post.content?.slice(0, 120) ?? ""}\n\n${postUrl}`;
+                const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(text)}`;
+                const canOpen = await Linking.canOpenURL(whatsappUrl);
+                if (canOpen) {
+                  Linking.openURL(whatsappUrl);
+                } else {
+                  Linking.openURL(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`);
+                }
+              }}
+            >
+              <View style={[shareOptionStyles.iconWrap, { backgroundColor: "#dcfce7" }]}>
+                <MaterialCommunityIcons name="whatsapp" size={20} color="#16a34a" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={shareOptionStyles.label}>WhatsApp</Text>
+                <Text style={shareOptionStyles.sub}>Compartilhe pelo WhatsApp</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={shareOptionStyles.option}
+              onPress={async () => {
+                setShowShareSheet(false);
+                const postUrl = `https://ibhub.app/post/${post.id}`;
+                const canOpen = await Linking.canOpenURL("instagram://");
+                if (canOpen) {
+                  await Share.share({ message: postUrl, url: postUrl });
+                } else {
+                  Linking.openURL("https://www.instagram.com/");
+                }
+              }}
+            >
+              <View style={[shareOptionStyles.iconWrap, { backgroundColor: "#fce7f3" }]}>
+                <Feather name="instagram" size={20} color="#db2777" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={shareOptionStyles.label}>Instagram</Text>
+                <Text style={shareOptionStyles.sub}>Compartilhe pelo Instagram</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={shareOptionStyles.option}
+              onPress={() => { setShowShareSheet(false); handleShare(); }}
+            >
+              <View style={[shareOptionStyles.iconWrap, { backgroundColor: "#f3f4f6" }]}>
+                <Feather name="link" size={20} color="#374151" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={shareOptionStyles.label}>Copiar link</Text>
+                <Text style={shareOptionStyles.sub}>Copie o link para compartilhar</Text>
+              </View>
+            </TouchableOpacity>
+          </Pressable>
         </Pressable>
       </Modal>
 
@@ -1158,6 +1231,13 @@ const styles = StyleSheet.create({
   },
   reactionEmoji: { fontSize: 28 },
   reactionLabel: { fontSize: 10, fontWeight: "600", color: "#374151" },
+});
+
+const shareOptionStyles = StyleSheet.create({
+  option:   { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: "#f3f4f6" },
+  iconWrap: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  label:    { fontSize: 15, fontWeight: "700", color: "#0d1b2a" },
+  sub:      { fontSize: 12, color: "#9ca3af", marginTop: 1 },
 });
 
 const shareStyles = StyleSheet.create({

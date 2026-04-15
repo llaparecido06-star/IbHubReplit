@@ -103,10 +103,27 @@ export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
   }
 }
 
+export async function uploadWebPostVideo(file: File, userId: string): Promise<string | null> {
+  try {
+    const ext = file.name.split(".").pop() ?? "mp4";
+    const path = `${userId}/${Date.now()}.${ext}`;
+    const { data, error } = await supabase.storage
+      .from("post-videos")
+      .upload(path, file, { contentType: file.type, upsert: false });
+    if (error) { console.error("uploadWebPostVideo error:", error); return null; }
+    const { data: urlData } = supabase.storage.from("post-videos").getPublicUrl(data.path);
+    return urlData?.publicUrl ?? null;
+  } catch (e) {
+    console.error("uploadWebPostVideo:", e);
+    return null;
+  }
+}
+
 export async function createWebPost(params: {
   user_id: string;
   content: string;
   image_url?: string | null;
+  video_url?: string | null;
   company_page_id?: string | null;
 }): Promise<Post | null> {
   try {
@@ -1909,7 +1926,25 @@ export async function addMarketComment(postId: string, authorId: string, content
     if (error || !data) return null;
     const { data: cur } = await supabase.from("market_posts").select("comments_count").eq("id", postId).single();
     await supabase.from("market_posts").update({ comments_count: (cur?.comments_count ?? 0) + 1 }).eq("id", postId);
-    return data;
+    const { data: authorProfile } = await supabase
+      .from("profiles")
+      .select("id, user_id, full_name, avatar_url")
+      .eq("user_id", authorId)
+      .maybeSingle();
+    return { ...data, author: authorProfile ?? undefined };
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchCompanyPageByName(name: string): Promise<{ id: string; name: string; avatar_url: string | null } | null> {
+  try {
+    const { data } = await supabase
+      .from("company_pages")
+      .select("id, name, avatar_url")
+      .ilike("name", `%${name}%`)
+      .maybeSingle();
+    return data ?? null;
   } catch {
     return null;
   }

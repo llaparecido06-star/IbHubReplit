@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
+import { Video, ResizeMode } from "expo-av";
 import { useRouter, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -108,6 +109,7 @@ export default function FeedScreen() {
   const [postMode, setPostMode]                     = useState<"text" | "poll">("text");
   const [postContent, setPostContent]               = useState("");
   const [postImageUris, setPostImageUris]           = useState<string[]>([]);
+  const [postVideoUri, setPostVideoUri]             = useState<string | null>(null);
   const [postLocation, setPostLocation]             = useState("");
   const [showLocationInput, setShowLocationInput]   = useState(false);
   const [pollQuestion, setPollQuestion]             = useState("");
@@ -389,12 +391,47 @@ export default function FeedScreen() {
     }
   };
 
+  const handlePickVideo = async () => {
+    if (Platform.OS !== "web") {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permissão necessária", "Precisamos de acesso à galeria para selecionar um vídeo.");
+        return;
+      }
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      allowsEditing: true,
+      quality: 1,
+      videoMaxDuration: 120,
+    });
+    if (!result.canceled && result.assets.length > 0) {
+      const asset = result.assets[0];
+      const durationSec = (asset.duration ?? 0) / 1000;
+      if (durationSec > 120) {
+        Alert.alert("Vídeo muito longo", "O vídeo deve ter no máximo 2 minutos de duração.");
+        return;
+      }
+      const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
+      if (asset.fileSize && asset.fileSize > MAX_VIDEO_BYTES) {
+        Alert.alert("Arquivo muito grande", "O vídeo deve ter no máximo 500 MB.");
+        return;
+      }
+      if (asset.mimeType && !asset.mimeType.startsWith("video/")) {
+        Alert.alert("Formato inválido", "Por favor selecione um arquivo de vídeo válido.");
+        return;
+      }
+      setPostVideoUri(asset.uri);
+      setPostImageUris([]);
+    }
+  };
+
   const handlePublishPost = async () => {
     setShowCreatePost(false);
     const content = postMode === "poll" ? pollQuestion : postContent;
-    if ((!content.trim() && postImageUris.length === 0) || !user?.id) {
+    if ((!content.trim() && postImageUris.length === 0 && !postVideoUri) || !user?.id) {
       setPostContent(""); setPollQuestion(""); setPollOptions(["",""]); setPostMode("text");
-      setPostImageUris([]); setPostLocation(""); setShowLocationInput(false);
+      setPostImageUris([]); setPostVideoUri(null); setPostLocation(""); setShowLocationInput(false);
       return;
     }
 
@@ -409,6 +446,7 @@ export default function FeedScreen() {
       content: content.trim(),
       image_url: postImageUris[0] ?? null,
       image_urls: postImageUris.length > 0 ? postImageUris : null,
+      video_url: postVideoUri ?? null,
       location: postLocation.trim() || null,
       likes_count: 0, comments_count: 0, shares_count: 0, view_count: 0,
       is_liked: false, is_bookmarked: false,
@@ -428,11 +466,16 @@ export default function FeedScreen() {
     };
     setPosts(prev => [tempPost, ...prev]);
 
-    // Upload images to Supabase Storage before saving
+    // Upload images or video to Supabase Storage before saving
     let uploadedUrls: string[] = [];
-    for (const uri of postImageUris) {
-      const url = await API.uploadPostImage(uri, user.id);
-      if (url) uploadedUrls.push(url);
+    let uploadedVideoUrl: string | null = null;
+    if (postVideoUri) {
+      uploadedVideoUrl = await API.uploadPostVideo(postVideoUri, user.id);
+    } else {
+      for (const uri of postImageUris) {
+        const url = await API.uploadPostImage(uri, user.id);
+        if (url) uploadedUrls.push(url);
+      }
     }
 
     const saved = await API.createPost({
@@ -441,6 +484,7 @@ export default function FeedScreen() {
       poll: pollData,
       image_url: uploadedUrls[0] ?? null,
       image_urls: uploadedUrls.length > 0 ? uploadedUrls : null,
+      video_url: uploadedVideoUrl ?? null,
       location: postLocation.trim() || null,
       company_page_id: activeCompany?.id ?? null,
     });
@@ -452,7 +496,7 @@ export default function FeedScreen() {
     }
 
     setPostContent(""); setPollQuestion(""); setPollOptions(["",""]); setPostMode("text");
-    setPostImageUris([]); setPostLocation(""); setShowLocationInput(false);
+    setPostImageUris([]); setPostVideoUri(null); setPostLocation(""); setShowLocationInput(false);
   };
 
   const handlePickWineImage = async () => {
@@ -999,15 +1043,36 @@ export default function FeedScreen() {
               </View>
             )}
 
+            {/* Video preview */}
+            {postVideoUri && (
+              <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+                <View style={{ position: "relative" }}>
+                  <Video
+                    source={{ uri: postVideoUri }}
+                    style={{ width: "100%", height: 200, borderRadius: 12 }}
+                    resizeMode={ResizeMode.COVER}
+                    useNativeControls
+                    isLooping={false}
+                  />
+                  <TouchableOpacity
+                    style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 14, padding: 5 }}
+                    onPress={() => setPostVideoUri(null)}
+                  >
+                    <Feather name="x" size={14} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
             {/* Toolbar */}
             <View style={[styles.postToolbar, { borderTopColor: colors.border }]}>
-              <TouchableOpacity style={styles.toolbarBtn} onPress={handlePickImage}>
-                <Feather name="image" size={18} color={postImageUris.length > 0 ? colors.gold : colors.foreground} />
-                <Text style={[styles.toolbarLabel, { color: postImageUris.length > 0 ? colors.gold : colors.foreground }]}>Foto</Text>
+              <TouchableOpacity style={styles.toolbarBtn} onPress={handlePickImage} disabled={!!postVideoUri}>
+                <Feather name="image" size={18} color={postImageUris.length > 0 ? colors.gold : postVideoUri ? colors.mutedForeground : colors.foreground} />
+                <Text style={[styles.toolbarLabel, { color: postImageUris.length > 0 ? colors.gold : postVideoUri ? colors.mutedForeground : colors.foreground }]}>Foto</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.toolbarBtn} onPress={() => Alert.alert("Em breve", "O upload de vídeos estará disponível em breve.")}>
-                <Feather name="video" size={18} color={colors.foreground} />
-                <Text style={[styles.toolbarLabel, { color: colors.foreground }]}>Vídeo</Text>
+              <TouchableOpacity style={styles.toolbarBtn} onPress={handlePickVideo} disabled={postImageUris.length > 0}>
+                <Feather name="video" size={18} color={postVideoUri ? colors.gold : postImageUris.length > 0 ? colors.mutedForeground : colors.foreground} />
+                <Text style={[styles.toolbarLabel, { color: postVideoUri ? colors.gold : postImageUris.length > 0 ? colors.mutedForeground : colors.foreground }]}>Vídeo</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.toolbarBtn} onPress={() => setPostMode(postMode === "poll" ? "text" : "poll")}>
                 <Feather name="bar-chart-2" size={18} color={postMode === "poll" ? colors.gold : colors.foreground} />

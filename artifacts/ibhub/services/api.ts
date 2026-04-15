@@ -29,6 +29,7 @@ export interface AppNotification {
   actor_id?: string | null;
   type: string;
   post_id?: string | null;
+  comment_id?: string | null;
   message?: string | null;
   read: boolean;
   created_at: string;
@@ -343,19 +344,7 @@ export async function toggleLike(postId: string, userId: string, isCurrentlyLike
       if (error) { console.error("toggleLike insert:", JSON.stringify(error)); return false; }
       // Increment count via RPC (bypasses RLS)
       await supabase.rpc("increment_post_likes", { p_post_id: postId });
-      // Notify post author via RPC (bypasses RLS, skips self-notification)
-      const { data: authorData, error: authorErr } = await supabase.rpc("get_post_author", { p_post_id: postId });
-      if (authorErr) console.error("get_post_author error:", JSON.stringify(authorErr));
-      if (authorData && authorData !== userId) {
-        const { error: notifErr } = await supabase.rpc("create_notification", {
-          p_user_id: authorData,
-          p_actor_id: userId,
-          p_type: "like",
-          p_post_id: postId,
-          p_message: "curtiu sua publicação",
-        });
-        if (notifErr) console.error("create_notification(like) error:", JSON.stringify(notifErr));
-      }
+      // Note: like notification is handled by DB trigger notify_on_like
     }
     return true;
   } catch (e) {
@@ -396,19 +385,7 @@ export async function toggleReaction(
     if (!hadPrevious) {
       // Fresh reaction (no previous) → increment
       await supabase.rpc("increment_post_likes", { p_post_id: postId });
-      // Notify post author
-      const { data: authorId, error: authorErr2 } = await supabase.rpc("get_post_author", { p_post_id: postId });
-      if (authorErr2) console.error("get_post_author(reaction) error:", JSON.stringify(authorErr2));
-      if (authorId && authorId !== userId) {
-        const { error: notifErr2 } = await supabase.rpc("create_notification", {
-          p_user_id: authorId,
-          p_actor_id: userId,
-          p_type: "like",
-          p_post_id: postId,
-          p_message: "reagiu à sua publicação",
-        });
-        if (notifErr2) console.error("create_notification(reaction) error:", JSON.stringify(notifErr2));
-      }
+      // Note: like notification is handled by DB trigger notify_on_like
     }
     // Changed reaction type (delete old, insert new) → count unchanged
 
@@ -600,26 +577,7 @@ export async function addComment(
     // Increment comments_count via RPC (bypasses RLS)
     await supabase.rpc("increment_post_comments", { p_post_id: postId });
 
-    if (parentCommentId) {
-      // Notify the parent comment author (reply notification)
-      await supabase.rpc("notify_comment_reply", {
-        p_parent_comment_id: parentCommentId,
-        p_actor_id: userId,
-        p_post_id: postId,
-      });
-    } else {
-      // Notify post author via RPC
-      const { data: authorId } = await supabase.rpc("get_post_author", { p_post_id: postId });
-      if (authorId && authorId !== userId) {
-        await supabase.rpc("create_notification", {
-          p_user_id: authorId,
-          p_actor_id: userId,
-          p_type: "comment",
-          p_post_id: postId,
-          p_message: "comentou na sua publicação",
-        });
-      }
-    }
+    // Note: comment/reply notifications are handled by DB trigger notify_on_comment
 
     return {
       ...(data as any),
@@ -881,11 +839,6 @@ export async function toggleFollow(
         { follower_id: currentUserId, following_id: targetId },
         { onConflict: "follower_id,following_id" },
       );
-      // Notify target
-      await supabase.from("notifications").insert({
-        user_id: targetId, actor_id: currentUserId, type: "follow",
-        message: "começou a seguir você",
-      });
     }
   } catch (e) {
     console.warn("toggleFollow:", e);
@@ -1158,7 +1111,7 @@ export async function fetchNotifications(userId: string): Promise<AppNotificatio
   try {
     const { data, error } = await supabase
       .from("notifications")
-      .select("id, user_id, actor_id, type, post_id, message, read, created_at")
+      .select("id, user_id, actor_id, type, post_id, comment_id, message, read, created_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(50);
@@ -1565,13 +1518,14 @@ export interface LikeUser {
   company_page_id?: string | null;
   company_name?: string | null;
   company_avatar?: string | null;
+  reaction_type?: string | null;
 }
 
 export async function fetchPostLikes(postId: string): Promise<LikeUser[]> {
   try {
     const { data, error } = await supabase
       .from("likes")
-      .select("user_id, company_page_id")
+      .select("user_id, company_page_id, reaction_type")
       .eq("post_id", postId)
       .order("created_at", { ascending: false })
       .limit(100);
@@ -1596,6 +1550,7 @@ export async function fetchPostLikes(postId: string): Promise<LikeUser[]> {
           avatar_url: c?.avatar_url ?? null,
           headline: c?.industry ?? null,
           company_page_id: l.company_page_id,
+          reaction_type: l.reaction_type ?? null,
         } as LikeUser;
       }
       const p = profileMap.get(l.user_id);
@@ -1605,6 +1560,7 @@ export async function fetchPostLikes(postId: string): Promise<LikeUser[]> {
         avatar_url: p?.avatar_url ?? null,
         headline: p?.headline ?? null,
         company_page_id: null,
+        reaction_type: l.reaction_type ?? null,
       } as LikeUser;
     });
   } catch (e) {
@@ -5285,6 +5241,11 @@ export async function addMarketComment(postId: string, authorId: string, content
     if (error || !data) return null;
     const { data: cur } = await supabase.from("market_posts").select("comments_count").eq("id", postId).single();
     await supabase.from("market_posts").update({ comments_count: (cur?.comments_count ?? 0) + 1 }).eq("id", postId);
-    return data;
+    const { data: authorProfile } = await supabase
+      .from("profiles")
+      .select("id, user_id, full_name, avatar_url")
+      .eq("user_id", authorId)
+      .maybeSingle();
+    return { ...data, author: authorProfile ?? undefined };
   } catch { return null; }
 }

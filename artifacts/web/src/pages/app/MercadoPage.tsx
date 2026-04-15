@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabase";
 import {
   MARKET_FALLBACK, MarketOverview, Period, fetchMarketOverview,
   fetchMarketPresentations, fetchAllMarketPresentations,
@@ -10,6 +12,7 @@ import {
   fetchMarketComments, addMarketComment, uploadMarketPostImage,
   uploadMarketPostVideo, voteOnMarketPoll, fetchPlanFeatures,
 } from "@/services/api";
+import { formatRelativeDate as timeAgo } from "@/utils/dateUtils";
 
 const GOLD   = "#c9a84c";
 const NAVY   = "#0d1b2a";
@@ -273,15 +276,6 @@ function ApresentacoesPanel({ isAdmin }: { isAdmin: boolean }) {
 
 /* ─── Ideal.BI Feed ──────────────────────────────────────────────────────── */
 
-function timeAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "agora";
-  if (m < 60) return `${m}min`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h`;
-  return `${Math.floor(h / 24)}d`;
-}
 
 function MarketPostAvatar({ src, name, size = 36 }: { src?: string | null; name: string; size?: number }) {
   if (src) return <img src={src} alt={name} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
@@ -400,9 +394,12 @@ function PollDisplay({ post, userId, onPollVote }: { post: MarketPost; userId: s
   );
 }
 
-function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle }: { post: MarketPost; userId: string; isAdmin: boolean; onLikeToggle: (id: string, liked: boolean, count: number) => void }) {
+interface IdealBICompany { id: string; name: string; avatar_url: string | null; }
+
+function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idealbiCompany }: { post: MarketPost; userId: string; isAdmin: boolean; onLikeToggle: (id: string, liked: boolean, count: number) => void; idealbiCompany?: IdealBICompany | null }) {
   const [post, setPost] = useState<MarketPost>(initialPost);
   const [showComments, setShowComments] = useState(false);
+  const [, setLocation] = useLocation();
 
   useEffect(() => { setPost(initialPost); }, [initialPost]);
 
@@ -420,10 +417,20 @@ function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle }: { 
     <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden" }}>
       {/* Author header */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px 10px" }}>
-        <MarketPostAvatar src={post.author?.avatar_url} name={post.author?.full_name ?? "Ideal.BI"} size={40} />
+        <div
+          onClick={() => idealbiCompany && setLocation(`/app/empresa/${idealbiCompany.id}`)}
+          style={{ cursor: idealbiCompany ? "pointer" : "default", display: "flex", alignItems: "center" }}
+        >
+          <MarketPostAvatar src={idealbiCompany?.avatar_url ?? post.author?.avatar_url} name={idealbiCompany?.name ?? post.author?.full_name ?? "Ideal.BI"} size={40} />
+        </div>
         <div style={{ flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{post.author?.full_name ?? "Ideal.BI"}</span>
+            <span
+              onClick={() => idealbiCompany && setLocation(`/app/empresa/${idealbiCompany.id}`)}
+              style={{ fontSize: 14, fontWeight: 800, color: NAVY, cursor: idealbiCompany ? "pointer" : "default" }}
+            >
+              {idealbiCompany?.name ?? post.author?.full_name ?? "Ideal.BI"}
+            </span>
             <span style={{ fontSize: 10, fontWeight: 700, color: WHITE, backgroundColor: GOLD, borderRadius: 4, padding: "1px 6px", letterSpacing: 0.3 }}>IDEAL.BI</span>
           </div>
           {post.author?.headline && (
@@ -506,14 +513,40 @@ function IdealBIFeed({ userId, isAdmin, planFeatures }: { userId: string; isAdmi
   const [pollMode, setPollMode] = useState(false);
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const [submitting, setSubmitting] = useState(false);
+  const [idealbiCompany, setIdealbiCompany] = useState<IdealBICompany | null>(null);
   const imgRef = useRef<HTMLInputElement>(null);
   const vidRef = useRef<HTMLInputElement>(null);
 
   const hasAccess = planFeatures.includes("mercado:idealbi") || isAdmin;
 
   useEffect(() => {
+    supabase
+      .from("company_pages")
+      .select("id, name, avatar_url")
+      .eq("name", "Ideal.BI")
+      .maybeSingle()
+      .then(({ data }) => { if (data) setIdealbiCompany(data as IdealBICompany); });
+  }, []);
+
+  useEffect(() => {
     fetchMarketPosts(userId).then(p => { setPosts(p); setLoading(false); });
   }, [userId]);
+
+  useEffect(() => {
+    const uid = Math.random().toString(36).slice(2, 8);
+    const ch = supabase
+      .channel(`market_feed_realtime_${uid}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "market_posts" }, (payload) => {
+        const updated = payload.new as any;
+        setPosts(prev => prev.map(p =>
+          p.id === updated.id
+            ? { ...p, likes_count: updated.likes_count ?? p.likes_count, comments_count: updated.comments_count ?? p.comments_count }
+            : p
+        ));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, []);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -717,6 +750,7 @@ function IdealBIFeed({ userId, isAdmin, planFeatures }: { userId: string; isAdmi
             userId={userId}
             isAdmin={isAdmin}
             onLikeToggle={handleLikeToggle}
+            idealbiCompany={idealbiCompany}
           />
         ))
       )}

@@ -19,21 +19,13 @@ import { useAuth, supabase } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
 import type { AppNotification } from "@/services/api";
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "agora";
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h`;
-  return `${Math.floor(hrs / 24)}d`;
-}
+import { formatRelativeDate } from "@/utils/dateUtils";
 
 const TYPE_META: Record<string, { icon: any; color: string; label: string }> = {
   like:          { icon: "heart",          color: "#e74c3c", label: "curtiu sua publicação" },
   comment:       { icon: "message-circle", color: "#3498db", label: "comentou na sua publicação" },
   comment_reply: { icon: "corner-down-right", color: "#8b5cf6", label: "respondeu seu comentário" },
+  comment_like:  { icon: "heart",          color: "#e74c3c", label: "curtiu seu comentário" },
   follow:        { icon: "user-plus",      color: "#2ecc71", label: "começou a seguir você" },
   connection:    { icon: "users",          color: "#c9a84c", label: "enviou pedido de conexão" },
   mention:       { icon: "at-sign",        color: "#9b59b6", label: "mencionou você" },
@@ -85,7 +77,7 @@ function NotifRow({
           {notif.message ?? meta.label}
         </Text>
         <Text style={[styles.rowTime, { color: colors.mutedForeground }]}>
-          {timeAgo(notif.created_at)}
+          {formatRelativeDate(notif.created_at)}
         </Text>
 
         {isConnectionPending && onAccept && onReject && (

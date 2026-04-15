@@ -101,9 +101,18 @@ export function LikesModal({ postId, likesCount, visible, onClose }: Props) {
                   )}
                 </View>
                 <View style={styles.info}>
-                  <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>
-                    {item.full_name}
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>
+                      {item.full_name}
+                    </Text>
+                    {item.reaction_type ? (
+                      <Text style={{ fontSize: 15 }}>
+                        {item.reaction_type === "saude" ? "🍷" : item.reaction_type === "bravo" ? "👏" : item.reaction_type === "destaque" ? "⭐" : item.reaction_type === "incrivel" ? "🔥" : "❤️"}
+                      </Text>
+                    ) : (
+                      <Text style={{ fontSize: 13 }}>❤️</Text>
+                    )}
+                  </View>
                   {item.headline ? (
                     <Text style={[styles.headline, { color: colors.mutedForeground }]} numberOfLines={1}>
                       {item.headline}

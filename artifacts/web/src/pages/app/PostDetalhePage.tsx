@@ -2,10 +2,12 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
+import { supabase } from "@/lib/supabase";
 import {
   fetchPostById, fetchPostComments, addPostComment, toggleLikePost, toggleBookmarkPost,
   Post, AppComment,
 } from "@/services/api";
+import { formatRelativeDate as relativeDate } from "@/utils/dateUtils";
 
 const GOLD = "#c9a84c";
 const NAVY = "#0d1b2a";
@@ -33,7 +35,7 @@ function CommentItem({ comment, depth = 0, onReply }: { comment: AppComment; dep
           <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.5 }}>{comment.content}</div>
           <div style={{ display: "flex", gap: 16, marginTop: 8, alignItems: "center" }}>
             <span style={{ fontSize: 11, color: MUTED }}>
-              {new Date(comment.created_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+              {relativeDate(comment.created_at)}
             </span>
             <button
               onClick={() => onReply(comment.id, comment.author?.full_name ?? "Usuário")}
@@ -79,6 +81,52 @@ export default function PostDetalhePage() {
   }, [postId, profile?.id]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!postId || !profile?.id) return;
+    const ch = supabase
+      .channel(`post_comments_${postId}`)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "comments",
+        filter: `post_id=eq.${postId}`,
+      }, async (payload) => {
+        const raw = payload.new as any;
+        if (raw.user_id === profile.id) return;
+        const { data: authorData } = await supabase
+          .from("profiles")
+          .select("id, full_name, avatar_url, headline, plan")
+          .eq("id", raw.user_id)
+          .single();
+        const newComment: AppComment = {
+          id: raw.id,
+          post_id: raw.post_id,
+          user_id: raw.user_id,
+          content: raw.content,
+          created_at: raw.created_at,
+          parent_comment_id: raw.parent_comment_id ?? null,
+          is_liked: false,
+          likes_count: 0,
+          replies: [],
+          author: authorData ?? undefined,
+        };
+        setComments(prev => {
+          if (raw.parent_comment_id) {
+            return prev.map(cm =>
+              cm.id === raw.parent_comment_id
+                ? { ...cm, replies: [...(cm.replies ?? []), newComment] }
+                : cm
+            );
+          }
+          if (prev.some(c => c.id === raw.id)) return prev;
+          return [...prev, newComment];
+        });
+        setPost(prev => prev ? { ...prev, comments_count: prev.comments_count + 1 } : prev);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [postId, profile?.id]);
 
   const handleLike = async () => {
     if (!post || !profile?.id) return;
@@ -153,7 +201,7 @@ export default function PostDetalhePage() {
                 </div>
                 {post.author?.headline && <div style={{ color: MUTED, fontSize: 12 }}>{post.author.headline}</div>}
                 <div style={{ color: MUTED, fontSize: 11, marginTop: 2 }}>
-                  {new Date(post.created_at).toLocaleString("pt-BR", { dateStyle: "medium", timeStyle: "short" })}
+                  {relativeDate(post.created_at)}
                 </div>
               </div>
             </div>
@@ -162,6 +210,20 @@ export default function PostDetalhePage() {
 
             {post.image_url && (
               <img src={post.image_url} alt="" style={{ width: "100%", borderRadius: 10, maxHeight: 480, objectFit: "cover", marginBottom: 12 }} />
+            )}
+            {post.image_urls && post.image_urls.length > 0 && !post.image_url && (
+              <div style={{ display: "grid", gridTemplateColumns: post.image_urls.length === 1 ? "1fr" : "1fr 1fr", gap: 4, marginBottom: 12 }}>
+                {post.image_urls.slice(0, 4).map((url, i) => (
+                  <img key={i} src={url} alt="" style={{ width: "100%", height: 220, objectFit: "cover", borderRadius: 8 }} />
+                ))}
+              </div>
+            )}
+            {post.video_url && (
+              <video
+                src={post.video_url}
+                controls
+                style={{ width: "100%", maxHeight: 480, borderRadius: 10, display: "block", background: "#000", marginBottom: 12 }}
+              />
             )}
 
             <div style={{ display: "flex", gap: 20, paddingTop: 12, borderTop: `1px solid ${BORDER}`, alignItems: "center" }}>

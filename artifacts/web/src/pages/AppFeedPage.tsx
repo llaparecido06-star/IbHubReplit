@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import StoriesBar from "@/components/stories/StoriesBar";
+import { supabase } from "@/lib/supabase";
 import {
   Post,
   ReactionType,
@@ -10,6 +11,7 @@ import {
   WineCommunityRating,
   fetchFeedPosts,
   fetchCompanyFeedPosts,
+  fetchPostById,
   toggleLikePost,
   changeReactionPost,
   toggleBookmarkPost,
@@ -17,6 +19,7 @@ import {
   sendWebConnectionRequest,
   fetchWineCommunityRankings,
 } from "@/services/api";
+import { formatRelativeDate } from "@/utils/dateUtils";
 
 const GOLD   = "#c9a84c";
 const NAVY   = "#0d1b2a";
@@ -24,19 +27,6 @@ const WHITE  = "#ffffff";
 const BG     = "#f5f5f0";
 const BORDER = "#e8e8e3";
 const MUTED  = "#7a8494";
-
-/* ─── Utils ──────────────────────────────── */
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1)  return "agora";
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return `${d}d`;
-  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
-}
 
 function planBadgeColor(plan?: string) {
   if (plan === "exclusive" || plan === "executivo") return "#7B2FBE";
@@ -130,6 +120,8 @@ function PostCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
+  const [showShare, setShowShare] = useState(false);
+  const shareRef = useRef<HTMLDivElement>(null);
   const pickerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const CUTOFF = 280;
   const content = post.content ?? "";
@@ -203,7 +195,7 @@ function PostCard({
               {post.author.headline}
             </div>
           )}
-          <div style={{ fontSize: 11, color: "#b0b7c3", marginTop: 2 }}>{timeAgo(post.created_at)}</div>
+          <div style={{ fontSize: 11, color: "#b0b7c3", marginTop: 2 }}>{formatRelativeDate(post.created_at)}</div>
         </div>
       </div>
 
@@ -241,10 +233,19 @@ function PostCard({
         </div>
       )}
 
+      {/* Video */}
+      {post.video_url && (
+        <video
+          src={post.video_url}
+          controls
+          style={{ width: "100%", maxHeight: 480, display: "block", background: "#000" }}
+        />
+      )}
+
       {/* Stats */}
       {(post.likes_count > 0 || post.comments_count > 0) && (
         <div style={{ display: "flex", gap: 12, padding: "8px 16px", fontSize: 12, color: MUTED, borderTop: `1px solid ${BORDER}` }}>
-          {post.likes_count > 0 && <span>👍 {post.likes_count}</span>}
+          {post.likes_count > 0 && <span>❤️ {post.likes_count}</span>}
           {post.comments_count > 0 && <span style={{ marginLeft: "auto" }}>{post.comments_count} comentário{post.comments_count !== 1 ? "s" : ""}</span>}
         </div>
       )}
@@ -311,11 +312,43 @@ function PostCard({
           <CommentIcon /><span>Comentar</span>
         </button>
 
-        <button onClick={() => {}} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: "none", border: "none", cursor: "pointer", padding: "10px 8px", fontSize: 13, fontWeight: 600, color: MUTED }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}>
-          <ShareIcon /><span>Compartilhar</span>
-        </button>
+        <div ref={shareRef} style={{ flex: 1, position: "relative" }}>
+          <button
+            onClick={() => setShowShare(v => !v)}
+            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: "none", border: "none", cursor: "pointer", padding: "10px 8px", fontSize: 13, fontWeight: 600, color: showShare ? GOLD : MUTED }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+          >
+            <ShareIcon /><span>Compartilhar</span>
+          </button>
+          {showShare && (
+            <div
+              style={{
+                position: "absolute", bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)",
+                background: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12,
+                boxShadow: "0 8px 24px rgba(0,0,0,0.14)", zIndex: 400, minWidth: 200, overflow: "hidden",
+              }}
+              onMouseLeave={() => setShowShare(false)}
+            >
+              {[
+                { label: "Copiar link", icon: "🔗", action: () => { navigator.clipboard.writeText(`https://ibhub.app/post/${post.id}`); setShowShare(false); } },
+                { label: "WhatsApp", icon: "💬", action: () => { window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent("https://ibhub.app/post/" + post.id)}`); setShowShare(false); } },
+                { label: "Instagram DM", icon: "📸", action: () => { window.open("https://instagram.com/direct/inbox/"); setShowShare(false); } },
+                { label: "Enviar no chat", icon: "✉️", action: () => { setLocation(`/app/mensagens?share=${post.id}`); setShowShare(false); } },
+              ].map(item => (
+                <button
+                  key={item.label}
+                  onClick={item.action}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, color: NAVY, textAlign: "left" }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}10`; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+                >
+                  <span style={{ fontSize: 16 }}>{item.icon}</span>{item.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <button onClick={() => onBookmark(post.id, !!post.is_bookmarked)} style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", padding: "10px 12px", color: MUTED }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
@@ -582,6 +615,50 @@ export default function AppFeedPage() {
   }, [load, authLoading]);
 
   useEffect(() => { fetchWineCommunityRankings().then(setWineRankings); }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+    const uid = Math.random().toString(36).slice(2, 8);
+    const ch = supabase
+      .channel(`feed_realtime_web_${userId}_${uid}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts" }, async (payload) => {
+        const raw = payload.new as any;
+        if (raw.user_id === userId) return;
+        if (companyId) {
+          if (raw.company_page_id !== companyId) return;
+        } else {
+          if (raw.company_page_id) return;
+        }
+        const full = await fetchPostById(raw.id, userId);
+        if (!full) return;
+        setPosts(prev => {
+          if (prev.some(p => p.id === full.id)) return prev;
+          return [full, ...prev];
+        });
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "comments" }, (payload) => {
+        const raw = payload.new as any;
+        setPosts(prev => prev.map(p =>
+          p.id === raw.post_id ? { ...p, comments_count: p.comments_count + 1 } : p
+        ));
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "likes" }, (payload) => {
+        const raw = payload.new as any;
+        if (raw.user_id === userId) return;
+        setPosts(prev => prev.map(p =>
+          p.id === raw.post_id ? { ...p, likes_count: p.likes_count + 1 } : p
+        ));
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "likes" }, (payload) => {
+        const raw = payload.old as any;
+        if (raw.user_id === userId) return;
+        setPosts(prev => prev.map(p =>
+          p.id === raw.post_id ? { ...p, likes_count: Math.max(0, p.likes_count - 1) } : p
+        ));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [userId, companyId]);
 
   const handleLike = useCallback(async (postId: string, isLiked: boolean, reaction: ReactionType = "curtir") => {
     if (!userId) return;

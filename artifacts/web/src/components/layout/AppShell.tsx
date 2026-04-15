@@ -10,6 +10,7 @@ import {
   WebCompanyPage,
   ProfilePerson,
   createWebPost,
+  uploadWebPostVideo,
 } from "@/services/api";
 
 const GOLD   = "#c9a84c";
@@ -93,7 +94,36 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
   const imgInputRef = useRef<HTMLInputElement>(null);
 
   // Vídeo
-  const [videoUrl, setVideoUrl] = useState("");
+  const [videoFile, setVideoFile]       = useState<File | null>(null);
+  const [videoPreview, setVideoPreview] = useState<string | null>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+
+  const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("video/")) {
+      alert("Por favor selecione um arquivo de vídeo válido.");
+      return;
+    }
+    const MAX_SIZE_BYTES = 500 * 1024 * 1024;
+    if (file.size > MAX_SIZE_BYTES) {
+      alert("O vídeo deve ter no máximo 500 MB.");
+      return;
+    }
+    const MAX_SECONDS = 120;
+    const vid = document.createElement("video");
+    vid.preload = "metadata";
+    vid.onloadedmetadata = () => {
+      URL.revokeObjectURL(vid.src);
+      if (vid.duration > MAX_SECONDS) {
+        alert("O vídeo deve ter no máximo 2 minutos.");
+        return;
+      }
+      setVideoFile(file);
+      setVideoPreview(URL.createObjectURL(file));
+    };
+    vid.src = URL.createObjectURL(file);
+  };
 
   // Enquete
   const [pollOptions, setPollOptions] = useState(["", ""]);
@@ -119,7 +149,7 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
   const buildContent = (): string => {
     if (tab === "texto") return content;
     if (tab === "foto")  return content;
-    if (tab === "video") return [content, videoUrl ? `🎬 ${videoUrl}` : ""].filter(Boolean).join("\n\n");
+    if (tab === "video") return content;
     if (tab === "enquete") {
       const opts = pollOptions.filter(o => o.trim());
       return [content, ...opts.map((o, i) => `${["🔵","🟡","🔴","🟢"][i] ?? "▸"} ${o}`)].filter(Boolean).join("\n");
@@ -140,7 +170,7 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
   const canSubmit = () => {
     if (tab === "texto") return content.trim().length > 0;
     if (tab === "foto")  return imagePreview !== null;
-    if (tab === "video") return videoUrl.trim().length > 0;
+    if (tab === "video") return videoFile !== null;
     if (tab === "enquete") return pollOptions.filter(o => o.trim()).length >= 2;
     if (tab === "vinho") return wineName.trim().length > 0;
     return false;
@@ -149,9 +179,19 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
   const handleSubmit = async () => {
     if (!canSubmit() || submitting) return;
     setSubmitting(true);
+    let video_url: string | null = null;
+    if (tab === "video" && videoFile) {
+      video_url = await uploadWebPostVideo(videoFile, userId);
+      if (!video_url) {
+        setSubmitting(false);
+        alert("Erro ao enviar vídeo. Tente novamente.");
+        return;
+      }
+    }
     await createWebPost({
       user_id: userId,
       content: buildContent(),
+      video_url: video_url ?? null,
       company_page_id: companyPageId ?? null,
     });
     setSubmitting(false);
@@ -267,11 +307,43 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
           {tab === "video" && (
             <div style={{ marginTop: 12 }}>
               <input
-                value={videoUrl}
-                onChange={e => setVideoUrl(e.target.value)}
-                placeholder="Cole o link do vídeo (YouTube, Vimeo...)"
-                style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, outline: "none", fontFamily: "inherit" }}
+                ref={videoInputRef}
+                type="file"
+                accept="video/*"
+                style={{ display: "none" }}
+                onChange={handleVideoChange}
               />
+              {videoPreview ? (
+                <div style={{ position: "relative" }}>
+                  <video
+                    src={videoPreview}
+                    controls
+                    style={{ width: "100%", maxHeight: 280, borderRadius: 10, display: "block", background: "#000" }}
+                  />
+                  <button
+                    onClick={() => { setVideoFile(null); setVideoPreview(null); }}
+                    style={{
+                      position: "absolute", top: 8, right: 8,
+                      backgroundColor: "rgba(0,0,0,0.6)", border: "none",
+                      borderRadius: "50%", width: 28, height: 28,
+                      cursor: "pointer", color: WHITE, fontSize: 16,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}
+                  >×</button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => videoInputRef.current?.click()}
+                  style={{
+                    width: "100%", padding: "32px 0",
+                    backgroundColor: BG, border: `2px dashed ${BORDER}`,
+                    borderRadius: 10, cursor: "pointer", fontSize: 14,
+                    color: MUTED, fontFamily: "inherit",
+                  }}
+                >
+                  🎬 Clique para selecionar um vídeo (máx. 2 min)
+                </button>
+              )}
             </div>
           )}
 

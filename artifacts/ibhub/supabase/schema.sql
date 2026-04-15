@@ -229,12 +229,15 @@ create table if not exists public.notifications (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid references auth.users(id) on delete cascade not null,
   actor_id   uuid references auth.users(id) on delete cascade,
-  type       text not null,  -- like, comment, follow, connection, mention
+  type       text not null,  -- like, comment, comment_reply, comment_like, follow, connection, mention
   post_id    uuid references public.posts(id) on delete cascade,
+  comment_id uuid references public.comments(id) on delete cascade,
   message    text,
   read       boolean not null default false,
   created_at timestamptz not null default now()
 );
+-- Add comment_id column to existing deployments
+alter table public.notifications add column if not exists comment_id uuid references public.comments(id) on delete cascade;
 
 -- Trigger: cria notificação ao curtir
 create or replace function public.notify_on_like()
@@ -467,3 +470,142 @@ create policy "plans_update_admin" on public.plans for update
   using (exists (select 1 from public.profiles where id = auth.uid() and is_admin = true));
 create policy "plans_delete_admin" on public.plans for delete
   using (exists (select 1 from public.profiles where id = auth.uid() and is_admin = true));
+
+-- Trigger: cria notificação ao comentar
+create or replace function public.notify_on_comment()
+returns trigger language plpgsql as $$
+declare
+  post_author uuid;
+  parent_author uuid;
+begin
+  -- Notify post author about new comment (not a reply)
+  if NEW.parent_comment_id is null then
+    select user_id into post_author from public.posts where id = NEW.post_id;
+    if post_author is not null and post_author != NEW.user_id then
+      insert into public.notifications(user_id, actor_id, type, post_id, comment_id, message)
+      values (post_author, NEW.user_id, 'comment', NEW.post_id, NEW.id, 'comentou na sua publicação');
+    end if;
+  else
+    -- Reply: notify parent comment author
+    select user_id into parent_author from public.comments where id = NEW.parent_comment_id;
+    if parent_author is not null and parent_author != NEW.user_id then
+      insert into public.notifications(user_id, actor_id, type, post_id, comment_id, message)
+      values (parent_author, NEW.user_id, 'comment_reply', NEW.post_id, NEW.id, 'respondeu ao seu comentário');
+    end if;
+    -- Also notify post author if different from parent author
+    select user_id into post_author from public.posts where id = NEW.post_id;
+    if post_author is not null and post_author != NEW.user_id and post_author != parent_author then
+      insert into public.notifications(user_id, actor_id, type, post_id, comment_id, message)
+      values (post_author, NEW.user_id, 'comment_reply', NEW.post_id, NEW.id, 'respondeu a um comentário na sua publicação');
+    end if;
+  end if;
+  return NEW;
+end;
+$$;
+drop trigger if exists comment_notification_trigger on public.comments;
+create trigger comment_notification_trigger
+  after insert on public.comments
+  for each row execute function public.notify_on_comment();
+
+-- ─── COMMENT LIKES ────────────────────────────────────────────────────────────
+create table if not exists public.comment_likes (
+  id         uuid primary key default gen_random_uuid(),
+  comment_id uuid references public.comments(id) on delete cascade not null,
+  user_id    uuid references auth.users(id) on delete cascade not null,
+  created_at timestamptz not null default now(),
+  unique(comment_id, user_id)
+);
+alter table public.comment_likes enable row level security;
+create policy "comment_likes_select" on public.comment_likes for select using (true);
+create policy "comment_likes_insert" on public.comment_likes for insert with check (auth.uid() = user_id);
+create policy "comment_likes_delete" on public.comment_likes for delete using (auth.uid() = user_id);
+
+-- Trigger: cria notificação ao curtir comentário
+create or replace function public.notify_on_comment_like()
+returns trigger language plpgsql as $$
+declare
+  comment_author uuid;
+  post_id_val uuid;
+begin
+  select user_id, post_id into comment_author, post_id_val from public.comments where id = NEW.comment_id;
+  if comment_author is not null and comment_author != NEW.user_id then
+    insert into public.notifications(user_id, actor_id, type, post_id, comment_id, message)
+    values (comment_author, NEW.user_id, 'comment_like', post_id_val, NEW.comment_id, 'curtiu seu comentário');
+  end if;
+  return NEW;
+end;
+$$;
+drop trigger if exists comment_like_notification_trigger on public.comment_likes;
+create trigger comment_like_notification_trigger
+  after insert on public.comment_likes
+  for each row execute function public.notify_on_comment_like();
+
+-- Trigger: cria notificação ao seguir
+create or replace function public.notify_on_follow()
+returns trigger language plpgsql as $$
+begin
+  if NEW.follower_id != NEW.following_id then
+    insert into public.notifications(user_id, actor_id, type, message)
+    values (NEW.following_id, NEW.follower_id, 'follow', 'começou a seguir você');
+  end if;
+  return NEW;
+end;
+$$;
+drop trigger if exists follow_notification_trigger on public.follows;
+create trigger follow_notification_trigger
+  after insert on public.follows
+  for each row execute function public.notify_on_follow();
+
+-- Trigger: cria notificação ao aceitar conexão
+create or replace function public.notify_on_connection_accepted()
+returns trigger language plpgsql as $$
+begin
+  if NEW.status = 'accepted' and (OLD.status is null or OLD.status != 'accepted') then
+    insert into public.notifications(user_id, actor_id, type, message)
+    values (NEW.requester_id, NEW.receiver_id, 'connection', 'aceitou sua solicitação de conexão');
+  end if;
+  return NEW;
+end;
+$$;
+drop trigger if exists connection_accepted_notification_trigger on public.connections;
+create trigger connection_accepted_notification_trigger
+  after update on public.connections
+  for each row execute function public.notify_on_connection_accepted();
+
+-- Trigger: cria notificação ao curtir post do mercado (Ideal.BI)
+create or replace function public.notify_on_market_like()
+returns trigger language plpgsql as $$
+declare
+  post_author uuid;
+begin
+  select author_id into post_author from public.market_posts where id = NEW.post_id;
+  if post_author is not null and post_author != NEW.user_id then
+    insert into public.notifications(user_id, actor_id, type, message)
+    values (post_author, NEW.user_id, 'like', 'curtiu sua publicação no Ideal.BI');
+  end if;
+  return NEW;
+end;
+$$;
+drop trigger if exists market_like_notification_trigger on public.market_post_likes;
+create trigger market_like_notification_trigger
+  after insert on public.market_post_likes
+  for each row execute function public.notify_on_market_like();
+
+-- Trigger: cria notificação ao comentar em post do mercado (Ideal.BI)
+create or replace function public.notify_on_market_comment()
+returns trigger language plpgsql as $$
+declare
+  post_author uuid;
+begin
+  select author_id into post_author from public.market_posts where id = NEW.post_id;
+  if post_author is not null and post_author != NEW.author_id then
+    insert into public.notifications(user_id, actor_id, type, message)
+    values (post_author, NEW.author_id, 'comment', 'comentou na sua publicação no Ideal.BI');
+  end if;
+  return NEW;
+end;
+$$;
+drop trigger if exists market_comment_notification_trigger on public.market_post_comments;
+create trigger market_comment_notification_trigger
+  after insert on public.market_post_comments
+  for each row execute function public.notify_on_market_comment();
