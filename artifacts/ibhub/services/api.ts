@@ -1,5 +1,6 @@
 import { supabase } from "@/context/AuthContext";
 import { Post } from "@/components/feed/PostCard";
+import { compressAvatar, compressPostImage, compressLogoImage } from "@/utils/compressImage";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 
@@ -168,14 +169,20 @@ async function attachAuthorsToPosts(rawPosts: any[], profileMap: Map<string, any
   }));
 }
 
-export async function fetchFeedPosts(currentUserId: string, activeCompanyId?: string | null): Promise<Post[]> {
+export async function fetchFeedPosts(
+  currentUserId: string,
+  activeCompanyId?: string | null,
+  offset = 0,
+  limit = 15,
+): Promise<Post[]> {
   try {
     // Use the authoritative API server endpoint for shadowban enforcement.
     // The server filters using the admin Supabase client; clients cannot bypass this.
     const session = (await supabase.auth.getSession()).data.session;
     if (!session?.access_token) return [];
 
-    const res = await fetch(`${API_URL}/feed/posts?limit=30`, {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    const res = await fetch(`${API_URL}/feed/posts?${params}`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
     });
     if (!res.ok) return [];
@@ -215,11 +222,12 @@ export async function fetchFeedPosts(currentUserId: string, activeCompanyId?: st
 
 export async function uploadPostImage(imageUri: string, userId: string): Promise<string | null> {
   try {
-    const ext = imageUri.split(".").pop()?.split("?")[0]?.toLowerCase() ?? "jpg";
-    const mime = ext === "png" ? "image/png" : ext === "gif" ? "image/gif" : ext === "webp" ? "image/webp" : "image/jpeg";
+    const compressed = await compressPostImage(imageUri);
+    const ext = "jpg";
+    const mime = "image/jpeg";
     const filename = `${userId}/${Date.now()}.${ext}`;
 
-    const response = await fetch(imageUri);
+    const response = await fetch(compressed);
     const arrayBuffer = await response.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
 
@@ -2626,12 +2634,12 @@ export async function uploadCompanyLogo(companyId: string, uri: string): Promise
     const userId = session?.user?.id;
     if (!userId) { console.error("uploadCompanyLogo: no session"); return null; }
 
-    const rawExt = (uri.split(".").pop()?.split("?")[0] ?? "jpg").toLowerCase();
-    const safeExt = ["jpg", "jpeg", "png", "webp"].includes(rawExt) ? rawExt : "jpg";
-    const mime = safeExt === "png" ? "image/png" : safeExt === "webp" ? "image/webp" : "image/jpeg";
+    const compressed = await compressLogoImage(uri);
+    const safeExt = "jpg";
+    const mime = "image/jpeg";
     const path = `${userId}/company-logos/${companyId}.${safeExt}`;
 
-    const resp = await fetch(uri);
+    const resp = await fetch(compressed);
     const arrayBuffer = await resp.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
 
@@ -3187,6 +3195,70 @@ export async function fetchOpportunities(
     })) as AppOpportunity[];
   } catch (e) {
     console.error("fetchOpportunities:", e);
+    return [];
+  }
+}
+
+export async function fetchOpportunitiesPage(
+  type: "vaga" | "marketplace",
+  search: string,
+  userId: string,
+  offset = 0,
+  limit = 15,
+): Promise<AppOpportunity[]> {
+  try {
+    let query = supabase
+      .from("opportunities")
+      .select(`
+        id, created_by, type, title, description, category, location, price, cover_image_url,
+        company, company_page_id, contract_type, salary, contact_email, expires_at, is_active, created_at,
+        interests_count, applications_count
+      `)
+      .eq("is_active", true)
+      .eq("type", type)
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (search.trim()) {
+      query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%,company.ilike.%${search}%,category.ilike.%${search}%`);
+    }
+
+    const { data, error } = await query;
+    if (error || !data) return [];
+
+    const ids = (data as any[]).map((d) => d.id);
+    let appliedIds = new Set<string>();
+    let savedIds = new Set<string>();
+    const promises: Promise<any>[] = [];
+
+    if (type === "vaga" && ids.length > 0) {
+      promises.push(
+        Promise.resolve(
+          supabase.from("opportunity_applications").select("opportunity_id").eq("applicant_id", userId).in("opportunity_id", ids),
+        ).then(({ data: apps }) => { if (apps) apps.forEach((a: any) => appliedIds.add(a.opportunity_id)); }),
+      );
+    }
+    if (ids.length > 0) {
+      promises.push(
+        Promise.resolve(
+          supabase.from("opportunity_saves").select("opportunity_id").eq("user_id", userId).in("opportunity_id", ids),
+        ).then(({ data: saves }) => { if (saves) saves.forEach((s: any) => savedIds.add(s.opportunity_id)); }),
+      );
+    }
+
+    const creatorIds = [...new Set((data as any[]).map(d => d.created_by).filter(Boolean))];
+    const [creatorMap] = await Promise.all([fetchCommentProfilesForIds(creatorIds), ...promises]);
+
+    return (data as any[]).map((d) => ({
+      ...d,
+      creator: d.created_by ? (creatorMap.get(d.created_by) ?? null) : null,
+      is_applied: appliedIds.has(d.id),
+      is_saved: savedIds.has(d.id),
+      interests_count: d.interests_count ?? 0,
+      applications_count: d.applications_count ?? 0,
+    })) as AppOpportunity[];
+  } catch (e) {
+    console.error("fetchOpportunitiesPage:", e);
     return [];
   }
 }
@@ -4234,12 +4306,12 @@ export async function reviewCertificationRequest(
 
 export async function uploadAvatar(userId: string, uri: string): Promise<string | null> {
   try {
-    const rawExt = (uri.split(".").pop()?.split("?")[0] ?? "jpg").toLowerCase();
-    const safeExt = ["jpg", "jpeg", "png", "webp"].includes(rawExt) ? rawExt : "jpg";
-    const mime = safeExt === "png" ? "image/png" : safeExt === "webp" ? "image/webp" : "image/jpeg";
+    const compressed = await compressAvatar(uri);
+    const safeExt = "jpg";
+    const mime = "image/jpeg";
     const path = `${userId}/avatar.${safeExt}`;
 
-    const response = await fetch(uri);
+    const response = await fetch(compressed);
     const arrayBuffer = await response.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
 
@@ -5157,11 +5229,12 @@ export interface MarketComment {
   };
 }
 
-export async function fetchMarketPosts(userId?: string): Promise<MarketPost[]> {
+export async function fetchMarketPosts(userId?: string, offset = 0, limit = 15): Promise<MarketPost[]> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) return [];
-    const res = await fetch(`${API_URL}/market/posts?limit=30`, {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    const res = await fetch(`${API_URL}/market/posts?${params}`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
     });
     if (!res.ok) return [];

@@ -53,7 +53,7 @@ router.delete("/users/me", async (req: Request, res: Response) => {
  * Authoritative server-side feed endpoint: shadowban filtering is enforced here.
  * Admin client is used only to fetch banned IDs; post queries use the user's JWT
  * so that existing RLS policies (privacy, blocks) are still respected.
- * Supports ?limit=N and ?since=ISO_TIMESTAMP for polling.
+ * Supports ?limit=N, ?offset=N (for infinite scroll), and ?since=ISO_TIMESTAMP for polling.
  */
 router.get("/feed/posts", async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
@@ -68,7 +68,8 @@ router.get("/feed/posts", async (req: Request, res: Response) => {
     return;
   }
   const currentUserId = userData.user.id;
-  const limit = Math.min(parseInt(req.query.limit as string) || 30, 100);
+  const limit = Math.min(parseInt(req.query.limit as string) || 15, 100);
+  const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
   const since = req.query.since as string | undefined;
 
   // Fetch shadowbanned IDs using admin client only (authoritative, server-side).
@@ -91,7 +92,7 @@ router.get("/feed/posts", async (req: Request, res: Response) => {
     .from("posts")
     .select("id, user_id, company_page_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count, view_count, location, hashtags, poll, created_at")
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .range(offset, offset + limit - 1);
 
   if (since) {
     postsQuery = postsQuery.gt("created_at", since);

@@ -79,6 +79,11 @@ export default function FeedScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMoreFeed, setHasMoreFeed] = useState(true);
+  const feedOffsetRef = useRef(0);
+  const isLoadingMoreRef = useRef(false);
+  const FEED_PAGE_SIZE = 15;
 
   // New posts banner
   const [newPosts, setNewPosts]                     = useState<Post[]>([]);
@@ -146,13 +151,17 @@ export default function FeedScreen() {
   }, [profile?.areas_of_expertise]);
 
   const loadPosts = useCallback(async () => {
+    feedOffsetRef.current = 0;
+    isLoadingMoreRef.current = false;
     // Try real Supabase data first
     if (user?.id) {
       try {
-        const realPosts = await API.fetchFeedPosts(user.id, activeCompany?.id);
+        const realPosts = await API.fetchFeedPosts(user.id, activeCompany?.id, 0, FEED_PAGE_SIZE);
         if (realPosts.length > 0) {
           const sorted = sortByRelevance(realPosts);
           setPosts(sorted);
+          feedOffsetRef.current = sorted.length;
+          setHasMoreFeed(realPosts.length >= FEED_PAGE_SIZE);
           await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(sorted));
           setLoading(false);
           return;
@@ -172,12 +181,39 @@ export default function FeedScreen() {
             await AsyncStorage.removeItem(STORAGE_KEY);
           }
         }
-        if (realCached.length > 0) { setPosts(sortByRelevance(realCached)); setLoading(false); return; }
+        if (realCached.length > 0) {
+          setPosts(sortByRelevance(realCached));
+          feedOffsetRef.current = realCached.length;
+          setHasMoreFeed(true);
+          setLoading(false);
+          return;
+        }
       }
     } catch {}
     setPosts([]);
+    setHasMoreFeed(false);
     setLoading(false);
   }, [user?.id, activeCompany?.id, sortByRelevance]);
+
+  const loadMorePosts = useCallback(async () => {
+    if (isLoadingMoreRef.current || !hasMoreFeed || !user?.id) return;
+    isLoadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const more = await API.fetchFeedPosts(user.id, activeCompany?.id, feedOffsetRef.current, FEED_PAGE_SIZE);
+      if (more.length > 0) {
+        setPosts(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const fresh = more.filter(p => !existingIds.has(p.id));
+          return [...prev, ...fresh];
+        });
+        feedOffsetRef.current += more.length;
+      }
+      setHasMoreFeed(more.length >= FEED_PAGE_SIZE);
+    } catch {}
+    setLoadingMore(false);
+    isLoadingMoreRef.current = false;
+  }, [user?.id, activeCompany?.id, hasMoreFeed]);
 
   const loadSuggestions = useCallback(async () => {
     if (!user?.id) return;
@@ -239,12 +275,16 @@ export default function FeedScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
+    feedOffsetRef.current = 0;
+    isLoadingMoreRef.current = false;
     if (user?.id) {
       try {
-        const realPosts = await API.fetchFeedPosts(user.id, activeCompany?.id);
+        const realPosts = await API.fetchFeedPosts(user.id, activeCompany?.id, 0, FEED_PAGE_SIZE);
         if (realPosts.length > 0) {
           const sorted = sortByRelevance(realPosts);
           setPosts(sorted);
+          feedOffsetRef.current = sorted.length;
+          setHasMoreFeed(realPosts.length >= FEED_PAGE_SIZE);
           await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(sorted));
           setRefreshing(false);
           return;
@@ -253,6 +293,7 @@ export default function FeedScreen() {
     }
     await AsyncStorage.removeItem(STORAGE_KEY);
     setPosts([]);
+    setHasMoreFeed(false);
     setRefreshing(false);
   }, [user?.id, activeCompany?.id, sortByRelevance]);
 
@@ -840,6 +881,15 @@ export default function FeedScreen() {
         showsVerticalScrollIndicator={false}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
+        onEndReached={loadMorePosts}
+        onEndReachedThreshold={0.3}
+        ListFooterComponent={
+          loadingMore ? (
+            <View style={{ paddingVertical: 20, alignItems: "center" }}>
+              <ActivityIndicator color={colors.gold} size="small" />
+            </View>
+          ) : null
+        }
       />
 
       {/* ── New Posts Banner ── */}

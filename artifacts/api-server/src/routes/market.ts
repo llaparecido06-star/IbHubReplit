@@ -14,7 +14,7 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
 /**
  * GET /market/posts
  * Returns Ideal.BI market posts. Requires mercado:idealbi plan feature.
- * Query params: limit (default 30, max 100), since (ISO timestamp for pagination)
+ * Query params: limit (default 15, max 100), offset=N (infinite scroll), since (ISO timestamp for new-post polling)
  */
 router.get("/market/posts", async (req: Request, res: Response): Promise<void> => {
   const userId = await resolveUserId(req, res);
@@ -23,14 +23,15 @@ router.get("/market/posts", async (req: Request, res: Response): Promise<void> =
   const allowed = await requirePlanFeature(req, res, userId, "mercado:idealbi");
   if (!allowed) return;
 
-  const limit = Math.min(parseInt(req.query.limit as string) || 30, 100);
+  const limit = Math.min(parseInt(req.query.limit as string) || 15, 100);
+  const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
   const since = req.query.since as string | undefined;
 
   let query = supabaseAdmin
     .from("market_posts")
     .select("id, author_id, content, image_url, video_url, poll_options, likes_count, comments_count, created_at")
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .range(offset, offset + limit - 1);
 
   if (since) {
     query = query.gt("created_at", since);

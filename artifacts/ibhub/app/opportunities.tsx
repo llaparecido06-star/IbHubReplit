@@ -17,12 +17,14 @@ import { Feather } from "@/components/ui/Icon";
 import { Badge } from "@/components/ui/Badge";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
-import { AppOpportunity, fetchOpportunities } from "@/services/api";
+import { usePaginatedQuery } from "@/hooks/usePaginatedQuery";
+import { AppOpportunity, fetchOpportunitiesPage } from "@/services/api";
 
 type SubTab = "vagas" | "marketplace";
 
 const VAGA_CATS   = ["Todos", "Sommelier", "Enólogo", "Gerência", "Marketing", "Vendas", "Exportação", "Produção", "Outros"];
 const MARKET_CATS = ["Todos", "Vinho", "Insumo", "Equipamento", "Serviço", "Outros"];
+const PAGE_SIZE   = 15;
 
 const typeColor: Record<string, "default" | "gold" | "wine" | "success"> = {
   vaga: "gold", marketplace: "success",
@@ -40,43 +42,48 @@ export default function OpportunitiesScreen() {
   const topPad    = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
-  const [subTab, setSubTab]     = useState<SubTab>("vagas");
-  const [search, setSearch]     = useState("");
+  const [subTab, setSubTab]       = useState<SubTab>("vagas");
+  const [search, setSearch]       = useState("");
   const [catFilter, setCatFilter] = useState("Todos");
-  const [items, setItems]       = useState<AppOpportunity[]>([]);
-  const [loading, setLoading]   = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const searchRef  = useRef<TextInput>(null);
-  const listRef    = useRef<FlatList<AppOpportunity>>(null);
+  const searchRef = useRef<TextInput>(null);
+  const listRef   = useRef<FlatList<AppOpportunity>>(null);
 
-  const load = useCallback(async (tab: SubTab, q: string) => {
-    if (!user?.id) return;
-    setLoading(true);
-    const data = await fetchOpportunities(tab === "vagas" ? "vaga" : "marketplace", q, user.id);
-    setItems(data);
-    setLoading(false);
-  }, [user?.id]);
+  const fetcher = useCallback(
+    (offset: number, limit: number) =>
+      user?.id
+        ? fetchOpportunitiesPage(subTab === "vagas" ? "vaga" : "marketplace", search, user.id, offset, limit)
+        : Promise.resolve([]),
+    [subTab, search, user?.id],
+  );
+
+  const { items, loading, loadingMore, hasMore, loadMore, refresh } =
+    usePaginatedQuery<AppOpportunity>(fetcher, PAGE_SIZE);
 
   useEffect(() => {
     setCatFilter("Todos");
-    load(subTab, search).then(() => {
+    refresh().then(() => {
       listRef.current?.scrollToOffset({ offset: 0, animated: false });
     });
   }, [subTab]);
 
   useEffect(() => {
     const t = setTimeout(() => {
-      load(subTab, search).then(() => {
+      refresh().then(() => {
         listRef.current?.scrollToOffset({ offset: 0, animated: false });
       });
     }, 400);
     return () => clearTimeout(t);
   }, [search]);
 
+  useEffect(() => {
+    refresh();
+  }, []);
+
   const onRefresh = async () => {
     setRefreshing(true);
-    await load(subTab, search);
+    await refresh();
     setRefreshing(false);
   };
 
@@ -247,6 +254,15 @@ export default function OpportunitiesScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />}
           contentContainerStyle={{ padding: 14, rowGap: 12, paddingBottom: bottomPad + 40 }}
           showsVerticalScrollIndicator={false}
+          onEndReached={catFilter === "Todos" ? loadMore : undefined}
+          onEndReachedThreshold={0.3}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={{ paddingVertical: 16, alignItems: "center" }}>
+                <ActivityIndicator color={colors.gold} size="small" />
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
             <View style={styles.empty}>
               <Feather name={subTab === "vagas" ? "briefcase" : "shopping-bag"} size={42} color={colors.mutedForeground} />

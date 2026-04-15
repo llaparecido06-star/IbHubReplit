@@ -1,5 +1,5 @@
 import { useRouter, useLocalSearchParams } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -14,6 +14,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
+
+const PAGE_SIZE = 15;
 
 function StarRow({ avg, count }: { avg: number; count: number }) {
   const colors = useColors();
@@ -45,19 +47,33 @@ export default function WineRankingScreen() {
   const insets  = useSafeAreaInsets();
   const params  = useLocalSearchParams<{ ean?: string }>();
 
-  // Se veio de um post de degustação, pré-filtra pelo EAN do vinho
   const initialEan = params.ean ?? "";
 
   type SortKey = "score" | "alpha" | "count";
 
-  const [ratings, setRatings]         = useState<API.WineCommunityRating[]>([]);
+  const [allRatings, setAllRatings]   = useState<API.WineCommunityRating[]>([]);
+  const [displayedItems, setDisplayedItems] = useState<API.WineCommunityRating[]>([]);
   const [loading, setLoading]         = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore]         = useState(false);
   const [eanFilter, setEanFilter]     = useState(initialEan);
   const [searching, setSearching]     = useState(false);
   const [sortBy, setSortBy]           = useState<SortKey>("score");
 
+  const pageRef = useRef(0);
+
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
+
+  const getSorted = useCallback(
+    (list: API.WineCommunityRating[], sort: SortKey) =>
+      [...list].sort((a, b) => {
+        if (sort === "alpha") return (a.name ?? "").localeCompare(b.name ?? "");
+        if (sort === "count") return Number(b.total_ratings ?? 0) - Number(a.total_ratings ?? 0);
+        return Number(b.avg_rating ?? 0) - Number(a.avg_rating ?? 0);
+      }),
+    [],
+  );
 
   const load = useCallback(async (ean?: string) => {
     if (ean !== undefined) {
@@ -66,16 +82,38 @@ export default function WineRankingScreen() {
       setLoading(true);
     }
     const data = await API.fetchWineCommunityRatings(ean || undefined);
-    setRatings(data);
+    const sorted = getSorted(data, sortBy);
+    setAllRatings(sorted);
+    pageRef.current = 1;
+    setDisplayedItems(sorted.slice(0, PAGE_SIZE));
+    setHasMore(sorted.length > PAGE_SIZE);
     setLoading(false);
     setSearching(false);
-  }, []);
+  }, [getSorted, sortBy]);
 
   useEffect(() => {
-    // Carrega com o EAN inicial (vindo de um post) ou sem filtro
     load(initialEan || undefined);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const sorted = getSorted(allRatings, sortBy);
+    setAllRatings(sorted);
+    pageRef.current = 1;
+    setDisplayedItems(sorted.slice(0, PAGE_SIZE));
+    setHasMore(sorted.length > PAGE_SIZE);
+  }, [sortBy]);
+
+  const loadMore = useCallback(() => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const nextPage = pageRef.current + 1;
+    const nextItems = allRatings.slice(0, nextPage * PAGE_SIZE);
+    setDisplayedItems(nextItems);
+    setHasMore(allRatings.length > nextPage * PAGE_SIZE);
+    pageRef.current = nextPage;
+    setLoadingMore(false);
+  }, [loadingMore, hasMore, allRatings]);
 
   const handleSearch = () => {
     load(eanFilter.trim() || undefined);
@@ -86,13 +124,7 @@ export default function WineRankingScreen() {
     load(undefined);
   };
 
-  const sortedRatings = [...ratings].sort((a, b) => {
-    if (sortBy === "alpha") return (a.name ?? "").localeCompare(b.name ?? "");
-    if (sortBy === "count") return Number(b.total_ratings ?? 0) - Number(a.total_ratings ?? 0);
-    return Number(b.avg_rating ?? 0) - Number(a.avg_rating ?? 0); // "score"
-  });
-
-  const SORT_OPTIONS: { key: typeof sortBy; label: string }[] = [
+  const SORT_OPTIONS: { key: SortKey; label: string }[] = [
     { key: "score", label: "Maior Pontuação" },
     { key: "count", label: "Mais Avaliados" },
     { key: "alpha", label: "Alfabética" },
@@ -170,7 +202,7 @@ export default function WineRankingScreen() {
       </View>
 
       {/* Sort filters */}
-      {!loading && ratings.length > 0 && (
+      {!loading && allRatings.length > 0 && (
         <View style={{ flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border }}>
           {SORT_OPTIONS.map((opt) => (
             <TouchableOpacity
@@ -194,7 +226,7 @@ export default function WineRankingScreen() {
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.gold} />
         </View>
-      ) : ratings.length === 0 ? (
+      ) : allRatings.length === 0 ? (
         <View style={styles.center}>
           <Feather name="bar-chart-2" size={44} color={colors.border} />
           <Text style={[styles.emptyTitle, { color: colors.mutedForeground }]}>
@@ -205,15 +237,24 @@ export default function WineRankingScreen() {
         </View>
       ) : (
         <FlatList
-          data={sortedRatings}
+          data={displayedItems}
           keyExtractor={(item) => item.ean}
           renderItem={renderItem}
           contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: bottomPad }}
           showsVerticalScrollIndicator={false}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.3}
           ListHeaderComponent={
             <Text style={[styles.listHeader, { color: colors.mutedForeground }]}>
-              {sortedRatings.length} {sortedRatings.length === 1 ? "rótulo" : "rótulos"} com avaliação pública
+              {allRatings.length} {allRatings.length === 1 ? "rótulo" : "rótulos"} com avaliação pública
             </Text>
+          }
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={{ paddingVertical: 16, alignItems: "center" }}>
+                <ActivityIndicator color={colors.gold} size="small" />
+              </View>
+            ) : null
           }
         />
       )}
