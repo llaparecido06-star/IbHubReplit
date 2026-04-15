@@ -5333,14 +5333,19 @@ export async function fetchMarketPosts(userId?: string, offset = 0, limit = 15):
       companyMap.set(companyData.id, companyData);
     }
 
-    // Fallback author shown when company page isn't found in DB yet
-    const fallbackAuthor = { id: "idealbi", full_name: "Ideal.BI", avatar_url: null, headline: "Inteligência de Mercado do Vinho" };
+    // All posts in this feed are from Ideal.BI — use any resolved company as the
+    // universal author, including for posts where company_page_id is still null
+    // (e.g. posts created before the backfill migration was applied).
+    const idealbiCompany = [...companyMap.values()][0] ?? null;
+    const universalAuthor = idealbiCompany
+      ? { id: idealbiCompany.id, full_name: idealbiCompany.name, avatar_url: idealbiCompany.avatar_url, headline: "Inteligência de Mercado do Vinho" }
+      : { id: "idealbi", full_name: "Ideal.BI", avatar_url: null, headline: "Inteligência de Mercado do Vinho" };
 
     return data.map((p: any) => {
-      const company = p.company_page_id ? (companyMap.get(p.company_page_id) ?? null) : null;
+      const company = p.company_page_id ? (companyMap.get(p.company_page_id) ?? idealbiCompany) : idealbiCompany;
       const author = company
         ? { id: company.id, full_name: company.name, avatar_url: company.avatar_url, headline: "Inteligência de Mercado do Vinho" }
-        : fallbackAuthor;
+        : universalAuthor;
       return { ...p, user_liked: likedSet.has(p.id), user_poll_vote: pollVoteMap.get(p.id) ?? null, author };
     });
   } catch { return []; }
