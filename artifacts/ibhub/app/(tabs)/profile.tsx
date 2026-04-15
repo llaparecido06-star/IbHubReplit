@@ -18,6 +18,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@/components/ui/Icon";
+import { PostRichContent } from "@/components/feed/PostRichContent";
 import QRCode from "react-native-qrcode-svg";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth, supabase } from "@/context/AuthContext";
@@ -407,21 +408,7 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
                   </View>
                 </View>
                 <Text style={{ fontSize: 14, lineHeight: 21, color: colors.foreground }}>{post.content}</Text>
-                {(() => {
-                  const urls: string[] = [];
-                  const raw = post.image_urls;
-                  if (Array.isArray(raw) && raw.length > 0) urls.push(...raw);
-                  else if (typeof raw === "string" && raw.trim().startsWith("[")) { try { const p = JSON.parse(raw); if (Array.isArray(p)) urls.push(...p); } catch {} }
-                  if (urls.length === 0 && post.image_url) urls.push(post.image_url);
-                  if (urls.length === 0) return null;
-                  return (
-                    <View style={{ gap: 4, marginTop: 8 }}>
-                      {urls.slice(0, 4).map((url, i) => (
-                        <Image key={`${url}-${i}`} source={{ uri: url }} style={{ width: "100%", height: 220, borderRadius: 10 }} resizeMode="cover" />
-                      ))}
-                    </View>
-                  );
-                })()}
+                <PostRichContent post={post as any} />
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 20, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border }}>
                   <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5 }} onPress={() => handleLikePost(post)}>
                     <Feather name="heart" size={17} color={post.is_liked ? "#e11d48" : colors.mutedForeground} />
@@ -1282,21 +1269,7 @@ export default function ProfileScreen() {
                   </TouchableOpacity>
                 </View>
                 <Text style={[styles.postContent, { color: colors.foreground }]}>{post.content}</Text>
-                {(() => {
-                  const urls: string[] = [];
-                  const raw = post.image_urls;
-                  if (Array.isArray(raw) && raw.length > 0) urls.push(...raw);
-                  else if (typeof raw === "string" && raw.trim().startsWith("[")) { try { const p = JSON.parse(raw); if (Array.isArray(p)) urls.push(...p); } catch {} }
-                  if (urls.length === 0 && post.image_url) urls.push(post.image_url);
-                  if (urls.length === 0) return null;
-                  return (
-                    <View style={{ gap: 4, marginTop: 8 }}>
-                      {urls.slice(0, 4).map((url, i) => (
-                        <Image key={`${url}-${i}`} source={{ uri: url }} style={{ width: "100%", height: 220, borderRadius: 10 }} resizeMode="cover" />
-                      ))}
-                    </View>
-                  );
-                })()}
+                <PostRichContent post={post as any} />
                 <View style={[styles.postActions, { borderTopColor: colors.border }]}>
                   <TouchableOpacity style={styles.postActionBtn} onPress={() => handleLikePost(post)}>
                     <Feather name="heart" size={18} color={post.is_liked ? "#e11d48" : colors.mutedForeground} />
@@ -1356,6 +1329,7 @@ export default function ProfileScreen() {
                     <Feather name="bookmark" size={16} color={colors.gold} />
                   </View>
                   <Text style={[styles.postContent, { color: colors.foreground }]} numberOfLines={4}>{post.content}</Text>
+                  <PostRichContent post={post as any} />
                   <View style={[styles.postActions, { borderTopColor: colors.border }]}>
                     <View style={styles.postActionBtn}>
                       <Feather name="heart" size={16} color={colors.mutedForeground} />
