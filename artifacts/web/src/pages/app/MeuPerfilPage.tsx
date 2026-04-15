@@ -267,11 +267,11 @@ export default function MeuPerfilPage() {
               </div>
             )}
 
-            {Array.isArray((profile as { certifications?: string[] | null })?.certifications) && ((profile as { certifications?: string[] | null }).certifications ?? []).length > 0 && (
+            {Array.isArray(profile?.certifications) && (profile.certifications ?? []).length > 0 && (
               <div style={{ marginTop: 18 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Certificações</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {((profile as { certifications?: string[] | null }).certifications ?? []).map((cert: string) => (
+                  {(profile.certifications ?? []).map((cert) => (
                     <span key={cert} style={{ backgroundColor: `${NAVY}12`, border: `1px solid ${NAVY}25`, borderRadius: 20, padding: "5px 14px", fontSize: 13, fontWeight: 600, color: NAVY }}>
                       {cert}
                     </span>
