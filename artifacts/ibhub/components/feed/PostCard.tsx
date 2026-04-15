@@ -426,8 +426,12 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
     onBookmark?.(post.id);
   };
 
+  const WEB_BASE = process.env.EXPO_PUBLIC_DOMAIN
+    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}/web`
+    : (process.env.EXPO_PUBLIC_API_URL ?? "").replace(/\/api$/, "");
+
   const handleShare = async () => {
-    const postUrl = `https://ibhub.app/post/${post.id}`;
+    const postUrl = `${WEB_BASE}/p/${post.id}`;
     if (Platform.OS === "web") {
       try {
         await navigator.clipboard.writeText(postUrl);
@@ -891,7 +895,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
               style={shareOptionStyles.option}
               onPress={async () => {
                 setShowShareSheet(false);
-                const postUrl = `https://ibhub.app/post/${post.id}`;
+                const postUrl = `${WEB_BASE}/p/${post.id}`;
                 const text = `Veja esta publicação no ibhub:\n\n${post.content?.slice(0, 120) ?? ""}\n\n${postUrl}`;
                 const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(text)}`;
                 const canOpen = await Linking.canOpenURL(whatsappUrl);
@@ -915,7 +919,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
               style={shareOptionStyles.option}
               onPress={async () => {
                 setShowShareSheet(false);
-                const postUrl = `https://ibhub.app/post/${post.id}`;
+                const postUrl = `${WEB_BASE}/p/${post.id}`;
                 const canOpen = await Linking.canOpenURL("instagram://");
                 if (canOpen) {
                   await Share.share({ message: postUrl, url: postUrl });
