@@ -13,6 +13,15 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
 router.get("/profile/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
 
+  const webBaseUrl = process.env.EXPO_PUBLIC_DOMAIN
+    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}/web`
+    : null;
+
+  if (webBaseUrl) {
+    res.redirect(302, `${webBaseUrl}/u/${id}`);
+    return;
+  }
+
   let name = "Usuário ibhub";
   let username = "";
   let avatarUrl = "";

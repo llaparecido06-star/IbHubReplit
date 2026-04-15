@@ -42,6 +42,7 @@ import AssinarSucessoPage from "@/pages/AssinarSucessoPage";
 import AssinarCanceladoPage from "@/pages/AssinarCanceladoPage";
 import MinhaContaPage from "@/pages/MinhaContaPage";
 import NotFound from "@/pages/not-found";
+import PublicProfilePage from "@/pages/PublicProfilePage";
 import { AdminShell } from "@/components/layout/AdminShell";
 import { FeatureFlagsProvider, useFeatureFlags } from "@/context/FeatureFlagsContext";
 import MaintenancePage from "@/pages/MaintenancePage";
@@ -137,7 +138,7 @@ function MaintenanceGuard({ children }: { children: React.ReactNode }) {
   // Auth paths that must remain reachable during maintenance so admins can sign in
   const isAuthPath = location === "/login" || location === "/cadastro" ||
     location === "/recuperar-senha" || location === "/redefinir-senha" ||
-    location === "/auth/callback";
+    location === "/auth/callback" || location.startsWith("/u/");
 
   useEffect(() => {
     if (loading || isLoading) return;
@@ -256,6 +257,9 @@ function Router() {
       <Route path="/app">
         <PrivateRoute component={AppFeedPage} />
       </Route>
+
+      {/* Public profile pages — no auth required */}
+      <Route path="/u/:id" component={PublicProfilePage} />
 
       {/* Subscription & account */}
       <Route path="/assinar/sucesso" component={AssinarSucessoPage} />

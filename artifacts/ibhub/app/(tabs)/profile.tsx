@@ -63,7 +63,10 @@ import { Post } from "@/components/feed/PostCard";
 import EmpresaDashboard from "@/components/EmpresaDashboard";
 import { UserListModal, UserListType } from "@/components/profile/UserListModal";
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
+const API_URL  = process.env.EXPO_PUBLIC_API_URL ?? "";
+const WEB_BASE = process.env.EXPO_PUBLIC_DOMAIN
+  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}/web`
+  : API_URL.replace(/\/api$/, "");
 
 type StatModal = UserListType | null;
 
@@ -902,7 +905,7 @@ export default function ProfileScreen() {
           <Text style={[styles.qrSub, { color: colors.mutedForeground }]}>Mostre para conectar rapidamente</Text>
           <View style={styles.qrBox}>
             <QRCode
-              value={`${API_URL}/profile/${user?.id ?? ""}`}
+              value={`${WEB_BASE}/u/${user?.id ?? ""}`}
               size={200}
               color={colors.navy}
               backgroundColor="#ffffff"
@@ -914,7 +917,7 @@ export default function ProfileScreen() {
             style={[styles.qrShareBtn, { backgroundColor: colors.gold }]}
             onPress={async () => {
               setShowQrModal(false);
-              const profileLink = `${API_URL}/profile/${user?.id ?? ""}`;
+              const profileLink = `${WEB_BASE}/u/${user?.id ?? ""}`;
               await Share.share({ message: `Conecte-se comigo na ibhub!\n${profileLink}` });
             }}
           >
