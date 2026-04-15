@@ -1,5 +1,4 @@
 import { useRouter, useFocusEffect } from "expo-router";
-import * as Linking from "expo-linking";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -63,6 +62,8 @@ import {
 import { Post } from "@/components/feed/PostCard";
 import EmpresaDashboard from "@/components/EmpresaDashboard";
 import { UserListModal, UserListType } from "@/components/profile/UserListModal";
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 
 type StatModal = UserListType | null;
 
@@ -901,7 +902,7 @@ export default function ProfileScreen() {
           <Text style={[styles.qrSub, { color: colors.mutedForeground }]}>Mostre para conectar rapidamente</Text>
           <View style={styles.qrBox}>
             <QRCode
-              value={Linking.createURL(`profile/${user?.id ?? "me"}`)}
+              value={`${API_URL}/profile/${user?.id ?? ""}`}
               size={200}
               color={colors.navy}
               backgroundColor="#ffffff"
@@ -913,7 +914,7 @@ export default function ProfileScreen() {
             style={[styles.qrShareBtn, { backgroundColor: colors.gold }]}
             onPress={async () => {
               setShowQrModal(false);
-              const profileLink = Linking.createURL(`profile/${user?.id ?? "me"}`);
+              const profileLink = `${API_URL}/profile/${user?.id ?? ""}`;
               await Share.share({ message: `Conecte-se comigo na ibhub!\n${profileLink}` });
             }}
           >
