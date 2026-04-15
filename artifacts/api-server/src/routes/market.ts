@@ -28,7 +28,7 @@ router.get("/market/posts", async (req: Request, res: Response): Promise<void> =
 
   let query = supabaseAdmin
     .from("market_posts")
-    .select("id, user_id, content, image_url, image_urls, video_url, likes_count, comments_count, poll, created_at")
+    .select("id, author_id, content, image_url, video_url, poll_options, likes_count, comments_count, created_at")
     .order("created_at", { ascending: false })
     .limit(limit);
 

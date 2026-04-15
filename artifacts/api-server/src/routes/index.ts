@@ -7,6 +7,7 @@ import stripeRouter from "./stripe";
 import presentationsRouter from "./presentations";
 import uploadsRouter from "./uploads";
 import marketRouter from "./market";
+import communityRouter from "./community";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(stripeRouter);
 router.use(presentationsRouter);
 router.use(uploadsRouter);
 router.use(marketRouter);
+router.use(communityRouter);
 
 export default router;

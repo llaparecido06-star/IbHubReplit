@@ -882,6 +882,9 @@ export default function MercadoPage() {
     { key: "apresentacoes", label: "📋 Apresentações" },
   ];
 
+  const isAdmin = profile?.is_admin ?? false;
+  const canMarket = (key: string) => isAdmin || hasFeature(`mercado:${key}`);
+
   return (
     <AppShell>
       <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 16px" }}>
@@ -962,74 +965,98 @@ export default function MercadoPage() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             {/* KPI Cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
-              {data.kpis.map((kpi) => (
-                <div key={kpi.label} style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                    <div style={{ width: 42, height: 42, backgroundColor: `${GOLD}18`, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>
-                      {kpi.icon === "Globe" ? "🌍" : kpi.icon === "TrendingUp" ? "📈" : "📊"}
-                    </div>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: kpi.change >= 0 ? "#16a34a" : "#dc2626" }}>
-                      {kpi.change >= 0 ? "↑" : "↓"} {Math.abs(kpi.change)}%
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 12, color: "#8a93a2" }}>{kpi.label}</div>
-                  <div style={{ fontSize: 12, color: "#aaa" }}>{kpi.period}</div>
-                  <div style={{ fontSize: 22, fontWeight: 900, color: NAVY, marginTop: 4 }}>{kpi.value}</div>
-                  {kpi.source && (
-                    <div style={{ fontSize: 11, color: "#aaa", marginTop: 6 }}>Fonte: {kpi.source}</div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Area Chart */}
-            <div style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                <span style={{ color: GOLD }}>📈</span>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0 }}>Exportações × Importações</h3>
-              </div>
-              <AreaChart data={data.chart_area} />
-            </div>
-
-            {/* Bar Chart */}
-            <div style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                <span style={{ color: GOLD }}>📊</span>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0 }}>Produção Nacional (Índice)</h3>
-              </div>
-              <BarChart data={data.chart_bar} />
-            </div>
-
-            {/* Tendências */}
-            <div style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                <span>🔥</span>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0 }}>Tendências do Período</h3>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {data.tendencias.map((t) => (
-                  <div key={t.title} style={{ display: "flex", gap: 14, padding: 14, backgroundColor: "#f9fafb", borderRadius: 10 }}>
-                    <div style={{
-                      width: 42, height: 42, borderRadius: 10, flexShrink: 0,
-                      backgroundColor: t.pos ? "#dcfce7" : "#fef2f2",
-                      display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18,
-                    }}>
-                      {t.pos ? "📈" : "📉"}
-                    </div>
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                        <span style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{t.title}</span>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: t.pos ? "#16a34a" : "#dc2626" }}>
-                          {t.pos ? "+" : ""}{t.change}%
-                        </span>
+            {canMarket("kpis") ? (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
+                {data.kpis.map((kpi) => (
+                  <div key={kpi.label} style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                      <div style={{ width: 42, height: 42, backgroundColor: `${GOLD}18`, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>
+                        {kpi.icon === "Globe" ? "🌍" : kpi.icon === "TrendingUp" ? "📈" : "📊"}
                       </div>
-                      <p style={{ fontSize: 13, color: "#8a93a2", margin: 0, lineHeight: 1.5 }}>{t.desc}</p>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: kpi.change >= 0 ? "#16a34a" : "#dc2626" }}>
+                        {kpi.change >= 0 ? "↑" : "↓"} {Math.abs(kpi.change)}%
+                      </span>
                     </div>
+                    <div style={{ fontSize: 12, color: "#8a93a2" }}>{kpi.label}</div>
+                    <div style={{ fontSize: 12, color: "#aaa" }}>{kpi.period}</div>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: NAVY, marginTop: 4 }}>{kpi.value}</div>
+                    {kpi.source && (
+                      <div style={{ fontSize: 11, color: "#aaa", marginTop: 6 }}>Fonte: {kpi.source}</div>
+                    )}
                   </div>
                 ))}
               </div>
-            </div>
+            ) : (
+              <div style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 28, textAlign: "center", color: MUTED }}>
+                <div style={{ fontSize: 32, marginBottom: 10 }}>🔒</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 4 }}>KPIs de Mercado</div>
+                <div style={{ fontSize: 13 }}>Disponível em planos com acesso ao mercado de dados.</div>
+              </div>
+            )}
+
+            {/* Charts */}
+            {canMarket("graficos") ? (
+              <>
+                <div style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                    <span style={{ color: GOLD }}>📈</span>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0 }}>Exportações × Importações</h3>
+                  </div>
+                  <AreaChart data={data.chart_area} />
+                </div>
+                <div style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                    <span style={{ color: GOLD }}>📊</span>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0 }}>Produção Nacional (Índice)</h3>
+                  </div>
+                  <BarChart data={data.chart_bar} />
+                </div>
+              </>
+            ) : (
+              <div style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 28, textAlign: "center", color: MUTED }}>
+                <div style={{ fontSize: 32, marginBottom: 10 }}>🔒</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Gráficos</div>
+                <div style={{ fontSize: 13 }}>Disponível em planos com acesso ao mercado de dados.</div>
+              </div>
+            )}
+
+            {/* Tendências */}
+            {canMarket("tendencias") ? (
+              <div style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                  <span>🔥</span>
+                  <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0 }}>Tendências do Período</h3>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {data.tendencias.map((t) => (
+                    <div key={t.title} style={{ display: "flex", gap: 14, padding: 14, backgroundColor: "#f9fafb", borderRadius: 10 }}>
+                      <div style={{
+                        width: 42, height: 42, borderRadius: 10, flexShrink: 0,
+                        backgroundColor: t.pos ? "#dcfce7" : "#fef2f2",
+                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18,
+                      }}>
+                        {t.pos ? "📈" : "📉"}
+                      </div>
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{t.title}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: t.pos ? "#16a34a" : "#dc2626" }}>
+                            {t.pos ? "+" : ""}{t.change}%
+                          </span>
+                        </div>
+                        <p style={{ fontSize: 13, color: "#8a93a2", margin: 0, lineHeight: 1.5 }}>{t.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 28, textAlign: "center", color: MUTED }}>
+                <div style={{ fontSize: 32, marginBottom: 10 }}>🔒</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Tendências do Período</div>
+                <div style={{ fontSize: 13 }}>Disponível em planos com acesso ao mercado de dados.</div>
+              </div>
+            )}
           </div>
         )}
       </div>

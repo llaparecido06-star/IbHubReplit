@@ -2509,13 +2509,16 @@ export async function createCompanyPage(params: {
   location?: string;
 }): Promise<CompanyPage | null> {
   try {
-    const { data, error } = await supabase
-      .from("company_pages")
-      .insert(params)
-      .select()
-      .single();
-    if (error) { console.error("createCompanyPage:", error); return null; }
-    return data as CompanyPage;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return null;
+    const res = await fetch(`${API_URL}/community/companies`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) { console.error("createCompanyPage:", res.status); return null; }
+    const body = await res.json() as { company: CompanyPage };
+    return body.company;
   } catch (e) {
     console.error("createCompanyPage:", e);
     return null;
@@ -3269,14 +3272,16 @@ export async function createOpportunity(
   userId: string,
 ): Promise<AppOpportunity | null> {
   try {
-    const { data, error } = await supabase
-      .from("opportunities")
-      .insert({ ...payload, created_by: userId, is_active: true })
-      .select()
-      .single();
-
-    if (error || !data) { console.error("createOpportunity:", error); return null; }
-    return data as AppOpportunity;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return null;
+    const res = await fetch(`${API_URL}/community/opportunities`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, created_by: userId }),
+    });
+    if (!res.ok) { console.error("createOpportunity:", res.status); return null; }
+    const body = await res.json() as { opportunity: AppOpportunity };
+    return body.opportunity;
   } catch (e) {
     console.error("createOpportunity:", e);
     return null;
@@ -5040,30 +5045,16 @@ export async function createGroup(params: {
   avatar_url?: string | null;
 }): Promise<Group | null> {
   try {
-    const { data, error } = await supabase.from("groups").insert(params).select().single();
-    if (error) { console.error("createGroup:", error); return null; }
-    const group = data as Group;
-    // Create a linked conversation so group-chat works (same UUID)
-    const { error: convErr } = await supabase.from("conversations").insert({
-      id: group.id,
-      is_group: true,
-      name: group.name,
-      created_at: group.created_at,
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return null;
+    const res = await fetch(`${API_URL}/community/groups`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(params),
     });
-    if (convErr) {
-      console.error("createGroup: conversation insert failed:", convErr);
-      // Clean up — delete the group since the conversation didn't get created
-      await supabase.from("groups").delete().eq("id", group.id);
-      return null;
-    }
-    const { error: partErr } = await supabase.from("conversation_participants").insert({
-      conversation_id: group.id,
-      user_id: group.owner_id,
-    });
-    if (partErr) {
-      console.warn("createGroup: participant insert failed (non-fatal):", partErr);
-    }
-    return group;
+    if (!res.ok) { console.error("createGroup:", res.status); return null; }
+    const body = await res.json() as { group: Group };
+    return body.group;
   } catch (e) {
     console.error("createGroup:", e);
     return null;
