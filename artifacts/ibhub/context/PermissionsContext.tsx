@@ -1,5 +1,5 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { useAuth } from "@/context/AuthContext";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useAuth, supabase } from "@/context/AuthContext";
 import { fetchPlanFeatures } from "@/services/api";
 import { getEntitlementStatus } from "@/utils/entitlement";
 
@@ -21,35 +21,75 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
   const { profile } = useAuth();
   const [features, setFeatures] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  const loadFeatures = useCallback(async (prof: typeof profile) => {
+    setIsLoading(true);
+    if (!prof) {
+      setFeatures([]);
+      setIsLoading(false);
+      return;
+    }
+    const entitle = getEntitlementStatus(prof);
+    if (entitle === "courtesy") {
+      setFeatures(["__all__"]);
+      setIsLoading(false);
+      return;
+    }
+    if (entitle === "past_due" || entitle === "free") {
+      setFeatures([]);
+      setIsLoading(false);
+      return;
+    }
+    try {
+      const planId = prof.plan ?? "gratuito";
+      const feats = await fetchPlanFeatures(planId);
+      setFeatures(feats);
+    } catch {
+      setFeatures([]);
+    }
+    setIsLoading(false);
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      setIsLoading(true);
-      if (!profile) {
-        if (!cancelled) { setFeatures([]); setIsLoading(false); }
-        return;
-      }
-      const entitle = getEntitlementStatus(profile);
-      if (entitle === "courtesy") {
-        if (!cancelled) { setFeatures(["__all__"]); setIsLoading(false); }
-        return;
-      }
-      if (entitle === "past_due" || entitle === "free") {
-        if (!cancelled) { setFeatures([]); setIsLoading(false); }
-        return;
-      }
-      try {
-        const planId = profile.plan ?? "gratuito";
-        const feats = await fetchPlanFeatures(planId);
-        if (!cancelled) { setFeatures(feats); setIsLoading(false); }
-      } catch {
-        if (!cancelled) { setFeatures([]); setIsLoading(false); }
+    loadFeatures(profile);
+  }, [profile?.plan, profile?.stripe_subscription_status, profile?.courtesy_until]);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+
+    const channel = supabase
+      .channel(`permissions:${profile.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "profiles",
+          filter: `id=eq.${profile.id}`,
+        },
+        (payload) => {
+          const updated = payload.new as { plan?: string; stripe_subscription_status?: string; courtesy_until?: string | null };
+          const merged = { ...profile, ...updated };
+          loadFeatures(merged as typeof profile);
+        },
+      )
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
       }
     };
-    load();
-    return () => { cancelled = true; };
-  }, [profile?.plan, profile?.stripe_subscription_status, profile?.courtesy_until]);
+  }, [profile?.id]);
 
   const hasFeature = useCallback(
     (key: string): boolean => {

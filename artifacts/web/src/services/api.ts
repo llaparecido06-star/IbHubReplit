@@ -562,6 +562,20 @@ export async function deleteMarketPresentation(id: string): Promise<boolean> {
   }
 }
 
+export async function triggerPresentationAccess(presentationId: string): Promise<void> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
+      ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
+    await fetch(`${apiBase}/presentations/${presentationId}/access`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+  } catch {
+  }
+}
+
 // ─── Conversations / Messages ─────────────────────────────────────────────────
 
 export interface WebConversation {

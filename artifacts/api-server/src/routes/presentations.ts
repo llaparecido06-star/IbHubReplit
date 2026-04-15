@@ -72,9 +72,10 @@ router.get("/presentations/:id/slides", async (req: Request, res: Response) => {
       .eq("id", planId2)
       .maybeSingle();
     const features = (planFeatures as { features?: string[] } | null)?.features ?? [];
-    const hasMercadoAccess = features.some((f) => f.startsWith("mercado:"));
-    if (!hasMercadoAccess) {
-      res.status(403).json({ error: "Plano atual não inclui acesso ao mercado de dados." });
+    // Only users with the exact "mercado:apresentacoes" plan feature may access presentation slides.
+    const hasPresentationsAccess = features.includes("mercado:apresentacoes");
+    if (!hasPresentationsAccess) {
+      res.status(403).json({ error: "Plano atual não inclui acesso às apresentações de mercado." });
       return;
     }
   }
@@ -190,14 +191,27 @@ router.post("/presentations/:id/access", async (req: Request, res: Response) => 
     return;
   }
 
+  // Server-side feature gate: check exact presentations feature key unless user has courtesy
+  const isCourtesyCheck = !!typedProfile.courtesy_until && new Date(typedProfile.courtesy_until) > new Date();
+  if (!isCourtesyCheck) {
+    const planId3 = typedProfile.plan ?? "gratuito";
+    const { data: planFeatures3 } = await supabaseAdmin
+      .from("plans")
+      .select("features")
+      .eq("id", planId3)
+      .maybeSingle();
+    const features3 = (planFeatures3 as { features?: string[] } | null)?.features ?? [];
+    if (!features3.includes("mercado:apresentacoes")) {
+      res.status(403).json({ error: "Plano atual não inclui acesso às apresentações de mercado." });
+      return;
+    }
+  }
+
   const { applyDeliveryStrategy } = await import("../lib/deliveryStrategies.js");
   type DS = "FULL_ACCESS" | "SEQUENTIAL_MONTHLY" | "RANDOM_DAILY" | "NONE";
 
-  // Courtesy users get FULL_ACCESS regardless of their plan strategy
-  const isCourtesy = !!typedProfile.courtesy_until && new Date(typedProfile.courtesy_until) > new Date();
-
   let strategy: DS;
-  if (isCourtesy) {
+  if (isCourtesyCheck) {
     strategy = "FULL_ACCESS";
   } else {
     const planId = typedProfile.plan ?? "gratuito";
@@ -207,6 +221,13 @@ router.post("/presentations/:id/access", async (req: Request, res: Response) => 
       .eq("id", planId)
       .maybeSingle();
     strategy = (((planData as { delivery_strategy?: string } | null)?.delivery_strategy) ?? "NONE") as DS;
+  }
+
+  // RANDOM_DAILY is managed exclusively by the daily cron job (once-per-day guarantee).
+  // Applying it on every access would unlock a new slide on every open, violating the intent.
+  if (strategy === "RANDOM_DAILY") {
+    res.json({ ok: true, applied: false, reason: "random_daily_deferred_to_cron" });
+    return;
   }
 
   const { data: slidesRaw } = await supabaseAdmin

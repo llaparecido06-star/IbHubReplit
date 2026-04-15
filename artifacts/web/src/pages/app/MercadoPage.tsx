@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabase";
 import {
   MARKET_FALLBACK, MarketOverview, Period, fetchMarketOverview,
   fetchMarketPresentations, fetchAllMarketPresentations,
-  upsertMarketPresentation, deleteMarketPresentation, MarketPresentation,
+  upsertMarketPresentation, deleteMarketPresentation, triggerPresentationAccess, MarketPresentation,
   MarketPost, MarketComment, MarketPollOption,
   fetchMarketPosts, createMarketPost, toggleMarketPostLike,
   fetchMarketComments, addMarketComment, uploadMarketPostImage,
@@ -261,9 +261,15 @@ function ApresentacoesPanel({ isAdmin }: { isAdmin: boolean }) {
                     </>
                   )}
                   {p.content_url && (
-                    <a href={p.content_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 700, color: GOLD, textDecoration: "none", padding: "5px 12px", border: `1px solid ${GOLD}50`, borderRadius: 7 }}>
+                    <button
+                      onClick={() => {
+                        triggerPresentationAccess(p.id).catch(() => {});
+                        window.open(p.content_url, "_blank", "noopener,noreferrer");
+                      }}
+                      style={{ fontSize: 12, fontWeight: 700, color: GOLD, background: "none", border: `1px solid ${GOLD}50`, borderRadius: 7, padding: "5px 12px", cursor: "pointer", fontFamily: "inherit" }}
+                    >
                       Ver →
-                    </a>
+                    </button>
                   )}
                 </div>
               </div>
