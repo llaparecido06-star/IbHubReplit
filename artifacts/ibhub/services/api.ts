@@ -2118,7 +2118,8 @@ export interface AppReport {
 }
 
 export async function createReport(params: {
-  post_id: string;
+  post_id?: string | null;
+  reported_user_id?: string | null;
   reported_by: string;
   reason: string;
 }): Promise<boolean> {

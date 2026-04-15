@@ -56,6 +56,9 @@ export default function PublicProfileScreen() {
   const [resolvedId, setResolvedId]   = useState<string>(id ?? "");
   const [userListModal, setUserListModal] = useState<UserListType | null>(null);
   const [selectedWine, setSelectedWine]   = useState<API.WineEntry | null>(null);
+  const [showReportModal,  setShowReportModal]  = useState(false);
+  const [reportReason,     setReportReason]     = useState("");
+  const [reportSubmitting, setReportSubmitting] = useState(false);
 
   const topPad   = insets.top;
   const navyBg   = (colors as any).navyLight ?? colors.navy;
@@ -135,6 +138,60 @@ export default function PublicProfileScreen() {
   const isCompany    = (userProfile as any).profile_type === "empresa";
   const isOwnProfile = currentUser?.id === resolvedId;
   const tab2Label    = isCompany ? "Portfólio" : "Adega";
+
+  const REPORT_REASONS = ["Spam", "Conteúdo ofensivo", "Informação falsa", "Assédio", "Perfil falso", "Outro"];
+
+  const handleShowUserMenu = () => {
+    if (!currentUser?.id || isOwnProfile) return;
+    Alert.alert(
+      userProfile.full_name,
+      "O que deseja fazer?",
+      [
+        { text: "Denunciar usuário", onPress: () => { setReportReason(""); setShowReportModal(true); } },
+        {
+          text: "Bloquear usuário",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Bloquear usuário",
+              `Tem certeza que deseja bloquear ${userProfile.full_name}? Esta pessoa não poderá ver seu perfil nem enviar mensagens.`,
+              [
+                { text: "Cancelar", style: "cancel" },
+                {
+                  text: "Bloquear", style: "destructive",
+                  onPress: async () => {
+                    if (!currentUser?.id || !resolvedId) return;
+                    await API.blockUser(currentUser.id, resolvedId);
+                    Alert.alert("Usuário bloqueado", `${userProfile.full_name} foi bloqueado(a). Você pode gerenciar bloqueios em Configurações.`);
+                    router.back();
+                  },
+                },
+              ]
+            );
+          },
+        },
+        { text: "Cancelar", style: "cancel" },
+      ]
+    );
+  };
+
+  const handleSubmitReport = async () => {
+    if (!reportReason || !currentUser?.id || !resolvedId) return;
+    setReportSubmitting(true);
+    const ok = await API.createReport({
+      reported_user_id: resolvedId,
+      reported_by: currentUser.id,
+      reason: reportReason,
+    });
+    setReportSubmitting(false);
+    setShowReportModal(false);
+    setReportReason("");
+    if (ok) {
+      Alert.alert("Denúncia enviada", "Obrigado! Nossa equipe irá revisar a denúncia.");
+    } else {
+      Alert.alert("Erro", "Não foi possível enviar a denúncia. Tente novamente.");
+    }
+  };
 
   /* ── Actions ── */
   const handleFollow = async () => {
@@ -234,7 +291,18 @@ export default function PublicProfileScreen() {
           {userProfile.full_name}
         </Text>
 
-        <View style={{ width: 44 }} />
+        {!isOwnProfile && !loading ? (
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={handleShowUserMenu}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            activeOpacity={0.7}
+          >
+            <Feather name="more-vertical" size={22} color="#fff" />
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 44 }} />
+        )}
       </View>
 
       {/* ══════════════════════════════════════════════════════════
@@ -499,6 +567,54 @@ export default function PublicProfileScreen() {
         userId={resolvedId || null}
         onClose={() => setUserListModal(null)}
       />
+
+      {/* ── Report User Modal ── */}
+      <Modal
+        visible={showReportModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowReportModal(false)}
+      >
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" }} onPress={() => setShowReportModal(false)}>
+          <Pressable style={{ backgroundColor: "#fff", borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 24, paddingBottom: 40 }} onPress={() => {}}>
+            <Text style={{ fontSize: 17, fontWeight: "800", color: colors.navy, marginBottom: 4 }}>Denunciar usuário</Text>
+            <Text style={{ fontSize: 13, color: colors.mutedForeground, marginBottom: 18 }}>
+              Selecione o motivo da denúncia. Nossa equipe irá revisar.
+            </Text>
+            {REPORT_REASONS.map((reason) => (
+              <TouchableOpacity
+                key={reason}
+                style={{
+                  flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+                  paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, marginBottom: 8,
+                  backgroundColor: reportReason === reason ? colors.gold + "18" : colors.background,
+                  borderWidth: 1.5,
+                  borderColor: reportReason === reason ? colors.gold : colors.border,
+                }}
+                onPress={() => setReportReason(reason)}
+              >
+                <Text style={{ fontSize: 15, fontWeight: "600", color: reportReason === reason ? colors.gold : colors.foreground }}>
+                  {reason}
+                </Text>
+                {reportReason === reason && <Feather name="check" size={18} color={colors.gold} />}
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={{
+                marginTop: 8, backgroundColor: reportReason ? colors.navy : colors.border,
+                borderRadius: 12, paddingVertical: 15, alignItems: "center",
+                opacity: reportSubmitting ? 0.6 : 1,
+              }}
+              onPress={handleSubmitReport}
+              disabled={!reportReason || reportSubmitting}
+            >
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>
+                {reportSubmitting ? "Enviando..." : "Enviar Denúncia"}
+              </Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Wine Detail Modal */}
       <Modal

@@ -39,6 +39,43 @@ router.delete("/users/me", async (req: Request, res: Response) => {
 
   const userId = userData.user.id;
 
+  // Explicitly delete / anonymize all user data before removing the auth record.
+  // Order matters: delete child rows before parent rows to avoid FK violations.
+  // Failures are logged but do not abort the deletion — the auth.users cascade
+  // will clean up any remaining FK-linked rows.
+  await Promise.allSettled([
+    supabaseAdmin.from("comment_likes").delete().eq("user_id", userId),
+    supabaseAdmin.from("likes").delete().eq("user_id", userId),
+    supabaseAdmin.from("bookmarks").delete().eq("user_id", userId),
+    supabaseAdmin.from("notification_preferences").delete().eq("user_id", userId),
+  ]);
+
+  await Promise.allSettled([
+    supabaseAdmin.from("comments").delete().eq("user_id", userId),
+    supabaseAdmin.from("stories").delete().eq("user_id", userId),
+    supabaseAdmin.from("wine_cellar").delete().eq("user_id", userId),
+    supabaseAdmin.from("post_hidden").delete().eq("user_id", userId),
+    supabaseAdmin.from("user_blocks").delete().or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`),
+  ]);
+
+  await Promise.allSettled([
+    supabaseAdmin.from("posts").delete().eq("user_id", userId),
+  ]);
+
+  // Anonymize profile before auth user deletion
+  await supabaseAdmin
+    .from("profiles")
+    .update({
+      full_name: "Conta Removida",
+      username: null,
+      bio: null,
+      avatar_url: null,
+      headline: null,
+      location: null,
+      phone: null,
+    })
+    .eq("id", userId);
+
   const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
   if (deleteError) {
     res.status(500).json({ error: deleteError.message ?? "Failed to delete user" });

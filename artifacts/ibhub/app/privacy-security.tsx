@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Modal,
   Platform,
@@ -93,31 +94,44 @@ export default function PrivacySecurityScreen() {
   const handleDeleteAccount = () => {
     Alert.alert(
       "Excluir conta",
-      "Todos os seus dados serão permanentemente removidos. Esta ação não pode ser desfeita.",
+      "Esta ação é permanente. Todos os seus dados (perfil, posts, mensagens, adega) serão removidos definitivamente. Deseja continuar?",
       [
         { text: "Cancelar", style: "cancel" },
         {
-          text: "Excluir",
+          text: "Sim, quero excluir",
           style: "destructive",
-          onPress: async () => {
-            setDeletingAccount(true);
-            try {
-              const { data: sessionData } = await supabase.auth.getSession();
-              const token = sessionData?.session?.access_token;
-              if (!token) {
-                Alert.alert("Erro", "Sessão inválida. Faça login novamente.");
-                return;
-              }
-              const result = await deleteAccount(token);
-              if (!result.success) {
-                Alert.alert("Erro", result.error ?? "Não foi possível excluir a conta.");
-                return;
-              }
-              await supabase.auth.signOut();
-              router.replace("/");
-            } finally {
-              setDeletingAccount(false);
-            }
+          onPress: () => {
+            Alert.alert(
+              "Confirmação final",
+              "Você tem certeza? Após a exclusão, sua conta e todos os dados associados serão APAGADOS PERMANENTEMENTE e não poderão ser recuperados.",
+              [
+                { text: "Cancelar", style: "cancel" },
+                {
+                  text: "Excluir definitivamente",
+                  style: "destructive",
+                  onPress: async () => {
+                    setDeletingAccount(true);
+                    try {
+                      const { data: sessionData } = await supabase.auth.getSession();
+                      const token = sessionData?.session?.access_token;
+                      if (!token) {
+                        Alert.alert("Erro", "Sessão inválida. Faça login novamente.");
+                        return;
+                      }
+                      const result = await deleteAccount(token);
+                      if (!result.success) {
+                        Alert.alert("Erro", result.error ?? "Não foi possível excluir a conta.");
+                        return;
+                      }
+                      await supabase.auth.signOut();
+                      router.replace("/");
+                    } finally {
+                      setDeletingAccount(false);
+                    }
+                  },
+                },
+              ]
+            );
           },
         },
       ]
@@ -174,22 +188,50 @@ export default function PrivacySecurityScreen() {
           </TouchableOpacity>
         </View>
 
+        <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
+          <View style={styles.sectionHead}>
+            <Feather name="users" size={15} color={colors.gold} />
+            <Text style={[styles.sectionHeadText, { color: colors.navy }]}>Controle Social</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.arrowRow, { borderTopColor: colors.border }]}
+            onPress={() => router.push("/blocked-users" as any)}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, { color: colors.navy }]}>Usuários Bloqueados</Text>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>Ver e gerenciar bloqueios</Text>
+            </View>
+            <Feather name="arrow-right" size={18} color={colors.mutedForeground} />
+          </TouchableOpacity>
+          <View style={[styles.infoRow, { borderTopColor: colors.border }]}>
+            <Feather name="flag" size={15} color={colors.mutedForeground} style={{ marginTop: 1 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, { color: colors.navy }]}>Denunciar Conteúdo</Text>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
+                Use o menu "⋯" em qualquer post ou perfil para denunciar conteúdo inadequado. Nossa equipe analisa todas as denúncias.
+              </Text>
+            </View>
+          </View>
+        </View>
+
         <View style={[styles.dangerCard, { backgroundColor: "#fff5f5", borderColor: "#fecaca" }]}>
           <View style={styles.dangerHead}>
             <Feather name="trash-2" size={15} color="#dc2626" />
             <Text style={[styles.dangerTitle, { color: "#dc2626" }]}>Zona de Perigo</Text>
           </View>
           <Text style={[styles.dangerText, { color: colors.mutedForeground }]}>
-            Ao excluir sua conta, todos os seus dados serão permanentemente removidos. Esta ação não pode ser desfeita.
+            Ao excluir sua conta, todos os seus dados (perfil, posts, mensagens, adega) serão permanentemente removidos. Esta ação não pode ser desfeita.
           </Text>
           <TouchableOpacity
             style={[styles.deleteBtn, { borderColor: "#dc2626", opacity: deletingAccount ? 0.5 : 1 }]}
             onPress={handleDeleteAccount}
             disabled={deletingAccount}
           >
-            <Text style={[styles.deleteBtnText, { color: "#dc2626" }]}>
-              {deletingAccount ? "Excluindo..." : "Excluir minha conta"}
-            </Text>
+            {deletingAccount ? (
+              <ActivityIndicator size="small" color="#dc2626" />
+            ) : (
+              <Text style={[styles.deleteBtnText, { color: "#dc2626" }]}>Excluir minha conta</Text>
+            )}
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -250,6 +292,7 @@ const styles = StyleSheet.create({
   sectionHeadText: { fontSize: 15, fontWeight: "700" },
   row:             { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 14, borderTopWidth: 1 },
   arrowRow:        { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 14, borderTopWidth: 1 },
+  infoRow:         { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingHorizontal: 14, paddingVertical: 14, borderTopWidth: 1 },
   rowLabel:        { fontSize: 15, fontWeight: "600" },
   rowSub:          { fontSize: 12, marginTop: 2 },
   dangerCard:      { borderRadius: 12, borderWidth: 1.5, padding: 16, gap: 12 },

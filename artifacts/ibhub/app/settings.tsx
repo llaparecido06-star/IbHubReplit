@@ -83,8 +83,8 @@ export default function SettingsScreen() {
       title: "PREFERÊNCIAS",
       rows: [
         { icon: "bell",     label: "Notificações",         sub: "Gerenciar notificações",         onPress: () => router.push("/notification-settings" as any) },
-        { icon: "lock",     label: "Privacidade e Segurança", sub: "Visibilidade e senha",        onPress: () => router.push("/privacy-security" as any) },
-        { icon: "slash",    label: "Usuários Bloqueados",   sub: "Gerenciar bloqueios",            onPress: () => router.push("/blocked-users" as any) },
+        { icon: "lock",     label: "Privacidade e Segurança", sub: "Visibilidade, senha e bloqueios", onPress: () => router.push("/privacy-security" as any) },
+        { icon: "slash",    label: "Usuários Bloqueados",   sub: "Gerenciar bloqueios",              onPress: () => router.push("/blocked-users" as any) },
       ],
     },
     {
