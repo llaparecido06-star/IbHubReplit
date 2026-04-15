@@ -46,6 +46,7 @@ export default function EventsScreen() {
   const insets = useSafeAreaInsets();
   const [events, setEvents] = useState(MOCK_EVENTS);
   const [filter, setFilter] = useState("todos");
+  const [loadingRsvpId, setLoadingRsvpId] = useState<string | null>(null);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -59,8 +60,12 @@ export default function EventsScreen() {
     return true;
   });
 
-  const toggleRSVP = (id: string) => {
+  const toggleRSVP = async (id: string) => {
+    if (loadingRsvpId) return;
+    setLoadingRsvpId(id);
+    await new Promise<void>((resolve) => setTimeout(resolve, 350));
     setEvents((prev) => prev.map((e) => e.id === id ? { ...e, is_rsvp: !e.is_rsvp, attendees: e.is_rsvp ? e.attendees - 1 : e.attendees + 1 } : e));
+    setLoadingRsvpId(null);
   };
 
   return (
@@ -132,6 +137,8 @@ export default function EventsScreen() {
                 onPress={() => toggleRSVP(item.id)}
                 variant={item.is_rsvp ? "outline" : "gold"}
                 size="sm"
+                loading={loadingRsvpId === item.id}
+                disabled={!!loadingRsvpId && loadingRsvpId !== item.id}
                 style={{ marginTop: 8, alignSelf: "flex-start" }}
               />
             </View>

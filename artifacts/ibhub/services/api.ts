@@ -4,6 +4,28 @@ import { compressAvatar, compressPostImage, compressLogoImage } from "@/utils/co
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 
+function isNetworkError(e: unknown): boolean {
+  const msg = String(e instanceof Error ? e.message : e).toLowerCase();
+  return (
+    msg.includes("network request failed") ||
+    msg.includes("failed to fetch") ||
+    msg.includes("networkerror") ||
+    msg.includes("etimedout") ||
+    msg.includes("econnrefused")
+  );
+}
+
+async function guardedFetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch (e: unknown) {
+    if (isNetworkError(e)) {
+      throw new Error("Verifique sua conexão e tente novamente.");
+    }
+    throw e;
+  }
+}
+
 export async function deleteAccount(token: string): Promise<{ success: boolean; error?: string }> {
   try {
     const res = await fetch(`${API_URL}/users/me`, {
@@ -182,7 +204,7 @@ export async function fetchFeedPosts(
     if (!session?.access_token) return [];
 
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-    const res = await fetch(`${API_URL}/feed/posts?${params}`, {
+    const res = await guardedFetch(`${API_URL}/feed/posts?${params}`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
     });
     if (!res.ok) return [];
@@ -215,6 +237,7 @@ export async function fetchFeedPosts(
       is_bookmarked: bookmarkedIds.has(post.id),
     }));
   } catch (e) {
+    if (isNetworkError(e)) throw e;
     console.warn("fetchFeedPosts:", e);
     return [];
   }
@@ -302,6 +325,7 @@ export async function createPost(params: {
       is_bookmarked: false,
     } as Post;
   } catch (e) {
+    if (isNetworkError(e)) throw e;
     console.error("createPost:", e);
     return null;
   }
@@ -435,7 +459,7 @@ export async function fetchNewPostsSince(since: string, currentUserId: string, a
     if (!session?.access_token) return [];
 
     const params = new URLSearchParams({ limit: "20", since });
-    const res = await fetch(`${API_URL}/feed/posts?${params.toString()}`, {
+    const res = await guardedFetch(`${API_URL}/feed/posts?${params.toString()}`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
     });
     if (!res.ok) return [];
@@ -2741,6 +2765,7 @@ export async function addWineEntry(params: Omit<WineEntry, "id" | "created_at" |
     if (error) { console.error("addWineEntry:", error); return null; }
     return data as WineEntry;
   } catch (e) {
+    if (isNetworkError(e)) throw e;
     console.error("addWineEntry:", e);
     return null;
   }
@@ -2757,6 +2782,7 @@ export async function updateWineEntry(id: string, changes: Partial<Omit<WineEntr
     if (error) { console.error("updateWineEntry:", error); return null; }
     return data as WineEntry;
   } catch (e) {
+    if (isNetworkError(e)) throw e;
     console.error("updateWineEntry:", e);
     return null;
   }
@@ -2768,6 +2794,7 @@ export async function deleteWineEntry(id: string): Promise<boolean> {
     if (error) { console.error("deleteWineEntry:", error); return false; }
     return true;
   } catch (e) {
+    if (isNetworkError(e)) throw e;
     console.error("deleteWineEntry:", e);
     return false;
   }
@@ -3338,7 +3365,7 @@ export async function createOpportunity(
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) return null;
-    const res = await fetch(`${API_URL}/community/opportunities`, {
+    const res = await guardedFetch(`${API_URL}/community/opportunities`, {
       method: "POST",
       headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ ...payload, created_by: userId }),
@@ -3347,6 +3374,7 @@ export async function createOpportunity(
     const body = await res.json() as { opportunity: AppOpportunity };
     return body.opportunity;
   } catch (e) {
+    if (isNetworkError(e)) throw e;
     console.error("createOpportunity:", e);
     return null;
   }

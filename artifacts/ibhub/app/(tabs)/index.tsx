@@ -83,6 +83,7 @@ export default function FeedScreen() {
   const [hasMoreFeed, setHasMoreFeed] = useState(true);
   const feedOffsetRef = useRef(0);
   const isLoadingMoreRef = useRef(false);
+  const isPostingRef = useRef(false);
   const FEED_PAGE_SIZE = 15;
 
   // New posts banner
@@ -472,6 +473,7 @@ export default function FeedScreen() {
   };
 
   const handlePublishPost = async () => {
+    if (isPostingRef.current) return;
     setShowCreatePost(false);
     const content = postMode === "poll" ? pollQuestion : postContent;
     if ((!content.trim() && postImageUris.length === 0 && !postVideoUri) || !user?.id) {
@@ -479,6 +481,7 @@ export default function FeedScreen() {
       setPostImageUris([]); setPostVideoUri(null); setPostLocation(""); setShowLocationInput(false);
       return;
     }
+    isPostingRef.current = true;
 
     const pollData = (postMode === "poll" && pollOptions.filter(o => o.trim()).length >= 2)
       ? { options: pollOptions.filter(o => o.trim()).map(t => ({ text: t, votes: 0 })), total_votes: 0, closed: false }
@@ -542,6 +545,7 @@ export default function FeedScreen() {
 
     setPostContent(""); setPollQuestion(""); setPollOptions(["",""]); setPostMode("text");
     setPostImageUris([]); setPostVideoUri(null); setPostLocation(""); setShowLocationInput(false);
+    isPostingRef.current = false;
   };
 
   const handlePickWineImage = async () => {

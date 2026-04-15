@@ -17,6 +17,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { updateProfile, uploadAvatar, checkUsernameAvailable } from "@/services/api";
+import { friendlyErrorMessage } from "@/hooks/useAsyncAction";
 
 const AREAS = [
   "Sommelier", "Produtor", "Importador", "Exportador", "Distribuidor",
@@ -158,42 +159,49 @@ export default function EditProfileScreen() {
       return;
     }
     setSaving(true);
-
-    let finalAvatarUrl: string | null | undefined = undefined;
-    if (avatarChanged && avatarUri) {
-      setUploadingAvatar(true);
-      const uploaded = await uploadAvatar(user.id, avatarUri);
-      setUploadingAvatar(false);
-      if (!uploaded) {
-        Alert.alert("Aviso", "Não foi possível fazer upload da foto, mas o resto do perfil será salvo.");
-      } else {
-        finalAvatarUrl = uploaded;
+    try {
+      let finalAvatarUrl: string | null | undefined = undefined;
+      if (avatarChanged && avatarUri) {
+        setUploadingAvatar(true);
+        try {
+          const uploaded = await uploadAvatar(user.id, avatarUri);
+          if (!uploaded) {
+            Alert.alert("Aviso", "Não foi possível fazer upload da foto, mas o resto do perfil será salvo.");
+          } else {
+            finalAvatarUrl = uploaded;
+          }
+        } finally {
+          setUploadingAvatar(false);
+        }
       }
-    }
 
-    const ok = await updateProfile(user.id, {
-      full_name:          fullName.trim(),
-      username:           username.trim() || undefined,
-      bio:                bio.trim() || null,
-      areas_of_expertise: selectedAreas,
-      company:            company.trim() || null,
-      position:           position.trim() || null,
-      certifications,
-      ...(finalAvatarUrl !== undefined ? { avatar_url: finalAvatarUrl } : {}),
-    });
-    setSaving(false);
-    if (!ok) {
-      Alert.alert("Erro", "Não foi possível salvar o perfil. Verifique se o nome de usuário já está em uso e tente novamente.");
-      return;
+      const ok = await updateProfile(user.id, {
+        full_name:          fullName.trim(),
+        username:           username.trim() || undefined,
+        bio:                bio.trim() || null,
+        areas_of_expertise: selectedAreas,
+        company:            company.trim() || null,
+        position:           position.trim() || null,
+        certifications,
+        ...(finalAvatarUrl !== undefined ? { avatar_url: finalAvatarUrl } : {}),
+      });
+      if (!ok) {
+        Alert.alert("Erro", "Não foi possível salvar o perfil. Verifique se o nome de usuário já está em uso e tente novamente.");
+        return;
+      }
+      if (finalAvatarUrl) {
+        setAvatarUri(finalAvatarUrl);
+        setAvatarChanged(false);
+        patchProfile({ avatar_url: finalAvatarUrl });
+      }
+      try { await refreshProfile?.(); } catch {}
+      Alert.alert("Salvo!", "Perfil atualizado com sucesso.");
+      router.back();
+    } catch (e: unknown) {
+      Alert.alert("Erro", friendlyErrorMessage(e));
+    } finally {
+      setSaving(false);
     }
-    if (finalAvatarUrl) {
-      setAvatarUri(finalAvatarUrl);
-      setAvatarChanged(false);
-      patchProfile({ avatar_url: finalAvatarUrl });
-    }
-    try { await refreshProfile?.(); } catch {}
-    Alert.alert("Salvo!", "Perfil atualizado com sucesso.");
-    router.back();
   };
 
   const name = fullName || profile?.full_name || "?";

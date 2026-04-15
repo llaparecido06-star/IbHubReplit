@@ -18,6 +18,7 @@ import { Feather } from "@/components/ui/Icon";
 import * as Notifications from "@/utils/safeNotifications";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 import * as API from "@/services/api";
 
 type WineStatus = "adega" | "consumido" | "presenteado" | "wishlist";
@@ -58,7 +59,6 @@ export default function WineCellarScreen() {
 
   const [wines, setWines]           = useState<API.WineEntry[]>([]);
   const [loadingData, setLoadingData] = useState(true);
-  const [saving, setSaving]         = useState(false);
   const [filter, setFilter]         = useState<FilterKey>("todos");
   const [search, setSearch]         = useState("");
   const [showForm, setShowForm]     = useState(false);
@@ -88,6 +88,34 @@ export default function WineCellarScreen() {
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
+
+  const { execute: executeSave, isLoading: saving } = useAsyncAction(
+    async (
+      payload: Omit<API.WineEntry, "id" | "created_at" | "updated_at">,
+      userId: string,
+      targetEditingId: string | null,
+    ) => {
+      if (targetEditingId) {
+        const updated = await API.updateWineEntry(targetEditingId, payload);
+        if (!updated) throw new Error("Não foi possível atualizar o vinho. Tente novamente.");
+        setWines((prev) => prev.map((w) => w.id === targetEditingId ? updated : w));
+      } else {
+        const entry = await API.addWineEntry({ ...payload, user_id: userId });
+        if (!entry) throw new Error("Não foi possível salvar o vinho. Tente novamente.");
+        setWines((prev) => [entry, ...prev]);
+      }
+      resetForm();
+      setShowForm(false);
+    }
+  );
+
+  const { execute: executeDelete } = useAsyncAction(
+    async (id: string) => {
+      const ok = await API.deleteWineEntry(id);
+      if (ok) setWines((prev) => prev.filter((w) => w.id !== id));
+      else throw new Error("Não foi possível remover o vinho. Tente novamente.");
+    }
+  );
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -194,15 +222,15 @@ export default function WineCellarScreen() {
 
   const canSave = wName.trim().length > 0 && wGrape.trim().length > 0 && wVintage.trim().length > 0 && wEan.trim().length > 0;
 
-  const handleAdd = async () => {
+  const handleAdd = () => {
     if (!wName.trim()) { Alert.alert("Atenção", "Informe o nome do vinho."); return; }
     if (!wGrape.trim()) { Alert.alert("Atenção", "Informe a uva/casta do vinho."); return; }
     if (!wVintage.trim()) { Alert.alert("Atenção", "Informe a safra do vinho."); return; }
     if (!wEan.trim()) { Alert.alert("Atenção", "Informe o EAN/código de barras do vinho."); return; }
     if (!user?.id) return;
 
-    const buyDate  = parseDateBR(wBuyDate);
-    const drinkBy  = parseDateBR(wDrinkBy);
+    const buyDate = parseDateBR(wBuyDate);
+    const drinkBy = parseDateBR(wDrinkBy);
 
     if (wBuyDate.trim() && !buyDate) {
       Alert.alert("Data inválida", "Informe a data de compra no formato dd/mm/aaaa."); return;
@@ -232,35 +260,9 @@ export default function WineCellarScreen() {
       rating: wRating,
       status: wStatus,
       is_private: wPrivate,
-    };
+    } as Omit<API.WineEntry, "id" | "created_at" | "updated_at">;
 
-    setSaving(true);
-    try {
-      if (editingId) {
-        const updated = await API.updateWineEntry(editingId, payload);
-        setSaving(false);
-        if (updated) {
-          setWines((prev) => prev.map((w) => w.id === editingId ? updated : w));
-          resetForm();
-          setShowForm(false);
-        } else {
-          Alert.alert("Erro", "Não foi possível atualizar o vinho. Tente novamente.");
-        }
-      } else {
-        const entry = await API.addWineEntry({ user_id: user.id, ...payload });
-        setSaving(false);
-        if (entry) {
-          setWines((prev) => [entry, ...prev]);
-          resetForm();
-          setShowForm(false);
-        } else {
-          Alert.alert("Erro", "Não foi possível salvar o vinho. Tente novamente.");
-        }
-      }
-    } catch (e) {
-      setSaving(false);
-      Alert.alert("Erro", "Ocorreu um erro inesperado. Tente novamente.");
-    }
+    executeSave(payload, user.id, editingId);
   };
 
   const handleDelete = (id: string, name: string) => {
@@ -272,10 +274,7 @@ export default function WineCellarScreen() {
         {
           text: "Remover",
           style: "destructive",
-          onPress: async () => {
-            const ok = await API.deleteWineEntry(id);
-            if (ok) setWines((prev) => prev.filter((w) => w.id !== id));
-          },
+          onPress: () => executeDelete(id),
         },
       ]
     );

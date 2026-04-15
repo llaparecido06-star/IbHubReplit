@@ -21,6 +21,7 @@ import { useAuth } from "@/context/AuthContext";
 import { usePermissions } from "@/context/PermissionsContext";
 import { PaywallScreen } from "@/components/ui/PaywallScreen";
 import { createOpportunity, uploadOpportunityImage } from "@/services/api";
+import { friendlyErrorMessage } from "@/hooks/useAsyncAction";
 import { maskDate, maskCurrency, CURRENCIES, type Currency } from "@/utils/masks";
 import { useTranslation } from "react-i18next";
 
@@ -127,6 +128,8 @@ export default function NewOpportunityScreen() {
       } else {
         Alert.alert(t("common.error"), t("opportunity.errors.error_publish"));
       }
+    } catch (e: unknown) {
+      Alert.alert(t("common.error"), friendlyErrorMessage(e));
     } finally {
       setPublishing(false);
     }
