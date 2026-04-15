@@ -760,30 +760,6 @@ export default function EmpresaScreen() {
               </View>
             </View>
 
-            {/* New content shortcuts */}
-            <View style={[styles.analyticsCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-              <Text style={[styles.analyticsTitle, { color: colors.navy }]}>Publicar Conteúdo</Text>
-              <View style={{ gap: 10 }}>
-                {[
-                  { label: "Nova Publicação",  icon: "edit",         route: "/create-post" },
-                  { label: "Nova Vaga",        icon: "briefcase",    route: "/new-opportunity" },
-                  { label: "Novo Anúncio",     icon: "shopping-bag", route: "/new-opportunity" },
-                  { label: "Novo Evento",      icon: "calendar",     route: "/new-event" },
-                ].map((action) => (
-                  <TouchableOpacity
-                    key={action.label}
-                    style={[styles.panelActionRow, { borderColor: colors.border }]}
-                    onPress={() => router.push(action.route as any)}
-                  >
-                    <View style={[styles.panelActionIcon, { backgroundColor: colors.gold + "18" }]}>
-                      <Feather name={action.icon as any} size={16} color={colors.gold} />
-                    </View>
-                    <Text style={[styles.panelActionLabel, { color: colors.navy }]}>{action.label}</Text>
-                    <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
           </View>
         )}
 
