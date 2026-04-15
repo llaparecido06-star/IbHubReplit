@@ -2885,7 +2885,7 @@ export async function fetchPresentationSlides(
   token: string,
 ): Promise<PresentationSlidesResult> {
   try {
-    const res = await fetch(`${API_URL}/api/presentations/${presentationId}/slides`, {
+    const res = await fetch(`${API_URL}/presentations/${presentationId}/slides`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return { slides: [], total: 0, unlocked: 0 };
@@ -2906,7 +2906,7 @@ export async function triggerPresentationAccess(
   token: string,
 ): Promise<void> {
   try {
-    await fetch(`${API_URL}/api/presentations/${presentationId}/access`, {
+    await fetch(`${API_URL}/presentations/${presentationId}/access`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
     });
