@@ -1840,7 +1840,9 @@ export async function fetchMarketPosts(userId?: string): Promise<MarketPost[]> {
     const data: any[] = json.posts ?? [];
     if (data.length === 0) return [];
 
-    // All market posts are attributed to the Ideal.BI company page.
+    // All market posts belong to the Ideal.BI company page (stored as company_page_id in DB).
+    const companyPageIds = [...new Set(data.map((p: any) => p.company_page_id).filter(Boolean))];
+
     const [likesRes, votesRes, companyRes] = await Promise.all([
       userId
         ? supabase.from("market_post_likes").select("post_id").eq("user_id", userId)
@@ -1848,30 +1850,31 @@ export async function fetchMarketPosts(userId?: string): Promise<MarketPost[]> {
       userId
         ? supabase.from("market_post_poll_votes").select("post_id, option_id").eq("user_id", userId)
         : Promise.resolve({ data: [] }),
-      supabase
-        .from("company_pages")
-        .select("id, name, avatar_url")
-        .ilike("name", "Ideal.BI")
-        .maybeSingle(),
+      companyPageIds.length > 0
+        ? supabase.from("company_pages").select("id, name, avatar_url").in("id", companyPageIds)
+        : supabase.from("company_pages").select("id, name, avatar_url").ilike("name", "Ideal.BI").maybeSingle(),
     ]);
 
     const likedSet    = new Set(((likesRes as any).data ?? []).map((l: any) => l.post_id as string));
     const pollVoteMap = new Map(((votesRes as any).data ?? []).map((v: any) => [v.post_id as string, v.option_id as string]));
 
-    const company = (companyRes as any).data as { id: string; name: string; avatar_url: string | null } | null;
-    const idealbiAuthor = {
-      id:         company?.id ?? "idealbi",
-      full_name:  company?.name ?? "Ideal.BI",
-      avatar_url: company?.avatar_url ?? null,
-      headline:   "Inteligência de Mercado do Vinho",
-    };
+    const companyMap = new Map<string, { id: string; name: string; avatar_url: string | null }>();
+    const companyData = (companyRes as any).data;
+    if (Array.isArray(companyData)) {
+      for (const c of companyData) companyMap.set(c.id, c);
+    } else if (companyData?.id) {
+      companyMap.set(companyData.id, companyData);
+    }
 
-    return data.map((p: any) => ({
-      ...p,
-      user_liked:    likedSet.has(p.id),
-      user_poll_vote: pollVoteMap.get(p.id) ?? null,
-      author:        idealbiAuthor,
-    }));
+    const fallbackAuthor = { id: "idealbi", full_name: "Ideal.BI", avatar_url: null, headline: "Inteligência de Mercado do Vinho" };
+
+    return data.map((p: any) => {
+      const company = p.company_page_id ? (companyMap.get(p.company_page_id) ?? null) : null;
+      const author = company
+        ? { id: company.id, full_name: company.name, avatar_url: company.avatar_url, headline: "Inteligência de Mercado do Vinho" }
+        : fallbackAuthor;
+      return { ...p, user_liked: likedSet.has(p.id), user_poll_vote: pollVoteMap.get(p.id) ?? null, author };
+    });
   } catch {
     return [];
   }

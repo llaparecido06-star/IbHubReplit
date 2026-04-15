@@ -11,6 +11,24 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
+// ─── Cache the Ideal.BI company page ID ─────────────────────────────────────
+// All market posts are published on behalf of the Ideal.BI company page.
+// We cache this at runtime so we don't query on every POST.
+let idealbiCompanyPageId: string | null | undefined = undefined; // undefined = not yet fetched
+
+async function getIdealbiCompanyPageId(): Promise<string | null> {
+  if (idealbiCompanyPageId !== undefined) return idealbiCompanyPageId;
+  const { data } = await supabaseAdmin
+    .from("company_pages")
+    .select("id")
+    .ilike("name", "Ideal.BI")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  idealbiCompanyPageId = (data as any)?.id ?? null;
+  return idealbiCompanyPageId;
+}
+
 /**
  * GET /market/posts
  * Returns Ideal.BI market posts. Requires mercado:idealbi plan feature.
@@ -29,7 +47,7 @@ router.get("/market/posts", async (req: Request, res: Response): Promise<void> =
 
   let query = supabaseAdmin
     .from("market_posts")
-    .select("id, author_id, content, image_url, video_url, poll_options, likes_count, comments_count, created_at")
+    .select("id, author_id, company_page_id, content, image_url, video_url, poll_options, likes_count, comments_count, created_at")
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -49,6 +67,8 @@ router.get("/market/posts", async (req: Request, res: Response): Promise<void> =
 /**
  * POST /market/posts
  * Creates an Ideal.BI market post. Requires mercado:idealbi plan feature.
+ * The post is always stored with the Ideal.BI company page as the owner
+ * (company_page_id), regardless of which authenticated user created it.
  */
 router.post("/market/posts", async (req: Request, res: Response): Promise<void> => {
   const userId = await resolveUserId(req, res);
@@ -69,10 +89,14 @@ router.post("/market/posts", async (req: Request, res: Response): Promise<void> 
     return;
   }
 
+  // Always attribute the post to the Ideal.BI company page
+  const companyPageId = await getIdealbiCompanyPageId();
+
   const { data, error } = await supabaseAdmin
     .from("market_posts")
     .insert({
-      author_id: userId,
+      author_id: userId,          // who physically published (for audit / notifications)
+      company_page_id: companyPageId, // the company the post belongs to (always Ideal.BI)
       content: content.trim(),
       image_url: image_url ?? null,
       video_url: video_url ?? null,
@@ -80,7 +104,7 @@ router.post("/market/posts", async (req: Request, res: Response): Promise<void> 
       likes_count: 0,
       comments_count: 0,
     })
-    .select("id, content, image_url, video_url, poll_options, created_at, author_id, likes_count, comments_count")
+    .select("id, content, image_url, video_url, poll_options, created_at, author_id, company_page_id, likes_count, comments_count")
     .single();
 
   if (error) {
