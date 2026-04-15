@@ -72,7 +72,7 @@ export default function EditProfileScreen() {
     const ok = await updateProfile(user.id, {
       full_name:          fullName.trim(),
       username:           username.trim() || undefined,
-      bio:                bio.trim() || null,
+      bio:                bio.trim() || undefined,
       areas_of_expertise: selectedAreas,
       company:            company.trim() || null,
       position:           position.trim() || null,

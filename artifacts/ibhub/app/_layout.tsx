@@ -81,8 +81,8 @@ function PushNotificationHandler() {
         const { status } = await SafeNotifications.requestPermissionsAsync();
         if (status !== "granted") return;
         // Pass projectId when available (required in standalone/EAS builds)
-        const projectId = (Constants.expoConfig?.extra as Record<string, unknown> | undefined)
-          ?.eas?.projectId as string | undefined;
+        const easConfig = (Constants.expoConfig?.extra as Record<string, unknown> | undefined)?.eas;
+        const projectId = (easConfig as Record<string, unknown> | undefined)?.projectId as string | undefined;
         const tokenResult = await SafeNotifications.getExpoPushTokenAsync(
           projectId ? { projectId } : undefined,
         );

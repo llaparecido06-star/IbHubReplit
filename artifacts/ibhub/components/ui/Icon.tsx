@@ -22,9 +22,12 @@ import {
   Clipboard,
   Clock,
   Copy,
+  CornerDownRight,
   CornerUpLeft,
   CornerUpRight,
+  Crosshair,
   Database,
+  Download,
   DollarSign,
   Edit,
   Pencil,
@@ -44,6 +47,7 @@ import {
   Inbox,
   Info,
   Key,
+  Layers,
   Link,
   Link2,
   Loader,
@@ -62,6 +66,7 @@ import {
   MoreVertical,
   Package,
   Paperclip,
+  Play,
   CirclePlay,
   Plus,
   CirclePlus,
@@ -85,15 +90,17 @@ import {
   UserCheck,
   UserPlus,
   Users,
+  UserX,
   Video,
   CircleX,
+  Wrench,
   X,
   Zap,
   Wind,
   Trophy,
 } from "lucide-react-native";
 import React from "react";
-import { Text } from "react-native";
+import { Text, View } from "react-native";
 
 const FEATHER_MAP: Record<string, React.ComponentType<any>> = {
   activity: Activity,
@@ -120,9 +127,12 @@ const FEATHER_MAP: Record<string, React.ComponentType<any>> = {
   clipboard: Clipboard,
   clock: Clock,
   copy: Copy,
+  "corner-down-right": CornerDownRight,
   "corner-up-left": CornerUpLeft,
   "corner-up-right": CornerUpRight,
+  crosshair: Crosshair,
   database: Database,
+  download: Download,
   "dollar-sign": DollarSign,
   edit: Edit,
   "edit-2": Pencil,
@@ -142,6 +152,7 @@ const FEATHER_MAP: Record<string, React.ComponentType<any>> = {
   inbox: Inbox,
   info: Info,
   key: Key,
+  layers: Layers,
   link: Link,
   "link-2": Link2,
   loader: Loader,
@@ -160,6 +171,7 @@ const FEATHER_MAP: Record<string, React.ComponentType<any>> = {
   "more-vertical": MoreVertical,
   package: Package,
   paperclip: Paperclip,
+  play: Play,
   "play-circle": CirclePlay,
   plus: Plus,
   "plus-circle": CirclePlus,
@@ -178,11 +190,13 @@ const FEATHER_MAP: Record<string, React.ComponentType<any>> = {
   tag: Tag,
   "trash-2": Trash2,
   "trending-up": TrendingUp,
+  tool: Wrench,
   upload: Upload,
   user: User,
   "user-check": UserCheck,
   "user-plus": UserPlus,
   users: Users,
+  "user-x": UserX,
   video: Video,
   wind: Wind,
   x: X,
@@ -220,6 +234,16 @@ interface IconProps {
 }
 
 export function Feather({ name, size = 24, color = "#000", style, strokeWidth = 2 }: IconProps) {
+  if (name === "instagram") {
+    const { Svg, Path } = require("react-native-svg");
+    return (
+      <Svg width={size} height={size} viewBox="0 0 24 24" style={style} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+        <Path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+        <Path d="M17.5 6.5h.01" />
+        <Path d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5z" />
+      </Svg>
+    );
+  }
   const LucideIcon = FEATHER_MAP[name];
   if (!LucideIcon) {
     console.warn(`Feather icon "${name}" not found`);
@@ -228,7 +252,6 @@ export function Feather({ name, size = 24, color = "#000", style, strokeWidth = 
   return <LucideIcon size={size} color={color} style={style} strokeWidth={strokeWidth} />;
 }
 
-// Expose glyphMap so code that uses `keyof typeof Feather.glyphMap` gets string type
 Feather.glyphMap = FEATHER_MAP as Record<string, React.ComponentType<any>>;
 
 export function MaterialCommunityIcons({ name, size = 24, color = "#000", style }: IconProps) {

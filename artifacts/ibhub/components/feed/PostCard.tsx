@@ -376,12 +376,14 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
     const rawUrls = post.image_urls;
     if (Array.isArray(rawUrls) && rawUrls.length > 0) {
       urls.push(...rawUrls);
-    } else if (typeof rawUrls === "string" && rawUrls.trim().startsWith("[")) {
-      // Supabase returned a JSONB-as-text value — parse it defensively
-      try {
-        const parsed: unknown = JSON.parse(rawUrls);
-        if (Array.isArray(parsed)) urls.push(...(parsed as string[]));
-      } catch {}
+    } else if (typeof (rawUrls as unknown) === "string") {
+      const rawStr = rawUrls as unknown as string;
+      if (rawStr.trim().startsWith("[")) {
+        try {
+          const parsed: unknown = JSON.parse(rawStr);
+          if (Array.isArray(parsed)) urls.push(...(parsed as string[]));
+        } catch {}
+      }
     }
     if (urls.length === 0 && post.image_url) {
       urls.push(post.image_url);

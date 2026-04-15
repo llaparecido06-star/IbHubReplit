@@ -466,7 +466,7 @@ export default function ChatScreen() {
     try {
       const { granted } = await requestRecordingPermissionsAsync();
       if (!granted) { Alert.alert("Permissão necessária", "Permita o acesso ao microfone."); return; }
-      await setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await audioRecorder.record();
       setIsRecording(true);
       setRecordingMs(0);
@@ -482,7 +482,7 @@ export default function ChatScreen() {
     setIsRecording(false);
     try {
       await audioRecorder.stop();
-      await setAudioModeAsync({ allowsRecordingIOS: false });
+      await setAudioModeAsync({ allowsRecording: false });
       const uri = audioRecorder.uri;
       if (!uri) return;
       setUploading(true);
@@ -506,7 +506,7 @@ export default function ChatScreen() {
     if (recordingTimer.current) clearInterval(recordingTimer.current);
     setIsRecording(false);
     try { await audioRecorder.stop(); } catch {}
-    await setAudioModeAsync({ allowsRecordingIOS: false }).catch(() => {});
+    await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
     setRecordingMs(0);
   };
 

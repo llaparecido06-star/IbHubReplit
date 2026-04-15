@@ -857,7 +857,7 @@ export default function EmpresaScreen() {
 
       {/* Product detail modal (non-managers) */}
       <Modal visible={!!selectedProduct} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSelectedProduct(null)}>
-        <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+        <View style={[styles.formContainer, { backgroundColor: colors.background }]}>
           <View style={[styles.formHeader, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
             <Text style={[styles.formTitle, { color: colors.navy }]} numberOfLines={1}>{selectedProduct?.name ?? ""}</Text>
             <TouchableOpacity onPress={() => setSelectedProduct(null)}>
