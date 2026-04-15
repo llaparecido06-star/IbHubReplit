@@ -3205,6 +3205,7 @@ export async function fetchOpportunitiesPage(
   userId: string,
   offset = 0,
   limit = 15,
+  category?: string,
 ): Promise<AppOpportunity[]> {
   try {
     let query = supabase
@@ -3221,6 +3222,9 @@ export async function fetchOpportunitiesPage(
 
     if (search.trim()) {
       query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%,company.ilike.%${search}%,category.ilike.%${search}%`);
+    }
+    if (category && category !== "Todos") {
+      query = query.eq("category", category);
     }
 
     const { data, error } = await query;

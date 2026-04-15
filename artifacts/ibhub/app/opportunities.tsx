@@ -53,9 +53,9 @@ export default function OpportunitiesScreen() {
   const fetcher = useCallback(
     (offset: number, limit: number) =>
       user?.id
-        ? fetchOpportunitiesPage(subTab === "vagas" ? "vaga" : "marketplace", search, user.id, offset, limit)
+        ? fetchOpportunitiesPage(subTab === "vagas" ? "vaga" : "marketplace", search, user.id, offset, limit, catFilter)
         : Promise.resolve([]),
-    [subTab, search, user?.id],
+    [subTab, search, user?.id, catFilter],
   );
 
   const { items, loading, loadingMore, hasMore, loadMore, refresh } =
@@ -63,10 +63,13 @@ export default function OpportunitiesScreen() {
 
   useEffect(() => {
     setCatFilter("Todos");
+  }, [subTab]);
+
+  useEffect(() => {
     refresh().then(() => {
       listRef.current?.scrollToOffset({ offset: 0, animated: false });
     });
-  }, [subTab]);
+  }, [subTab, catFilter]);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -77,10 +80,6 @@ export default function OpportunitiesScreen() {
     return () => clearTimeout(t);
   }, [search]);
 
-  useEffect(() => {
-    refresh();
-  }, []);
-
   const onRefresh = async () => {
     setRefreshing(true);
     await refresh();
@@ -88,10 +87,6 @@ export default function OpportunitiesScreen() {
   };
 
   const cats = subTab === "vagas" ? VAGA_CATS : MARKET_CATS;
-
-  const filtered = catFilter === "Todos"
-    ? items
-    : items.filter((i) => i.category === catFilter);
 
   const renderItem = ({ item }: { item: AppOpportunity }) => (
     <TouchableOpacity
@@ -247,14 +242,14 @@ export default function OpportunitiesScreen() {
       ) : (
         <FlatList
           ref={listRef}
-          data={filtered}
+          data={items}
           keyExtractor={(i) => i.id}
           renderItem={renderItem}
           keyboardShouldPersistTaps="handled"
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />}
           contentContainerStyle={{ padding: 14, rowGap: 12, paddingBottom: bottomPad + 40 }}
           showsVerticalScrollIndicator={false}
-          onEndReached={catFilter === "Todos" ? loadMore : undefined}
+          onEndReached={loadMore}
           onEndReachedThreshold={0.3}
           ListFooterComponent={
             loadingMore ? (
