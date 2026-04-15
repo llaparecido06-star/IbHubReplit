@@ -145,7 +145,7 @@ const POST_SELECT_BASE = `id, user_id, company_page_id, content, image_url, imag
 const COMMENT_SELECT_BASE = `id, post_id, parent_comment_id, user_id, company_page_id, content, created_at, likes_count`;
 
 // Fetch profiles by IDs (workaround: avoids broken FK join posts→auth.users)
-async function fetchProfilesForIds(userIds: string[]): Promise<Map<string, any>> {
+export async function fetchProfilesForIds(userIds: string[]): Promise<Map<string, any>> {
   if (userIds.length === 0) return new Map();
   const { data } = await supabase.from("profiles").select(AUTHOR_SELECT).in("id", userIds);
   return new Map((data ?? []).map((p: any) => [p.id, p]));
