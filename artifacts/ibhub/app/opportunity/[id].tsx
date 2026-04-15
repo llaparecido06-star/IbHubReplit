@@ -5,6 +5,7 @@ import {
   Alert,
   Animated,
   Easing,
+  Image,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -27,6 +28,7 @@ import {
   expressInterest,
   fetchOpportunityById,
   getOrCreateDirectConversation,
+  sendMessage,
   trackOpportunityView,
   uploadCV,
 } from "@/services/api";
@@ -101,33 +103,43 @@ export default function OpportunityDetailScreen() {
     setSubmitting(true);
     try {
       let cvUrl: string | null = null;
+      let cvFileName: string | null = cvName;
       if (cvUri) {
         cvUrl = await uploadCV(cvUri, user.id);
       }
       const ok = await applyToJob(opp.id, user.id, cvUrl, message.trim() || null);
-      if (ok) {
-        closeSheet();
-        setOpp((prev) => prev ? { ...prev, is_applied: true, applications_count: (prev.applications_count ?? 0) + 1 } : prev);
-        Alert.alert(
-          "Candidatura enviada!",
-          "O recrutador foi notificado. Deseja abrir uma conversa com a empresa?",
-          [
-            { text: "Depois", style: "cancel" },
-            {
-              text: "Abrir Chat",
-              onPress: async () => {
-                const convoId = await getOrCreateDirectConversation(user.id, opp.created_by, true);
-                if (convoId) {
-                  const cpId = opp.company_page_id;
-                  const route = cpId ? `/chat/${convoId}?companyId=${cpId}` : `/chat/${convoId}`;
-                  router.push(route as any);
-                }
-              },
-            },
-          ],
-        );
-      } else {
+      if (!ok) {
         Alert.alert("Erro", "Não foi possível enviar a candidatura. Você já se candidatou?");
+        return;
+      }
+      closeSheet();
+      setOpp((prev) => prev ? { ...prev, is_applied: true, applications_count: (prev.applications_count ?? 0) + 1 } : prev);
+
+      // Auto-create conversation and send application message
+      const convoId = await getOrCreateDirectConversation(user.id, opp.created_by, true);
+      if (convoId) {
+        const cpId = opp.company_page_id ?? null;
+        // Send standardized application text
+        const appMsg = [
+          `Me candidatei à vaga **${opp.title}**${opp.company ? ` na ${opp.company}` : ""}.`,
+          message.trim() ? `\n\n${message.trim()}` : "",
+          cvUrl ? "\n\nSegue meu currículo em anexo." : "",
+        ].join("");
+        await sendMessage(convoId, user.id, appMsg, { companyPageId: cpId });
+
+        // If CV attached, also send as file message so recruiter can download
+        if (cvUrl && cvFileName) {
+          await sendMessage(convoId, user.id, cvFileName, {
+            message_type: "file",
+            metadata: { file_url: cvUrl, file_name: cvFileName, file_type: "document" },
+            companyPageId: cpId,
+          });
+        }
+
+        const route = cpId ? `/chat/${convoId}?companyId=${cpId}` : `/chat/${convoId}`;
+        router.push(route as any);
+      } else {
+        Alert.alert("Candidatura enviada!", "O recrutador foi notificado da sua candidatura.");
       }
     } finally {
       setSubmitting(false);
@@ -198,7 +210,27 @@ export default function OpportunityDetailScreen() {
         <View style={[styles.heroCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.heroTitle, { color: colors.foreground }]}>{opp.title}</Text>
 
-          {isVaga && opp.company ? (
+          {opp.company_page ? (
+            <TouchableOpacity
+              style={styles.companyCard}
+              onPress={() => router.push(`/empresa/${opp.company_page_id}` as any)}
+            >
+              {opp.company_page.avatar_url ? (
+                <Image source={{ uri: opp.company_page.avatar_url }} style={styles.companyAvatar} />
+              ) : (
+                <View style={[styles.companyAvatar, styles.companyAvatarPlaceholder, { backgroundColor: colors.muted }]}>
+                  <Feather name="briefcase" size={16} color={colors.mutedForeground} />
+                </View>
+              )}
+              <View>
+                <Text style={[styles.companyCardName, { color: colors.gold }]}>{opp.company_page.name}</Text>
+                {opp.company ? (
+                  <Text style={[styles.heroSub, { color: colors.mutedForeground, marginTop: 0 }]}>{opp.company}</Text>
+                ) : null}
+              </View>
+              <Feather name="chevron-right" size={16} color={colors.mutedForeground} style={{ marginLeft: "auto" }} />
+            </TouchableOpacity>
+          ) : isVaga && opp.company ? (
             <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>{opp.company}</Text>
           ) : opp.creator?.full_name ? (
             <TouchableOpacity onPress={() => router.push(`/profile/${opp.creator!.id}` as any)}>
@@ -428,4 +460,8 @@ const styles = StyleSheet.create({
   msgInput:     { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, minHeight: 100 },
   submitBtn:    { paddingVertical: 15, borderRadius: 14, alignItems: "center" },
   submitBtnText:{ color: "#fff", fontSize: 15, fontWeight: "800" },
+  companyCard:  { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 6, marginBottom: 2, paddingVertical: 6 },
+  companyAvatar:{ width: 36, height: 36, borderRadius: 8 },
+  companyAvatarPlaceholder: { alignItems: "center", justifyContent: "center" },
+  companyCardName: { fontSize: 14, fontWeight: "700" },
 });

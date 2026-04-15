@@ -3528,22 +3528,29 @@ export interface AppEventAttendee {
 async function enrichEventsWithOrganizer(events: any[]): Promise<any[]> {
   if (events.length === 0) return events;
   const userIds = [...new Set(events.map((e: any) => e.user_id).filter(Boolean))];
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("id, full_name, avatar_url, username")
-    .in("id", userIds);
-  const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
 
-  const { data: companies } = await supabase
-    .from("company_pages")
-    .select("id, owner_id, name, avatar_url")
-    .in("owner_id", userIds);
-  const companyByOwner = new Map((companies ?? []).map((c: any) => [c.owner_id, c]));
+  // Collect company_page_ids that are set directly on events (authoritative source)
+  const directCompanyPageIds = [...new Set(events.map((e: any) => e.company_page_id).filter(Boolean))];
+
+  const [profilesRes, directCompaniesRes, ownerCompaniesRes] = await Promise.all([
+    supabase.from("profiles").select("id, full_name, avatar_url, username").in("id", userIds),
+    directCompanyPageIds.length > 0
+      ? supabase.from("company_pages").select("id, owner_id, name, avatar_url").in("id", directCompanyPageIds)
+      : Promise.resolve({ data: [] }),
+    supabase.from("company_pages").select("id, owner_id, name, avatar_url").in("owner_id", userIds),
+  ]);
+
+  const profileMap     = new Map((profilesRes.data ?? []).map((p: any) => [p.id, p]));
+  const companyById    = new Map((directCompaniesRes.data ?? []).map((c: any) => [c.id, c]));
+  const companyByOwner = new Map((ownerCompaniesRes.data ?? []).map((c: any) => [c.owner_id, c]));
 
   return events.map((e: any) => ({
     ...e,
     organizer: profileMap.get(e.user_id) ?? null,
-    company_organizer: companyByOwner.get(e.user_id) ?? null,
+    // Prefer direct company_page_id linkage; fall back to owner_id lookup
+    company_organizer: (e.company_page_id ? companyById.get(e.company_page_id) : null)
+      ?? companyByOwner.get(e.user_id)
+      ?? null,
   }));
 }
 
@@ -3552,7 +3559,7 @@ export async function fetchEvents(search = "", userId = ""): Promise<AppEvent[]>
     let q = supabase
       .from("events")
       .select(`
-        id, user_id, title, description, start_date, end_date,
+        id, user_id, company_page_id, title, description, start_date, end_date,
         location_type, location, link, image_url, restricted_positions,
         entry_type, capacity, visibility, is_active, pay_link, created_at,
         attendees_count
@@ -3605,7 +3612,7 @@ export async function fetchAllEventsAdmin(): Promise<AppEvent[]> {
   try {
     const { data, error } = await supabase
       .from("events")
-      .select("id, user_id, title, description, start_date, end_date, location_type, location, link, image_url, restricted_positions, entry_type, capacity, visibility, is_active, pay_link, created_at")
+      .select("id, user_id, company_page_id, title, description, start_date, end_date, location_type, location, link, image_url, restricted_positions, entry_type, capacity, visibility, is_active, pay_link, created_at")
       .order("start_date", { ascending: true });
     if (error) { console.error("fetchAllEventsAdmin:", error); return []; }
     return await enrichEventsWithOrganizer(data ?? []);
@@ -3635,7 +3642,7 @@ export async function fetchEventById(id: string): Promise<AppEvent | null> {
     const { data, error } = await supabase
       .from("events")
       .select(`
-        id, user_id, title, description, start_date, end_date,
+        id, user_id, company_page_id, title, description, start_date, end_date,
         location_type, location, link, image_url, restricted_positions,
         entry_type, capacity, visibility, is_active, pay_link, created_at
       `)
