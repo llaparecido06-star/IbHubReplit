@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { AppState, AppStateStatus } from "react-native";
 import { useAuth, supabase } from "@/context/AuthContext";
 import { fetchPlanFeatures } from "@/services/api";
 import { getEntitlementStatus } from "@/utils/entitlement";
@@ -18,7 +19,7 @@ const PermissionsContext = createContext<PermissionsContextValue>({
 });
 
 export function PermissionsProvider({ children }: { children: React.ReactNode }) {
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const [features, setFeatures] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -76,9 +77,14 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
           filter: `id=eq.${profile.id}`,
         },
         (payload) => {
-          const updated = payload.new as { plan?: string; stripe_subscription_status?: string; courtesy_until?: string | null };
+          const updated = payload.new as {
+            plan?: string;
+            stripe_subscription_status?: string;
+            courtesy_until?: string | null;
+          };
           const merged = { ...profile, ...updated };
           loadFeatures(merged as typeof profile);
+          refreshProfile().catch(() => {});
         },
       )
       .on(
@@ -104,6 +110,19 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
       }
     };
   }, [profile?.id, profile?.plan]);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    const handleAppStateChange = (nextState: AppStateStatus) => {
+      if (nextState === "active") {
+        refreshProfile().catch(() => {});
+      }
+    };
+
+    const sub = AppState.addEventListener("change", handleAppStateChange);
+    return () => sub.remove();
+  }, [profile?.id, refreshProfile]);
 
   const hasFeature = useCallback(
     (key: string): boolean => {

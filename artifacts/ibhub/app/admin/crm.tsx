@@ -23,6 +23,7 @@ import {
   changeUserPlan,
   type AdminUser,
 } from "@/services/admin-api";
+import { useAuth } from "@/context/AuthContext";
 
 const AVATAR_COLORS = ["#0d1b2a", "#1e3a5f", "#7c3aed", "#e11d48", "#059669", "#374151", "#1e3a5f"];
 const PLANS = ["gratuito", "basico", "profissional", "empresarial", "premium"] as const;
@@ -43,6 +44,7 @@ function formatDate(iso: string): string {
 export default function AdminCRMScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { user, refreshProfile } = useAuth();
   const [drawerOpen, setDrawerOpen]       = useState(false);
   const [search, setSearch]               = useState("");
   const [selectedUser, setSelectedUser]   = useState<AdminUser | null>(null);
@@ -182,12 +184,15 @@ export default function AdminCRMScreen() {
     );
   };
 
-  const handleSavePlan = async (user: AdminUser) => {
+  const handleSavePlan = async (adminUser: AdminUser) => {
     setSavingPlan(true);
     try {
-      await changeUserPlan(user.id, planEdit, isCourtesy);
-      setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, plan: planEdit } : u));
+      await changeUserPlan(adminUser.id, planEdit, isCourtesy);
+      setUsers((prev) => prev.map((u) => u.id === adminUser.id ? { ...u, plan: planEdit } : u));
       setSelectedUser((prev) => prev ? { ...prev, plan: planEdit } : prev);
+      if (adminUser.id === user?.id) {
+        await refreshProfile();
+      }
       Alert.alert("Sucesso", `Plano atualizado para "${planEdit}"${isCourtesy ? " (Cortesia)" : ""}.`);
     } catch (e: unknown) {
       Alert.alert("Erro", e instanceof Error ? e.message : "Erro ao salvar plano");
