@@ -14,6 +14,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { usePermissions } from "@/context/PermissionsContext";
+import { PaywallScreen } from "@/components/ui/PaywallScreen";
 import { updateProfile } from "@/services/api";
 
 const CERT_OPTIONS = [
@@ -36,6 +38,7 @@ export default function CertificationsScreen() {
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
   const { user, profile, patchProfile } = useAuth();
+  const { hasFeature, isLoading: permLoading } = usePermissions();
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -89,6 +92,16 @@ export default function CertificationsScreen() {
       },
     ]);
   };
+
+  if (!permLoading && !hasFeature("Upload Certificados")) {
+    return (
+      <PaywallScreen
+        featureName="Upload de Certificados"
+        description="Exiba suas certificações profissionais de vinho no seu perfil ibhub."
+        requiredPlan="Profissional"
+      />
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

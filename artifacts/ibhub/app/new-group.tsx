@@ -17,6 +17,8 @@ import * as ImagePicker from "expo-image-picker";
 import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { usePermissions } from "@/context/PermissionsContext";
+import { PaywallScreen } from "@/components/ui/PaywallScreen";
 import { supabase } from "@/context/AuthContext";
 import { createGroup, uploadGroupAvatar } from "@/services/api";
 
@@ -35,6 +37,7 @@ export default function NewGroupScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profile, user } = useAuth();
+  const { hasFeature, isLoading: permLoading } = usePermissions();
   const userId = profile?.id ?? user?.id ?? "";
 
   const [name, setName]           = useState("");
@@ -98,6 +101,16 @@ export default function NewGroupScreen() {
     setLoading(false);
     router.replace(`/group-chat/${group.id}` as any);
   };
+
+  if (!permLoading && !hasFeature("Criar Grupos")) {
+    return (
+      <PaywallScreen
+        featureName="Criar Grupos"
+        description="Crie e gerencie grupos temáticos para conectar profissionais do vinho."
+        requiredPlan="Profissional"
+      />
+    );
+  }
 
   return (
     <KeyboardAvoidingView

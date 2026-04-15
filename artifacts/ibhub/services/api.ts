@@ -2898,6 +2898,20 @@ export async function fetchPresentationSlides(
   }
 }
 
+export async function triggerPresentationAccess(
+  presentationId: string,
+  token: string,
+): Promise<void> {
+  try {
+    await fetch(`${API_URL}/api/presentations/${presentationId}/access`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (e) {
+    console.error("triggerPresentationAccess:", e);
+  }
+}
+
 // ─── MARKET PERMISSIONS ──────────────────────────────────────────────────────
 
 export interface MarketPermission {

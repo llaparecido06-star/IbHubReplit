@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
+import { usePermissions } from "@/context/PermissionsContext";
+import { PaywallPage } from "@/components/PaywallPage";
 import { AppShell } from "@/components/layout/AppShell";
 import { fetchUserAnalytics, UserAnalytics } from "@/services/api";
 
@@ -35,6 +37,19 @@ export default function AnalyticsPage() {
     if (!profile?.id) return;
     fetchUserAnalytics(profile.id).then(setAnalytics).finally(() => setLoading(false));
   }, [profile?.id]);
+
+  const { hasFeature, isLoading: permLoading } = usePermissions();
+  if (!permLoading && !hasFeature("Relatórios Detalhados")) {
+    return (
+      <AppShell>
+        <PaywallPage
+          featureName="Relatórios Detalhados"
+          description="Acesse estatísticas completas do seu perfil e acompanhe o seu crescimento na rede."
+          requiredPlan="Profissional"
+        />
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>

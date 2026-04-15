@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { usePermissions } from "@/context/PermissionsContext";
+import { PaywallPage } from "@/components/PaywallPage";
 import { AppShell } from "@/components/layout/AppShell";
 import { supabase } from "@/lib/supabase";
 
@@ -73,10 +75,24 @@ export default function CertificacoesPage() {
     if (ok) { setCerts(updated); patchProfile({ certifications: updated }); }
   };
 
+  const { hasFeature, isLoading: permLoading } = usePermissions();
+
   const inputStyle: React.CSSProperties = {
     width: "100%", padding: "10px 12px", borderRadius: 8, border: `1.5px solid ${BORDER}`,
     fontSize: 14, fontFamily: "inherit", boxSizing: "border-box",
   };
+
+  if (!permLoading && !hasFeature("Upload Certificados")) {
+    return (
+      <AppShell>
+        <PaywallPage
+          featureName="Upload de Certificados"
+          description="Exiba suas certificações profissionais de vinho no seu perfil ibhub."
+          requiredPlan="Profissional"
+        />
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>

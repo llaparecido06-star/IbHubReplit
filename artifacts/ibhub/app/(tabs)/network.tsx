@@ -32,7 +32,7 @@ import {
 } from "react-native-svg";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
-import { getEntitlementStatus } from "@/utils/entitlement";
+import { usePermissions } from "@/context/PermissionsContext";
 import * as API from "@/services/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -430,7 +430,10 @@ function SlideViewerModal({
     if (!visible || !presentation || !session?.access_token) return;
     setLoading(true);
     setCurrentIdx(0);
-    API.fetchPresentationSlides(presentation.id, session.access_token).then(result => {
+    const token = session.access_token;
+    API.triggerPresentationAccess(presentation.id, token).then(() =>
+      API.fetchPresentationSlides(presentation.id, token)
+    ).then(result => {
       setSlides(result.slides);
       setTotal(result.total);
       setUnlocked(result.unlocked);
@@ -869,11 +872,12 @@ function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors 
   );
 }
 
-function IdealBIFeedMobile({ userId, isAdmin, planFeatures, colors, bottomPad }: {
-  userId: string; isAdmin: boolean; planFeatures: string[];
+function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
+  userId: string; isAdmin: boolean;
   colors: ReturnType<typeof useColors>; bottomPad: number;
 }) {
   const router = useRouter();
+  const { hasFeature: permHasFeature } = usePermissions();
   const [posts, setPosts] = useState<API.MarketPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [newContent, setNewContent] = useState("");
@@ -883,7 +887,7 @@ function IdealBIFeedMobile({ userId, isAdmin, planFeatures, colors, bottomPad }:
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const [posting, setPosting] = useState(false);
 
-  const hasAccess = planFeatures.includes("mercado:idealbi") || isAdmin;
+  const hasAccess = permHasFeature("mercado:idealbi") || isAdmin;
 
   useEffect(() => {
     if (!hasAccess) { setLoading(false); return; }
@@ -1119,7 +1123,7 @@ export default function MercadoScreen() {
   const [mainTab,      setMainTab]      = useState<MercadoTab>("visao");
   const [data,         setData]         = useState<API.MarketOverview>(FALLBACK.ano);
   const [loading,      setLoading]      = useState(false);
-  const [planFeatures, setPlanFeatures] = useState<string[] | null>(null);
+  const { hasFeature } = usePermissions();
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
@@ -1138,24 +1142,9 @@ export default function MercadoScreen() {
 
   useEffect(() => { loadPeriod(period); }, [period, loadPeriod]);
 
-  useEffect(() => {
-    // Only load plan features when the user has an active entitlement.
-    // past_due users lose feature access until they update their payment method.
-    const entitle = getEntitlementStatus(profile);
-    if (entitle === "past_due" || entitle === "free") {
-      setPlanFeatures([]);
-      return;
-    }
-    const planId = profile?.plan ?? "gratuito";
-    API.fetchPlanFeatures(planId).then(feats => {
-      setPlanFeatures(feats);
-    }).catch(() => setPlanFeatures([]));
-  }, [profile?.plan, profile?.stripe_subscription_status, profile?.courtesy_until]);
-
   const can = useCallback((key: string): boolean => {
-    if (planFeatures === null) return true;
-    return planFeatures.includes(`mercado:${key}`);
-  }, [planFeatures]);
+    return hasFeature(`mercado:${key}`);
+  }, [hasFeature]);
 
   const periods: { key: Period; label: string }[] = [
     { key: "mes",       label: "Último Mês"      },
@@ -1212,7 +1201,6 @@ export default function MercadoScreen() {
         <IdealBIFeedMobile
           userId={user?.id ?? ""}
           isAdmin={profile?.is_admin ?? false}
-          planFeatures={planFeatures ?? []}
           colors={colors}
           bottomPad={bottomPad}
         />

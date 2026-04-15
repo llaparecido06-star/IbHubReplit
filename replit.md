@@ -82,6 +82,8 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 
 - `src/lib/supabase.ts` — cliente Supabase (usa `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` definidos no vite.config.ts a partir dos secrets EXPO_PUBLIC_*)
 - `src/context/AuthContext.tsx` — sessão, signIn/signUp/Google/signOut, resetPassword, refreshProfile
+- `src/context/PermissionsContext.tsx` — permissões globais baseadas no plano do usuário (hasFeature, features, planTier, isLoading)
+- `src/components/PaywallPage.tsx` — componente paywall para features bloqueadas por plano
 - `src/App.tsx` — roteamento Wouter com PrivateRoute e PublicOnlyRoute guards
 
 ---
@@ -139,6 +141,8 @@ Criar na pasta `components/` em vez de repetir código:
 - `app/(auth)/login.tsx` — tela de login
 - `app/(auth)/register.tsx` — cadastro 3 etapas
 - `context/AuthContext.tsx` — sessão Supabase
+- `context/PermissionsContext.tsx` — permissões globais baseadas no plano (hasFeature, features, planTier)
+- `components/ui/PaywallScreen.tsx` — tela paywall para features bloqueadas
 - `app/_layout.tsx` — roteamento raiz
 - `constants/colors.ts` — paleta de cores (dark theme)
 - `hooks/useColors.ts` — hook de cores (atualmente forçado para light — ver pendências)

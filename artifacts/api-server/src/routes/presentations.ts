@@ -145,6 +145,72 @@ router.get("/presentations/:id/slides", async (req: Request, res: Response) => {
   res.json({ slides: results, total: totalSlides, unlocked: unlockedSlideIds.size });
 });
 
+// POST /presentations/:id/access
+// Called when a user opens a presentation — triggers the delivery strategy for their plan
+// so they receive slides immediately (in addition to the daily cron job).
+router.post("/presentations/:id/access", async (req: Request, res: Response) => {
+  const userId = await requireAuth(req, res);
+  if (!userId) return;
+
+  const presentationId = String(req.params.id);
+
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("id, plan, is_admin, stripe_subscription_status, courtesy_until, created_at")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (!profile) {
+    res.status(404).json({ error: "Profile not found" });
+    return;
+  }
+
+  const typedProfile = profile as { id: string; plan?: string; is_admin?: boolean; stripe_subscription_status?: string; courtesy_until?: string; created_at: string };
+
+  if (typedProfile.is_admin) {
+    res.json({ ok: true, applied: false, reason: "admin" });
+    return;
+  }
+
+  const planId = typedProfile.plan ?? "gratuito";
+  const { data: planData } = await supabaseAdmin
+    .from("plans")
+    .select("delivery_strategy")
+    .eq("id", planId)
+    .maybeSingle();
+
+  const { applyDeliveryStrategy } = await import("../lib/deliveryStrategies.js");
+  type DS = "FULL_ACCESS" | "SEQUENTIAL_MONTHLY" | "RANDOM_DAILY" | "NONE";
+
+  const strategy = (((planData as { delivery_strategy?: string } | null)?.delivery_strategy) ?? "NONE") as DS;
+
+  const { data: slidesRaw } = await supabaseAdmin
+    .from("presentation_slides")
+    .select("id, storage_path, sequence_order")
+    .eq("presentation_id", presentationId)
+    .order("sequence_order", { ascending: true });
+
+  if (!slidesRaw || slidesRaw.length === 0) {
+    res.json({ ok: true, applied: false, reason: "no_slides" });
+    return;
+  }
+
+  const slides = (slidesRaw as { id: string; storage_path: string; sequence_order: number }[]).map(s => ({
+    ...s,
+    presentation_id: presentationId,
+  }));
+
+  await applyDeliveryStrategy(
+    userId,
+    { id: typedProfile.id, plan: typedProfile.plan ?? "gratuito", created_at: typedProfile.created_at },
+    strategy,
+    presentationId,
+    slides,
+  );
+
+  res.json({ ok: true, applied: true, strategy });
+});
+
 // POST /admin/update-plan-strategy
 router.post("/admin/update-plan-strategy", async (req: Request, res: Response) => {
   const adminId = await requireAdmin(req, res);

@@ -15,6 +15,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AuthProvider, useAuth, supabase } from "@/context/AuthContext";
+import { PermissionsProvider } from "@/context/PermissionsContext";
 import { UnreadProvider, useUnread } from "@/context/UnreadContext";
 import { SidebarNav, useIsDesktop } from "@/components/ui/SidebarNav";
 
@@ -203,9 +204,11 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <AuthProvider>
-            <UnreadProvider>
-              <RootLayoutNav />
-            </UnreadProvider>
+            <PermissionsProvider>
+              <UnreadProvider>
+                <RootLayoutNav />
+              </UnreadProvider>
+            </PermissionsProvider>
           </AuthProvider>
         </GestureHandlerRootView>
       </QueryClientProvider>

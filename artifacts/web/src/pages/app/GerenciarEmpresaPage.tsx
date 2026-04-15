@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
+import { usePermissions } from "@/context/PermissionsContext";
+import { PaywallPage } from "@/components/PaywallPage";
 import { AppShell } from "@/components/layout/AppShell";
 import { fetchWebCompanyPageById, updateCompanyPage, CompanyPageFull } from "@/services/api";
 
@@ -60,6 +62,20 @@ export default function GerenciarEmpresaPage() {
   }, [companyId]);
 
   useEffect(() => { load(); }, [load]);
+
+  const { hasFeature, isLoading: permLoading } = usePermissions();
+
+  if (!permLoading && !hasFeature("Criar Página Empresa")) {
+    return (
+      <AppShell>
+        <PaywallPage
+          featureName="Criar e Gerir Página de Empresa"
+          description="Publique uma página profissional para sua empresa no ibhub e gerencie sua equipe."
+          requiredPlan="Empresarial"
+        />
+      </AppShell>
+    );
+  }
 
   if (!loading && company && company.owner_id !== profile?.id) {
     return (

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/context/AuthContext";
+import { usePermissions } from "@/context/PermissionsContext";
 import { supabase } from "@/lib/supabase";
 import {
   MARKET_FALLBACK, MarketOverview, Period, fetchMarketOverview,
@@ -10,7 +11,7 @@ import {
   MarketPost, MarketComment, MarketPollOption,
   fetchMarketPosts, createMarketPost, toggleMarketPostLike,
   fetchMarketComments, addMarketComment, uploadMarketPostImage,
-  uploadMarketPostVideo, voteOnMarketPoll, fetchPlanFeatures,
+  uploadMarketPostVideo, voteOnMarketPoll,
 } from "@/services/api";
 import { formatRelativeDate as timeAgo } from "@/utils/dateUtils";
 
@@ -501,7 +502,8 @@ function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idea
   );
 }
 
-function IdealBIFeed({ userId, isAdmin, planFeatures }: { userId: string; isAdmin: boolean; planFeatures: string[] }) {
+function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) {
+  const { hasFeature } = usePermissions();
   const [posts, setPosts] = useState<MarketPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -517,7 +519,7 @@ function IdealBIFeed({ userId, isAdmin, planFeatures }: { userId: string; isAdmi
   const imgRef = useRef<HTMLInputElement>(null);
   const vidRef = useRef<HTMLInputElement>(null);
 
-  const hasAccess = planFeatures.includes("mercado:idealbi") || isAdmin;
+  const hasAccess = hasFeature("mercado:idealbi") || isAdmin;
 
   useEffect(() => {
     supabase
@@ -766,13 +768,6 @@ export default function MercadoPage() {
   const [mainTab, setMainTab] = useState<MercadoTab>("visao");
   const [data, setData] = useState<MarketOverview>(MARKET_FALLBACK.ano);
   const [loading, setLoading] = useState(false);
-  const [planFeatures, setPlanFeatures] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (!profile?.plan) return;
-    fetchPlanFeatures(profile.plan).then(f => setPlanFeatures(f));
-  }, [profile?.plan]);
-
   useEffect(() => {
     if (mainTab !== "visao") return;
     setLoading(true);
@@ -851,7 +846,6 @@ export default function MercadoPage() {
           <IdealBIFeed
             userId={user?.id ?? ""}
             isAdmin={profile?.is_admin ?? false}
-            planFeatures={planFeatures}
           />
         ) : loading ? (
           <div style={{ textAlign: "center", padding: 60, color: "#aaa" }}>⏳ Carregando dados...</div>

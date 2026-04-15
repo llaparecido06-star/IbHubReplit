@@ -17,6 +17,8 @@ import * as ImagePicker from "expo-image-picker";
 import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { usePermissions } from "@/context/PermissionsContext";
+import { PaywallScreen } from "@/components/ui/PaywallScreen";
 import { createOpportunity, uploadOpportunityImage } from "@/services/api";
 import { maskDate, maskCurrency, CURRENCIES, type Currency } from "@/utils/masks";
 import { useTranslation } from "react-i18next";
@@ -33,6 +35,7 @@ export default function NewOpportunityScreen() {
   const insets = useSafeAreaInsets();
   const { user, activeCompany } = useAuth();
   const { t } = useTranslation();
+  const { hasFeature, isLoading: permLoading } = usePermissions();
   const isEmpresa = !!activeCompany;
 
   const [mode, setMode]         = useState<Mode>("vaga");
@@ -171,6 +174,16 @@ export default function NewOpportunityScreen() {
   );
 
   const kavBehavior = Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined;
+
+  if (!permLoading && !hasFeature("Publicar Vagas")) {
+    return (
+      <PaywallScreen
+        featureName="Publicar Vagas e Ofertas"
+        description="Publique vagas de emprego e ofertas no marketplace do ibhub para alcançar profissionais do vinho."
+        requiredPlan="Profissional"
+      />
+    );
+  }
 
   return (
     <KeyboardAvoidingView

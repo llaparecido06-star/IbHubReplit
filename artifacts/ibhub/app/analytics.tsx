@@ -14,6 +14,8 @@ import { Feather } from "@/components/ui/Icon";
 import Svg, { Line, Polyline, Circle, Text as SvgText } from "react-native-svg";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { usePermissions } from "@/context/PermissionsContext";
+import { PaywallScreen } from "@/components/ui/PaywallScreen";
 import { fetchUserAnalytics, UserAnalytics, DailyEngagement } from "@/services/api";
 
 const CHART_W = 300;
@@ -80,6 +82,7 @@ export default function AnalyticsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { hasFeature, isLoading: permLoading } = usePermissions();
 
   const [analytics, setAnalytics] = useState<UserAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -109,6 +112,16 @@ export default function AnalyticsScreen() {
     { icon: "heart",          label: "CURTIDAS TOTAIS",    value: a?.totalLikes ?? 0,      iconColor: "#ef4444" },
     { icon: "message-circle", label: "COMENTÁRIOS",        value: a?.totalComments ?? 0,   iconColor: colors.mutedForeground },
   ];
+
+  if (!permLoading && !hasFeature("Relatórios Detalhados")) {
+    return (
+      <PaywallScreen
+        featureName="Relatórios Detalhados"
+        description="Acesse estatísticas completas do seu perfil e acompanhe o seu crescimento na rede."
+        requiredPlan="Profissional"
+      />
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
