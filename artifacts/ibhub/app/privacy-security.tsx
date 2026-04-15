@@ -48,13 +48,19 @@ export default function PrivacySecurityScreen() {
     if (!profile?.id) return;
     setPublicProfile(value);
     setSavingVisibility(true);
-    const ok = await updateProfile(profile.id, { is_public: value });
-    setSavingVisibility(false);
-    if (!ok) {
+    try {
+      const ok = await updateProfile(profile.id, { is_public: value });
+      if (!ok) {
+        setPublicProfile(!value);
+        Alert.alert("Erro", "Não foi possível salvar a configuração. Tente novamente.");
+      } else {
+        await refreshProfile();
+      }
+    } catch {
       setPublicProfile(!value);
-      Alert.alert("Erro", "Não foi possível salvar a configuração. Tente novamente.");
-    } else {
-      await refreshProfile();
+      Alert.alert("Erro de Conexão", "Verifique sua conexão e tente novamente.");
+    } finally {
+      setSavingVisibility(false);
     }
   };
 

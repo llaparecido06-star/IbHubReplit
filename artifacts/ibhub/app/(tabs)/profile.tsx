@@ -21,6 +21,7 @@ import QRCode from "react-native-qrcode-svg";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth, supabase } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { friendlyErrorMessage } from "@/hooks/useAsyncAction";
 import {
   CompanyPage,
   FollowProfile,
@@ -373,6 +374,7 @@ export default function ProfileScreen() {
   const handleLikePost = async (post: Post) => {
     if (!user?.id) return;
     const wasLiked = post.is_liked ?? false;
+    const prevCount = post.likes_count;
     setPosts((prev) =>
       prev.map((p) =>
         p.id === post.id
@@ -380,13 +382,19 @@ export default function ProfileScreen() {
           : p
       )
     );
-    const ok = await toggleLike(post.id, user.id, wasLiked, activeCompany?.id);
-    if (!ok) {
+    try {
+      const ok = await toggleLike(post.id, user.id, wasLiked, activeCompany?.id);
+      if (!ok) {
+        setPosts((prev) =>
+          prev.map((p) => p.id === post.id ? { ...p, is_liked: wasLiked, likes_count: prevCount } : p)
+        );
+        Alert.alert("Erro", "Não foi possível curtir. Tente novamente.");
+      }
+    } catch (e: unknown) {
       setPosts((prev) =>
-        prev.map((p) =>
-          p.id === post.id ? { ...p, is_liked: wasLiked, likes_count: wasLiked ? p.likes_count + 1 : p.likes_count - 1 } : p
-        )
+        prev.map((p) => p.id === post.id ? { ...p, is_liked: wasLiked, likes_count: prevCount } : p)
       );
+      Alert.alert("Erro de Conexão", friendlyErrorMessage(e));
     }
   };
 
@@ -405,12 +413,20 @@ export default function ProfileScreen() {
   const handleSubmitComment = async () => {
     const text = commentText.trim();
     if (!text || !showComments || !user?.id) return;
+    const targetId = showComments;
     setCommentText("");
     setShowComments(null);
     setPosts((prev) =>
-      prev.map((p) => p.id === showComments ? { ...p, comments_count: p.comments_count + 1 } : p)
+      prev.map((p) => p.id === targetId ? { ...p, comments_count: p.comments_count + 1 } : p)
     );
-    await addComment(showComments, user.id, text);
+    try {
+      await addComment(targetId, user.id, text);
+    } catch (e: unknown) {
+      setPosts((prev) =>
+        prev.map((p) => p.id === targetId ? { ...p, comments_count: p.comments_count - 1 } : p)
+      );
+      Alert.alert("Erro de Conexão", friendlyErrorMessage(e));
+    }
   };
 
   const wineInCellar = wineEntries.filter((w) => w.status === "adega").length;

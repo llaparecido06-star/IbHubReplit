@@ -64,17 +64,20 @@ export default function CertificationsScreen() {
 
     setSaving(true);
     const updated = [...certifications, cert];
-    const ok = await updateProfile(user.id, { certifications: updated });
-    setSaving(false);
-
-    if (!ok) {
-      Alert.alert("Erro", "Não foi possível salvar. Tente novamente.");
-      return;
+    try {
+      const ok = await updateProfile(user.id, { certifications: updated });
+      if (!ok) {
+        Alert.alert("Erro", "Não foi possível salvar. Tente novamente.");
+        return;
+      }
+      setCertifications(updated);
+      patchProfile({ certifications: updated });
+      setSelectedCert(""); setCustomCert(""); setShowForm(false); setShowPicker(false);
+    } catch {
+      Alert.alert("Erro de Conexão", "Verifique sua conexão e tente novamente.");
+    } finally {
+      setSaving(false);
     }
-
-    setCertifications(updated);
-    patchProfile({ certifications: updated });
-    setSelectedCert(""); setCustomCert(""); setShowForm(false); setShowPicker(false);
   };
 
   const handleRemove = (cert: string) => {
@@ -84,10 +87,16 @@ export default function CertificationsScreen() {
         text: "Remover", style: "destructive", onPress: async () => {
           if (!user?.id) return;
           const updated = certifications.filter((c) => c !== cert);
-          const ok = await updateProfile(user.id, { certifications: updated });
-          if (ok) {
-            setCertifications(updated);
-            patchProfile({ certifications: updated });
+          try {
+            const ok = await updateProfile(user.id, { certifications: updated });
+            if (ok) {
+              setCertifications(updated);
+              patchProfile({ certifications: updated });
+            } else {
+              Alert.alert("Erro", "Não foi possível remover. Tente novamente.");
+            }
+          } catch {
+            Alert.alert("Erro de Conexão", "Verifique sua conexão e tente novamente.");
           }
         },
       },

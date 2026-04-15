@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Platform,
   Pressable,
@@ -166,13 +167,24 @@ export default function PublicProfileScreen() {
     if (cid) router.push(`/chat/${cid}` as any);
   };
 
-  const handleLike = (postId: string) => {
+  const handleLike = async (postId: string) => {
     const post = userPosts.find(p => p.id === postId);
     if (!post || !currentUser?.id) return;
+    const wasLiked = post.is_liked ?? false;
+    const prevCount = post.likes_count;
     setUserPosts(prev => prev.map(p => p.id === postId
-      ? { ...p, is_liked: !p.is_liked, likes_count: p.is_liked ? p.likes_count - 1 : p.likes_count + 1 }
+      ? { ...p, is_liked: !wasLiked, likes_count: wasLiked ? p.likes_count - 1 : p.likes_count + 1 }
       : p));
-    API.toggleLike(postId, currentUser.id, post.is_liked ?? false);
+    try {
+      const ok = await API.toggleLike(postId, currentUser.id, wasLiked);
+      if (!ok) {
+        setUserPosts(prev => prev.map(p => p.id === postId ? { ...p, is_liked: wasLiked, likes_count: prevCount } : p));
+        Alert.alert("Erro", "Não foi possível curtir. Tente novamente.");
+      }
+    } catch {
+      setUserPosts(prev => prev.map(p => p.id === postId ? { ...p, is_liked: wasLiked, likes_count: prevCount } : p));
+      Alert.alert("Erro de Conexão", "Verifique sua conexão e tente novamente.");
+    }
   };
 
   const handleBookmark = (postId: string) => {
