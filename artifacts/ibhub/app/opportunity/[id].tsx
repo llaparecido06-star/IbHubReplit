@@ -139,9 +139,8 @@ export default function OpportunityDetailScreen() {
         const cpId = opp.company_page_id ?? null;
         // Send standardized application text
         const appMsg = [
-          `Me candidatei à vaga **${opp.title}**${opp.company ? ` na ${opp.company}` : ""}.`,
+          `Me candidatei na sua vaga **${opp.title}**${cvUrl ? " e meu currículo abaixo" : ""}.`,
           message.trim() ? `\n\n${message.trim()}` : "",
-          cvUrl ? "\n\nSegue meu currículo em anexo." : "",
         ].join("");
         await sendMessage(convoId, user.id, appMsg, { companyPageId: cpId });
 

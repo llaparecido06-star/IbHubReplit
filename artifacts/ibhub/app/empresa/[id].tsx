@@ -103,7 +103,7 @@ export default function EmpresaScreen() {
   const [sortBy, setSortBy]             = useState<SortKey>("data");
   const [filterCat, setFilterCat]       = useState<ProductCat | "todos">("todos");
   const [showProductForm, setShowProductForm] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<CompanyProduct | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<LocalProduct | null>(null);
   const [editingProduct, setEditingProduct]   = useState<LocalProduct | null>(null);
   const [savingProduct, setSavingProduct]     = useState(false);
 
@@ -838,18 +838,18 @@ export default function EmpresaScreen() {
               <Image source={{ uri: selectedProduct.image_url }} style={{ width: "100%", height: 220, borderRadius: 12 }} resizeMode="cover" />
             )}
             <View style={{ gap: 8 }}>
-              {selectedProduct?.category && (
+              {selectedProduct?.cat && (
                 <View style={[styles.catBadgeSmall, { backgroundColor: colors.gold + "18", alignSelf: "flex-start" }]}>
                   <Text style={[styles.catBadgeSmallText, { color: colors.gold }]}>
-                    {PRODUCT_CATS.find((c) => c.key === selectedProduct.category)?.label ?? selectedProduct.category}
+                    {PRODUCT_CATS.find((c) => c.key === selectedProduct.cat)?.label}
                   </Text>
                 </View>
               )}
               {selectedProduct?.price && (
                 <Text style={[styles.productPrice, { fontSize: 20 }]}>{selectedProduct.price}</Text>
               )}
-              {selectedProduct?.description && (
-                <Text style={{ fontSize: 14, color: colors.foreground, lineHeight: 22 }}>{selectedProduct.description}</Text>
+              {selectedProduct?.desc && (
+                <Text style={{ fontSize: 14, color: colors.foreground, lineHeight: 22 }}>{selectedProduct.desc}</Text>
               )}
             </View>
             {user?.id && companyPage?.owner_id && user.id !== companyPage.owner_id && (
