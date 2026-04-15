@@ -46,14 +46,15 @@ router.delete("/users/me", async (req: Request, res: Response) => {
   const STORAGE_BUCKETS = ["avatars", "post-images", "post-videos", "stories"] as const;
 
   async function deleteStorageBucket(bucket: string): Promise<void> {
+    // Always list from offset 0 — after each removal the index shifts,
+    // so re-listing from the start ensures no file is skipped.
     const PAGE = 1000;
-    let offset = 0;
     for (;;) {
       const { data: files, error: listErr } = await supabaseAdmin.storage
         .from(bucket)
-        .list(userId, { limit: PAGE, offset });
+        .list(userId, { limit: PAGE, offset: 0 });
       if (listErr) {
-        storageWarnings.push(`list ${bucket} offset=${offset}: ${listErr.message}`);
+        storageWarnings.push(`list ${bucket}: ${listErr.message}`);
         break;
       }
       if (!files || files.length === 0) break;
@@ -65,8 +66,8 @@ router.delete("/users/me", async (req: Request, res: Response) => {
         storageWarnings.push(`remove ${bucket}: ${removeErr.message}`);
         break;
       }
+      // If fewer than PAGE files were returned, we've cleared the bucket folder.
       if (files.length < PAGE) break;
-      offset += PAGE;
     }
   }
 

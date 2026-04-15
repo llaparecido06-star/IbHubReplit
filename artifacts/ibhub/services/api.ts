@@ -2286,6 +2286,31 @@ export async function updateReportStatus(
   }
 }
 
+export interface MyReport {
+  id: string;
+  post_id: string | null;
+  reported_user_id: string | null;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+}
+
+export async function fetchMyReports(userId: string): Promise<MyReport[]> {
+  try {
+    const { data, error } = await supabase
+      .from("reports")
+      .select("id, post_id, reported_user_id, reason, status, created_at")
+      .eq("reported_by", userId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (error) { console.error("fetchMyReports:", error); return []; }
+    return (data ?? []) as MyReport[];
+  } catch (e) {
+    console.error("fetchMyReports:", e);
+    return [];
+  }
+}
+
 export async function deletePost(postId: string): Promise<boolean> {
   try {
     const { error } = await supabase.from("posts").delete().eq("id", postId);

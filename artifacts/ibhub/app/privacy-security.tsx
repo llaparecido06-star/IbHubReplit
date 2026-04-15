@@ -203,12 +203,22 @@ export default function PrivacySecurityScreen() {
             </View>
             <Feather name="arrow-right" size={18} color={colors.mutedForeground} />
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.arrowRow, { borderTopColor: colors.border }]}
+            onPress={() => router.push("/my-reports" as any)}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, { color: colors.navy }]}>Minhas Denúncias</Text>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>Ver histórico de denúncias enviadas</Text>
+            </View>
+            <Feather name="arrow-right" size={18} color={colors.mutedForeground} />
+          </TouchableOpacity>
           <View style={[styles.infoRow, { borderTopColor: colors.border }]}>
             <Feather name="flag" size={15} color={colors.mutedForeground} style={{ marginTop: 1 }} />
             <View style={{ flex: 1 }}>
-              <Text style={[styles.rowLabel, { color: colors.navy }]}>Denunciar Conteúdo</Text>
+              <Text style={[styles.rowLabel, { color: colors.navy }]}>Como denunciar</Text>
               <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
-                Use o menu "⋯" em qualquer post ou perfil para denunciar conteúdo inadequado. Nossa equipe analisa todas as denúncias.
+                Use o menu "⋯" em qualquer post ou perfil para denunciar conteúdo inadequado.
               </Text>
             </View>
           </View>
