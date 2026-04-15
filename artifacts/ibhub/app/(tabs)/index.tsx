@@ -33,6 +33,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useFeatureFlags } from "@/context/FeatureFlagsContext";
 import { useColors } from "@/hooks/useColors";
+import { friendlyErrorMessage } from "@/hooks/useAsyncAction";
 import * as API from "@/services/api";
 import type { SuggestedProfile } from "@/services/api";
 import { supabase } from "@/context/AuthContext";
@@ -815,17 +816,27 @@ export default function FeedScreen() {
               const post = posts.find(p => p.id === id);
               if (!post || !user?.id) return;
               const wasLiked = post.is_liked ?? false;
+              const prevCount = post.likes_count;
               setLikingPostIds(prev => new Set([...prev, id]));
               setPosts(prev => prev.map(p => p.id === id
                 ? { ...p, is_liked: !wasLiked, likes_count: wasLiked ? p.likes_count - 1 : p.likes_count + 1 }
                 : p));
-              const ok = await API.toggleLike(id, user.id, wasLiked, activeCompany?.id);
-              if (!ok) {
+              try {
+                const ok = await API.toggleLike(id, user.id, wasLiked, activeCompany?.id);
+                if (!ok) {
+                  setPosts(prev => prev.map(p => p.id === id
+                    ? { ...p, is_liked: wasLiked, likes_count: prevCount }
+                    : p));
+                  Alert.alert("Erro", "Não foi possível curtir. Tente novamente.");
+                }
+              } catch (e: unknown) {
                 setPosts(prev => prev.map(p => p.id === id
-                  ? { ...p, is_liked: wasLiked, likes_count: wasLiked ? p.likes_count + 1 : p.likes_count - 1 }
+                  ? { ...p, is_liked: wasLiked, likes_count: prevCount }
                   : p));
+                Alert.alert("Erro de Conexão", friendlyErrorMessage(e));
+              } finally {
+                setLikingPostIds(prev => { const s = new Set(prev); s.delete(id); return s; });
               }
-              setLikingPostIds(prev => { const s = new Set(prev); s.delete(id); return s; });
             }}
             onReact={async (id, reaction) => {
               if (likingPostIds.has(id)) return;
@@ -848,13 +859,22 @@ export default function FeedScreen() {
                     : wasLiked ? p.likes_count : p.likes_count + 1,
                 };
               }));
-              const ok = await API.toggleReaction(id, user.id, reaction, prevReaction, activeCompany?.id);
-              if (!ok) {
+              try {
+                const ok = await API.toggleReaction(id, user.id, reaction, prevReaction, activeCompany?.id);
+                if (!ok) {
+                  setPosts(prev => prev.map(p =>
+                    p.id !== id ? p : { ...p, is_liked: prevIsLiked, reaction_type: prevReaction, likes_count: prevCount }
+                  ));
+                  Alert.alert("Erro", "Não foi possível reagir. Tente novamente.");
+                }
+              } catch (e: unknown) {
                 setPosts(prev => prev.map(p =>
                   p.id !== id ? p : { ...p, is_liked: prevIsLiked, reaction_type: prevReaction, likes_count: prevCount }
                 ));
+                Alert.alert("Erro de Conexão", friendlyErrorMessage(e));
+              } finally {
+                setLikingPostIds(prev => { const s = new Set(prev); s.delete(id); return s; });
               }
-              setLikingPostIds(prev => { const s = new Set(prev); s.delete(id); return s; });
             }}
             onBookmark={(id) => {
               const post = posts.find(p => p.id === id);

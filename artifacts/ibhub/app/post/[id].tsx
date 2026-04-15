@@ -4,6 +4,7 @@ import { Video, ResizeMode } from "expo-av";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   FlatList,
   KeyboardAvoidingView,
@@ -22,6 +23,7 @@ import { useAuth, supabase } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
 import type { AppComment } from "@/services/api";
+import { friendlyErrorMessage } from "@/hooks/useAsyncAction";
 import { Post } from "@/components/feed/PostCard";
 import { LikesModal } from "@/components/feed/LikesModal";
 import { formatRelativeDate } from "@/utils/dateUtils";
@@ -185,24 +187,50 @@ export default function PostDetailScreen() {
     setPost(prev => prev ? { ...prev, comments_count: (prev.comments_count || 0) + 1 } : prev);
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
 
-    const saved = await API.addComment(id, user.id, text, activeCompany?.id ?? null, currentReplyTo?.commentId ?? null);
+    try {
+      const saved = await API.addComment(id, user.id, text, activeCompany?.id ?? null, currentReplyTo?.commentId ?? null);
 
-    if (saved) {
-      const savedWithReplies = { ...saved, replies: [] };
+      if (saved) {
+        const savedWithReplies = { ...saved, replies: [] };
+        if (currentReplyTo?.commentId) {
+          setComments(prev => prev.map(c =>
+            c.id === currentReplyTo.commentId
+              ? { ...c, replies: (c.replies ?? []).map(r => r.id === tempId ? savedWithReplies : r) }
+              : c
+          ));
+        } else {
+          setComments(prev => prev.map(c => c.id === tempId ? savedWithReplies : c));
+        }
+      } else {
+        // API returned null — remove optimistic comment
+        if (currentReplyTo?.commentId) {
+          setComments(prev => prev.map(c =>
+            c.id === currentReplyTo.commentId
+              ? { ...c, replies: (c.replies ?? []).filter(r => r.id !== tempId) }
+              : c
+          ));
+        } else {
+          setComments(prev => prev.filter(c => c.id !== tempId));
+        }
+        setPost(prev => prev ? { ...prev, comments_count: Math.max(0, (prev.comments_count || 0) - 1) } : prev);
+        Alert.alert("Erro", "Não foi possível enviar o comentário. Tente novamente.");
+      }
+    } catch (e: unknown) {
+      // Remove optimistic comment on network failure
       if (currentReplyTo?.commentId) {
         setComments(prev => prev.map(c =>
           c.id === currentReplyTo.commentId
-            ? {
-                ...c,
-                replies: (c.replies ?? []).map(r => r.id === tempId ? savedWithReplies : r),
-              }
+            ? { ...c, replies: (c.replies ?? []).filter(r => r.id !== tempId) }
             : c
         ));
       } else {
-        setComments(prev => prev.map(c => c.id === tempId ? savedWithReplies : c));
+        setComments(prev => prev.filter(c => c.id !== tempId));
       }
+      setPost(prev => prev ? { ...prev, comments_count: Math.max(0, (prev.comments_count || 0) - 1) } : prev);
+      Alert.alert("Erro", friendlyErrorMessage(e));
+    } finally {
+      setSendingComment(false);
     }
-    setSendingComment(false);
   };
 
   const handleLikeComment = async (commentId: string, isReply: boolean, parentId?: string, isCurrentlyLiked?: boolean) => {

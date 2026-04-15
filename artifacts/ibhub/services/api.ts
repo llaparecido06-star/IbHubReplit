@@ -394,6 +394,7 @@ export async function toggleLike(postId: string, userId: string, isCurrentlyLike
     }
     return true;
   } catch (e) {
+    if (isNetworkError(e)) throw e;
     console.error("toggleLike:", e);
     return false;
   }
@@ -437,6 +438,7 @@ export async function toggleReaction(
 
     return true;
   } catch (e) {
+    if (isNetworkError(e)) throw e;
     console.error("toggleReaction:", e);
     return false;
   }
@@ -637,6 +639,7 @@ export async function addComment(
       company_page: companyPageId ? (companyMap.get(companyPageId) ?? null) : null,
     } as AppComment;
   } catch (e) {
+    if (isNetworkError(e)) throw e;
     console.error("addComment:", e);
     return null;
   }
@@ -678,6 +681,7 @@ export async function updateProfile(
     if (error) { console.error("updateProfile:", error); return false; }
     return true;
   } catch (e) {
+    if (isNetworkError(e)) throw e;
     console.error("updateProfile:", e);
     return false;
   }
@@ -4350,6 +4354,7 @@ export async function uploadAvatar(userId: string, uri: string): Promise<string 
     const publicUrl = urlData.publicUrl;
     return publicUrl ? `${publicUrl}?t=${Date.now()}` : null;
   } catch (e) {
+    if (isNetworkError(e)) throw e;
     console.error("uploadAvatar:", e);
     return null;
   }
