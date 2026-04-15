@@ -29,6 +29,7 @@ export interface Post {
     avatar_url?: string | null;
     headline?: string | null;
     plan?: string;
+    is_shadowbanned?: boolean;
   };
   company_page?: { id: string; name: string; avatar_url?: string | null } | null;
 }
@@ -84,24 +85,24 @@ function _normalisePost(raw: any, profileMap: Map<string, any>): Post {
 
 export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
   try {
-    // Server-side shadowban filter: DB itself excludes shadowbanned users' posts
-    const shadowbannedIds = await _fetchShadowbannedIds(currentUserId);
+    // Use the authoritative API server endpoint for shadowban enforcement.
+    // The server filters using the admin Supabase client; clients cannot bypass this.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return [];
 
-    let postsQuery = supabase
-      .from("posts")
-      .select(POST_SELECT)
-      .order("created_at", { ascending: false })
-      .limit(30);
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
+      ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
 
-    if (shadowbannedIds.length > 0) {
-      postsQuery = postsQuery.not("user_id", "in", `(${shadowbannedIds.map(id => `"${id}"`).join(",")})`);
-    }
+    const res = await fetch(`${apiBase}/feed/posts?limit=30`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (!res.ok) return [];
 
-    const { data, error } = await postsQuery;
-    if (error || !data || !data.length) return [];
+    const { posts: rawPosts } = await res.json() as { posts: any[] };
+    if (!rawPosts?.length) return [];
 
-    const userIds = [...new Set(data.map((p: any) => p.user_id).filter(Boolean))] as string[];
-    const postIds = data.map((p: any) => p.id) as string[];
+    const userIds = [...new Set(rawPosts.map((p: any) => p.user_id).filter(Boolean))] as string[];
+    const postIds = rawPosts.map((p: any) => p.id) as string[];
 
     const [profileMap, likedRes, bookmarkRes] = await Promise.all([
       _fetchProfilesMap(userIds),
@@ -112,7 +113,7 @@ export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
     const likedMap = new Map((likedRes.data ?? []).map((l: any) => [l.post_id, l.reaction_type ?? "curtir"]));
     const bookmarkedIds = new Set((bookmarkRes.data ?? []).map((b: any) => b.post_id));
 
-    return data.map((raw: any) => ({
+    return rawPosts.map((raw: any) => ({
       ..._normalisePost(raw, profileMap),
       is_liked: likedMap.has(raw.id),
       reaction_type: likedMap.get(raw.id) ?? null,

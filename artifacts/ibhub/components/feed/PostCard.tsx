@@ -70,6 +70,7 @@ export interface Post {
     avatar_url?: string | null;
     headline?: string | null;
     plan?: string;
+    is_shadowbanned?: boolean;
   };
   company_page?: {
     id: string;

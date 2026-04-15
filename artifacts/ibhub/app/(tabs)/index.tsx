@@ -291,7 +291,7 @@ export default function FeedScreen() {
         const full = await API.fetchPostById(raw.id, user.id);
         if (!full) return;
         // Skip posts from shadowbanned users (server-side shadowban enforcement for realtime path)
-        if ((full.author as any)?.is_shadowbanned) return;
+        if (full.author?.is_shadowbanned) return;
         setPosts(prev => {
           if (prev.some(p => p.id === full.id)) return prev;
           setNewPosts(np => [...np, full]);

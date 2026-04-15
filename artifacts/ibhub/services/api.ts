@@ -170,26 +170,22 @@ async function attachAuthorsToPosts(rawPosts: any[], profileMap: Map<string, any
 
 export async function fetchFeedPosts(currentUserId: string, activeCompanyId?: string | null): Promise<Post[]> {
   try {
-    // Server-side shadowban filter: fetch banned IDs (DB excludes the rows itself)
-    const shadowbannedIds = await fetchShadowbannedIds(currentUserId);
+    // Use the authoritative API server endpoint for shadowban enforcement.
+    // The server filters using the admin Supabase client; clients cannot bypass this.
+    const session = (await supabase.auth.getSession()).data.session;
+    if (!session?.access_token) return [];
 
-    let postsQuery = supabase
-      .from("posts")
-      .select(POST_SELECT_BASE)
-      .order("created_at", { ascending: false })
-      .limit(30);
+    const res = await fetch(`${API_URL}/feed/posts?limit=30`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (!res.ok) return [];
 
-    if (shadowbannedIds.length > 0) {
-      postsQuery = postsQuery.not("user_id", "in", `(${shadowbannedIds.map(id => `"${id}"`).join(",")})`);
-    }
+    const { posts: rawPosts } = await res.json() as { posts: any[] };
+    if (!rawPosts?.length) return [];
 
-    const { data, error } = await postsQuery;
-
-    if (error || !data || data.length === 0) return [];
-
-    const postIds = data.map((p: any) => p.id);
-    const userIds = [...new Set(data.map((p: any) => p.user_id).filter(Boolean))];
-    const companyIds = [...new Set(data.map((p: any) => p.company_page_id).filter(Boolean))];
+    const postIds = rawPosts.map((p: any) => p.id as string);
+    const userIds = [...new Set(rawPosts.map((p: any) => p.user_id as string).filter(Boolean))];
+    const companyIds = [...new Set(rawPosts.map((p: any) => p.company_page_id as string).filter(Boolean))];
 
     const likedQuery = activeCompanyId
       ? supabase.from("likes").select("post_id, reaction_type").eq("company_page_id", activeCompanyId).in("post_id", postIds)
@@ -205,7 +201,7 @@ export async function fetchFeedPosts(currentUserId: string, activeCompanyId?: st
     const likedMap = new Map((likedRes.data ?? []).map((l: any) => [l.post_id, l.reaction_type ?? null]));
     const bookmarkedIds = new Set((bookmarkRes.data ?? []).map((b: any) => b.post_id));
 
-    return (await attachAuthorsToPosts(data as any[], profileMap, companyMap)).map((post: any) => ({
+    return (await attachAuthorsToPosts(rawPosts, profileMap, companyMap)).map((post: any) => ({
       ...post,
       is_liked: likedMap.has(post.id),
       reaction_type: likedMap.get(post.id) ?? null,

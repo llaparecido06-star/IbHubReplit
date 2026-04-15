@@ -27,7 +27,8 @@ export default function LoginPage() {
     setError(null);
     const { error: err } = await signIn(email, password);
     if (err) {
-      setError("E-mail ou senha incorretos");
+      const isSuspension = err.toLowerCase().includes("suspensa") || err.toLowerCase().includes("suspen");
+      setError(isSuspension ? err : "E-mail ou senha incorretos");
       setLoading(false);
     } else {
       const redirect = sessionStorage.getItem("redirect_after_login");
