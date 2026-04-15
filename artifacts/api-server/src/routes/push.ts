@@ -112,17 +112,28 @@ router.post("/push/send", async (req: Request, res: Response): Promise<void> => 
     .eq("user_id", callerId)
     .maybeSingle();
 
-  if (participantErr || !callerParticipant) {
+  if (participantErr) {
+    logger.error({ err: participantErr, conversationId, callerId }, "DB error verifying participant");
+    res.status(500).json({ error: "Erro ao verificar participação na conversa." });
+    return;
+  }
+  if (!callerParticipant) {
     res.status(403).json({ error: "Você não é participante desta conversa." });
     return;
   }
 
   // Resolve all other participants server-side (service role — no RLS bypass risk)
-  const { data: participants } = await supabaseAdmin
+  const { data: participants, error: participantsErr } = await supabaseAdmin
     .from("conversation_participants")
     .select("user_id")
     .eq("conversation_id", conversationId)
     .neq("user_id", callerId);
+
+  if (participantsErr) {
+    logger.error({ err: participantsErr, conversationId }, "DB error fetching participants");
+    res.status(500).json({ error: "Erro ao buscar participantes da conversa." });
+    return;
+  }
 
   if (!participants || participants.length === 0) {
     res.status(200).json({ sent: 0, skipped: "no other participants" });
@@ -132,10 +143,16 @@ router.post("/push/send", async (req: Request, res: Response): Promise<void> => 
   const recipientIds = participants.map((p: { user_id: string }) => p.user_id);
 
   // Look up push tokens for recipients
-  const { data: tokenRows } = await supabaseAdmin
+  const { data: tokenRows, error: tokensErr } = await supabaseAdmin
     .from("push_tokens")
     .select("token")
     .in("user_id", recipientIds);
+
+  if (tokensErr) {
+    logger.error({ err: tokensErr, conversationId }, "DB error fetching push tokens");
+    res.status(500).json({ error: "Erro ao buscar tokens de notificação." });
+    return;
+  }
 
   const validTokens = (tokenRows ?? [])
     .map((r: { token: string }) => r.token)
