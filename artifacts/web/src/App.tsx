@@ -1,5 +1,5 @@
 import React from "react";
-import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
+import { Switch, Route, Router as WouterRouter, useRoute, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { PermissionsProvider } from "@/context/PermissionsContext";
@@ -131,7 +131,13 @@ function AdminNotFound() {
 function MaintenanceGuard({ children }: { children: React.ReactNode }) {
   const { isEnabled, isLoading } = useFeatureFlags();
   const { profile, loading, session } = useAuth();
+  const [location] = useLocation();
   const manutencao = isEnabled("manutencao");
+
+  // Auth paths that must remain reachable during maintenance so admins can sign in
+  const isAuthPath = location === "/login" || location === "/cadastro" ||
+    location === "/recuperar-senha" || location === "/redefinir-senha" ||
+    location === "/auth/callback";
 
   useEffect(() => {
     if (loading || isLoading) return;
@@ -143,9 +149,9 @@ function MaintenanceGuard({ children }: { children: React.ReactNode }) {
   }, [manutencao, isLoading, loading, session, profile?.is_admin]);
 
   if (loading || isLoading) return null;
-  // Maintenance blocks everyone except admins (unauthenticated + non-admin authenticated).
-  // The maintenance page provides a hidden admin login link so admins can reach login.
-  if (manutencao && !profile?.is_admin) {
+  // Auth routes pass through regardless of maintenance (admin login path must work).
+  // All other routes: block everyone except admins when maintenance is on.
+  if (manutencao && !profile?.is_admin && !isAuthPath) {
     return <MaintenancePage />;
   }
   return <>{children}</>;

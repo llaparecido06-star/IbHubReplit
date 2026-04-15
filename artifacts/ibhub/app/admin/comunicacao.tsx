@@ -18,7 +18,7 @@ import { supabase } from "@/context/AuthContext";
 import { useAuth } from "@/context/AuthContext";
 import { broadcastPushNotification } from "@/services/admin-api";
 
-const SEGMENTS = ["Todos os usuários", "Gratuito", "Básico", "Empresa", "Executivo", "Profissional"];
+const SEGMENTS = ["Todos os usuários", "Gratuito", "Básico", "Profissional", "Empresarial", "Premium"];
 
 interface ReferralTrackingEntry {
   id: string;

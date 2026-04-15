@@ -7,7 +7,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack, useRouter, type Href } from "expo-router";
+import { Stack, useRouter, usePathname, type Href } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useRef } from "react";
 import { ActivityIndicator, View } from "react-native";
@@ -218,28 +218,32 @@ function RootLayoutNav() {
   const { session, loading, isRecovering, needsProfileCompletion } = useAuth();
   const { isEnabled, isLoading: flagsLoading } = useFeatureFlags();
   const router = useRouter();
+  const pathname = usePathname();
   const didNavigateIn = useRef(false);
   const manutencao = isEnabled("manutencao");
+
+  // Auth routes that must remain accessible during maintenance so admins can sign in
+  const isAuthPath = pathname.includes("login") || pathname.includes("auth");
 
   useEffect(() => {
     if (loading || isRecovering || flagsLoading) return;
 
     if (!session) {
       didNavigateIn.current = false;
-      // While maintenance is on, unauthenticated users see maintenance.
-      // The maintenance screen has a hidden admin-login link so admins can sign in.
-      if (manutencao) {
+      if (manutencao && !isAuthPath) {
+        // Unauthenticated + maintenance: show maintenance (unless already on an auth route)
         router.replace("/maintenance" as any);
-      } else {
+      } else if (!manutencao) {
         router.replace("/(auth)/login" as any);
       }
+      // else: maintenance + isAuthPath → stay on login, let admin sign in
     } else if (needsProfileCompletion) {
       router.replace("/social-complete" as any);
     } else if (!didNavigateIn.current) {
       didNavigateIn.current = true;
       setTimeout(() => router.replace("/(tabs)" as any), 80);
     }
-  }, [session, loading, isRecovering, needsProfileCompletion, manutencao, flagsLoading]);
+  }, [session, loading, isRecovering, needsProfileCompletion, manutencao, flagsLoading, isAuthPath]);
 
   if (loading) {
     return (

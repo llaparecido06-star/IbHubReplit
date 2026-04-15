@@ -604,23 +604,31 @@ router.post("/admin/broadcast-push", async (req: Request, res: Response) => {
     .select("token, user_id, profiles!inner(plan)")
     .not("token", "is", null);
 
-  // Filter by plan — clients pass the actual plan column value or "all"
-  // Accepts both English plan keys ("gratuito", "basico", etc.) and legacy Portuguese labels
+  // Filter by plan — clients pass either "all" / "Todos os usuários" or a specific plan value.
+  // Both English plan keys and Portuguese display labels are accepted; unknown values → 400.
   const planMap: Record<string, string> = {
     "gratuito": "gratuito",
     "basico": "basico",
     "profissional": "profissional",
     "empresarial": "empresarial",
     "premium": "premium",
-    // Legacy Portuguese label support (mobile admin screen)
+    // Portuguese display label equivalents (mobile admin screen)
     "Gratuito": "gratuito",
     "Básico": "basico",
     "Profissional": "profissional",
-    "Empresa": "empresarial",
+    "Empresarial": "empresarial",
     "Premium": "premium",
   };
-  if (segment && segment !== "all" && segment !== "Todos os usuários" && planMap[segment]) {
-    tokenQuery = tokenQuery.eq("profiles.plan", planMap[segment]);
+  const broadcastAll = !segment || segment === "all" || segment === "Todos os usuários";
+  if (!broadcastAll) {
+    const planValue = planMap[segment];
+    if (!planValue) {
+      res.status(400).json({
+        error: `Invalid segment "${segment}". Valid values: all, ${Object.keys(planMap).join(", ")}.`,
+      });
+      return;
+    }
+    tokenQuery = tokenQuery.eq("profiles.plan", planValue);
   }
 
   const { data: tokenRows, error: tokenErr } = await tokenQuery;
