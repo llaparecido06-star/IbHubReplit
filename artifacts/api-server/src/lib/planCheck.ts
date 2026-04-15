@@ -65,6 +65,28 @@ function isCourtesyActive(prof: CallerProfile): boolean {
 }
 
 /**
+ * Server-side admin gate. Only users with is_admin = true may proceed.
+ * Returns `true` if access is granted.
+ * Returns `false` and sends a 403 response if access is denied.
+ */
+export async function requireAdmin(
+  req: Request,
+  res: Response,
+  userId: string,
+): Promise<boolean> {
+  const prof = await loadCallerProfile(userId);
+  if (!prof) {
+    res.status(404).json({ error: "Profile not found" });
+    return false;
+  }
+  if (!prof.is_admin) {
+    res.status(403).json({ error: "Apenas administradores do IbHub podem publicar no feed Ideal.BI." });
+    return false;
+  }
+  return true;
+}
+
+/**
  * Server-side plan feature gate. Call this before serving gated resources.
  *
  * - Admins always pass.

@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
-import { resolveUserId, requirePlanFeature } from "../lib/planCheck.js";
+import { resolveUserId, requirePlanFeature, requireAdmin } from "../lib/planCheck.js";
 
 const router: IRouter = Router();
 
@@ -66,15 +66,17 @@ router.get("/market/posts", async (req: Request, res: Response): Promise<void> =
 
 /**
  * POST /market/posts
- * Creates an Ideal.BI market post. Requires mercado:idealbi plan feature.
+ * Creates an Ideal.BI market post. ADMIN ONLY.
+ * Only users with is_admin = true in their profile may create posts.
  * The post is always stored with the Ideal.BI company page as the owner
- * (company_page_id), regardless of which authenticated user created it.
+ * (company_page_id), regardless of which admin published it.
  */
 router.post("/market/posts", async (req: Request, res: Response): Promise<void> => {
   const userId = await resolveUserId(req, res);
   if (!userId) return;
 
-  const allowed = await requirePlanFeature(req, res, userId, "mercado:idealbi");
+  // Only ibhub admins can publish to the Ideal.BI feed
+  const allowed = await requireAdmin(req, res, userId);
   if (!allowed) return;
 
   const { content, image_url, video_url, poll_options } = req.body as {
