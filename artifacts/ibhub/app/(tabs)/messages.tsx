@@ -71,6 +71,11 @@ export default function MessagesScreen() {
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
 
+  // In company mode, always show Mensagens tab (Solicitações is hidden)
+  useEffect(() => {
+    if (activeCompany) setMainTab("mensagens");
+  }, [activeCompany?.id]);
+
   const load = useCallback(async () => {
     if (!user?.id) { setLoading(false); return; }
     const data = await API.fetchConversations(user.id, activeCompany?.id ?? null);
@@ -323,9 +328,9 @@ export default function MessagesScreen() {
         </View>
       )}
 
-      {/* Tabs: Mensagens / Solicitações */}
+      {/* Tabs: Mensagens / Solicitações (only show Solicitações for personal accounts) */}
       <View style={[styles.tabRow, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
-        {(["mensagens", "solicitacoes"] as MainTab[]).map((t) => {
+        {(activeCompany ? ["mensagens"] as MainTab[] : ["mensagens", "solicitacoes"] as MainTab[]).map((t) => {
           const label = t === "mensagens" ? "Mensagens" : "Solicitações";
           const isActive = t === mainTab;
           return (
