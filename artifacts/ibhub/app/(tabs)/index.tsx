@@ -713,9 +713,13 @@ export default function FeedScreen() {
           <TouchableOpacity onPress={() => setShowAccountMenu(true)}>
             <View style={styles.avatarChevron}>
               {activeCompany ? (
-                <View style={[styles.companyAvatar, { backgroundColor: colors.navy }]}>
-                  <Text style={[styles.companyAvatarText, { color: colors.gold }]}>{activeCompany.name[0]?.toUpperCase() ?? "E"}</Text>
-                </View>
+                activeCompany.avatar_url ? (
+                  <Avatar uri={activeCompany.avatar_url} name={activeCompany.name} size={34} />
+                ) : (
+                  <View style={[styles.companyAvatar, { backgroundColor: colors.navy }]}>
+                    <Text style={[styles.companyAvatarText, { color: colors.gold }]}>{activeCompany.name[0]?.toUpperCase() ?? "E"}</Text>
+                  </View>
+                )
               ) : (
                 <Avatar uri={profile?.avatar_url} name={profile?.full_name} size={34} />
               )}
