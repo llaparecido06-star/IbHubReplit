@@ -55,16 +55,22 @@ router.get("/presentations/:id/slides", async (req: Request, res: Response) => {
 
   const { data: profile } = await supabaseAdmin
     .from("profiles")
-    .select("plan, is_admin, courtesy_until")
+    .select("plan, is_admin, courtesy_until, stripe_subscription_status")
     .eq("id", userId)
     .maybeSingle();
 
-  const caller = profile as { plan?: string; is_admin?: boolean; courtesy_until?: string | null } | null;
+  const caller = profile as { plan?: string; is_admin?: boolean; courtesy_until?: string | null; stripe_subscription_status?: string | null } | null;
   const isAdmin = !!caller?.is_admin;
   const isCourtesy = !!caller?.courtesy_until && new Date(caller.courtesy_until) > new Date();
 
-  // Server-side feature gate: non-admin, non-courtesy users must have the mercado:apresentacoes plan feature
+  // Server-side entitlement + feature gate for non-admin, non-courtesy users
   if (!isAdmin && !isCourtesy) {
+    // Deny past_due subscriptions — they lost access even if plan row still references paid tier
+    const subStatus = caller?.stripe_subscription_status ?? null;
+    if (subStatus === "past_due") {
+      res.status(403).json({ error: "Assinatura com pagamento pendente. Regularize para acessar." });
+      return;
+    }
     const callerPlanId = caller?.plan ?? "gratuito";
     const { data: callerPlan } = await supabaseAdmin
       .from("plans")
@@ -192,8 +198,13 @@ router.post("/presentations/:id/access", async (req: Request, res: Response) => 
   const accessorPlanId = accessorProfile.plan ?? "gratuito";
   const accessorIsCourtesy = !!accessorProfile.courtesy_until && new Date(accessorProfile.courtesy_until) > new Date();
 
-  // Server-side feature gate: exact mercado:apresentacoes required unless courtesy
+  // Server-side entitlement + feature gate: exact mercado:apresentacoes required unless courtesy
   if (!accessorIsCourtesy) {
+    // Deny past_due subscriptions
+    if (accessorProfile.stripe_subscription_status === "past_due") {
+      res.status(403).json({ error: "Assinatura com pagamento pendente. Regularize para acessar." });
+      return;
+    }
     const { data: accessorPlan } = await supabaseAdmin
       .from("plans")
       .select("features")

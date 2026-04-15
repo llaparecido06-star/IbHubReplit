@@ -562,6 +562,29 @@ export async function deleteMarketPresentation(id: string): Promise<boolean> {
   }
 }
 
+export interface PresentationSlide {
+  slide_id: string;
+  sequence_order: number;
+  url: string | null;
+  locked: boolean;
+}
+
+export async function fetchPresentationSlides(presentationId: string): Promise<{ slides: PresentationSlide[]; total: number } | null> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return null;
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
+      ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
+    const res = await fetch(`${apiBase}/presentations/${presentationId}/slides`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (!res.ok) return null;
+    return res.json() as Promise<{ slides: PresentationSlide[]; total: number }>;
+  } catch {
+    return null;
+  }
+}
+
 export async function triggerPresentationAccess(presentationId: string): Promise<{ ok: boolean; reason?: string }> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) return { ok: false, reason: "unauthenticated" };

@@ -107,7 +107,7 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
 
   const hasFeature = useCallback(
     (key: string): boolean => {
-      if (isLoading) return true;
+      if (isLoading) return false;
       if (features.includes("__all__")) return true;
       return features.includes(key);
     },

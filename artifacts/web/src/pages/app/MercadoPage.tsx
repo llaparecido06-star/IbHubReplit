@@ -7,7 +7,8 @@ import { supabase } from "@/lib/supabase";
 import {
   MARKET_FALLBACK, MarketOverview, Period, fetchMarketOverview,
   fetchMarketPresentations, fetchAllMarketPresentations,
-  upsertMarketPresentation, deleteMarketPresentation, triggerPresentationAccess, MarketPresentation,
+  upsertMarketPresentation, deleteMarketPresentation, triggerPresentationAccess,
+  fetchPresentationSlides, PresentationSlide, MarketPresentation,
   MarketPost, MarketComment, MarketPollOption,
   fetchMarketPosts, createMarketPost, toggleMarketPostLike,
   fetchMarketComments, addMarketComment, uploadMarketPostImage,
@@ -125,6 +126,9 @@ function ApresentacoesPanel({ isAdmin }: { isAdmin: boolean }) {
   const [saving, setSaving] = useState(false);
   const [accessingId, setAccessingId] = useState<string | null>(null);
   const [blockedId, setBlockedId] = useState<string | null>(null);
+  const [viewingPresentation, setViewingPresentation] = useState<MarketPresentation | null>(null);
+  const [viewSlides, setViewSlides] = useState<PresentationSlide[]>([]);
+  const [viewLoading, setViewLoading] = useState(false);
 
   const reload = () => {
     const fetch = isAdmin ? fetchAllMarketPresentations : fetchMarketPresentations;
@@ -279,11 +283,16 @@ function ApresentacoesPanel({ isAdmin }: { isAdmin: boolean }) {
                           setAccessingId(p.id);
                           try {
                             const result = await triggerPresentationAccess(p.id);
-                            if (result.ok) {
-                              window.open(p.content_url, "_blank", "noopener,noreferrer");
-                            } else {
+                            if (!result.ok) {
                               setBlockedId(p.id);
+                              return;
                             }
+                            setViewingPresentation(p);
+                            setViewSlides([]);
+                            setViewLoading(true);
+                            const data = await fetchPresentationSlides(p.id);
+                            setViewSlides(data?.slides ?? []);
+                            setViewLoading(false);
                           } finally {
                             setAccessingId(null);
                           }
@@ -300,6 +309,60 @@ function ApresentacoesPanel({ isAdmin }: { isAdmin: boolean }) {
           </div>
         ))}
       </div>
+
+      {/* Slide Viewer Modal */}
+      {viewingPresentation && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.7)", zIndex: 2000, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 16px", overflowY: "auto" }}
+          onClick={(e) => { if (e.target === e.currentTarget) { setViewingPresentation(null); } }}
+        >
+          <div style={{ backgroundColor: WHITE, borderRadius: 18, width: "100%", maxWidth: 720, boxShadow: "0 12px 60px rgba(0,0,0,0.3)", overflow: "hidden" }}>
+            {/* Modal header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px", borderBottom: `1px solid ${BORDER}` }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: NAVY }}>{viewingPresentation.title}</h2>
+                {!viewLoading && <p style={{ margin: "4px 0 0", fontSize: 12, color: MUTED }}>{viewSlides.filter(s => !s.locked).length} de {viewSlides.length} slides desbloqueados</p>}
+              </div>
+              <button onClick={() => setViewingPresentation(null)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: MUTED, lineHeight: 1 }}>×</button>
+            </div>
+            {/* Content */}
+            <div style={{ padding: 24 }}>
+              {viewLoading ? (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 200 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: "50%", border: "3px solid #c9a84c", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+                </div>
+              ) : viewSlides.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
+                  <p style={{ fontSize: 14 }}>Nenhum slide disponível nesta apresentação.</p>
+                </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 14 }}>
+                  {viewSlides.map((slide) => (
+                    <div key={slide.slide_id} style={{ borderRadius: 12, overflow: "hidden", border: `1px solid ${BORDER}`, position: "relative" }}>
+                      {slide.locked ? (
+                        <div style={{ width: "100%", aspectRatio: "16/9", backgroundColor: "#f3f4f6", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                          <span style={{ fontSize: 28 }}>🔒</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: MUTED }}>Slide {slide.sequence_order}</span>
+                          <span style={{ fontSize: 10, color: "#b0b8c4" }}>Desbloqueado em breve</span>
+                        </div>
+                      ) : slide.url ? (
+                        <a href={slide.url} target="_blank" rel="noopener noreferrer" style={{ display: "block", textDecoration: "none" }}>
+                          <img src={slide.url} alt={`Slide ${slide.sequence_order}`} style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", display: "block" }} />
+                          <div style={{ padding: "6px 10px", fontSize: 11, fontWeight: 600, color: NAVY, backgroundColor: WHITE }}>Slide {slide.sequence_order} ↗</div>
+                        </a>
+                      ) : (
+                        <div style={{ width: "100%", aspectRatio: "16/9", backgroundColor: `${GOLD}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: MUTED }}>
+                          Slide {slide.sequence_order}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
