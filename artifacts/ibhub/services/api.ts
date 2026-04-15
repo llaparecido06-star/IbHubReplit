@@ -2264,6 +2264,7 @@ export async function getOrCreateDirectConversation(userId1: string, userId2: st
 
     // Only an accepted connection unlocks the chat immediately (goes to Mensagens).
     // Following only → recipient's accepted=false → goes to Solicitações tab.
+    // Company page owners always receive messages directly (no request flow).
     const connCheck = await supabase
       .from("connections")
       .select("id", { count: "exact", head: true })
@@ -2271,8 +2272,17 @@ export async function getOrCreateDirectConversation(userId1: string, userId2: st
         `and(requester_id.eq.${userId1},receiver_id.eq.${userId2}),and(requester_id.eq.${userId2},receiver_id.eq.${userId1})`,
       )
       .eq("status", "accepted");
-    // forceAccepted=true for company profiles (no messaging restrictions)
-    const recipientAccepted = forceAccepted || (connCheck.count ?? 0) > 0;
+
+    let eitherIsCompanyOwner = false;
+    if (!forceAccepted) {
+      const { count: cpCount } = await supabase
+        .from("company_pages")
+        .select("id", { count: "exact", head: true })
+        .or(`owner_id.eq.${userId2},owner_id.eq.${userId1}`);
+      eitherIsCompanyOwner = (cpCount ?? 0) > 0;
+    }
+
+    const recipientAccepted = forceAccepted || (connCheck.count ?? 0) > 0 || eitherIsCompanyOwner;
 
     // Generate UUID client-side to avoid the RLS SELECT-after-INSERT issue
     // (convos_select requires being a participant, but participants don't exist yet at INSERT time)
