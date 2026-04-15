@@ -40,11 +40,11 @@ export function getEntitlementStatus(profile: EntitlementProfile | null): Entitl
   const stripeStatus  = profile.stripe_subscription_status;
   const courtesyUntil = profile.courtesy_until;
 
+  if (courtesyUntil && new Date(courtesyUntil) > new Date()) return "courtesy";
+
   if (stripeStatus === "active")   return "active";
   if (stripeStatus === "trialing") return "trialing";
   if (stripeStatus === "past_due") return "past_due";
-
-  if (courtesyUntil && new Date(courtesyUntil) > new Date()) return "courtesy";
 
   return "free";
 }

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
+import { usePermissions } from "@/context/PermissionsContext";
 import { AppShell } from "@/components/layout/AppShell";
 import {
   Group,
@@ -240,7 +241,10 @@ function CreateGroupModal({ userId, onClose, onCreated }: CreateGroupModalProps)
 
 export default function GruposPage() {
   const { profile, user, activeCompany } = useAuth();
+  const { hasFeature } = usePermissions();
   const userId = profile?.id ?? user?.id ?? "";
+  const canCreateGroups = (profile?.is_admin ?? false) || hasFeature("Criar Grupos");
+  const [lockedCreate, setLockedCreate] = useState(false);
 
   const [mine, setMine]       = useState<Group[]>([]);
   const [explore, setExplore] = useState<Group[]>([]);
@@ -316,7 +320,7 @@ export default function GruposPage() {
               {activeCompany ? `Grupos em que ${activeCompany.name} participa` : "Comunidades de profissionais do vinho"}
             </p>
           </div>
-          <button onClick={() => setShowCreate(true)} style={{
+          <button onClick={() => { if (!canCreateGroups) { setLockedCreate(true); return; } setShowCreate(true); }} style={{
             backgroundColor: GOLD, color: WHITE, fontWeight: 800, fontSize: 13,
             border: "none", borderRadius: 10, padding: "10px 18px", cursor: "pointer",
           }}>
@@ -398,7 +402,7 @@ export default function GruposPage() {
                   {search || activeCategory !== "Todos" ? "Tente outra busca ou categoria" : "Seja o primeiro a criar um grupo!"}
                 </p>
                 {!search && activeCategory === "Todos" && (
-                  <button onClick={() => setShowCreate(true)} style={{
+                  <button onClick={() => { if (!canCreateGroups) { setLockedCreate(true); return; } setShowCreate(true); }} style={{
                     marginTop: 16, padding: "10px 24px", backgroundColor: GOLD, color: WHITE,
                     border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer",
                   }}>
@@ -417,6 +421,23 @@ export default function GruposPage() {
           onClose={() => setShowCreate(false)}
           onCreated={handleCreated}
         />
+      )}
+      {lockedCreate && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setLockedCreate(false)}>
+          <div style={{ backgroundColor: "#fff", borderRadius: 18, padding: 40, maxWidth: 380, width: "90%", textAlign: "center" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 44, marginBottom: 16 }}>🔒</div>
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: "#0d1b2a", marginBottom: 8 }}>Criar Grupos</h3>
+            <p style={{ fontSize: 14, color: "#7a8494", marginBottom: 24, lineHeight: 1.6 }}>
+              A criação de grupos está disponível em planos que incluem a funcionalidade "Criar Grupos".
+            </p>
+            <a href="/assinar" style={{ display: "inline-block", padding: "11px 28px", backgroundColor: "#c9a84c", color: "#0d1b2a", borderRadius: 10, fontWeight: 800, fontSize: 14, textDecoration: "none" }}>
+              Ver Planos
+            </a>
+            <button onClick={() => setLockedCreate(false)} style={{ display: "block", margin: "12px auto 0", background: "none", border: "none", fontSize: 13, color: "#7a8494", cursor: "pointer" }}>Fechar</button>
+          </div>
+        </div>
       )}
     </AppShell>
   );

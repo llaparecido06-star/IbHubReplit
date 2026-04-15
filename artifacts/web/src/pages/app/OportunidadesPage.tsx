@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
+import { usePermissions } from "@/context/PermissionsContext";
 import { AppShell } from "@/components/layout/AppShell";
 import {
   AppOpportunity,
@@ -60,7 +61,10 @@ const chip = (label: string, active: boolean, onClick: () => void) => (
 );
 
 export default function OportunidadesPage() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const { hasFeature } = usePermissions();
+  const canPublishVagas = (profile?.is_admin ?? false) || hasFeature("Publicar Vagas");
+  const [lockedPublish, setLockedPublish] = useState(false);
   const [location, setLocation] = useLocation();
 
   const initialTab = (): OporTab => {
@@ -237,7 +241,11 @@ export default function OportunidadesPage() {
             <p style={{ fontSize: 14, color: "#8a93a2", margin: "4px 0 0" }}>Marketplace, vagas e eventos do setor vitivinícola</p>
           </div>
           <button
-            onClick={() => { setShowCreate(true); setCreateTab(tab === "vagas" ? "vaga" : "marketplace"); }}
+            onClick={() => {
+              if (!canPublishVagas) { setLockedPublish(true); return; }
+              setShowCreate(true);
+              setCreateTab(tab === "vagas" ? "vaga" : "marketplace");
+            }}
             style={{ backgroundColor: GOLD, color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 14, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
           >
             + Publicar
@@ -639,6 +647,23 @@ export default function OportunidadesPage() {
                 {creating ? "Publicando..." : "✓ Publicar oportunidade"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {lockedPublish && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setLockedPublish(false)}>
+          <div style={{ backgroundColor: "#fff", borderRadius: 18, padding: 40, maxWidth: 380, width: "90%", textAlign: "center" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 44, marginBottom: 16 }}>🔒</div>
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: "#0d1b2a", marginBottom: 8 }}>Publicar Vagas e Oportunidades</h3>
+            <p style={{ fontSize: 14, color: "#7a8494", marginBottom: 24, lineHeight: 1.6 }}>
+              A publicação de vagas e oportunidades está disponível em planos que incluem a funcionalidade "Publicar Vagas".
+            </p>
+            <a href="/assinar" style={{ display: "inline-block", padding: "11px 28px", backgroundColor: "#c9a84c", color: "#0d1b2a", borderRadius: 10, fontWeight: 800, fontSize: 14, textDecoration: "none" }}>
+              Ver Planos
+            </a>
+            <button onClick={() => setLockedPublish(false)} style={{ display: "block", margin: "12px auto 0", background: "none", border: "none", fontSize: 13, color: "#7a8494", cursor: "pointer" }}>Fechar</button>
           </div>
         </div>
       )}

@@ -5,10 +5,10 @@ import { fetchPlanFeatures } from "@/services/api";
 
 function resolveEntitlement(profile: { stripe_subscription_status?: string | null; courtesy_until?: string | null; plan?: string | null } | null) {
   if (!profile) return "free";
+  if (profile.courtesy_until && new Date(profile.courtesy_until) > new Date()) return "courtesy";
   if (profile.stripe_subscription_status === "active")   return "active";
   if (profile.stripe_subscription_status === "trialing") return "trialing";
   if (profile.stripe_subscription_status === "past_due") return "past_due";
-  if (profile.courtesy_until && new Date(profile.courtesy_until) > new Date()) return "courtesy";
   return "free";
 }
 
