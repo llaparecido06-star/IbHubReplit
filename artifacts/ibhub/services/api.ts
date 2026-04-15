@@ -1789,28 +1789,17 @@ export async function savePushToken(userId: string, token: string): Promise<void
  */
 export async function dispatchPushToConversation(
   conversationId: string,
-  senderId: string,
+  _senderId: string,
   senderName: string,
   messageBody: string,
 ): Promise<void> {
   if (!API_URL) return;
   try {
-    // Get all participants except sender (user can only read own participants via RLS,
-    // but conversation_participants SELECT allows members to see co-members)
-    const { data: participants } = await supabase
-      .from("conversation_participants")
-      .select("user_id")
-      .eq("conversation_id", conversationId)
-      .neq("user_id", senderId);
-
-    if (!participants || participants.length === 0) return;
-    const recipientUserIds = participants.map((p: any) => p.user_id);
-
-    // Use JWT-authenticated server-side lookup: server uses service role to fetch
-    // push tokens so the client never needs cross-user push_tokens SELECT access.
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) return;
 
+    // Server verifies caller is a participant, resolves recipients, and looks up
+    // push tokens via service role. Client supplies conversationId only.
     await fetch(`${API_URL}/push/send`, {
       method: "POST",
       headers: {
@@ -1818,7 +1807,7 @@ export async function dispatchPushToConversation(
         Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
-        recipientUserIds,
+        conversationId,
         title: senderName,
         body: messageBody,
         data: { conversationId },

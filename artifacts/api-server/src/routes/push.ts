@@ -46,46 +46,100 @@ async function sendExpoPushNotifications(messages: ExpoPushMessage[]): Promise<v
   }
 }
 
+// ─── In-memory rate limiter ───────────────────────────────────────────────────
+// Max 20 push dispatches per user per 60 seconds.
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(userId);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(userId, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  if (entry.count >= 20) return false;
+  entry.count += 1;
+  return true;
+}
+
+// Periodically purge expired entries to avoid memory leaks
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of rateLimitMap) {
+    if (now > val.resetAt) rateLimitMap.delete(key);
+  }
+}, 120_000);
+
+// ─── POST /push/send ─────────────────────────────────────────────────────────
 /**
- * POST /api/push/send
- * Requires authentication (Bearer token).
+ * Dispatches Expo push notifications to conversation participants.
+ * Requires authentication. The caller MUST be a participant in the conversation.
  *
- * Body (option A — direct tokens): { tokens: string[], title, body, data?, activeConversationId? }
- * Body (option B — server-side lookup): { recipientUserIds: string[], title, body, data?, activeConversationId? }
+ * Body: { conversationId: string, title: string, body: string, data?: object }
  *
- * Option B is preferred: the server looks up push tokens via service role so
- * clients never need RLS access to other users' push_tokens rows.
+ * The server resolves recipient user IDs from `conversation_participants`
+ * and looks up their push tokens via service role. Clients never directly
+ * supply token lists or recipient IDs — authorization is derived from
+ * the conversation relationship.
  */
 router.post("/push/send", async (req: Request, res: Response): Promise<void> => {
   const callerId = await resolveUserId(req, res);
   if (!callerId) return;
 
-  const { tokens: rawTokens, recipientUserIds, title, body, data, activeConversationId } = req.body as {
-    tokens?: string[];
-    recipientUserIds?: string[];
+  // Rate limit: 20 dispatches per user per minute
+  if (!checkRateLimit(callerId)) {
+    res.status(429).json({ error: "Muitas solicitações — tente novamente em breve." });
+    return;
+  }
+
+  const { conversationId, title, body, data } = req.body as {
+    conversationId?: string;
     title?: string;
     body?: string;
     data?: Record<string, unknown>;
-    activeConversationId?: string;
   };
 
-  let validTokens: string[] = [];
-
-  if (recipientUserIds && Array.isArray(recipientUserIds) && recipientUserIds.length > 0) {
-    // Server-side token lookup via service role — clients never need push_tokens SELECT
-    const { data: tokenRows } = await supabaseAdmin
-      .from("push_tokens")
-      .select("token")
-      .in("user_id", recipientUserIds);
-    validTokens = (tokenRows ?? [])
-      .map((r: { token: string }) => r.token)
-      .filter((t: string) => typeof t === "string" && t.startsWith("ExponentPushToken["));
-  } else if (rawTokens && Array.isArray(rawTokens)) {
-    // Legacy path: client supplies tokens directly (still validated)
-    validTokens = rawTokens.filter(
-      (t) => typeof t === "string" && t.startsWith("ExponentPushToken["),
-    );
+  if (!conversationId || typeof conversationId !== "string") {
+    res.status(400).json({ error: "conversationId is required" });
+    return;
   }
+
+  // Verify caller is a participant in this conversation (authorization check)
+  const { data: callerParticipant, error: participantErr } = await supabaseAdmin
+    .from("conversation_participants")
+    .select("user_id")
+    .eq("conversation_id", conversationId)
+    .eq("user_id", callerId)
+    .maybeSingle();
+
+  if (participantErr || !callerParticipant) {
+    res.status(403).json({ error: "Você não é participante desta conversa." });
+    return;
+  }
+
+  // Resolve all other participants server-side (service role — no RLS bypass risk)
+  const { data: participants } = await supabaseAdmin
+    .from("conversation_participants")
+    .select("user_id")
+    .eq("conversation_id", conversationId)
+    .neq("user_id", callerId);
+
+  if (!participants || participants.length === 0) {
+    res.status(200).json({ sent: 0, skipped: "no other participants" });
+    return;
+  }
+
+  const recipientIds = participants.map((p: { user_id: string }) => p.user_id);
+
+  // Look up push tokens for recipients
+  const { data: tokenRows } = await supabaseAdmin
+    .from("push_tokens")
+    .select("token")
+    .in("user_id", recipientIds);
+
+  const validTokens = (tokenRows ?? [])
+    .map((r: { token: string }) => r.token)
+    .filter((t: string) => typeof t === "string" && t.startsWith("ExponentPushToken["));
 
   if (validTokens.length === 0) {
     res.status(200).json({ sent: 0, skipped: "no valid expo push tokens" });
@@ -96,12 +150,12 @@ router.post("/push/send", async (req: Request, res: Response): Promise<void> => 
     to: token,
     title: title ?? "Nova mensagem",
     body: body ?? "Você tem uma nova mensagem",
-    data: { ...data, activeConversationId },
+    data: { ...data, conversationId },
     sound: "default",
   }));
 
   await sendExpoPushNotifications(messages);
-  logger.info({ count: messages.length, caller: callerId }, "Push notifications dispatched");
+  logger.info({ count: messages.length, conversationId, caller: callerId }, "Push notifications dispatched");
   res.json({ sent: messages.length });
 });
 
