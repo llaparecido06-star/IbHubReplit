@@ -1,4 +1,5 @@
 import { useRouter, useFocusEffect } from "expo-router";
+import * as Linking from "expo-linking";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -900,7 +901,7 @@ export default function ProfileScreen() {
           <Text style={[styles.qrSub, { color: colors.mutedForeground }]}>Mostre para conectar rapidamente</Text>
           <View style={styles.qrBox}>
             <QRCode
-              value={`https://ibhub.com.br/profile/${user?.id ?? "me"}`}
+              value={Linking.createURL(`profile/${user?.id ?? "me"}`)}
               size={200}
               color={colors.navy}
               backgroundColor="#ffffff"
@@ -912,7 +913,8 @@ export default function ProfileScreen() {
             style={[styles.qrShareBtn, { backgroundColor: colors.gold }]}
             onPress={async () => {
               setShowQrModal(false);
-              await Share.share({ message: `Conecte-se comigo na ibhub!\nhttps://ibhub.com.br/profile/${user?.id ?? "me"}` });
+              const profileLink = Linking.createURL(`profile/${user?.id ?? "me"}`);
+              await Share.share({ message: `Conecte-se comigo na ibhub!\n${profileLink}` });
             }}
           >
             <Feather name="share-2" size={16} color="#fff" />
