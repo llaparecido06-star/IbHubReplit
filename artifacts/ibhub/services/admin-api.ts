@@ -17,6 +17,7 @@ export interface AdminUser {
   username: string | null;
   email: string | null;
   plan: string;
+  courtesy_until: string | null;
   areas_of_expertise: string[] | null;
   created_at: string;
   is_banned: boolean;

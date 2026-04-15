@@ -41,6 +41,7 @@ export interface AdminUser {
   username: string | null;
   email: string | null;
   plan: string;
+  courtesy_until: string | null;
   is_admin: boolean;
   is_banned: boolean;
   is_shadowbanned: boolean;

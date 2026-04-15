@@ -90,7 +90,7 @@ export default function AdminCRMScreen() {
     } else {
       setSelectedUser(user);
       setPlanEdit(user.plan);
-      setIsCourtesy(false);
+      setIsCourtesy(!!user.courtesy_until && new Date(user.courtesy_until) > new Date());
     }
   };
 

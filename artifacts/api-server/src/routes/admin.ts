@@ -66,7 +66,7 @@ router.get("/admin/users", async (req: Request, res: Response) => {
 
   let profileQuery = supabaseAdmin
     .from("profiles")
-    .select("id, full_name, username, plan, areas_of_expertise, created_at, is_banned, is_shadowbanned, is_admin")
+    .select("id, full_name, username, plan, courtesy_until, areas_of_expertise, created_at, is_banned, is_shadowbanned, is_admin")
     .in("id", ids)
     .order("created_at", { ascending: false });
 

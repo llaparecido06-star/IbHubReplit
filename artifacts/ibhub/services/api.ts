@@ -422,27 +422,22 @@ export async function incrementViewCount(postId: string): Promise<void> {
 
 export async function fetchNewPostsSince(since: string, currentUserId: string, activeCompanyId?: string | null): Promise<Post[]> {
   try {
-    // Server-side shadowban filter
-    const shadowbannedIds = await fetchShadowbannedIds(currentUserId);
+    // Use the authoritative API server endpoint (same as fetchFeedPosts) with a `since` filter.
+    const session = (await supabase.auth.getSession()).data.session;
+    if (!session?.access_token) return [];
 
-    let newPostsQuery = supabase
-      .from("posts")
-      .select(POST_SELECT_BASE)
-      .gt("created_at", since)
-      .order("created_at", { ascending: false })
-      .limit(20);
+    const params = new URLSearchParams({ limit: "20", since });
+    const res = await fetch(`${API_URL}/feed/posts?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (!res.ok) return [];
 
-    if (shadowbannedIds.length > 0) {
-      newPostsQuery = newPostsQuery.not("user_id", "in", `(${shadowbannedIds.map(id => `"${id}"`).join(",")})`);
-    }
+    const { posts: rawPosts } = await res.json() as { posts: any[] };
+    if (!rawPosts?.length) return [];
 
-    const { data, error } = await newPostsQuery;
-
-    if (error || !data || data.length === 0) return [];
-
-    const postIds = data.map((p: any) => p.id);
-    const userIds = [...new Set(data.map((p: any) => p.user_id).filter(Boolean))];
-    const companyIds = [...new Set(data.map((p: any) => p.company_page_id).filter(Boolean))];
+    const postIds = rawPosts.map((p: any) => p.id as string);
+    const userIds = [...new Set(rawPosts.map((p: any) => p.user_id as string).filter(Boolean))];
+    const companyIds = [...new Set(rawPosts.map((p: any) => p.company_page_id as string).filter(Boolean))];
 
     const likedQuery = activeCompanyId
       ? supabase.from("likes").select("post_id, reaction_type").eq("company_page_id", activeCompanyId).in("post_id", postIds)
@@ -458,7 +453,7 @@ export async function fetchNewPostsSince(since: string, currentUserId: string, a
     const likedMap = new Map((likedRes.data ?? []).map((l: any) => [l.post_id, l.reaction_type ?? null]));
     const bookmarkedIds = new Set((bookmarkRes.data ?? []).map((b: any) => b.post_id));
 
-    return (await attachAuthorsToPosts(data, profileMap, companyMap)).map((post: any) => ({
+    return (await attachAuthorsToPosts(rawPosts, profileMap, companyMap)).map((post: any) => ({
       ...post,
       is_liked: likedMap.has(post.id),
       reaction_type: likedMap.get(post.id) ?? null,

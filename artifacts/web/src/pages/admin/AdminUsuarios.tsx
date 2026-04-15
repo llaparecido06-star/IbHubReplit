@@ -154,7 +154,7 @@ export default function AdminUsuarios() {
                       <tr
                         key={u.id}
                         style={{ borderTop: "1px solid #f2f3f5", backgroundColor: selectedUser?.id === u.id ? `${GOLD}08` : idx % 2 === 0 ? "#fff" : "#fafafa", cursor: "pointer" }}
-                        onClick={() => { setSelectedUser(u); setPlanEdit(u.plan); setIsCourtesy(false); }}
+                        onClick={() => { setSelectedUser(u); setPlanEdit(u.plan); setIsCourtesy(!!u.courtesy_until && new Date(u.courtesy_until) > new Date()); }}
                       >
                         <td style={td}>
                           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

@@ -128,11 +128,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => { subscription.unsubscribe(); };
   }, [fetchProfile]);
 
-  // Realtime: detect when admin bans the current user and force sign-out
+  // Realtime: detect when admin updates this user's profile (ban, plan, courtesy, etc.)
   useEffect(() => {
     if (!user?.id) return;
     const channel = supabase
-      .channel(`ban-watcher-${user.id}`)
+      .channel(`profile-watcher-${user.id}`)
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${user.id}` },
@@ -141,12 +141,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (updated.is_banned === true) {
             setSuspensionMsg("Sua conta foi suspensa. Entre em contato com o suporte.");
             await supabase.auth.signOut();
+          } else {
+            // Refresh profile for plan/courtesy/shadowban changes so entitlements apply immediately.
+            await fetchProfile(user.id);
           }
         },
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user?.id]);
+  }, [user?.id, fetchProfile]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
