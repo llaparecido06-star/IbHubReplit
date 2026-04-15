@@ -84,6 +84,8 @@ export default function FeedScreen() {
   const feedOffsetRef = useRef(0);
   const isLoadingMoreRef = useRef(false);
   const isPostingRef = useRef(false);
+  const likingPostIdsRef = useRef<Set<string>>(new Set());
+  const [isPublishing, setIsPublishing] = useState(false);
   const FEED_PAGE_SIZE = 15;
 
   // New posts banner
@@ -474,14 +476,15 @@ export default function FeedScreen() {
 
   const handlePublishPost = async () => {
     if (isPostingRef.current) return;
-    setShowCreatePost(false);
     const content = postMode === "poll" ? pollQuestion : postContent;
     if ((!content.trim() && postImageUris.length === 0 && !postVideoUri) || !user?.id) {
+      setShowCreatePost(false);
       setPostContent(""); setPollQuestion(""); setPollOptions(["",""]); setPostMode("text");
       setPostImageUris([]); setPostVideoUri(null); setPostLocation(""); setShowLocationInput(false);
       return;
     }
     isPostingRef.current = true;
+    setIsPublishing(true);
 
     const pollData = (postMode === "poll" && pollOptions.filter(o => o.trim()).length >= 2)
       ? { options: pollOptions.filter(o => o.trim()).map(t => ({ text: t, votes: 0 })), total_votes: 0, closed: false }
@@ -513,39 +516,46 @@ export default function FeedScreen() {
         : null,
     };
     setPosts(prev => [tempPost, ...prev]);
+    setShowCreatePost(false);
 
-    // Upload images or video to Supabase Storage before saving
-    let uploadedUrls: string[] = [];
-    let uploadedVideoUrl: string | null = null;
-    if (postVideoUri) {
-      uploadedVideoUrl = await API.uploadPostVideo(postVideoUri, user.id);
-    } else {
-      for (const uri of postImageUris) {
-        const url = await API.uploadPostImage(uri, user.id);
-        if (url) uploadedUrls.push(url);
+    try {
+      // Upload images or video to Supabase Storage before saving
+      let uploadedUrls: string[] = [];
+      let uploadedVideoUrl: string | null = null;
+      if (postVideoUri) {
+        uploadedVideoUrl = await API.uploadPostVideo(postVideoUri, user.id);
+      } else {
+        for (const uri of postImageUris) {
+          const url = await API.uploadPostImage(uri, user.id);
+          if (url) uploadedUrls.push(url);
+        }
       }
-    }
 
-    const saved = await API.createPost({
-      user_id: user.id,
-      content: content.trim(),
-      poll: pollData,
-      image_url: uploadedUrls[0] ?? null,
-      image_urls: uploadedUrls.length > 0 ? uploadedUrls : null,
-      video_url: uploadedVideoUrl ?? null,
-      location: postLocation.trim() || null,
-      company_page_id: activeCompany?.id ?? null,
-    });
-    if (saved) {
-      setPosts(prev => prev.map(p => p.id === tempPost.id ? saved : p));
-    } else {
+      const saved = await API.createPost({
+        user_id: user.id,
+        content: content.trim(),
+        poll: pollData,
+        image_url: uploadedUrls[0] ?? null,
+        image_urls: uploadedUrls.length > 0 ? uploadedUrls : null,
+        video_url: uploadedVideoUrl ?? null,
+        location: postLocation.trim() || null,
+        company_page_id: activeCompany?.id ?? null,
+      });
+      if (saved) {
+        setPosts(prev => prev.map(p => p.id === tempPost.id ? saved : p));
+      } else {
+        setPosts(prev => prev.filter(p => p.id !== tempPost.id));
+        Alert.alert("Erro ao publicar", "Não foi possível criar o post. Verifique sua conexão e tente novamente.");
+      }
+    } catch {
       setPosts(prev => prev.filter(p => p.id !== tempPost.id));
-      Alert.alert("Erro ao publicar", "Não foi possível criar o post. Verifique sua conexão e tente novamente.");
+      Alert.alert("Erro ao publicar", "Verifique sua conexão e tente novamente.");
+    } finally {
+      setPostContent(""); setPollQuestion(""); setPollOptions(["",""]); setPostMode("text");
+      setPostImageUris([]); setPostVideoUri(null); setPostLocation(""); setShowLocationInput(false);
+      isPostingRef.current = false;
+      setIsPublishing(false);
     }
-
-    setPostContent(""); setPollQuestion(""); setPollOptions(["",""]); setPostMode("text");
-    setPostImageUris([]); setPostVideoUri(null); setPostLocation(""); setShowLocationInput(false);
-    isPostingRef.current = false;
   };
 
   const handlePickWineImage = async () => {
@@ -800,9 +810,11 @@ export default function FeedScreen() {
             currentUserId={user?.id}
             isVisible={visiblePostIds.has(item.id)}
             onLike={async (id) => {
+              if (likingPostIdsRef.current.has(id)) return;
               const post = posts.find(p => p.id === id);
               if (!post || !user?.id) return;
               const wasLiked = post.is_liked ?? false;
+              likingPostIdsRef.current.add(id);
               setPosts(prev => prev.map(p => p.id === id
                 ? { ...p, is_liked: !wasLiked, likes_count: wasLiked ? p.likes_count - 1 : p.likes_count + 1 }
                 : p));
@@ -812,8 +824,10 @@ export default function FeedScreen() {
                   ? { ...p, is_liked: wasLiked, likes_count: wasLiked ? p.likes_count + 1 : p.likes_count - 1 }
                   : p));
               }
+              likingPostIdsRef.current.delete(id);
             }}
             onReact={async (id, reaction) => {
+              if (likingPostIdsRef.current.has(id)) return;
               const post = posts.find(p => p.id === id);
               if (!post || !user?.id) return;
               const prevReaction = post.reaction_type ?? null;
@@ -821,6 +835,7 @@ export default function FeedScreen() {
               const prevCount = post.likes_count;
               const isSameReaction = prevReaction === reaction;
               const wasLiked = !!(prevIsLiked || prevReaction);
+              likingPostIdsRef.current.add(id);
               setPosts(prev => prev.map(p => {
                 if (p.id !== id) return p;
                 return {
@@ -838,6 +853,7 @@ export default function FeedScreen() {
                   p.id !== id ? p : { ...p, is_liked: prevIsLiked, reaction_type: prevReaction, likes_count: prevCount }
                 ));
               }
+              likingPostIdsRef.current.delete(id);
             }}
             onBookmark={(id) => {
               const post = posts.find(p => p.id === id);
@@ -960,10 +976,12 @@ export default function FeedScreen() {
                 {postMode === "text" ? "Criar publicação" : "Criar enquete"}
               </Text>
               <TouchableOpacity
-                style={[styles.publishBtn, { backgroundColor: postMode === "text" ? (postContent.trim() ? colors.gold : colors.gold + "55") : (pollQuestion.trim() ? colors.gold : colors.gold + "55") }]}
+                style={[styles.publishBtn, { backgroundColor: isPublishing ? colors.gold + "88" : (postMode === "text" ? (postContent.trim() ? colors.gold : colors.gold + "55") : (pollQuestion.trim() ? colors.gold : colors.gold + "55")), flexDirection: "row", alignItems: "center", gap: 6 }]}
                 onPress={handlePublishPost}
+                disabled={isPublishing}
               >
-                <Text style={styles.publishBtnText}>Publicar</Text>
+                {isPublishing && <ActivityIndicator size="small" color="#fff" />}
+                <Text style={styles.publishBtnText}>{isPublishing ? "Publicando..." : "Publicar"}</Text>
               </TouchableOpacity>
             </View>
 
