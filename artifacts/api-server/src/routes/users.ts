@@ -41,43 +41,55 @@ router.delete("/users/me", async (req: Request, res: Response) => {
   const storageWarnings: string[] = [];
 
   // ── 1. Delete Storage objects ────────────────────────────────────────────
-  // All user-owned media is stored under a {userId}/ prefix in each bucket.
-  // Paginate with offset to handle users with >1000 files per bucket.
-  const STORAGE_BUCKETS = ["avatars", "post-images", "post-videos", "stories"] as const;
+  // User-owned objects are stored under various prefixes across multiple buckets.
+  // Always re-list from offset=0 after each batch delete to avoid index-shift skips.
+  // bucket → list of folder prefixes where user files may be stored
+  const STORAGE_TARGETS: Array<{ bucket: string; prefix: string }> = [
+    // avatars:           ${userId}/avatar.jpg
+    { bucket: "avatars",          prefix: userId },
+    // post-images:       ${userId}/${timestamp}.jpg
+    { bucket: "post-images",      prefix: userId },
+    // post-videos:       ${userId}/${timestamp}.*
+    { bucket: "post-videos",      prefix: userId },
+    // stories:           ${userId}/${timestamp}.*
+    { bucket: "stories",          prefix: userId },
+    // chat-attachments:  chat/${userId}/...  AND  portfolio/${userId}/...
+    { bucket: "chat-attachments", prefix: `chat/${userId}` },
+    { bucket: "chat-attachments", prefix: `portfolio/${userId}` },
+    // cvs:               cvs/${userId}/${timestamp}.*
+    { bucket: "cvs",              prefix: `cvs/${userId}` },
+  ];
 
-  async function deleteStorageBucket(bucket: string): Promise<void> {
-    // Always list from offset 0 — after each removal the index shifts,
-    // so re-listing from the start ensures no file is skipped.
+  async function deleteStoragePrefix(bucket: string, prefix: string): Promise<void> {
     const PAGE = 1000;
     for (;;) {
       const { data: files, error: listErr } = await supabaseAdmin.storage
         .from(bucket)
-        .list(userId, { limit: PAGE, offset: 0 });
+        .list(prefix, { limit: PAGE, offset: 0 });
       if (listErr) {
-        storageWarnings.push(`list ${bucket}: ${listErr.message}`);
+        storageWarnings.push(`list ${bucket}/${prefix}: ${listErr.message}`);
         break;
       }
       if (!files || files.length === 0) break;
-      const paths = files.map((f: { name: string }) => `${userId}/${f.name}`);
+      const paths = files.map((f: { name: string }) => `${prefix}/${f.name}`);
       const { error: removeErr } = await supabaseAdmin.storage
         .from(bucket)
         .remove(paths);
       if (removeErr) {
-        storageWarnings.push(`remove ${bucket}: ${removeErr.message}`);
+        storageWarnings.push(`remove ${bucket}/${prefix}: ${removeErr.message}`);
         break;
       }
-      // If fewer than PAGE files were returned, we've cleared the bucket folder.
       if (files.length < PAGE) break;
     }
   }
 
   await Promise.all(
-    STORAGE_BUCKETS.map(async (bucket) => {
+    STORAGE_TARGETS.map(async ({ bucket, prefix }) => {
       try {
-        await deleteStorageBucket(bucket);
+        await deleteStoragePrefix(bucket, prefix);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
-        storageWarnings.push(`${bucket}: ${msg}`);
+        storageWarnings.push(`${bucket}/${prefix}: ${msg}`);
       }
     })
   );
