@@ -324,7 +324,7 @@ export default function OportunidadesScreen() {
             <TouchableOpacity
               key={item.id}
               style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border, padding: 0, overflow: "hidden" }]}
-              onPress={() => router.push(`/opportunity/${item.id}` as any)}
+              onPress={() => router.push(`/market-item/${item.id}` as any)}
               activeOpacity={0.75}
             >
               {/* Cover image */}
