@@ -161,7 +161,11 @@ export default function PublicProfileScreen() {
                   text: "Bloquear", style: "destructive",
                   onPress: async () => {
                     if (!currentUser?.id || !resolvedId) return;
-                    await API.blockUser(currentUser.id, resolvedId);
+                    const ok = await API.blockUser(currentUser.id, resolvedId);
+                    if (!ok) {
+                      Alert.alert("Erro", "Não foi possível bloquear este usuário. Tente novamente.");
+                      return;
+                    }
                     Alert.alert("Usuário bloqueado", `${userProfile.full_name} foi bloqueado(a). Você pode gerenciar bloqueios em Configurações.`);
                     router.back();
                   },

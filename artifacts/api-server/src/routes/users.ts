@@ -60,6 +60,12 @@ router.delete("/users/me", async (req: Request, res: Response) => {
     { bucket: "cvs",              prefix: `cvs/${userId}` },
   ];
 
+  // Errors caused by a non-existent bucket or empty folder are not failures —
+  // it simply means the user never uploaded to that bucket.
+  const BUCKET_NOT_FOUND_PATTERNS = ["not found", "does not exist", "The resource was not found"];
+  const isBucketMissing = (msg: string) =>
+    BUCKET_NOT_FOUND_PATTERNS.some((p) => msg.toLowerCase().includes(p.toLowerCase()));
+
   async function deleteStoragePrefix(bucket: string, prefix: string): Promise<void> {
     const PAGE = 1000;
     for (;;) {
@@ -67,6 +73,8 @@ router.delete("/users/me", async (req: Request, res: Response) => {
         .from(bucket)
         .list(prefix, { limit: PAGE, offset: 0 });
       if (listErr) {
+        // Bucket or folder not found → nothing to delete, not a real failure.
+        if (isBucketMissing(listErr.message)) break;
         storageWarnings.push(`list ${bucket}/${prefix}: ${listErr.message}`);
         break;
       }
@@ -139,18 +147,28 @@ router.delete("/users/me", async (req: Request, res: Response) => {
     storageWarnings.push(`profile anonymize: ${profileErr.message}`);
   }
 
-  // ── 4. Delete auth user (CASCADE handles remaining FK rows) ──────────────
+  // ── 4. Fail-closed: abort if any cleanup step failed ─────────────────────
+  // Auth user is deleted ONLY when storage + DB cleanup are fully clean.
+  // This ensures no orphaned user data is left behind on a partial failure
+  // and allows the user to retry account deletion.
+  const allWarnings = [...storageWarnings, ...dbWarnings];
+  if (allWarnings.length > 0) {
+    console.error("[deleteUser] cleanup failures, aborting auth deletion:", allWarnings);
+    res.status(500).json({
+      error: "Não foi possível excluir todos os seus dados. Tente novamente.",
+      warnings: allWarnings,
+    });
+    return;
+  }
+
+  // ── 5. Delete auth user (CASCADE handles remaining FK rows) ──────────────
   const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
   if (deleteError) {
     res.status(500).json({ error: deleteError.message ?? "Failed to delete user" });
     return;
   }
 
-  const allWarnings = [...storageWarnings, ...dbWarnings];
-  res.status(200).json({
-    success: true,
-    ...(allWarnings.length > 0 ? { warnings: allWarnings } : {}),
-  });
+  res.status(200).json({ success: true });
 });
 
 /**
