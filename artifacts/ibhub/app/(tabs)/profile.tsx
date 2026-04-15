@@ -1,5 +1,5 @@
 import { useRouter, useFocusEffect } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -253,6 +253,15 @@ export default function ProfileScreen() {
   useFocusEffect(useCallback(() => { refreshCompanyPages(); }, [refreshCompanyPages]));
   // Also reload when switching identity (activeCompany change)
   useEffect(() => { refreshCompanyPages(); }, [refreshCompanyPages, activeCompany]);
+  // Go directly to the empresa profile page — skip the "Modo Empresa" intermediary screen
+  const didRedirectRef = useRef(false);
+  useFocusEffect(useCallback(() => {
+    if (activeCompany?.id && !didRedirectRef.current) {
+      didRedirectRef.current = true;
+      router.push(`/empresa/${activeCompany.id}` as any);
+    }
+    return () => { didRedirectRef.current = false; };
+  }, [activeCompany?.id]));
 
   // Realtime: remove accepted connections from suggestions
   useEffect(() => {
