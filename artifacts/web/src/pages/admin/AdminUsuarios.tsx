@@ -6,6 +6,7 @@ import {
   banUser,
   changeUserPlan,
   resetUserPassword,
+  shadowbanUser,
 } from "@/services/adminApi";
 
 const GOLD = "#c9a84c";
@@ -28,6 +29,7 @@ export default function AdminUsuarios() {
   const [planFilter, setPlanFilter] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [planEdit, setPlanEdit] = useState("");
+  const [isCourtesy, setIsCourtesy] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
   const loadUsers = async (q?: string) => {
@@ -58,12 +60,21 @@ export default function AdminUsuarios() {
   const handleChangePlan = async () => {
     if (!selectedUser || !planEdit) return;
     setActionLoading(true);
-    const ok = await changeUserPlan(selectedUser.id, planEdit);
+    const ok = await changeUserPlan(selectedUser.id, planEdit, isCourtesy);
     setActionLoading(false);
     if (ok) {
       setUsers((prev) => prev.map((u) => u.id === selectedUser.id ? { ...u, plan: planEdit } : u));
       setSelectedUser((prev) => prev ? { ...prev, plan: planEdit } : prev);
     }
+  };
+
+  const handleShadowban = async (user: AdminUser, shadowban: boolean) => {
+    if (!confirm(`${shadowban ? "Aplicar shadowban" : "Remover shadowban"} em "${user.full_name ?? user.username}"?`)) return;
+    setActionLoading(true);
+    await shadowbanUser(user.id, shadowban);
+    setActionLoading(false);
+    setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, is_shadowbanned: shadowban } : u));
+    if (selectedUser?.id === user.id) setSelectedUser((prev) => prev ? { ...prev, is_shadowbanned: shadowban } : prev);
   };
 
   const filtered = users.filter((u) => {
@@ -142,7 +153,7 @@ export default function AdminUsuarios() {
                       <tr
                         key={u.id}
                         style={{ borderTop: "1px solid #f2f3f5", backgroundColor: selectedUser?.id === u.id ? `${GOLD}08` : idx % 2 === 0 ? "#fff" : "#fafafa", cursor: "pointer" }}
-                        onClick={() => { setSelectedUser(u); setPlanEdit(u.plan); }}
+                        onClick={() => { setSelectedUser(u); setPlanEdit(u.plan); setIsCourtesy(false); }}
                       >
                         <td style={td}>
                           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -237,19 +248,31 @@ export default function AdminUsuarios() {
                   <select
                     value={planEdit}
                     onChange={(e) => setPlanEdit(e.target.value)}
-                    style={{ width: "100%", padding: "8px 12px", border: "1px solid #e8eaed", borderRadius: 8, fontSize: 13, marginBottom: 8 }}
+                    style={{ width: "100%", padding: "8px 12px", border: "1px solid #e8eaed", borderRadius: 8, fontSize: 13, marginBottom: 10 }}
                   >
                     {PLANS.map((p) => (
                       <option key={p} value={p}>{p}</option>
                     ))}
                   </select>
+                  <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, cursor: "pointer" }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: NAVY }}>Cortesia</div>
+                      <div style={{ fontSize: 11, color: "#8a93a2" }}>Acesso sem validação Stripe</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={isCourtesy}
+                      onChange={(e) => setIsCourtesy(e.target.checked)}
+                      style={{ width: 18, height: 18, cursor: "pointer" }}
+                    />
+                  </label>
                   <button
                     onClick={handleChangePlan}
-                    disabled={actionLoading || planEdit === selectedUser.plan}
+                    disabled={actionLoading}
                     style={{
                       width: "100%", padding: "9px 0",
-                      backgroundColor: planEdit === selectedUser.plan ? "#e8eaed" : GOLD,
-                      color: planEdit === selectedUser.plan ? "#aaa" : "#fff",
+                      backgroundColor: GOLD,
+                      color: "#fff",
                       border: "none", borderRadius: 8,
                       fontSize: 13, fontWeight: 700, cursor: "pointer",
                     }}
@@ -278,6 +301,19 @@ export default function AdminUsuarios() {
                     borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer",
                   }}
                 >🔑 Redefinir senha</button>
+
+                {/* Shadowban action */}
+                <button
+                  onClick={() => handleShadowban(selectedUser, !selectedUser.is_shadowbanned)}
+                  disabled={actionLoading}
+                  style={{
+                    padding: "10px 0",
+                    backgroundColor: selectedUser.is_shadowbanned ? "#f3f4f6" : "#f9fafb",
+                    color: selectedUser.is_shadowbanned ? "#6b7280" : "#374151",
+                    border: "1px solid #e8eaed",
+                    borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  }}
+                >{selectedUser.is_shadowbanned ? "👁️ Remover shadowban" : "🕵️ Aplicar shadowban"}</button>
 
                 {/* Ban action */}
                 <button

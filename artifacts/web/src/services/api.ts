@@ -50,7 +50,7 @@ async function _fetchProfilesMap(userIds: string[]): Promise<Map<string, any>> {
   if (!userIds.length) return new Map();
   const { data } = await supabase
     .from("profiles")
-    .select("id, full_name, username, avatar_url, position, company, plan")
+    .select("id, full_name, username, avatar_url, position, company, plan, is_shadowbanned")
     .in("id", userIds);
   return new Map((data ?? []).map((p: any) => [p.id, p]));
 }
@@ -91,7 +91,13 @@ export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
     const likedMap = new Map((likedRes.data ?? []).map((l: any) => [l.post_id, l.reaction_type ?? "curtir"]));
     const bookmarkedIds = new Set((bookmarkRes.data ?? []).map((b: any) => b.post_id));
 
-    return data.map((raw: any) => ({
+    const visibleData = data.filter((raw: any) => {
+      if (raw.user_id === currentUserId) return true;
+      const profile = profileMap.get(raw.user_id);
+      return !profile?.is_shadowbanned;
+    });
+
+    return visibleData.map((raw: any) => ({
       ..._normalisePost(raw, profileMap),
       is_liked: likedMap.has(raw.id),
       reaction_type: likedMap.get(raw.id) ?? null,

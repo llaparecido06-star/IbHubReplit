@@ -5,6 +5,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -14,10 +15,17 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@/components/ui/Icon";
 import AdminDrawer from "@/components/AdminDrawer";
 import { useColors } from "@/hooks/useColors";
-import { supabase } from "@/context/AuthContext";
-import { fetchAdminUsers, generateResetLink, type AdminUser } from "@/services/admin-api";
+import {
+  fetchAdminUsers,
+  generateResetLink,
+  banUser,
+  shadowbanUser,
+  changeUserPlan,
+  type AdminUser,
+} from "@/services/admin-api";
 
 const AVATAR_COLORS = ["#0d1b2a", "#1e3a5f", "#7c3aed", "#e11d48", "#059669", "#374151", "#1e3a5f"];
+const PLANS = ["basico", "profissional", "empresarial", "premium"] as const;
 
 function getInitial(name: string | null, email: string | null): string {
   const str = name ?? email ?? "?";
@@ -35,13 +43,17 @@ function formatDate(iso: string): string {
 export default function AdminCRMScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const [drawerOpen, setDrawerOpen]     = useState(false);
-  const [search, setSearch]             = useState("");
-  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
-  const [users, setUsers]               = useState<AdminUser[]>([]);
-  const [loading, setLoading]           = useState(true);
-  const [error, setError]               = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen]       = useState(false);
+  const [search, setSearch]               = useState("");
+  const [selectedUser, setSelectedUser]   = useState<AdminUser | null>(null);
+  const [users, setUsers]                 = useState<AdminUser[]>([]);
+  const [loading, setLoading]             = useState(true);
+  const [error, setError]                 = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+
+  const [planEdit, setPlanEdit]     = useState<string>("basico");
+  const [isCourtesy, setIsCourtesy] = useState(false);
+  const [savingPlan, setSavingPlan] = useState(false);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -72,12 +84,24 @@ export default function AdminCRMScreen() {
     );
   });
 
+  const selectUser = (user: AdminUser, isSel: boolean) => {
+    if (isSel) {
+      setSelectedUser(null);
+    } else {
+      setSelectedUser(user);
+      setPlanEdit(user.plan);
+      setIsCourtesy(false);
+    }
+  };
+
   const handleBan = (user: AdminUser) => {
     const isBanned = user.is_banned;
     const actionLabel = isBanned ? "Desbanir Usuário" : "Banir Usuário";
     Alert.alert(
       actionLabel,
-      `${actionLabel}: ${user.full_name ?? user.username}?`,
+      isBanned
+        ? `Desbanir ${user.full_name ?? user.username}? O usuário poderá acessar a plataforma novamente.`
+        : `Banir ${user.full_name ?? user.username}? A sessão ativa será encerrada imediatamente.`,
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -85,17 +109,15 @@ export default function AdminCRMScreen() {
           style: "destructive",
           onPress: async () => {
             setActionLoading(true);
-            const { error: err } = await supabase
-              .from("profiles")
-              .update({ is_banned: !isBanned })
-              .eq("id", user.id);
-            setActionLoading(false);
-            if (err) {
-              Alert.alert("Erro", err.message);
-            } else {
+            try {
+              await banUser(user.id, !isBanned);
               Alert.alert("Sucesso", `Usuário ${isBanned ? "desbanido" : "banido"} com sucesso.`);
               setSelectedUser(null);
               void fetchUsers();
+            } catch (e: unknown) {
+              Alert.alert("Erro", e instanceof Error ? e.message : "Erro desconhecido");
+            } finally {
+              setActionLoading(false);
             }
           },
         },
@@ -115,17 +137,15 @@ export default function AdminCRMScreen() {
           text: "Confirmar",
           onPress: async () => {
             setActionLoading(true);
-            const { error: err } = await supabase
-              .from("profiles")
-              .update({ is_shadowbanned: !isShadowbanned })
-              .eq("id", user.id);
-            setActionLoading(false);
-            if (err) {
-              Alert.alert("Erro", err.message);
-            } else {
+            try {
+              await shadowbanUser(user.id, !isShadowbanned);
               Alert.alert("Sucesso", `Shadowban ${isShadowbanned ? "removido" : "aplicado"} com sucesso.`);
               setSelectedUser(null);
               void fetchUsers();
+            } catch (e: unknown) {
+              Alert.alert("Erro", e instanceof Error ? e.message : "Erro desconhecido");
+            } finally {
+              setActionLoading(false);
             }
           },
         },
@@ -160,6 +180,20 @@ export default function AdminCRMScreen() {
         },
       ]
     );
+  };
+
+  const handleSavePlan = async (user: AdminUser) => {
+    setSavingPlan(true);
+    try {
+      await changeUserPlan(user.id, planEdit, isCourtesy);
+      setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, plan: planEdit } : u));
+      setSelectedUser((prev) => prev ? { ...prev, plan: planEdit } : prev);
+      Alert.alert("Sucesso", `Plano atualizado para "${planEdit}"${isCourtesy ? " (Cortesia)" : ""}.`);
+    } catch (e: unknown) {
+      Alert.alert("Erro", e instanceof Error ? e.message : "Erro ao salvar plano");
+    } finally {
+      setSavingPlan(false);
+    }
   };
 
   return (
@@ -222,7 +256,7 @@ export default function AdminCRMScreen() {
                         idx < filtered.length - 1 && !isSelected && { borderBottomWidth: 1, borderBottomColor: colors.border },
                         isSelected && { backgroundColor: colors.gold + "08" },
                       ]}
-                      onPress={() => setSelectedUser(isSelected ? null : user)}
+                      onPress={() => selectUser(user, isSelected)}
                     >
                       <View style={[styles.avatar, { backgroundColor: AVATAR_COLORS[idx % AVATAR_COLORS.length] }]}>
                         <Text style={[styles.avatarText, { color: colors.gold }]}>{initial}</Text>
@@ -275,6 +309,51 @@ export default function AdminCRMScreen() {
                         </View>
 
                         <Text style={[styles.idText, { color: colors.mutedForeground }]}>ID: {user.id}</Text>
+
+                        {/* Plan editor */}
+                        <View style={[styles.planSection, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                          <Text style={[styles.sectionLabel, { color: colors.navy }]}>Alterar Plano</Text>
+                          <View style={styles.planGrid}>
+                            {PLANS.map((p) => (
+                              <TouchableOpacity
+                                key={p}
+                                onPress={() => setPlanEdit(p)}
+                                style={[
+                                  styles.planChip,
+                                  { borderColor: planEdit === p ? colors.gold : colors.border },
+                                  planEdit === p && { backgroundColor: colors.gold + "15" },
+                                ]}
+                              >
+                                <Text style={[styles.planChipText, { color: planEdit === p ? colors.gold : colors.foreground }]}>
+                                  {p}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                          <View style={styles.courtesyRow}>
+                            <View>
+                              <Text style={[styles.courtesyLabel, { color: colors.navy }]}>Cortesia</Text>
+                              <Text style={[styles.courtesySub, { color: colors.mutedForeground }]}>Acesso sem Stripe</Text>
+                            </View>
+                            <Switch
+                              value={isCourtesy}
+                              onValueChange={setIsCourtesy}
+                              trackColor={{ false: colors.border, true: colors.gold + "60" }}
+                              thumbColor={isCourtesy ? colors.gold : "#f4f3f4"}
+                            />
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => handleSavePlan(user)}
+                            disabled={savingPlan}
+                            style={[styles.savePlanBtn, { backgroundColor: savingPlan ? colors.border : colors.gold }]}
+                          >
+                            {savingPlan ? (
+                              <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                              <Text style={styles.savePlanBtnText}>Salvar Plano</Text>
+                            )}
+                          </TouchableOpacity>
+                        </View>
 
                         <Text style={[styles.dangerTitle, { color: colors.gold }]}>ZONA DE PERIGO</Text>
 
@@ -349,6 +428,16 @@ const styles = StyleSheet.create({
   infoCellLabel:    { fontSize: 11 },
   infoCellValue:    { fontSize: 14, fontWeight: "700" },
   idText:           { fontSize: 11, fontFamily: "monospace" },
+  planSection:      { borderRadius: 10, borderWidth: 1, padding: 14, gap: 10 },
+  sectionLabel:     { fontSize: 13, fontWeight: "700" },
+  planGrid:         { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  planChip:         { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5 },
+  planChipText:     { fontSize: 13, fontWeight: "600" },
+  courtesyRow:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  courtesyLabel:    { fontSize: 14, fontWeight: "600" },
+  courtesySub:      { fontSize: 11, marginTop: 2 },
+  savePlanBtn:      { paddingVertical: 12, borderRadius: 10, alignItems: "center" },
+  savePlanBtnText:  { color: "#fff", fontSize: 14, fontWeight: "700" },
   dangerTitle:      { fontSize: 12, fontWeight: "800", letterSpacing: 0.5, marginTop: 4 },
   dangerBtn:        { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 13, borderRadius: 10, borderWidth: 1 },
   dangerBtnText:    { fontSize: 14, fontWeight: "600" },

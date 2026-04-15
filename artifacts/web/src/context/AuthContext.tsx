@@ -126,7 +126,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    if (error) {
+      const msg = error.message ?? "";
+      if (msg.toLowerCase().includes("ban") || msg.toLowerCase().includes("suspend")) {
+        return { error: "Sua conta foi suspensa. Entre em contato com o suporte." };
+      }
+      return { error: msg };
+    }
+    const { data: { user: authedUser } } = await supabase.auth.getUser();
+    if (authedUser) {
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("is_banned")
+        .eq("id", authedUser.id)
+        .maybeSingle();
+      if ((prof as { is_banned?: boolean } | null)?.is_banned) {
+        await supabase.auth.signOut();
+        return { error: "Sua conta foi suspensa. Entre em contato com o suporte." };
+      }
+    }
+    return { error: null };
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {

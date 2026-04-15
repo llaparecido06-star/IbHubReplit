@@ -43,6 +43,7 @@ export interface AdminUser {
   plan: string;
   is_admin: boolean;
   is_banned: boolean;
+  is_shadowbanned: boolean;
   areas_of_expertise: string[] | null;
   created_at: string;
 }
@@ -166,11 +167,25 @@ export async function banUser(userId: string, ban: boolean): Promise<boolean> {
   }
 }
 
-export async function changeUserPlan(userId: string, plan: string): Promise<boolean> {
+export async function changeUserPlan(userId: string, plan: string, isCourtesy?: boolean): Promise<boolean> {
   try {
     const res = await adminFetch("/admin/change-plan", {
       method: "POST",
-      body: JSON.stringify({ userId, plan }),
+      body: JSON.stringify({ userId, plan, isCourtesy }),
+    });
+    if (!res.ok) return false;
+    const json = await res.json() as { success?: boolean };
+    return !!json.success;
+  } catch {
+    return false;
+  }
+}
+
+export async function shadowbanUser(userId: string, shadowban: boolean): Promise<boolean> {
+  try {
+    const res = await adminFetch("/admin/shadowban-user", {
+      method: "POST",
+      body: JSON.stringify({ userId, shadowban }),
     });
     if (!res.ok) return false;
     const json = await res.json() as { success?: boolean };

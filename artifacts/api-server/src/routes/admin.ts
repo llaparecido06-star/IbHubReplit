@@ -336,6 +336,34 @@ router.post("/admin/ban-user", async (req: Request, res: Response) => {
     res.status(500).json({ error: error.message });
     return;
   }
+
+  // Revoke all active sessions for the user via Supabase Auth
+  const banDuration = ban ? "876600h" : "none";
+  await supabaseAdmin.auth.admin.updateUserById(userId, { ban_duration: banDuration });
+
+  res.json({ success: true });
+});
+
+// Shadowban or un-shadowban a user
+router.post("/admin/shadowban-user", async (req: Request, res: Response) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+
+  const { userId, shadowban } = req.body as { userId?: string; shadowban?: boolean };
+  if (!userId || shadowban === undefined) {
+    res.status(400).json({ error: "userId and shadowban are required" });
+    return;
+  }
+
+  const { error } = await supabaseAdmin
+    .from("profiles")
+    .update({ is_shadowbanned: shadowban })
+    .eq("id", userId);
+
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
   res.json({ success: true });
 });
 
@@ -344,7 +372,7 @@ router.post("/admin/change-plan", async (req: Request, res: Response) => {
   const adminId = await requireAdmin(req, res);
   if (!adminId) return;
 
-  const { userId, plan } = req.body as { userId?: string; plan?: string };
+  const { userId, plan, isCourtesy } = req.body as { userId?: string; plan?: string; isCourtesy?: boolean };
   if (!userId || !plan) {
     res.status(400).json({ error: "userId and plan are required" });
     return;
@@ -356,9 +384,19 @@ router.post("/admin/change-plan", async (req: Request, res: Response) => {
     return;
   }
 
+  const update: Record<string, unknown> = { plan };
+
+  if (isCourtesy === true) {
+    // Grant courtesy access for 10 years (effectively permanent until admin revokes)
+    const courtesyUntil = new Date(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toISOString();
+    update.courtesy_until = courtesyUntil;
+  } else if (isCourtesy === false) {
+    update.courtesy_until = null;
+  }
+
   const { error } = await supabaseAdmin
     .from("profiles")
-    .update({ plan })
+    .update(update)
     .eq("id", userId);
 
   if (error) {

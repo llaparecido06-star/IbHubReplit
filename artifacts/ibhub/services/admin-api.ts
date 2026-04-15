@@ -74,6 +74,45 @@ export async function fetchUserByEmail(email: string): Promise<AdminUserByEmail>
   return json.user as AdminUserByEmail;
 }
 
+export async function banUser(userId: string, ban: boolean): Promise<void> {
+  const headers = await getAdminHeaders();
+  const res = await fetch(`${API_URL}/admin/ban-user`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ userId, ban }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
+  }
+}
+
+export async function shadowbanUser(userId: string, shadowban: boolean): Promise<void> {
+  const headers = await getAdminHeaders();
+  const res = await fetch(`${API_URL}/admin/shadowban-user`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ userId, shadowban }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
+  }
+}
+
+export async function changeUserPlan(userId: string, plan: string, isCourtesy?: boolean): Promise<void> {
+  const headers = await getAdminHeaders();
+  const res = await fetch(`${API_URL}/admin/change-plan`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ userId, plan, isCourtesy }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
+  }
+}
+
 export async function broadcastPushNotification(params: {
   title: string;
   body: string;

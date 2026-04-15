@@ -125,7 +125,7 @@ function normaliseAuthor(author: any): any {
 }
 
 // Common embedded author select string (uses real column names)
-const AUTHOR_SELECT = "id, full_name, username, avatar_url, position, company, plan";
+const AUTHOR_SELECT = "id, full_name, username, avatar_url, position, company, plan, is_shadowbanned";
 const COMMENT_AUTHOR_SELECT = "id, full_name, avatar_url, position, company";
 
 // Base post select WITHOUT the broken profiles FK join (posts.user_id → auth.users, not profiles)
@@ -185,7 +185,13 @@ export async function fetchFeedPosts(currentUserId: string, activeCompanyId?: st
     const likedMap = new Map((likedRes.data ?? []).map((l: any) => [l.post_id, l.reaction_type ?? null]));
     const bookmarkedIds = new Set((bookmarkRes.data ?? []).map((b: any) => b.post_id));
 
-    return (await attachAuthorsToPosts(data, profileMap, companyMap)).map((post: any) => ({
+    const visiblePosts = data.filter((p: any) => {
+      if (p.user_id === currentUserId) return true;
+      const profile = profileMap.get(p.user_id);
+      return !profile?.is_shadowbanned;
+    });
+
+    return (await attachAuthorsToPosts(visiblePosts, profileMap, companyMap)).map((post: any) => ({
       ...post,
       is_liked: likedMap.has(post.id),
       reaction_type: likedMap.get(post.id) ?? null,

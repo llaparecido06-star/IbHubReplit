@@ -14,12 +14,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@/components/ui/Icon";
 import AdminDrawer from "@/components/AdminDrawer";
 import { useColors } from "@/hooks/useColors";
-import { useAuth } from "@/context/AuthContext";
 import * as API from "@/services/api";
-import type { AppReport, CertificationRequest } from "@/services/api";
-
-const MAIN_TABS = ["Denúncias", "Certificações"];
-const CERT_TABS = ["Pendentes", "Verificadas", "Rejeitadas", "Todas"];
+import type { AppReport } from "@/services/api";
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -32,29 +28,15 @@ function timeAgo(dateStr: string): string {
   return `${days}d`;
 }
 
-function certTabToStatus(tab: string): "pending" | "verified" | "rejected" | undefined {
-  if (tab === "Pendentes") return "pending";
-  if (tab === "Verificadas") return "verified";
-  if (tab === "Rejeitadas") return "rejected";
-  return undefined;
-}
-
 export default function AdminModeracaoScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [mainTab, setMainTab]       = useState("Denúncias");
-  const [certTab, setCertTab]       = useState("Pendentes");
 
   const [reports, setReports]       = useState<AppReport[]>([]);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-
-  const [certRequests, setCertRequests] = useState<CertificationRequest[]>([]);
-  const [certsLoading, setCertsLoading] = useState(false);
-  const [certActionLoading, setCertActionLoading] = useState<string | null>(null);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -66,61 +48,12 @@ export default function AdminModeracaoScreen() {
     setReportsLoading(false);
   }, []);
 
-  const loadCerts = useCallback(async (tab: string) => {
-    setCertsLoading(true);
-    const data = await API.getAdminCertificationRequests(certTabToStatus(tab));
-    setCertRequests(data);
-    setCertsLoading(false);
-  }, []);
-
-  useEffect(() => {
-    if (mainTab === "Denúncias") {
-      loadReports();
-    } else {
-      loadCerts(certTab);
-    }
-  }, [mainTab, certTab, loadReports, loadCerts]);
+  useEffect(() => { loadReports(); }, [loadReports]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    if (mainTab === "Denúncias") {
-      await loadReports();
-    } else {
-      await loadCerts(certTab);
-    }
+    await loadReports();
     setRefreshing(false);
-  };
-
-  const handleCertReview = async (req: CertificationRequest, action: "verified" | "rejected") => {
-    if (!user) return;
-    const label = action === "verified" ? "aprovar" : "rejeitar";
-    Alert.alert(
-      action === "verified" ? "Aprovar Certificação" : "Rejeitar Certificação",
-      `Deseja ${label} a certificação "${req.name}" de ${req.requester?.full_name ?? "usuário"}?`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: action === "verified" ? "Aprovar" : "Rejeitar",
-          style: action === "rejected" ? "destructive" : "default",
-          onPress: async () => {
-            setCertActionLoading(req.id);
-            const ok = await API.reviewCertificationRequest(req.id, action, user.id);
-            if (ok) {
-              setCertRequests((prev) => {
-                const status = certTabToStatus(certTab);
-                if (status === undefined) {
-                  return prev.map((r) => r.id === req.id ? { ...r, status: action } : r);
-                }
-                return prev.filter((r) => r.id !== req.id);
-              });
-            } else {
-              Alert.alert("Erro", "Não foi possível processar a solicitação. Tente novamente.");
-            }
-            setCertActionLoading(null);
-          },
-        },
-      ],
-    );
   };
 
   const handleApprove = async (report: AppReport) => {
@@ -134,14 +67,12 @@ export default function AdminModeracaoScreen() {
           style: "destructive",
           onPress: async () => {
             setActionLoading(report.id);
-            // Update status FIRST (before post deletion cascades the report row away)
             const statusUpdated = await API.updateReportStatus(report.id, "approved");
             if (!statusUpdated) {
               Alert.alert("Erro", "Não foi possível atualizar o status da denúncia. Tente novamente.");
               setActionLoading(null);
               return;
             }
-            // Now delete the post (ON DELETE CASCADE will remove the report row)
             const deleted = await API.deletePost(report.post_id);
             if (!deleted) {
               Alert.alert("Atenção", "Status da denúncia atualizado, mas não foi possível remover a publicação. Verifique suas permissões.");
@@ -170,7 +101,7 @@ export default function AdminModeracaoScreen() {
           <Feather name="menu" size={22} color={colors.navy} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.navy }]}>Moderação</Text>
-        <TouchableOpacity onPress={mainTab === "Denúncias" ? loadReports : () => loadCerts(certTab)}>
+        <TouchableOpacity onPress={loadReports}>
           <Feather name="refresh-cw" size={20} color={colors.navy} />
         </TouchableOpacity>
       </View>
@@ -183,244 +114,93 @@ export default function AdminModeracaoScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} colors={[colors.gold]} />
         }
       >
-        {/* Hero */}
         <View style={{ gap: 4 }}>
           <Text style={[styles.heroTitle, { color: colors.navy }]}>Moderação</Text>
           <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>
-            Denúncias, aprovações e verificações de certificações
+            Denúncias e conteúdo inapropriado
           </Text>
         </View>
 
-        {/* Main tabs */}
-        <View style={styles.mainTabRow}>
-          {MAIN_TABS.map((t) => {
-            const isActive = t === mainTab;
-            const label = t === "Denúncias"
-              ? `Denúncias${reports.length > 0 ? ` (${reports.length})` : " (0)"}`
-              : t;
-            return (
-              <TouchableOpacity
-                key={t}
-                style={[
-                  styles.mainTab,
-                  { borderColor: isActive ? colors.gold : colors.border, backgroundColor: "#fff" },
-                  isActive && { borderWidth: 1.5 },
-                ]}
-                onPress={() => setMainTab(t)}
-              >
-                <Feather
-                  name={t === "Denúncias" ? "alert-octagon" : "award"}
-                  size={14}
-                  color={isActive ? colors.gold : colors.mutedForeground}
-                />
-                <Text style={[styles.mainTabText, { color: isActive ? colors.gold : colors.foreground, fontWeight: isActive ? "700" : "400" }]}>
-                  {label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {mainTab === "Denúncias" ? (
-          reportsLoading ? (
-            <View style={styles.empty}>
-              <ActivityIndicator size="small" color={colors.gold} />
-            </View>
-          ) : reports.length === 0 ? (
-            <View style={styles.empty}>
-              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhuma denúncia pendente 🎉</Text>
-            </View>
-          ) : (
-            <View style={{ gap: 12 }}>
-              {reports.map((report) => (
-                <View key={report.id} style={[styles.reportCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-                  {/* Report header */}
-                  <View style={styles.reportCardHeader}>
-                    <View style={[styles.flagIcon, { backgroundColor: "#fef2f2" }]}>
-                      <Feather name="flag" size={14} color="#dc2626" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.reportReason, { color: "#0d1b2a" }]} numberOfLines={1}>
-                        {report.reason}
-                      </Text>
-                      <Text style={[styles.reportMeta, { color: colors.mutedForeground }]}>
-                        {timeAgo(report.created_at)}
-                      </Text>
-                    </View>
+        {reportsLoading ? (
+          <View style={styles.empty}>
+            <ActivityIndicator size="small" color={colors.gold} />
+          </View>
+        ) : reports.length === 0 ? (
+          <View style={styles.empty}>
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhuma denúncia pendente 🎉</Text>
+          </View>
+        ) : (
+          <View style={{ gap: 12 }}>
+            <Text style={[{ fontSize: 13, color: colors.mutedForeground }]}>
+              {reports.length} denúncia{reports.length !== 1 ? "s" : ""} pendente{reports.length !== 1 ? "s" : ""}
+            </Text>
+            {reports.map((report) => (
+              <View key={report.id} style={[styles.reportCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                <View style={styles.reportCardHeader}>
+                  <View style={[styles.flagIcon, { backgroundColor: "#fef2f2" }]}>
+                    <Feather name="flag" size={14} color="#dc2626" />
                   </View>
-
-                  {/* Post preview */}
-                  {report.post && (
-                    <View style={[styles.postPreview, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                      <Text style={[styles.postPreviewText, { color: "#374151" }]} numberOfLines={3}>
-                        {report.post.content ?? "(sem conteúdo)"}
-                      </Text>
-                      <Text style={[styles.postPreviewId, { color: colors.mutedForeground }]}>
-                        Post ID: {report.post_id.slice(0, 8)}…
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Reporter */}
-                  <Text style={[styles.reporterText, { color: colors.mutedForeground }]}>
-                    Denunciado por:{" "}
-                    <Text style={{ fontWeight: "600", color: "#374151" }}>
-                      {report.reporter?.full_name ?? report.reported_by.slice(0, 8)}
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.reportReason, { color: "#0d1b2a" }]} numberOfLines={1}>
+                      {report.reason}
                     </Text>
-                  </Text>
-
-                  {/* Actions */}
-                  <View style={styles.reportActions}>
-                    <TouchableOpacity
-                      style={[styles.rejectBtn, { borderColor: colors.border }]}
-                      onPress={() => handleReject(report)}
-                      disabled={actionLoading === report.id}
-                    >
-                      {actionLoading === report.id ? (
-                        <ActivityIndicator size="small" color="#6b7280" />
-                      ) : (
-                        <>
-                          <Feather name="x-circle" size={14} color="#6b7280" />
-                          <Text style={[styles.rejectBtnText, { color: "#6b7280" }]}>Ignorar</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.approveBtn, { backgroundColor: "#dc2626" }]}
-                      onPress={() => handleApprove(report)}
-                      disabled={actionLoading === report.id}
-                    >
-                      {actionLoading === report.id ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <>
-                          <Feather name="trash-2" size={14} color="#fff" />
-                          <Text style={styles.approveBtnText}>Remover post</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
+                    <Text style={[styles.reportMeta, { color: colors.mutedForeground }]}>
+                      {timeAgo(report.created_at)}
+                    </Text>
                   </View>
                 </View>
-              ))}
-            </View>
-          )
-        ) : (
-          <>
-            {/* Cert sub-tabs */}
-            <View style={styles.certTabRow}>
-              {CERT_TABS.map((t) => (
-                <TouchableOpacity
-                  key={t}
-                  style={[
-                    styles.certTab,
-                    { backgroundColor: t === certTab ? colors.navy : "#f3f4f6" },
-                  ]}
-                  onPress={() => setCertTab(t)}
-                >
-                  <Text style={[styles.certTabText, { color: t === certTab ? "#fff" : colors.foreground }]}>{t}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
 
-            {certsLoading ? (
-              <View style={styles.empty}>
-                <ActivityIndicator size="small" color={colors.gold} />
-              </View>
-            ) : certRequests.length === 0 ? (
-              <View style={styles.empty}>
-                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                  {certTab === "Pendentes" ? "Nenhuma solicitação pendente 🎉" : "Nenhuma certificação nessa categoria"}
-                </Text>
-              </View>
-            ) : (
-              <View style={{ gap: 12 }}>
-                {certRequests.map((req) => (
-                  <View key={req.id} style={[styles.reportCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-                    <View style={styles.reportCardHeader}>
-                      <View style={[styles.flagIcon, { backgroundColor: colors.gold + "18" }]}>
-                        <Feather name="award" size={14} color={colors.gold} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.reportReason, { color: "#0d1b2a" }]} numberOfLines={1}>
-                          {req.name}
-                        </Text>
-                        <Text style={[styles.reportMeta, { color: colors.mutedForeground }]}>
-                          {timeAgo(req.created_at)}
-                        </Text>
-                      </View>
-                      {req.status !== "pending" && (
-                        <View style={[styles.certStatusBadge, {
-                          backgroundColor: req.status === "verified" ? colors.gold + "18" : "#dc262618",
-                        }]}>
-                          <Text style={[styles.certStatusText, {
-                            color: req.status === "verified" ? colors.gold : "#dc2626",
-                          }]}>
-                            {req.status === "verified" ? "Verificado" : "Rejeitado"}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-
-                    <View style={[styles.postPreview, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                      <Text style={[styles.postPreviewText, { color: "#374151" }]}>
-                        Emissor: {req.issuer}
-                      </Text>
-                      {req.cert_number && (
-                        <Text style={[styles.postPreviewText, { color: "#374151" }]}>
-                          Nº {req.cert_number}
-                        </Text>
-                      )}
-                      {req.date && (
-                        <Text style={[styles.postPreviewText, { color: "#374151" }]}>
-                          Data: {req.date}
-                        </Text>
-                      )}
-                    </View>
-
-                    <Text style={[styles.reporterText, { color: colors.mutedForeground }]}>
-                      Solicitante:{" "}
-                      <Text style={{ fontWeight: "600", color: "#374151" }}>
-                        {req.requester?.full_name ?? req.user_id.slice(0, 8)}
-                      </Text>
+                {report.post && (
+                  <View style={[styles.postPreview, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <Text style={[styles.postPreviewText, { color: "#374151" }]} numberOfLines={3}>
+                      {report.post.content ?? "(sem conteúdo)"}
                     </Text>
-
-                    {req.status === "pending" && (
-                      <View style={styles.reportActions}>
-                        <TouchableOpacity
-                          style={[styles.rejectBtn, { borderColor: "#dc2626" }]}
-                          onPress={() => handleCertReview(req, "rejected")}
-                          disabled={certActionLoading === req.id}
-                        >
-                          {certActionLoading === req.id ? (
-                            <ActivityIndicator size="small" color="#dc2626" />
-                          ) : (
-                            <>
-                              <Feather name="x-circle" size={14} color="#dc2626" />
-                              <Text style={[styles.rejectBtnText, { color: "#dc2626" }]}>Rejeitar</Text>
-                            </>
-                          )}
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.approveBtn, { backgroundColor: colors.gold }]}
-                          onPress={() => handleCertReview(req, "verified")}
-                          disabled={certActionLoading === req.id}
-                        >
-                          {certActionLoading === req.id ? (
-                            <ActivityIndicator size="small" color="#fff" />
-                          ) : (
-                            <>
-                              <Feather name="check-circle" size={14} color="#fff" />
-                              <Text style={styles.approveBtnText}>Aprovar</Text>
-                            </>
-                          )}
-                        </TouchableOpacity>
-                      </View>
-                    )}
+                    <Text style={[styles.postPreviewId, { color: colors.mutedForeground }]}>
+                      Post ID: {report.post_id.slice(0, 8)}…
+                    </Text>
                   </View>
-                ))}
+                )}
+
+                <Text style={[styles.reporterText, { color: colors.mutedForeground }]}>
+                  Denunciado por:{" "}
+                  <Text style={{ fontWeight: "600", color: "#374151" }}>
+                    {report.reporter?.full_name ?? report.reported_by.slice(0, 8)}
+                  </Text>
+                </Text>
+
+                <View style={styles.reportActions}>
+                  <TouchableOpacity
+                    style={[styles.rejectBtn, { borderColor: colors.border }]}
+                    onPress={() => handleReject(report)}
+                    disabled={actionLoading === report.id}
+                  >
+                    {actionLoading === report.id ? (
+                      <ActivityIndicator size="small" color="#6b7280" />
+                    ) : (
+                      <>
+                        <Feather name="x-circle" size={14} color="#6b7280" />
+                        <Text style={[styles.rejectBtnText, { color: "#6b7280" }]}>Ignorar</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.approveBtn, { backgroundColor: "#dc2626" }]}
+                    onPress={() => handleApprove(report)}
+                    disabled={actionLoading === report.id}
+                  >
+                    {actionLoading === report.id ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <>
+                        <Feather name="trash-2" size={14} color="#fff" />
+                        <Text style={styles.approveBtnText}>Remover post</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
-            )}
-          </>
+            ))}
+          </View>
         )}
       </ScrollView>
 
@@ -430,21 +210,13 @@ export default function AdminModeracaoScreen() {
 }
 
 const styles = StyleSheet.create({
-  container:    { flex: 1 },
-  header:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
-  headerTitle:  { fontSize: 18, fontWeight: "700" },
-  heroTitle:    { fontSize: 22, fontWeight: "800" },
-  heroSub:      { fontSize: 13, lineHeight: 18 },
-  mainTabRow:   { flexDirection: "row", gap: 8 },
-  mainTab:      { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderRadius: 10, borderWidth: 1 },
-  mainTabText:  { fontSize: 13 },
-  certTabRow:   { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  certTab:      { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20 },
-  certTabText:  { fontSize: 13, fontWeight: "600" },
-  empty:        { alignItems: "center", paddingVertical: 60 },
-  emptyText:    { fontSize: 14 },
-
-  // Report card
+  container:        { flex: 1 },
+  header:           { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
+  headerTitle:      { fontSize: 18, fontWeight: "700" },
+  heroTitle:        { fontSize: 22, fontWeight: "800" },
+  heroSub:          { fontSize: 13, lineHeight: 18 },
+  empty:            { alignItems: "center", paddingVertical: 60 },
+  emptyText:        { fontSize: 14 },
   reportCard:       { borderRadius: 14, borderWidth: 1, padding: 16, gap: 12 },
   reportCardHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   flagIcon:         { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
@@ -459,6 +231,4 @@ const styles = StyleSheet.create({
   rejectBtnText:    { fontSize: 14, fontWeight: "600" },
   approveBtn:       { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 11, borderRadius: 10 },
   approveBtnText:   { fontSize: 14, fontWeight: "600", color: "#fff" },
-  certStatusBadge:  { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
-  certStatusText:   { fontSize: 11, fontWeight: "600" },
 });
