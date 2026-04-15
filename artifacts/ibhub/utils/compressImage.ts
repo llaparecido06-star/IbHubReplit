@@ -1,5 +1,5 @@
 import * as ImageManipulator from "expo-image-manipulator";
-import { Platform } from "react-native";
+import { Image, Platform } from "react-native";
 
 export interface CompressOptions {
   maxWidth?: number;
@@ -24,7 +24,10 @@ async function compressImageWeb(uri: string, options: CompressOptions = {}): Pro
       canvas.toBlob(
         (blob) => {
           if (!blob) { resolve(uri); return; }
-          resolve(URL.createObjectURL(blob));
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => resolve(uri);
+          reader.readAsDataURL(blob);
         },
         "image/jpeg",
         quality,
@@ -35,13 +38,22 @@ async function compressImageWeb(uri: string, options: CompressOptions = {}): Pro
   });
 }
 
+async function getNativeWidth(uri: string): Promise<number> {
+  return new Promise((resolve) => {
+    Image.getSize(uri, (w) => resolve(w), () => resolve(Infinity));
+  });
+}
+
 export async function compressImage(uri: string, options: CompressOptions = {}): Promise<string> {
   if (Platform.OS === "web") return compressImageWeb(uri, options);
   const { maxWidth = 1200, quality = 0.72 } = options;
   try {
+    const originalWidth = await getNativeWidth(uri);
+    const actions: ImageManipulator.Action[] =
+      originalWidth > maxWidth ? [{ resize: { width: maxWidth } }] : [];
     const result = await ImageManipulator.manipulateAsync(
       uri,
-      [{ resize: { width: maxWidth } }],
+      actions,
       { compress: quality, format: ImageManipulator.SaveFormat.JPEG },
     );
     return result.uri;

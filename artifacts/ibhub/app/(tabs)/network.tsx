@@ -36,6 +36,7 @@ import { usePermissions } from "@/context/PermissionsContext";
 import { PaywallScreen } from "@/components/ui/PaywallScreen";
 import * as API from "@/services/api";
 import { compressPostImage } from "@/utils/compressImage";
+import { usePaginatedQuery } from "@/hooks/usePaginatedQuery";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -902,13 +903,6 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
 }) {
   const router = useRouter();
   const { hasFeature: permHasFeature } = usePermissions();
-  const [posts, setPosts] = useState<API.MarketPost[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const offsetRef = useRef(0);
-  const isLoadingMoreRef = useRef(false);
-  const MARKET_PAGE_SIZE = 15;
   const [newContent, setNewContent] = useState("");
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<"image" | "video" | null>(null);
@@ -918,35 +912,16 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
 
   const hasAccess = permHasFeature("mercado:idealbi") || isAdmin;
 
-  useEffect(() => {
-    if (!hasAccess) { setLoading(false); return; }
-    offsetRef.current = 0;
-    API.fetchMarketPosts(userId, 0, MARKET_PAGE_SIZE).then(p => {
-      setPosts(p);
-      offsetRef.current = p.length;
-      setHasMore(p.length >= MARKET_PAGE_SIZE);
-      setLoading(false);
-    });
-  }, [hasAccess, userId]);
+  const fetcher = useCallback(
+    (offset: number, limit: number) =>
+      hasAccess ? API.fetchMarketPosts(userId, offset, limit) : Promise.resolve([]),
+    [hasAccess, userId],
+  );
 
-  const loadMore = useCallback(() => {
-    if (isLoadingMoreRef.current || !hasMore) return;
-    isLoadingMoreRef.current = true;
-    setLoadingMore(true);
-    API.fetchMarketPosts(userId, offsetRef.current, MARKET_PAGE_SIZE).then((more) => {
-      if (more.length > 0) {
-        setPosts(prev => {
-          const existingIds = new Set(prev.map(p => p.id));
-          return [...prev, ...more.filter(p => !existingIds.has(p.id))];
-        });
-        offsetRef.current += more.length;
-      }
-      setHasMore(more.length >= MARKET_PAGE_SIZE);
-    }).finally(() => {
-      setLoadingMore(false);
-      isLoadingMoreRef.current = false;
-    });
-  }, [hasMore, userId]);
+  const { items: posts, loading, loadingMore, loadMore, refresh, setItems: setPosts } =
+    usePaginatedQuery<API.MarketPost>(fetcher);
+
+  useEffect(() => { refresh(); }, [hasAccess]);
 
   const handleLikeToggle = (id: string, liked: boolean, count: number) => {
     setPosts(prev => prev.map(p => p.id === id ? { ...p, user_liked: liked, likes_count: count } : p));
