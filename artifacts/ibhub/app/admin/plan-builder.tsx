@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -16,10 +16,7 @@ import { Feather } from "@/components/ui/Icon";
 import AdminDrawer from "@/components/AdminDrawer";
 import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/context/AuthContext";
-import { useAuth } from "@/context/AuthContext";
 import * as API from "@/services/api";
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 
 const ALL_GENERAL_FEATURES = [
   "Chat ilimitado",
@@ -79,22 +76,10 @@ function toSlug(s: string): string {
   return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
 }
 
-async function updatePlanStrategy(token: string, planId: string, strategy: DeliveryStrategy): Promise<void> {
-  const res = await fetch(`${API_URL}/api/admin/update-plan-strategy`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ plan_id: planId, delivery_strategy: strategy }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? `HTTP ${res.status}`);
-  }
-}
 
 export default function AdminPlanBuilderScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { session } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const [plans,   setPlans]   = useState<Plan[]>([]);
@@ -187,12 +172,9 @@ export default function AdminPlanBuilderScreen() {
       const price_cents = parsePriceString(editPrice);
       const { error: err } = await supabase
         .from("plans")
-        .update({ name: editName, subtitle: editSubtitle, price_cents, features: editFeatures })
+        .update({ name: editName, subtitle: editSubtitle, price_cents, features: editFeatures, delivery_strategy: editDelivery })
         .eq("id", editPlan.id);
       if (err) throw err;
-      if (session?.access_token) {
-        await updatePlanStrategy(session.access_token, editPlan.id, editDelivery);
-      }
       Alert.alert("Sucesso", "Plano atualizado.");
       setShowEditModal(false);
       void loadPlans();
@@ -211,11 +193,8 @@ export default function AdminPlanBuilderScreen() {
       const newId = toSlug(editName) || `plano_${Date.now()}`;
       const { error: err } = await supabase
         .from("plans")
-        .insert({ id: newId, name: editName, subtitle: editSubtitle, price_cents, features: editFeatures, is_active: true, sort_order: plans.length });
+        .insert({ id: newId, name: editName, subtitle: editSubtitle, price_cents, features: editFeatures, delivery_strategy: editDelivery, is_active: true, sort_order: plans.length });
       if (err) throw err;
-      if (session?.access_token && editDelivery !== "NONE") {
-        await updatePlanStrategy(session.access_token, newId, editDelivery);
-      }
       Alert.alert("Sucesso", "Novo plano criado.");
       setShowNewModal(false);
       void loadPlans();
