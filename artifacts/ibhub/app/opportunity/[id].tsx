@@ -132,8 +132,9 @@ export default function OpportunityDetailScreen() {
       closeSheet();
       setOpp((prev) => prev ? { ...prev, is_applied: true, applications_count: (prev.applications_count ?? 0) + 1 } : prev);
 
-      // Auto-create conversation and send application message
-      const convoId = await getOrCreateDirectConversation(user.id, opp.created_by, true);
+      // Auto-create conversation — route to company owner if page is present
+      const chatTargetId = opp.company_page?.owner_id ?? opp.created_by;
+      const convoId = await getOrCreateDirectConversation(user.id, chatTargetId, true);
       if (convoId) {
         const cpId = opp.company_page_id ?? null;
         // Send standardized application text

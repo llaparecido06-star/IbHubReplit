@@ -49,7 +49,8 @@ export default function MarketItemScreen() {
   const handleNegociar = async () => {
     if (!user?.id || !item) return;
 
-    const sellerId = item.created_by;
+    // Route to company owner when the listing belongs to a company page
+    const sellerId = item.company_page?.owner_id ?? item.created_by;
     if (sellerId === user.id) {
       Alert.alert("Atenção", "Você não pode negociar com você mesmo.");
       return;

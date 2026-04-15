@@ -146,7 +146,7 @@ async function fetchCommentProfilesForIds(userIds: string[]): Promise<Map<string
 }
 async function fetchCompanyPagesForIds(companyIds: string[]): Promise<Map<string, any>> {
   if (companyIds.length === 0) return new Map();
-  const { data } = await supabase.from("company_pages").select("id, name, avatar_url").in("id", companyIds);
+  const { data } = await supabase.from("company_pages").select("id, owner_id, name, avatar_url").in("id", companyIds);
   return new Map((data ?? []).map((c: any) => [c.id, c]));
 }
 async function attachAuthorsToPosts(rawPosts: any[], profileMap: Map<string, any>, companyMap: Map<string, any>): Promise<any[]> {
@@ -3060,7 +3060,7 @@ export interface AppOpportunity {
   cover_image_url?: string | null;
   company?: string | null;
   company_page_id?: string | null;
-  company_page?: { id: string; name: string; avatar_url?: string | null } | null;
+  company_page?: { id: string; owner_id?: string | null; name: string; avatar_url?: string | null } | null;
   contract_type?: string | null;
   salary?: string | null;
   contact_email?: string | null;
@@ -3266,7 +3266,7 @@ export async function uploadCV(uri: string, userId: string): Promise<string | nu
 export async function fetchUserLastCV(userId: string): Promise<{ url: string; name: string } | null> {
   try {
     const { data, error } = await supabase
-      .from("job_applications")
+      .from("opportunity_applications")
       .select("cv_url, created_at")
       .eq("applicant_id", userId)
       .not("cv_url", "is", null)

@@ -174,21 +174,29 @@ export default function EmpresaScreen() {
         const since7 = new Date(); since7.setDate(since7.getDate() - 7);
         const since7Str = since7.toISOString().split("T")[0];
 
-        const [fRes, vRes, mRes, viewsRes, likesRes, commentsRes] = await Promise.all([
+        const [fRes, vRes, mRes, likesRes, commentsRes] = await Promise.all([
           supabase.from("company_follows").select("id", { count: "exact", head: true }).eq("company_id", id),
           supabase.from("opportunities").select("id", { count: "exact", head: true }).eq("company_page_id", id).eq("type", "vaga").eq("is_active", true),
           supabase.from("opportunities").select("id", { count: "exact", head: true }).eq("company_page_id", id).eq("type", "marketplace").eq("is_active", true),
-          ownerId
-            ? supabase.from("profile_views").select("id", { count: "exact", head: true }).eq("profile_id", ownerId).gte("viewed_at", since7Str)
-            : Promise.resolve({ count: 0 }),
           supabase.from("likes").select("id", { count: "exact", head: true }).eq("company_page_id", id),
           supabase.from("comments").select("id", { count: "exact", head: true }).eq("company_page_id", id),
         ]);
+
+        let views = 0;
+        if (ownerId) {
+          const { count } = await supabase
+            .from("profile_views")
+            .select("id", { count: "exact", head: true })
+            .eq("profile_id", ownerId)
+            .gte("viewed_at", since7Str);
+          views = count ?? 0;
+        }
+
         setFollowersCount(fRes.count ?? 0);
         setVacanciesCount(vRes.count ?? 0);
         setMarketCount(mRes.count ?? 0);
-        setViewsCount((viewsRes as any).count ?? 0);
-        setEngagementCount(((likesRes.count ?? 0) + (commentsRes.count ?? 0)));
+        setViewsCount(views);
+        setEngagementCount((likesRes.count ?? 0) + (commentsRes.count ?? 0));
         setAnalyticsLoaded(true);
       })();
     }
