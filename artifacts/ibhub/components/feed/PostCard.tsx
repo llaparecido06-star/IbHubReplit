@@ -502,7 +502,14 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
   const displayName   = companyPage ? companyPage.name : (author?.full_name ?? "Usuário");
   const displayPressTarget = companyPage
     ? () => router.push(`/empresa/${companyPage.id}` as any)
-    : () => author?.id && router.push(`/profile/${author.id}` as any);
+    : () => {
+        if (!author?.id) return;
+        if (author.id === currentUserId) {
+          router.push("/(tabs)/profile" as any);
+        } else {
+          router.push(`/profile/${author.id}` as any);
+        }
+      };
 
   const likeButtonColor = reactionInfo ? "#e74c3c" : isLiked ? "#e74c3c" : colors.border;
   const likeButtonLabel = reactionInfo ? reactionInfo.label : isLiked ? "Curtido" : "Curtir";

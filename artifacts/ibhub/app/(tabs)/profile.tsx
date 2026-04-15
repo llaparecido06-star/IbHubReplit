@@ -407,6 +407,21 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
                   </View>
                 </View>
                 <Text style={{ fontSize: 14, lineHeight: 21, color: colors.foreground }}>{post.content}</Text>
+                {(() => {
+                  const urls: string[] = [];
+                  const raw = post.image_urls;
+                  if (Array.isArray(raw) && raw.length > 0) urls.push(...raw);
+                  else if (typeof raw === "string" && raw.trim().startsWith("[")) { try { const p = JSON.parse(raw); if (Array.isArray(p)) urls.push(...p); } catch {} }
+                  if (urls.length === 0 && post.image_url) urls.push(post.image_url);
+                  if (urls.length === 0) return null;
+                  return (
+                    <View style={{ gap: 4, marginTop: 8 }}>
+                      {urls.slice(0, 4).map((url, i) => (
+                        <Image key={`${url}-${i}`} source={{ uri: url }} style={{ width: "100%", height: 220, borderRadius: 10 }} resizeMode="cover" />
+                      ))}
+                    </View>
+                  );
+                })()}
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 20, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border }}>
                   <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5 }} onPress={() => handleLikePost(post)}>
                     <Feather name="heart" size={17} color={post.is_liked ? "#e11d48" : colors.mutedForeground} />
@@ -1267,6 +1282,21 @@ export default function ProfileScreen() {
                   </TouchableOpacity>
                 </View>
                 <Text style={[styles.postContent, { color: colors.foreground }]}>{post.content}</Text>
+                {(() => {
+                  const urls: string[] = [];
+                  const raw = post.image_urls;
+                  if (Array.isArray(raw) && raw.length > 0) urls.push(...raw);
+                  else if (typeof raw === "string" && raw.trim().startsWith("[")) { try { const p = JSON.parse(raw); if (Array.isArray(p)) urls.push(...p); } catch {} }
+                  if (urls.length === 0 && post.image_url) urls.push(post.image_url);
+                  if (urls.length === 0) return null;
+                  return (
+                    <View style={{ gap: 4, marginTop: 8 }}>
+                      {urls.slice(0, 4).map((url, i) => (
+                        <Image key={`${url}-${i}`} source={{ uri: url }} style={{ width: "100%", height: 220, borderRadius: 10 }} resizeMode="cover" />
+                      ))}
+                    </View>
+                  );
+                })()}
                 <View style={[styles.postActions, { borderTopColor: colors.border }]}>
                   <TouchableOpacity style={styles.postActionBtn} onPress={() => handleLikePost(post)}>
                     <Feather name="heart" size={18} color={post.is_liked ? "#e11d48" : colors.mutedForeground} />
