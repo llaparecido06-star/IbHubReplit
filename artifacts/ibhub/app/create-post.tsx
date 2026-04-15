@@ -245,8 +245,8 @@ export default function CreatePostScreen() {
       }
 
       router.back();
-    } catch (e) {
-      console.error("handlePost:", e);
+    } catch {
+      Alert.alert("Erro de Conexão", "Não foi possível publicar. Verifique sua conexão e tente novamente.");
     } finally {
       setPosting(false);
     }
