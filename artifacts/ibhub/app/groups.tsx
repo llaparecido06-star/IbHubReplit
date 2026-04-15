@@ -41,6 +41,7 @@ export default function GroupsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [dbError, setDbError]       = useState(false);
   const realtimeRef                 = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const reloadTimer                 = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -65,17 +66,19 @@ export default function GroupsScreen() {
   // Realtime: refresh list on group membership changes
   useEffect(() => {
     if (!userId || realtimeRef.current) return;
+    const debouncedLoad = () => {
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
+      reloadTimer.current = setTimeout(() => load(true), 500);
+    };
+
     const ch = supabase
       .channel(`groups-realtime:${userId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "group_members" }, () => {
-        load(true);
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "groups" }, () => {
-        load(true);
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "group_members" }, debouncedLoad)
+      .on("postgres_changes", { event: "*", schema: "public", table: "groups" }, debouncedLoad)
       .subscribe();
     realtimeRef.current = ch;
     return () => {
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
       if (realtimeRef.current) {
         supabase.removeChannel(realtimeRef.current);
         realtimeRef.current = null;

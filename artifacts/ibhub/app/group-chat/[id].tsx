@@ -277,7 +277,7 @@ export default function GroupChatScreen() {
       setRecording(rec);
       setIsRecording(true);
       setRecordingMs(0);
-      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       recordingTimer.current = setInterval(() => setRecordingMs(prev => prev + 1000), 1000);
     } catch {
       Alert.alert("Erro", "Não foi possível iniciar a gravação.");
