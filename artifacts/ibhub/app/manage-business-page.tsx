@@ -18,7 +18,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
+import { usePermissions } from "@/context/PermissionsContext";
 import { useColors } from "@/hooks/useColors";
+import { PaywallScreen } from "@/components/ui/PaywallScreen";
 import * as API from "@/services/api";
 
 type Tab     = "preview" | "editar" | "equipe";
@@ -40,6 +42,7 @@ export default function ManageBusinessPageScreen() {
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
   const { user: currentUser } = useAuth();
+  const { hasFeature, isLoading: permLoading } = usePermissions();
   const { id: pageId }  = useLocalSearchParams<{ id: string }>();
 
   const [activeTab, setActiveTab] = useState<Tab>("preview");
@@ -258,11 +261,21 @@ export default function ManageBusinessPageScreen() {
   const logoSource = logoUri ?? page?.avatar_url ?? null;
   const logoInitial = (page?.name ?? companyName ?? "?")[0]?.toUpperCase() ?? "?";
 
-  if (loading) {
+  if (loading || permLoading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }]}>
         <ActivityIndicator color={colors.gold} size="large" />
       </View>
+    );
+  }
+
+  if (!hasFeature("Criar Página Empresa")) {
+    return (
+      <PaywallScreen
+        featureName="Criar Página Empresa"
+        description="Crie e gerencie uma página empresarial profissional para a sua empresa no ibhub."
+        requiredPlan="Empresarial"
+      />
     );
   }
 

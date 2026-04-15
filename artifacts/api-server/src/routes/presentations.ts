@@ -55,11 +55,29 @@ router.get("/presentations/:id/slides", async (req: Request, res: Response) => {
 
   const { data: profile } = await supabaseAdmin
     .from("profiles")
-    .select("plan, is_admin")
+    .select("plan, is_admin, courtesy_until")
     .eq("id", userId)
     .maybeSingle();
 
-  const isAdmin = !!(profile as { is_admin?: boolean } | null)?.is_admin;
+  const typedProfile2 = profile as { plan?: string; is_admin?: boolean; courtesy_until?: string | null } | null;
+  const isAdmin = !!typedProfile2?.is_admin;
+  const isCourtesy2 = !!typedProfile2?.courtesy_until && new Date(typedProfile2.courtesy_until) > new Date();
+
+  // Server-side feature gate: non-admin, non-courtesy users must have a plan with mercado features
+  if (!isAdmin && !isCourtesy2) {
+    const planId2 = typedProfile2?.plan ?? "gratuito";
+    const { data: planFeatures } = await supabaseAdmin
+      .from("plans")
+      .select("features")
+      .eq("id", planId2)
+      .maybeSingle();
+    const features = (planFeatures as { features?: string[] } | null)?.features ?? [];
+    const hasMercadoAccess = features.some((f) => f.startsWith("mercado:"));
+    if (!hasMercadoAccess) {
+      res.status(403).json({ error: "Plano atual não inclui acesso ao mercado de dados." });
+      return;
+    }
+  }
 
   // For non-admin callers, verify the presentation is published
   if (!isAdmin) {
@@ -95,10 +113,10 @@ router.get("/presentations/:id/slides", async (req: Request, res: Response) => {
 
   let unlockedSlideIds: Set<string>;
 
-  if (isAdmin) {
+  if (isAdmin || isCourtesy2) {
     unlockedSlideIds = new Set(slides.map((s) => s.id));
   } else {
-    const planId = (profile as { plan?: string } | null)?.plan ?? "gratuito";
+    const planId = typedProfile2?.plan ?? "gratuito";
     const { data: planData } = await supabaseAdmin
       .from("plans")
       .select("delivery_strategy")
@@ -165,28 +183,35 @@ router.post("/presentations/:id/access", async (req: Request, res: Response) => 
     return;
   }
 
-  const typedProfile = profile as { id: string; plan?: string; is_admin?: boolean; stripe_subscription_status?: string; courtesy_until?: string; created_at: string };
+  const typedProfile = profile as { id: string; plan?: string; is_admin?: boolean; stripe_subscription_status?: string; courtesy_until?: string | null; created_at: string };
 
   if (typedProfile.is_admin) {
     res.json({ ok: true, applied: false, reason: "admin" });
     return;
   }
 
-  const planId = typedProfile.plan ?? "gratuito";
-  const { data: planData } = await supabaseAdmin
-    .from("plans")
-    .select("delivery_strategy")
-    .eq("id", planId)
-    .maybeSingle();
-
   const { applyDeliveryStrategy } = await import("../lib/deliveryStrategies.js");
   type DS = "FULL_ACCESS" | "SEQUENTIAL_MONTHLY" | "RANDOM_DAILY" | "NONE";
 
-  const strategy = (((planData as { delivery_strategy?: string } | null)?.delivery_strategy) ?? "NONE") as DS;
+  // Courtesy users get FULL_ACCESS regardless of their plan strategy
+  const isCourtesy = !!typedProfile.courtesy_until && new Date(typedProfile.courtesy_until) > new Date();
+
+  let strategy: DS;
+  if (isCourtesy) {
+    strategy = "FULL_ACCESS";
+  } else {
+    const planId = typedProfile.plan ?? "gratuito";
+    const { data: planData } = await supabaseAdmin
+      .from("plans")
+      .select("delivery_strategy")
+      .eq("id", planId)
+      .maybeSingle();
+    strategy = (((planData as { delivery_strategy?: string } | null)?.delivery_strategy) ?? "NONE") as DS;
+  }
 
   const { data: slidesRaw } = await supabaseAdmin
-    .from("presentation_slides")
-    .select("id, storage_path, sequence_order")
+    .from("slides")
+    .select("id, sequence_order")
     .eq("presentation_id", presentationId)
     .order("sequence_order", { ascending: true });
 
@@ -195,7 +220,7 @@ router.post("/presentations/:id/access", async (req: Request, res: Response) => 
     return;
   }
 
-  const slides = (slidesRaw as { id: string; storage_path: string; sequence_order: number }[]).map(s => ({
+  const slides = (slidesRaw as { id: string; sequence_order: number }[]).map(s => ({
     ...s,
     presentation_id: presentationId,
   }));
