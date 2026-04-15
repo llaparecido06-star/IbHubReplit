@@ -226,8 +226,13 @@ function RootLayoutNav() {
 
     if (!session) {
       didNavigateIn.current = false;
-      // Unauthenticated users always go to login (admins must be able to sign in)
-      router.replace("/(auth)/login" as any);
+      // While maintenance is on, unauthenticated users see maintenance.
+      // The maintenance screen has a hidden admin-login link so admins can sign in.
+      if (manutencao) {
+        router.replace("/maintenance" as any);
+      } else {
+        router.replace("/(auth)/login" as any);
+      }
     } else if (needsProfileCompletion) {
       router.replace("/social-complete" as any);
     } else if (!didNavigateIn.current) {

@@ -135,16 +135,17 @@ function MaintenanceGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (loading || isLoading) return;
+    if (!manutencao) return;
     if (!session) return;
     if (profile?.is_admin) return;
-    if (manutencao) {
-      supabase.auth.signOut();
-    }
+    // Non-admin authenticated user: sign out, they'll see MaintenancePage next render
+    supabase.auth.signOut();
   }, [manutencao, isLoading, loading, session, profile?.is_admin]);
 
   if (loading || isLoading) return null;
-  // Only block authenticated non-admin users — unauthenticated users always reach login
-  if (manutencao && session && !profile?.is_admin) {
+  // Maintenance blocks everyone except admins (unauthenticated + non-admin authenticated).
+  // The maintenance page provides a hidden admin login link so admins can reach login.
+  if (manutencao && !profile?.is_admin) {
     return <MaintenancePage />;
   }
   return <>{children}</>;

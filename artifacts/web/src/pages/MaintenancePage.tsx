@@ -1,3 +1,5 @@
+import { Link } from "wouter";
+
 const GOLD = "#c9a84c";
 const NAVY = "#0d1b2a";
 
@@ -34,9 +36,22 @@ export default function MaintenancePage() {
         Voltaremos em breve, obrigado pela paciência!
       </p>
       <div style={{ width: 48, height: 2, backgroundColor: "rgba(201,168,76,0.3)", borderRadius: 1, marginBottom: 24 }} />
-      <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", letterSpacing: 1, margin: 0 }}>
+      <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", letterSpacing: 1, margin: "0 0 40px" }}>
         ibhub — Rede do Vinho
       </p>
+
+      {/* Hidden admin bypass — only admins can use this to log in and access the platform */}
+      <Link href="/login">
+        <span style={{
+          fontSize: 11,
+          color: "rgba(255,255,255,0.15)",
+          cursor: "pointer",
+          textDecoration: "none",
+          letterSpacing: 0.5,
+        }}>
+          Acesso administrativo
+        </span>
+      </Link>
     </div>
   );
 }
