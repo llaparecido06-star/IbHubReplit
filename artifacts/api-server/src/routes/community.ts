@@ -66,10 +66,18 @@ router.post("/community/groups", async (req: Request, res: Response): Promise<vo
     return;
   }
 
-  await supabaseAdmin.from("conversation_participants").insert({
-    conversation_id: group.id,
-    user_id: userId,
-  });
+  // Add creator to both conversation_participants (for RLS messaging) and
+  // group_members (for member count + "my groups" list) with role "owner"
+  await Promise.all([
+    supabaseAdmin.from("conversation_participants").upsert(
+      { conversation_id: group.id, user_id: userId },
+      { onConflict: "conversation_id,user_id", ignoreDuplicates: true }
+    ),
+    supabaseAdmin.from("group_members").upsert(
+      { group_id: group.id, user_id: userId, role: "owner" },
+      { onConflict: "group_id,user_id", ignoreDuplicates: true }
+    ),
+  ]);
 
   res.status(201).json({ group });
 });
