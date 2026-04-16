@@ -32,7 +32,7 @@ export default function MarketItemScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, activeCompany } = useAuth();
 
   const [item, setItem] = useState<AppOpportunity | null>(null);
   const [loading, setLoading] = useState(true);
@@ -62,7 +62,7 @@ export default function MarketItemScreen() {
 
     setContacting(true);
     try {
-      const convoId = await getOrCreateDirectConversation(user.id, sellerId, true);
+      const convoId = await getOrCreateDirectConversation(user.id, sellerId, true, activeCompany?.id ?? null);
       if (convoId) {
         const companyId = item.company_page_id;
 

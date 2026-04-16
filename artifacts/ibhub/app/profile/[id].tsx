@@ -40,7 +40,7 @@ const FALLBACK_USER = {
 export default function PublicProfileScreen() {
   const colors  = useColors();
   const router  = useRouter();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, activeCompany } = useAuth();
   const { id }  = useLocalSearchParams<{ id: string }>();
   const insets  = useSafeAreaInsets();
 
@@ -223,7 +223,7 @@ export default function PublicProfileScreen() {
   const handleMessage = async () => {
     if (!currentUser?.id || !id || !canMessage || messagingLoading) return;
     setMessagingLoading(true);
-    const cid = await API.getOrCreateDirectConversation(currentUser.id, id);
+    const cid = await API.getOrCreateDirectConversation(currentUser.id, id, false, activeCompany?.id ?? null);
     setMessagingLoading(false);
     if (cid) router.push(`/chat/${cid}` as any);
   };

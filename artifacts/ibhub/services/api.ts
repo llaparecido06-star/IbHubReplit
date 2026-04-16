@@ -135,6 +135,7 @@ export interface AppConversation {
   participant?: { id: string; full_name: string; avatar_url?: string | null } | null;
   participant_company?: { id: string; name: string; avatar_url?: string | null } | null;
   accepted?: boolean;
+  company_page_id?: string | null;
 }
 
 // ─── POSTS ───────────────────────────────────────────────────────────────────
@@ -1906,7 +1907,7 @@ export async function fetchConversations(userId: string, activeCompanyId?: strin
       supabase.rpc("get_my_conversations_participants", { p_user_id: userId }),
       supabase
         .from("conversation_participants")
-        .select(`conversation_id, accepted, last_read_at, conversation:conversations(id, is_group, name, created_at)`)
+        .select(`conversation_id, accepted, last_read_at, conversation:conversations(id, is_group, name, created_at, company_page_id)`)
         .eq("user_id", userId),
     ]);
 
@@ -1980,6 +1981,7 @@ export async function fetchConversations(userId: string, activeCompanyId?: strin
         participant,
         participant_company: otherSenderCompanyId ? { id: otherSenderCompanyId, name: "", avatar_url: null } : null,
         accepted: pInfo?.my_accepted ?? (row.accepted ?? true),
+        company_page_id: (convo as any).company_page_id ?? null,
       });
     }
 
@@ -2001,24 +2003,16 @@ export async function fetchConversations(userId: string, activeCompanyId?: strin
       }
     }
 
-    // ── Identity filter ────────────────────────────────────────────────────────
-    // When in company mode, only show conversations that have at least one
-    // message sent by the current user acting as that company.
-    if (activeCompanyId) {
-      const { data: companyMsgs } = await supabase
-        .from("messages")
-        .select("conversation_id")
-        .eq("sender_id", userId)
-        .eq("from_company_page_id", activeCompanyId);
-      const companyConvIds = new Set((companyMsgs ?? []).map((m: any) => m.conversation_id as string));
-      return results
-        .filter(r => companyConvIds.has(r.id))
-        .sort((a, b) => new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime());
-    }
-
-    return results.sort(
+    // ── Identity filter (personal vs company) ─────────────────────────────────
+    // Conversations are tagged at creation with company_page_id (null = personal).
+    // Group chats (is_group=true) always appear in both modes.
+    const sorted = results.sort(
       (a, b) => new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime(),
     );
+    if (activeCompanyId) {
+      return sorted.filter(r => r.is_group || r.company_page_id === activeCompanyId);
+    }
+    return sorted.filter(r => r.is_group || !r.company_page_id);
   } catch (e) {
     console.error("fetchConversations:", e);
     return [];
@@ -2327,12 +2321,19 @@ export async function countPendingReports(): Promise<number> {
   } catch { return 0; }
 }
 
-export async function getOrCreateDirectConversation(userId1: string, userId2: string, forceAccepted = false): Promise<string | null> {
+export async function getOrCreateDirectConversation(
+  userId1: string,
+  userId2: string,
+  forceAccepted = false,
+  companyPageId?: string | null,
+): Promise<string | null> {
   try {
-    // Use SECURITY DEFINER RPC to find existing conversation (bypasses cp_select RLS)
+    // Use SECURITY DEFINER RPC to find existing conversation (bypasses cp_select RLS).
+    // The RPC also matches on company_page_id so personal and company threads stay separate.
     const { data: existing } = await supabase.rpc("get_direct_conversation", {
-      p_user1: userId1,
-      p_user2: userId2,
+      p_user1:           userId1,
+      p_user2:           userId2,
+      p_company_page_id: companyPageId ?? null,
     });
     if (existing) return existing as string;
 
@@ -2368,7 +2369,7 @@ export async function getOrCreateDirectConversation(userId1: string, userId2: st
 
     const { error: convErr } = await supabase
       .from("conversations")
-      .insert({ id: convoId, is_group: false });
+      .insert({ id: convoId, is_group: false, company_page_id: companyPageId ?? null });
     if (convErr) { console.error("getOrCreateDirectConversation insert:", convErr); return null; }
 
     await supabase.from("conversation_participants").insert([

@@ -42,7 +42,7 @@ export default function OpportunityDetailScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, activeCompany } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const topPad    = Platform.OS === "web" ? 67 : insets.top;
@@ -144,7 +144,7 @@ export default function OpportunityDetailScreen() {
       setOpp((prev) => prev ? { ...prev, is_applied: true, applications_count: (prev.applications_count ?? 0) + 1 } : prev);
 
       const chatTargetId = opp.company_page?.owner_id ?? opp.created_by;
-      const convoId = await getOrCreateDirectConversation(user.id, chatTargetId, true);
+      const convoId = await getOrCreateDirectConversation(user.id, chatTargetId, true, activeCompany?.id ?? null);
       if (convoId) {
         const cpId = opp.company_page_id ?? null;
         const appMsg = [
@@ -178,7 +178,7 @@ export default function OpportunityDetailScreen() {
     setContactSending(true);
     try {
       const chatTargetId = opp.company_page?.owner_id ?? opp.created_by;
-      const convoId = await getOrCreateDirectConversation(user.id, chatTargetId, true);
+      const convoId = await getOrCreateDirectConversation(user.id, chatTargetId, true, activeCompany?.id ?? null);
       if (convoId) {
         await sendMessage(convoId, user.id, text);
         closeContactSheet();

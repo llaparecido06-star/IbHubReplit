@@ -212,7 +212,7 @@ export default function MessagesScreen() {
   const handleStartChat = async (targetUserId: string) => {
     if (!user?.id || startingChat) return;
     setStartingChat(targetUserId);
-    const convoId = await API.getOrCreateDirectConversation(user.id, targetUserId);
+    const convoId = await API.getOrCreateDirectConversation(user.id, targetUserId, false, activeCompany?.id ?? null);
     setStartingChat(null);
     setShowNewConvo(false);
     if (convoId) router.push(`/chat/${convoId}` as any);
