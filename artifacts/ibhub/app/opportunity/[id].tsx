@@ -52,7 +52,7 @@ export default function OpportunityDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [isInterested, setIsInterested] = useState(false);
 
-  // Apply modal state
+  // Apply sheet state
   const [showApply, setShowApply]   = useState(false);
   const [message, setMessage]       = useState("");
   const [cvName, setCvName]         = useState<string | null>(null);
@@ -61,12 +61,18 @@ export default function OpportunityDetailScreen() {
   const [usingSavedCv, setUsingSavedCv] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Animated bottom sheet
-  const slideAnim = useRef(new Animated.Value(400)).current;
+  // Direct message sheet state
+  const [showContact, setShowContact] = useState(false);
+  const [directMsg, setDirectMsg]     = useState("");
+  const [contactSending, setContactSending] = useState(false);
+
+  // Animated bottom sheet (shared)
+  const slideAnim        = useRef(new Animated.Value(500)).current;
+  const contactSlideAnim = useRef(new Animated.Value(400)).current;
+
   const openSheet = () => {
     setShowApply(true);
     Animated.timing(slideAnim, { toValue: 0, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-    // Auto-load saved CV from last application
     if (user?.id && !savedCv) {
       fetchUserLastCV(user.id).then((cv) => {
         if (cv) { setSavedCv(cv); setUsingSavedCv(true); }
@@ -74,7 +80,15 @@ export default function OpportunityDetailScreen() {
     }
   };
   const closeSheet = () => {
-    Animated.timing(slideAnim, { toValue: 400, duration: 260, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => setShowApply(false));
+    Animated.timing(slideAnim, { toValue: 500, duration: 260, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => setShowApply(false));
+  };
+
+  const openContactSheet = () => {
+    setShowContact(true);
+    Animated.timing(contactSlideAnim, { toValue: 0, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  };
+  const closeContactSheet = () => {
+    Animated.timing(contactSlideAnim, { toValue: 400, duration: 240, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => setShowContact(false));
   };
 
   useEffect(() => {
@@ -84,7 +98,6 @@ export default function OpportunityDetailScreen() {
       setOpp(data);
       if (data?.is_interested) setIsInterested(true);
       setLoading(false);
-      // Track view — skip if creator is viewing their own listing
       if (data && data.created_by !== user.id) {
         trackOpportunityView(id);
       }
@@ -115,11 +128,9 @@ export default function OpportunityDetailScreen() {
       let cvFileName: string | null = null;
 
       if (cvUri) {
-        // User picked a new CV — upload it
         cvUrl = await uploadCV(cvUri, user.id);
         cvFileName = cvName;
       } else if (usingSavedCv && savedCv) {
-        // Auto-use previously saved CV
         cvUrl = savedCv.url;
         cvFileName = savedCv.name;
       }
@@ -132,19 +143,16 @@ export default function OpportunityDetailScreen() {
       closeSheet();
       setOpp((prev) => prev ? { ...prev, is_applied: true, applications_count: (prev.applications_count ?? 0) + 1 } : prev);
 
-      // Auto-create conversation — route to company owner if page is present
       const chatTargetId = opp.company_page?.owner_id ?? opp.created_by;
       const convoId = await getOrCreateDirectConversation(user.id, chatTargetId, true);
       if (convoId) {
         const cpId = opp.company_page_id ?? null;
-        // Send standardized application text — sender is the applicant, no companyPageId
         const appMsg = [
           `Me candidatei na sua vaga **${opp.title}**${cvUrl ? " e meu currículo abaixo" : ""}.`,
           message.trim() ? `\n\n${message.trim()}` : "",
         ].join("");
         await sendMessage(convoId, user.id, appMsg);
 
-        // If CV attached, also send as file message so recruiter can download
         if (cvUrl && cvFileName) {
           await sendMessage(convoId, user.id, cvFileName, {
             message_type: "file",
@@ -152,7 +160,6 @@ export default function OpportunityDetailScreen() {
           });
         }
 
-        // Route with companyId for UI context (recruiter side), but sender is always the applicant
         const route = cpId ? `/chat/${convoId}?companyId=${cpId}` : `/chat/${convoId}`;
         router.push(route as any);
       } else {
@@ -160,6 +167,29 @@ export default function OpportunityDetailScreen() {
       }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSendDirectMessage = async () => {
+    if (!opp || !user?.id) return;
+    const text = directMsg.trim();
+    if (!text) { Alert.alert("Atenção", "Digite uma mensagem para enviar."); return; }
+
+    setContactSending(true);
+    try {
+      const chatTargetId = opp.company_page?.owner_id ?? opp.created_by;
+      const convoId = await getOrCreateDirectConversation(user.id, chatTargetId, true);
+      if (convoId) {
+        await sendMessage(convoId, user.id, text);
+        closeContactSheet();
+        const cpId = opp.company_page_id ?? null;
+        const route = cpId ? `/chat/${convoId}?companyId=${cpId}` : `/chat/${convoId}`;
+        router.push(route as any);
+      } else {
+        Alert.alert("Erro", "Não foi possível abrir a conversa. Tente novamente.");
+      }
+    } finally {
+      setContactSending(false);
     }
   };
 
@@ -205,6 +235,11 @@ export default function OpportunityDetailScreen() {
   const isOwner = user?.id === opp.created_by;
   const isVaga  = opp.type === "vaga";
 
+  // Company display — always prioritise company_page, never link to personal profile
+  const hasCompanyPage = !!opp.company_page_id;
+  const companyName    = opp.company_page?.name ?? opp.company ?? null;
+  const companyAvatar  = opp.company_page?.avatar_url ?? null;
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
 
@@ -220,40 +255,39 @@ export default function OpportunityDetailScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ paddingBottom: bottomPad + 100 }}
+        contentContainerStyle={{ paddingBottom: bottomPad + 120 }}
         showsVerticalScrollIndicator={false}
       >
         {/* Hero card */}
         <View style={[styles.heroCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.heroTitle, { color: colors.foreground }]}>{opp.title}</Text>
 
-          {opp.company_page ? (
-            <TouchableOpacity
-              style={styles.companyCard}
-              onPress={() => router.push(`/empresa/${opp.company_page_id}` as any)}
-            >
-              {opp.company_page.avatar_url ? (
-                <Image source={{ uri: opp.company_page.avatar_url }} style={styles.companyAvatar} />
-              ) : (
-                <View style={[styles.companyAvatar, styles.companyAvatarPlaceholder, { backgroundColor: colors.muted }]}>
-                  <Feather name="briefcase" size={16} color={colors.mutedForeground} />
-                </View>
-              )}
-              <View>
-                <Text style={[styles.companyCardName, { color: colors.gold }]}>{opp.company_page.name}</Text>
-                {opp.company ? (
-                  <Text style={[styles.heroSub, { color: colors.mutedForeground, marginTop: 0 }]}>{opp.company}</Text>
-                ) : null}
+          {/* Company card — always shows company, never personal profile */}
+          <TouchableOpacity
+            style={styles.companyCard}
+            onPress={() => hasCompanyPage ? router.push(`/empresa/${opp.company_page_id}` as any) : undefined}
+            activeOpacity={hasCompanyPage ? 0.8 : 1}
+            disabled={!hasCompanyPage}
+          >
+            {companyAvatar ? (
+              <Image source={{ uri: companyAvatar }} style={styles.companyAvatar} />
+            ) : (
+              <View style={[styles.companyAvatar, styles.companyAvatarPlaceholder, { backgroundColor: colors.muted }]}>
+                <Feather name="briefcase" size={16} color={colors.mutedForeground} />
               </View>
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.companyCardName, { color: colors.gold }]}>
+                {companyName ?? "Empresa anunciante"}
+              </Text>
+              {opp.company && opp.company !== companyName ? (
+                <Text style={[styles.heroSub, { color: colors.mutedForeground, marginTop: 0 }]}>{opp.company}</Text>
+              ) : null}
+            </View>
+            {hasCompanyPage && (
               <Feather name="chevron-right" size={16} color={colors.mutedForeground} style={{ marginLeft: "auto" }} />
-            </TouchableOpacity>
-          ) : isVaga && opp.company ? (
-            <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>{opp.company}</Text>
-          ) : opp.creator?.full_name ? (
-            <TouchableOpacity onPress={() => router.push(`/profile/${opp.creator!.id}` as any)}>
-              <Text style={[styles.heroSub, { color: colors.gold }]}>por {opp.creator.full_name}</Text>
-            </TouchableOpacity>
-          ) : null}
+            )}
+          </TouchableOpacity>
 
           <View style={styles.pillsRow}>
             {opp.category ? (
@@ -334,44 +368,80 @@ export default function OpportunityDetailScreen() {
         <View style={[styles.bottomBar, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: bottomPad + 8 }]}>
           {isVaga ? (
             opp.is_applied ? (
-              <View style={[styles.appliedBadge, { backgroundColor: colors.secondary }]}>
-                <Feather name="check-circle" size={16} color={colors.mutedForeground} />
-                <Text style={[styles.appliedText, { color: colors.mutedForeground }]}>Candidatura enviada</Text>
+              <View style={{ gap: 10 }}>
+                <View style={[styles.appliedBadge, { backgroundColor: colors.secondary }]}>
+                  <Feather name="check-circle" size={16} color={colors.mutedForeground} />
+                  <Text style={[styles.appliedText, { color: colors.mutedForeground }]}>Candidatura enviada</Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.actionBtnSecondary, { borderColor: colors.navy }]}
+                  onPress={openContactSheet}
+                >
+                  <Feather name="message-circle" size={16} color={colors.navy} />
+                  <Text style={[styles.actionBtnSecondaryText, { color: colors.navy }]}>Mensagem para a empresa</Text>
+                </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: colors.gold }]}
-                onPress={openSheet}
-                activeOpacity={0.85}
-              >
-                <Feather name="send" size={17} color="#fff" />
-                <Text style={styles.actionBtnText}>Candidatar-se</Text>
-              </TouchableOpacity>
+              <View style={{ gap: 10 }}>
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: colors.gold }]}
+                  onPress={openSheet}
+                  activeOpacity={0.85}
+                >
+                  <Feather name="send" size={17} color="#fff" />
+                  <Text style={styles.actionBtnText}>Candidatar-se</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtnSecondary, { borderColor: colors.navy }]}
+                  onPress={openContactSheet}
+                >
+                  <Feather name="message-circle" size={16} color={colors.navy} />
+                  <Text style={[styles.actionBtnSecondaryText, { color: colors.navy }]}>Mensagem direta para a empresa</Text>
+                </TouchableOpacity>
+              </View>
             )
           ) : isInterested ? (
-            <View style={[styles.appliedBadge, { backgroundColor: colors.secondary }]}>
-              <Feather name="check-circle" size={16} color={colors.gold} />
-              <Text style={[styles.appliedText, { color: colors.gold }]}>Interesse registrado</Text>
+            <View style={{ gap: 10 }}>
+              <View style={[styles.appliedBadge, { backgroundColor: colors.secondary }]}>
+                <Feather name="check-circle" size={16} color={colors.gold} />
+                <Text style={[styles.appliedText, { color: colors.gold }]}>Interesse registrado</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.actionBtnSecondary, { borderColor: colors.navy }]}
+                onPress={openContactSheet}
+              >
+                <Feather name="message-circle" size={16} color={colors.navy} />
+                <Text style={[styles.actionBtnSecondaryText, { color: colors.navy }]}>Mensagem para a empresa</Text>
+              </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: colors.navy }]}
-              onPress={handleInterest}
-              disabled={submitting}
-              activeOpacity={0.85}
-            >
-              {submitting ? <ActivityIndicator color="#fff" size="small" /> : (
-                <>
-                  <Feather name="message-circle" size={17} color="#fff" />
-                  <Text style={styles.actionBtnText}>Tenho interesse</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            <View style={{ gap: 10 }}>
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: colors.navy }]}
+                onPress={handleInterest}
+                disabled={submitting}
+                activeOpacity={0.85}
+              >
+                {submitting ? <ActivityIndicator color="#fff" size="small" /> : (
+                  <>
+                    <Feather name="message-circle" size={17} color="#fff" />
+                    <Text style={styles.actionBtnText}>Tenho interesse</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtnSecondary, { borderColor: colors.gold }]}
+                onPress={openContactSheet}
+              >
+                <Feather name="mail" size={16} color={colors.gold} />
+                <Text style={[styles.actionBtnSecondaryText, { color: colors.gold }]}>Mensagem direta para a empresa</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
       )}
 
-      {/* Apply bottom sheet overlay */}
+      {/* Apply bottom sheet */}
       {showApply && (
         <Pressable style={styles.overlay} onPress={closeSheet}>
           <Pressable onPress={(e) => e.stopPropagation()}>
@@ -386,7 +456,6 @@ export default function OpportunityDetailScreen() {
                 <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Enviar candidatura</Text>
                 <Text style={[styles.sheetSub, { color: colors.mutedForeground }]}>{opp.title}</Text>
 
-                {/* CV — saved or new */}
                 {savedCv && !cvUri ? (
                   <View style={[styles.cvPicker, { borderColor: usingSavedCv ? colors.gold : colors.border, backgroundColor: colors.background }]}>
                     <Feather name="file-text" size={18} color={colors.gold} />
@@ -425,7 +494,6 @@ export default function OpportunityDetailScreen() {
                   </TouchableOpacity>
                 )}
 
-                {/* Message */}
                 <TextInput
                   style={[styles.msgInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background }]}
                   placeholder="Mensagem para o recrutador (opcional)"
@@ -454,49 +522,101 @@ export default function OpportunityDetailScreen() {
           </Pressable>
         </Pressable>
       )}
+
+      {/* Direct message to company sheet */}
+      {showContact && (
+        <Pressable style={styles.overlay} onPress={closeContactSheet}>
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+              <Animated.View
+                style={[
+                  styles.sheet,
+                  { backgroundColor: colors.card, transform: [{ translateY: contactSlideAnim }] },
+                ]}
+              >
+                <View style={styles.sheetHandle} />
+                <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Mensagem para a empresa</Text>
+                <Text style={[styles.sheetSub, { color: colors.mutedForeground }]}>
+                  {companyName ?? opp.title}
+                </Text>
+
+                <TextInput
+                  style={[styles.msgInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background, minHeight: 120 }]}
+                  placeholder={`Olá! Tenho interesse em "${opp.title}". Gostaria de mais informações.`}
+                  placeholderTextColor={colors.mutedForeground}
+                  value={directMsg}
+                  onChangeText={setDirectMsg}
+                  multiline
+                  numberOfLines={5}
+                  textAlignVertical="top"
+                  autoFocus
+                />
+
+                <TouchableOpacity
+                  style={[styles.submitBtn, { backgroundColor: contactSending ? colors.border : colors.navy }]}
+                  onPress={handleSendDirectMessage}
+                  disabled={contactSending}
+                  activeOpacity={0.85}
+                >
+                  {contactSending ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <>
+                      <Feather name="send" size={16} color="#fff" />
+                      <Text style={styles.submitBtnText}>Enviar mensagem</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </Animated.View>
+            </KeyboardAvoidingView>
+          </Pressable>
+        </Pressable>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container:    { flex: 1 },
-  center:       { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
-  notFound:     { fontSize: 15 },
-  header:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 10, borderBottomWidth: 1 },
-  backBtn:      { padding: 4 },
-  headerTitle:  { fontSize: 17, fontWeight: "700", flex: 1, textAlign: "center" },
-  heroCard:     { margin: 14, borderRadius: 14, borderWidth: 1, padding: 20, gap: 12 },
-  heroTitle:    { fontSize: 20, fontWeight: "800", lineHeight: 26 },
-  heroSub:      { fontSize: 14, marginTop: -4 },
-  pillsRow:     { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  pill:         { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
-  pillText:     { fontSize: 12, fontWeight: "700" },
-  metaGrid:     { gap: 10 },
-  metaItem:     { flexDirection: "row", alignItems: "center", gap: 8 },
-  metaText:     { fontSize: 13, flex: 1 },
-  section:      { marginHorizontal: 14, marginBottom: 14 },
-  sectionTitle: { fontSize: 16, fontWeight: "700", marginBottom: 8 },
-  sectionBody:  { fontSize: 14, lineHeight: 22 },
-  expiryBanner: { marginHorizontal: 14, marginBottom: 14, flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 10, borderWidth: 1 },
-  expiryText:   { fontSize: 13 },
-  bottomBar:    { paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1 },
-  actionBtn:    { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 15, borderRadius: 14 },
-  actionBtnText:{ color: "#fff", fontSize: 15, fontWeight: "800" },
-  appliedBadge: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 15, borderRadius: 14 },
-  appliedText:  { fontSize: 14, fontWeight: "600" },
-  overlay:      { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
-  sheet:        { borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 20, paddingBottom: 40, gap: 14, shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 20 },
-  sheetHandle:  { width: 38, height: 4, borderRadius: 2, backgroundColor: "#ccc", alignSelf: "center", marginBottom: 4 },
-  sheetTitle:   { fontSize: 18, fontWeight: "800" },
-  sheetSub:     { fontSize: 13, marginTop: -6 },
-  cvPicker:     { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1.5, borderRadius: 12, borderStyle: "dashed", padding: 14 },
-  cvLabel:      { fontSize: 14, fontWeight: "600" },
-  cvHint:       { fontSize: 11, marginTop: 2 },
-  msgInput:     { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, minHeight: 100 },
-  submitBtn:    { paddingVertical: 15, borderRadius: 14, alignItems: "center" },
-  submitBtnText:{ color: "#fff", fontSize: 15, fontWeight: "800" },
-  companyCard:  { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 6, marginBottom: 2, paddingVertical: 6 },
-  companyAvatar:{ width: 36, height: 36, borderRadius: 8 },
+  container:              { flex: 1 },
+  center:                 { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  notFound:               { fontSize: 15 },
+  header:                 { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 10, borderBottomWidth: 1 },
+  backBtn:                { padding: 4 },
+  headerTitle:            { fontSize: 17, fontWeight: "700", flex: 1, textAlign: "center" },
+  heroCard:               { margin: 14, borderRadius: 14, borderWidth: 1, padding: 20, gap: 12 },
+  heroTitle:              { fontSize: 20, fontWeight: "800", lineHeight: 26 },
+  heroSub:                { fontSize: 14, marginTop: -4 },
+  pillsRow:               { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  pill:                   { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
+  pillText:               { fontSize: 12, fontWeight: "700" },
+  metaGrid:               { gap: 10 },
+  metaItem:               { flexDirection: "row", alignItems: "center", gap: 8 },
+  metaText:               { fontSize: 13, flex: 1 },
+  section:                { marginHorizontal: 14, marginBottom: 14 },
+  sectionTitle:           { fontSize: 16, fontWeight: "700", marginBottom: 8 },
+  sectionBody:            { fontSize: 14, lineHeight: 22 },
+  expiryBanner:           { marginHorizontal: 14, marginBottom: 14, flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 10, borderWidth: 1 },
+  expiryText:             { fontSize: 13 },
+  bottomBar:              { paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1 },
+  actionBtn:              { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 15, borderRadius: 14 },
+  actionBtnText:          { color: "#fff", fontSize: 15, fontWeight: "800" },
+  actionBtnSecondary:     { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, borderRadius: 14, borderWidth: 1.5 },
+  actionBtnSecondaryText: { fontSize: 14, fontWeight: "700" },
+  appliedBadge:           { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, borderRadius: 14 },
+  appliedText:            { fontSize: 14, fontWeight: "600" },
+  overlay:                { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  sheet:                  { borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 20, paddingBottom: 40, gap: 14, shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 20 },
+  sheetHandle:            { width: 38, height: 4, borderRadius: 2, backgroundColor: "#ccc", alignSelf: "center", marginBottom: 4 },
+  sheetTitle:             { fontSize: 18, fontWeight: "800" },
+  sheetSub:               { fontSize: 13, marginTop: -6 },
+  cvPicker:               { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1.5, borderRadius: 12, borderStyle: "dashed", padding: 14 },
+  cvLabel:                { fontSize: 14, fontWeight: "600" },
+  cvHint:                 { fontSize: 11, marginTop: 2 },
+  msgInput:               { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, minHeight: 100 },
+  submitBtn:              { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 15, borderRadius: 14 },
+  submitBtnText:          { color: "#fff", fontSize: 15, fontWeight: "800" },
+  companyCard:            { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 6, marginBottom: 2, paddingVertical: 6 },
+  companyAvatar:          { width: 36, height: 36, borderRadius: 8 },
   companyAvatarPlaceholder: { alignItems: "center", justifyContent: "center" },
-  companyCardName: { fontSize: 14, fontWeight: "700" },
+  companyCardName:        { fontSize: 14, fontWeight: "700" },
 });

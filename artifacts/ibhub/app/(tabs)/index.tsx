@@ -1344,7 +1344,7 @@ export default function FeedScreen() {
               <View>
                 <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>EAN / CÓDIGO DE BARRAS</Text>
                 <View style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: colors.border, borderRadius: 10, backgroundColor: "#fafaf8", paddingHorizontal: 12 }}>
-                  <MaterialCommunityIcons name="barcode" size={20} color={colors.gold} style={{ marginRight: 8 }} />
+                  <Feather name="hash" size={18} color={colors.gold} style={{ marginRight: 8 }} />
                   <TextInput
                     style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: 10 }}
                     placeholder="Ex: 7896123456789 (EAN-13)"
