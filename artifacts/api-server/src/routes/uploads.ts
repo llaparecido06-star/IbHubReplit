@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { resolveUserId, requirePlanFeature } from "../lib/planCheck.js";
+import multer from "multer";
 
 const router: IRouter = Router();
 
@@ -101,6 +102,69 @@ router.post("/uploads/chat", async (req: Request, res: Response): Promise<void> 
     res.status(500).json({ error: "Upload failed" });
   }
 });
+
+/**
+ * POST /api/uploads/chat-form  (multipart/form-data)
+ * FormData fields: file (binary), userId (string), mimeType (string)
+ * Returns: { url: string }
+ * Used by mobile clients — avoids base64 encoding of large audio/video files.
+ */
+const chatUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 75 * 1024 * 1024 },
+});
+
+router.post(
+  "/uploads/chat-form",
+  chatUpload.single("file"),
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith("Bearer ")) {
+        res.status(401).json({ error: "Missing authorization header" });
+        return;
+      }
+
+      const file = (req as any).file as Express.Multer.File | undefined;
+      if (!file) {
+        res.status(400).json({ error: "No file uploaded" });
+        return;
+      }
+
+      const { userId, mimeType } = req.body as { userId?: string; mimeType?: string };
+      if (!userId) {
+        res.status(400).json({ error: "userId is required" });
+        return;
+      }
+
+      const safeMime = mimeType || file.mimetype || "application/octet-stream";
+      const ext = (safeMime.split("/")[1] ?? "bin")
+        .replace("jpeg", "jpg")
+        .replace("quicktime", "mov")
+        .replace("x-m4a", "m4a");
+      const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+      const path = `chat/${userId}/${fileName}`;
+
+      await ensureBucket();
+
+      const { error } = await supabaseAdmin.storage
+        .from(BUCKET)
+        .upload(path, file.buffer, { contentType: safeMime, upsert: false });
+
+      if (error) {
+        console.error("uploads/chat-form error:", error);
+        res.status(500).json({ error: error.message });
+        return;
+      }
+
+      const { data } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(path);
+      res.json({ url: data.publicUrl });
+    } catch (err) {
+      console.error("uploads/chat-form:", err);
+      res.status(500).json({ error: "Upload failed" });
+    }
+  }
+);
 
 /**
  * POST /api/uploads/portfolio

@@ -2,6 +2,7 @@ import { supabase } from "@/context/AuthContext";
 import { Post } from "@/components/feed/PostCard";
 import { compressAvatar, compressPostImage, compressLogoImage } from "@/utils/compressImage";
 import * as FileSystem from "expo-file-system";
+import { Platform } from "react-native";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 
@@ -2393,7 +2394,7 @@ export async function uploadChatMedia(
   try {
     const safeMime = mimeType || "image/jpeg";
     const ext = safeMime.includes("/")
-      ? safeMime.split("/")[1]?.replace("jpeg", "jpg").replace("quicktime", "mov") ?? "jpg"
+      ? safeMime.split("/")[1]?.replace("jpeg", "jpg").replace("quicktime", "mov").replace("x-m4a", "m4a") ?? "jpg"
       : "jpg";
     const fileName = `upload_${Date.now()}.${ext}`;
 
@@ -2403,29 +2404,35 @@ export async function uploadChatMedia(
     const userId = sessionData?.session?.user?.id;
     if (!token || !userId) return null;
 
-    // Use expo-file-system to read the local file as base64 — this works
-    // reliably on iOS and Android for file://, content://, and audio recorder URIs.
-    // FileReader is not available in Hermes on iOS and fetch(localUri) fails for
-    // audio/document URIs, so this is the only correct approach in React Native.
-    let localUri = uri;
-    // content:// and ph:// URIs must be copied to a local file:// path first
-    if (localUri.startsWith("ph://") || localUri.startsWith("content://")) {
-      const tmpPath = `${FileSystem.cacheDirectory}tmp_upload_${Date.now()}.${ext}`;
-      await FileSystem.copyAsync({ from: localUri, to: tmpPath });
-      localUri = tmpPath;
-    }
-    const base64 = await FileSystem.readAsStringAsync(localUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
+    const formData = new FormData();
+    formData.append("userId", userId);
+    formData.append("mimeType", safeMime);
 
-    // POST to API server which uses service role key — bypasses Supabase RLS
-    const res = await fetch(`${apiUrl}/uploads/chat`, {
+    if (Platform.OS === "web") {
+      // On web, uri is typically a blob: URL — fetch it to get a Blob object
+      const blobRes = await fetch(uri);
+      const blob = await blobRes.blob();
+      formData.append("file", blob, fileName);
+    } else {
+      // On native (iOS/Android), copy ph:// and content:// URIs to file:// first
+      let localUri = uri;
+      if (localUri.startsWith("ph://") || localUri.startsWith("content://")) {
+        const tmpPath = `${FileSystem.cacheDirectory}tmp_upload_${Date.now()}.${ext}`;
+        await FileSystem.copyAsync({ from: localUri, to: tmpPath });
+        localUri = tmpPath;
+      }
+      // Append as a file object — React Native's native fetch streams this directly
+      // without loading the full file into JS memory (avoids base64 overhead and OOM)
+      formData.append("file", { uri: localUri, name: fileName, type: safeMime } as any);
+    }
+
+    const res = await fetch(`${apiUrl}/uploads/chat-form`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
+        // Do NOT set Content-Type — let fetch set multipart/form-data with boundary
       },
-      body: JSON.stringify({ fileBase64: base64, fileName, mimeType: safeMime, userId }),
+      body: formData,
     });
 
     if (!res.ok) {
