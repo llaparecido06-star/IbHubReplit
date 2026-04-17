@@ -22,6 +22,7 @@ import type { AppStory, StoryGroup } from "@/services/api";
 
 const STORY_DURATION = 5000;
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const STORY_HEIGHT = Math.round(SCREEN_WIDTH * (16 / 9));
 
 interface TaggedProfile {
   id: string;
@@ -174,11 +175,12 @@ export default function StoryViewerScreen() {
 
   return (
     <View
-      style={[styles.container, { backgroundColor: "#000" }]}
+      style={[styles.container, { backgroundColor: "#000", justifyContent: "center", alignItems: "center" }]}
       onStartShouldSetResponder={() => true}
       onResponderGrant={onTouchStart}
       onResponderRelease={onTouchEnd}
     >
+      <View style={{ width: SCREEN_WIDTH, height: STORY_HEIGHT, overflow: "hidden" }}>
       {currentStory.image_url ? (
         <Image
           source={{ uri: currentStory.image_url }}
@@ -256,6 +258,7 @@ export default function StoryViewerScreen() {
             ))}
           </ScrollView>
         )}
+      </View>
       </View>
     </View>
   );

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Dimensions,
   Image,
@@ -37,6 +37,22 @@ function getImageUrls(post: Post): string[] {
   }
   if (urls.length === 0 && post.image_url) urls.push(post.image_url);
   return urls;
+}
+
+function SmartImage({ url }: { url: string }) {
+  const [portrait, setPortrait] = useState<boolean | null>(null);
+  const imgHeight = portrait ? Math.round(SCREEN_WIDTH * (5 / 4)) : 220;
+  return (
+    <Image
+      source={{ uri: url }}
+      style={{ width: "100%", height: imgHeight, borderRadius: 10 }}
+      resizeMode="cover"
+      onLoad={(e: any) => {
+        const src = e?.nativeEvent?.source ?? e?.source;
+        if (src?.width && src?.height) setPortrait(src.height > src.width);
+      }}
+    />
+  );
 }
 
 function InlineVideoPlayer({ videoUrl }: { videoUrl: string }) {
@@ -113,12 +129,7 @@ export function PostRichContent({ post, onVote }: Props) {
       {imageUrls.length > 0 && (
         <View style={{ gap: 4, marginTop: 8 }}>
           {imageUrls.slice(0, 4).map((url, i) => (
-            <Image
-              key={`${url}-${i}`}
-              source={{ uri: url }}
-              style={{ width: "100%", height: 220, borderRadius: 10 }}
-              resizeMode="cover"
-            />
+            <SmartImage key={`${url}-${i}`} url={url} />
           ))}
         </View>
       )}
