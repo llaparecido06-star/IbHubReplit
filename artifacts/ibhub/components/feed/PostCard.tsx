@@ -148,7 +148,7 @@ const videoStyles = StyleSheet.create({
   container: {
     marginTop: 10,
     width: "100%",
-    height: SCREEN_WIDTH * 0.58,
+    height: Math.round(SCREEN_WIDTH * (16 / 9)),
     borderRadius: 12,
     overflow: "hidden",
     backgroundColor: "#000",

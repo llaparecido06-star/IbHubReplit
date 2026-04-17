@@ -48,7 +48,7 @@ function InlineVideoPlayer({ videoUrl }: { videoUrl: string }) {
   return (
     <TouchableOpacity
       onPress={() => { if (player.playing) player.pause(); else player.play(); }}
-      style={{ width: "100%", height: SCREEN_WIDTH * 0.56, borderRadius: 10, overflow: "hidden", backgroundColor: "#000", marginTop: 8 }}
+      style={{ width: "100%", height: Math.round(SCREEN_WIDTH * (16 / 9)), borderRadius: 10, overflow: "hidden", backgroundColor: "#000", marginTop: 8 }}
       activeOpacity={0.9}
     >
       <VideoView
