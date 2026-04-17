@@ -12,6 +12,186 @@ import { AntDesign, Feather, MaterialCommunityIcons } from "@/components/ui/Icon
 import { useColors } from "@/hooks/useColors";
 import type { Post } from "./PostCard";
 
+/* ─── Wine Tasting Card ─────────────────────────────────────────────────── */
+
+type WineField = {
+  prefix: string;
+  iconLib: "feather" | "mci";
+  icon: string;
+  label: string | null;
+  isTitle?: boolean;
+  isScore?: boolean;
+};
+
+const WINE_FIELDS: WineField[] = [
+  { prefix: "🍷 Degustação:", iconLib: "mci",     icon: "glass-wine", label: null,            isTitle: true },
+  { prefix: "🏠 Produtor:",   iconLib: "feather",  icon: "home",       label: "Produtor" },
+  { prefix: "🌿 Uva/Casta:", iconLib: "feather",  icon: "layers",     label: "Uva/Casta" },
+  { prefix: "📅 Safra:",      iconLib: "feather",  icon: "calendar",   label: "Safra" },
+  { prefix: "🏷️ EAN:",        iconLib: "feather",  icon: "tag",        label: "EAN" },
+  { prefix: "⭐ Pontuação:",   iconLib: "mci",      icon: "star",       label: "Pontuação",    isScore: true },
+  { prefix: "👃 Aroma:",       iconLib: "feather",  icon: "wind",       label: "Aroma" },
+  { prefix: "👅 Sabor:",       iconLib: "feather",  icon: "zap",        label: "Sabor" },
+  { prefix: "🍽️ Harmonização:", iconLib: "feather", icon: "heart",      label: "Harmonização" },
+  { prefix: "📝 Notas:",       iconLib: "feather",  icon: "file-text",  label: "Notas" },
+];
+
+function parseWineContent(content: string): { field: WineField; value: string }[] {
+  const lines = content.split("\n").map((l) => l.trim()).filter(Boolean);
+  const result: { field: WineField; value: string }[] = [];
+  for (const line of lines) {
+    for (const field of WINE_FIELDS) {
+      if (line.startsWith(field.prefix)) {
+        const value = line.slice(field.prefix.length).trim();
+        if (value) result.push({ field, value });
+        break;
+      }
+    }
+  }
+  return result;
+}
+
+function WineFieldIcon({
+  field,
+  size,
+  color,
+}: {
+  field: WineField;
+  size: number;
+  color: string;
+}) {
+  if (field.iconLib === "mci") {
+    return <MaterialCommunityIcons name={field.icon as any} size={size} color={color} />;
+  }
+  return <Feather name={field.icon as any} size={size} color={color} />;
+}
+
+export function WineTastingCard({ content }: { content: string }) {
+  const colors = useColors();
+  const parsed = parseWineContent(content);
+  if (parsed.length === 0) return null;
+
+  const titleEntry = parsed.find((p) => p.field.isTitle);
+  const scoreEntry = parsed.find((p) => p.field.isScore);
+  const rows = parsed.filter((p) => !p.field.isTitle && !p.field.isScore);
+
+  const gold = colors.gold ?? "#B8860B";
+  const navy = colors.navy ?? "#0B1F3A";
+
+  return (
+    <View
+      style={{
+        backgroundColor: gold + "12",
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: gold + "40",
+        padding: 12,
+        marginTop: 4,
+        gap: 8,
+      }}
+    >
+      {/* Wine name header */}
+      {titleEntry && (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 17,
+              backgroundColor: gold + "25",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <WineFieldIcon field={titleEntry.field} size={18} color={gold} />
+          </View>
+          <Text
+            style={{
+              flex: 1,
+              fontSize: 15,
+              fontWeight: "700",
+              color: navy,
+            }}
+            numberOfLines={2}
+          >
+            {titleEntry.value}
+          </Text>
+          {/* Score badge */}
+          {scoreEntry && (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 3,
+                backgroundColor: gold,
+                borderRadius: 8,
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+              }}
+            >
+              <MaterialCommunityIcons name="star" size={12} color="#fff" />
+              <Text style={{ fontSize: 13, fontWeight: "800", color: "#fff" }}>
+                {scoreEntry.value}
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* If no title but has score, show score standalone */}
+      {!titleEntry && scoreEntry && (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <MaterialCommunityIcons name="star" size={14} color={gold} />
+          <Text style={{ fontSize: 14, fontWeight: "700", color: gold }}>
+            {scoreEntry.value}
+          </Text>
+        </View>
+      )}
+
+      {/* Other fields */}
+      {rows.length > 0 && (
+        <View
+          style={{
+            borderTopWidth: 1,
+            borderTopColor: gold + "25",
+            paddingTop: 8,
+            gap: 5,
+          }}
+        >
+          {rows.map(({ field, value }) => (
+            <View
+              key={field.prefix}
+              style={{ flexDirection: "row", alignItems: "flex-start", gap: 6 }}
+            >
+              <View style={{ marginTop: 1 }}>
+                <WineFieldIcon field={field} size={13} color={gold} />
+              </View>
+              {field.label && (
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: "600",
+                    color: colors.mutedForeground ?? "#888",
+                    minWidth: 90,
+                  }}
+                >
+                  {field.label}:
+                </Text>
+              )}
+              <Text
+                style={{ flex: 1, fontSize: 13, color: colors.foreground }}
+                numberOfLines={3}
+              >
+                {value}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
 function detectPostType(content: string): "wine" | "text" {

@@ -25,6 +25,7 @@ import {
 import { formatRelativeDate } from "@/utils/dateUtils";
 import { AntDesign, Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
+import { WineTastingCard } from "@/components/feed/PostRichContent";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { createReport, hidePost, blockUser, fetchConversations, sendMessage, checkIsFollowing, toggleFollow } from "@/services/api";
@@ -599,18 +600,22 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
 
       <Pressable onPress={() => router.push(`/post/${post.id}` as any)} style={styles.contentWrap}>
         {post.content ? (
-          <>
-            <Text style={[styles.content, { color: colors.foreground }]}>
-              {displayContent}
-            </Text>
-            {isLong && (
-              <TouchableOpacity onPress={() => setExpanded(!expanded)}>
-                <Text style={[styles.seeMore, { color: colors.gold }]}>
-                  {expanded ? "Ver menos" : "Ver mais"}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </>
+          postType === "wine" ? (
+            <WineTastingCard content={post.content} />
+          ) : (
+            <>
+              <Text style={[styles.content, { color: colors.foreground }]}>
+                {displayContent}
+              </Text>
+              {isLong && (
+                <TouchableOpacity onPress={() => setExpanded(!expanded)}>
+                  <Text style={[styles.seeMore, { color: colors.gold }]}>
+                    {expanded ? "Ver menos" : "Ver mais"}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </>
+          )
         ) : null}
 
         {post.hashtags && post.hashtags.length > 0 && (
