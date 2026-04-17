@@ -5358,11 +5358,23 @@ export interface MarketComment {
   author_id: string;
   content: string;
   created_at: string;
+  reply_to_id?: string | null;
+  replies?: MarketComment[];
   author?: {
     id: string;
     full_name?: string | null;
     avatar_url?: string | null;
+    position?: string | null;
+    company?: string | null;
   };
+}
+
+export interface MarketPostLiker {
+  id: string;
+  full_name?: string | null;
+  avatar_url?: string | null;
+  position?: string | null;
+  company?: string | null;
 }
 
 export async function fetchMarketPosts(userId?: string, offset = 0, limit = 15): Promise<MarketPost[]> {
@@ -5536,6 +5548,8 @@ export async function toggleMarketPostLike(postId: string, userId: string, curre
   } catch { return currentlyLiked; }
 }
 
+const REPLY_PREFIX_RE = /^\[R:([0-9a-f-]{36})\]/i;
+
 export async function fetchMarketComments(postId: string): Promise<MarketComment[]> {
   try {
     const { data, error } = await supabase
@@ -5548,11 +5562,57 @@ export async function fetchMarketComments(postId: string): Promise<MarketComment
     const authorIds = [...new Set(data.map((c: any) => c.author_id))];
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, user_id, full_name, avatar_url")
+      .select("id, user_id, full_name, avatar_url, position, company")
       .in("user_id", authorIds);
     const profileMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p]));
 
-    return data.map((c: any) => ({ ...c, author: profileMap.get(c.author_id) ?? null }));
+    // Parse [R:parentId] prefix embedded in content (reply encoding)
+    const flat: MarketComment[] = data.map((c: any) => {
+      const match = REPLY_PREFIX_RE.exec(c.content ?? "");
+      return {
+        ...c,
+        reply_to_id: match ? match[1] : null,
+        content: match ? c.content.slice(match[0].length) : c.content,
+        replies: [] as MarketComment[],
+        author: profileMap.get(c.author_id) ?? null,
+      };
+    });
+
+    // Build tree: top-level comments first, then nest replies
+    const byId = new Map(flat.map(c => [c.id, c]));
+    const roots: MarketComment[] = [];
+    for (const c of flat) {
+      if (c.reply_to_id && byId.has(c.reply_to_id)) {
+        byId.get(c.reply_to_id)!.replies!.push(c);
+      } else {
+        roots.push(c);
+      }
+    }
+    return roots;
+  } catch { return []; }
+}
+
+export async function fetchMarketPostLikers(postId: string): Promise<MarketPostLiker[]> {
+  try {
+    const { data: likes } = await supabase
+      .from("market_post_likes")
+      .select("user_id")
+      .eq("post_id", postId)
+      .limit(50);
+    if (!likes || likes.length === 0) return [];
+
+    const userIds = likes.map((l: any) => l.user_id);
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("user_id, full_name, avatar_url, position, company")
+      .in("user_id", userIds);
+    return (profiles ?? []).map((p: any) => ({
+      id: p.user_id,
+      full_name: p.full_name,
+      avatar_url: p.avatar_url,
+      position: p.position,
+      company: p.company,
+    }));
   } catch { return []; }
 }
 
@@ -5565,21 +5625,40 @@ export async function deleteDirectConversation(conversationId: string): Promise<
   } catch { return false; }
 }
 
-export async function addMarketComment(postId: string, authorId: string, content: string): Promise<MarketComment | null> {
+export async function addMarketComment(
+  postId: string,
+  authorId: string,
+  content: string,
+  replyToId?: string | null,
+): Promise<MarketComment | null> {
   try {
+    // Embed reply reference as a prefix in the content field (no schema change needed)
+    const storedContent = replyToId ? `[R:${replyToId}]${content}` : content;
     const { data, error } = await supabase
       .from("market_post_comments")
-      .insert({ post_id: postId, author_id: authorId, content })
+      .insert({ post_id: postId, author_id: authorId, content: storedContent })
       .select("id, post_id, author_id, content, created_at")
       .single();
     if (error || !data) return null;
-    const { data: cur } = await supabase.from("market_posts").select("comments_count").eq("id", postId).single();
-    await supabase.from("market_posts").update({ comments_count: (cur?.comments_count ?? 0) + 1 }).eq("id", postId);
+
+    // Only increment comments_count for top-level comments (not replies)
+    if (!replyToId) {
+      const { data: cur } = await supabase.from("market_posts").select("comments_count").eq("id", postId).single();
+      await supabase.from("market_posts").update({ comments_count: (cur?.comments_count ?? 0) + 1 }).eq("id", postId);
+    }
+
     const { data: authorProfile } = await supabase
       .from("profiles")
-      .select("id, user_id, full_name, avatar_url")
+      .select("id, user_id, full_name, avatar_url, position, company")
       .eq("user_id", authorId)
       .maybeSingle();
-    return { ...data, author: authorProfile ?? undefined };
+
+    return {
+      ...data,
+      reply_to_id: replyToId ?? null,
+      content, // return the clean content without prefix
+      replies: [],
+      author: authorProfile ?? undefined,
+    };
   } catch { return null; }
 }

@@ -745,52 +745,283 @@ function IdealBIAvatar({ src, name, size = 36 }: { src?: string | null; name: st
   );
 }
 
-function MarketCommentsList({ postId, userId, colors }: { postId: string; userId: string; colors: ReturnType<typeof useColors> }) {
-  const [comments, setComments] = useState<API.MarketComment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [text, setText] = useState("");
-  const [sending, setSending] = useState(false);
+// ─── Forum Comment Item ───────────────────────────────────────────────────────
+
+function MarketCommentItem({
+  comment,
+  postId,
+  userId,
+  colors,
+  depth = 0,
+  onReply,
+}: {
+  comment: API.MarketComment;
+  postId: string;
+  userId: string;
+  colors: ReturnType<typeof useColors>;
+  depth?: number;
+  onReply: (comment: API.MarketComment) => void;
+}) {
+  const isReply = depth > 0;
+  const authorName  = comment.author?.full_name ?? "Usuário";
+  const authorPos   = comment.author?.position;
+  const authorComp  = comment.author?.company;
+  const subtitle    = [authorPos, authorComp].filter(Boolean).join(" · ");
+  const timeStr     = new Date(comment.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <View style={{ marginLeft: isReply ? 36 : 0, marginBottom: 10 }}>
+      {/* Reply thread line */}
+      {isReply && (
+        <View style={{ position: "absolute", left: -20, top: 0, bottom: 0, width: 2, backgroundColor: colors.border }} />
+      )}
+      <View style={{ flexDirection: "row", gap: 10 }}>
+        <IdealBIAvatar src={comment.author?.avatar_url} name={authorName} size={isReply ? 26 : 32} />
+        <View style={{ flex: 1 }}>
+          <View style={{
+            backgroundColor: isReply ? "#f8f6f2" : colors.secondary,
+            borderRadius: 12,
+            borderTopLeftRadius: 4,
+            padding: 10,
+            borderWidth: isReply ? 1 : 0,
+            borderColor: colors.border,
+          }}>
+            {/* Author info */}
+            <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
+              <Text style={{ fontWeight: "700", fontSize: 13, color: colors.navy }}>{authorName}</Text>
+              {subtitle ? (
+                <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{subtitle}</Text>
+              ) : null}
+            </View>
+            <Text style={{ fontSize: 13, lineHeight: 19, color: colors.foreground }}>{comment.content}</Text>
+          </View>
+
+          {/* Actions row */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 5, marginLeft: 4 }}>
+            <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{timeStr}</Text>
+            <TouchableOpacity onPress={() => onReply(comment)}>
+              <Text style={{ fontSize: 11, fontWeight: "700", color: colors.gold }}>Responder</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Nested replies */}
+          {(comment.replies ?? []).length > 0 && (
+            <View style={{ marginTop: 8 }}>
+              {(comment.replies ?? []).map(reply => (
+                <MarketCommentItem
+                  key={reply.id}
+                  comment={reply}
+                  postId={postId}
+                  userId={userId}
+                  colors={colors}
+                  depth={depth + 1}
+                  onReply={onReply}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ─── Forum Comments List ──────────────────────────────────────────────────────
+
+function MarketCommentsList({ postId, userId, colors, onCommentsCountChange }: {
+  postId: string;
+  userId: string;
+  colors: ReturnType<typeof useColors>;
+  onCommentsCountChange?: (delta: number) => void;
+}) {
+  const [comments,    setComments]    = useState<API.MarketComment[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [text,        setText]        = useState("");
+  const [sending,     setSending]     = useState(false);
+  const [replyTo,     setReplyTo]     = useState<API.MarketComment | null>(null);
+  const inputRef = useRef<any>(null);
 
   useEffect(() => {
     API.fetchMarketComments(postId).then(c => { setComments(c); setLoading(false); });
   }, [postId]);
 
+  const handleReply = (comment: API.MarketComment) => {
+    setReplyTo(comment);
+    setTimeout(() => inputRef.current?.focus(), 100);
+  };
+
+  const cancelReply = () => { setReplyTo(null); };
+
   const send = async () => {
     const t = text.trim();
     if (!t || !userId) return;
     setSending(true);
-    const c = await API.addMarketComment(postId, userId, t);
-    if (c) { setComments(prev => [...prev, c]); setText(""); }
+    const c = await API.addMarketComment(postId, userId, t, replyTo?.id ?? null);
+    if (c) {
+      if (replyTo) {
+        // Append the reply to the correct parent
+        setComments(prev => prev.map(parent =>
+          parent.id === replyTo.id
+            ? { ...parent, replies: [...(parent.replies ?? []), c] }
+            : parent
+        ));
+      } else {
+        setComments(prev => [...prev, c]);
+        onCommentsCountChange?.(1);
+      }
+      setText("");
+      setReplyTo(null);
+    }
     setSending(false);
   };
 
   return (
     <View style={{ marginTop: 8 }}>
-      {loading ? <ActivityIndicator size="small" color={colors.gold} /> : comments.map(c => (
-        <View key={c.id} style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
-          <IdealBIAvatar src={c.author?.avatar_url} name={c.author?.full_name ?? "U"} size={28} />
-          <View style={{ flex: 1, backgroundColor: colors.secondary, borderRadius: 10, padding: 8 }}>
-            <Text style={{ fontWeight: "700", fontSize: 12, color: colors.navy }}>{c.author?.full_name ?? "Usuário"}</Text>
-            <Text style={{ fontSize: 13, color: colors.foreground, marginTop: 2 }}>{c.content}</Text>
+      {/* Thread divider */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+        <Text style={{ fontSize: 11, color: colors.mutedForeground, fontWeight: "600" }}>
+          {loading ? "Carregando..." : `${comments.reduce((a, c) => a + 1 + (c.replies?.length ?? 0), 0)} comentários`}
+        </Text>
+        <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+      </View>
+
+      {loading ? (
+        <ActivityIndicator size="small" color={colors.gold} style={{ marginVertical: 16 }} />
+      ) : (
+        comments.map(comment => (
+          <MarketCommentItem
+            key={comment.id}
+            comment={comment}
+            postId={postId}
+            userId={userId}
+            colors={colors}
+            depth={0}
+            onReply={handleReply}
+          />
+        ))
+      )}
+
+      {/* Reply to context pill */}
+      {replyTo && (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.gold + "18", borderRadius: 10, padding: 8, marginBottom: 6 }}>
+          <Feather name="corner-down-right" size={14} color={colors.gold} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 11, color: colors.gold, fontWeight: "700" }}>
+              Respondendo a {replyTo.author?.full_name ?? "Usuário"}
+            </Text>
+            <Text style={{ fontSize: 11, color: colors.mutedForeground }} numberOfLines={1}>{replyTo.content}</Text>
           </View>
+          <TouchableOpacity onPress={cancelReply}>
+            <Feather name="x" size={14} color={colors.mutedForeground} />
+          </TouchableOpacity>
         </View>
-      ))}
-      <View style={{ flexDirection: "row", gap: 8, marginTop: 4, alignItems: "center" }}>
+      )}
+
+      {/* Input */}
+      <View style={{ flexDirection: "row", gap: 8, marginTop: 4, alignItems: "flex-end" }}>
         <TextInput
+          ref={inputRef}
           value={text}
           onChangeText={setText}
-          placeholder="Comentar..."
+          placeholder={replyTo ? `Responder a ${replyTo.author?.full_name ?? "Usuário"}...` : "Comentar no fórum..."}
           placeholderTextColor={colors.mutedForeground}
-          style={{ flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, fontSize: 13, color: colors.foreground }}
-          returnKeyType="send"
-          onSubmitEditing={send}
+          multiline
+          style={{
+            flex: 1,
+            borderWidth: 1.5,
+            borderColor: replyTo ? colors.gold : colors.border,
+            borderRadius: 16,
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            fontSize: 13,
+            color: colors.foreground,
+            maxHeight: 80,
+          }}
+          returnKeyType="default"
           editable={!sending}
         />
-        <TouchableOpacity onPress={send} disabled={sending || !text.trim()}>
-          <Feather name="send" size={18} color={text.trim() ? colors.gold : colors.mutedForeground} />
+        <TouchableOpacity
+          onPress={send}
+          disabled={sending || !text.trim()}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: text.trim() ? colors.gold : colors.border,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {sending
+            ? <ActivityIndicator size="small" color="#fff" />
+            : <Feather name="send" size={15} color="#fff" />}
         </TouchableOpacity>
       </View>
     </View>
+  );
+}
+
+// ─── Who Liked Modal ──────────────────────────────────────────────────────────
+
+function LikersModal({
+  postId,
+  visible,
+  onClose,
+  colors,
+}: {
+  postId: string;
+  visible: boolean;
+  onClose: () => void;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const [likers,   setLikers]   = useState<API.MarketPostLiker[]>([]);
+  const [loading,  setLoading]  = useState(false);
+
+  useEffect(() => {
+    if (!visible) return;
+    setLoading(true);
+    API.fetchMarketPostLikers(postId).then(l => { setLikers(l); setLoading(false); });
+  }, [visible, postId]);
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }}>
+        <View style={{ backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: "60%" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <Text style={{ fontWeight: "700", fontSize: 16, color: colors.navy }}>
+              Curtido por {likers.length > 0 ? `(${likers.length})` : ""}
+            </Text>
+            <TouchableOpacity onPress={onClose}>
+              <Feather name="x" size={20} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+          {loading ? (
+            <ActivityIndicator color={colors.gold} style={{ marginVertical: 24 }} />
+          ) : likers.length === 0 ? (
+            <Text style={{ color: colors.mutedForeground, textAlign: "center", marginVertical: 24 }}>
+              Nenhuma curtida ainda.
+            </Text>
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {likers.map(l => {
+                const subtitle = [l.position, l.company].filter(Boolean).join(" · ");
+                return (
+                  <View key={l.id} style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                    <IdealBIAvatar src={l.avatar_url} name={l.full_name ?? "U"} size={40} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontWeight: "700", fontSize: 14, color: colors.navy }}>{l.full_name ?? "Usuário"}</Text>
+                      {subtitle ? <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{subtitle}</Text> : null}
+                    </View>
+                    <Feather name="heart" size={14} color="#dc2626" />
+                  </View>
+                );
+              })}
+            </ScrollView>
+          )}
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -850,9 +1081,10 @@ function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors 
   onLikeToggle: (id: string, liked: boolean, count: number) => void;
   colors: ReturnType<typeof useColors>;
 }) {
-  const [post, setPost] = useState<API.MarketPost>(initialPost);
-  const [showComments, setShowComments] = useState(false);
-  const [liking, setLiking] = useState(false);
+  const [post,          setPost]          = useState<API.MarketPost>(initialPost);
+  const [showComments,  setShowComments]  = useState(false);
+  const [showLikers,    setShowLikers]    = useState(false);
+  const [liking,        setLiking]        = useState(false);
   const dateStr = new Date(post.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
 
   useEffect(() => { setPost(initialPost); }, [initialPost]);
@@ -860,8 +1092,10 @@ function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors 
   const handleLike = async () => {
     if (liking) return;
     setLiking(true);
+    const newCount = post.user_liked ? Math.max(0, post.likes_count - 1) : post.likes_count + 1;
+    setPost(p => ({ ...p, user_liked: !p.user_liked, likes_count: newCount }));
     const newLiked = await API.toggleMarketPostLike(post.id, userId, post.user_liked);
-    onLikeToggle(post.id, newLiked, post.user_liked ? Math.max(0, post.likes_count - 1) : post.likes_count + 1);
+    onLikeToggle(post.id, newLiked, newCount);
     setLiking(false);
   };
 
@@ -871,25 +1105,31 @@ function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors 
 
   const hasMedia = !!(post.image_url || post.video_url);
   const hasPoll  = !!(post.poll_options && post.poll_options.length > 0);
+  const totalComments = post.comments_count;
 
   return (
-    <View style={{ marginHorizontal: 16, marginBottom: 14, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: "#fff", overflow: "hidden" }}>
+    <View style={{ marginHorizontal: 16, marginBottom: 14, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: "#fff", overflow: "hidden", shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } }}>
+      {/* Header */}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 14, paddingBottom: 10 }}>
-        <IdealBIAvatar src={post.author?.avatar_url} name="Ideal.BI" size={40} />
+        <IdealBIAvatar src={post.author?.avatar_url} name="Ideal.BI" size={42} />
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <Text style={{ fontWeight: "700", fontSize: 14, color: colors.navy }}>Ideal.BI</Text>
-            <View style={{ backgroundColor: "#c9a84c22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-              <Text style={{ fontSize: 10, fontWeight: "700", color: colors.gold }}>📡 Feed Exclusivo</Text>
+            <Text style={{ fontWeight: "800", fontSize: 15, color: colors.navy }}>Ideal.BI</Text>
+            <View style={{ backgroundColor: colors.gold + "20", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, flexDirection: "row", alignItems: "center", gap: 3 }}>
+              <Feather name="radio" size={9} color={colors.gold} />
+              <Text style={{ fontSize: 10, fontWeight: "700", color: colors.gold }}>Feed Exclusivo</Text>
             </View>
           </View>
           <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>Inteligência de Mercado do Vinho</Text>
           <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 1 }}>{dateStr}</Text>
         </View>
       </View>
-      <Text style={{ fontSize: 14, lineHeight: 21, color: colors.foreground, paddingHorizontal: 14, paddingBottom: hasMedia || hasPoll ? 10 : 14 }}>
+
+      {/* Content */}
+      <Text style={{ fontSize: 14, lineHeight: 22, color: colors.foreground, paddingHorizontal: 14, paddingBottom: hasMedia || hasPoll ? 10 : 14 }}>
         {post.content}
       </Text>
+
       {post.image_url ? (
         <Image source={{ uri: post.image_url }} style={{ width: "100%", height: 220 } as any} contentFit="cover" />
       ) : null}
@@ -899,21 +1139,65 @@ function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors 
       {hasPoll ? (
         <MarketPollMobile post={post} userId={userId} colors={colors} onPollVote={handlePollVote} />
       ) : null}
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: 1, borderTopColor: colors.border }}>
-        <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5 }} onPress={handleLike}>
-          <Feather name="heart" size={16} color={post.user_liked ? "#dc2626" : colors.mutedForeground} />
-          <Text style={{ fontSize: 13, color: post.user_liked ? "#dc2626" : colors.mutedForeground }}>{post.likes_count}</Text>
+
+      {/* Stats bar (likes preview) */}
+      {post.likes_count > 0 && (
+        <TouchableOpacity
+          onPress={() => setShowLikers(true)}
+          style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingTop: 8 }}
+        >
+          <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: "#dc2626", alignItems: "center", justifyContent: "center" }}>
+            <Feather name="heart" size={9} color="#fff" />
+          </View>
+          <Text style={{ fontSize: 12, color: colors.mutedForeground }}>
+            {post.likes_count} {post.likes_count === 1 ? "pessoa curtiu" : "pessoas curtiram"} · ver quem curtiu
+          </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5 }} onPress={() => setShowComments(v => !v)}>
-          <Feather name="message-circle" size={16} color={colors.mutedForeground} />
-          <Text style={{ fontSize: 13, color: colors.mutedForeground }}>{post.comments_count}</Text>
+      )}
+
+      {/* Action bar */}
+      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: 1, borderTopColor: colors.border, marginTop: 8, gap: 4 }}>
+        <TouchableOpacity
+          style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 7, borderRadius: 10, backgroundColor: post.user_liked ? "#fef2f2" : colors.secondary }}
+          onPress={handleLike}
+          disabled={liking}
+        >
+          <Feather name="heart" size={16} color={post.user_liked ? "#dc2626" : colors.mutedForeground} />
+          <Text style={{ fontSize: 13, fontWeight: "600", color: post.user_liked ? "#dc2626" : colors.mutedForeground }}>
+            {post.user_liked ? "Curtido" : "Curtir"}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 7, borderRadius: 10, backgroundColor: showComments ? colors.navy + "10" : colors.secondary }}
+          onPress={() => setShowComments(v => !v)}
+        >
+          <Feather name="message-square" size={16} color={showComments ? colors.navy : colors.mutedForeground} />
+          <Text style={{ fontSize: 13, fontWeight: "600", color: showComments ? colors.navy : colors.mutedForeground }}>
+            {totalComments > 0 ? `${totalComments} ${totalComments === 1 ? "comentário" : "comentários"}` : "Comentar"}
+          </Text>
         </TouchableOpacity>
       </View>
-      {showComments ? (
-        <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-          <MarketCommentsList postId={post.id} userId={userId} colors={colors} />
+
+      {/* Forum comment thread */}
+      {showComments && (
+        <View style={{ paddingHorizontal: 14, paddingBottom: 16, backgroundColor: "#fafaf8", borderTopWidth: 1, borderTopColor: colors.border }}>
+          <MarketCommentsList
+            postId={post.id}
+            userId={userId}
+            colors={colors}
+            onCommentsCountChange={(delta) => setPost(p => ({ ...p, comments_count: p.comments_count + delta }))}
+          />
         </View>
-      ) : null}
+      )}
+
+      {/* Likers modal */}
+      <LikersModal
+        postId={post.id}
+        visible={showLikers}
+        onClose={() => setShowLikers(false)}
+        colors={colors}
+      />
     </View>
   );
 }

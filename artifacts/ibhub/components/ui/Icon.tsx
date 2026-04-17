@@ -102,6 +102,7 @@ import {
   Flame,
   ThumbsUp,
   Sparkles,
+  Radio,
 } from "lucide-react-native";
 import React from "react";
 import { Text, View } from "react-native";
@@ -207,6 +208,7 @@ const FEATHER_MAP: Record<string, React.ComponentType<any>> = {
   "x-circle": CircleX,
   zap: Zap,
   trophy: Trophy,
+  radio: Radio,
 };
 
 const MCI_MAP: Record<string, { component: React.ComponentType<any>; fill?: boolean }> = {
