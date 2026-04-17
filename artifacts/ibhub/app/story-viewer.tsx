@@ -53,6 +53,7 @@ export default function StoryViewerScreen() {
       return [];
     }
   })();
+
   const [groupIndex, setGroupIndex] = useState(Number(params.groupIndex ?? 0));
   const [storyIndex, setStoryIndex] = useState(0);
   const [taggedProfiles, setTaggedProfiles] = useState<TaggedProfile[]>([]);
@@ -100,21 +101,14 @@ export default function StoryViewerScreen() {
       useNativeDriver: false,
     });
     progressAnimation.current.start(({ finished }) => {
-      if (finished && !isPaused.current) {
-        goToNext();
-      }
+      if (finished && !isPaused.current) goToNext();
     });
   }, [progressAnim, goToNext]);
 
   useEffect(() => {
     if (!currentStory) return;
-
-    if (user?.id) {
-      API.markStoryViewed(currentStory.id, user.id);
-    }
-
+    if (user?.id) API.markStoryViewed(currentStory.id, user.id);
     setTaggedProfiles([]);
-
     const taggedIds = currentStory.tagged_users ?? [];
     if (taggedIds.length > 0) {
       supabase
@@ -125,12 +119,8 @@ export default function StoryViewerScreen() {
           if (data) setTaggedProfiles(data as TaggedProfile[]);
         });
     }
-
     startProgress();
-
-    return () => {
-      progressAnimation.current?.stop();
-    };
+    return () => { progressAnimation.current?.stop(); };
   }, [currentStory?.id]);
 
   const handleTouchStart = useRef<{ x: number; t: number } | null>(null);
@@ -146,20 +136,10 @@ export default function StoryViewerScreen() {
     const dx = e.nativeEvent.pageX - handleTouchStart.current.x;
     const dt = Date.now() - handleTouchStart.current.t;
     isPaused.current = false;
-
     if (Math.abs(dx) > 60 && dt < 400) {
-      if (dx < 0) {
-        goToNext();
-      } else {
-        goToPrev();
-      }
+      if (dx < 0) goToNext(); else goToPrev();
     } else if (dt < 250 && Math.abs(dx) < 10) {
-      const tapX = e.nativeEvent.pageX;
-      if (tapX < SCREEN_WIDTH / 3) {
-        goToPrev();
-      } else {
-        goToNext();
-      }
+      if (e.nativeEvent.pageX < SCREEN_WIDTH / 3) goToPrev(); else goToNext();
     } else {
       startProgress();
     }
@@ -167,7 +147,7 @@ export default function StoryViewerScreen() {
 
   if (!currentGroup || !currentStory) {
     return (
-      <View style={[styles.container, { backgroundColor: "#000", justifyContent: "center", alignItems: "center" }]}>
+      <View style={styles.screen}>
         <Text style={{ color: "#fff" }}>Nenhum momento disponível</Text>
       </View>
     );
@@ -175,98 +155,101 @@ export default function StoryViewerScreen() {
 
   return (
     <View
-      style={[styles.container, { backgroundColor: "#000", justifyContent: "center", alignItems: "center" }]}
+      style={styles.screen}
       onStartShouldSetResponder={() => true}
       onResponderGrant={onTouchStart}
       onResponderRelease={onTouchEnd}
     >
-      <View style={{ width: SCREEN_WIDTH, height: STORY_HEIGHT, overflow: "hidden" }}>
-      {currentStory.image_url ? (
-        <Image
-          source={{ uri: currentStory.image_url }}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-        />
-      ) : (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" }]}>
-          <Text style={{ color: colors.gold, fontSize: 48 }}>🍷</Text>
-        </View>
-      )}
-
-      <View style={[StyleSheet.absoluteFill, styles.gradient]} />
-
-      <View style={[styles.topSection, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.progressBars}>
-          {currentGroup.stories.map((_, i) => (
-            <View key={i} style={[styles.progressTrack, { flex: 1 }]}>
-              {i < storyIndex ? (
-                <View style={[styles.progressAnimFill, { width: "100%" }]} />
-              ) : i === storyIndex ? (
-                <Animated.View
-                  style={[
-                    styles.progressAnimFill,
-                    {
-                      width: progressAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: ["0%", "100%"],
-                      }),
-                    },
-                  ]}
-                />
-              ) : null}
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.authorRow}>
-          <Avatar uri={currentGroup.author.avatar_url} name={currentGroup.author.full_name} size={36} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.authorName}>{currentGroup.author.full_name}</Text>
-            <Text style={styles.storyTime}>{formatTime(currentStory.created_at)}</Text>
+      <View style={styles.frame}>
+        {currentStory.image_url ? (
+          <Image
+            source={{ uri: currentStory.image_url }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" }]}>
+            <Text style={{ color: colors.gold, fontSize: 48 }}>🍷</Text>
           </View>
-          <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
-            <Feather name="x" size={24} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={[styles.bottomSection, { paddingBottom: insets.bottom + 16 }]}>
-        {currentStory.text ? (
-          <Text style={styles.overlayText}>{currentStory.text}</Text>
-        ) : null}
-
-        {taggedProfiles.length > 0 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.taggedRow}
-          >
-            <Feather name="at-sign" size={13} color="rgba(255,255,255,0.8)" style={{ marginRight: 4 }} />
-            {taggedProfiles.map((tp) => (
-              <TouchableOpacity
-                key={tp.id}
-                style={styles.tagChip}
-                onPress={() => {
-                  progressAnimation.current?.stop();
-                  const profileHref: Href = `/profile/${tp.id}`;
-                  router.push(profileHref);
-                }}
-              >
-                <Avatar uri={tp.avatar_url} name={tp.full_name} size={18} />
-                <Text style={styles.tagChipText}>@{tp.full_name.split(" ")[0]}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
         )}
-      </View>
+
+        <View style={styles.gradient} />
+
+        <View style={[styles.topSection, { paddingTop: insets.top + 8 }]}>
+          <View style={styles.progressBars}>
+            {currentGroup.stories.map((_, i) => (
+              <View key={i} style={[styles.progressTrack, { flex: 1 }]}>
+                {i < storyIndex ? (
+                  <View style={[styles.progressAnimFill, { width: "100%" }]} />
+                ) : i === storyIndex ? (
+                  <Animated.View
+                    style={[
+                      styles.progressAnimFill,
+                      {
+                        width: progressAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: ["0%", "100%"],
+                        }),
+                      },
+                    ]}
+                  />
+                ) : null}
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.authorRow}>
+            <Avatar uri={currentGroup.author.avatar_url} name={currentGroup.author.full_name} size={36} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.authorName}>{currentGroup.author.full_name}</Text>
+              <Text style={styles.storyTime}>{formatTime(currentStory.created_at)}</Text>
+            </View>
+            <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
+              <Feather name="x" size={24} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={[styles.bottomSection, { paddingBottom: insets.bottom + 16 }]}>
+          {currentStory.text ? (
+            <Text style={styles.overlayText}>{currentStory.text}</Text>
+          ) : null}
+
+          {taggedProfiles.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.taggedRow}
+            >
+              <Feather name="at-sign" size={13} color="rgba(255,255,255,0.8)" style={{ marginRight: 4 }} />
+              {taggedProfiles.map((tp) => {
+                const profileHref: Href = `/profile/${tp.id}`;
+                return (
+                  <TouchableOpacity
+                    key={tp.id}
+                    style={styles.tagChip}
+                    onPress={() => {
+                      progressAnimation.current?.stop();
+                      router.push(profileHref);
+                    }}
+                  >
+                    <Avatar uri={tp.avatar_url} name={tp.full_name} size={18} />
+                    <Text style={styles.tagChipText}>@{tp.full_name.split(" ")[0]}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container:        { flex: 1 },
-  gradient:         { backgroundColor: "rgba(0,0,0,0.15)" },
+  screen:           { flex: 1, backgroundColor: "#000", justifyContent: "center", alignItems: "center" },
+  frame:            { width: SCREEN_WIDTH, height: STORY_HEIGHT, overflow: "hidden" },
+  gradient:         { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.15)" },
   topSection:       { paddingHorizontal: 12, gap: 10 },
   progressBars:     { flexDirection: "row", gap: 3, height: 2 },
   progressTrack:    { height: 2, backgroundColor: "rgba(255,255,255,0.3)", borderRadius: 1, overflow: "hidden" },
