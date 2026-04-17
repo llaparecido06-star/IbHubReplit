@@ -1,6 +1,7 @@
 import { supabase } from "@/context/AuthContext";
 import { Post } from "@/components/feed/PostCard";
 import { compressAvatar, compressPostImage, compressLogoImage } from "@/utils/compressImage";
+import * as FileSystem from "expo-file-system";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 
@@ -2402,22 +2403,19 @@ export async function uploadChatMedia(
     const userId = sessionData?.session?.user?.id;
     if (!token || !userId) return null;
 
-    // Read the local file URI as a blob then convert to base64.
-    // This is the most reliable approach in React Native without expo-file-system:
-    // fetch() handles file://, content:// and ph:// URIs natively.
-    const fileResponse = await fetch(uri);
-    const blob = await fileResponse.blob();
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        // result = "data:<mime>;base64,<data>" — extract only the data part
-        const b64 = result.split(",")[1];
-        if (b64) resolve(b64);
-        else reject(new Error("FileReader empty result"));
-      };
-      reader.onerror = () => reject(new Error("FileReader failed"));
-      reader.readAsDataURL(blob);
+    // Use expo-file-system to read the local file as base64 — this works
+    // reliably on iOS and Android for file://, content://, and audio recorder URIs.
+    // FileReader is not available in Hermes on iOS and fetch(localUri) fails for
+    // audio/document URIs, so this is the only correct approach in React Native.
+    let localUri = uri;
+    // content:// and ph:// URIs must be copied to a local file:// path first
+    if (localUri.startsWith("ph://") || localUri.startsWith("content://")) {
+      const tmpPath = `${FileSystem.cacheDirectory}tmp_upload_${Date.now()}.${ext}`;
+      await FileSystem.copyAsync({ from: localUri, to: tmpPath });
+      localUri = tmpPath;
+    }
+    const base64 = await FileSystem.readAsStringAsync(localUri, {
+      encoding: FileSystem.EncodingType.Base64,
     });
 
     // POST to API server which uses service role key — bypasses Supabase RLS

@@ -86,6 +86,7 @@ export default function ChatScreen() {
   const [replyTo,                setReplyTo]                = useState<AppMessage | null>(null);
   const [sending,                setSending]                = useState(false);
   const [uploading,              setUploading]              = useState(false);
+  const [uploadStatus,           setUploadStatus]           = useState<string | null>(null);
   const [loading,                setLoading]                = useState(true);
   const [isTyping,               setIsTyping]              = useState(false);
   const [isParticipantOnline,    setIsParticipantOnline]    = useState(false);
@@ -415,26 +416,44 @@ export default function ChatScreen() {
 
     setUploading(true);
     try {
-      // Compress images before upload to avoid OOM
-      const uploadUri = msgType === "image" ? await compressImage(asset.uri) : asset.uri;
-      const url = await API.uploadChatMedia(id, uploadUri, mimeType);
-
-      if (!url) {
-        Alert.alert("Erro", "Não foi possível enviar a mídia. Tente novamente.");
-        setMessages(prev => prev.filter(m => m.id !== tempId));
-        return;
-      }
-
-      const saved = await API.sendMediaMessage(id, user.id, url, msgType);
-      if (saved) {
-        seenMsgIds.current.add(saved.id);
-        setMessages(prev => {
-          const filtered = prev.filter(m => m.id !== tempId && m.id !== saved.id);
-          return [...filtered, saved];
-        });
+      if (msgType === "image") {
+        setUploadStatus("Comprimindo imagem...");
+        const uploadUri = await compressImage(asset.uri);
+        setUploadStatus("Enviando imagem...");
+        const url = await API.uploadChatMedia(id, uploadUri, mimeType);
+        if (!url) {
+          Alert.alert("Erro", "Não foi possível enviar a imagem. Tente novamente.");
+          setMessages(prev => prev.filter(m => m.id !== tempId));
+          return;
+        }
+        const saved = await API.sendMediaMessage(id, user.id, url, msgType);
+        if (saved) {
+          seenMsgIds.current.add(saved.id);
+          setMessages(prev => {
+            const filtered = prev.filter(m => m.id !== tempId && m.id !== saved.id);
+            return [...filtered, saved];
+          });
+        }
+      } else {
+        setUploadStatus("Enviando vídeo...");
+        const url = await API.uploadChatMedia(id, asset.uri, mimeType);
+        if (!url) {
+          Alert.alert("Erro", "Não foi possível enviar o vídeo. Tente novamente.");
+          setMessages(prev => prev.filter(m => m.id !== tempId));
+          return;
+        }
+        const saved = await API.sendMediaMessage(id, user.id, url, msgType);
+        if (saved) {
+          seenMsgIds.current.add(saved.id);
+          setMessages(prev => {
+            const filtered = prev.filter(m => m.id !== tempId && m.id !== saved.id);
+            return [...filtered, saved];
+          });
+        }
       }
     } finally {
       setUploading(false);
+      setUploadStatus(null);
     }
   };
 
@@ -448,8 +467,10 @@ export default function ChatScreen() {
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
       setUploading(true);
+      setUploadStatus(`Enviando ${asset.name ?? "arquivo"}...`);
       const url = await API.uploadChatMedia(id, asset.uri, asset.mimeType ?? "application/octet-stream");
       setUploading(false);
+      setUploadStatus(null);
       if (!url) { Alert.alert("Erro", "Não foi possível enviar o arquivo."); return; }
       const saved = await API.sendMediaMessage(id, user.id, url, "file", asset.name ?? "arquivo");
       if (saved) {
@@ -493,8 +514,10 @@ export default function ChatScreen() {
       const uri = audioRecorder.uri;
       if (!uri) return;
       setUploading(true);
+      setUploadStatus("Enviando áudio...");
       const url = await API.uploadChatMedia(id, uri, "audio/m4a");
       setUploading(false);
+      setUploadStatus(null);
       if (!url) { Alert.alert("Erro", "Não foi possível enviar o áudio."); return; }
       const saved = await API.sendMediaMessage(id, user.id, url, "audio");
       if (saved) {
@@ -770,12 +793,20 @@ export default function ChatScreen() {
             </Pressable>
 
             {/* Reply button (right of my bubble) */}
-            {isMe && (
+            {isMe && !isTemp && (
               <TouchableOpacity style={st.replyBtn} onPress={() => setReplyTo(item)}>
                 <Feather name="corner-up-right" size={13} color={colors.mutedForeground} />
               </TouchableOpacity>
             )}
           </View>
+
+          {/* Pending upload indicator under my temp message */}
+          {isTemp && isMe && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-end", marginTop: 2, marginRight: 6 }}>
+              <ActivityIndicator size={10} color={colors.gold} />
+              <Text style={{ fontSize: 10, color: colors.mutedForeground }}>{uploadStatus ?? "Enviando..."}</Text>
+            </View>
+          )}
 
           {renderReactions(item, isMe)}
           {renderReadReceipt(item)}
@@ -932,9 +963,18 @@ export default function ChatScreen() {
 
       {/* Upload progress */}
       {uploading && (
-        <View style={[st.uploadBanner, { backgroundColor: colors.gold }]}>
-          <ActivityIndicator size="small" color="#fff" />
-          <Text style={st.uploadText}>Enviando...</Text>
+        <View style={[st.uploadBanner, { backgroundColor: colors.navy }]}>
+          <View style={st.uploadBannerInner}>
+            <ActivityIndicator size="small" color={colors.gold} />
+            <View style={{ flex: 1 }}>
+              <Text style={[st.uploadText, { color: "#fff", fontWeight: "600" }]}>
+                {uploadStatus ?? "Enviando..."}
+              </Text>
+              <View style={st.uploadProgressTrack}>
+                <View style={[st.uploadProgressFill, { backgroundColor: colors.gold }]} />
+              </View>
+            </View>
+          </View>
         </View>
       )}
 
@@ -1366,8 +1406,11 @@ const st = StyleSheet.create({
   postShareImage:{ width: "100%", height: 120 },
 
   // Banners
-  uploadBanner: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 8 },
-  uploadText:   { color: "#fff", fontSize: 13, fontWeight: "600" },
+  uploadBanner:         { paddingHorizontal: 16, paddingVertical: 10 },
+  uploadBannerInner:    { flexDirection: "row", alignItems: "center", gap: 12 },
+  uploadText:           { color: "#fff", fontSize: 13, marginBottom: 4 },
+  uploadProgressTrack:  { height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.25)", overflow: "hidden" },
+  uploadProgressFill:   { height: 3, borderRadius: 2, width: "60%" },
   typingBanner: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 8, borderTopWidth: 1, backgroundColor: "#fff" },
   typingDots:   { flexDirection: "row", gap: 3 },
   typingDot:    { width: 5, height: 5, borderRadius: 3 },
