@@ -86,6 +86,93 @@ const WineGlassIcon = () => (
   </svg>
 );
 
+/* ─── Wine Tasting Card (web) ───────────── */
+type WineField = { prefix: string; icon: string; label: string | null; isTitle?: boolean; isScore?: boolean };
+const WINE_FIELDS: WineField[] = [
+  { prefix: "🍷 Degustação:", icon: "🍷", label: null, isTitle: true },
+  { prefix: "🏠 Produtor:",   icon: "🏠", label: "Produtor" },
+  { prefix: "🌿 Uva/Casta:", icon: "🍃", label: "Uva/Casta" },
+  { prefix: "📅 Safra:",      icon: "📅", label: "Safra" },
+  { prefix: "🏷️ EAN:",        icon: "🏷", label: "EAN" },
+  { prefix: "⭐ Pontuação:",   icon: "⭐", label: "Pontuação", isScore: true },
+  { prefix: "👃 Aroma:",       icon: "💨", label: "Aroma" },
+  { prefix: "👅 Sabor:",       icon: "⚡", label: "Sabor" },
+  { prefix: "🍽️ Harmonização:", icon: "❤️", label: "Harmonização" },
+  { prefix: "📝 Notas:",       icon: "📄", label: "Notas" },
+];
+
+function parseWineContent(content: string): { field: WineField; value: string }[] {
+  return content.split("\n").map(l => l.trim()).filter(Boolean).flatMap(line => {
+    for (const field of WINE_FIELDS) {
+      if (line.startsWith(field.prefix)) {
+        const value = line.slice(field.prefix.length).trim();
+        return value ? [{ field, value }] : [];
+      }
+    }
+    return [];
+  });
+}
+
+function WineTastingCardWeb({ content }: { content: string }) {
+  const parsed = parseWineContent(content);
+  if (parsed.length === 0) return null;
+  const titleEntry = parsed.find(p => p.field.isTitle);
+  const scoreEntry = parsed.find(p => p.field.isScore);
+  const rows = parsed.filter(p => !p.field.isTitle && !p.field.isScore);
+  return (
+    <div style={{
+      backgroundColor: `${GOLD}10`,
+      border: `1px solid ${GOLD}35`,
+      borderRadius: 10,
+      padding: "12px 14px",
+      marginTop: 4,
+    }}>
+      {titleEntry && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: rows.length > 0 ? 10 : 0 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: "50%",
+            backgroundColor: `${GOLD}22`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 18, flexShrink: 0,
+          }}>
+            🍷
+          </div>
+          <span style={{ flex: 1, fontSize: 15, fontWeight: 800, color: NAVY }}>{titleEntry.value}</span>
+          {scoreEntry && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 4,
+              backgroundColor: GOLD, borderRadius: 8,
+              padding: "3px 8px",
+            }}>
+              <span style={{ fontSize: 13 }}>⭐</span>
+              <span style={{ fontSize: 13, fontWeight: 800, color: WHITE }}>{scoreEntry.value}</span>
+            </div>
+          )}
+        </div>
+      )}
+      {!titleEntry && scoreEntry && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+          <span>⭐</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: GOLD }}>{scoreEntry.value}</span>
+        </div>
+      )}
+      {rows.length > 0 && (
+        <div style={{ borderTop: `1px solid ${GOLD}25`, paddingTop: 10, display: "flex", flexDirection: "column", gap: 5 }}>
+          {rows.map(({ field, value }) => (
+            <div key={field.prefix} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13 }}>
+              <span style={{ fontSize: 14, flexShrink: 0, lineHeight: 1.4 }}>{field.icon}</span>
+              {field.label && (
+                <span style={{ fontWeight: 600, color: MUTED, minWidth: 100, flexShrink: 0 }}>{field.label}:</span>
+              )}
+              <span style={{ color: NAVY, lineHeight: 1.5 }}>{value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Reaction config ────────────────────── */
 const REACTIONS: { type: ReactionType; emoji: string; label: string; color: string }[] = [
   { type: "curtir",   emoji: "👍", label: "Curtir",  color: "#1a56db" },
@@ -205,15 +292,21 @@ function PostCard({
       </div>
 
       {/* Content */}
-      <div style={{ padding: "0 16px 12px", fontSize: 14, color: NAVY, lineHeight: 1.65, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-        {displayContent}
-        {isLong && (
-          <button
-            onClick={() => setExpanded(!expanded)}
-            style={{ background: "none", border: "none", color: GOLD, fontSize: 13, fontWeight: 700, cursor: "pointer", padding: 0, marginLeft: 4 }}
-          >
-            {expanded ? "Ver menos" : "Ver mais"}
-          </button>
+      <div style={{ padding: "0 16px 12px" }}>
+        {isWinePost ? (
+          <WineTastingCardWeb content={content} />
+        ) : (
+          <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.65, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+            {displayContent}
+            {isLong && (
+              <button
+                onClick={() => setExpanded(!expanded)}
+                style={{ background: "none", border: "none", color: GOLD, fontSize: 13, fontWeight: 700, cursor: "pointer", padding: 0, marginLeft: 4 }}
+              >
+                {expanded ? "Ver menos" : "Ver mais"}
+              </button>
+            )}
+          </div>
         )}
       </div>
 

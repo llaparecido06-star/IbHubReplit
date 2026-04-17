@@ -765,33 +765,26 @@ export async function sendWebMessage(conversationId: string, senderId: string, c
 
 export async function uploadChatAttachment(file: File, userId: string): Promise<string | null> {
   try {
-    // Get the current session token so the API server can verify the user
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData?.session?.access_token ?? "";
-
-    // Convert file to base64 via FileReader
-    const fileBase64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload  = () => resolve((reader.result as string).split(",")[1] ?? "");
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
 
     const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
       ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
 
-    const res = await fetch(`${apiBase}/uploads/chat`, {
+    // Use multipart/form-data — avoids loading large video/audio files into memory
+    // as base64 (which caused Network request failed for large files)
+    const formData = new FormData();
+    formData.append("file", file, file.name);
+    formData.append("userId", userId);
+    formData.append("mimeType", file.type || "application/octet-stream");
+
+    const res = await fetch(`${apiBase}/uploads/chat-form`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        // Do NOT set Content-Type — let browser set multipart boundary automatically
       },
-      body: JSON.stringify({
-        fileBase64,
-        fileName: file.name,
-        mimeType: file.type || "application/octet-stream",
-        userId,
-      }),
+      body: formData,
     });
 
     if (!res.ok) {
@@ -1830,6 +1823,8 @@ export interface MarketComment {
     id: string;
     full_name?: string | null;
     avatar_url?: string | null;
+    position?: string | null;
+    company?: string | null;
   };
 }
 
@@ -1997,14 +1992,23 @@ export async function fetchMarketComments(postId: string): Promise<MarketComment
     const authorIds = [...new Set(data.map((c: any) => c.author_id))];
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, user_id, full_name, avatar_url")
+      .select("id, user_id, full_name, avatar_url, headline")
       .in("user_id", authorIds);
     const profileMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p]));
 
-    return data.map((c: any) => ({
-      ...c,
-      author: profileMap.get(c.author_id) ?? null,
-    }));
+    return data.map((c: any) => {
+      const profile = profileMap.get(c.author_id);
+      return {
+        ...c,
+        author: profile ? {
+          id: profile.id,
+          full_name: profile.full_name,
+          avatar_url: profile.avatar_url,
+          position: profile.headline ?? null,
+          company: null,
+        } : null,
+      };
+    });
   } catch {
     return [];
   }

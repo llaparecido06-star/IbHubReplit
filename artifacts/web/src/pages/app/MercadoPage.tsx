@@ -410,8 +410,16 @@ function MarketPostComments({ postId, userId }: { postId: string; userId: string
             <div key={c.id} style={{ display: "flex", gap: 8 }}>
               <MarketPostAvatar src={c.author?.avatar_url} name={c.author?.full_name ?? "U"} size={28} />
               <div style={{ flex: 1, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "8px 12px" }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{c.author?.full_name ?? "Usuário"} </span>
-                <span style={{ fontSize: 12, color: "#555" }}>{c.content}</span>
+                <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "2px 6px", marginBottom: 3 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{c.author?.full_name ?? "Usuário"}</span>
+                  {c.author?.position && (
+                    <span style={{ fontSize: 11, color: MUTED }}>· {c.author.position}</span>
+                  )}
+                  {c.author?.company && (
+                    <span style={{ fontSize: 11, color: MUTED }}>· {c.author.company}</span>
+                  )}
+                </div>
+                <span style={{ fontSize: 13, color: "#333", lineHeight: 1.5 }}>{c.content}</span>
               </div>
             </div>
           ))}
