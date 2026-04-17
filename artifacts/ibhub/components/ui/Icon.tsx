@@ -98,6 +98,10 @@ import {
   Zap,
   Wind,
   Trophy,
+  Wine,
+  Flame,
+  ThumbsUp,
+  Sparkles,
 } from "lucide-react-native";
 import React from "react";
 import { Text, View } from "react-native";
@@ -216,6 +220,13 @@ const MCI_MAP: Record<string, { component: React.ComponentType<any>; fill?: bool
   "comment-outline": { component: MessageSquare, fill: false },
   "share-variant-outline": { component: Share2, fill: false },
   trophy: { component: Trophy, fill: false },
+  wine: { component: Wine, fill: false },
+  "glass-wine": { component: Wine, fill: false },
+  fire: { component: Flame, fill: false },
+  flame: { component: Flame, fill: false },
+  "hand-clap": { component: ThumbsUp, fill: false },
+  "thumbs-up": { component: ThumbsUp, fill: false },
+  sparkles: { component: Sparkles, fill: false },
 };
 
 const ANTDESIGN_MAP: Record<string, { component: React.ComponentType<any>; fill?: boolean }> = {

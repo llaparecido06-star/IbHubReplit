@@ -19,7 +19,7 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather } from "@/components/ui/Icon";
+import { Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import {
   Defs,
   LinearGradient,
@@ -1423,7 +1423,7 @@ export default function MercadoScreen() {
               {can("variedades") ? (
                 <View style={styles.section}>
                   <View style={styles.sectionTitleRow}>
-                    <Text style={{ fontSize: 18, marginRight: 6 }} allowFontScaling={false}>🍷</Text>
+                    <MaterialCommunityIcons name="glass-wine" size={18} color={colors.navy} style={{ marginRight: 6 }} />
                     <Text style={[styles.sectionTitle, { color: colors.navy }]}>Variedades em Destaque</Text>
                   </View>
                   <View style={[styles.tableCard, { backgroundColor: "#fff", borderColor: colors.border }]}>

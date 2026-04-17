@@ -32,11 +32,11 @@ import type { AppConversation } from "@/services/api";
 
 export type ReactionType = "saude" | "bravo" | "destaque" | "incrivel";
 
-export const REACTIONS: { type: ReactionType; emoji: string; label: string }[] = [
-  { type: "saude",    emoji: "🍷", label: "Saúde!" },
-  { type: "bravo",    emoji: "👏", label: "Bravo!" },
-  { type: "destaque", emoji: "⭐", label: "Destaque!" },
-  { type: "incrivel", emoji: "🔥", label: "Incrível!" },
+export const REACTIONS: { type: ReactionType; emoji: string; iconName: string; iconColor: string; label: string }[] = [
+  { type: "saude",    emoji: "🍷", iconName: "glass-wine", iconColor: "#7C3AED", label: "Saúde!" },
+  { type: "bravo",    emoji: "👏", iconName: "hand-clap",  iconColor: "#F59E0B", label: "Bravo!" },
+  { type: "destaque", emoji: "⭐", iconName: "star",        iconColor: "#EAB308", label: "Destaque!" },
+  { type: "incrivel", emoji: "🔥", iconName: "fire",        iconColor: "#EF4444", label: "Incrível!" },
 ];
 
 export interface Post {
@@ -281,6 +281,10 @@ function ImageCarousel({ imageUrls }: { imageUrls: string[] }) {
 
 const REPORT_REASONS = ["Spam", "Conteúdo ofensivo", "Informação falsa", "Assédio", "Outro"];
 
+function ReactionIcon({ iconName, iconColor, size }: { iconName: string; iconColor: string; size: number }) {
+  return <MaterialCommunityIcons name={iconName as any} size={size} color={iconColor} />;
+}
+
 function ReactionPicker({
   visible,
   onSelect,
@@ -302,7 +306,7 @@ function ReactionPicker({
               onPress={() => { onSelect(r.type); onClose(); }}
               activeOpacity={0.7}
             >
-              <Text style={styles.reactionEmoji} allowFontScaling={false}>{r.emoji}</Text>
+              <ReactionIcon iconName={r.iconName} iconColor={r.iconColor} size={28} />
               <Text style={styles.reactionLabel}>{r.label}</Text>
             </TouchableOpacity>
           ))}
@@ -515,9 +519,8 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
         }
       };
 
-  const likeButtonColor = reactionInfo ? "#e74c3c" : isLiked ? "#e74c3c" : colors.border;
+  const likeButtonColor = reactionInfo ? reactionInfo.iconColor : isLiked ? "#e74c3c" : colors.border;
   const likeButtonLabel = reactionInfo ? reactionInfo.label : isLiked ? "Curtido" : "Curtir";
-  const likeButtonIcon  = reactionInfo ? reactionInfo.emoji : null;
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
@@ -528,7 +531,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
           onPress={() => router.push({ pathname: "/wine-ranking" as any, params: wineEan ? { ean: wineEan } : {} })}
           activeOpacity={0.75}
         >
-          <Text style={styles.wineBadgeIcon} allowFontScaling={false}>🍷</Text>
+          <MaterialCommunityIcons name="glass-wine" size={13} color={colors.gold} />
           <Text style={[styles.wineBadgeText, { color: colors.gold }]}>Avaliação de Vinho</Text>
           {wineEan ? (
             <Text style={[styles.wineBadgeText, { color: colors.gold, opacity: 0.7 }]}>· Ver ranking ↗</Text>
@@ -719,9 +722,9 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
               activeOpacity={onViewLikes ? 0.6 : 1}
               disabled={!onViewLikes}
             >
-              <View style={[styles.statIcon, { backgroundColor: "#e74c3c" }]}>
+              <View style={[styles.statIcon, { backgroundColor: reactionInfo ? reactionInfo.iconColor : "#e74c3c" }]}>
                 {reactionInfo
-                  ? <Text style={{ fontSize: 12, lineHeight: 14 }} allowFontScaling={false}>{reactionInfo.emoji}</Text>
+                  ? <ReactionIcon iconName={reactionInfo.iconName} iconColor="#fff" size={10} />
                   : <AntDesign name="heart" size={9} color="#fff" />
                 }
               </View>
@@ -774,8 +777,8 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
             <ActivityIndicator size="small" color={colors.mutedForeground} />
           ) : (
             <Animated.View style={{ transform: [{ scale: likeScale }] }}>
-              {likeButtonIcon ? (
-                <Text style={{ fontSize: 20 }} allowFontScaling={false}>{likeButtonIcon}</Text>
+              {reactionInfo ? (
+                <ReactionIcon iconName={reactionInfo.iconName} iconColor={reactionInfo.iconColor} size={22} />
               ) : (
                 <AntDesign
                   name="heart"

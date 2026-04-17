@@ -18,7 +18,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather } from "@/components/ui/Icon";
+import { Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
@@ -300,7 +300,7 @@ export default function CreatePostScreen() {
           style={[styles.modeBtn, mode === "degustacao" && { borderBottomColor: colors.gold, borderBottomWidth: 2 }]}
           onPress={() => setMode("degustacao")}
         >
-          <Text style={{ fontSize: 14 }} allowFontScaling={false}>🍷</Text>
+          <MaterialCommunityIcons name="glass-wine" size={14} color={mode === "degustacao" ? colors.gold : colors.mutedForeground} />
           <Text style={[styles.modeBtnText, { color: mode === "degustacao" ? colors.gold : colors.mutedForeground }]}>
             Degustação
           </Text>
@@ -428,7 +428,7 @@ export default function CreatePostScreen() {
         {mode === "degustacao" && (
           <View style={styles.tastingForm}>
             <View style={[styles.tastingHero, { backgroundColor: colors.gold + "10", borderColor: colors.gold + "30", borderWidth: 1, borderRadius: 12 }]}>
-              <Text style={{ fontSize: 32 }} allowFontScaling={false}>🍷</Text>
+              <MaterialCommunityIcons name="glass-wine" size={32} color={colors.gold} />
               <View>
                 <Text style={[styles.tastingHeroTitle, { color: colors.navy }]}>Nota de Degustação</Text>
                 <Text style={[styles.tastingHeroSub, { color: colors.mutedForeground }]}>Compartilhe sua avaliação profissional</Text>
@@ -495,7 +495,7 @@ export default function CreatePostScreen() {
               style={[styles.scorePicker, { borderColor: tastingScore ? colors.gold : colors.border, backgroundColor: "#fff" }]}
               onPress={() => setShowScorePicker(v => !v)}
             >
-              <Text style={{ fontSize: 22 }} allowFontScaling={false}>⭐</Text>
+              <MaterialCommunityIcons name="star" size={22} color={colors.gold} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.scorePickerLabel, { color: colors.mutedForeground }]}>Pontuação (0–100)</Text>
                 <Text style={[styles.scorePickerValue, { color: tastingScore ? colors.gold : colors.mutedForeground }]}>

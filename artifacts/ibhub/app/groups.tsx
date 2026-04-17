@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather } from "@/components/ui/Icon";
+import { Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
@@ -183,7 +183,7 @@ export default function GroupsScreen() {
 
         {loading ? (
           <View style={styles.empty}>
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]} allowFontScaling={false}>Carregando grupos… 🍷</Text>
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Carregando grupos…</Text>
           </View>
         ) : (
           <>

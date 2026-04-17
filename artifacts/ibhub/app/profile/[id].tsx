@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather } from "@/components/ui/Icon";
+import { Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { PostCard, Post } from "@/components/feed/PostCard";
@@ -630,7 +630,10 @@ export default function PublicProfileScreen() {
         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" }}>
           <View style={[styles.wineModal, { backgroundColor: colors.background }]}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }} allowFontScaling={false}>🍷 Detalhes do Vinho</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <MaterialCommunityIcons name="glass-wine" size={18} color={colors.gold} />
+                <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }}>Detalhes do Vinho</Text>
+              </View>
               <TouchableOpacity onPress={() => setSelectedWine(null)}>
                 <Feather name="x" size={22} color={colors.mutedForeground} />
               </TouchableOpacity>

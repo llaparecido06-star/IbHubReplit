@@ -116,7 +116,7 @@ export function PostRichContent({ post, onVote }: Props) {
           }
           activeOpacity={0.75}
         >
-          <Text style={{ fontSize: 16 }} allowFontScaling={false}>🍷</Text>
+          <MaterialCommunityIcons name="glass-wine" size={16} color={colors.gold} />
           <Text style={{ fontSize: 12, fontWeight: "700", color: colors.gold }}>
             Avaliação de Vinho
           </Text>

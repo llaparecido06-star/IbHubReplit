@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather } from "@/components/ui/Icon";
+import { Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
@@ -169,7 +169,7 @@ export default function StoryViewerScreen() {
           />
         ) : (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" }]}>
-            <Text style={{ color: colors.gold, fontSize: 48 }} allowFontScaling={false}>🍷</Text>
+            <MaterialCommunityIcons name="glass-wine" size={48} color={colors.gold} />
           </View>
         )}
 
