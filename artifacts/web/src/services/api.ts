@@ -1006,15 +1006,21 @@ export async function fetchCompanyPostsWeb(companyId: string, currentUserId: str
       .limit(30);
     if (!rawPosts) return [];
 
-    const authorIds = [...new Set((rawPosts as any[]).map((p: any) => p.user_id).filter(Boolean))];
+    const [authorIds, companyPageRes] = await Promise.all([
+      Promise.resolve([...new Set((rawPosts as any[]).map((p: any) => p.user_id).filter(Boolean))]),
+      supabase.from("company_pages").select("id, name, avatar_url").eq("id", companyId).maybeSingle(),
+    ]);
+
     let profileMap = new Map<string, any>();
     if (authorIds.length > 0) {
       const { data: profiles } = await supabase
         .from("profiles")
         .select("id, full_name, avatar_url, headline, plan")
-        .in("id", authorIds);
+        .in("id", authorIds as string[]);
       profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
     }
+
+    const companyPage = companyPageRes.data ?? null;
 
     const postIds = (rawPosts as any[]).map((p: any) => p.id);
     const [likesRes, commentsRes, bookmarksRes] = await Promise.all([
@@ -1040,14 +1046,15 @@ export async function fetchCompanyPostsWeb(companyId: string, currentUserId: str
     return (rawPosts as any[]).map((p: any) => {
       const myLike = (likesByPost.get(p.id) ?? []).find((l: any) => l.user_id === currentUserId);
       return {
-        id: p.id, user_id: p.user_id, content: p.content,
-        image_url: p.image_url, video_url: p.video_url, created_at: p.created_at,
+        id: p.id, user_id: p.user_id, company_page_id: p.company_page_id,
+        content: p.content, image_url: p.image_url, video_url: p.video_url, created_at: p.created_at,
         likes_count: countByPost.get(p.id) ?? 0,
         comments_count: commentCount.get(p.id) ?? 0,
         shares_count: p.shares_count ?? 0,
         is_liked: !!myLike, reaction_type: myLike?.reaction_type ?? null,
         is_bookmarked: bookmarkSet.has(p.id),
         author: profileMap.get(p.user_id) ?? null,
+        company_page: p.company_page_id ? companyPage : null,
       };
     });
   } catch (e) {

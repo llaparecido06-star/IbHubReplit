@@ -39,13 +39,22 @@ function Avatar({ src, name, size = 40, bg = "#722f37" }: { src?: string | null;
 function MiniPostCard({ post }: { post: Post }) {
   const content = post.content ?? "";
   const displayContent = content.length > 220 ? content.slice(0, 220).trimEnd() + "…" : content;
-  const authorName = post.author?.full_name ?? "Membro";
+  const companyPage = post.company_page ?? null;
+  const authorName = companyPage ? companyPage.name : (post.author?.full_name ?? "Membro");
+  const authorAvatar = companyPage ? companyPage.avatar_url : post.author?.avatar_url;
   return (
     <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <Avatar src={post.author?.avatar_url} name={authorName} size={32} />
+        <Avatar src={authorAvatar} name={authorName} size={32} bg={companyPage ? GOLD : "#722f37"} />
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{authorName}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{authorName}</div>
+            {companyPage && (
+              <span style={{ fontSize: 9, fontWeight: 700, color: WHITE, backgroundColor: GOLD, padding: "1px 5px", borderRadius: 100 }}>
+                Empresa
+              </span>
+            )}
+          </div>
           <div style={{ fontSize: 11, color: MUTED }}>{timeAgo(post.created_at)}</div>
         </div>
       </div>

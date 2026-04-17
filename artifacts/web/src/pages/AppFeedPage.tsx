@@ -435,14 +435,21 @@ function SuggestionCard({
 }
 
 /* ─── PostTrigger (opens global modal) ─── */
-function PostTrigger({ profile }: { profile: { avatar_url?: string | null; full_name?: string | null } | null }) {
+function PostTrigger({
+  profile,
+  activeCompany,
+}: {
+  profile: { avatar_url?: string | null; full_name?: string | null } | null;
+  activeCompany?: { name: string; avatar_url?: string | null } | null;
+}) {
   const openModal = () => window.dispatchEvent(new CustomEvent("ibhub:openCreatePost"));
   const { isEnabled: isFlagEnabled } = useFeatureFlags();
-  const name = profile?.full_name ?? "Usuário";
+  const name = activeCompany ? activeCompany.name : (profile?.full_name ?? "Usuário");
+  const avatarSrc = activeCompany ? activeCompany.avatar_url : profile?.avatar_url;
   return (
     <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 14, marginBottom: 14 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <Avatar src={profile?.avatar_url} name={name} size={40} />
+        <Avatar src={avatarSrc} name={name} size={40} bg={activeCompany ? GOLD : "#722f37"} />
         <button onClick={openModal} style={{
           flex: 1, textAlign: "left", padding: "10px 16px",
           backgroundColor: BG, border: `1px solid ${BORDER}`,
@@ -737,7 +744,7 @@ export default function AppFeedPage() {
         {/* ── Feed column ─────────────────── */}
         <div style={{ flex: 1, minWidth: 0 }}>
           {!activeCompany && isFlagEnabled("stories") && <StoriesBar userId={userId} />}
-          <PostTrigger profile={profile} />
+          <PostTrigger profile={profile} activeCompany={activeCompany} />
 
           {loading ? (
             <div style={{ textAlign: "center", padding: 48, color: MUTED }}>
