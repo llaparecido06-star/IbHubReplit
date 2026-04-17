@@ -128,16 +128,19 @@ export default function OportunidadesPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const uid = user?.id ?? "";
-    const [m, v, ev] = await Promise.all([
-      fetchOpportunities("marketplace", uid),
-      fetchOpportunities("vaga", uid),
-      fetchEvents(uid),
-    ]);
-    setMarket(m);
-    setVagas(v);
-    setEventos(ev);
-    setLoading(false);
+    try {
+      const uid = user?.id ?? "";
+      const [m, v, ev] = await Promise.all([
+        fetchOpportunities("marketplace", uid),
+        fetchOpportunities("vaga", uid),
+        fetchEvents(uid),
+      ]);
+      setMarket(m);
+      setVagas(v);
+      setEventos(ev);
+    } finally {
+      setLoading(false);
+    }
   }, [user?.id]);
 
   useEffect(() => { loadData(); }, [loadData]);

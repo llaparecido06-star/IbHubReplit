@@ -11,6 +11,7 @@ import {
   ProfilePerson,
   createWebPost,
   uploadWebPostVideo,
+  addWineEntry,
 } from "@/services/api";
 
 const GOLD   = "#c9a84c";
@@ -129,10 +130,15 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
   const [pollOptions, setPollOptions] = useState(["", ""]);
 
   // Avaliação de Vinho
-  const [wineName, setWineName]   = useState("");
-  const [wineEan, setWineEan]     = useState("");
-  const [wineScore, setWineScore] = useState(80);
-  const [wineNotes, setWineNotes] = useState("");
+  const [wineName, setWineName]       = useState("");
+  const [wineGrape, setWineGrape]     = useState("");
+  const [wineSafra, setWineSafra]     = useState("");
+  const [wineEan, setWineEan]         = useState("");
+  const [wineProducer, setWineProducer] = useState("");
+  const [wineCountry, setWineCountry] = useState("");
+  const [wineRegion, setWineRegion]   = useState("");
+  const [wineScore, setWineScore]     = useState(85);
+  const [wineNotes, setWineNotes]     = useState("");
 
   const name = companyPageId ? (companyName ?? "Empresa") : (profile.full_name ?? "Usuário");
   const avatarSrc = companyPageId ? companyAvatar : profile.avatar_url;
@@ -157,11 +163,19 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
     if (tab === "vinho") {
       const stars = Math.max(1, Math.min(5, Math.round(wineScore / 20)));
       const starsStr = "⭐".repeat(stars);
+      const metaLine = [
+        wineGrape.trim()    ? `🍇 ${wineGrape.trim()}`    : "",
+        wineSafra.trim()    ? `📅 ${wineSafra.trim()}`     : "",
+        wineProducer.trim() ? `🏭 ${wineProducer.trim()}`  : "",
+        wineRegion.trim()   ? `📍 ${wineRegion.trim()}`    : "",
+        wineCountry.trim()  ? `🌍 ${wineCountry.trim()}`   : "",
+      ].filter(Boolean).join(" · ");
       return [
-        `${starsStr} **${wineName || "Vinho"}** — Degustação`,
+        `${starsStr} ${wineName || "Vinho"}`,
+        metaLine,
         `📊 Pontuação: ${wineScore}/100`,
-        wineEan ? `🏷️ EAN: ${wineEan}` : "",
-        wineNotes ? `📝 ${wineNotes}` : "",
+        wineEan.trim()   ? `🏷️ EAN: ${wineEan.trim()}`   : "",
+        wineNotes.trim() ? `📝 ${wineNotes.trim()}`        : "",
       ].filter(Boolean).join("\n");
     }
     return content;
@@ -194,6 +208,24 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
       video_url: video_url ?? null,
       company_page_id: companyPageId ?? null,
     });
+    if (tab === "vinho" && wineName.trim()) {
+      addWineEntry({
+        user_id: userId,
+        name: wineName.trim(),
+        vintage: wineSafra.trim() || null,
+        ean: wineEan.trim() || null,
+        grape: wineGrape.trim() || null,
+        region: wineRegion.trim() || null,
+        producer: wineProducer.trim() || null,
+        country: wineCountry.trim() || null,
+        rating: Math.max(1, Math.min(5, Math.round(wineScore / 20))),
+        score_100: wineScore,
+        notes: wineNotes.trim() || null,
+        qty: 1,
+        status: "consumido",
+        is_private: false,
+      }).catch(() => {});
+    }
     setSubmitting(false);
     onCreated();
     onClose();
@@ -375,9 +407,24 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
 
           {/* Avaliação de Vinho */}
           {tab === "vinho" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {/* Nome do vinho */}
               <input value={wineName} onChange={e => setWineName(e.target.value)} placeholder="Nome do vinho *" style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, outline: "none", fontFamily: "inherit" }} />
-              <input value={wineEan} onChange={e => setWineEan(e.target.value)} placeholder="Código EAN (opcional)" style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, outline: "none", fontFamily: "inherit" }} />
+              {/* Uva e Safra */}
+              <div style={{ display: "flex", gap: 8 }}>
+                <input value={wineGrape} onChange={e => setWineGrape(e.target.value)} placeholder="Uva/Casta (ex: Cabernet Sauvignon)" style={{ flex: 3, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, outline: "none", fontFamily: "inherit", minWidth: 0 }} />
+                <input value={wineSafra} onChange={e => setWineSafra(e.target.value)} placeholder="Safra" style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, outline: "none", fontFamily: "inherit", minWidth: 0 }} maxLength={4} />
+              </div>
+              {/* Produtor e País */}
+              <div style={{ display: "flex", gap: 8 }}>
+                <input value={wineProducer} onChange={e => setWineProducer(e.target.value)} placeholder="Produtor (ex: Concha y Toro)" style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, outline: "none", fontFamily: "inherit", minWidth: 0 }} />
+                <input value={wineCountry} onChange={e => setWineCountry(e.target.value)} placeholder="País" style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, outline: "none", fontFamily: "inherit", minWidth: 0 }} />
+              </div>
+              {/* Região */}
+              <input value={wineRegion} onChange={e => setWineRegion(e.target.value)} placeholder="Região" style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, outline: "none", fontFamily: "inherit" }} />
+              {/* EAN */}
+              <input value={wineEan} onChange={e => setWineEan(e.target.value)} placeholder="Código EAN (opcional — usado no ranking comunitário)" style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, outline: "none", fontFamily: "inherit" }} />
+              {/* Pontuação */}
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                   <label style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>Pontuação</label>
@@ -391,6 +438,7 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
                   ))}
                 </div>
               </div>
+              {/* Notas */}
               <textarea value={wineNotes} onChange={e => setWineNotes(e.target.value)} placeholder="Notas de degustação, aromas, sabores..." rows={3} style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, outline: "none", resize: "none", fontFamily: "inherit" }} />
             </div>
           )}

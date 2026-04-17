@@ -610,18 +610,21 @@ export default function AppFeedPage() {
       return;
     }
     setLoading(true);
-    if (companyId) {
-      const postsData = await fetchCompanyFeedPosts(companyId, userId);
-      setPosts(postsData);
-    } else {
-      const [postsData, suggsData] = await Promise.all([
-        fetchFeedPosts(userId),
-        fetchWebSuggestedConnections(userId, 5),
-      ]);
-      setPosts(postsData);
-      setSuggestions(suggsData);
+    try {
+      if (companyId) {
+        const postsData = await fetchCompanyFeedPosts(companyId, userId);
+        setPosts(postsData);
+      } else {
+        const [postsData, suggsData] = await Promise.all([
+          fetchFeedPosts(userId),
+          fetchWebSuggestedConnections(userId, 5),
+        ]);
+        setPosts(postsData);
+        setSuggestions(suggsData);
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [userId, companyId]);
 
   useEffect(() => {
