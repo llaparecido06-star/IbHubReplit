@@ -5098,6 +5098,60 @@ export async function updateApplicationStatus(
   }
 }
 
+/** Delete an opportunity (vaga or marketplace item) by id. */
+export async function deleteOpportunityById(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("opportunities").delete().eq("id", id);
+    if (error) { console.error("deleteOpportunityById:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("deleteOpportunityById:", e);
+    return false;
+  }
+}
+
+/** Delete an event by id. */
+export async function deleteEventById(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("events").delete().eq("id", id);
+    if (error) { console.error("deleteEventById:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("deleteEventById:", e);
+    return false;
+  }
+}
+
+/** Partial update an opportunity (title, description, price, salary, expires_at, contact_email, location, category). */
+export async function updateOpportunity(
+  id: string,
+  fields: Partial<Pick<AppOpportunity, "title" | "description" | "price" | "salary" | "expires_at" | "contact_email" | "location" | "category">>,
+): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("opportunities").update(fields).eq("id", id);
+    if (error) { console.error("updateOpportunity:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("updateOpportunity:", e);
+    return false;
+  }
+}
+
+/** Partial update an event (title, description, location, start_date, end_date, capacity, is_active). */
+export async function updateEvent(
+  id: string,
+  fields: Partial<Pick<AppEvent, "title" | "description" | "location" | "start_date" | "end_date" | "capacity" | "is_active">>,
+): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("events").update(fields).eq("id", id);
+    if (error) { console.error("updateEvent:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("updateEvent:", e);
+    return false;
+  }
+}
+
 // ─── Groups ───────────────────────────────────────────────────────────────────
 
 export interface Group {

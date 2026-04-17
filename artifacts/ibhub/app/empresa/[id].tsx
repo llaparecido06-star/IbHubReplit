@@ -40,7 +40,7 @@ import {
 import { Post } from "@/components/feed/PostCard";
 import { friendlyErrorMessage } from "@/hooks/useAsyncAction";
 
-type CompanyTab  = "publicacoes" | "portfolio" | "painel";
+type CompanyTab  = "publicacoes" | "portfolio" | "painel" | "anuncios";
 type ProductCat  = "produto" | "vinho" | "acessorio" | "servico";
 type SortKey     = "data" | "preco" | "categoria";
 
@@ -549,23 +549,37 @@ export default function EmpresaScreen() {
         </View>
 
         {/* Tabs */}
-        <View style={[styles.tabBar, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={[styles.tabBar, { backgroundColor: "#fff", borderBottomColor: colors.border }]}
+          contentContainerStyle={{ flexDirection: "row" }}
+        >
           {([
             { key: "publicacoes", label: "PUBLICAÇÕES" },
             { key: "portfolio",   label: "PORTIFÓLIO" },
-            ...(isManager ? [{ key: "painel" as CompanyTab, label: "PAINEL" }] : []),
+            ...(isManager ? [
+              { key: "painel"   as CompanyTab, label: "PAINEL" },
+              { key: "anuncios" as CompanyTab, label: "ANÚNCIOS" },
+            ] : []),
           ] as { key: CompanyTab; label: string }[]).map((t) => (
             <TouchableOpacity
               key={t.key}
-              style={[styles.tabItem, activeTab === t.key && { borderBottomColor: colors.gold, borderBottomWidth: 2 }]}
-              onPress={() => setActiveTab(t.key)}
+              style={[styles.tabItem, { flex: 0, paddingHorizontal: 16 }, activeTab === t.key && { borderBottomColor: colors.gold, borderBottomWidth: 2 }]}
+              onPress={() => {
+                if (t.key === "anuncios") {
+                  router.push({ pathname: "/empresa/admin" as any, params: { id, name: companyPage?.name ?? "" } });
+                } else {
+                  setActiveTab(t.key);
+                }
+              }}
             >
               <Text style={[styles.tabLabel, { color: activeTab === t.key ? colors.gold : colors.mutedForeground }]}>
                 {t.label}
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
 
         {/* ── Publicações ── */}
         {activeTab === "publicacoes" && (
