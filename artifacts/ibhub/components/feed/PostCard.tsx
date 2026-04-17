@@ -25,7 +25,7 @@ import {
 import { formatRelativeDate } from "@/utils/dateUtils";
 import { AntDesign, Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
-import { WineTastingCard } from "@/components/feed/PostRichContent";
+import { WineTastingCard, canParseWine } from "@/components/feed/PostRichContent";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { createReport, hidePost, blockUser, fetchConversations, sendMessage, checkIsFollowing, toggleFollow } from "@/services/api";
@@ -600,7 +600,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
 
       <Pressable onPress={() => router.push(`/post/${post.id}` as any)} style={styles.contentWrap}>
         {post.content ? (
-          postType === "wine" ? (
+          postType === "wine" && canParseWine(post.content) ? (
             <WineTastingCard content={post.content} />
           ) : (
             <>

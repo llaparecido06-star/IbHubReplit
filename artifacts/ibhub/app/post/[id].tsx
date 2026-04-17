@@ -18,7 +18,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@/components/ui/Icon";
-import { WineTastingCard } from "@/components/feed/PostRichContent";
+import { WineTastingCard, canParseWine } from "@/components/feed/PostRichContent";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth, supabase } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
@@ -441,7 +441,7 @@ export default function PostDetailScreen() {
                 </TouchableOpacity>
 
                 {/* Content */}
-                {post.content && /^⭐/.test(post.content) && /Pontuação/.test(post.content) ? (
+                {post.content && canParseWine(post.content) ? (
                   <WineTastingCard content={post.content} />
                 ) : (
                   <Text style={[styles.postContentPreview, { color: colors.foreground }]}>{post.content}</Text>

@@ -36,13 +36,21 @@ const WINE_FIELDS: WineField[] = [
   { prefix: "📝 Notas:",       iconLib: "feather",  icon: "file-text",  label: "Notas" },
 ];
 
+// Strip Unicode variation selectors (e.g. U+FE0F) so emoji matching works
+// regardless of how the content was stored (iOS, Android, web may differ).
+function normalizeEmoji(s: string): string {
+  return s.replace(/\uFE0F/g, "");
+}
+
 function parseWineContent(content: string): { field: WineField; value: string }[] {
   const lines = content.split("\n").map((l) => l.trim()).filter(Boolean);
   const result: { field: WineField; value: string }[] = [];
   for (const line of lines) {
+    const normLine = normalizeEmoji(line);
     for (const field of WINE_FIELDS) {
-      if (line.startsWith(field.prefix)) {
-        const value = line.slice(field.prefix.length).trim();
+      const normPrefix = normalizeEmoji(field.prefix);
+      if (normLine.startsWith(normPrefix)) {
+        const value = normLine.slice(normPrefix.length).trim();
         if (value) result.push({ field, value });
         break;
       }
@@ -64,6 +72,11 @@ function WineFieldIcon({
     return <MaterialCommunityIcons name={field.icon as any} size={size} color={color} />;
   }
   return <Feather name={field.icon as any} size={size} color={color} />;
+}
+
+/** Returns true if the content can be parsed as a structured wine tasting post. */
+export function canParseWine(content: string): boolean {
+  return parseWineContent(content).length > 0;
 }
 
 export function WineTastingCard({ content }: { content: string }) {
