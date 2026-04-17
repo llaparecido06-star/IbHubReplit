@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { resolveUserId, requirePlanFeature, requireAdmin } from "../lib/planCheck.js";
+import { broadcastPushToAllUsers } from "../lib/pushUtils.js";
 
 const router: IRouter = Router();
 
@@ -113,6 +114,19 @@ router.post("/market/posts", async (req: Request, res: Response): Promise<void> 
     res.status(500).json({ error: error.message });
     return;
   }
+
+  // Fire-and-forget: notify all users about the new Ideal.BI post
+  const previewBody = (data as any).content?.slice(0, 100) ?? "Novo conteúdo disponível";
+  broadcastPushToAllUsers({
+    title: "📡 Novo post Ideal.BI",
+    body: previewBody,
+    data: {
+      type: "market_post",
+      postId: (data as any).id,
+      deepLink: "/(tabs)/mercado",
+    },
+    excludeUserId: userId,
+  });
 
   res.status(201).json({ post: data });
 });
