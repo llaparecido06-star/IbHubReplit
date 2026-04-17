@@ -1256,6 +1256,32 @@ export default function ChatScreen() {
               <Text style={[st.menuItemText, { color: colors.navy }]}>Follow-up</Text>
             </TouchableOpacity>
             <View style={[st.menuDivider, { backgroundColor: colors.border }]} />
+            <TouchableOpacity
+              style={st.menuItem}
+              onPress={() => {
+                setShowMenu(false);
+                Alert.alert(
+                  "Apagar conversa",
+                  "Todas as mensagens serão excluídas permanentemente. Tem certeza?",
+                  [
+                    { text: "Cancelar", style: "cancel" },
+                    {
+                      text: "Apagar",
+                      style: "destructive",
+                      onPress: async () => {
+                        const ok = await API.deleteDirectConversation(id);
+                        if (ok) router.back();
+                        else Alert.alert("Erro", "Não foi possível apagar a conversa.");
+                      },
+                    },
+                  ],
+                );
+              }}
+            >
+              <Feather name="trash-2" size={17} color="#dc2626" />
+              <Text style={[st.menuItemText, { color: "#dc2626" }]}>Apagar conversa</Text>
+            </TouchableOpacity>
+            <View style={[st.menuDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity style={st.menuItem} onPress={() => setShowMenu(false)}>
               <Feather name="flag" size={17} color="#dc2626" />
               <Text style={[st.menuItemText, { color: "#dc2626" }]}>Denunciar</Text>

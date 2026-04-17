@@ -5504,6 +5504,15 @@ export async function fetchMarketComments(postId: string): Promise<MarketComment
   } catch { return []; }
 }
 
+export async function deleteDirectConversation(conversationId: string): Promise<boolean> {
+  try {
+    await supabase.from("messages").delete().eq("conversation_id", conversationId);
+    await supabase.from("conversation_participants").delete().eq("conversation_id", conversationId);
+    const { error } = await supabase.from("conversations").delete().eq("id", conversationId);
+    return !error;
+  } catch { return false; }
+}
+
 export async function addMarketComment(postId: string, authorId: string, content: string): Promise<MarketComment | null> {
   try {
     const { data, error } = await supabase
