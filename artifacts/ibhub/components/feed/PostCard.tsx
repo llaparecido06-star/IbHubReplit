@@ -302,7 +302,7 @@ function ReactionPicker({
               onPress={() => { onSelect(r.type); onClose(); }}
               activeOpacity={0.7}
             >
-              <Text style={styles.reactionEmoji}>{r.emoji}</Text>
+              <Text style={styles.reactionEmoji} allowFontScaling={false}>{r.emoji}</Text>
               <Text style={styles.reactionLabel}>{r.label}</Text>
             </TouchableOpacity>
           ))}
@@ -528,7 +528,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
           onPress={() => router.push({ pathname: "/wine-ranking" as any, params: wineEan ? { ean: wineEan } : {} })}
           activeOpacity={0.75}
         >
-          <Text style={styles.wineBadgeIcon}>🍷</Text>
+          <Text style={styles.wineBadgeIcon} allowFontScaling={false}>🍷</Text>
           <Text style={[styles.wineBadgeText, { color: colors.gold }]}>Avaliação de Vinho</Text>
           {wineEan ? (
             <Text style={[styles.wineBadgeText, { color: colors.gold, opacity: 0.7 }]}>· Ver ranking ↗</Text>
@@ -721,7 +721,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
             >
               <View style={[styles.statIcon, { backgroundColor: "#e74c3c" }]}>
                 {reactionInfo
-                  ? <Text style={{ fontSize: 9 }}>{reactionInfo.emoji}</Text>
+                  ? <Text style={{ fontSize: 11 }} allowFontScaling={false}>{reactionInfo.emoji}</Text>
                   : <AntDesign name="heart" size={9} color="#fff" />
                 }
               </View>
@@ -775,7 +775,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
           ) : (
             <Animated.View style={{ transform: [{ scale: likeScale }] }}>
               {likeButtonIcon ? (
-                <Text style={{ fontSize: 20 }}>{likeButtonIcon}</Text>
+                <Text style={{ fontSize: 20 }} allowFontScaling={false}>{likeButtonIcon}</Text>
               ) : (
                 <AntDesign
                   name="heart"

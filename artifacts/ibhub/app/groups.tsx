@@ -183,7 +183,7 @@ export default function GroupsScreen() {
 
         {loading ? (
           <View style={styles.empty}>
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Carregando grupos… 🍷</Text>
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]} allowFontScaling={false}>Carregando grupos… 🍷</Text>
           </View>
         ) : (
           <>

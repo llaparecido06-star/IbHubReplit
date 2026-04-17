@@ -1260,7 +1260,7 @@ export default function FeedScreen() {
                 <Feather name="x" size={20} color={colors.mutedForeground} />
               </TouchableOpacity>
               <View style={styles.wineHeaderTitle}>
-                <Text style={{ fontSize: 14 }}>🍷</Text>
+                <Text style={{ fontSize: 14 }} allowFontScaling={false}>🍷</Text>
                 <Text style={[styles.postModalTitle, { color: colors.navy }]}>Avaliar Rótulo</Text>
               </View>
               <TouchableOpacity style={[styles.publishBtn, { backgroundColor: wineName.trim() ? colors.gold : colors.gold + "55" }]} onPress={handlePublishWine}>

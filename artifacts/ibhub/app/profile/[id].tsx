@@ -630,7 +630,7 @@ export default function PublicProfileScreen() {
         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" }}>
           <View style={[styles.wineModal, { backgroundColor: colors.background }]}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }}>🍷 Detalhes do Vinho</Text>
+              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }} allowFontScaling={false}>🍷 Detalhes do Vinho</Text>
               <TouchableOpacity onPress={() => setSelectedWine(null)}>
                 <Feather name="x" size={22} color={colors.mutedForeground} />
               </TouchableOpacity>

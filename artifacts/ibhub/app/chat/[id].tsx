@@ -805,7 +805,7 @@ export default function ChatScreen() {
     return (
       <View style={{ gap: 4, padding: 4 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Text style={{ fontSize: 16 }}>🍷</Text>
+          <Text style={{ fontSize: 16 }} allowFontScaling={false}>🍷</Text>
           <Text style={[{ fontSize: 10, fontWeight: "700", letterSpacing: 0.5 }, { color: isMe ? colors.gold : colors.gold }]}>FICHA DE VINHO</Text>
         </View>
         {meta.image_url && <Image source={{ uri: meta.image_url }} style={[st.mediaImage, { borderRadius: 8, height: 100 }]} resizeMode="cover" />}
@@ -924,7 +924,7 @@ export default function ChatScreen() {
                 <Feather name="message-circle" size={36} color={colors.navy} />
               </View>
               <Text style={[st.emptyTitle, { color: colors.navy }]}>Nenhuma mensagem ainda</Text>
-              <Text style={[st.emptyHint, { color: colors.mutedForeground }]}>Seja o primeiro a dizer olá! 🍷</Text>
+              <Text style={[st.emptyHint, { color: colors.mutedForeground }]} allowFontScaling={false}>Seja o primeiro a dizer olá! 🍷</Text>
             </View>
           }
         />
@@ -1082,7 +1082,7 @@ export default function ChatScreen() {
             <View style={{ gap: 10 }}>
               {[
                 {
-                  icon: <Text style={{ fontSize: 22 }}>🍷</Text>,
+                  icon: <Text style={{ fontSize: 22 }} allowFontScaling={false}>🍷</Text>,
                   title: "Enviar Ficha de Vinho",
                   sub: "Compartilhe um vinho do seu catálogo",
                   bg: colors.gold + "18",
@@ -1129,7 +1129,7 @@ export default function ChatScreen() {
             <Text style={[st.sheetTitle, { color: colors.navy }]}>Selecionar Vinho</Text>
             {wines.length === 0 ? (
               <View style={[st.empty, { paddingTop: 32 }]}>
-                <Text style={{ fontSize: 36 }}>🍷</Text>
+                <Text style={{ fontSize: 36 }} allowFontScaling={false}>🍷</Text>
                 <Text style={[{ fontSize: 14, color: colors.mutedForeground }]}>Nenhum vinho cadastrado</Text>
               </View>
             ) : (
@@ -1144,7 +1144,7 @@ export default function ChatScreen() {
                       <Image source={{ uri: wine.image_url }} style={st.wineImg} />
                     ) : (
                       <View style={[st.wineImg, { backgroundColor: colors.gold + "20", alignItems: "center", justifyContent: "center" }]}>
-                        <Text style={{ fontSize: 20 }}>🍷</Text>
+                        <Text style={{ fontSize: 20 }} allowFontScaling={false}>🍷</Text>
                       </View>
                     )}
                     <View style={{ flex: 1 }}>

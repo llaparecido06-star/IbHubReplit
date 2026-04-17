@@ -169,7 +169,7 @@ export default function StoryViewerScreen() {
           />
         ) : (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" }]}>
-            <Text style={{ color: colors.gold, fontSize: 48 }}>🍷</Text>
+            <Text style={{ color: colors.gold, fontSize: 48 }} allowFontScaling={false}>🍷</Text>
           </View>
         )}
 

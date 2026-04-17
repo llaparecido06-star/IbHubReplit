@@ -1423,7 +1423,7 @@ export default function MercadoScreen() {
               {can("variedades") ? (
                 <View style={styles.section}>
                   <View style={styles.sectionTitleRow}>
-                    <Text style={{ fontSize: 18, marginRight: 6 }}>🍷</Text>
+                    <Text style={{ fontSize: 18, marginRight: 6 }} allowFontScaling={false}>🍷</Text>
                     <Text style={[styles.sectionTitle, { color: colors.navy }]}>Variedades em Destaque</Text>
                   </View>
                   <View style={[styles.tableCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
