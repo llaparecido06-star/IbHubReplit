@@ -377,7 +377,7 @@ export default function EmpresaScreen() {
     if (!user?.id || !companyPage?.owner_id || messagingLoading) return;
     setMessagingLoading(true);
     // Companies have no messaging restrictions — forceAccepted=true
-    const convoId = await getOrCreateDirectConversation(user.id, companyPage.owner_id, true, activeCompany?.id ?? null);
+    const convoId = await getOrCreateDirectConversation(user.id, companyPage.owner_id, true, null);
     setMessagingLoading(false);
     if (convoId) router.push(`/chat/${convoId}?companyId=${companyPage.id}` as any);
   };
@@ -866,7 +866,7 @@ export default function EmpresaScreen() {
                 style={[styles.formSaveBtn, { backgroundColor: colors.navy, marginTop: 8 }]}
                 onPress={async () => {
                   if (!user?.id || !companyPage?.owner_id) return;
-                  const convoId = await getOrCreateDirectConversation(user.id, companyPage.owner_id, true, activeCompany?.id ?? null);
+                  const convoId = await getOrCreateDirectConversation(user.id, companyPage.owner_id, true, null);
                   if (convoId) {
                     setSelectedProduct(null);
                     router.push(`/chat/${convoId}?companyId=${companyPage.id}` as any);

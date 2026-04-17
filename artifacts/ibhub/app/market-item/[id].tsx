@@ -62,7 +62,7 @@ export default function MarketItemScreen() {
 
     setContacting(true);
     try {
-      const convoId = await getOrCreateDirectConversation(user.id, sellerId, true, activeCompany?.id ?? null);
+      const convoId = await getOrCreateDirectConversation(user.id, sellerId, true, null);
       if (convoId) {
         const companyId = item.company_page_id;
 

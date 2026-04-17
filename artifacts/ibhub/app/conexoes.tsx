@@ -22,6 +22,7 @@ import {
   fetchPendingConnectionsSent,
   fetchConnectedUsers,
   respondToConnection,
+  getOrCreateDirectConversation,
 } from "@/services/api";
 
 type ConexoesTab = "pendentes" | "conectados";
@@ -34,10 +35,22 @@ export default function ConexoesScreen() {
 
   const [activeTab, setActiveTab] = useState<ConexoesTab>("pendentes");
   const [loading, setLoading] = useState(true);
+  const [openingDM, setOpeningDM] = useState<string | null>(null);
 
   const [received, setReceived] = useState<ConnectionProfile[]>([]);
   const [sent, setSent] = useState<ConnectionProfile[]>([]);
   const [connected, setConnected] = useState<ConnectionProfile[]>([]);
+
+  const openDM = async (personId: string) => {
+    if (!user?.id || openingDM) return;
+    setOpeningDM(personId);
+    try {
+      const cid = await getOrCreateDirectConversation(user.id, personId, true, null);
+      if (cid) router.push(`/chat/${cid}` as any);
+    } finally {
+      setOpeningDM(null);
+    }
+  };
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -229,7 +242,8 @@ export default function ConexoesScreen() {
                     person,
                     <TouchableOpacity
                       style={[styles.msgBtn, { borderColor: colors.border }]}
-                      onPress={() => router.push(`/chat/${person.id}` as any)}
+                      onPress={() => openDM(person.id)}
+                      disabled={openingDM === person.id}
                     >
                       <Feather name="message-circle" size={15} color={colors.navy} />
                     </TouchableOpacity>,
