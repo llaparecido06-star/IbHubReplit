@@ -223,7 +223,7 @@ function AuthenticatedLayout() {
 }
 
 function RootLayoutNav() {
-  const { session, loading, isRecovering, needsProfileCompletion } = useAuth();
+  const { session, loading, isRecovering } = useAuth();
   const { isEnabled, isLoading: flagsLoading } = useFeatureFlags();
   const router = useRouter();
   const pathname = usePathname();
@@ -245,13 +245,11 @@ function RootLayoutNav() {
         router.replace("/(auth)/login" as any);
       }
       // else: maintenance + isAuthPath → stay on login, let admin sign in
-    } else if (needsProfileCompletion) {
-      router.replace("/social-complete" as any);
     } else if (!didNavigateIn.current) {
       didNavigateIn.current = true;
       setTimeout(() => router.replace("/(tabs)" as any), 80);
     }
-  }, [session, loading, isRecovering, needsProfileCompletion, manutencao, flagsLoading, isAuthPath]);
+  }, [session, loading, isRecovering, manutencao, flagsLoading, isAuthPath]);
 
   if (loading) {
     return (
@@ -277,14 +275,6 @@ function RootLayoutNav() {
         <Stack.Screen name="maintenance" options={{ headerShown: false }} />
         <Stack.Screen name="terms-of-use" options={{ animation: "slide_from_right" }} />
         <Stack.Screen name="privacy-policy" options={{ animation: "slide_from_right" }} />
-      </Stack>
-    );
-  }
-
-  if (needsProfileCompletion) {
-    return (
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="social-complete" options={{ headerShown: false }} />
       </Stack>
     );
   }
