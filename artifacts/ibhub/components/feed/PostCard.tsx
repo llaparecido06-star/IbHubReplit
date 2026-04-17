@@ -721,7 +721,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
             >
               <View style={[styles.statIcon, { backgroundColor: "#e74c3c" }]}>
                 {reactionInfo
-                  ? <Text style={{ fontSize: 11 }} allowFontScaling={false}>{reactionInfo.emoji}</Text>
+                  ? <Text style={{ fontSize: 12, lineHeight: 14 }} allowFontScaling={false}>{reactionInfo.emoji}</Text>
                   : <AntDesign name="heart" size={9} color="#fff" />
                 }
               </View>
