@@ -46,12 +46,13 @@ export default function GroupChatScreen() {
   const colors  = useColors();
   const router  = useRouter();
   const { id }  = useLocalSearchParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user, activeCompany } = useAuth();
   const insets  = useSafeAreaInsets();
 
   const [groupInfo, setGroupInfo]       = useState<GroupInfo>({ name: "Grupo", member_count: 0, avatar_url: null, owner_id: "" });
   const [messages, setMessages]         = useState<AppMessage[]>([]);
   const [profiles, setProfiles]         = useState<Map<string, SenderProfile>>(new Map());
+  const [companyProfiles, setCompanyProfiles] = useState<Map<string, { id: string; name: string; avatar_url: string | null }>>(new Map());
   const [input, setInput]               = useState("");
   const [loading, setLoading]           = useState(true);
   const [sending, setSending]           = useState(false);
@@ -81,16 +82,29 @@ export default function GroupChatScreen() {
   // ── Load group info + messages ────────────────────────────────────────────
 
   const loadProfiles = useCallback(async (msgs: AppMessage[]) => {
-    const senderIds = Array.from(new Set(msgs.map(m => m.sender_id)));
-    if (senderIds.length === 0) return;
-    const { data } = await supabase
-      .from("profiles")
-      .select("id, full_name, avatar_url")
-      .in("id", senderIds);
-    if (data) {
+    const senderIds  = Array.from(new Set(msgs.map(m => m.sender_id)));
+    const companyIds = Array.from(new Set(
+      msgs.map(m => (m as any).from_company_page_id).filter(Boolean) as string[]
+    ));
+
+    const [profilesRes, companiesRes] = await Promise.all([
+      senderIds.length > 0
+        ? supabase.from("profiles").select("id, full_name, avatar_url").in("id", senderIds)
+        : Promise.resolve({ data: [] as any[] }),
+      companyIds.length > 0
+        ? supabase.from("company_pages").select("id, name, avatar_url").in("id", companyIds)
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
+
+    if (profilesRes.data) {
       const map = new Map<string, SenderProfile>();
-      for (const p of data as SenderProfile[]) map.set(p.id, p);
+      for (const p of profilesRes.data as SenderProfile[]) map.set(p.id, p);
       setProfiles(map);
+    }
+    if (companiesRes.data) {
+      const map = new Map<string, { id: string; name: string; avatar_url: string | null }>();
+      for (const c of companiesRes.data as any[]) map.set(c.id, { id: c.id, name: c.name, avatar_url: c.avatar_url ?? null });
+      setCompanyProfiles(map);
     }
   }, []);
 
@@ -152,6 +166,18 @@ export default function GroupChatScreen() {
             }
             return prev;
           });
+          // Load company profile for new message if it was sent as a company
+          const newCompanyId = (raw as any).from_company_page_id ?? null;
+          if (newCompanyId) {
+            setCompanyProfiles(prev => {
+              if (!prev.has(newCompanyId)) {
+                supabase.from("company_pages").select("id, name, avatar_url").eq("id", newCompanyId).maybeSingle().then(({ data }) => {
+                  if (data) setCompanyProfiles(p => new Map(p).set((data as any).id, { id: (data as any).id, name: (data as any).name, avatar_url: (data as any).avatar_url ?? null }));
+                });
+              }
+              return prev;
+            });
+          }
           setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
           if (raw.sender_id !== user.id) {
             API.markConversationRead(id, user.id);
@@ -238,7 +264,7 @@ export default function GroupChatScreen() {
     setSending(true);
     broadcastTyping(false);
     if (typingTimer.current) clearTimeout(typingTimer.current);
-    await API.sendMessage(id, user.id, text, { reply_to_id: replyTo?.id });
+    await API.sendMessage(id, user.id, text, { reply_to_id: replyTo?.id, companyPageId: activeCompany?.id ?? null });
     setReplyTo(null);
     setSending(false);
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
@@ -258,7 +284,7 @@ export default function GroupChatScreen() {
         const url = await API.uploadChatMedia(id, asset.uri, asset.mimeType ?? "audio/mpeg");
         setUploading(false);
         if (!url) { Alert.alert("Erro", "Não foi possível enviar o áudio."); return; }
-        const saved = await API.sendMediaMessage(id, user.id, url, "audio");
+        const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", activeCompany?.id ?? null);
         if (saved) {
           seenMsgIds.current.add(saved.id);
           setMessages(prev => [...prev, saved]);
@@ -296,7 +322,7 @@ export default function GroupChatScreen() {
       const url = await API.uploadChatMedia(id, uri, "audio/m4a");
       setUploading(false);
       if (!url) { Alert.alert("Erro", "Não foi possível enviar o áudio."); return; }
-      const saved = await API.sendMediaMessage(id, user.id, url, "audio");
+      const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", activeCompany?.id ?? null);
       if (saved) {
         seenMsgIds.current.add(saved.id);
         setMessages(prev => [...prev, saved]);
@@ -334,7 +360,7 @@ export default function GroupChatScreen() {
       const url = await API.uploadChatMedia(id, asset.uri, asset.mimeType ?? "application/octet-stream");
       setUploading(false);
       if (!url) { Alert.alert("Erro", "Não foi possível enviar o arquivo."); return; }
-      const saved = await API.sendMediaMessage(id, user.id, url, "file", asset.name ?? "arquivo");
+      const saved = await API.sendMediaMessage(id, user.id, url, "file", asset.name ?? "arquivo", activeCompany?.id ?? null);
       if (saved) {
         seenMsgIds.current.add(saved.id);
         setMessages(prev => [...prev, saved]);
@@ -358,7 +384,7 @@ export default function GroupChatScreen() {
         {
           text: "Sair", style: "destructive", onPress: async () => {
             if (!user?.id) return;
-            const ok = await API.leaveGroup(id, user.id);
+            const ok = await API.leaveGroup(id, user.id, activeCompany?.id ?? null);
             if (ok) {
               router.replace("/groups" as any);
             } else {
@@ -466,10 +492,15 @@ export default function GroupChatScreen() {
   );
 
   const renderMessage = ({ item }: { item: AppMessage }) => {
-    const isMe       = item.sender_id === user?.id;
-    const time       = new Date(item.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-    const sender     = profiles.get(item.sender_id);
-    const senderName = isMe ? myName : (sender?.full_name ?? "Membro");
+    const isMe         = item.sender_id === user?.id;
+    const time         = new Date(item.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const sender       = profiles.get(item.sender_id);
+    const fromCompanyId = (item as any).from_company_page_id ?? null;
+    const companyProfile = fromCompanyId ? companyProfiles.get(fromCompanyId) : null;
+    // Display name/avatar: prefer company identity if message was sent as company
+    const displayName  = isMe ? myName : (companyProfile?.name ?? sender?.full_name ?? "Membro");
+    const displayAvatar = companyProfile?.avatar_url ?? sender?.avatar_url ?? undefined;
+    const isCompanyMsg = !!fromCompanyId;
     const msgReactions = reactionsMap[item.id] ?? {};
     const hasReactions = Object.keys(msgReactions).length > 0;
     const msgType    = item.message_type ?? "text";
@@ -479,12 +510,24 @@ export default function GroupChatScreen() {
         <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
           {!isMe && (
             <View style={styles.senderWrap}>
-              <Avatar name={senderName} uri={sender?.avatar_url ?? undefined} size={28} />
+              <Avatar name={displayName} uri={displayAvatar} size={28} />
             </View>
           )}
           <View style={{ maxWidth: "80%" }}>
             {!isMe && (
-              <Text style={[styles.senderName, { color: colors.gold }]}>{senderName}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Text style={[styles.senderName, { color: colors.gold }]}>{displayName}</Text>
+                {isCompanyMsg && (
+                  <View style={{ backgroundColor: colors.gold + "22", borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
+                    <Text style={{ fontSize: 9, color: colors.gold, fontWeight: "700" }}>EMPRESA</Text>
+                  </View>
+                )}
+              </View>
+            )}
+            {isMe && isCompanyMsg && (
+              <Text style={{ fontSize: 9, color: "#fff8", textAlign: "right", marginBottom: 2 }}>
+                enviado como empresa
+              </Text>
             )}
             <Pressable
               style={[

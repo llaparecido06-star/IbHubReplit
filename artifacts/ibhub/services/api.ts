@@ -2450,17 +2450,20 @@ export async function sendMediaMessage(
   mediaUrl: string,
   messageType: "image" | "video" | "audio" | "file",
   caption = "",
+  companyPageId?: string | null,
 ): Promise<AppMessage | null> {
   try {
+    const payload: any = {
+      conversation_id: conversationId,
+      sender_id: senderId,
+      content: caption,
+      message_type: messageType,
+      media_url: mediaUrl,
+    };
+    if (companyPageId) payload.from_company_page_id = companyPageId;
     const { data, error } = await supabase
       .from("messages")
-      .insert({
-        conversation_id: conversationId,
-        sender_id: senderId,
-        content: caption,
-        message_type: messageType,
-        media_url: mediaUrl,
-      })
+      .insert(payload)
       .select()
       .single();
     if (error) { console.error("sendMediaMessage:", error); return null; }
@@ -5111,11 +5114,16 @@ export interface Group {
   is_owner?: boolean;
 }
 
-export async function fetchGroups(userId: string): Promise<{ mine: Group[]; explore: Group[] }> {
+export async function fetchGroups(userId: string, activeCompanyId?: string | null): Promise<{ mine: Group[]; explore: Group[] }> {
   try {
+    // Fetch memberships scoped to the current identity (personal or company)
+    const membershipsQuery = activeCompanyId
+      ? supabase.from("group_members").select("group_id, role").eq("user_id", userId).eq("company_page_id", activeCompanyId)
+      : supabase.from("group_members").select("group_id, role").eq("user_id", userId).is("company_page_id", null);
+
     const [groupsRes, membershipsRes] = await Promise.all([
       supabase.from("groups").select("*").order("created_at", { ascending: false }),
-      supabase.from("group_members").select("group_id, role").eq("user_id", userId),
+      membershipsQuery,
     ]);
     if (groupsRes.error) throw groupsRes.error;
     const membershipMap = new Map<string, string>(
@@ -5229,23 +5237,35 @@ export async function fetchGroupHistoryClearedAt(groupId: string, userId: string
   } catch { return null; }
 }
 
-export async function joinGroup(groupId: string, userId: string): Promise<boolean> {
+export async function joinGroup(groupId: string, userId: string, companyPageId?: string | null): Promise<boolean> {
   try {
+    const cpId = companyPageId ?? null;
     const [{ error: gmErr }, { error: cpErr }] = await Promise.all([
-      supabase.from("group_members").insert({ group_id: groupId, user_id: userId, role: "member" }),
-      supabase.from("conversation_participants").upsert({ conversation_id: groupId, user_id: userId }, { onConflict: "conversation_id,user_id", ignoreDuplicates: true }),
+      supabase.from("group_members").insert({ group_id: groupId, user_id: userId, role: "member", company_page_id: cpId }),
+      supabase.from("conversation_participants").upsert(
+        { conversation_id: groupId, user_id: userId, company_page_id: cpId },
+        { onConflict: "conversation_id,user_id,company_page_id", ignoreDuplicates: true }
+      ),
     ]);
     if (cpErr) console.warn("joinGroup conversation_participants:", cpErr);
     return !gmErr;
   } catch { return false; }
 }
 
-export async function leaveGroup(groupId: string, userId: string): Promise<boolean> {
+export async function leaveGroup(groupId: string, userId: string, companyPageId?: string | null): Promise<boolean> {
   try {
-    const [{ error: gmErr }, { error: cpErr }] = await Promise.all([
-      supabase.from("group_members").delete().eq("group_id", groupId).eq("user_id", userId),
-      supabase.from("conversation_participants").delete().eq("conversation_id", groupId).eq("user_id", userId),
-    ]);
+    const cpId = companyPageId ?? null;
+    // Delete only the identity-specific row, not ALL memberships of this user.
+    let gmQ = supabase.from("group_members").delete().eq("group_id", groupId).eq("user_id", userId);
+    let cpQ = supabase.from("conversation_participants").delete().eq("conversation_id", groupId).eq("user_id", userId);
+    if (cpId) {
+      gmQ = gmQ.eq("company_page_id", cpId);
+      cpQ = cpQ.eq("company_page_id", cpId);
+    } else {
+      gmQ = gmQ.is("company_page_id", null);
+      cpQ = cpQ.is("company_page_id", null);
+    }
+    const [{ error: gmErr }, { error: cpErr }] = await Promise.all([gmQ, cpQ]);
     if (gmErr) console.warn("leaveGroup group_members:", gmErr);
     if (cpErr) console.warn("leaveGroup conversation_participants:", cpErr);
     return !gmErr;

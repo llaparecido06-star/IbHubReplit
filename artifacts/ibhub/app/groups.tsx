@@ -30,8 +30,9 @@ export default function GroupsScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { profile, user } = useAuth();
+  const { profile, user, activeCompany } = useAuth();
   const userId = profile?.id ?? user?.id ?? "";
+  const activeCompanyId = activeCompany?.id ?? null;
 
   const [search, setSearch]         = useState("");
   const [category, setCategory]     = useState("Todos");
@@ -50,7 +51,7 @@ export default function GroupsScreen() {
     if (!userId) return;
     if (!isRefresh) setLoading(true);
     try {
-      const { mine, explore } = await fetchGroups(userId);
+      const { mine, explore } = await fetchGroups(userId, activeCompanyId);
       setMyGroups(mine);
       setExplore(explore);
       setDbError(false);
@@ -59,7 +60,7 @@ export default function GroupsScreen() {
     }
     setLoading(false);
     setRefreshing(false);
-  }, [userId]);
+  }, [userId, activeCompanyId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -98,9 +99,10 @@ export default function GroupsScreen() {
   const filteredExplore = exploreGroups.filter(filter);
 
   const handleJoin = async (g: Group) => {
-    const ok = await joinGroup(g.id, userId);
+    const ok = await joinGroup(g.id, userId, activeCompanyId);
     if (ok) {
-      Alert.alert("✅ Você entrou!", `Bem-vindo ao grupo "${g.name}".`);
+      const who = activeCompanyId ? "Sua empresa entrou" : "Você entrou";
+      Alert.alert("✅ " + who + "!", `Bem-vindo ao grupo "${g.name}".`);
       load();
     } else {
       Alert.alert("Erro", "Não foi possível entrar no grupo.");
@@ -108,11 +110,12 @@ export default function GroupsScreen() {
   };
 
   const handleLeave = (g: Group) => {
-    Alert.alert("Sair do grupo", `Tem certeza que deseja sair de "${g.name}"?`, [
+    const who = activeCompanyId ? "sua empresa sair" : "você sair";
+    Alert.alert("Sair do grupo", `Tem certeza que deseja fazer ${who} de "${g.name}"?`, [
       { text: "Cancelar", style: "cancel" },
       {
         text: "Sair", style: "destructive", onPress: async () => {
-          const ok = await leaveGroup(g.id, userId);
+          const ok = await leaveGroup(g.id, userId, activeCompanyId);
           if (ok) load();
           else Alert.alert("Erro", "Não foi possível sair do grupo.");
         }
