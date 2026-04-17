@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   Image,
@@ -11,14 +11,19 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import { Feather } from "@/components/ui/Icon";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { changeLocale, LOCALE_STORAGE_KEY } from "@/i18n";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const LANGUAGES = [
-  { code: "BR", label: "Português (BR)" },
-  { code: "US", label: "English" },
-  { code: "ES", label: "Español" },
+  { code: "pt-BR", flag: "🇧🇷", label: "Português (BR)" },
+  { code: "en",    flag: "🇺🇸", label: "English" },
+  { code: "es",    flag: "🇪🇸", label: "Español" },
+  { code: "fr",    flag: "🇫🇷", label: "Français" },
+  { code: "it",    flag: "🇮🇹", label: "Italiano" },
 ];
 
 interface MenuRow {
@@ -32,22 +37,36 @@ interface MenuRow {
 export default function SettingsScreen() {
   const colors  = useColors();
   const router  = useRouter();
+  const { t, i18n } = useTranslation();
   const { profile, signOut } = useAuth();
   const insets  = useSafeAreaInsets();
 
   const [langOpen, setLangOpen]         = useState(false);
-  const [selectedLang, setSelectedLang] = useState("BR");
+  const [selectedLang, setSelectedLang] = useState(i18n.language || "pt-BR");
+
+  // Sync selectedLang with persisted value on mount
+  useEffect(() => {
+    AsyncStorage.getItem(LOCALE_STORAGE_KEY).then((saved) => {
+      if (saved) setSelectedLang(saved);
+    }).catch(() => {});
+  }, []);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
-  const currentLang = LANGUAGES.find((l) => l.code === selectedLang)!;
+  const currentLang = LANGUAGES.find((l) => l.code === selectedLang) ?? LANGUAGES[0];
 
   const handleSignOut = () => {
     Alert.alert("Sair", "Deseja realmente sair da sua conta?", [
       { text: "Cancelar", style: "cancel" },
       { text: "Sair", style: "destructive", onPress: signOut },
     ]);
+  };
+
+  const handleSelectLang = async (code: string) => {
+    setSelectedLang(code);
+    setLangOpen(false);
+    await changeLocale(code);
   };
 
   const name      = profile?.full_name ?? "Usuário";
@@ -68,38 +87,38 @@ export default function SettingsScreen() {
     {
       title: "CONTA",
       rows: [
-        { icon: "edit-2",  label: "Editar Perfil",        sub: "Alterar informações pessoais",  onPress: () => router.push("/edit-profile" as any) },
-        { icon: "bar-chart-2", label: "Analytics",         sub: "Estatísticas do seu perfil",    onPress: () => router.push("/analytics" as any) },
-        { icon: "shield",  label: "Certificações",         sub: "Certificações",                 onPress: () => router.push("/certifications" as any) },
+        { icon: "edit-2",      label: "Editar Perfil",              sub: "Alterar informações pessoais",      onPress: () => router.push("/edit-profile" as any) },
+        { icon: "bar-chart-2", label: "Analytics",                  sub: "Estatísticas do seu perfil",         onPress: () => router.push("/analytics" as any) },
+        { icon: "shield",      label: "Certificações",              sub: "Certificações",                      onPress: () => router.push("/certifications" as any) },
       ],
     },
     {
       title: "CONTEÚDO",
       rows: [
-        { icon: "bookmark", label: "Publicações Salvas",   sub: "Suas publicações favoritas",    onPress: () => router.push("/salvos" as any) },
+        { icon: "bookmark",    label: "Publicações Salvas",         sub: "Suas publicações favoritas",         onPress: () => router.push("/salvos" as any) },
       ],
     },
     {
       title: "PREFERÊNCIAS",
       rows: [
-        { icon: "bell",     label: "Notificações",         sub: "Gerenciar notificações",         onPress: () => router.push("/notification-settings" as any) },
-        { icon: "lock",     label: "Privacidade e Segurança", sub: "Visibilidade, senha e bloqueios", onPress: () => router.push("/privacy-security" as any) },
-        { icon: "slash",    label: "Usuários Bloqueados",   sub: "Gerenciar bloqueios",              onPress: () => router.push("/blocked-users" as any) },
+        { icon: "bell",        label: "Notificações",               sub: "Gerenciar notificações",             onPress: () => router.push("/notification-settings" as any) },
+        { icon: "lock",        label: "Privacidade e Segurança",    sub: "Visibilidade, senha e bloqueios",    onPress: () => router.push("/privacy-security" as any) },
+        { icon: "slash",       label: "Usuários Bloqueados",        sub: "Gerenciar bloqueios",                onPress: () => router.push("/blocked-users" as any) },
       ],
     },
     {
       title: "ASSINATURA",
       rows: [
-        { icon: "star",     label: "Assinatura",            sub: "Gerencie seu plano",             onPress: () => router.push("/subscription" as any) },
+        { icon: "star",        label: "Assinatura",                 sub: "Gerencie seu plano",                 onPress: () => router.push("/subscription" as any) },
       ],
     },
     {
       title: "SUPORTE & LEGAL",
       rows: [
-        { icon: "file-text", label: "Termos de Uso",         sub: "Termos e condições",             onPress: () => router.push("/terms-of-use") },
-        { icon: "file-text", label: "Política de Privacidade", sub: "Como usamos seus dados",       onPress: () => router.push("/privacy-policy") },
-        { icon: "mail",      label: "Fale Conosco",           sub: "Suporte e feedback",             onPress: () => router.push("/contact") },
-        { icon: "alert-circle", label: "Reportar Bug",        sub: "Nos ajude a melhorar",           onPress: () => router.push("/report-bug") },
+        { icon: "file-text",   label: "Termos de Uso",              sub: "Termos e condições",                 onPress: () => router.push("/terms-of-use") },
+        { icon: "file-text",   label: "Política de Privacidade",    sub: "Como usamos seus dados",             onPress: () => router.push("/privacy-policy") },
+        { icon: "mail",        label: "Fale Conosco",               sub: "Suporte e feedback",                 onPress: () => router.push("/contact") },
+        { icon: "alert-circle",label: "Reportar Bug",               sub: "Nos ajude a melhorar",               onPress: () => router.push("/report-bug") },
       ],
     },
   ];
@@ -145,29 +164,30 @@ export default function SettingsScreen() {
             <View style={{ flex: 1 }}>
               <Text style={[styles.rowLabel, { color: colors.navy }]}>Idioma</Text>
               <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
-                {currentLang.code} {currentLang.label}
+                {currentLang.flag} {currentLang.label}
               </Text>
             </View>
             <Feather name={langOpen ? "chevron-down" : "chevron-right"} size={18} color={colors.mutedForeground} />
           </TouchableOpacity>
           {langOpen && (
             <View style={[styles.langDropdown, { borderTopColor: colors.border }]}>
-              {LANGUAGES.map((lang) => (
+              {LANGUAGES.map((lang, idx) => (
                 <TouchableOpacity
                   key={lang.code}
                   style={[
                     styles.langOption,
-                    { borderBottomColor: colors.border },
+                    idx < LANGUAGES.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border },
                     selectedLang === lang.code && { backgroundColor: colors.gold + "12" },
                   ]}
-                  onPress={() => { setSelectedLang(lang.code); setLangOpen(false); }}
+                  onPress={() => handleSelectLang(lang.code)}
                 >
-                  <Text style={[styles.langCode, { color: selectedLang === lang.code ? colors.gold : colors.mutedForeground }]}>
-                    {lang.code}
-                  </Text>
+                  <Text style={styles.langFlag}>{lang.flag}</Text>
                   <Text style={[styles.langLabel, { color: selectedLang === lang.code ? colors.gold : colors.foreground }]}>
                     {lang.label}
                   </Text>
+                  {selectedLang === lang.code && (
+                    <Feather name="check" size={16} color={colors.gold} style={{ marginLeft: "auto" }} />
+                  )}
                 </TouchableOpacity>
               ))}
             </View>
@@ -249,8 +269,8 @@ const styles = StyleSheet.create({
   menuCard:    { borderRadius: 12, borderWidth: 1, overflow: "hidden" },
   langRow:     { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
   langDropdown:{ borderTopWidth: 1 },
-  langOption:  { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: 1 },
-  langCode:    { fontSize: 13, fontWeight: "700", width: 24 },
+  langOption:  { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 13 },
+  langFlag:    { fontSize: 20 },
   langLabel:   { fontSize: 14 },
   sectionTitle:{ fontSize: 12, fontWeight: "700", letterSpacing: 0.8, paddingHorizontal: 2, marginBottom: 8, marginTop: 8 },
   menuRow:     { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },

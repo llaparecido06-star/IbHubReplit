@@ -1,4 +1,4 @@
-import "@/i18n";
+import { initLocale } from "@/i18n";
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -289,6 +289,11 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
   });
+
+  useEffect(() => {
+    // Restore persisted language before first render
+    initLocale();
+  }, []);
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
