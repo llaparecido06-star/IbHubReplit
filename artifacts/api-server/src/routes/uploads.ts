@@ -14,17 +14,41 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
 const BUCKET = "chat-attachments";
 let bucketReady = false;
 
+const ALLOWED_MIME_TYPES = [
+  "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp", "image/heic", "image/heif",
+  "video/mp4", "video/quicktime", "video/webm", "video/avi", "video/mov", "video/mpeg",
+  "audio/m4a", "audio/mp4", "audio/mpeg", "audio/mp3", "audio/ogg", "audio/wav", "audio/webm", "audio/aac", "audio/x-m4a",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/octet-stream",
+  "text/plain",
+  "text/csv",
+];
+
 async function ensureBucket() {
   if (bucketReady) return;
   const { data: buckets } = await supabaseAdmin.storage.listBuckets();
   const exists = (buckets ?? []).some((b: any) => b.id === BUCKET);
+
+  const bucketConfig = {
+    public: true,
+    fileSizeLimit: 52428800,
+    allowedMimeTypes: ALLOWED_MIME_TYPES,
+  };
+
   if (!exists) {
-    await supabaseAdmin.storage.createBucket(BUCKET, { public: true, fileSizeLimit: 52428800 });
+    await supabaseAdmin.storage.createBucket(BUCKET, bucketConfig);
+  } else {
+    // Always update to ensure MIME restrictions are removed / correct
+    await supabaseAdmin.storage.updateBucket(BUCKET, bucketConfig);
   }
   bucketReady = true;
 }
 
-// Ensure bucket exists at startup
+// Ensure bucket exists and is configured at startup
 ensureBucket().catch(err => console.warn("ensureBucket:", err));
 
 /**

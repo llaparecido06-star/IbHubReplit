@@ -7,6 +7,7 @@ import {
   FlatList,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -19,6 +20,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAudioRecorder, requestRecordingPermissionsAsync, setAudioModeAsync, RecordingPresets } from "expo-audio";
 import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
 import { Feather } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
@@ -62,6 +64,7 @@ export default function GroupChatScreen() {
   const [reactionTarget, setReactionTarget] = useState<string | null>(null);
   const [replyTo, setReplyTo]           = useState<AppMessage | null>(null);
   const [menuVisible, setMenuVisible]   = useState(false);
+  const [showAttach, setShowAttach]     = useState(false);
 
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording]   = useState(false);
@@ -157,7 +160,12 @@ export default function GroupChatScreen() {
           const raw = payload.new as AppMessage;
           if (seenMsgIds.current.has(raw.id)) return;
           seenMsgIds.current.add(raw.id);
-          setMessages(prev => [...prev, raw]);
+          setMessages(prev => {
+            // Replace any temp message from the same sender with matching type
+            const hasDupe = prev.some(m => m.id === raw.id);
+            if (hasDupe) return prev;
+            return [...prev, raw];
+          });
           setProfiles(prev => {
             if (!prev.has(raw.sender_id)) {
               supabase.from("profiles").select("id, full_name, avatar_url").eq("id", raw.sender_id).maybeSingle().then(({ data }) => {
@@ -273,7 +281,7 @@ export default function GroupChatScreen() {
   // ── Audio recording ───────────────────────────────────────────────────────
 
   const startRecording = async () => {
-    // On web, recording via microphone is not supported — fall back to picking an audio file
+    // On web, fall back to picking an audio file
     if (Platform.OS === "web") {
       if (!user?.id || !id) return;
       try {
@@ -287,7 +295,10 @@ export default function GroupChatScreen() {
         const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", activeCompany?.id ?? null);
         if (saved) {
           seenMsgIds.current.add(saved.id);
-          setMessages(prev => [...prev, saved]);
+          setMessages(prev => {
+            const filtered = prev.filter(m => m.id !== saved.id);
+            return [...filtered, saved];
+          });
         }
       } catch {
         setUploading(false);
@@ -325,7 +336,10 @@ export default function GroupChatScreen() {
       const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", activeCompany?.id ?? null);
       if (saved) {
         seenMsgIds.current.add(saved.id);
-        setMessages(prev => [...prev, saved]);
+        setMessages(prev => {
+          const filtered = prev.filter(m => m.id !== saved.id);
+          return [...filtered, saved];
+        });
         setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
       }
     } catch {
@@ -348,9 +362,89 @@ export default function GroupChatScreen() {
     return `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
   };
 
+  // ── Image / video picker ──────────────────────────────────────────────────
+
+  const pickAndSendMedia = async (type: "camera" | "gallery") => {
+    setShowAttach(false);
+    if (!user?.id || !id) return;
+
+    let result: ImagePicker.ImagePickerResult;
+
+    if (type === "camera") {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permissão necessária", "Permita o acesso à câmera nas configurações.");
+        return;
+      }
+      result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images", "videos"], quality: 0.7 });
+    } else {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permissão necessária", "Permita o acesso à galeria nas configurações.");
+        return;
+      }
+      result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images", "videos"],
+        quality: 0.7,
+      });
+    }
+
+    if (result.canceled || !result.assets?.[0]) return;
+
+    const asset    = result.assets[0];
+    const mimeType = asset.mimeType ?? (asset.type === "video" ? "video/mp4" : "image/jpeg");
+    const msgType  = mimeType.startsWith("video") ? "video" : "image";
+
+    // Optimistic temp message
+    const tempId = `tmp_${Date.now()}`;
+    seenMsgIds.current.add(tempId);
+    const tempMsg: AppMessage = {
+      id: tempId,
+      conversation_id: id,
+      sender_id: user.id,
+      content: "",
+      created_at: new Date().toISOString(),
+      message_type: msgType,
+      media_url: asset.uri,
+    };
+    setMessages(prev => [...prev, tempMsg]);
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+
+    setUploading(true);
+    try {
+      const url = await API.uploadChatMedia(id, asset.uri, mimeType);
+      setUploading(false);
+      if (!url) {
+        setMessages(prev => prev.filter(m => m.id !== tempId));
+        seenMsgIds.current.delete(tempId);
+        Alert.alert("Erro", "Não foi possível enviar a mídia.");
+        return;
+      }
+      const saved = await API.sendMediaMessage(id, user.id, url, msgType, "", activeCompany?.id ?? null);
+      if (saved) {
+        seenMsgIds.current.add(saved.id);
+        setMessages(prev => {
+          const filtered = prev.filter(m => m.id !== tempId && m.id !== saved.id);
+          return [...filtered, saved];
+        });
+        seenMsgIds.current.delete(tempId);
+        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+      } else {
+        setMessages(prev => prev.filter(m => m.id !== tempId));
+        seenMsgIds.current.delete(tempId);
+      }
+    } catch {
+      setUploading(false);
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      seenMsgIds.current.delete(tempId);
+      Alert.alert("Erro", "Não foi possível enviar a mídia.");
+    }
+  };
+
   // ── File attachment ───────────────────────────────────────────────────────
 
   const pickAndSendFile = async () => {
+    setShowAttach(false);
     if (!user?.id || !id) return;
     try {
       const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
@@ -363,7 +457,10 @@ export default function GroupChatScreen() {
       const saved = await API.sendMediaMessage(id, user.id, url, "file", asset.name ?? "arquivo", activeCompany?.id ?? null);
       if (saved) {
         seenMsgIds.current.add(saved.id);
-        setMessages(prev => [...prev, saved]);
+        setMessages(prev => {
+          const filtered = prev.filter(m => m.id !== saved.id);
+          return [...filtered, saved];
+        });
         setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
       }
     } catch (e: any) {
@@ -475,7 +572,10 @@ export default function GroupChatScreen() {
   );
 
   const renderFileBubble = (item: AppMessage, isMe: boolean) => (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 4 }}>
+    <TouchableOpacity
+      style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 4 }}
+      onPress={() => item.media_url && Linking.openURL(item.media_url).catch(() => Alert.alert("Erro", "Não foi possível abrir o arquivo."))}
+    >
       <View style={[styles.fileIcon, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : colors.background }]}>
         <Feather name="file-text" size={18} color={isMe ? "#fff" : colors.navy} />
       </View>
@@ -488,7 +588,7 @@ export default function GroupChatScreen() {
         </Text>
       </View>
       <Feather name="download" size={16} color={isMe ? "#ffffff88" : colors.mutedForeground} />
-    </View>
+    </TouchableOpacity>
   );
 
   const renderMessage = ({ item }: { item: AppMessage }) => {
@@ -497,13 +597,13 @@ export default function GroupChatScreen() {
     const sender       = profiles.get(item.sender_id);
     const fromCompanyId = (item as any).from_company_page_id ?? null;
     const companyProfile = fromCompanyId ? companyProfiles.get(fromCompanyId) : null;
-    // Display name/avatar: prefer company identity if message was sent as company
     const displayName  = isMe ? myName : (companyProfile?.name ?? sender?.full_name ?? "Membro");
     const displayAvatar = companyProfile?.avatar_url ?? sender?.avatar_url ?? undefined;
     const isCompanyMsg = !!fromCompanyId;
     const msgReactions = reactionsMap[item.id] ?? {};
     const hasReactions = Object.keys(msgReactions).length > 0;
     const msgType    = item.message_type ?? "text";
+    const isTemp     = item.id.startsWith("tmp_");
 
     return (
       <View style={[styles.msgGroup, isMe ? styles.msgGroupMe : styles.msgGroupOther]}>
@@ -513,7 +613,7 @@ export default function GroupChatScreen() {
               <Avatar name={displayName} uri={displayAvatar} size={28} />
             </View>
           )}
-          <View style={{ maxWidth: "80%" }}>
+          <View style={{ maxWidth: "80%", opacity: isTemp ? 0.6 : 1 }}>
             {!isMe && (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                 <Text style={[styles.senderName, { color: colors.gold }]}>{displayName}</Text>
@@ -556,7 +656,7 @@ export default function GroupChatScreen() {
                 renderAudioBubble(item, isMe)
               ) : msgType === "file" ? (
                 renderFileBubble(item, isMe)
-              ) : msgType === "image" && item.media_url ? (
+              ) : (msgType === "image" || msgType === "video") && item.media_url ? (
                 <View>
                   <Image source={{ uri: item.media_url }} style={styles.mediaImage} resizeMode="cover" />
                   <Text style={[styles.bubbleTime, { color: isMe ? "#ffffff88" : colors.mutedForeground, marginTop: 4 }]}>{time}</Text>
@@ -674,6 +774,30 @@ export default function GroupChatScreen() {
         </View>
       )}
 
+      {/* Attach mini-menu */}
+      {showAttach && (
+        <View style={[styles.attachMenu, { backgroundColor: "#fff", borderTopColor: colors.border }]}>
+          <TouchableOpacity style={styles.attachOption} onPress={() => pickAndSendMedia("camera")}>
+            <View style={[styles.attachIcon, { backgroundColor: colors.navy + "12" }]}>
+              <Feather name="camera" size={20} color={colors.navy} />
+            </View>
+            <Text style={[styles.attachLabel, { color: colors.foreground }]}>Câmera</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.attachOption} onPress={() => pickAndSendMedia("gallery")}>
+            <View style={[styles.attachIcon, { backgroundColor: colors.navy + "12" }]}>
+              <Feather name="image" size={20} color={colors.navy} />
+            </View>
+            <Text style={[styles.attachLabel, { color: colors.foreground }]}>Galeria</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.attachOption} onPress={pickAndSendFile}>
+            <View style={[styles.attachIcon, { backgroundColor: colors.navy + "12" }]}>
+              <Feather name="file" size={20} color={colors.navy} />
+            </View>
+            <Text style={[styles.attachLabel, { color: colors.foreground }]}>Arquivo</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Recording bar */}
       {isRecording && (
         <View style={[styles.recordingBar, { backgroundColor: "#fff", borderTopColor: colors.border }]}>
@@ -698,8 +822,11 @@ export default function GroupChatScreen() {
       {/* Input */}
       {!isRecording && (
         <View style={[styles.inputRow, { paddingBottom: bottomPad + 8, backgroundColor: "#fff", borderTopColor: colors.border }]}>
-          <TouchableOpacity onPress={pickAndSendFile} style={styles.iconBtn}>
-            <Feather name="paperclip" size={20} color={colors.mutedForeground} />
+          <TouchableOpacity
+            onPress={() => setShowAttach(v => !v)}
+            style={[styles.iconBtn, showAttach && { opacity: 1 }]}
+          >
+            <Feather name={showAttach ? "x" : "paperclip"} size={20} color={showAttach ? colors.gold : colors.mutedForeground} />
           </TouchableOpacity>
           <TextInput
             style={[styles.input, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border }]}
@@ -710,6 +837,7 @@ export default function GroupChatScreen() {
             multiline
             onSubmitEditing={handleSend}
             returnKeyType="send"
+            onFocus={() => setShowAttach(false)}
           />
           {input.trim() ? (
             <TouchableOpacity
@@ -827,6 +955,10 @@ const styles = StyleSheet.create({
   uploadingBar:    { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8 },
   replyBar:        { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: 1 },
   replyBarAccent:  { width: 3, height: "100%", borderRadius: 2 },
+  attachMenu:      { flexDirection: "row", paddingHorizontal: 16, paddingVertical: 12, gap: 20, borderTopWidth: 1 },
+  attachOption:    { alignItems: "center", gap: 6 },
+  attachIcon:      { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
+  attachLabel:     { fontSize: 11, fontWeight: "600" },
   recordingBar:    { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 14, borderTopWidth: 1, gap: 10 },
   recordCancelBtn: { padding: 8 },
   recordDot:       { width: 8, height: 8, borderRadius: 4, backgroundColor: "#dc2626" },

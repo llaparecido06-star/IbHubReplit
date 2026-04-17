@@ -13,6 +13,7 @@ import {
   FlatList,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -427,7 +428,10 @@ export default function ChatScreen() {
       const saved = await API.sendMediaMessage(id, user.id, url, msgType);
       if (saved) {
         seenMsgIds.current.add(saved.id);
-        setMessages(prev => prev.map(m => m.id === tempId ? saved : m));
+        setMessages(prev => {
+          const filtered = prev.filter(m => m.id !== tempId && m.id !== saved.id);
+          return [...filtered, saved];
+        });
       }
     } finally {
       setUploading(false);
@@ -450,7 +454,10 @@ export default function ChatScreen() {
       const saved = await API.sendMediaMessage(id, user.id, url, "file", asset.name ?? "arquivo");
       if (saved) {
         seenMsgIds.current.add(saved.id);
-        setMessages(prev => [...prev, saved]);
+        setMessages(prev => {
+          const filtered = prev.filter(m => m.id !== saved.id);
+          return [...filtered, saved];
+        });
         setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
       }
     } catch (e: any) {
@@ -492,7 +499,10 @@ export default function ChatScreen() {
       const saved = await API.sendMediaMessage(id, user.id, url, "audio");
       if (saved) {
         seenMsgIds.current.add(saved.id);
-        setMessages(prev => [...prev, saved]);
+        setMessages(prev => {
+          const filtered = prev.filter(m => m.id !== saved.id);
+          return [...filtered, saved];
+        });
         setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
       }
     } catch {
@@ -812,7 +822,10 @@ export default function ChatScreen() {
   };
 
   const renderFileBubble = (item: AppMessage, isMe: boolean) => (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 4 }}>
+    <TouchableOpacity
+      style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 4 }}
+      onPress={() => item.media_url && Linking.openURL(item.media_url).catch(() => Alert.alert("Erro", "Não foi possível abrir o arquivo."))}
+    >
       <View style={[{ width: 36, height: 36, borderRadius: 8, alignItems: "center", justifyContent: "center" }, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : colors.background }]}>
         <Feather name="file-text" size={18} color={isMe ? "#fff" : colors.navy} />
       </View>
@@ -823,7 +836,7 @@ export default function ChatScreen() {
         <Text style={[{ fontSize: 11 }, { color: isMe ? "#ffffff88" : colors.mutedForeground }]}>{formatTime(item.created_at)}</Text>
       </View>
       <Feather name="download" size={16} color={isMe ? "#ffffff88" : colors.mutedForeground} />
-    </View>
+    </TouchableOpacity>
   );
 
   const renderAudioBubble = (item: AppMessage, isMe: boolean) => (
