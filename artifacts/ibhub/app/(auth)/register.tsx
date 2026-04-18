@@ -374,6 +374,7 @@ export default function RegisterScreen() {
 
         const { error: upsertError } = await supabase.from("profiles").upsert({
           id:                 currentUser.id,
+          full_name:          fullName.trim(),
           username:           username.toLowerCase().trim(),
           phone:              phoneWithDDI,
           areas_of_expertise: selectedAreas,
@@ -381,7 +382,9 @@ export default function RegisterScreen() {
           company:            company.trim() || null,
           position:           role.trim() || null,
           certifications:     certifications.length > 0 ? certifications : [],
-          plan:               selectedPlan,
+          // Always start as gratuito — paid plans are activated via Stripe
+          // after the user completes payment in the subscription screen.
+          plan:               "gratuito",
           ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
         }, { onConflict: "id" });
 
@@ -401,6 +404,17 @@ export default function RegisterScreen() {
 
         // Reload profile so avatar appears immediately in header/tabs
         await refreshProfileByUserId(currentUser.id);
+
+        setLoading(false);
+
+        // Paid plans must go through Stripe — redirect to subscription page
+        // so the user can complete payment and activate the plan.
+        if (selectedPlan !== "basico") {
+          router.replace("/subscription" as any);
+        } else {
+          router.replace("/(tabs)" as any);
+        }
+        return;
       }
 
       setLoading(false);
@@ -729,6 +743,15 @@ export default function RegisterScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+
+              {selectedPlan !== "basico" && (
+                <View style={styles.paymentNotice}>
+                  <Feather name="credit-card" size={14} color="#c9a84c" />
+                  <Text style={styles.paymentNoticeText}>
+                    Após criar sua conta, você será direcionado para concluir o pagamento e ativar o plano selecionado.
+                  </Text>
+                </View>
+              )}
             </View>
           )}
 
@@ -744,7 +767,10 @@ export default function RegisterScreen() {
               </View>
             ) : (
               <Text style={styles.continueBtnText}>
-                {step === TOTAL_STEPS ? "Finalizar cadastro" : "Continuar  →"}
+                {step === TOTAL_STEPS
+                  ? (selectedPlan !== "basico" ? "Criar conta e ir para pagamento  →" : "Finalizar cadastro")
+                  : "Continuar  →"
+                }
               </Text>
             )}
           </TouchableOpacity>
@@ -984,6 +1010,13 @@ const styles = StyleSheet.create({
   pickerCountryName: { flex: 1, color: "#f5f0e8", fontSize: 15, fontWeight: "500" },
   pickerDdi: { color: "#8fa3b8", fontSize: 14, fontWeight: "600", marginRight: 4 },
   pickerSeparator: { height: 1, backgroundColor: "rgba(255,255,255,0.06)", marginHorizontal: 20 },
+  paymentNotice: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    backgroundColor: "rgba(201,168,76,0.1)", borderRadius: 10,
+    borderWidth: 1, borderColor: "rgba(201,168,76,0.25)",
+    padding: 12, marginTop: 4,
+  },
+  paymentNoticeText: { flex: 1, color: "#c9a84c", fontSize: 13, lineHeight: 18 },
   bioWrap: { gap: 4 },
   bioCount: { color: "#8fa3b8", fontSize: 11, textAlign: "right", marginTop: 2 },
   certChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 },
