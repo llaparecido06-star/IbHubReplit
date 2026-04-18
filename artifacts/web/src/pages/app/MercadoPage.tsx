@@ -602,6 +602,31 @@ function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idea
   );
 }
 
+function LockedBlock({ title }: { title: string }) {
+  return (
+    <div style={{
+      backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14,
+      padding: "32px 24px", textAlign: "center",
+    }}>
+      <div style={{ fontSize: 36, marginBottom: 12 }}>🔒</div>
+      <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 6 }}>{title}</div>
+      <p style={{ fontSize: 13, color: MUTED, maxWidth: 380, margin: "0 auto 20px", lineHeight: 1.6 }}>
+        Esta seção não está incluída no seu plano atual. Faça upgrade para acessar dados e análises completos.
+      </p>
+      <a
+        href="/assinar"
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 6,
+          padding: "11px 28px", backgroundColor: GOLD, borderRadius: 10,
+          fontSize: 14, fontWeight: 800, color: NAVY, textDecoration: "none",
+        }}
+      >
+        ⚡ Ver Planos e Assinar
+      </a>
+    </div>
+  );
+}
+
 function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) {
   const { hasFeature } = usePermissions();
   const [posts, setPosts] = useState<MarketPost[]>([]);
@@ -731,12 +756,12 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
             </div>
           ))}
         </div>
-        <button
-          onClick={() => window.location.href = "/planos"}
-          style={{ padding: "12px 32px", backgroundColor: GOLD, border: "none", borderRadius: 10, fontSize: 15, fontWeight: 800, color: NAVY, cursor: "pointer", fontFamily: "inherit" }}
+        <a
+          href="/assinar"
+          style={{ display: "inline-block", padding: "12px 32px", backgroundColor: GOLD, borderRadius: 10, fontSize: 15, fontWeight: 800, color: NAVY, textDecoration: "none" }}
         >
-          Ver planos de assinatura →
-        </button>
+          Ver planos e assinar →
+        </a>
       </div>
     );
   }
@@ -1000,11 +1025,7 @@ export default function MercadoPage() {
                 ))}
               </div>
             ) : (
-              <div style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 28, textAlign: "center", color: MUTED }}>
-                <div style={{ fontSize: 32, marginBottom: 10 }}>🔒</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 4 }}>KPIs de Mercado</div>
-                <div style={{ fontSize: 13 }}>Disponível em planos com acesso ao mercado de dados.</div>
-              </div>
+              <LockedBlock title="KPIs de Mercado" />
             )}
 
             {/* Charts */}
@@ -1026,11 +1047,7 @@ export default function MercadoPage() {
                 </div>
               </>
             ) : (
-              <div style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 28, textAlign: "center", color: MUTED }}>
-                <div style={{ fontSize: 32, marginBottom: 10 }}>🔒</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Gráficos</div>
-                <div style={{ fontSize: 13 }}>Disponível em planos com acesso ao mercado de dados.</div>
-              </div>
+              <LockedBlock title="Gráficos de Mercado" />
             )}
 
             {/* Tendências */}
@@ -1064,11 +1081,7 @@ export default function MercadoPage() {
                 </div>
               </div>
             ) : (
-              <div style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 28, textAlign: "center", color: MUTED }}>
-                <div style={{ fontSize: 32, marginBottom: 10 }}>🔒</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Tendências do Período</div>
-                <div style={{ fontSize: 13 }}>Disponível em planos com acesso ao mercado de dados.</div>
-              </div>
+              <LockedBlock title="Tendências do Período" />
             )}
           </div>
         )}

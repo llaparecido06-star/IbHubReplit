@@ -1441,6 +1441,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 function LockedSection({ title, icon, colors }: { title: string; icon: string; colors: any }) {
+  const router = useRouter();
   return (
     <View style={[styles.lockedCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
       <View style={[styles.lockedIconBox, { backgroundColor: colors.gold + "15" }]}>
@@ -1452,8 +1453,16 @@ function LockedSection({ title, icon, colors }: { title: string; icon: string; c
       </Text>
       <View style={[styles.lockedBadge, { backgroundColor: colors.gold + "18" }]}>
         <Feather name="lock" size={12} color={colors.gold} />
-        <Text style={[styles.lockedBadgeText, { color: colors.gold }]}>Faça upgrade para desbloquear</Text>
+        <Text style={[styles.lockedBadgeText, { color: colors.gold }]}>Recurso dos planos pagos</Text>
       </View>
+      <TouchableOpacity
+        style={{ marginTop: 12, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.gold, paddingHorizontal: 22, paddingVertical: 11, borderRadius: 10 }}
+        onPress={() => router.push("/subscription")}
+        activeOpacity={0.8}
+      >
+        <Feather name="zap" size={14} color="#fff" />
+        <Text style={{ color: "#fff", fontWeight: "800", fontSize: 14 }}>Ver Planos e Assinar</Text>
+      </TouchableOpacity>
     </View>
   );
 }
