@@ -37,7 +37,7 @@ export default function SubscriptionScreen() {
   const colors   = useColors();
   const router   = useRouter();
   const insets   = useSafeAreaInsets();
-  const { profile, refreshProfile } = useAuth();
+  const { profile, refreshProfile, session } = useAuth();
   const { paidPlans, freePlan, getPlanLabel, loading: plansLoading } = usePlans();
 
   const [openingBrowser, setOpeningBrowser] = useState(false);
@@ -85,12 +85,31 @@ export default function SubscriptionScreen() {
   };
 
   const openPortal = async () => {
-    const url = `${webBase}/web/minha-conta`;
+    if (!session?.access_token) {
+      Alert.alert("Erro", "Sessão expirada. Faça login novamente.");
+      return;
+    }
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? "";
     setOpeningBrowser(true);
     try {
-      await Linking.openURL(url);
+      const res = await fetch(`${apiUrl}/stripe/create-portal-session`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json() as { url?: string; error?: string };
+      if (!res.ok || !data.url) {
+        Alert.alert("Erro", data.error ?? "Não foi possível abrir o portal de assinatura.");
+        return;
+      }
+      const canOpen = await Linking.canOpenURL(data.url);
+      if (canOpen) await Linking.openURL(data.url);
+      else Alert.alert("Erro", "Não foi possível abrir o navegador.");
     } catch {
-      Alert.alert("Erro", "Não foi possível abrir o navegador.");
+      Alert.alert("Erro", "Não foi possível abrir o portal de assinatura.");
     } finally {
       setOpeningBrowser(false);
     }
@@ -164,13 +183,32 @@ export default function SubscriptionScreen() {
 
           {(hasActiveSub || isPastDue) && (
             <TouchableOpacity
-              style={[styles.manageBtn, { borderColor: colors.border }]}
+              style={[styles.manageBtn, { borderColor: colors.border, marginTop: 10 }]}
               onPress={openPortal}
               disabled={openingBrowser}
             >
-              <Feather name="external-link" size={14} color={colors.navy} />
-              <Text style={[styles.manageBtnText, { color: colors.navy }]}>Gerenciar assinatura</Text>
+              {openingBrowser
+                ? <ActivityIndicator size="small" color={colors.navy} />
+                : <Feather name="settings" size={14} color={colors.navy} />
+              }
+              <Text style={[styles.manageBtnText, { color: colors.navy }]}>
+                {openingBrowser ? "Abrindo portal…" : "Gerenciar assinatura"}
+              </Text>
             </TouchableOpacity>
+          )}
+          {(hasActiveSub || isPastDue) && (
+            <View style={{ marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {[
+                { icon: "credit-card", label: "Trocar cartão" },
+                { icon: "file-text",   label: "Ver faturas"   },
+                { icon: "x-circle",    label: "Cancelar"      },
+              ].map(item => (
+                <View key={item.label} style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: colors.background, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}>
+                  <Feather name={item.icon as any} size={11} color={colors.mutedForeground} />
+                  <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{item.label}</Text>
+                </View>
+              ))}
+            </View>
           )}
         </View>
 

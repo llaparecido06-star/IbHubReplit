@@ -5,6 +5,7 @@ import { createPortalSession } from "@/services/stripe";
 import { AppShell } from "@/components/layout/AppShell";
 import { getEntitlementStatus } from "@/utils/entitlement";
 import { supabase } from "@/lib/supabase";
+import { usePlans, formatPlanPrice } from "@/hooks/usePlans";
 
 const NAVY  = "#0d1b2a";
 const GOLD  = "#c9a84c";
@@ -14,18 +15,21 @@ const MUTED = "#7a8494";
 const BG    = "#f5f5f0";
 
 const PLAN_LABELS: Record<string, string> = {
-  basico:    "Básico",
-  premium:   "Premium",
-  exclusive: "Exclusive",
-  business:  "Business",
+  gratuito:     "Gratuito",
+  profissional: "Profissional",
+  empresas:     "Empresas",
+  premium:      "Premium",
+  basico:       "Básico",
+  exclusive:    "Exclusive",
+  business:     "Business",
 };
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
-  active:    { label: "Ativo",          color: "#059669", bg: "#d1fae5" },
-  trialing:  { label: "Período de teste", color: "#2563eb", bg: "#dbeafe" },
-  past_due:  { label: "Pagamento pendente", color: "#d97706", bg: "#fef3c7" },
-  canceled:  { label: "Cancelado",      color: "#dc2626", bg: "#fee2e2" },
-  inactive:  { label: "Gratuito",       color: "#6b7280", bg: "#f3f4f6" },
+  active:    { label: "Ativo",               color: "#059669", bg: "#d1fae5" },
+  trialing:  { label: "Período de teste",    color: "#2563eb", bg: "#dbeafe" },
+  past_due:  { label: "Pagamento pendente",  color: "#d97706", bg: "#fef3c7" },
+  canceled:  { label: "Cancelado",           color: "#dc2626", bg: "#fee2e2" },
+  inactive:  { label: "Gratuito",            color: "#6b7280", bg: "#f3f4f6" },
 };
 
 type Section = "perfil" | "assinatura" | "seguranca" | "notificacoes" | "privacidade";
@@ -117,13 +121,15 @@ export default function MinhaContaPage() {
   const [showConex,    setShowConex]    = useState(true);
   const [allowMsg,     setAllowMsg]     = useState(true);
 
-  const plan          = profile?.plan ?? "basico";
+  const { paidPlans, getPlanLabel } = usePlans();
+  const plan          = profile?.plan ?? "gratuito";
   const entitleStatus = getEntitlementStatus(profile);
   const stripeStatus  = profile?.stripe_subscription_status ?? null;
   const periodEnd     = profile?.stripe_current_period_end ?? null;
   const status        = stripeStatus ? STATUS_LABELS[stripeStatus] ?? STATUS_LABELS.inactive : STATUS_LABELS.inactive;
   const hasActiveSub  = entitleStatus === "active" || entitleStatus === "trialing" || entitleStatus === "courtesy";
   const isPastDue     = entitleStatus === "past_due";
+  const currentPlanData = paidPlans.find(p => p.id === plan);
 
   async function handlePortal() {
     if (!session) return;
@@ -233,65 +239,121 @@ export default function MinhaContaPage() {
       );
 
       case "assinatura": return (
-        <Card>
-          <SectionTitle title="Assinatura" />
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
-            <div>
-              <div style={{ fontSize: 22, fontWeight: 900, color: NAVY }}>{PLAN_LABELS[plan] ?? plan}</div>
-              {periodEnd && (
-                <div style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>
-                  {hasActiveSub ? "Renova em" : "Encerra em"}: {new Date(periodEnd).toLocaleDateString("pt-BR")}
+        <div>
+          {/* Current plan card */}
+          <Card>
+            <SectionTitle title="Meu plano" />
+
+            {/* Plan info row */}
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 26, fontWeight: 900, color: NAVY }}>
+                  {getPlanLabel(plan) || PLAN_LABELS[plan] || plan}
                 </div>
-              )}
-            </div>
-            <div style={{ backgroundColor: status.bg, color: status.color, fontWeight: 700, fontSize: 12, padding: "5px 14px", borderRadius: 100 }}>
-              {status.label}
-            </div>
-          </div>
-
-          {isPastDue && (
-            <div style={{ backgroundColor: "#fef3c7", borderRadius: 10, padding: "12px 14px", marginBottom: 14, fontSize: 13, color: "#92400e" }}>
-              ⚠️ Seu pagamento está pendente. Atualize seu método de pagamento para manter o acesso.
-            </div>
-          )}
-
-          {plan === "basico" && !hasActiveSub ? (
-            <button onClick={() => setLocation("/assinar")} style={{ width: "100%", backgroundColor: GOLD, color: NAVY, border: "none", borderRadius: 10, padding: "14px 0", fontSize: 15, fontWeight: 800, cursor: "pointer" }}>
-              Fazer upgrade de plano
-            </button>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {(hasActiveSub || isPastDue) && (
-                <button onClick={handlePortal} disabled={portalLoading} style={{ width: "100%", backgroundColor: NAVY, color: WHITE, border: "none", borderRadius: 10, padding: "14px 0", fontSize: 15, fontWeight: 700, cursor: "pointer", opacity: portalLoading ? 0.7 : 1 }}>
-                  {portalLoading ? "Abrindo portal…" : "Gerenciar assinatura"}
-                </button>
-              )}
-              {!hasActiveSub && (
-                <button onClick={() => setLocation("/assinar")} style={{ width: "100%", backgroundColor: GOLD, color: NAVY, border: "none", borderRadius: 10, padding: "14px 0", fontSize: 15, fontWeight: 800, cursor: "pointer" }}>
-                  Reativar assinatura
-                </button>
-              )}
-            </div>
-          )}
-          {portalError && <p style={{ fontSize: 13, color: "#dc2626", marginTop: 10, textAlign: "center" }}>{portalError}</p>}
-
-          {/* Plan comparison */}
-          <div style={{ marginTop: 24, padding: "16px", backgroundColor: BG, borderRadius: 10 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Recursos incluídos no seu plano</div>
-            {[
-              { label: "Acesso ao feed e conexões", ok: true },
-              { label: "Chat com profissionais",      ok: plan !== "basico" },
-              { label: "Adega virtual",               ok: plan !== "basico" },
-              { label: "Dados de mercado avançados",  ok: plan === "exclusive" || plan === "business" },
-              { label: "Perfil de empresa",            ok: plan === "business" },
-            ].map(r => (
-              <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7, fontSize: 13 }}>
-                <span style={{ color: r.ok ? "#059669" : "#d1d5db", fontSize: 15 }}>{r.ok ? "✓" : "○"}</span>
-                <span style={{ color: r.ok ? NAVY : MUTED }}>{r.label}</span>
+                {currentPlanData && (
+                  <div style={{ fontSize: 13, color: GOLD, fontWeight: 700, marginTop: 2 }}>
+                    {formatPlanPrice(currentPlanData).main}
+                    {formatPlanPrice(currentPlanData).period && (
+                      <span style={{ fontWeight: 400, color: MUTED }}>{formatPlanPrice(currentPlanData).period}</span>
+                    )}
+                  </div>
+                )}
+                {periodEnd && (
+                  <div style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>
+                    {hasActiveSub ? "🔄 Renova em" : "⏹ Encerra em"}: <strong>{new Date(periodEnd).toLocaleDateString("pt-BR")}</strong>
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
-        </Card>
+              <div style={{ backgroundColor: status.bg, color: status.color, fontWeight: 700, fontSize: 12, padding: "6px 16px", borderRadius: 100, whiteSpace: "nowrap" }}>
+                {status.label}
+              </div>
+            </div>
+
+            {/* Features of current plan */}
+            {currentPlanData && currentPlanData.features.filter(f => !f.startsWith("mercado:")).length > 0 && (
+              <div style={{ backgroundColor: BG, borderRadius: 10, padding: "14px 16px", marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: MUTED, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  Recursos do seu plano
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                  {currentPlanData.features.filter(f => !f.startsWith("mercado:")).map(f => (
+                    <div key={f} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: NAVY }}>
+                      <span style={{ color: "#059669", fontSize: 14 }}>✓</span> {f}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Pagamento pendente */}
+            {isPastDue && (
+              <div style={{ backgroundColor: "#fef3c7", border: "1px solid #fde68a", borderRadius: 10, padding: "12px 14px", marginBottom: 14, fontSize: 13, color: "#92400e", display: "flex", alignItems: "flex-start", gap: 8 }}>
+                <span>⚠️</span>
+                <span>Seu pagamento está pendente. Clique em <strong>Gerenciar assinatura</strong> para atualizar seu cartão e manter o acesso.</span>
+              </div>
+            )}
+
+            {/* CTA buttons */}
+            {(plan === "gratuito" || plan === "basico") && !hasActiveSub ? (
+              <button onClick={() => setLocation("/assinar")} style={{ width: "100%", backgroundColor: GOLD, color: NAVY, border: "none", borderRadius: 10, padding: "14px 0", fontSize: 15, fontWeight: 800, cursor: "pointer" }}>
+                ⚡ Fazer upgrade de plano
+              </button>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {(hasActiveSub || isPastDue) && (
+                  <button onClick={handlePortal} disabled={portalLoading} style={{ width: "100%", backgroundColor: NAVY, color: WHITE, border: "none", borderRadius: 10, padding: "14px 0", fontSize: 15, fontWeight: 700, cursor: "pointer", opacity: portalLoading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                    <span>⚙️</span>
+                    <span>{portalLoading ? "Abrindo portal…" : "Gerenciar assinatura"}</span>
+                  </button>
+                )}
+                {!hasActiveSub && (
+                  <button onClick={() => setLocation("/assinar")} style={{ width: "100%", backgroundColor: GOLD, color: NAVY, border: "none", borderRadius: 10, padding: "14px 0", fontSize: 15, fontWeight: 800, cursor: "pointer" }}>
+                    🔄 Reativar assinatura
+                  </button>
+                )}
+                {hasActiveSub && (
+                  <button onClick={() => setLocation("/assinar")} style={{ width: "100%", backgroundColor: "transparent", color: MUTED, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "12px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                    Ver outros planos
+                  </button>
+                )}
+              </div>
+            )}
+
+            {portalError && (
+              <p style={{ fontSize: 13, color: "#dc2626", marginTop: 12, textAlign: "center", backgroundColor: "#fef2f2", padding: "10px", borderRadius: 8 }}>
+                ⚠️ {portalError}
+              </p>
+            )}
+          </Card>
+
+          {/* Portal Stripe explanation card */}
+          {(hasActiveSub || isPastDue) && (
+            <Card>
+              <SectionTitle title="Portal de assinatura Stripe" />
+              <p style={{ fontSize: 13, color: MUTED, margin: "0 0 16px", lineHeight: 1.6 }}>
+                Ao clicar em <strong>Gerenciar assinatura</strong>, você é redirecionado para o portal seguro do Stripe, onde pode realizar as ações abaixo sem precisar entrar em contato com o suporte:
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12, marginBottom: 16 }}>
+                {[
+                  { emoji: "💳", title: "Trocar cartão", desc: "Atualize o método de pagamento cadastrado" },
+                  { emoji: "🧾", title: "Ver faturas", desc: "Acesse e baixe todas as suas faturas" },
+                  { emoji: "📋", title: "Histórico", desc: "Veja o histórico completo de pagamentos" },
+                  { emoji: "🔄", title: "Trocar de plano", desc: "Faça upgrade ou downgrade do seu plano" },
+                  { emoji: "❌", title: "Cancelar", desc: "Cancele sua assinatura quando quiser" },
+                ].map(item => (
+                  <div key={item.title} style={{ backgroundColor: BG, borderRadius: 10, padding: "14px 12px" }}>
+                    <div style={{ fontSize: 22, marginBottom: 6 }}>{item.emoji}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{item.title}</div>
+                    <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.5 }}>{item.desc}</div>
+                  </div>
+                ))}
+              </div>
+              <button onClick={handlePortal} disabled={portalLoading} style={{ width: "100%", backgroundColor: NAVY, color: WHITE, border: "none", borderRadius: 10, padding: "13px 0", fontSize: 14, fontWeight: 700, cursor: "pointer", opacity: portalLoading ? 0.7 : 1 }}>
+                {portalLoading ? "Abrindo portal…" : "Abrir portal de assinatura →"}
+              </button>
+            </Card>
+          )}
+        </div>
       );
 
       case "notificacoes": return (
