@@ -702,12 +702,14 @@ export interface SuggestedProfile {
   areas: string[];
   connection_status: "none" | "pending" | "connected";
   match_score: number;
+  company_match: boolean;
   is_following: boolean;
 }
 
 export async function fetchSuggestedConnections(
   currentUserId: string,
   userAreas: string[],
+  userCompany?: string | null,
   limit = 10,
 ): Promise<SuggestedProfile[]> {
   try {
@@ -744,13 +746,15 @@ export async function fetchSuggestedConnections(
     const followingIds = new Set<string>((followsRes.data ?? []).map((f: any) => f.following_id));
 
     const lowerUserAreas = userAreas.map(a => a.toLowerCase());
+    const lowerUserCompany = userCompany?.toLowerCase() ?? null;
 
-    // 3. Score and rank
+    // 3. Score and rank — area matches + company match
     const scored = (profiles as any[])
       .filter((p: any) => !excludedIds.has(p.id) && p.id !== currentUserId && p.user_id !== currentUserId)
       .map((p: any) => {
         const pAreas: string[] = Array.isArray(p.areas) ? p.areas : [];
         const match_score = pAreas.filter(a => lowerUserAreas.includes(a.toLowerCase())).length;
+        const company_match = !!(lowerUserCompany && p.company && p.company.toLowerCase() === lowerUserCompany);
         const headline = [p.position, p.company].filter(Boolean).join(" · ") || null;
         return {
           id: p.id,
@@ -762,11 +766,15 @@ export async function fetchSuggestedConnections(
           areas: pAreas,
           connection_status: statusMap.get(p.id) ?? "none",
           match_score,
+          company_match,
           is_following: followingIds.has(p.id),
         } as SuggestedProfile;
       })
       .sort((a, b) => {
-        if (b.match_score !== a.match_score) return b.match_score - a.match_score;
+        // Combined sort: area matches + company match bonus, then plan tier
+        const totalA = a.match_score + (a.company_match ? 2 : 0);
+        const totalB = b.match_score + (b.company_match ? 2 : 0);
+        if (totalB !== totalA) return totalB - totalA;
         const planOrder: Record<string, number> = { exclusive: 3, business: 2, premium: 1, basico: 0, gratuito: 0 };
         return (planOrder[b.plan] ?? 0) - (planOrder[a.plan] ?? 0);
       });

@@ -676,7 +676,7 @@ export default function ProfileScreen() {
       fetchWineCellar(user.id),
       fetchFollowers(user.id),
       fetchFollowing(user.id),
-      fetchSuggestedConnections(user.id, areas, 8),
+      fetchSuggestedConnections(user.id, areas, profile?.company ?? null, 8),
     ]);
     setPosts(p);
     setSavedPosts(saved);
@@ -1187,14 +1187,19 @@ export default function ProfileScreen() {
                   >
                     {s.headline || "—"}
                   </Text>
-                  {s.match_score > 0 && (
+                  {s.company_match ? (
+                    <View style={[styles.matchBadge, { backgroundColor: "#1a56db18" }]}>
+                      <Feather name="briefcase" size={10} color="#1a56db" />
+                      <Text style={[styles.matchBadgeText, { color: "#1a56db" }]}>Mesma empresa</Text>
+                    </View>
+                  ) : s.match_score > 0 ? (
                     <View style={[styles.matchBadge, { backgroundColor: colors.gold + "18" }]}>
                       <Feather name="zap" size={10} color={colors.gold} />
                       <Text style={[styles.matchBadgeText, { color: colors.gold }]}>
                         {s.match_score} área{s.match_score > 1 ? "s" : ""} em comum
                       </Text>
                     </View>
-                  )}
+                  ) : null}
                   {isConnected ? (
                     <View style={[styles.suggestBtnFilled, { backgroundColor: colors.navy + "14" }]}>
                       <Feather name="check" size={12} color={colors.navy} />

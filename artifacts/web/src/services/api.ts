@@ -42,6 +42,8 @@ export interface SuggestedProfile {
   headline: string | null;
   plan: string;
   connection_status: "none" | "pending" | "connected";
+  match_score: number;
+  company_match: boolean;
 }
 
 const POST_SELECT = `id, user_id, company_page_id, content, image_url, image_urls, video_url,
@@ -403,7 +405,12 @@ export async function fetchUserPosts(userId: string): Promise<Post[]> {
   }
 }
 
-export async function fetchWebSuggestedConnections(currentUserId: string, limit = 5): Promise<SuggestedProfile[]> {
+export async function fetchWebSuggestedConnections(
+  currentUserId: string,
+  userAreas: string[] = [],
+  userCompany: string | null = null,
+  limit = 5,
+): Promise<SuggestedProfile[]> {
   try {
     const { data: conns } = await supabase
       .from("connections")
@@ -420,23 +427,39 @@ export async function fetchWebSuggestedConnections(currentUserId: string, limit 
 
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, full_name, username, avatar_url, position, company, plan")
-      .limit(60);
+      .select("id, full_name, username, avatar_url, position, company, plan, areas")
+      .limit(80);
 
     if (!profiles) return [];
 
-    return (profiles as any[])
+    const lowerUserAreas = userAreas.map(a => a.toLowerCase());
+    const lowerUserCompany = userCompany?.toLowerCase() ?? null;
+
+    const scored = (profiles as any[])
       .filter((p: any) => !excludedIds.has(p.id))
-      .slice(0, limit)
-      .map((p: any) => ({
-        id: p.id,
-        full_name: p.full_name,
-        username: p.username,
-        avatar_url: p.avatar_url,
-        headline: [p.position, p.company].filter(Boolean).join(" · ") || null,
-        plan: p.plan ?? "gratuito",
-        connection_status: statusMap.get(p.id) ?? "none",
-      }));
+      .map((p: any) => {
+        const pAreas: string[] = Array.isArray(p.areas) ? p.areas : [];
+        const match_score = pAreas.filter(a => lowerUserAreas.includes(a.toLowerCase())).length;
+        const company_match = !!(lowerUserCompany && p.company && p.company.toLowerCase() === lowerUserCompany);
+        return {
+          id: p.id,
+          full_name: p.full_name,
+          username: p.username,
+          avatar_url: p.avatar_url,
+          headline: [p.position, p.company].filter(Boolean).join(" · ") || null,
+          plan: p.plan ?? "gratuito",
+          connection_status: statusMap.get(p.id) ?? "none",
+          match_score,
+          company_match,
+        } as SuggestedProfile;
+      })
+      .sort((a, b) => {
+        const totalA = a.match_score + (a.company_match ? 2 : 0);
+        const totalB = b.match_score + (b.company_match ? 2 : 0);
+        return totalB - totalA;
+      });
+
+    return scored.slice(0, limit);
   } catch (e) {
     console.warn("fetchWebSuggestedConnections:", e);
     return [];

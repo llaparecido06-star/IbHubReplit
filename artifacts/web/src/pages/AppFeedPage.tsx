@@ -511,6 +511,15 @@ function SuggestionCard({
             {profile.headline.length > 40 ? profile.headline.slice(0, 40) + "…" : profile.headline}
           </div>
         )}
+        {profile.company_match ? (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 700, color: "#1a56db", background: "#1a56db15", borderRadius: 6, padding: "1px 6px", marginTop: 4 }}>
+            💼 Mesma empresa
+          </span>
+        ) : profile.match_score > 0 ? (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 700, color: GOLD, background: `${GOLD}18`, borderRadius: 6, padding: "1px 6px", marginTop: 4 }}>
+            ⚡ {profile.match_score} área{profile.match_score > 1 ? "s" : ""} em comum
+          </span>
+        ) : null}
       </div>
       <button
         onClick={handleConnect}
@@ -586,7 +595,7 @@ function SuggestionsPanel({ suggestions, onConnect }: { suggestions: SuggestedPr
       marginBottom: 14,
     }}>
       <h3 style={{ fontSize: 14, fontWeight: 800, color: NAVY, marginBottom: 14, margin: "0 0 14px" }}>
-        Sugestões de Conexão
+        Pessoas que você pode conhecer
       </h3>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {suggestions.map((s) => (
@@ -595,6 +604,15 @@ function SuggestionsPanel({ suggestions, onConnect }: { suggestions: SuggestedPr
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.full_name}</div>
               {s.headline && <div style={{ fontSize: 11, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.headline}</div>}
+              {s.company_match ? (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 700, color: "#1a56db", background: "#1a56db15", borderRadius: 6, padding: "1px 6px", marginTop: 2 }}>
+                  💼 Mesma empresa
+                </span>
+              ) : s.match_score > 0 ? (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 700, color: GOLD, background: `${GOLD}18`, borderRadius: 6, padding: "1px 6px", marginTop: 2 }}>
+                  ⚡ {s.match_score} área{s.match_score > 1 ? "s" : ""} em comum
+                </span>
+              ) : null}
             </div>
             <ConnectBtn profile={s} onConnect={onConnect} />
           </div>
@@ -710,9 +728,11 @@ export default function AppFeedPage() {
         const postsData = await fetchCompanyFeedPosts(companyId, userId);
         setPosts(postsData);
       } else {
+        const userAreas: string[] = Array.isArray(profile?.areas_of_expertise) ? profile.areas_of_expertise : [];
+        const userCompany: string | null = profile?.company ?? null;
         const [postsData, suggsData] = await Promise.all([
           fetchFeedPosts(userId),
-          fetchWebSuggestedConnections(userId, 5),
+          fetchWebSuggestedConnections(userId, userAreas, userCompany, 5),
         ]);
         setPosts(postsData);
         setSuggestions(suggsData);
@@ -720,7 +740,7 @@ export default function AppFeedPage() {
     } finally {
       setLoading(false);
     }
-  }, [userId, companyId]);
+  }, [userId, companyId, profile?.areas_of_expertise, profile?.company]);
 
   useEffect(() => {
     if (!authLoading) load();

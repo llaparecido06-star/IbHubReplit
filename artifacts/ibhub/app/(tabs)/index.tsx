@@ -161,18 +161,6 @@ export default function FeedScreen() {
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
   const firstName = profile?.full_name?.split(" ")[0] ?? "você";
 
-  // ── Feed algorithm: posts matching user's tags appear first ──
-  const sortByRelevance = useCallback((list: Post[]) => {
-    const userTags = (profile?.areas_of_expertise ?? []).map((t: string) => t.toLowerCase());
-    if (userTags.length === 0) return list;
-    return [...list].sort((a, b) => {
-      const scoreA = (a.hashtags ?? []).filter(h => userTags.includes(h.toLowerCase())).length;
-      const scoreB = (b.hashtags ?? []).filter(h => userTags.includes(h.toLowerCase())).length;
-      if (scoreB !== scoreA) return scoreB - scoreA;
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
-  }, [profile?.areas_of_expertise]);
-
   const loadPosts = useCallback(async () => {
     feedOffsetRef.current = 0;
     isLoadingMoreRef.current = false;
@@ -182,11 +170,10 @@ export default function FeedScreen() {
       try {
         const realPosts = await API.fetchFeedPosts(user.id, activeCompany?.id, 0, FEED_PAGE_SIZE);
         if (realPosts.length > 0) {
-          const sorted = sortByRelevance(realPosts);
-          setPosts(sorted);
-          feedOffsetRef.current = sorted.length;
+          setPosts(realPosts);
+          feedOffsetRef.current = realPosts.length;
           setHasMoreFeed(realPosts.length >= FEED_PAGE_SIZE);
-          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(sorted));
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(realPosts));
           setLoading(false);
           return;
         }
@@ -208,7 +195,7 @@ export default function FeedScreen() {
           }
         }
         if (realCached.length > 0) {
-          setPosts(sortByRelevance(realCached));
+          setPosts(realCached);
           feedOffsetRef.current = realCached.length;
           setHasMoreFeed(true);
           setLoading(false);
@@ -219,7 +206,7 @@ export default function FeedScreen() {
     setPosts([]);
     setHasMoreFeed(false);
     setLoading(false);
-  }, [user?.id, activeCompany?.id, sortByRelevance]);
+  }, [user?.id, activeCompany?.id]);
 
   const loadMorePosts = useCallback(async () => {
     if (isLoadingMoreRef.current || !hasMoreFeed || !user?.id) return;
@@ -247,9 +234,10 @@ export default function FeedScreen() {
   const loadSuggestions = useCallback(async () => {
     if (!user?.id) return;
     const areas = profile?.areas_of_expertise ?? [];
-    const data = await API.fetchSuggestedConnections(user.id, areas, 10);
+    const company = profile?.company ?? null;
+    const data = await API.fetchSuggestedConnections(user.id, areas, company, 10);
     setSuggestions(data);
-  }, [user?.id, profile?.areas_of_expertise]);
+  }, [user?.id, profile?.areas_of_expertise, profile?.company]);
 
   useEffect(() => { loadSuggestions(); }, [loadSuggestions]);
 
@@ -310,11 +298,10 @@ export default function FeedScreen() {
       try {
         const realPosts = await API.fetchFeedPosts(user.id, activeCompany?.id, 0, FEED_PAGE_SIZE);
         if (realPosts.length > 0) {
-          const sorted = sortByRelevance(realPosts);
-          setPosts(sorted);
-          feedOffsetRef.current = sorted.length;
+          setPosts(realPosts);
+          feedOffsetRef.current = realPosts.length;
           setHasMoreFeed(realPosts.length >= FEED_PAGE_SIZE);
-          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(sorted));
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(realPosts));
           setRefreshing(false);
           return;
         }
@@ -326,7 +313,7 @@ export default function FeedScreen() {
     setPosts([]);
     setHasMoreFeed(false);
     setRefreshing(false);
-  }, [user?.id, activeCompany?.id, sortByRelevance]);
+  }, [user?.id, activeCompany?.id]);
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
 
@@ -806,12 +793,17 @@ export default function FeedScreen() {
                   </Text>
 
                   {/* Match badge */}
-                  {s.match_score > 0 && (
+                  {s.company_match ? (
+                    <View style={[styles.matchBadge, { backgroundColor: "#1a56db18" }]}>
+                      <Feather name="briefcase" size={10} color="#1a56db" />
+                      <Text style={[styles.matchBadgeText, { color: "#1a56db" }]}>Mesma empresa</Text>
+                    </View>
+                  ) : s.match_score > 0 ? (
                     <View style={[styles.matchBadge, { backgroundColor: colors.gold + "18" }]}>
                       <Feather name="zap" size={10} color={colors.gold} />
                       <Text style={[styles.matchBadgeText, { color: colors.gold }]}>{s.match_score} área{s.match_score > 1 ? "s" : ""} em comum</Text>
                     </View>
-                  )}
+                  ) : null}
 
                   {/* Connect button */}
                   {isConnected ? (

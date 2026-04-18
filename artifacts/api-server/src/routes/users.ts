@@ -173,9 +173,13 @@ router.delete("/users/me", async (req: Request, res: Response) => {
 
 /**
  * GET /feed/posts
- * Authoritative server-side feed endpoint: shadowban filtering is enforced here.
- * Admin client is used only to fetch banned IDs; post queries use the user's JWT
- * so that existing RLS policies (privacy, blocks) are still respected.
+ * Authoritative server-side feed endpoint with tiered relevance algorithm.
+ * Tier 1 — accepted connections (score 1000+freshness)
+ * Tier 2 — followed users (score 500+freshness)
+ * Tier 3 — users sharing areas/company (score 200+freshness)
+ * Tier 4 — everyone else (freshness only)
+ * Shadowban filtering is enforced server-side via admin client.
+ * Post queries use the user's JWT so that existing RLS policies are still respected.
  * Supports ?limit=N, ?offset=N (for infinite scroll), and ?since=ISO_TIMESTAMP for polling.
  */
 router.get("/feed/posts", async (req: Request, res: Response) => {
@@ -195,15 +199,54 @@ router.get("/feed/posts", async (req: Request, res: Response) => {
   const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
   const since = req.query.since as string | undefined;
 
-  // Fetch shadowbanned IDs using admin client only (authoritative, server-side).
-  // This is the only place the service role is used — post queries use the user JWT below.
-  const { data: shadowbanned } = await supabaseAdmin
-    .from("profiles")
-    .select("id")
-    .eq("is_shadowbanned", true);
-  const bannedIds = (shadowbanned ?? [])
+  // Pool size: fetch enough posts to score and paginate from.
+  // Always fetch from the beginning (no DB offset) so scoring is consistent across pages.
+  const poolSize = Math.min(Math.max(offset + limit * 4, 120), 300);
+
+  // Fetch shadowban list + user graph data in parallel using admin client.
+  const [shadowbannedRes, profileRes, connectionsRes, followsRes] = await Promise.all([
+    supabaseAdmin.from("profiles").select("id").eq("is_shadowbanned", true),
+    supabaseAdmin.from("profiles").select("areas, company").eq("id", currentUserId).single(),
+    supabaseAdmin
+      .from("connections")
+      .select("requester_id, receiver_id")
+      .or(`requester_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
+      .eq("status", "accepted"),
+    supabaseAdmin.from("follows").select("following_id").eq("follower_id", currentUserId),
+  ]);
+
+  const bannedIds = (shadowbannedRes.data ?? [])
     .map((p: { id: string }) => p.id)
     .filter((id: string) => id !== currentUserId);
+
+  // Build connection/follow sets
+  const connectionUserIds = new Set<string>();
+  (connectionsRes.data ?? []).forEach((c: any) => {
+    const otherId = c.requester_id === currentUserId ? c.receiver_id : c.requester_id;
+    connectionUserIds.add(otherId);
+  });
+  const followingUserIds = new Set<string>(
+    (followsRes.data ?? []).map((f: any) => f.following_id as string),
+  );
+
+  // Build area/company match set from profiles
+  const userAreas: string[] = (profileRes.data?.areas ?? []).map((a: string) => a.toLowerCase());
+  const userCompany: string | null = profileRes.data?.company?.toLowerCase() ?? null;
+
+  let areaMatchUserIds = new Set<string>();
+  if (userAreas.length > 0 || userCompany) {
+    const { data: areaProfiles } = await supabaseAdmin
+      .from("profiles")
+      .select("id, areas, company")
+      .neq("id", currentUserId)
+      .limit(500);
+    (areaProfiles ?? []).forEach((p: any) => {
+      const pAreas: string[] = (p.areas ?? []).map((a: string) => a.toLowerCase());
+      const hasAreaMatch = pAreas.some((a) => userAreas.includes(a));
+      const hasCompanyMatch = userCompany && p.company && p.company.toLowerCase() === userCompany;
+      if (hasAreaMatch || hasCompanyMatch) areaMatchUserIds.add(p.id as string);
+    });
+  }
 
   // Create a per-request client scoped to the user's JWT so RLS is respected.
   const userClient = createClient(supabaseUrl!, supabaseAnonKey!, {
@@ -211,11 +254,12 @@ router.get("/feed/posts", async (req: Request, res: Response) => {
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
 
+  // Fetch the pool chronologically (scoring will reorder)
   let postsQuery = userClient
     .from("posts")
     .select("id, user_id, company_page_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count, view_count, location, hashtags, poll, created_at")
     .order("created_at", { ascending: false })
-    .range(offset, offset + limit - 1);
+    .range(0, poolSize - 1);
 
   if (since) {
     postsQuery = postsQuery.gt("created_at", since);
@@ -225,13 +269,33 @@ router.get("/feed/posts", async (req: Request, res: Response) => {
     postsQuery = postsQuery.not("user_id", "in", `(${bannedIds.map((id: string) => `"${id}"`).join(",")})`);
   }
 
-  const { data: posts, error: postsError } = await postsQuery;
+  const { data: rawPosts, error: postsError } = await postsQuery;
   if (postsError) {
     res.status(500).json({ error: postsError.message });
     return;
   }
 
-  res.json({ posts: posts ?? [] });
+  // Score each post by tier + freshness decay
+  const now = Date.now();
+  const scored = (rawPosts ?? []).map((post: any) => {
+    const hoursOld = (now - new Date(post.created_at).getTime()) / 3_600_000;
+    const freshness = 100 / (hoursOld + 2); // max ~50, decays with time
+    let tier = 0;
+    if (post.user_id) {
+      if (connectionUserIds.has(post.user_id)) tier = 1000;
+      else if (followingUserIds.has(post.user_id)) tier = 500;
+      else if (areaMatchUserIds.has(post.user_id)) tier = 200;
+    }
+    return { post, _score: tier + freshness };
+  });
+
+  // Sort by score descending (higher tier + fresher posts first)
+  scored.sort((a, b) => b._score - a._score);
+
+  // Paginate from the scored pool
+  const page = scored.slice(offset, offset + limit).map((s) => s.post);
+
+  res.json({ posts: page });
 });
 
 /**
