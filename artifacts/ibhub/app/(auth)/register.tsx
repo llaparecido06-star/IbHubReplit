@@ -64,7 +64,7 @@ const AREAS = [
   // Varejo & ponto de venda
   "Loja Especializada", "Supermercado", "E-commerce", "Adega",
   // Hospitalidade & serviço
-  "Sommelier", "Restaurateur", "Hotelaria", "Bar / Bistrô",
+  "Sommelier", "Restaurante", "Hotelaria", "Bar / Bistrô",
   // Experiências & comunicação
   "Enoturismo", "Eventos", "Marketing", "Jornalismo", "Educação",
   // Negócios & outros
