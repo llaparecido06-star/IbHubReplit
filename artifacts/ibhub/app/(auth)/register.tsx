@@ -57,9 +57,18 @@ const COUNTRIES: Country[] = [
 ];
 
 const AREAS = [
-  "Sommelier", "Produtor", "Importador", "Exportador", "Distribuidor",
-  "Enoturismo", "Marketing", "Jornalismo", "Educação", "Consultoria",
-  "Enólogo", "Restaurateur", "Investidor", "Comprador", "Entusiasta", "Outros",
+  // Produção
+  "Viticultor", "Produtor", "Enólogo", "Adega / Cave",
+  // Comércio exterior & distribuição
+  "Importador", "Exportador", "Distribuidor", "Atacadista", "Representante Comercial",
+  // Varejo & ponto de venda
+  "Loja Especializada", "Supermercado", "E-commerce", "Adega",
+  // Hospitalidade & serviço
+  "Sommelier", "Restaurateur", "Hotelaria", "Bar / Bistrô",
+  // Experiências & comunicação
+  "Enoturismo", "Eventos", "Marketing", "Jornalismo", "Educação",
+  // Negócios & outros
+  "Consultoria", "Comprador", "Investidor", "Entusiasta", "Outros",
 ];
 
 const PLANS = [
