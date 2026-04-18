@@ -9,41 +9,61 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     let cancelled = false;
 
+    // Hard timeout: if auth doesn't resolve in 12s, show an error.
+    const timeout = setTimeout(() => {
+      if (!cancelled) setError("Autenticação demorou demais. Tente novamente.");
+    }, 12000);
+
     async function handleCallback() {
-      const hash = window.location.hash;
-      const search = window.location.search;
-      const params = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : search.slice(1));
-      const type = params.get("type");
+      try {
+        const hash = window.location.hash;
+        const search = window.location.search;
+        const params = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : search.slice(1));
+        const type = params.get("type");
 
-      if (type === "recovery") {
-        const accessToken = params.get("access_token");
-        const refreshToken = params.get("refresh_token");
-        if (accessToken && refreshToken) {
-          await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+        // Password recovery: fragment carries access + refresh tokens
+        if (type === "recovery") {
+          const accessToken = params.get("access_token");
+          const refreshToken = params.get("refresh_token");
+          if (accessToken && refreshToken) {
+            await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+          }
+          if (!cancelled) setLocation("/redefinir-senha");
+          return;
         }
-        if (!cancelled) setLocation("/redefinir-senha");
-        return;
-      }
 
-      const code = new URLSearchParams(search).get("code");
-      if (code) {
-        const { error: err } = await supabase.auth.exchangeCodeForSession(code);
+        // PKCE OAuth: URL carries a code that we exchange for a session
+        const code = new URLSearchParams(search).get("code");
+        if (code) {
+          const { error: err } = await supabase.auth.exchangeCodeForSession(code);
+          if (!cancelled) {
+            if (err) { setError(err.message); return; }
+            setLocation("/app");
+          }
+          return;
+        }
+
+        // Implicit OAuth (fragment tokens) or session already established
+        const { data: { session } } = await supabase.auth.getSession();
         if (!cancelled) {
-          if (err) { setError(err.message); return; }
-          setLocation("/app");
-        }
-        return;
-      }
+          if (session) { setLocation("/app"); return; }
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!cancelled) {
-        if (session) { setLocation("/app"); }
-        else { setError("Não foi possível autenticar. Tente novamente."); }
+          // Last resort: wait for onAuthStateChange
+          const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+            if (cancelled) { subscription.unsubscribe(); return; }
+            if (event === "SIGNED_IN" && s) {
+              subscription.unsubscribe();
+              setLocation("/app");
+            }
+          });
+        }
+      } catch (e: unknown) {
+        if (!cancelled) setError((e as Error).message ?? "Erro ao autenticar.");
       }
     }
 
     void handleCallback();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; clearTimeout(timeout); };
   }, [setLocation]);
 
   if (error) {

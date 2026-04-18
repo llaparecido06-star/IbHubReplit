@@ -115,11 +115,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
         await fetchProfile(session.user.id);
+
+        // Safety net: create a minimal profile for new social-auth users
+        // (Google, etc.) if the DB trigger didn't run.
+        if (event === "SIGNED_IN") {
+          try {
+            const u = session.user;
+            const { count } = await supabase
+              .from("profiles")
+              .select("id", { count: "exact", head: true })
+              .or(`id.eq.${u.id},user_id.eq.${u.id}`);
+            if (count === 0) {
+              const meta = u.user_metadata ?? {};
+              await supabase.from("profiles").upsert({
+                user_id: u.id,
+                full_name: meta.full_name ?? meta.name ?? (u.email?.split("@")[0] ?? ""),
+                avatar_url: meta.avatar_url ?? meta.picture ?? null,
+                plan: "gratuito",
+              }, { onConflict: "user_id", ignoreDuplicates: true });
+              await fetchProfile(u.id);
+            }
+          } catch {}
+        }
       } else {
         setProfile(null);
       }

@@ -17,9 +17,10 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
-    // Implicit flow — no WebCrypto needed. Supabase returns tokens in the
-    // URL fragment (#access_token=…) rather than a PKCE code that requires
-    // SHA-256 hashing (unavailable in Expo Go's Hermes engine).
+    // Implicit flow: Supabase returns tokens in the URL fragment
+    // (#access_token=…) instead of a PKCE code that requires WebCrypto /
+    // SHA-256 hashing — unavailable in Expo Go's Hermes engine.
+    flowType: "implicit",
   },
 });
 
@@ -199,6 +200,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         await fetchProfile(session.user.id);
+
+        // Safety net: ensure a profile row exists for new social-auth users.
+        // A Supabase DB trigger should create it, but this handles the case
+        // where the trigger is missing or the insert races.
+        if (event === "SIGNED_IN") {
+          try {
+            const u = session.user;
+            const { count } = await supabase
+              .from("profiles")
+              .select("id", { count: "exact", head: true })
+              .or(`id.eq.${u.id},user_id.eq.${u.id}`);
+            if (count === 0) {
+              const meta = u.user_metadata ?? {};
+              await supabase.from("profiles").upsert({
+                user_id: u.id,
+                full_name: meta.full_name ?? meta.name ?? (u.email?.split("@")[0] ?? ""),
+                avatar_url: meta.avatar_url ?? meta.picture ?? null,
+                plan: "gratuito",
+              }, { onConflict: "user_id", ignoreDuplicates: true });
+              await fetchProfile(u.id);
+            }
+          } catch {}
+        }
 
         // Apply pending referral code (saved by registration screen before sign-up).
         if (event === "SIGNED_IN") {
