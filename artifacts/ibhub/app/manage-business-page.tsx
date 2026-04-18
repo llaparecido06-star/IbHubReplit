@@ -55,6 +55,7 @@ export default function ManageBusinessPageScreen() {
 
   // Editar fields (local copies so user can cancel)
   const [companyName, setCompanyName] = useState("");
+  const [username, setUsername]       = useState("");
   const [category, setCategory]       = useState("Vinícola");
   const [desc, setDesc]               = useState("");
   const [website, setWebsite]         = useState("");
@@ -86,6 +87,7 @@ export default function ManageBusinessPageScreen() {
     if (data) {
       setPage(data);
       setCompanyName(data.name);
+      setUsername(data.username ?? "");
       setCategory(data.industry ?? "Vinícola");
       setDesc(data.bio ?? "");
       setWebsite(data.website ?? "");
@@ -136,6 +138,7 @@ export default function ManageBusinessPageScreen() {
       const created = await API.createCompanyPage({
         owner_id: currentUser.id,
         name: companyName.trim(),
+        username: username.trim() || undefined,
         industry: category,
         bio: desc.trim() || undefined,
         website: website.trim() || undefined,
@@ -161,6 +164,7 @@ export default function ManageBusinessPageScreen() {
 
     const ok = await API.updateCompanyPage(pageId, {
       name: companyName.trim(),
+      username: username.trim() || null,
       industry: category,
       bio: desc.trim() || null,
       website: website.trim() || null,
@@ -171,7 +175,7 @@ export default function ManageBusinessPageScreen() {
     setSaving(false);
 
     if (ok) {
-      setPage(prev => prev ? { ...prev, name: companyName, industry: category, bio: desc, website, location, avatar_url } : prev);
+      setPage(prev => prev ? { ...prev, name: companyName, username: username.trim() || null, industry: category, bio: desc, website, location, avatar_url } : prev);
       Alert.alert("Salvo!", "Alterações salvas com sucesso.");
     } else {
       Alert.alert("Erro", "Não foi possível salvar. Tente novamente.");
@@ -281,13 +285,13 @@ export default function ManageBusinessPageScreen() {
 
   const isCreateMode = !pageId;
 
-  const tabList: Array<{ key: Tab; label: string; icon: string }> = isOwner
-    ? [
-        { key: "preview", label: "Preview", icon: "eye" },
-        { key: "editar", label: "Editar", icon: "edit-2" },
-        { key: "equipe", label: "Equipe", icon: "users" },
-      ]
-    : [{ key: "preview", label: "Preview", icon: "eye" }];
+  const canEdit = isOwner || userRole === "editor" || userRole === "moderador";
+
+  const tabList: Array<{ key: Tab; label: string; icon: string }> = [
+    { key: "preview", label: "Preview", icon: "eye" },
+    ...(canEdit ? [{ key: "editar" as Tab, label: "Editar", icon: "edit-2" }] : []),
+    ...(isOwner  ? [{ key: "equipe" as Tab, label: "Equipe", icon: "users" }] : []),
+  ];
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -427,6 +431,22 @@ export default function ManageBusinessPageScreen() {
                 placeholder="Nome da empresa"
                 placeholderTextColor={colors.mutedForeground}
               />
+            </View>
+
+            <View style={styles.field}>
+              <Text style={[styles.fieldLabel, { color: colors.navy }]}>Username da página</Text>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Text style={{ color: colors.mutedForeground, fontSize: 15, marginRight: 4 }}>@</Text>
+                <TextInput
+                  style={[styles.input, { flex: 1, backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+                  value={username}
+                  onChangeText={t => setUsername(t.toLowerCase().replace(/[^a-z0-9._]/g, ""))}
+                  placeholder="nome_empresa"
+                  placeholderTextColor={colors.mutedForeground}
+                  autoCapitalize="none"
+                />
+              </View>
+              <Text style={[styles.charCount, { color: colors.mutedForeground }]}>Letras minúsculas, números, ponto e underscore.</Text>
             </View>
 
             <View style={styles.field}>

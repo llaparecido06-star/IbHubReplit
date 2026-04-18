@@ -2458,9 +2458,52 @@ export async function createWebStory(params: { user_id: string; text?: string; i
 
 // ─── Company Page Edit ───────────────────────────────────────────────────────
 
+export async function checkUserCompanyRole(
+  companyId: string,
+  userId: string,
+): Promise<{ isOwner: boolean; role: string | null }> {
+  try {
+    const { data: page } = await supabase
+      .from("company_pages")
+      .select("owner_id")
+      .eq("id", companyId)
+      .single();
+    if (page?.owner_id === userId) return { isOwner: true, role: "owner" };
+    const { data: adminRow } = await supabase
+      .from("company_page_admins")
+      .select("role")
+      .eq("company_id", companyId)
+      .eq("user_id", userId)
+      .single();
+    if (adminRow) return { isOwner: false, role: adminRow.role };
+    return { isOwner: false, role: null };
+  } catch (e) {
+    return { isOwner: false, role: null };
+  }
+}
+
+export async function uploadCompanyLogoWeb(
+  companyId: string,
+  file: File,
+): Promise<string | null> {
+  try {
+    const ext = file.name.split(".").pop() ?? "jpg";
+    const path = `company-logos/${companyId}/logo.${ext}`;
+    const { error } = await supabase.storage
+      .from("avatars")
+      .upload(path, file, { contentType: file.type, upsert: true });
+    if (error) { console.warn("uploadCompanyLogoWeb:", error); return null; }
+    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+    return data.publicUrl + `?t=${Date.now()}`;
+  } catch (e) {
+    console.warn("uploadCompanyLogoWeb:", e);
+    return null;
+  }
+}
+
 export async function updateCompanyPage(
   companyId: string,
-  updates: Partial<Pick<CompanyPageFull, "name" | "bio" | "website" | "industry" | "location" | "username">>
+  updates: Partial<Pick<CompanyPageFull, "name" | "bio" | "website" | "industry" | "location" | "username" | "avatar_url">>
 ): Promise<boolean> {
   try {
     const { error } = await supabase.from("company_pages").update(updates).eq("id", companyId);
