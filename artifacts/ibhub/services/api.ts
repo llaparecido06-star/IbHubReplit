@@ -658,6 +658,7 @@ export interface UpdateProfilePayload {
   full_name?: string;
   username?: string;
   bio?: string;
+  phone?: string | null;
   areas_of_expertise?: string[];
   company?: string | null;
   position?: string | null;

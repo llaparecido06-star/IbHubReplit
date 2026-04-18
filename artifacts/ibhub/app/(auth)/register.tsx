@@ -57,8 +57,9 @@ const COUNTRIES: Country[] = [
 ];
 
 const AREAS = [
-  "Sommelier", "Comprador", "Importador", "Produtor",
-  "Enólogo", "Consultor", "Investidor", "Entusiasta", "Outros",
+  "Sommelier", "Produtor", "Importador", "Exportador", "Distribuidor",
+  "Enoturismo", "Marketing", "Jornalismo", "Educação", "Consultoria",
+  "Enólogo", "Restaurateur", "Investidor", "Comprador", "Entusiasta", "Outros",
 ];
 
 const PLANS = [
@@ -152,8 +153,11 @@ export default function RegisterScreen() {
   const [emailState, setEmailState] = useState<ValidationState>("idle");
 
   const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
+  const [bio, setBio] = useState("");
   const [company, setCompany] = useState("");
   const [role, setRole] = useState("");
+  const [certifications, setCertifications] = useState<string[]>([]);
+  const [certInput, setCertInput] = useState("");
 
   const [selectedPlan, setSelectedPlan] = useState("basico");
   const [loading, setLoading] = useState(false);
@@ -264,9 +268,21 @@ export default function RegisterScreen() {
   };
 
   const toggleArea = (area: string) =>
-    setSelectedAreas((prev) =>
-      prev.includes(area) ? prev.filter((a) => a !== area) : [...prev, area]
-    );
+    setSelectedAreas((prev) => {
+      if (prev.includes(area)) return prev.filter((a) => a !== area);
+      if (prev.length >= 3) return prev;
+      return [...prev, area];
+    });
+
+  const addCertification = () => {
+    const trimmed = certInput.trim();
+    if (!trimmed || certifications.includes(trimmed)) { setCertInput(""); return; }
+    setCertifications((prev) => [...prev, trimmed]);
+    setCertInput("");
+  };
+
+  const removeCertification = (cert: string) =>
+    setCertifications((prev) => prev.filter((c) => c !== cert));
 
   const goBack = () => {
     if (step === 1) router.back();
@@ -352,8 +368,10 @@ export default function RegisterScreen() {
           username:           username.toLowerCase().trim(),
           phone:              phoneWithDDI,
           areas_of_expertise: selectedAreas,
+          bio:                bio.trim() || null,
           company:            company.trim() || null,
           position:           role.trim() || null,
+          certifications:     certifications.length > 0 ? certifications : [],
           plan:               selectedPlan,
           ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
         }, { onConflict: "id" });
@@ -590,9 +608,9 @@ export default function RegisterScreen() {
 
           {step === 2 && (
             <View style={styles.stepContainer}>
-              <Text style={styles.stepTitle}>Área de atuação</Text>
+              <Text style={styles.stepTitle}>Perfil profissional</Text>
               <Text style={styles.stepSubtitle}>
-                Selecione suas áreas para networking qualificado
+                Selecione suas áreas para networking qualificado (máx. 3)
               </Text>
               <View style={styles.areasGrid}>
                 {AREAS.map((area) => (
@@ -607,8 +625,59 @@ export default function RegisterScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-              <FormField icon={undefined} value={company} onChangeText={setCompany} placeholder="Empresa" />
-              <FormField icon={undefined} value={role} onChangeText={setRole} placeholder="Cargo" />
+
+              <FormField icon={undefined} value={company} onChangeText={setCompany} placeholder="Empresa (opcional)" />
+              <FormField icon={undefined} value={role} onChangeText={setRole} placeholder="Cargo (opcional)" />
+
+              {/* Bio */}
+              <View style={styles.bioWrap}>
+                <View style={styles.fieldWrap}>
+                  <Feather name="file-text" size={16} color="#8fa3b8" style={styles.fieldIcon} />
+                  <TextInput
+                    style={[styles.textInput, { flex: 1, height: 80, textAlignVertical: "top", paddingTop: 10 }]}
+                    placeholder="Bio — fale sobre você (opcional)"
+                    placeholderTextColor="#8fa3b8"
+                    value={bio}
+                    onChangeText={(v) => { if (v.length <= 200) setBio(v); }}
+                    multiline
+                    maxLength={200}
+                  />
+                </View>
+                <Text style={styles.bioCount}>{bio.length}/200</Text>
+              </View>
+
+              {/* Certificações */}
+              <View>
+                {certifications.length > 0 && (
+                  <View style={styles.certChips}>
+                    {certifications.map((cert) => (
+                      <View key={cert} style={styles.certChipItem}>
+                        <Text style={styles.certChipLabel}>{cert}</Text>
+                        <TouchableOpacity onPress={() => removeCertification(cert)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                          <Feather name="x" size={13} color="#8fa3b8" />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                <View style={styles.certInputRow}>
+                  <View style={[styles.fieldWrap, { flex: 1 }]}>
+                    <Feather name="award" size={16} color="#8fa3b8" style={styles.fieldIcon} />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="Certificação (ex: WSET Level 3)"
+                      placeholderTextColor="#8fa3b8"
+                      value={certInput}
+                      onChangeText={setCertInput}
+                      onSubmitEditing={addCertification}
+                      returnKeyType="done"
+                    />
+                  </View>
+                  <TouchableOpacity style={styles.certAddBtn} onPress={addCertification}>
+                    <Feather name="plus" size={18} color="#0d1b2a" />
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
           )}
 
@@ -906,4 +975,20 @@ const styles = StyleSheet.create({
   pickerCountryName: { flex: 1, color: "#f5f0e8", fontSize: 15, fontWeight: "500" },
   pickerDdi: { color: "#8fa3b8", fontSize: 14, fontWeight: "600", marginRight: 4 },
   pickerSeparator: { height: 1, backgroundColor: "rgba(255,255,255,0.06)", marginHorizontal: 20 },
+  bioWrap: { gap: 4 },
+  bioCount: { color: "#8fa3b8", fontSize: 11, textAlign: "right", marginTop: 2 },
+  certChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 },
+  certChipItem: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: "rgba(201,168,76,0.1)", borderWidth: 1,
+    borderColor: "rgba(201,168,76,0.3)", borderRadius: 20,
+    paddingHorizontal: 12, paddingVertical: 7,
+  },
+  certChipLabel: { color: "#c9a84c", fontSize: 13, fontWeight: "600" },
+  certInputRow: { flexDirection: "row", gap: 10, alignItems: "center" },
+  certAddBtn: {
+    width: 52, height: 52, borderRadius: 10,
+    backgroundColor: "#c9a84c",
+    alignItems: "center", justifyContent: "center",
+  },
 });

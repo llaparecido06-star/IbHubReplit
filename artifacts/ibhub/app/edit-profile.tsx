@@ -22,7 +22,7 @@ import { useAsyncAction } from "@/hooks/useAsyncAction";
 const AREAS = [
   "Sommelier", "Produtor", "Importador", "Exportador", "Distribuidor",
   "Enoturismo", "Marketing", "Jornalismo", "Educação", "Consultoria",
-  "Enólogo", "Restaurateur",
+  "Enólogo", "Restaurateur", "Investidor", "Comprador", "Entusiasta", "Outros",
 ];
 
 type UsernameStatus = "idle" | "checking" | "available" | "unavailable";
@@ -36,6 +36,7 @@ export default function EditProfileScreen() {
   const [fullName, setFullName]       = useState(profile?.full_name    ?? "");
   const [username, setUsername]       = useState(profile?.username     ?? "");
   const [bio, setBio]                 = useState(profile?.bio          ?? "");
+  const [phone, setPhone]             = useState(profile?.phone        ?? "");
   const [selectedAreas, setSelectedAreas] = useState<string[]>(
     profile?.areas_of_expertise ?? []
   );
@@ -73,6 +74,7 @@ export default function EditProfileScreen() {
       full_name:          fullName.trim(),
       username:           username.trim() || undefined,
       bio:                bio.trim() || undefined,
+      phone:              phone.trim() || null,
       areas_of_expertise: selectedAreas,
       company:            company.trim() || null,
       position:           position.trim() || null,
@@ -101,6 +103,7 @@ export default function EditProfileScreen() {
       fullName   !== (profile?.full_name    ?? "") ||
       username   !== (profile?.username     ?? "") ||
       bio        !== (profile?.bio          ?? "") ||
+      phone      !== (profile?.phone        ?? "") ||
       company    !== (profile?.company      ?? "") ||
       position   !== (profile?.position     ?? "") ||
       avatarChanged ||
@@ -109,7 +112,7 @@ export default function EditProfileScreen() {
         Array.isArray(profile?.certifications) ? profile.certifications : []
       )
     );
-  }, [fullName, username, bio, company, position,
+  }, [fullName, username, bio, phone, company, position,
       selectedAreas, certifications, avatarChanged, profile]);
 
   const handleBack = () => {
@@ -283,6 +286,19 @@ export default function EditProfileScreen() {
             placeholderTextColor={colors.mutedForeground}
           />
           <Text style={[styles.charCount, { color: colors.mutedForeground }]}>{bio.length}/200</Text>
+        </View>
+
+        {/* Telefone */}
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: colors.foreground }]}>Telefone (com DDI)</Text>
+          <TextInput
+            style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+            value={phone}
+            onChangeText={setPhone}
+            placeholder="+55 11 99999-9999"
+            placeholderTextColor={colors.mutedForeground}
+            keyboardType="phone-pad"
+          />
         </View>
 
         {/* Áreas de atuação */}
