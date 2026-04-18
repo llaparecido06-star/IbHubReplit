@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { usePlans, formatPlanPrice } from "@/hooks/usePlans";
 
 const TOTAL_STEPS = 3;
 
@@ -11,40 +12,6 @@ const AREAS = [
   "Enólogo", "Restaurateur", "Investidor", "Entusiasta", "Outros",
 ];
 
-const PLANS = [
-  {
-    key: "basico",
-    name: "Básico",
-    price: "GRÁTIS",
-    subtitle: "Para iniciantes",
-    popular: false,
-    features: ["Perfil básico", "Feed de publicações", "5 conexões/mês"],
-  },
-  {
-    key: "premium",
-    name: "Premium",
-    price: "R$ 149/mês",
-    subtitle: "Para profissionais",
-    popular: true,
-    features: ["Tudo do Básico", "Conexões ilimitadas", "Mercado", "Dados de mercado"],
-  },
-  {
-    key: "exclusive",
-    name: "Exclusive",
-    price: "R$ 299/mês",
-    subtitle: "Para especialistas",
-    popular: false,
-    features: ["Tudo do Premium", "Inteligência de mercado", "Apresentações exclusivas", "Destaque no feed"],
-  },
-  {
-    key: "business",
-    name: "Business",
-    price: "R$ 499/mês",
-    subtitle: "Para empresas",
-    popular: false,
-    features: ["Tudo do Exclusive", "Página empresarial", "Vagas de emprego", "Suporte prioritário"],
-  },
-];
 
 type ValidationState = "idle" | "checking" | "available" | "taken" | "invalid";
 
@@ -92,7 +59,8 @@ export default function CadastroPage() {
   const [company, setCompany] = useState("");
   const [role, setRole] = useState("");
 
-  const [selectedPlan, setSelectedPlan] = useState("basico");
+  const [selectedPlan, setSelectedPlan] = useState("gratuito");
+  const { paidPlans, freePlan, loading: plansLoading } = usePlans();
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("Criando conta...");
   const [error, setError] = useState<string | null>(null);
@@ -190,14 +158,18 @@ export default function CadastroPage() {
           areas_of_expertise: selectedAreas,
           company: company.trim() || null,
           position: role.trim() || null,
-          plan: selectedPlan,
+          plan: "gratuito", // always start free; paid plans activate after Stripe payment
         }, { onConflict: "id" });
 
         await refreshProfileByUserId(currentUser.id);
       }
 
       setLoading(false);
-      setLocation("/app");
+      if (selectedPlan !== "gratuito") {
+        setLocation(`/assinar?plano=${selectedPlan}`);
+      } else {
+        setLocation("/app");
+      }
     }
   };
 
@@ -426,49 +398,63 @@ export default function CadastroPage() {
             </div>
           ) : (
             <div style={{ backgroundColor: "#ffffff", borderRadius: 16, padding: 28, boxShadow: "0 4px 24px rgba(13,27,42,0.08)" }}>
-              <h2 style={{ fontSize: 20, fontWeight: 800, color: "#0d1b2a", marginBottom: 4 }}>Escolha seu plano</h2>
-              <p style={{ fontSize: 14, color: "#8a93a2", marginBottom: 24 }}>Etapa 3 de 3 — Você pode mudar depois</p>
+              <h2 style={{ fontSize: 20, fontWeight: 800, color: "#0d1b2a", marginBottom: 4 }}>Invista na sua carreira</h2>
+              <p style={{ fontSize: 14, color: "#8a93a2", marginBottom: 24 }}>Etapa 3 de 3 — Desbloqueie o ibhub completo</p>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
-                {PLANS.map((plan) => (
-                  <label key={plan.key} style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 14,
-                    padding: "14px 16px",
-                    borderRadius: 12,
-                    border: selectedPlan === plan.key ? "2px solid #c9a84c" : "2px solid #e8eaed",
-                    backgroundColor: selectedPlan === plan.key ? "rgba(201,168,76,0.08)" : "#f4f5f7",
-                    cursor: "pointer",
-                    transition: "all 0.2s",
-                    position: "relative",
-                  }}>
-                    <input
-                      type="radio"
-                      name="plan"
-                      value={plan.key}
-                      checked={selectedPlan === plan.key}
-                      onChange={() => setSelectedPlan(plan.key)}
-                      style={{ accentColor: "#c9a84c" }}
-                    />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontWeight: 800, fontSize: 15, color: "#0d1b2a" }}>{plan.name}</span>
-                        <span style={{ fontWeight: 800, fontSize: 14, color: "#c9a84c" }}>{plan.price}</span>
-                      </div>
-                      <span style={{ fontSize: 12, color: "#8a93a2" }}>{plan.subtitle}</span>
-                    </div>
-                    {plan.popular && (
-                      <span style={{
-                        position: "absolute", top: -10, right: 12,
-                        backgroundColor: "#722f37", color: "#fff",
-                        fontSize: 9, fontWeight: 800, padding: "3px 8px",
-                        borderRadius: 100, letterSpacing: 1.5,
-                      }}>POPULAR</span>
-                    )}
-                  </label>
-                ))}
-              </div>
+              {plansLoading ? (
+                <div style={{ textAlign: "center", padding: "24px 0", color: "#9ca3af" }}>Carregando planos...</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
+                  {paidPlans.map((plan, idx) => {
+                    const isSelected = selectedPlan === plan.id;
+                    const isPopular  = idx === 0;
+                    const price      = formatPlanPrice(plan);
+                    return (
+                      <label key={plan.id} style={{
+                        display: "flex", alignItems: "center", gap: 14,
+                        padding: "14px 16px", borderRadius: 12, cursor: "pointer",
+                        border: isSelected ? "2px solid #c9a84c" : isPopular ? "2px solid rgba(201,168,76,0.4)" : "2px solid #e8eaed",
+                        backgroundColor: isSelected ? "rgba(201,168,76,0.08)" : "#f9fafb",
+                        transition: "all 0.18s", position: "relative",
+                      }}>
+                        <input
+                          type="radio" name="plan" value={plan.id}
+                          checked={isSelected} onChange={() => setSelectedPlan(plan.id)}
+                          style={{ accentColor: "#c9a84c" }}
+                        />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ fontWeight: 800, fontSize: 15, color: "#0d1b2a" }}>{plan.name}</span>
+                            <span style={{ fontWeight: 800, fontSize: 14, color: "#c9a84c" }}>
+                              {price.main}{price.period && <span style={{ fontWeight: 400, fontSize: 12, color: "#9ca3af" }}>{price.period}</span>}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: 12, color: "#8a93a2" }}>{plan.subtitle}</span>
+                        </div>
+                        {isPopular && !isSelected && (
+                          <span style={{
+                            position: "absolute", top: -10, right: 12,
+                            backgroundColor: "#c9a84c", color: "#0d1b2a",
+                            fontSize: 9, fontWeight: 800, padding: "3px 10px",
+                            borderRadius: 100, letterSpacing: 1.2,
+                          }}>MAIS POPULAR</span>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+
+              {selectedPlan !== "gratuito" && (
+                <div style={{
+                  display: "flex", alignItems: "flex-start", gap: 10,
+                  backgroundColor: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.25)",
+                  borderRadius: 10, padding: "10px 14px", marginBottom: 16,
+                  fontSize: 13, color: "#92713a", lineHeight: 1.5,
+                }}>
+                  💳 Após criar sua conta, você será direcionado para concluir o pagamento via Stripe.
+                </div>
+              )}
 
               <div style={{ display: "flex", gap: 12 }}>
                 <button
@@ -480,11 +466,29 @@ export default function CadastroPage() {
                 >← Voltar</button>
                 <button
                   onClick={nextStep}
+                  disabled={loading}
                   style={{
                     flex: 2, backgroundColor: "#c9a84c", color: "#0d1b2a", fontWeight: 800,
-                    fontSize: 15, padding: "14px", borderRadius: 10, border: "none", cursor: "pointer",
+                    fontSize: 15, padding: "14px", borderRadius: 10, border: "none",
+                    cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1,
                   }}
-                >Criar minha conta 🍷</button>
+                >
+                  {loading ? loadingMsg : selectedPlan !== "gratuito" ? "Criar conta e pagar →" : "Criar minha conta 🍷"}
+                </button>
+              </div>
+
+              {/* Discreet free option */}
+              <div style={{ textAlign: "center", marginTop: 14 }}>
+                <button
+                  onClick={() => { setSelectedPlan("gratuito"); nextStep(); }}
+                  disabled={loading}
+                  style={{
+                    background: "none", border: "none", cursor: "pointer",
+                    color: "#9ca3af", fontSize: 13, textDecoration: "underline",
+                  }}
+                >
+                  {freePlan ? `Continuar com o plano ${freePlan.name} (grátis)` : "Continuar gratuitamente"}
+                </button>
               </div>
             </div>
           )}

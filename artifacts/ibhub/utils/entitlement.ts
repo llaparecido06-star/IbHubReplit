@@ -62,13 +62,19 @@ export function hasPlanAccess(profile: EntitlementProfile | null): boolean {
  * Returns true if the user's plan matches or exceeds the required tier,
  * AND the user has an active entitlement.
  *
- * Tier order: basico < premium < exclusive < business
+ * Tier order: gratuito < profissional < empresas < premium
+ * Legacy IDs (basico/exclusive/business) are mapped for backward compatibility.
  */
 const TIER_ORDER: Record<string, number> = {
-  basico:    0,
-  premium:   1,
-  exclusive: 2,
-  business:  3,
+  // Current plan IDs
+  gratuito:     0,
+  profissional: 1,
+  empresas:     2,
+  premium:      3,
+  // Legacy plan IDs — kept for backward compatibility
+  basico:       0,
+  exclusive:    2,
+  business:     3,
 };
 
 export function hasMinimumPlan(profile: EntitlementProfile | null, requiredPlan: string): boolean {

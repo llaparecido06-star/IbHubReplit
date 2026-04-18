@@ -3,85 +3,10 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { createCheckoutSession } from "@/services/stripe";
 import { hasPlanAccess } from "@/utils/entitlement";
+import { usePlans, formatPlanPrice } from "@/hooks/usePlans";
 
-const NAVY  = "#0d1b2a";
-const GOLD  = "#c9a84c";
-const WINE  = "#722f37";
-
-interface Plan {
-  id: string;
-  name: string;
-  price: string;
-  period?: string;
-  subtitle: string;
-  popular?: boolean;
-  features: string[];
-}
-
-const PLANS: Plan[] = [
-  {
-    id: "basico",
-    name: "Básico",
-    price: "Grátis",
-    subtitle: "Para iniciantes e exploradores",
-    features: [
-      "Perfil público completo",
-      "Feed de publicações",
-      "5 conexões por mês",
-      "Acesso ao chat básico",
-    ],
-  },
-  {
-    id: "premium",
-    name: "Premium",
-    price: "R$ 149",
-    period: "/mês",
-    subtitle: "Para profissionais do vinho",
-    popular: true,
-    features: [
-      "Tudo do Básico",
-      "Conexões ilimitadas",
-      "Marketplace B2B",
-      "Dados de mercado",
-      "Criação de grupos",
-    ],
-  },
-  {
-    id: "exclusive",
-    name: "Exclusive",
-    price: "R$ 299",
-    period: "/mês",
-    subtitle: "Para especialistas e líderes",
-    features: [
-      "Tudo do Premium",
-      "Inteligência de mercado avançada",
-      "Apresentações exclusivas",
-      "Destaque no feed",
-      "Smart Match B2B",
-    ],
-  },
-  {
-    id: "business",
-    name: "Business",
-    price: "R$ 499",
-    period: "/mês",
-    subtitle: "Para empresas e distribuidoras",
-    features: [
-      "Tudo do Exclusive",
-      "Página empresarial",
-      "Publicação de vagas",
-      "Analytics avançado",
-      "Suporte prioritário",
-    ],
-  },
-];
-
-const PLAN_LABELS: Record<string, string> = {
-  basico: "Básico",
-  premium: "Premium",
-  exclusive: "Exclusive",
-  business: "Business",
-};
+const NAVY = "#0d1b2a";
+const GOLD = "#c9a84c";
 
 export default function AssinarPage() {
   const { session, profile } = useAuth();
@@ -90,34 +15,27 @@ export default function AssinarPage() {
   const [error, setError] = useState<string | null>(null);
   const autoTriggered = useRef(false);
 
-  const currentPlan  = profile?.plan ?? "basico";
+  const { paidPlans, freePlan, getPlanLabel, loading: plansLoading } = usePlans();
+
+  const currentPlan  = profile?.plan ?? "gratuito";
   const hasActiveSub = hasPlanAccess(profile);
+  const isFree       = !hasActiveSub;
 
   async function handleAssinar(planId: string) {
-    const plan = PLANS.find(p => p.id === planId);
-    if (!plan) return;
-
-    if (plan.id === "basico") {
-      setError("O plano Básico é gratuito — não é necessária assinatura.");
-      return;
-    }
     if (!session) {
-      // Save intended plan and redirect to login
-      sessionStorage.setItem("redirect_after_login", `/assinar?plano=${plan.id}`);
+      sessionStorage.setItem("redirect_after_login", `/assinar?plano=${planId}`);
       setLocation("/login");
       return;
     }
-
-    setLoading(plan.id);
+    setLoading(planId);
     setError(null);
     try {
-      const { url } = await createCheckoutSession(session.access_token, plan.id);
+      const { url } = await createCheckoutSession(session.access_token, planId);
       window.location.href = url;
     } catch (err: unknown) {
       const raw = err instanceof Error ? err.message : "Erro ao iniciar checkout. Tente novamente.";
-      // Make Stripe config errors more actionable
       const message = raw.toLowerCase().includes("no such price")
-        ? "Erro de configuração: price ID inválido no Stripe. Verifique as variáveis STRIPE_PRICE_* no painel."
+        ? "Erro de configuração: price ID inválido no Stripe. Verifique o Stripe Price ID no Plan Builder."
         : raw;
       setError(message);
     } finally {
@@ -125,28 +43,24 @@ export default function AssinarPage() {
     }
   }
 
-  // Auto-trigger checkout when user returns from login with ?plano= in the URL
   useEffect(() => {
-    if (autoTriggered.current) return;
-    if (!session) return; // wait until session is loaded
-
+    if (autoTriggered.current || !session || plansLoading || paidPlans.length === 0) return;
     const params = new URLSearchParams(window.location.search);
     const planoParam = params.get("plano");
-    if (!planoParam || planoParam === "basico") return;
-
-    const plan = PLANS.find(p => p.id === planoParam);
+    if (!planoParam) return;
+    const plan = paidPlans.find(p => p.id === planoParam);
     if (!plan) return;
-
     autoTriggered.current = true;
-    // Clean the URL so a refresh doesn't re-trigger
     window.history.replaceState({}, "", window.location.pathname);
     handleAssinar(planoParam);
-  }, [session]);
+  }, [session, plansLoading, paidPlans]);
+
+  const ACCENT_COLORS = ["#c9a84c", "#0d1b2a", "#722f37"];
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f6f7f9", fontFamily: "Inter, sans-serif" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: "#f3f4f6", fontFamily: "Inter, sans-serif" }}>
       {/* Header */}
-      <header style={{ backgroundColor: NAVY, padding: "20px 24px", display: "flex", alignItems: "center", gap: 16 }}>
+      <header style={{ backgroundColor: NAVY, padding: "18px 24px", display: "flex", alignItems: "center", gap: 16 }}>
         <button
           onClick={() => setLocation(session ? "/app" : "/")}
           style={{ background: "none", border: "none", cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", gap: 8 }}
@@ -154,134 +68,202 @@ export default function AssinarPage() {
           <span style={{ fontSize: 20 }}>←</span>
           <span style={{ fontWeight: 700, fontSize: 18, color: GOLD }}>ibhub</span>
         </button>
-        <span style={{ color: "rgba(255,255,255,0.4)" }}>/</span>
-        <span style={{ color: "rgba(255,255,255,0.8)", fontSize: 15 }}>Assinar</span>
+        <span style={{ color: "rgba(255,255,255,0.3)" }}>/</span>
+        <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 15 }}>Assinar</span>
       </header>
 
-      <div style={{ maxWidth: 1080, margin: "0 auto", padding: "48px 24px" }}>
+      <div style={{ maxWidth: 1000, margin: "0 auto", padding: "52px 20px 60px" }}>
         {/* Hero */}
-        <div style={{ textAlign: "center", marginBottom: 48 }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>🍷</div>
-          <h1 style={{ fontSize: 34, fontWeight: 900, color: NAVY, marginBottom: 12 }}>
-            Escolha seu plano
+        <div style={{ textAlign: "center", marginBottom: 52 }}>
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: 8,
+            backgroundColor: `${GOLD}18`, border: `1px solid ${GOLD}40`,
+            borderRadius: 100, padding: "6px 18px", marginBottom: 20,
+          }}>
+            <span style={{ color: GOLD, fontSize: 16 }}>🍷</span>
+            <span style={{ color: GOLD, fontWeight: 700, fontSize: 13 }}>ibhub Pro</span>
+          </div>
+          <h1 style={{ fontSize: 38, fontWeight: 900, color: NAVY, marginBottom: 14, lineHeight: 1.15 }}>
+            Invista na sua carreira<br />no mundo do vinho
           </h1>
-          <p style={{ fontSize: 16, color: "#8a93a2", maxWidth: 520, margin: "0 auto" }}>
-            Desbloqueie todo o potencial da maior rede do mundo vitivinícola. Cancele quando quiser.
+          <p style={{ fontSize: 16, color: "#6b7280", maxWidth: 480, margin: "0 auto", lineHeight: 1.6 }}>
+            Acesse inteligência de mercado, conexões exclusivas e ferramentas para impulsionar seu negócio.
           </p>
-          {session && currentPlan !== "basico" && (
+          {session && currentPlan !== "gratuito" && (
             <div style={{
-              display: "inline-block", marginTop: 14,
+              display: "inline-block", marginTop: 18,
               backgroundColor: `${GOLD}14`, border: `1px solid ${GOLD}40`,
-              borderRadius: 100, padding: "6px 18px",
+              borderRadius: 100, padding: "6px 20px",
             }}>
               <span style={{ color: GOLD, fontWeight: 700, fontSize: 13 }}>
-                Plano atual: {PLAN_LABELS[currentPlan] ?? currentPlan}
-                {hasActiveSub ? " · Ativo" : ""}
+                Plano atual: {getPlanLabel(currentPlan)}{hasActiveSub ? " · Ativo" : ""}
               </span>
             </div>
           )}
         </div>
 
+        {/* Error */}
         {error && (
           <div style={{
             backgroundColor: "#fef2f2", border: "1px solid #fecaca",
-            borderRadius: 10, padding: "14px 18px", marginBottom: 24,
+            borderRadius: 10, padding: "14px 18px", marginBottom: 28,
             color: "#dc2626", fontSize: 14, textAlign: "center",
           }}>
             {error}
           </div>
         )}
 
-        {/* Plan cards */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-          gap: 20,
-        }}>
-          {PLANS.map((plan) => {
-            const isCurrent = plan.id === currentPlan;
-            const isPaid = plan.id !== "basico";
-            const isLoading = loading === plan.id;
+        {/* Plan cards — paid only */}
+        {plansLoading ? (
+          <div style={{ textAlign: "center", padding: "60px 0", color: "#9ca3af" }}>
+            <div style={{ fontSize: 24, marginBottom: 12 }}>⌛</div>
+            Carregando planos...
+          </div>
+        ) : (
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+            gap: 20,
+            marginBottom: 16,
+          }}>
+            {paidPlans.map((plan, idx) => {
+              const isCurrent  = plan.id === currentPlan;
+              const isLoading  = loading === plan.id;
+              const isPopular  = idx === 0;
+              const price      = formatPlanPrice(plan);
+              const accent     = ACCENT_COLORS[idx % ACCENT_COLORS.length];
+              const generalFeatures = plan.features.filter(f => !f.startsWith("mercado:"));
 
-            return (
-              <div
-                key={plan.id}
-                style={{
-                  backgroundColor: "#fff",
-                  borderRadius: 16,
-                  border: isCurrent ? `2px solid ${GOLD}` : "1px solid #e8eaed",
-                  padding: "28px 24px",
-                  position: "relative",
-                  boxShadow: plan.popular ? "0 8px 32px rgba(201,168,76,0.15)" : "none",
-                  display: "flex",
-                  flexDirection: "column",
-                }}
-              >
-                {plan.popular && (
-                  <div style={{
-                    position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)",
-                    backgroundColor: GOLD, color: "#0d1b2a", fontWeight: 800,
-                    fontSize: 11, padding: "4px 16px", borderRadius: 100, letterSpacing: 0.8,
-                  }}>
-                    MAIS POPULAR
+              return (
+                <div
+                  key={plan.id}
+                  style={{
+                    backgroundColor: "#fff",
+                    borderRadius: 18,
+                    border: isCurrent
+                      ? `2px solid ${GOLD}`
+                      : isPopular
+                        ? `2px solid ${GOLD}70`
+                        : "1.5px solid #e5e7eb",
+                    padding: "28px 24px 24px",
+                    position: "relative",
+                    boxShadow: isPopular
+                      ? "0 8px 40px rgba(201,168,76,0.14)"
+                      : "0 2px 12px rgba(0,0,0,0.05)",
+                    display: "flex",
+                    flexDirection: "column",
+                    transition: "box-shadow 0.2s",
+                  }}
+                >
+                  {/* Popular badge */}
+                  {isPopular && !isCurrent && (
+                    <div style={{
+                      position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)",
+                      backgroundColor: GOLD, color: NAVY, fontWeight: 900,
+                      fontSize: 11, padding: "4px 18px", borderRadius: 100, letterSpacing: 1,
+                      whiteSpace: "nowrap",
+                    }}>
+                      MAIS POPULAR
+                    </div>
+                  )}
+                  {isCurrent && (
+                    <div style={{
+                      position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)",
+                      backgroundColor: "#059669", color: "#fff", fontWeight: 900,
+                      fontSize: 11, padding: "4px 18px", borderRadius: 100, letterSpacing: 1,
+                      whiteSpace: "nowrap",
+                    }}>
+                      ✓ PLANO ATUAL
+                    </div>
+                  )}
+
+                  {/* Top color bar */}
+                  <div style={{ height: 4, backgroundColor: accent, borderRadius: 2, marginBottom: 20, marginLeft: -24, marginRight: -24, marginTop: -4 }} />
+
+                  <h2 style={{ fontSize: 22, fontWeight: 900, color: NAVY, margin: "0 0 4px" }}>{plan.name}</h2>
+                  <p style={{ fontSize: 13, color: "#9ca3af", margin: "0 0 18px", lineHeight: 1.5 }}>{plan.subtitle}</p>
+
+                  <div style={{ marginBottom: 22 }}>
+                    <span style={{ fontSize: 32, fontWeight: 900, color: accent }}>{price.main}</span>
+                    {price.period && <span style={{ fontSize: 14, color: "#9ca3af", marginLeft: 2 }}>{price.period}</span>}
                   </div>
-                )}
 
-                <h2 style={{ fontSize: 22, fontWeight: 900, color: NAVY, marginBottom: 4 }}>{plan.name}</h2>
-                <p style={{ fontSize: 13, color: "#8a93a2", marginBottom: 16 }}>{plan.subtitle}</p>
+                  <ul style={{ listStyle: "none", padding: 0, margin: "0 0 24px", display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
+                    {generalFeatures.map((f) => (
+                      <li key={f} style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 14, color: "#374151" }}>
+                        <span style={{ color: GOLD, flexShrink: 0, fontSize: 15 }}>✓</span>
+                        {f}
+                      </li>
+                    ))}
+                    {generalFeatures.length === 0 && (
+                      <li style={{ fontSize: 13, color: "#9ca3af", fontStyle: "italic" }}>
+                        Configure as funcionalidades no Plan Builder
+                      </li>
+                    )}
+                  </ul>
 
-                <div style={{ marginBottom: 20 }}>
-                  <span style={{ fontSize: 30, fontWeight: 900, color: GOLD }}>{plan.price}</span>
-                  {plan.period && <span style={{ fontSize: 15, color: "#8a93a2" }}>{plan.period}</span>}
+                  {isCurrent ? (
+                    <div style={{
+                      backgroundColor: `${GOLD}12`, border: `1px solid ${GOLD}30`,
+                      borderRadius: 10, padding: "13px 0", textAlign: "center",
+                      color: GOLD, fontWeight: 800, fontSize: 15,
+                    }}>
+                      ✓ Plano atual
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleAssinar(plan.id)}
+                      disabled={isLoading || !!loading}
+                      style={{
+                        backgroundColor: isPopular ? GOLD : NAVY,
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 10,
+                        padding: "15px 0",
+                        fontSize: 15,
+                        fontWeight: 800,
+                        cursor: (isLoading || !!loading) ? "not-allowed" : "pointer",
+                        opacity: (isLoading || (!!loading && loading !== plan.id)) ? 0.65 : 1,
+                        transition: "opacity 0.2s",
+                      }}
+                    >
+                      {isLoading ? "Aguarde..." : `Assinar ${plan.name}`}
+                    </button>
+                  )}
                 </div>
+              );
+            })}
+          </div>
+        )}
 
-                <ul style={{ listStyle: "none", padding: 0, margin: "0 0 24px", display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
-                  {plan.features.map((f) => (
-                    <li key={f} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "#374151" }}>
-                      <span style={{ color: GOLD, fontSize: 16, flexShrink: 0 }}>✓</span>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-
-                {isCurrent ? (
-                  <div style={{
-                    backgroundColor: `${GOLD}12`, border: `1px solid ${GOLD}30`,
-                    borderRadius: 10, padding: "13px 0", textAlign: "center",
-                    color: GOLD, fontWeight: 700, fontSize: 15,
-                  }}>
-                    Plano atual
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => handleAssinar(plan.id)}
-                    disabled={isLoading || !!loading}
-                    style={{
-                      backgroundColor: isPaid ? GOLD : `${NAVY}12`,
-                      color: isPaid ? NAVY : NAVY,
-                      border: isPaid ? "none" : `1px solid ${NAVY}30`,
-                      borderRadius: 10,
-                      padding: "14px 0",
-                      fontSize: 15,
-                      fontWeight: 800,
-                      cursor: "pointer",
-                      opacity: (isLoading || (!!loading && loading !== plan.id)) ? 0.7 : 1,
-                    }}
-                  >
-                    {isLoading ? "Aguarde..." : isPaid ? `Assinar ${plan.name}` : "Usar gratuitamente"}
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        {/* Free plan — discreet text at bottom */}
+        {freePlan && (
+          <div style={{
+            textAlign: "center",
+            marginTop: 8,
+            padding: "16px 0",
+          }}>
+            {isFree ? (
+              <span style={{ fontSize: 13, color: "#9ca3af" }}>
+                ✓ Você está no plano {freePlan.name} · {freePlan.subtitle}
+              </span>
+            ) : (
+              <span style={{ fontSize: 13, color: "#9ca3af" }}>
+                Ou continue com o <span style={{ fontWeight: 600 }}>plano {freePlan.name}</span> sem custos
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Trust signals */}
-        <div style={{ textAlign: "center", marginTop: 48, color: "#8a93a2", fontSize: 13, display: "flex", flexWrap: "wrap", gap: 24, justifyContent: "center" }}>
-          <span>🔒 Pagamento 100% seguro via Stripe</span>
-          <span>💳 Cartão de crédito</span>
-          <span>❌ Cancele quando quiser</span>
-          <span>🇧🇷 Preços em Reais</span>
+        <div style={{
+          display: "flex", flexWrap: "wrap", gap: 20, justifyContent: "center",
+          marginTop: 40, padding: "20px 0",
+          borderTop: "1px solid #e5e7eb",
+        }}>
+          {["🔒 Pagamento 100% seguro via Stripe", "💳 Cartão de crédito", "❌ Cancele quando quiser", "🇧🇷 Preços em Reais"].map(s => (
+            <span key={s} style={{ color: "#6b7280", fontSize: 13 }}>{s}</span>
+          ))}
         </div>
       </div>
     </div>

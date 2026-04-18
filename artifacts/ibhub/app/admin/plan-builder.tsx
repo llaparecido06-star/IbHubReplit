@@ -35,10 +35,9 @@ const ALL_GENERAL_FEATURES = [
 
 const DEFAULT_PLANS = [
   { id: "gratuito",     name: "Gratuito",     subtitle: "Acesso básico à plataforma",                  price_cents: 0,     features: [], is_active: true, sort_order: 0 },
-  { id: "profissional", name: "Profissional", subtitle: "Acesso à inteligência de mercado",             price_cents: 9990,  features: [], is_active: true, sort_order: 1 },
-  { id: "basico",       name: "Básico",       subtitle: "Recursos profissionais essenciais",            price_cents: 14900, features: [], is_active: true, sort_order: 2 },
-  { id: "empresa",      name: "Empresa",      subtitle: "Painel de gestão e criação de oportunidades", price_cents: 24700, features: [], is_active: true, sort_order: 3 },
-  { id: "executivo",    name: "Executivo",    subtitle: "Acesso completo a todas as funcionalidades",   price_cents: 49900, features: ALL_GENERAL_FEATURES, is_active: true, sort_order: 4 },
+  { id: "profissional", name: "Profissional", subtitle: "Para profissionais do vinho",                  price_cents: 14990, features: [], is_active: true, sort_order: 1 },
+  { id: "empresas",     name: "Empresas",     subtitle: "Para negócios, distribuidoras e importadoras", price_cents: 29990, features: [], is_active: true, sort_order: 2 },
+  { id: "premium",      name: "Premium",      subtitle: "Acesso completo à plataforma ibhub",           price_cents: 49990, features: ALL_GENERAL_FEATURES, is_active: true, sort_order: 3 },
 ];
 
 type DeliveryStrategy = "RANDOM_DAILY" | "SEQUENTIAL_MONTHLY" | "FULL_ACCESS" | "NONE";

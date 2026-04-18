@@ -23,6 +23,7 @@ import { Feather } from "@/components/ui/Icon";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/context/AuthContext";
 import { applyReferralCode, ensureReferralCode } from "@/services/api";
+import { usePlans, formatPlanPrice } from "@/hooks/usePlans";
 
 const TOTAL_STEPS = 3;
 
@@ -71,40 +72,6 @@ const AREAS = [
   "Consultoria", "Comprador", "Investidor", "Entusiasta", "Outros",
 ];
 
-const PLANS = [
-  {
-    key: "basico",
-    name: "Básico",
-    price: "GRÁTIS",
-    subtitle: "Para iniciantes",
-    popular: false,
-    features: ["Perfil básico", "Feed de publicações", "5 conexões/mês"],
-  },
-  {
-    key: "premium",
-    name: "Premium",
-    price: "R$ 149/mês",
-    subtitle: "Para profissionais",
-    popular: true,
-    features: ["Tudo do Básico", "Conexões ilimitadas", "Mercado", "Dados de mercado"],
-  },
-  {
-    key: "exclusive",
-    name: "Exclusive",
-    price: "R$ 299/mês",
-    subtitle: "Para especialistas",
-    popular: false,
-    features: ["Tudo do Premium", "Inteligência de mercado", "Apresentações exclusivas", "Destaque no feed"],
-  },
-  {
-    key: "business",
-    name: "Business",
-    price: "R$ 499/mês",
-    subtitle: "Para empresas",
-    popular: false,
-    features: ["Tudo do Exclusive", "Página empresarial", "Vagas de emprego", "Suporte prioritário"],
-  },
-];
 
 type ValidationState = "idle" | "checking" | "available" | "taken" | "invalid";
 
@@ -168,7 +135,8 @@ export default function RegisterScreen() {
   const [certifications, setCertifications] = useState<string[]>([]);
   const [certInput, setCertInput] = useState("");
 
-  const [selectedPlan, setSelectedPlan] = useState("basico");
+  const [selectedPlan, setSelectedPlan] = useState("gratuito");
+  const { paidPlans, freePlan, loading: plansLoading } = usePlans();
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("Criando conta...");
   const [error, setError] = useState<string | null>(null);
@@ -409,7 +377,7 @@ export default function RegisterScreen() {
 
         // Paid plans must go through Stripe — redirect to subscription page
         // so the user can complete payment and activate the plan.
-        if (selectedPlan !== "basico") {
+        if (selectedPlan !== "gratuito") {
           router.replace("/subscription" as any);
         } else {
           router.replace("/(tabs)" as any);
@@ -706,45 +674,68 @@ export default function RegisterScreen() {
 
           {step === 3 && (
             <View style={styles.stepContainer}>
-              <Text style={styles.stepTitle}>Escolha seu plano</Text>
+              <Text style={styles.stepTitle}>Invista na sua carreira</Text>
               <Text style={styles.stepSubtitle}>
-                Selecione o plano perfeito para suas necessidades
+                Escolha um plano para desbloquear o ibhub completo
               </Text>
-              <View style={styles.plansContainer}>
-                {PLANS.map((plan) => (
-                  <TouchableOpacity
-                    key={plan.key}
-                    style={[styles.planCard, selectedPlan === plan.key && styles.planCardActive]}
-                    onPress={() => setSelectedPlan(plan.key)}
-                    activeOpacity={0.8}
-                  >
-                    {plan.popular && (
-                      <View style={styles.popularBadge}>
-                        <Text style={styles.popularBadgeText}>POPULAR</Text>
-                      </View>
-                    )}
-                    <View style={styles.planHeader}>
-                      <View>
-                        <Text style={styles.planName}>{plan.name}</Text>
-                        <Text style={styles.planSubtitle2}>{plan.subtitle}</Text>
-                      </View>
-                      <Text style={[styles.planPrice, plan.key === "basico" && { color: "#c9a84c" }]}>
-                        {plan.price}
-                      </Text>
-                    </View>
-                    <View style={styles.planFeatures}>
-                      {plan.features.map((feat) => (
-                        <View key={feat} style={styles.planFeatureRow}>
-                          <Feather name="check" size={14} color="#c9a84c" />
-                          <Text style={styles.planFeatureText}>{feat}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
 
-              {selectedPlan !== "basico" && (
+              {plansLoading ? (
+                <View style={{ alignItems: "center", paddingVertical: 24 }}>
+                  <ActivityIndicator color="#c9a84c" />
+                  <Text style={{ color: "#8fa3b8", fontSize: 13, marginTop: 8 }}>Carregando planos...</Text>
+                </View>
+              ) : (
+                <View style={styles.plansContainer}>
+                  {paidPlans.map((plan, idx) => {
+                    const isSelected = selectedPlan === plan.id;
+                    const isPopular  = idx === 0;
+                    const price      = formatPlanPrice(plan);
+                    const generalFeats = plan.features.filter(f => !f.startsWith("mercado:"));
+
+                    return (
+                      <TouchableOpacity
+                        key={plan.id}
+                        style={[styles.planCard, isSelected && styles.planCardActive]}
+                        onPress={() => setSelectedPlan(plan.id)}
+                        activeOpacity={0.8}
+                      >
+                        {isPopular && !isSelected && (
+                          <View style={styles.popularBadge}>
+                            <Text style={styles.popularBadgeText}>MAIS POPULAR</Text>
+                          </View>
+                        )}
+                        {isSelected && (
+                          <View style={[styles.popularBadge, { backgroundColor: "#c9a84c" }]}>
+                            <Text style={styles.popularBadgeText}>✓ SELECIONADO</Text>
+                          </View>
+                        )}
+                        <View style={styles.planHeader}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.planName}>{plan.name}</Text>
+                            <Text style={styles.planSubtitle2}>{plan.subtitle}</Text>
+                          </View>
+                          <View style={{ alignItems: "flex-end" }}>
+                            <Text style={styles.planPrice}>{price.main}</Text>
+                            {price.period && <Text style={{ color: "#8fa3b8", fontSize: 11 }}>{price.period}</Text>}
+                          </View>
+                        </View>
+                        {generalFeats.length > 0 && (
+                          <View style={styles.planFeatures}>
+                            {generalFeats.map((feat) => (
+                              <View key={feat} style={styles.planFeatureRow}>
+                                <Feather name="check" size={13} color="#c9a84c" />
+                                <Text style={styles.planFeatureText}>{feat}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+
+              {selectedPlan !== "gratuito" && (
                 <View style={styles.paymentNotice}>
                   <Feather name="credit-card" size={14} color="#c9a84c" />
                   <Text style={styles.paymentNoticeText}>
@@ -768,12 +759,28 @@ export default function RegisterScreen() {
             ) : (
               <Text style={styles.continueBtnText}>
                 {step === TOTAL_STEPS
-                  ? (selectedPlan !== "basico" ? "Criar conta e ir para pagamento  →" : "Finalizar cadastro")
+                  ? (selectedPlan !== "gratuito" ? "Criar conta e ir para pagamento  →" : "Finalizar cadastro")
                   : "Continuar  →"
                 }
               </Text>
             )}
           </TouchableOpacity>
+
+          {/* Discreet free plan option — bottom of step 3 */}
+          {step === TOTAL_STEPS && (
+            <TouchableOpacity
+              style={{ paddingVertical: 14, alignItems: "center" }}
+              onPress={() => { setSelectedPlan("gratuito"); nextStep(); }}
+              disabled={loading}
+            >
+              <Text style={{ color: "#8fa3b8", fontSize: 13, textDecorationLine: "underline" }}>
+                {freePlan
+                  ? `Continuar com o plano ${freePlan.name} (grátis)`
+                  : "Continuar gratuitamente"
+                }
+              </Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
 
