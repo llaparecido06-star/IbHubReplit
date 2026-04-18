@@ -23,7 +23,7 @@ import { Feather } from "@/components/ui/Icon";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/context/AuthContext";
 import { applyReferralCode, ensureReferralCode } from "@/services/api";
-import { usePlans, formatPlanPrice } from "@/hooks/usePlans";
+import { usePlans, formatPlanPrice, formatOriginalPrice, calcDiscount } from "@/hooks/usePlans";
 
 const TOTAL_STEPS = 3;
 
@@ -687,10 +687,12 @@ export default function RegisterScreen() {
               ) : (
                 <View style={styles.plansContainer}>
                   {paidPlans.map((plan, idx) => {
-                    const isSelected = selectedPlan === plan.id;
-                    const isPopular  = idx === 0;
-                    const price      = formatPlanPrice(plan);
-                    const generalFeats = plan.features.filter(f => !f.startsWith("mercado:"));
+                    const isSelected    = selectedPlan === plan.id;
+                    const isPopular     = idx === 0;
+                    const price         = formatPlanPrice(plan);
+                    const originalPrice = formatOriginalPrice(plan);
+                    const discount      = calcDiscount(plan);
+                    const generalFeats  = plan.features.filter(f => !f.startsWith("mercado:"));
 
                     return (
                       <TouchableOpacity
@@ -715,10 +717,27 @@ export default function RegisterScreen() {
                             <Text style={styles.planSubtitle2}>{plan.subtitle}</Text>
                           </View>
                           <View style={{ alignItems: "flex-end" }}>
-                            <Text style={styles.planPrice}>{price.main}</Text>
+                            {originalPrice && (
+                              <Text style={{ fontSize: 11, color: "#8fa3b8", textDecorationLine: "line-through" }}>
+                                De: {originalPrice}
+                              </Text>
+                            )}
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                              <Text style={styles.planPrice}>{price.main}</Text>
+                              {discount && (
+                                <View style={{ backgroundColor: "#d1fae5", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5 }}>
+                                  <Text style={{ fontSize: 9, fontWeight: "800", color: "#065f46" }}>-{discount}%</Text>
+                                </View>
+                              )}
+                            </View>
                             {price.period && <Text style={{ color: "#8fa3b8", fontSize: 11 }}>{price.period}</Text>}
                           </View>
                         </View>
+                        {plan.description && (
+                          <Text style={{ fontSize: 12, color: "#8fa3b8", fontStyle: "italic", marginBottom: 6, lineHeight: 17 }}>
+                            {plan.description}
+                          </Text>
+                        )}
                         {generalFeats.length > 0 && (
                           <View style={styles.planFeatures}>
                             {generalFeats.map((feat) => (

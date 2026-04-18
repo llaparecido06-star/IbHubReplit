@@ -53,7 +53,9 @@ interface Plan {
   id: string;
   name: string;
   subtitle: string;
+  description?: string | null;
   price_cents: number;
+  original_price_cents?: number | null;
   features: string[];
   is_active: boolean;
   sort_order: number;
@@ -93,6 +95,8 @@ export default function AdminPlanBuilderScreen() {
   const [editName, setEditName]             = useState("");
   const [editSubtitle, setEditSubtitle]     = useState("");
   const [editPrice, setEditPrice]           = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editOriginalPrice, setEditOriginalPrice] = useState("");
   const [editFeatures, setEditFeatures]     = useState<string[]>([]);
   const [editDelivery, setEditDelivery]     = useState<DeliveryStrategy>("NONE");
   const [editStripeId, setEditStripeId]     = useState("");
@@ -144,7 +148,9 @@ export default function AdminPlanBuilderScreen() {
     setEditPlan(plan);
     setEditName(plan.name);
     setEditSubtitle(plan.subtitle);
+    setEditDescription(plan.description ?? "");
     setEditPrice(plan.price_cents === 0 ? "0" : (plan.price_cents / 100).toFixed(2).replace(".", ","));
+    setEditOriginalPrice(plan.original_price_cents ? (plan.original_price_cents / 100).toFixed(2).replace(".", ",") : "");
     setEditFeatures([...plan.features]);
     setEditDelivery((plan.delivery_strategy ?? "NONE") as DeliveryStrategy);
     setEditStripeId(plan.stripe_price_id ?? "");
@@ -155,7 +161,9 @@ export default function AdminPlanBuilderScreen() {
     setEditPlan(null);
     setEditName("");
     setEditSubtitle("");
+    setEditDescription("");
     setEditPrice("0");
+    setEditOriginalPrice("");
     setEditFeatures([]);
     setEditDelivery("NONE");
     setEditStripeId("");
@@ -172,11 +180,13 @@ export default function AdminPlanBuilderScreen() {
     if (!editPlan) return;
     setSaving(true);
     try {
-      const price_cents = parsePriceString(editPrice);
-      const stripeId = editStripeId.trim() || null;
+      const price_cents          = parsePriceString(editPrice);
+      const original_price_cents = parsePriceString(editOriginalPrice) || null;
+      const stripeId             = editStripeId.trim() || null;
+      const description          = editDescription.trim() || null;
       const { error: err } = await supabase
         .from("plans")
-        .update({ name: editName, subtitle: editSubtitle, price_cents, features: editFeatures, delivery_strategy: editDelivery, stripe_price_id: stripeId })
+        .update({ name: editName, subtitle: editSubtitle, description, price_cents, original_price_cents, features: editFeatures, delivery_strategy: editDelivery, stripe_price_id: stripeId })
         .eq("id", editPlan.id);
       if (err) throw err;
       Alert.alert("Sucesso", "Plano atualizado.");
@@ -193,12 +203,14 @@ export default function AdminPlanBuilderScreen() {
     if (!editName.trim()) { Alert.alert("Erro", "Informe o nome do plano."); return; }
     setSaving(true);
     try {
-      const price_cents = parsePriceString(editPrice);
-      const newId = toSlug(editName) || `plano_${Date.now()}`;
-      const stripeId = editStripeId.trim() || null;
+      const price_cents          = parsePriceString(editPrice);
+      const original_price_cents = parsePriceString(editOriginalPrice) || null;
+      const newId                = toSlug(editName) || `plano_${Date.now()}`;
+      const stripeId             = editStripeId.trim() || null;
+      const description          = editDescription.trim() || null;
       const { error: err } = await supabase
         .from("plans")
-        .insert({ id: newId, name: editName, subtitle: editSubtitle, price_cents, features: editFeatures, delivery_strategy: editDelivery, stripe_price_id: stripeId, is_active: true, sort_order: plans.length });
+        .insert({ id: newId, name: editName, subtitle: editSubtitle, description, price_cents, original_price_cents, features: editFeatures, delivery_strategy: editDelivery, stripe_price_id: stripeId, is_active: true, sort_order: plans.length });
       if (err) throw err;
       Alert.alert("Sucesso", "Novo plano criado.");
       setShowNewModal(false);
@@ -254,14 +266,63 @@ export default function AdminPlanBuilderScreen() {
                 <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>SUBTÍTULO</Text>
                 <TextInput
                   style={[styles.mInput, { borderColor: colors.border, color: colors.foreground }]}
-                  placeholder="Ex: Recursos avançados"
+                  placeholder="Ex: Para profissionais do vinho"
                   placeholderTextColor={colors.mutedForeground}
                   value={editSubtitle}
                   onChangeText={setEditSubtitle}
                 />
               </View>
+
               <View style={styles.mField}>
-                <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>PREÇO (R$)</Text>
+                <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>DESCRIÇÃO (marketing)</Text>
+                <TextInput
+                  style={[styles.mInput, { borderColor: colors.border, color: colors.foreground, minHeight: 72, textAlignVertical: "top", paddingTop: 10 }]}
+                  placeholder="Ex: Ideal para sommerliers e consultores que precisam de visibilidade e dados estratégicos de mercado."
+                  placeholderTextColor={colors.mutedForeground}
+                  value={editDescription}
+                  onChangeText={setEditDescription}
+                  multiline
+                  numberOfLines={3}
+                />
+                <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 4 }}>
+                  Aparece como copy de marketing nas telas de assinatura. Deixe em branco para não exibir.
+                </Text>
+              </View>
+
+              {/* Pricing — "De: / Por:" */}
+              <View style={styles.mField}>
+                <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>PREÇO ORIGINAL "DE:" (R$)</Text>
+                <TextInput
+                  style={[styles.mInput, { borderColor: colors.border, color: colors.foreground }]}
+                  placeholder="Ex: 199,90 — deixe vazio para não mostrar desconto"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={editOriginalPrice}
+                  onChangeText={setEditOriginalPrice}
+                  keyboardType="decimal-pad"
+                />
+                {/* Live discount preview */}
+                {(() => {
+                  const orig = parsePriceString(editOriginalPrice);
+                  const curr = parsePriceString(editPrice);
+                  if (orig > 0 && curr > 0 && orig > curr) {
+                    const pct = Math.round(((orig - curr) / orig) * 100);
+                    return (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 }}>
+                        <Text style={{ fontSize: 12, color: colors.mutedForeground, textDecorationLine: "line-through" }}>
+                          De: {centsToString(orig)}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: "#059669", fontWeight: "700" }}>
+                          Por: {centsToString(curr)} · -{pct}% desconto
+                        </Text>
+                      </View>
+                    );
+                  }
+                  return null;
+                })()}
+              </View>
+
+              <View style={styles.mField}>
+                <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>PREÇO REAL "POR:" (R$)</Text>
                 <TextInput
                   style={[styles.mInput, { borderColor: colors.border, color: colors.foreground }]}
                   placeholder="0,00"
@@ -431,7 +492,19 @@ export default function AdminPlanBuilderScreen() {
                     <Text style={[styles.planName, { color: colors.navy }]}>{plan.name}</Text>
                     <Text style={[styles.planSub, { color: colors.mutedForeground }]}>{plan.subtitle}</Text>
                   </View>
-                  <Text style={[styles.planPrice, { color: colors.navy }]}>{centsToString(plan.price_cents)}</Text>
+                  <View style={{ alignItems: "flex-end" }}>
+                    {plan.original_price_cents && plan.original_price_cents > plan.price_cents && (
+                      <Text style={{ fontSize: 11, color: colors.mutedForeground, textDecorationLine: "line-through" }}>
+                        {centsToString(plan.original_price_cents)}
+                      </Text>
+                    )}
+                    <Text style={[styles.planPrice, { color: colors.navy }]}>{centsToString(plan.price_cents)}</Text>
+                    {plan.original_price_cents && plan.original_price_cents > plan.price_cents && (
+                      <Text style={{ fontSize: 10, color: "#059669", fontWeight: "700" }}>
+                        -{Math.round(((plan.original_price_cents - plan.price_cents) / plan.original_price_cents) * 100)}% OFF
+                      </Text>
+                    )}
+                  </View>
                   <TouchableOpacity style={[styles.editBtn, { borderColor: colors.border }]} onPress={() => openEdit(plan)}>
                     <Feather name="edit-2" size={13} color={colors.foreground} />
                     <Text style={[styles.editBtnText, { color: colors.foreground }]}>Editar</Text>

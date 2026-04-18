@@ -18,7 +18,7 @@ import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { getEntitlementStatus } from "@/utils/entitlement";
-import { usePlans, formatPlanPrice } from "@/hooks/usePlans";
+import { usePlans, formatPlanPrice, formatOriginalPrice, calcDiscount } from "@/hooks/usePlans";
 
 function getWebBaseUrl(): string {
   const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? "";
@@ -186,9 +186,11 @@ export default function SubscriptionScreen() {
           </View>
         ) : (
           paidPlans.map((plan, idx) => {
-            const isActive  = plan.id === currentPlan;
-            const isPopular = idx === 0;
-            const price     = formatPlanPrice(plan);
+            const isActive       = plan.id === currentPlan;
+            const isPopular      = idx === 0;
+            const price          = formatPlanPrice(plan);
+            const originalPrice  = formatOriginalPrice(plan);
+            const discount       = calcDiscount(plan);
             const generalFeatures = plan.features.filter(f => !f.startsWith("mercado:"));
 
             return (
@@ -220,12 +222,33 @@ export default function SubscriptionScreen() {
                     <Text style={[styles.planSub, { color: colors.mutedForeground }]}>{plan.subtitle}</Text>
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
-                    <Text style={[styles.planPrice, { color: colors.gold }]}>{price.main}</Text>
+                    {originalPrice && (
+                      <Text style={{ fontSize: 12, color: colors.mutedForeground, textDecorationLine: "line-through" }}>
+                        De: {originalPrice}
+                      </Text>
+                    )}
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Text style={[styles.planPrice, { color: colors.gold }]}>{price.main}</Text>
+                      {discount && (
+                        <View style={{ backgroundColor: "#d1fae5", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                          <Text style={{ fontSize: 10, fontWeight: "800", color: "#065f46" }}>-{discount}%</Text>
+                        </View>
+                      )}
+                    </View>
                     {price.period && (
-                      <Text style={[styles.planPeriod, { color: colors.mutedForeground }]}>{price.period}</Text>
+                      <Text style={[styles.planPeriod, { color: colors.mutedForeground }]}>
+                        {originalPrice ? `Por: ${price.main}` : ""}{price.period}
+                      </Text>
                     )}
                   </View>
                 </View>
+
+                {/* Marketing description */}
+                {plan.description && (
+                  <Text style={{ fontSize: 13, color: colors.mutedForeground, lineHeight: 19, fontStyle: "italic" }}>
+                    {plan.description}
+                  </Text>
+                )}
 
                 {generalFeatures.length > 0 && (
                   <View style={styles.features}>

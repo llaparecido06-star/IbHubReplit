@@ -5,7 +5,9 @@ export interface DbPlan {
   id: string;
   name: string;
   subtitle: string;
+  description?: string | null;
   price_cents: number;
+  original_price_cents?: number | null;
   features: string[];
   is_active: boolean;
   sort_order: number;
@@ -17,6 +19,17 @@ export function formatPlanPrice(plan: DbPlan): { main: string; period?: string }
   if (plan.price_cents === 0) return { main: "Grátis" };
   const val = plan.price_cents / 100;
   return { main: `R$ ${val.toFixed(2).replace(".", ",")}`, period: "/mês" };
+}
+
+export function formatOriginalPrice(plan: DbPlan): string | null {
+  if (!plan.original_price_cents || plan.original_price_cents <= plan.price_cents) return null;
+  const val = plan.original_price_cents / 100;
+  return `R$ ${val.toFixed(2).replace(".", ",")}`;
+}
+
+export function calcDiscount(plan: DbPlan): number | null {
+  if (!plan.original_price_cents || plan.original_price_cents <= plan.price_cents) return null;
+  return Math.round(((plan.original_price_cents - plan.price_cents) / plan.original_price_cents) * 100);
 }
 
 export function usePlans() {

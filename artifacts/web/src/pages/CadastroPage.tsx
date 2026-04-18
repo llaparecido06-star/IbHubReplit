@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { usePlans, formatPlanPrice } from "@/hooks/usePlans";
+import { usePlans, formatPlanPrice, formatOriginalPrice, calcDiscount } from "@/hooks/usePlans";
 
 const TOTAL_STEPS = 3;
 
@@ -406,12 +406,14 @@ export default function CadastroPage() {
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
                   {paidPlans.map((plan, idx) => {
-                    const isSelected = selectedPlan === plan.id;
-                    const isPopular  = idx === 0;
-                    const price      = formatPlanPrice(plan);
+                    const isSelected    = selectedPlan === plan.id;
+                    const isPopular     = idx === 0;
+                    const price         = formatPlanPrice(plan);
+                    const originalPrice = formatOriginalPrice(plan);
+                    const discount      = calcDiscount(plan);
                     return (
                       <label key={plan.id} style={{
-                        display: "flex", alignItems: "center", gap: 14,
+                        display: "flex", alignItems: "flex-start", gap: 14,
                         padding: "14px 16px", borderRadius: 12, cursor: "pointer",
                         border: isSelected ? "2px solid #c9a84c" : isPopular ? "2px solid rgba(201,168,76,0.4)" : "2px solid #e8eaed",
                         backgroundColor: isSelected ? "rgba(201,168,76,0.08)" : "#f9fafb",
@@ -420,16 +422,34 @@ export default function CadastroPage() {
                         <input
                           type="radio" name="plan" value={plan.id}
                           checked={isSelected} onChange={() => setSelectedPlan(plan.id)}
-                          style={{ accentColor: "#c9a84c" }}
+                          style={{ accentColor: "#c9a84c", marginTop: 3 }}
                         />
                         <div style={{ flex: 1 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                             <span style={{ fontWeight: 800, fontSize: 15, color: "#0d1b2a" }}>{plan.name}</span>
-                            <span style={{ fontWeight: 800, fontSize: 14, color: "#c9a84c" }}>
-                              {price.main}{price.period && <span style={{ fontWeight: 400, fontSize: 12, color: "#9ca3af" }}>{price.period}</span>}
-                            </span>
+                            <div style={{ textAlign: "right" }}>
+                              {originalPrice && (
+                                <div style={{ fontSize: 11, color: "#9ca3af", textDecoration: "line-through" }}>
+                                  De: {originalPrice}
+                                </div>
+                              )}
+                              <div style={{ display: "flex", alignItems: "center", gap: 5, justifyContent: "flex-end" }}>
+                                <span style={{ fontWeight: 800, fontSize: 14, color: "#c9a84c" }}>{price.main}</span>
+                                {discount && (
+                                  <span style={{ backgroundColor: "#d1fae5", color: "#065f46", fontWeight: 800, fontSize: 9, padding: "2px 6px", borderRadius: 6 }}>
+                                    -{discount}%
+                                  </span>
+                                )}
+                              </div>
+                              {price.period && <div style={{ fontWeight: 400, fontSize: 11, color: "#9ca3af" }}>{price.period}</div>}
+                            </div>
                           </div>
                           <span style={{ fontSize: 12, color: "#8a93a2" }}>{plan.subtitle}</span>
+                          {plan.description && (
+                            <div style={{ fontSize: 11, color: "#8a93a2", fontStyle: "italic", marginTop: 4, lineHeight: 1.5 }}>
+                              {plan.description}
+                            </div>
+                          )}
                         </div>
                         {isPopular && !isSelected && (
                           <span style={{

@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { createCheckoutSession } from "@/services/stripe";
 import { hasPlanAccess } from "@/utils/entitlement";
-import { usePlans, formatPlanPrice } from "@/hooks/usePlans";
+import { usePlans, formatPlanPrice, formatOriginalPrice, calcDiscount } from "@/hooks/usePlans";
 
 const NAVY = "#0d1b2a";
 const GOLD = "#c9a84c";
@@ -127,11 +127,13 @@ export default function AssinarPage() {
             marginBottom: 16,
           }}>
             {paidPlans.map((plan, idx) => {
-              const isCurrent  = plan.id === currentPlan;
-              const isLoading  = loading === plan.id;
-              const isPopular  = idx === 0;
-              const price      = formatPlanPrice(plan);
-              const accent     = ACCENT_COLORS[idx % ACCENT_COLORS.length];
+              const isCurrent       = plan.id === currentPlan;
+              const isLoading       = loading === plan.id;
+              const isPopular       = idx === 0;
+              const price           = formatPlanPrice(plan);
+              const originalPrice   = formatOriginalPrice(plan);
+              const discount        = calcDiscount(plan);
+              const accent          = ACCENT_COLORS[idx % ACCENT_COLORS.length];
               const generalFeatures = plan.features.filter(f => !f.startsWith("mercado:"));
 
               return (
@@ -181,11 +183,36 @@ export default function AssinarPage() {
                   <div style={{ height: 4, backgroundColor: accent, borderRadius: 2, marginBottom: 20, marginLeft: -24, marginRight: -24, marginTop: -4 }} />
 
                   <h2 style={{ fontSize: 22, fontWeight: 900, color: NAVY, margin: "0 0 4px" }}>{plan.name}</h2>
-                  <p style={{ fontSize: 13, color: "#9ca3af", margin: "0 0 18px", lineHeight: 1.5 }}>{plan.subtitle}</p>
+                  <p style={{ fontSize: 13, color: "#9ca3af", margin: "0 0 10px", lineHeight: 1.5 }}>{plan.subtitle}</p>
+
+                  {/* Marketing description */}
+                  {plan.description && (
+                    <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 14px", lineHeight: 1.6, fontStyle: "italic" }}>
+                      {plan.description}
+                    </p>
+                  )}
 
                   <div style={{ marginBottom: 22 }}>
-                    <span style={{ fontSize: 32, fontWeight: 900, color: accent }}>{price.main}</span>
-                    {price.period && <span style={{ fontSize: 14, color: "#9ca3af", marginLeft: 2 }}>{price.period}</span>}
+                    {originalPrice && (
+                      <div style={{ fontSize: 13, color: "#9ca3af", textDecoration: "line-through", marginBottom: 2 }}>
+                        De: {originalPrice}
+                      </div>
+                    )}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 32, fontWeight: 900, color: accent }}>{price.main}</span>
+                      {discount && (
+                        <span style={{
+                          backgroundColor: "#d1fae5", color: "#065f46",
+                          fontWeight: 800, fontSize: 12,
+                          padding: "3px 8px", borderRadius: 8,
+                        }}>-{discount}%</span>
+                      )}
+                    </div>
+                    {price.period && (
+                      <span style={{ fontSize: 14, color: "#9ca3af" }}>
+                        {originalPrice ? `Por: ${price.main}` : ""}{price.period}
+                      </span>
+                    )}
                   </div>
 
                   <ul style={{ listStyle: "none", padding: 0, margin: "0 0 24px", display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
