@@ -125,11 +125,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchProfile = useCallback(async (userId: string) => {
     try {
-      const { data, error } = await supabase
+      // Use limit(1) to avoid "multiple rows" error if duplicate profiles exist
+      const { data: rows, error } = await supabase
         .from("profiles")
         .select("*")
         .or(`id.eq.${userId},user_id.eq.${userId}`)
-        .maybeSingle();
+        .limit(1);
+      const data = rows?.[0] ?? null;
       if (!error && data) {
         const d = data as any;
         const headline =
@@ -203,24 +205,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Safety net: ensure a profile row exists for new social-auth users.
         // A Supabase DB trigger should create it, but this handles the case
-        // where the trigger is missing or the insert races.
+        // where the trigger is missing or it created the row with null full_name.
         if (event === "SIGNED_IN") {
           try {
             const u = session.user;
-            const { count } = await supabase
+            const meta = u.user_metadata ?? {};
+            const googleName = (meta.full_name ?? meta.name ?? u.email?.split("@")[0] ?? "") as string;
+            const googleAvatar = (meta.avatar_url ?? meta.picture ?? null) as string | null;
+
+            // Fetch current profile state (limit 1 to handle any duplicate rows)
+            const { data: rows } = await supabase
               .from("profiles")
-              .select("id", { count: "exact", head: true })
-              .or(`id.eq.${u.id},user_id.eq.${u.id}`);
-            if (count === 0) {
-              const meta = u.user_metadata ?? {};
-              await supabase.from("profiles").upsert({
+              .select("id, full_name, avatar_url")
+              .or(`id.eq.${u.id},user_id.eq.${u.id}`)
+              .limit(1);
+            const existing = rows?.[0] ?? null;
+
+            if (!existing) {
+              // No profile → create one with id = auth.uid() as primary key
+              await supabase.from("profiles").insert({
+                id: u.id,
                 user_id: u.id,
-                full_name: meta.full_name ?? meta.name ?? (u.email?.split("@")[0] ?? ""),
-                avatar_url: meta.avatar_url ?? meta.picture ?? null,
+                full_name: googleName || null,
+                avatar_url: googleAvatar,
                 plan: "gratuito",
-              }, { onConflict: "user_id", ignoreDuplicates: true });
-              await fetchProfile(u.id);
+              });
+            } else if (!existing.full_name && googleName) {
+              // Profile exists but has no name (trigger didn't set it) → fill it in
+              const update: Record<string, string | null> = { user_id: u.id, full_name: googleName };
+              if (!existing.avatar_url && googleAvatar) update.avatar_url = googleAvatar;
+              await supabase.from("profiles").update(update).eq("id", existing.id);
             }
+
+            await fetchProfile(u.id);
           } catch {}
         }
 

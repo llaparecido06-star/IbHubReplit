@@ -664,7 +664,11 @@ export default function ProfileScreen() {
   }, [user?.id]);
 
   const loadData = useCallback(async () => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setLoadingData(false);
+      setRefreshing(false);
+      return;
+    }
     // Always fetch company pages regardless of mode
     refreshCompanyPages();
     // Skip heavy personal data when in company mode (we show EmpresaProfileProxy anyway)

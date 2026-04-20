@@ -223,7 +223,7 @@ function AuthenticatedLayout() {
 }
 
 function RootLayoutNav() {
-  const { session, loading, isRecovering } = useAuth();
+  const { session, loading, isRecovering, needsProfileCompletion } = useAuth();
   const { isEnabled, isLoading: flagsLoading } = useFeatureFlags();
   const router = useRouter();
   const pathname = usePathname();
@@ -250,6 +250,15 @@ function RootLayoutNav() {
       setTimeout(() => router.replace("/(tabs)" as any), 80);
     }
   }, [session, loading, isRecovering, manutencao, flagsLoading, isAuthPath]);
+
+  // Separate effect: redirect social-auth users to profile completion screen.
+  // This fires even after the main effect already navigated to /(tabs), so
+  // Google/Apple users who skipped completion are always intercepted.
+  useEffect(() => {
+    if (loading || isRecovering || !session || !needsProfileCompletion) return;
+    if (pathname.includes("social-complete") || pathname.includes("auth")) return;
+    router.replace("/social-complete" as any);
+  }, [loading, isRecovering, session, needsProfileCompletion, pathname]);
 
   if (loading) {
     return (
