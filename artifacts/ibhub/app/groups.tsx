@@ -18,7 +18,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/context/AuthContext";
-import { Group, fetchGroups, joinGroup, leaveGroup, notifyGroupJoinRequest } from "@/services/api";
+import { Group, fetchGroups, joinGroup, requestGroupJoin, leaveGroup, notifyGroupJoinRequest } from "@/services/api";
 
 type AccessType = "aberto" | "fechado" | "restrito";
 
@@ -114,14 +114,15 @@ export default function GroupsScreen() {
           { text: "Cancelar", style: "cancel" },
           {
             text: "Solicitar", onPress: async () => {
-              const ok = await joinGroup(g.id, userId, activeCompanyId);
+              // requestGroupJoin inserts with role="pending" — NO chat access yet
+              const ok = await requestGroupJoin(g.id, userId, activeCompanyId);
               if (ok) {
                 // Notify the group owner via API server (bypasses notification RLS)
                 void notifyGroupJoinRequest(g.id);
-                Alert.alert("Solicitação enviada!", "O administrador do grupo foi notificado e irá aprovar sua entrada em breve.");
+                Alert.alert("Solicitação enviada!", "Aguarde a aprovação do administrador. Você pode acompanhar o status na lista de grupos.");
                 load();
               } else {
-                Alert.alert("Erro", "Não foi possível enviar a solicitação.");
+                Alert.alert("Erro", "Não foi possível enviar a solicitação. Você já pode ter uma solicitação pendente.");
               }
             }
           },
@@ -255,7 +256,12 @@ export default function GroupsScreen() {
                           </View>
                         </View>
                       </View>
-                      {g.access === "restrito" ? (
+                      {g.is_pending ? (
+                        <View style={[styles.joinBtn, { backgroundColor: "#fef3c7", borderWidth: 1.5, borderColor: "#f59e0b", flexDirection: "row", alignItems: "center", gap: 4 }]}>
+                          <Feather name="clock" size={12} color="#d97706" />
+                          <Text style={[styles.joinBtnText, { color: "#d97706", fontSize: 11 }]}>Aguardando</Text>
+                        </View>
+                      ) : g.access === "restrito" ? (
                         <View style={[styles.joinBtn, { backgroundColor: colors.background, flexDirection: "row", alignItems: "center", gap: 4 }]}>
                           <Feather name="shield" size={12} color={colors.mutedForeground} />
                           <Text style={[styles.joinBtnText, { color: colors.mutedForeground }]}>Por convite</Text>

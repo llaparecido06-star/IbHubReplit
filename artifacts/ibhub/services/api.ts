@@ -5194,6 +5194,7 @@ export interface Group {
   member_count?: number;
   is_member?: boolean;
   is_owner?: boolean;
+  is_pending?: boolean;
 }
 
 export async function fetchGroups(userId: string, activeCompanyId?: string | null): Promise<{ mine: Group[]; explore: Group[] }> {
@@ -5212,19 +5213,26 @@ export async function fetchGroups(userId: string, activeCompanyId?: string | nul
       (membershipsRes.data ?? []).map((m: any) => [m.group_id, m.role])
     );
     const groups = (groupsRes.data ?? []) as any[];
+    // Exclude pending members from count (they haven't been approved yet)
     const countResults = await Promise.all(
       groups.map(g =>
-        supabase.from("group_members").select("user_id", { count: "exact", head: true }).eq("group_id", g.id)
+        supabase.from("group_members").select("user_id", { count: "exact", head: true }).eq("group_id", g.id).neq("role", "pending")
       )
     );
-    const enriched: Group[] = groups.map((g, i) => ({
-      ...g,
-      member_count: countResults[i].count ?? 0,
-      is_member: membershipMap.has(g.id),
-      is_owner: g.owner_id === userId,
-    }));
+    const enriched: Group[] = groups.map((g, i) => {
+      const role = membershipMap.get(g.id);
+      return {
+        ...g,
+        member_count: countResults[i].count ?? 0,
+        is_member:  role !== undefined && role !== "pending",
+        is_pending: role === "pending",
+        is_owner:   g.owner_id === userId,
+      };
+    });
     return {
+      // Full members only (not pending)
       mine:    enriched.filter(g => g.is_member),
+      // Pending users appear in explore with is_pending=true so they can see the status badge
       // restrito groups are hidden from search/explore — only visible to members
       explore: enriched.filter(g => !g.is_member && g.access !== "restrito"),
     };
@@ -5336,6 +5344,48 @@ export async function joinGroup(groupId: string, userId: string, companyPageId?:
     if (cpErr) console.warn("joinGroup conversation_participants:", cpErr);
     return !gmErr;
   } catch { return false; }
+}
+
+// Inserts a "pending" membership — does NOT grant chat access until admin approves.
+export async function requestGroupJoin(groupId: string, userId: string, companyPageId?: string | null): Promise<boolean> {
+  try {
+    const cpId = companyPageId ?? null;
+    const { error } = await supabase
+      .from("group_members")
+      .insert({ group_id: groupId, user_id: userId, role: "pending", company_page_id: cpId });
+    if (error) console.warn("requestGroupJoin:", error);
+    return !error;
+  } catch { return false; }
+}
+
+// Admin approves a pending member — handled server-side to bypass RLS.
+export async function approveGroupMember(groupId: string, memberId: string): Promise<boolean> {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) return false;
+    const res = await fetch(`${API_URL}/community/groups/${groupId}/members/${memberId}/approve`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+    if (!res.ok) { console.error("approveGroupMember:", res.status, await res.text()); return false; }
+    return true;
+  } catch (e) { console.error("approveGroupMember:", e); return false; }
+}
+
+// Admin rejects a pending member — removes the pending group_members row.
+export async function rejectGroupMember(groupId: string, memberId: string): Promise<boolean> {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) return false;
+    const res = await fetch(`${API_URL}/community/groups/${groupId}/members/${memberId}/reject`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+    if (!res.ok) { console.error("rejectGroupMember:", res.status, await res.text()); return false; }
+    return true;
+  } catch (e) { console.error("rejectGroupMember:", e); return false; }
 }
 
 export async function notifyGroupJoinRequest(groupId: string): Promise<void> {

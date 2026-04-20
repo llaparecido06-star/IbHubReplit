@@ -243,4 +243,81 @@ router.post("/community/groups/:id/notify-request", async (req: Request, res: Re
   res.status(200).json({ ok: true });
 });
 
+/**
+ * POST /community/groups/:id/members/:userId/approve
+ * Admin approves a pending join request: promotes role to "member" and adds
+ * the user to conversation_participants so they can see the group chat.
+ */
+router.post("/community/groups/:id/members/:userId/approve", async (req: Request, res: Response): Promise<void> => {
+  const callerId = await resolveUserId(req, res);
+  if (!callerId) return;
+
+  const groupId    = req.params.id as string;
+  const memberId   = req.params.userId as string;
+
+  // Verify the caller is the group owner
+  const { data: group, error: groupErr } = await supabaseAdmin
+    .from("groups")
+    .select("owner_id")
+    .eq("id", groupId)
+    .maybeSingle();
+
+  if (groupErr || !group) { res.status(404).json({ error: "Group not found" }); return; }
+  if (group.owner_id !== callerId) { res.status(403).json({ error: "Only the group owner can approve members" }); return; }
+
+  // Promote to member
+  const { error: updateErr } = await supabaseAdmin
+    .from("group_members")
+    .update({ role: "member" })
+    .eq("group_id", groupId)
+    .eq("user_id", memberId)
+    .eq("role", "pending");
+
+  if (updateErr) { res.status(500).json({ error: updateErr.message }); return; }
+
+  // Grant chat access
+  const { error: cpErr } = await supabaseAdmin
+    .from("conversation_participants")
+    .upsert(
+      { conversation_id: groupId, user_id: memberId },
+      { onConflict: "conversation_id,user_id,company_page_id", ignoreDuplicates: true }
+    );
+  if (cpErr) console.warn("approve — conversation_participants:", cpErr.message);
+
+  res.status(200).json({ ok: true });
+});
+
+/**
+ * DELETE /community/groups/:id/members/:userId/reject
+ * Admin rejects a pending join request: removes the pending group_members row.
+ */
+router.delete("/community/groups/:id/members/:userId/reject", async (req: Request, res: Response): Promise<void> => {
+  const callerId = await resolveUserId(req, res);
+  if (!callerId) return;
+
+  const groupId  = req.params.id as string;
+  const memberId = req.params.userId as string;
+
+  // Verify the caller is the group owner
+  const { data: group, error: groupErr } = await supabaseAdmin
+    .from("groups")
+    .select("owner_id")
+    .eq("id", groupId)
+    .maybeSingle();
+
+  if (groupErr || !group) { res.status(404).json({ error: "Group not found" }); return; }
+  if (group.owner_id !== callerId) { res.status(403).json({ error: "Only the group owner can reject members" }); return; }
+
+  const { error: deleteErr } = await supabaseAdmin
+    .from("group_members")
+    .delete()
+    .eq("group_id", groupId)
+    .eq("user_id", memberId)
+    .eq("role", "pending");
+
+  if (deleteErr) { res.status(500).json({ error: deleteErr.message }); return; }
+
+  res.status(200).json({ ok: true });
+});
+
 export default router;

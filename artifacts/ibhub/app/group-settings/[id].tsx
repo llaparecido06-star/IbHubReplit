@@ -19,7 +19,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/context/AuthContext";
-import { uploadGroupAvatar, leaveGroup } from "@/services/api";
+import { uploadGroupAvatar, leaveGroup, approveGroupMember, rejectGroupMember } from "@/services/api";
 
 type Tab = "membros" | "pendentes" | "convidar" | "link";
 
@@ -52,10 +52,12 @@ export default function GroupSettingsScreen() {
   const { profile, user } = useAuth();
   const userId = profile?.id ?? user?.id ?? "";
 
-  const [activeTab, setActiveTab] = useState<Tab>("membros");
-  const [group, setGroup]         = useState<GroupData>({ name: "Grupo", avatar_url: null, owner_id: "", members: [] });
-  const [loading, setLoading]     = useState(true);
-  const [updating, setUpdating]   = useState(false);
+  const [activeTab, setActiveTab]       = useState<Tab>("membros");
+  const [group, setGroup]               = useState<GroupData>({ name: "Grupo", avatar_url: null, owner_id: "", members: [] });
+  const [loading, setLoading]           = useState(true);
+  const [updating, setUpdating]         = useState(false);
+  const [pendingMembers, setPending]    = useState<{ id: string; name: string; avatar_url: string | null }[]>([]);
+  const [approvingId, setApprovingId]   = useState<string | null>(null);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -65,22 +67,23 @@ export default function GroupSettingsScreen() {
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    const [groupRes, membersRes] = await Promise.all([
+    const [groupRes, membersRes, pendingRes] = await Promise.all([
       supabase.from("groups").select("name, avatar_url, owner_id").eq("id", id).maybeSingle(),
-      supabase.from("group_members").select("user_id, role").eq("group_id", id),
+      supabase.from("group_members").select("user_id, role").eq("group_id", id).neq("role", "pending"),
+      supabase.from("group_members").select("user_id").eq("group_id", id).eq("role", "pending"),
     ]);
 
-    const groupData = groupRes.data as any;
-    const rawMembers = (membersRes.data ?? []) as any[];
+    const groupData   = groupRes.data as any;
+    const rawMembers  = (membersRes.data ?? []) as any[];
+    const rawPending  = (pendingRes.data ?? []) as any[];
 
     if (!groupData) { setLoading(false); return; }
 
-    // Fetch profiles for all members
-    const memberIds = rawMembers.map((m: any) => m.user_id).filter(Boolean);
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, full_name, avatar_url")
-      .in("id", memberIds);
+    // Fetch profiles for active members + pending members
+    const allIds = [...new Set([...rawMembers.map((m: any) => m.user_id), ...rawPending.map((m: any) => m.user_id)].filter(Boolean))];
+    const { data: profiles } = allIds.length > 0
+      ? await supabase.from("profiles").select("id, full_name, avatar_url").in("id", allIds)
+      : { data: [] };
 
     const profileMap = new Map<string, any>((profiles ?? []).map((p: any) => [p.id, p]));
 
@@ -101,7 +104,13 @@ export default function GroupSettingsScreen() {
       return rank[a.role] - rank[b.role];
     });
 
+    const pending = rawPending.map((m: any) => {
+      const p = profileMap.get(m.user_id);
+      return { id: m.user_id, name: p?.full_name ?? "Usuário", avatar_url: p?.avatar_url ?? null };
+    });
+
     setGroup({ name: groupData.name, avatar_url: groupData.avatar_url, owner_id: groupData.owner_id, members });
+    setPending(pending);
     setLoading(false);
   }, [id]);
 
@@ -168,6 +177,44 @@ export default function GroupSettingsScreen() {
             } else {
               Alert.alert("Erro", "Não foi possível excluir o grupo.");
             }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleApprove = (member: { id: string; name: string }) => {
+    Alert.alert(
+      "Aprovar solicitação",
+      `Aprovar entrada de ${member.name} no grupo?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Aprovar", onPress: async () => {
+            setApprovingId(member.id);
+            const ok = await approveGroupMember(id, member.id);
+            setApprovingId(null);
+            if (ok) load();
+            else Alert.alert("Erro", "Não foi possível aprovar o membro.");
+          },
+        },
+      ]
+    );
+  };
+
+  const handleReject = (member: { id: string; name: string }) => {
+    Alert.alert(
+      "Recusar solicitação",
+      `Recusar a entrada de ${member.name}?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Recusar", style: "destructive", onPress: async () => {
+            setApprovingId(member.id);
+            const ok = await rejectGroupMember(id, member.id);
+            setApprovingId(null);
+            if (ok) load();
+            else Alert.alert("Erro", "Não foi possível recusar a solicitação.");
           },
         },
       ]
@@ -278,12 +325,54 @@ export default function GroupSettingsScreen() {
         );
 
       case "pendentes":
+        if (loading) return <ActivityIndicator color={colors.gold} style={{ paddingTop: 40 }} />;
+        if (pendingMembers.length === 0) {
+          return (
+            <View style={styles.emptyTab}>
+              <Feather name="clock" size={36} color={colors.border} />
+              <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>
+                Nenhuma solicitação pendente
+              </Text>
+            </View>
+          );
+        }
         return (
-          <View style={styles.emptyTab}>
-            <Feather name="clock" size={36} color={colors.border} />
-            <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>
-              Nenhuma solicitação pendente
+          <View style={{ gap: 10, padding: 16 }}>
+            <Text style={[{ fontSize: 13, color: colors.mutedForeground, marginBottom: 4 }]}>
+              {pendingMembers.length} {pendingMembers.length === 1 ? "solicitação pendente" : "solicitações pendentes"}
             </Text>
+            {pendingMembers.map((member) => (
+              <View key={member.id} style={[styles.memberRow, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                <TouchableOpacity onPress={() => router.push(`/profile/${member.id}` as any)} activeOpacity={0.7}>
+                  <Avatar name={member.name} uri={member.avatar_url ?? undefined} size={42} />
+                </TouchableOpacity>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.memberName, { color: colors.navy }]}>{member.name}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
+                    <Feather name="clock" size={11} color="#d97706" />
+                    <Text style={{ fontSize: 11, color: "#d97706" }}>Aguardando aprovação</Text>
+                  </View>
+                </View>
+                {approvingId === member.id ? (
+                  <ActivityIndicator size="small" color={colors.gold} />
+                ) : (
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <TouchableOpacity
+                      style={[styles.approveBtn, { backgroundColor: "#dcfce7", borderColor: "#22c55e" }]}
+                      onPress={() => handleApprove(member)}
+                    >
+                      <Feather name="check" size={15} color="#16a34a" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.approveBtn, { backgroundColor: "#fef2f2", borderColor: "#fca5a5" }]}
+                      onPress={() => handleReject(member)}
+                    >
+                      <Feather name="x" size={15} color="#dc2626" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            ))}
           </View>
         );
 
@@ -410,6 +499,10 @@ const styles = StyleSheet.create({
   deleteBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   emptyTab:      { alignItems: "center", paddingTop: 60, gap: 12 },
   emptyTabText:  { fontSize: 14 },
+  approveBtn: {
+    width: 34, height: 34, borderRadius: 8, borderWidth: 1.5,
+    alignItems: "center", justifyContent: "center",
+  },
   linkTab:       { gap: 12 },
   linkBox: {
     flexDirection: "row", alignItems: "center", gap: 10,
