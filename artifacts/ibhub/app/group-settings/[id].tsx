@@ -343,16 +343,20 @@ export default function GroupSettingsScreen() {
             </Text>
             {pendingMembers.map((member) => (
               <View key={member.id} style={[styles.memberRow, { backgroundColor: "#fff", borderColor: colors.border }]}>
-                <TouchableOpacity onPress={() => router.push(`/profile/${member.id}` as any)} activeOpacity={0.7}>
+                <TouchableOpacity
+                  style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}
+                  onPress={() => router.push(`/profile/${member.id}` as any)}
+                  activeOpacity={0.7}
+                >
                   <Avatar name={member.name} uri={member.avatar_url ?? undefined} size={42} />
-                </TouchableOpacity>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.memberName, { color: colors.navy }]}>{member.name}</Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
-                    <Feather name="clock" size={11} color="#d97706" />
-                    <Text style={{ fontSize: 11, color: "#d97706" }}>Aguardando aprovação</Text>
+                  <View>
+                    <Text style={[styles.memberName, { color: colors.navy }]}>{member.name}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
+                      <Feather name="clock" size={11} color="#d97706" />
+                      <Text style={{ fontSize: 11, color: "#d97706" }}>Aguardando aprovação</Text>
+                    </View>
                   </View>
-                </View>
+                </TouchableOpacity>
                 {approvingId === member.id ? (
                   <ActivityIndicator size="small" color={colors.gold} />
                 ) : (
