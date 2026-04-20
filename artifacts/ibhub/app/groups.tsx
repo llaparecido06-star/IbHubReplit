@@ -18,7 +18,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/context/AuthContext";
-import { Group, fetchGroups, joinGroup, leaveGroup } from "@/services/api";
+import { Group, fetchGroups, joinGroup, leaveGroup, notifyGroupJoinRequest } from "@/services/api";
 
 type AccessType = "aberto" | "fechado" | "restrito";
 
@@ -109,15 +109,16 @@ export default function GroupsScreen() {
     if (access === "fechado") {
       Alert.alert(
         "Solicitar entrada",
-        `Deseja enviar uma solicitação para entrar em "${g.name}"? O administrador precisará aprovar.`,
+        `Deseja enviar uma solicitação para entrar em "${g.name}"? O administrador será notificado e precisará aprovar.`,
         [
           { text: "Cancelar", style: "cancel" },
           {
             text: "Solicitar", onPress: async () => {
               const ok = await joinGroup(g.id, userId, activeCompanyId);
               if (ok) {
-                const who = activeCompanyId ? "sua empresa" : "você";
-                Alert.alert("Solicitação enviada!", `O administrador do grupo foi notificado. Enquanto aguarda a aprovação, ${who} já pode acessar o grupo.`);
+                // Notify the group owner via API server (bypasses notification RLS)
+                void notifyGroupJoinRequest(g.id);
+                Alert.alert("Solicitação enviada!", "O administrador do grupo foi notificado e irá aprovar sua entrada em breve.");
                 load();
               } else {
                 Alert.alert("Erro", "Não foi possível enviar a solicitação.");

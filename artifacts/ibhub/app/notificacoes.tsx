@@ -29,6 +29,7 @@ const TYPE_META: Record<string, { icon: any; color: string; label: string }> = {
   follow:        { icon: "user-plus",      color: "#2ecc71", label: "começou a seguir você" },
   connection:    { icon: "users",          color: "#c9a84c", label: "enviou pedido de conexão" },
   mention:       { icon: "at-sign",        color: "#9b59b6", label: "mencionou você" },
+  group_request: { icon: "user-check",     color: "#7c3aed", label: "solicitou entrar no seu grupo" },
 };
 
 function NotifRow({
@@ -178,7 +179,9 @@ export default function NotificationsScreen() {
       setNotifs(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
       await API.markNotificationRead(notif.id);
     }
-    if (notif.post_id) {
+    if (notif.type === "group_request" && notif.metadata?.group_id) {
+      router.push(`/group-settings/${notif.metadata.group_id}` as any);
+    } else if (notif.post_id) {
       router.push(`/post/${notif.post_id}` as any);
     } else if (notif.actor?.id) {
       router.push(`/profile/${notif.actor.id}` as any);

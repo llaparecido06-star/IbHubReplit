@@ -63,6 +63,7 @@ export interface AppNotification {
   actor?: { id: string; full_name: string; avatar_url?: string | null } | null;
   connection_id?: string | null;
   connection_status?: "pending" | "accepted" | "rejected" | null;
+  metadata?: Record<string, any> | null;
 }
 
 export interface AppComment {
@@ -1176,7 +1177,7 @@ export async function fetchNotifications(userId: string): Promise<AppNotificatio
   try {
     const { data, error } = await supabase
       .from("notifications")
-      .select("id, user_id, actor_id, type, post_id, comment_id, message, read, created_at")
+      .select("id, user_id, actor_id, type, post_id, comment_id, message, read, created_at, metadata")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(50);
@@ -5222,7 +5223,11 @@ export async function fetchGroups(userId: string, activeCompanyId?: string | nul
       is_member: membershipMap.has(g.id),
       is_owner: g.owner_id === userId,
     }));
-    return { mine: enriched.filter(g => g.is_member), explore: enriched.filter(g => !g.is_member) };
+    return {
+      mine:    enriched.filter(g => g.is_member),
+      // restrito groups are hidden from search/explore — only visible to members
+      explore: enriched.filter(g => !g.is_member && g.access !== "restrito"),
+    };
   } catch (e) {
     console.warn("fetchGroups:", e);
     return { mine: [], explore: [] };
@@ -5331,6 +5336,20 @@ export async function joinGroup(groupId: string, userId: string, companyPageId?:
     if (cpErr) console.warn("joinGroup conversation_participants:", cpErr);
     return !gmErr;
   } catch { return false; }
+}
+
+export async function notifyGroupJoinRequest(groupId: string): Promise<void> {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) return;
+    await fetch(`${API_URL}/community/groups/${groupId}/notify-request`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.warn("notifyGroupJoinRequest:", e);
+  }
 }
 
 export async function leaveGroup(groupId: string, userId: string, companyPageId?: string | null): Promise<boolean> {

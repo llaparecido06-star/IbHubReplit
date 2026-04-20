@@ -92,7 +92,13 @@ create policy "messages_delete" on public.messages
   for delete using (sender_id = auth.uid());
 
 
--- ── 5. Verify ─────────────────────────────────────────────────────────────────
+-- ── 5. Add metadata column to notifications (for group_request type) ─────────
+-- Stores extra context like group_id for routing in the notification screen.
+alter table public.notifications
+  add column if not exists metadata jsonb;
+
+
+-- ── 6. Verify ─────────────────────────────────────────────────────────────────
 select
   column_name,
   data_type,

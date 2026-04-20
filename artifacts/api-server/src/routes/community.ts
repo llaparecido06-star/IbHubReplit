@@ -190,4 +190,57 @@ router.post("/community/companies", async (req: Request, res: Response): Promise
   res.status(201).json({ company: data });
 });
 
+/**
+ * POST /community/groups/:id/notify-request
+ * Sends a "join request" notification to the group owner using the service role key
+ * (bypasses the v50 RLS policy that blocks direct client-side notification inserts).
+ * Body: { requester_name: string }
+ */
+router.post("/community/groups/:id/notify-request", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+
+  const groupId = req.params.id as string;
+
+  // Fetch the group to get owner_id and name
+  const { data: group, error: groupErr } = await supabaseAdmin
+    .from("groups")
+    .select("owner_id, name, access")
+    .eq("id", groupId)
+    .maybeSingle();
+
+  if (groupErr || !group) {
+    res.status(404).json({ error: "Group not found" });
+    return;
+  }
+
+  if (group.access !== "fechado") {
+    res.status(400).json({ error: "Notifications are only sent for closed (fechado) groups" });
+    return;
+  }
+
+  if (group.owner_id === userId) {
+    res.status(200).json({ ok: true, skipped: "owner cannot request to join their own group" });
+    return;
+  }
+
+  const { error: notifErr } = await supabaseAdmin
+    .from("notifications")
+    .insert({
+      user_id:  group.owner_id,
+      actor_id: userId,
+      type:     "group_request",
+      message:  `solicitou participação no grupo "${group.name}"`,
+      metadata: { group_id: groupId },
+    });
+
+  if (notifErr) {
+    console.error("notify-request insert:", notifErr);
+    res.status(500).json({ error: notifErr.message });
+    return;
+  }
+
+  res.status(200).json({ ok: true });
+});
+
 export default router;
