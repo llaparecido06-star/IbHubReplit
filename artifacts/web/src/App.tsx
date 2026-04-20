@@ -150,7 +150,7 @@ function MaintenanceGuard({ children }: { children: React.ReactNode }) {
     supabase.auth.signOut();
   }, [manutencao, isLoading, loading, session, profile?.is_admin]);
 
-  if (loading || isLoading) return null;
+  if (loading || isLoading) return <LoadingScreen />;
   // Auth routes pass through regardless of maintenance (admin login path must work).
   // All other routes: block everyone except admins when maintenance is on.
   if (manutencao && !profile?.is_admin && !isAuthPath) {

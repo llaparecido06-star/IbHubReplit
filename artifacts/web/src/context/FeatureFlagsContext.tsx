@@ -21,21 +21,29 @@ export function FeatureFlagsProvider({ children }: { children: React.ReactNode }
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const loadFlags = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("feature_flags")
-      .select("key, enabled")
-      .in("key", FLAG_KEYS);
-    if (error) {
+    // Safety timeout: if the Supabase query hangs, unblock the UI after 5 seconds
+    const timeout = setTimeout(() => setIsLoading(false), 5000);
+    try {
+      const { data, error } = await supabase
+        .from("feature_flags")
+        .select("key, enabled")
+        .in("key", FLAG_KEYS);
+      clearTimeout(timeout);
+      if (error) {
+        setIsLoading(false);
+        return;
+      }
+      const map: Record<string, boolean> = {};
+      for (const f of FLAG_KEYS) {
+        const found = (data ?? []).find((d: { key: string; enabled: boolean }) => d.key === f);
+        map[f] = found ? found.enabled : false;
+      }
+      setFlags(map);
       setIsLoading(false);
-      return;
+    } catch {
+      clearTimeout(timeout);
+      setIsLoading(false);
     }
-    const map: Record<string, boolean> = {};
-    for (const f of FLAG_KEYS) {
-      const found = (data ?? []).find((d: { key: string; enabled: boolean }) => d.key === f);
-      map[f] = found ? found.enabled : false;
-    }
-    setFlags(map);
-    setIsLoading(false);
   }, []);
 
   useEffect(() => {

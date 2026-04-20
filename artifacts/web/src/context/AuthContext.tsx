@@ -74,11 +74,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchProfile = useCallback(async (userId: string) => {
     try {
-      const { data, error } = await supabase
+      // Use limit(1) to avoid "multiple rows" error if duplicate profiles exist
+      const { data: rows, error } = await supabase
         .from("profiles")
         .select("*")
         .or(`id.eq.${userId},user_id.eq.${userId}`)
-        .maybeSingle();
+        .limit(1);
+      const data = rows?.[0] ?? null;
       if (!error && data) {
         const d = data as Record<string, unknown>;
         const headline =
@@ -121,25 +123,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session?.user) {
         await fetchProfile(session.user.id);
 
-        // Safety net: create a minimal profile for new social-auth users
-        // (Google, etc.) if the DB trigger didn't run.
+        // Safety net: ensure a profile row exists for new social-auth users.
+        // Also fills in null full_name if a DB trigger created the row without metadata.
         if (event === "SIGNED_IN") {
           try {
             const u = session.user;
-            const { count } = await supabase
+            const meta = u.user_metadata ?? {};
+            const googleName = (meta.full_name ?? meta.name ?? u.email?.split("@")[0] ?? "") as string;
+            const googleAvatar = (meta.avatar_url ?? meta.picture ?? null) as string | null;
+
+            const { data: rows } = await supabase
               .from("profiles")
-              .select("id", { count: "exact", head: true })
-              .or(`id.eq.${u.id},user_id.eq.${u.id}`);
-            if (count === 0) {
-              const meta = u.user_metadata ?? {};
-              await supabase.from("profiles").upsert({
+              .select("id, full_name, avatar_url")
+              .or(`id.eq.${u.id},user_id.eq.${u.id}`)
+              .limit(1);
+            const existing = rows?.[0] ?? null;
+
+            if (!existing) {
+              await supabase.from("profiles").insert({
+                id: u.id,
                 user_id: u.id,
-                full_name: meta.full_name ?? meta.name ?? (u.email?.split("@")[0] ?? ""),
-                avatar_url: meta.avatar_url ?? meta.picture ?? null,
+                full_name: googleName || null,
+                avatar_url: googleAvatar,
                 plan: "gratuito",
-              }, { onConflict: "user_id", ignoreDuplicates: true });
-              await fetchProfile(u.id);
+              });
+            } else if (!existing.full_name && googleName) {
+              const update: Record<string, string | null> = { user_id: u.id, full_name: googleName };
+              if (!existing.avatar_url && googleAvatar) update.avatar_url = googleAvatar;
+              await supabase.from("profiles").update(update).eq("id", existing.id);
             }
+
+            await fetchProfile(u.id);
           } catch {}
         }
       } else {
