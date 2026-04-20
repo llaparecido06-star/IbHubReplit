@@ -243,6 +243,9 @@ function ImageCarousel({ imageUrls }: { imageUrls: string[] }) {
         source={{ uri: imageUrls[0] }}
         style={styles.image}
         contentFit="cover"
+        placeholder={{ color: "#e8edf2" }}
+        transition={{ duration: 250 }}
+        priority="high"
       />
     );
   }
@@ -262,6 +265,9 @@ function ImageCarousel({ imageUrls }: { imageUrls: string[] }) {
             source={{ uri }}
             style={styles.carouselImage}
             contentFit="cover"
+            placeholder={{ color: "#e8edf2" }}
+            transition={{ duration: 250 }}
+            priority={i === 0 ? "high" : "normal"}
           />
         ))}
       </ScrollView>

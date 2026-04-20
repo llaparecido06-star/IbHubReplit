@@ -4440,12 +4440,16 @@ export async function fetchCompanyPosts(companyId: string, currentUserId?: strin
 
     if (!pageData?.owner_id) return [];
 
+    console.log("[fetchCompanyPosts] companyId:", companyId, "owner_id:", pageData.owner_id);
+
     const { data, error } = await supabase
       .from("posts")
       .select(POST_SELECT_BASE)
       .or(`user_id.eq.${pageData.owner_id},company_page_id.eq.${companyId}`)
       .order("created_at", { ascending: false })
       .limit(50);
+
+    console.log("[fetchCompanyPosts] result count:", data?.length ?? 0, "error:", error?.message ?? null);
 
     if (error) { console.error("fetchCompanyPosts:", error); return []; }
 

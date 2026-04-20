@@ -98,6 +98,11 @@ export default function EmpresaScreen() {
   const [postsLoading, setPostsLoading] = useState(false);
   const [postsLoaded, setPostsLoaded] = useState(false);
 
+  useEffect(() => {
+    setPosts([]);
+    setPostsLoaded(false);
+  }, [id]);
+
   const [products, setProducts]         = useState<LocalProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsLoaded, setProductsLoaded] = useState(false);

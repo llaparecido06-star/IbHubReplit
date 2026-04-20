@@ -429,7 +429,7 @@ export default function FeedScreen() {
     setVisiblePostIds(nowVisible);
   }, []);
 
-  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 60 }).current;
+  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 25 }).current;
 
   const handlePickImage = async () => {
     if (Platform.OS !== "web") {
