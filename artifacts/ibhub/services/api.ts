@@ -2480,10 +2480,19 @@ export async function sendMediaMessage(
       .insert(payload)
       .select()
       .single();
-    if (error) { console.error("sendMediaMessage:", error); return null; }
+    if (error) {
+      console.error("[sendMediaMessage] Supabase error:", JSON.stringify({
+        message: error.message,
+        code: (error as any).code,
+        details: (error as any).details,
+        hint: (error as any).hint,
+        payload,
+      }));
+      return null;
+    }
     return data as AppMessage;
-  } catch (e) {
-    console.error("sendMediaMessage:", e);
+  } catch (e: any) {
+    console.error("[sendMediaMessage] exception:", e?.message ?? e);
     return null;
   }
 }

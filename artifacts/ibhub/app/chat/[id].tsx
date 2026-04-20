@@ -99,6 +99,7 @@ export default function ChatScreen() {
   // Audio recording
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording,     setIsRecording]      = useState(false);
+  const isRecordingRef = useRef(false); // ref mirror to avoid race conditions
   const [recordingMs,     setRecordingMs]      = useState(0);
   const recordingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -491,56 +492,122 @@ export default function ChatScreen() {
 
   const startRecording = async () => {
     if (Platform.OS === "web") { Alert.alert("Áudio", "Gravação de áudio não disponível na versão web."); return; }
+    if (isRecordingRef.current) {
+      // Already recording — stop and send
+      void stopRecording();
+      return;
+    }
     try {
       const { granted } = await requestRecordingPermissionsAsync();
-      if (!granted) { Alert.alert("Permissão necessária", "Permita o acesso ao microfone."); return; }
+      if (!granted) { Alert.alert("Permissão necessária", "Permita o acesso ao microfone nas configurações do dispositivo."); return; }
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await audioRecorder.record();
+      isRecordingRef.current = true;
       setIsRecording(true);
       setRecordingMs(0);
       recordingTimer.current = setInterval(() => setRecordingMs(prev => prev + 1000), 1000);
-    } catch (e) {
+      console.log("[Audio] Recording started.");
+    } catch (e: any) {
+      console.error("[Audio] startRecording error:", e?.message);
       Alert.alert("Erro", "Não foi possível iniciar a gravação.");
     }
   };
 
   const stopRecording = async () => {
-    if (!isRecording || !user?.id || !id) return;
-    if (recordingTimer.current) clearInterval(recordingTimer.current);
+    // Use ref instead of state to avoid React batching race condition
+    if (!isRecordingRef.current || !user?.id || !id) {
+      console.log("[Audio] stopRecording skipped — not recording or missing context.");
+      return;
+    }
+    if (recordingTimer.current) {
+      clearInterval(recordingTimer.current);
+      recordingTimer.current = null;
+    }
+    isRecordingRef.current = false;
     setIsRecording(false);
+    setRecordingMs(0);
     try {
       await audioRecorder.stop();
-      await setAudioModeAsync({ allowsRecording: false });
+      await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
+
+      // Give the native layer a tick to write the file before reading the URI
+      await new Promise(resolve => setTimeout(resolve, 150));
+
       const uri = audioRecorder.uri;
-      if (!uri) return;
+      console.log("[Audio] Recording stopped. URI:", uri ?? "null");
+
+      if (!uri) {
+        Alert.alert("Áudio vazio", "Nenhum áudio foi gravado. Tente segurar o botão por mais tempo.");
+        return;
+      }
+
       setUploading(true);
       setUploadStatus("Enviando áudio...");
-      const url = await API.uploadChatMedia(id, uri, "audio/m4a");
+
+      // Determine mime/extension — expo-audio records as m4a on both platforms
+      const mimeType = Platform.OS === "android" ? "audio/mp4" : "audio/m4a";
+      const url = await API.uploadChatMedia(id, uri, mimeType);
+
       setUploading(false);
       setUploadStatus(null);
-      if (!url) { Alert.alert("Erro", "Não foi possível enviar o áudio."); return; }
-      const saved = await API.sendMediaMessage(id, user.id, url, "audio");
-      if (saved) {
+
+      if (!url) {
+        console.error("[Audio] uploadChatMedia returned null");
+        Alert.alert("Erro", "Não foi possível enviar o áudio. Verifique sua conexão.");
+        return;
+      }
+
+      console.log("[Audio] Upload OK, sending message...");
+
+      // Direct Supabase insert so we can surface the exact error if it fails
+      const audioPayload: any = {
+        conversation_id: id,
+        sender_id: user.id,
+        content: "",
+        message_type: "audio",
+        media_url: url,
+      };
+      if (activeCompany?.id) audioPayload.from_company_page_id = activeCompany.id;
+
+      const { data: saved, error: msgError } = await supabase
+        .from("messages")
+        .insert(audioPayload)
+        .select()
+        .single();
+
+      if (msgError) {
+        const detail = `[${(msgError as any).code ?? "?"}] ${msgError.message}${(msgError as any).details ? " — " + (msgError as any).details : ""}${(msgError as any).hint ? "\nDica: " + (msgError as any).hint : ""}`;
+        console.error("[Audio] Supabase insert error:", JSON.stringify(msgError));
+        Alert.alert("Erro ao salvar áudio", detail);
+      } else if (saved) {
         seenMsgIds.current.add(saved.id);
         setMessages(prev => {
-          const filtered = prev.filter(m => m.id !== saved.id);
-          return [...filtered, saved];
+          const filtered = prev.filter((m: any) => m.id !== saved.id);
+          return [...filtered, saved as any];
         });
         setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+        console.log("[Audio] Audio message sent successfully.");
       }
-    } catch {
+    } catch (e: any) {
+      console.error("[Audio] stopRecording error:", e?.message);
       setUploading(false);
+      setUploadStatus(null);
       Alert.alert("Erro", "Não foi possível processar o áudio.");
     }
   };
 
   const cancelRecording = async () => {
-    if (!isRecording) return;
-    if (recordingTimer.current) clearInterval(recordingTimer.current);
+    if (!isRecordingRef.current) return;
+    if (recordingTimer.current) {
+      clearInterval(recordingTimer.current);
+      recordingTimer.current = null;
+    }
+    isRecordingRef.current = false;
     setIsRecording(false);
+    setRecordingMs(0);
     try { await audioRecorder.stop(); } catch {}
     await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
-    setRecordingMs(0);
+    console.log("[Audio] Recording cancelled.");
   };
 
   // ── Wine card ────────────────────────────────────────────────────────────────
@@ -993,12 +1060,18 @@ export default function ChatScreen() {
       {/* Recording overlay */}
       {isRecording && (
         <View style={[st.recordingBanner, { backgroundColor: "#fee2e2", borderTopColor: "#fca5a5" }]}>
-          <View style={[st.recordingDot, { backgroundColor: "#dc2626" }]} />
-          <Text style={[st.recordingText, { color: "#dc2626" }]}>
-            Gravando... {formatDuration(recordingMs)}
-          </Text>
           <TouchableOpacity onPress={cancelRecording} style={st.recordingCancel}>
             <Feather name="x" size={18} color="#dc2626" />
+          </TouchableOpacity>
+          <View style={[st.recordingDot, { backgroundColor: "#dc2626" }]} />
+          <Text style={[st.recordingText, { color: "#dc2626", flex: 1 }]}>
+            Gravando... {formatDuration(recordingMs)}
+          </Text>
+          <TouchableOpacity
+            onPress={stopRecording}
+            style={[st.recordingSend, { backgroundColor: "#dc2626" }]}
+          >
+            <Feather name="send" size={16} color="#fff" />
           </TouchableOpacity>
         </View>
       )}
@@ -1056,9 +1129,7 @@ export default function ChatScreen() {
           ) : (
             <TouchableOpacity
               style={[st.micBtnWrap, isRecording && { backgroundColor: "#fee2e2" }]}
-              onPressIn={startRecording}
-              onPressOut={stopRecording}
-              delayLongPress={0}
+              onPress={startRecording}
             >
               <Feather name="mic" size={22} color={isRecording ? "#dc2626" : colors.mutedForeground} />
             </TouchableOpacity>
@@ -1417,8 +1488,9 @@ const st = StyleSheet.create({
   typingText:   { fontSize: 12, fontStyle: "italic" },
   recordingBanner: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: 1 },
   recordingDot: { width: 8, height: 8, borderRadius: 4 },
-  recordingText:{ flex: 1, fontSize: 14, fontWeight: "600" },
+  recordingText:{ fontSize: 14, fontWeight: "600" },
   recordingCancel: { padding: 4 },
+  recordingSend: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
 
   // Reply preview bar
   replyPreview: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: 2 },
