@@ -99,6 +99,37 @@ export default function GroupsScreen() {
   const filteredExplore = exploreGroups.filter(filter);
 
   const handleJoin = async (g: Group) => {
+    const access = g.access as AccessType;
+
+    if (access === "restrito") {
+      Alert.alert("Grupo restrito", "Este grupo é por convite. Entre em contato com o administrador para solicitar acesso.");
+      return;
+    }
+
+    if (access === "fechado") {
+      Alert.alert(
+        "Solicitar entrada",
+        `Deseja enviar uma solicitação para entrar em "${g.name}"? O administrador precisará aprovar.`,
+        [
+          { text: "Cancelar", style: "cancel" },
+          {
+            text: "Solicitar", onPress: async () => {
+              const ok = await joinGroup(g.id, userId, activeCompanyId);
+              if (ok) {
+                const who = activeCompanyId ? "sua empresa" : "você";
+                Alert.alert("Solicitação enviada!", `O administrador do grupo foi notificado. Enquanto aguarda a aprovação, ${who} já pode acessar o grupo.`);
+                load();
+              } else {
+                Alert.alert("Erro", "Não foi possível enviar a solicitação.");
+              }
+            }
+          },
+        ]
+      );
+      return;
+    }
+
+    // aberto — join immediately
     const ok = await joinGroup(g.id, userId, activeCompanyId);
     if (ok) {
       const who = activeCompanyId ? "Sua empresa entrou" : "Você entrou";
@@ -223,12 +254,21 @@ export default function GroupsScreen() {
                           </View>
                         </View>
                       </View>
-                      <TouchableOpacity
-                        style={[styles.joinBtn, { backgroundColor: colors.gold }]}
-                        onPress={() => handleJoin(g)}
-                      >
-                        <Text style={styles.joinBtnText}>Participar</Text>
-                      </TouchableOpacity>
+                      {g.access === "restrito" ? (
+                        <View style={[styles.joinBtn, { backgroundColor: colors.background, flexDirection: "row", alignItems: "center", gap: 4 }]}>
+                          <Feather name="shield" size={12} color={colors.mutedForeground} />
+                          <Text style={[styles.joinBtnText, { color: colors.mutedForeground }]}>Por convite</Text>
+                        </View>
+                      ) : (
+                        <TouchableOpacity
+                          style={[styles.joinBtn, { backgroundColor: g.access === "fechado" ? "transparent" : colors.gold, borderWidth: g.access === "fechado" ? 1.5 : 0, borderColor: colors.gold }]}
+                          onPress={() => handleJoin(g)}
+                        >
+                          <Text style={[styles.joinBtnText, { color: g.access === "fechado" ? colors.gold : "#fff" }]}>
+                            {g.access === "fechado" ? "Solicitar" : "Participar"}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                     {g.description && (
                       <Text style={[styles.cardDesc, { color: colors.mutedForeground }]}>{g.description}</Text>

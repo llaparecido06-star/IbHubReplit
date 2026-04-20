@@ -25,7 +25,14 @@ import { createGroup, uploadGroupAvatar } from "@/services/api";
 
 type AccessType = "aberto" | "fechado" | "restrito";
 
-const CATEGORIES = ["Exportação", "Sommelier", "Produção", "Importação", "Enoturismo", "Marketing", "Outros"];
+const CATEGORIES = [
+  "Viticultor", "Produtor", "Enólogo", "Adega / Cave",
+  "Importador", "Exportador", "Distribuidor", "Atacadista", "Representante Comercial",
+  "Loja Especializada", "Supermercado", "E-commerce", "Adega",
+  "Sommelier", "Restaurante", "Hotelaria", "Bar / Bistrô",
+  "Enoturismo", "Eventos", "Marketing", "Jornalismo", "Educação",
+  "Consultoria", "Comprador", "Investidor", "Entusiasta", "Outros",
+];
 
 const ACCESS_OPTIONS: { value: AccessType; label: string; desc: string; icon: any }[] = [
   { value: "aberto",   label: "Aberto",   desc: "Qualquer pessoa pode entrar",   icon: "globe" },

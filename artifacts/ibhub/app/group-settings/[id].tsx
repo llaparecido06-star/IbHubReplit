@@ -6,6 +6,7 @@ import {
   Image,
   Platform,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -296,21 +297,36 @@ export default function GroupSettingsScreen() {
           </View>
         );
 
-      case "link":
+      case "link": {
+        const deepLink = `ibhub://group-chat/${id}`;
+        const handleShare = async () => {
+          try {
+            await Share.share({
+              message: `Participe do grupo "${group.name}" no ibhub!\n${deepLink}`,
+              url: deepLink,
+            });
+          } catch (e: any) {
+            Alert.alert("Erro", "Não foi possível compartilhar o link.");
+          }
+        };
         return (
           <View style={[styles.linkTab, { padding: 16 }]}>
+            <Text style={[{ fontSize: 13, color: colors.mutedForeground, marginBottom: 8 }]}>
+              Compartilhe este link para convidar pessoas ao grupo
+            </Text>
             <View style={[styles.linkBox, { backgroundColor: "#fff", borderColor: colors.border }]}>
               <Feather name="link-2" size={18} color={colors.gold} />
-              <Text style={[styles.linkText, { color: colors.navy }]} numberOfLines={1}>
-                ibhub.app/grupo/{id}
+              <Text style={[styles.linkText, { color: colors.navy }]} numberOfLines={1} selectable>
+                {deepLink}
               </Text>
             </View>
-            <TouchableOpacity style={[styles.copyBtn, { backgroundColor: colors.gold }]}>
-              <Feather name="copy" size={16} color="#fff" />
-              <Text style={styles.copyBtnText}>Copiar link</Text>
+            <TouchableOpacity style={[styles.copyBtn, { backgroundColor: colors.gold }]} onPress={handleShare}>
+              <Feather name="share-2" size={16} color="#fff" />
+              <Text style={styles.copyBtnText}>Compartilhar link</Text>
             </TouchableOpacity>
           </View>
         );
+      }
     }
   };
 
