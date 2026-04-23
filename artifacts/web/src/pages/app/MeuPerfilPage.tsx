@@ -123,7 +123,7 @@ function MiniPostCard({ post }: { post: Post }) {
 type ProfileTab = "publicacoes" | "sobre";
 
 export default function MeuPerfilPage() {
-  const { profile, user } = useAuth();
+  const { profile, user, loading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const width = useWindowWidth();
   const isMobile = width < 768;
@@ -144,10 +144,13 @@ export default function MeuPerfilPage() {
   const memberSince = (profile as any)?.created_at ? new Date((profile as any).created_at).getFullYear() : null;
 
   useEffect(() => {
+    if (authLoading) return;
     if (!userId) { setLoadingPosts(false); return; }
-    fetchProfileStats(userId).then(setStats);
-    fetchUserPosts(userId).then(data => { setPosts(data); setLoadingPosts(false); });
-  }, [userId]);
+    fetchProfileStats(userId).then(setStats).catch(() => {});
+    fetchUserPosts(userId)
+      .then(data => { setPosts(data); setLoadingPosts(false); })
+      .catch(() => setLoadingPosts(false));
+  }, [userId, authLoading]);
 
   const openConnections = async () => {
     const list = await fetchConnectionsList(userId);

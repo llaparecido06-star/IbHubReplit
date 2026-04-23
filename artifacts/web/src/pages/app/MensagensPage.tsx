@@ -120,7 +120,7 @@ function XIcon({ size = 14, color = MUTED }: { size?: number; color?: string }) 
 }
 
 export default function MensagensPage() {
-  const { profile, user, activeCompany } = useAuth();
+  const { profile, user, activeCompany, loading: authLoading } = useAuth();
   const userId = profile?.id ?? user?.id ?? "";
   const isMobile = useIsMobile();
 
@@ -142,12 +142,12 @@ export default function MensagensPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (authLoading) return;
     if (!userId) { setLoading(false); return; }
-    fetchWebConversations(userId).then(data => {
-      setConversations(data);
-      setLoading(false);
-    });
-  }, [userId]);
+    fetchWebConversations(userId)
+      .then(data => { setConversations(data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [userId, authLoading]);
 
   const loadMessages = useCallback(async (convo: WebConversation) => {
     setSelected(convo);
