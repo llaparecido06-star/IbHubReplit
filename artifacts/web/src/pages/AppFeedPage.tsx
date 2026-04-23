@@ -211,6 +211,7 @@ function PostCard({
   const [showShare, setShowShare] = useState(false);
   const shareRef = useRef<HTMLDivElement>(null);
   const pickerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pickerHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const CUTOFF = 280;
   const content = post.content ?? "";
   const isLong = content.length > CUTOFF;
@@ -229,12 +230,22 @@ function PostCard({
     else if (post.author?.id === currentUserId) setLocation("/app/perfil");
   };
 
-  const startPicker = () => { pickerTimer.current = setTimeout(() => setShowPicker(true), 350); };
+  const startPicker = () => {
+    if (pickerHideTimer.current) clearTimeout(pickerHideTimer.current);
+    pickerTimer.current = setTimeout(() => setShowPicker(true), 400);
+  };
   const cancelPicker = () => { if (pickerTimer.current) clearTimeout(pickerTimer.current); };
-  const hidePicker = () => { cancelPicker(); setShowPicker(false); };
+  const hidePicker = () => {
+    cancelPicker();
+    pickerHideTimer.current = setTimeout(() => setShowPicker(false), 250);
+  };
+  const keepPicker = () => {
+    if (pickerHideTimer.current) clearTimeout(pickerHideTimer.current);
+  };
 
   const handleReact = (reaction: ReactionType) => {
-    hidePicker();
+    if (pickerHideTimer.current) clearTimeout(pickerHideTimer.current);
+    setShowPicker(false);
     onLike(post.id, !!post.is_liked, reaction);
   };
 
@@ -345,7 +356,12 @@ function PostCard({
       {/* Stats */}
       {(post.likes_count > 0 || post.comments_count > 0) && (
         <div style={{ display: "flex", gap: 12, padding: "8px 16px", fontSize: 12, color: MUTED, borderTop: `1px solid ${BORDER}` }}>
-          {post.likes_count > 0 && <span>❤️ {post.likes_count}</span>}
+          {post.likes_count > 0 && (
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span>{post.is_liked ? reactionEmoji(post.reaction_type ?? "curtir") : "👍"}</span>
+              {post.likes_count}
+            </span>
+          )}
           {post.comments_count > 0 && <span style={{ marginLeft: "auto" }}>{post.comments_count} comentário{post.comments_count !== 1 ? "s" : ""}</span>}
         </div>
       )}
@@ -357,13 +373,16 @@ function PostCard({
         <div style={{ position: "relative", flex: 1 }} onMouseLeave={hidePicker}>
           {/* Reaction Picker */}
           {showPicker && (
-            <div style={{
-              position: "absolute", bottom: "calc(100% + 6px)", left: 4,
-              background: WHITE, border: `1px solid ${BORDER}`,
-              borderRadius: 32, boxShadow: "0 4px 20px rgba(0,0,0,0.14)",
-              display: "flex", gap: 2, padding: "6px 8px", zIndex: 300,
-              whiteSpace: "nowrap",
-            }}>
+            <div
+              onMouseEnter={keepPicker}
+              onMouseLeave={hidePicker}
+              style={{
+                position: "absolute", bottom: "100%", left: 0,
+                background: WHITE, border: `1px solid ${BORDER}`,
+                borderRadius: 32, boxShadow: "0 4px 20px rgba(0,0,0,0.14)",
+                display: "flex", gap: 2, padding: "8px 10px 10px", zIndex: 300,
+                whiteSpace: "nowrap",
+              }}>
               {REACTIONS.map(r => (
                 <button
                   key={r.type}
@@ -371,11 +390,11 @@ function PostCard({
                   title={r.label}
                   style={{
                     background: "none", border: "none", cursor: "pointer",
-                    fontSize: 22, lineHeight: 1, padding: "2px 4px",
-                    borderRadius: 8, transition: "transform 0.1s",
-                    display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                    fontSize: 24, lineHeight: 1, padding: "2px 6px",
+                    borderRadius: 8, transition: "transform 0.12s",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
                   }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.35)"; }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.4)"; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }}
                 >
                   <span>{r.emoji}</span>
@@ -387,15 +406,13 @@ function PostCard({
 
           <button
             onMouseEnter={startPicker}
-            onMouseLeave={cancelPicker}
+            onMouseLeave={hidePicker}
             onClick={() => handleReact(post.reaction_type ?? "curtir")}
             style={{
               width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
               background: "none", border: "none", cursor: "pointer", padding: "10px 8px",
               fontSize: 13, fontWeight: 600, color: post.is_liked ? reactionColor(post.reaction_type) : MUTED,
             }}
-            onFocus={startPicker}
-            onBlur={hidePicker}
           >
             {post.is_liked ? (
               <span style={{ fontSize: 15 }}>{reactionEmoji(post.reaction_type)}</span>
