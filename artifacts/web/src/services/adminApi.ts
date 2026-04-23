@@ -197,6 +197,20 @@ export async function shadowbanUser(userId: string, shadowban: boolean): Promise
   }
 }
 
+export async function setUserPassword(userId: string, newPassword: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await adminFetch("/admin/set-password", {
+      method: "POST",
+      body: JSON.stringify({ userId, newPassword }),
+    });
+    const json = await res.json() as { success?: boolean; error?: string };
+    if (!res.ok) return { success: false, error: json.error ?? "Erro ao definir senha" };
+    return { success: true };
+  } catch {
+    return { success: false, error: "Erro de rede" };
+  }
+}
+
 export async function resetUserPassword(userId: string): Promise<{ success: boolean; resetLink?: string; error?: string }> {
   try {
     const res = await adminFetch("/admin/reset-password", {

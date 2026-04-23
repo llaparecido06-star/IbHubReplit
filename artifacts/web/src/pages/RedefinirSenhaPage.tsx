@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 
 export default function RedefinirSenhaPage() {
-  const { updatePassword } = useAuth();
+  const { updatePassword, mustChangePassword } = useAuth();
   const [, setLocation] = useLocation();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -42,6 +42,21 @@ export default function RedefinirSenhaPage() {
           </div>
         </div>
 
+        {mustChangePassword && !success && (
+          <div style={{
+            backgroundColor: "#fffbeb", border: "1px solid #fde68a", borderRadius: 12,
+            padding: "14px 18px", marginBottom: 16,
+            display: "flex", alignItems: "flex-start", gap: 10,
+          }}>
+            <span style={{ fontSize: 18 }}>🔐</span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#92400e" }}>Troca de senha obrigatória</div>
+              <div style={{ fontSize: 12, color: "#78350f", marginTop: 2, lineHeight: 1.5 }}>
+                O administrador definiu uma senha temporária para sua conta. Crie uma nova senha para continuar.
+              </div>
+            </div>
+          </div>
+        )}
         <div style={{ backgroundColor: "#ffffff", borderRadius: 16, padding: 32, boxShadow: "0 4px 24px rgba(13,27,42,0.08)" }}>
           {success ? (
             <div style={{ textAlign: "center" }}>

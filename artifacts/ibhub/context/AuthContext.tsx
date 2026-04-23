@@ -74,6 +74,7 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   isRecovering: boolean;
+  mustChangePassword: boolean;
   needsProfileCompletion: boolean;
   activeCompany: ActiveCompany | null;
   setActiveCompany: (company: ActiveCompany | null) => void;
@@ -121,6 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile]                   = useState<Profile | null>(null);
   const [loading, setLoading]                   = useState(true);
   const [isRecovering, setIsRecovering]         = useState(false);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   const [needsProfileCompletion, setNeedsProfileCompletion] = useState(false);
   const [activeCompany, setActiveCompany]       = useState<ActiveCompany | null>(null);
 
@@ -222,6 +224,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
       setUser(session?.user ?? null);
+      setMustChangePassword(session?.user?.user_metadata?.must_change_password === true);
       if (session?.user) {
         await fetchProfile(session.user.id);
       }
@@ -237,6 +240,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setSession(session);
       setUser(session?.user ?? null);
+      setMustChangePassword(session?.user?.user_metadata?.must_change_password === true);
       if (session?.user) {
         await fetchProfile(session.user.id);
 
@@ -540,14 +544,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updatePassword = async (newPassword: string) => {
     const { error } = await supabase.auth.updateUser({ password: newPassword });
-    if (!error) setIsRecovering(false);
+    if (!error) {
+      setIsRecovering(false);
+      setMustChangePassword(false);
+      // Clear the flag in user metadata so it doesn't persist across sessions
+      await supabase.auth.updateUser({ data: { must_change_password: false } }).catch(() => {});
+    }
     return { error: error?.message ?? null };
   };
 
   return (
     <AuthContext.Provider
       value={{
-        session, user, profile, loading, isRecovering, needsProfileCompletion,
+        session, user, profile, loading, isRecovering, mustChangePassword, needsProfileCompletion,
         activeCompany, setActiveCompany,
         signIn, signUp, signInWithGoogle, signInWithApple, signOut,
         resetPassword, updatePassword, clearRecovery, clearProfileCompletion,

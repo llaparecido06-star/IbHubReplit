@@ -66,17 +66,21 @@ function LoadingScreen() {
 }
 
 function PrivateRoute({ component: Component }: { component: React.ComponentType }) {
-  const { session, loading } = useAuth();
-  const [, setLocation] = useLocation();
+  const { session, loading, mustChangePassword } = useAuth();
+  const [location, setLocation] = useLocation();
 
   useEffect(() => {
-    if (!loading && !session) {
+    if (loading) return;
+    if (!session) {
       setLocation("/login");
+    } else if (mustChangePassword && location !== "/redefinir-senha") {
+      setLocation("/redefinir-senha");
     }
-  }, [loading, session, setLocation]);
+  }, [loading, session, mustChangePassword, location, setLocation]);
 
   if (loading) return <LoadingScreen />;
   if (!session) return null;
+  if (mustChangePassword) return null;
 
   return <Component />;
 }

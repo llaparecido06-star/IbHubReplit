@@ -223,7 +223,7 @@ function AuthenticatedLayout() {
 }
 
 function RootLayoutNav() {
-  const { session, loading, isRecovering, needsProfileCompletion } = useAuth();
+  const { session, loading, isRecovering, mustChangePassword, needsProfileCompletion } = useAuth();
   const { isEnabled, isLoading: flagsLoading } = useFeatureFlags();
   const router = useRouter();
   const pathname = usePathname();
@@ -234,7 +234,7 @@ function RootLayoutNav() {
   const isAuthPath = pathname.includes("login") || pathname.includes("auth");
 
   useEffect(() => {
-    if (loading || isRecovering || flagsLoading) return;
+    if (loading || isRecovering || mustChangePassword || flagsLoading) return;
 
     if (!session) {
       didNavigateIn.current = false;
@@ -249,16 +249,16 @@ function RootLayoutNav() {
       didNavigateIn.current = true;
       setTimeout(() => router.replace("/(tabs)" as any), 80);
     }
-  }, [session, loading, isRecovering, manutencao, flagsLoading, isAuthPath]);
+  }, [session, loading, isRecovering, mustChangePassword, manutencao, flagsLoading, isAuthPath]);
 
   // Separate effect: redirect social-auth users to profile completion screen.
   // This fires even after the main effect already navigated to /(tabs), so
   // Google/Apple users who skipped completion are always intercepted.
   useEffect(() => {
-    if (loading || isRecovering || !session || !needsProfileCompletion) return;
+    if (loading || isRecovering || mustChangePassword || !session || !needsProfileCompletion) return;
     if (pathname.includes("social-complete") || pathname.includes("auth")) return;
     router.replace("/social-complete" as any);
-  }, [loading, isRecovering, session, needsProfileCompletion, pathname]);
+  }, [loading, isRecovering, mustChangePassword, session, needsProfileCompletion, pathname]);
 
   if (loading) {
     return (
@@ -268,7 +268,7 @@ function RootLayoutNav() {
     );
   }
 
-  if (isRecovering) {
+  if (isRecovering || mustChangePassword) {
     return (
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)/reset-password" options={{ headerShown: false }} />

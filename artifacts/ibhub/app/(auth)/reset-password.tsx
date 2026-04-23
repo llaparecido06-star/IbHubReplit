@@ -17,7 +17,7 @@ export default function ResetPasswordScreen() {
   const colors  = useColors();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
-  const { updatePassword, clearRecovery } = useAuth();
+  const { updatePassword, clearRecovery, mustChangePassword } = useAuth();
 
   const [password, setPassword]         = useState("");
   const [confirm, setConfirm]           = useState("");
@@ -90,6 +90,17 @@ export default function ResetPasswordScreen() {
                 Escolha uma senha segura de pelo menos 6 caracteres.
               </Text>
             </View>
+
+            {mustChangePassword && (
+              <View style={{ backgroundColor: "#fffbeb", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#fde68a", marginBottom: 8, flexDirection: "row", gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: "#92400e" }}>Troca obrigatória</Text>
+                  <Text style={{ fontSize: 12, color: "#78350f", marginTop: 2, lineHeight: 18 }}>
+                    O administrador criou uma senha temporária para sua conta. Crie uma nova senha para continuar.
+                  </Text>
+                </View>
+              </View>
+            )}
 
             {error && (
               <View style={[styles.errorBox, { backgroundColor: colors.destructive + "15" }]}>

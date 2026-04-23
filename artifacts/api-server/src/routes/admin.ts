@@ -117,6 +117,41 @@ router.post("/admin/reset-password", async (req: Request, res: Response) => {
   res.json({ resetLink: data.properties.action_link });
 });
 
+router.post("/admin/set-password", async (req: Request, res: Response) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+
+  const { userId, newPassword } = req.body as { userId?: string; newPassword?: string };
+  if (!userId || !newPassword) {
+    res.status(400).json({ error: "userId and newPassword are required" });
+    return;
+  }
+  if (newPassword.length < 6) {
+    res.status(400).json({ error: "Password must be at least 6 characters" });
+    return;
+  }
+
+  // 1. Update password
+  const { error: passErr } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+    password: newPassword,
+  });
+  if (passErr) {
+    res.status(500).json({ error: passErr.message });
+    return;
+  }
+
+  // 2. Set must_change_password flag in user_metadata so the app forces a change on next login
+  const { error: metaErr } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+    user_metadata: { must_change_password: true },
+  });
+  if (metaErr) {
+    // Non-fatal: password is set, but flag failed — log and continue
+    console.error("[set-password] Failed to set must_change_password metadata:", metaErr.message);
+  }
+
+  res.json({ success: true });
+});
+
 router.get("/admin/user-by-email", async (req: Request, res: Response) => {
   const adminId = await requireAdmin(req, res);
   if (!adminId) return;

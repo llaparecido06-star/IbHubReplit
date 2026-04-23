@@ -42,6 +42,7 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  mustChangePassword: boolean;
   activeCompany: ActiveCompany | null;
   setActiveCompany: (company: ActiveCompany | null) => void;
   suspensionMsg: string | null;
@@ -63,11 +64,16 @@ function isProfileComplete(data: unknown): boolean {
   return !!(data as { username?: string })?.username?.trim();
 }
 
+function hasMustChangeFlag(session: Session | null): boolean {
+  return session?.user?.user_metadata?.must_change_password === true;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null);
   const [suspensionMsg, setSuspensionMsg] = useState<string | null>(null);
   const clearSuspensionMsg = useCallback(() => setSuspensionMsg(null), []);
@@ -129,6 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         resolveInitial();
         setSession(session);
         setUser(session?.user ?? null);
+        setMustChangePassword(hasMustChangeFlag(session));
         if (session?.user) {
           fetchProfile(session.user.id).finally(() => setLoading(false));
         } else {
@@ -141,6 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(null);
         setUser(null);
         setProfile(null);
+        setMustChangePassword(false);
         setLoading(false);
       });
 
@@ -153,6 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setSession(session);
       setUser(session?.user ?? null);
+      setMustChangePassword(hasMustChangeFlag(session));
       if (session?.user) {
         await fetchProfile(session.user.id);
 
@@ -299,12 +308,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updatePassword = async (newPassword: string) => {
     const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (!error) {
+      // Clear the must_change_password flag in user_metadata
+      await supabase.auth.updateUser({ data: { must_change_password: false } }).catch(() => {});
+      setMustChangePassword(false);
+    }
     return { error: error?.message ?? null };
   };
 
   return (
     <AuthContext.Provider value={{
       session, user, profile, loading,
+      mustChangePassword,
       activeCompany, setActiveCompany,
       suspensionMsg, clearSuspensionMsg,
       signIn, signUp, signInWithGoogle, signOut,
