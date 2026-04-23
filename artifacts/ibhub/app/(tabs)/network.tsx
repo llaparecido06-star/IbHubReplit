@@ -943,7 +943,7 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
         {/* Suggestion chips — same style as period filter */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16, paddingHorizontal: 16 }}>
           <View style={{ flexDirection: "row", gap: 8, paddingBottom: 4 }}>
-            {["Casillero del Diablo", "Penfolds Bin 389", "Santa Julia", "Passo Fundo Malbec", "Sogrape"].map(s => (
+            {["Casillero del Diablo", "Penfolds Bin 389", "Santa Julia", "Catena Zapata", "Concha y Toro", "Domus Aurea", "Quinta do Crasto"].map(s => (
               <TouchableOpacity
                 key={s}
                 style={[styles.periodBtn, { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border }]}
