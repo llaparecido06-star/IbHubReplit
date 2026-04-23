@@ -174,6 +174,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   /** Handles a deep link URL — sets session if it is a password recovery link */
   const handleDeepLink = useCallback(async (url: string | null) => {
     if (!url) return;
+
+    // ── Implicit flow: tokens in URL fragment (#access_token=...&type=recovery) ──
     const tokens = parseRecoveryUrl(url);
     if (tokens) {
       const { error } = await supabase.auth.setSession({
@@ -181,6 +183,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         refresh_token: tokens.refreshToken,
       });
       if (!error) setIsRecovering(true);
+      return;
+    }
+
+    // ── PKCE flow: one-time code in query string (?code=...) ──────────────────
+    // Supabase projects with PKCE enabled send ibhub://reset-password?code=xxx.
+    // We must NOT intercept the OAuth callback (ibhub://auth/callback?code=xxx)
+    // because openAuthSessionAsync handles that separately.
+    if (url.includes("reset-password")) {
+      try {
+        const qs = url.split("?")[1] ?? "";
+        const params = Object.fromEntries(new URLSearchParams(qs));
+        if (params.code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(params.code);
+          // PASSWORD_RECOVERY event fired by onAuthStateChange will set isRecovering=true.
+          // Set it here too as a safety net in case the event arrives after this resolves.
+          if (!error) setIsRecovering(true);
+        }
+      } catch (e) {
+        console.error("[handleDeepLink] PKCE exchange failed:", e);
+      }
     }
   }, []);
 
@@ -188,16 +210,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Complete any pending auth sessions (handles OAuth redirects on app resume)
     WebBrowser.maybeCompleteAuthSession();
 
-    // 1. Restore existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // 1. Resolve deep links BEFORE finalising loading state.
+    //    If the app was cold-started by a password-recovery link (PKCE: ?code=xxx),
+    //    we must exchange the code and set isRecovering=true BEFORE calling getSession()
+    //    — otherwise getSession() returns null, loading becomes false, and RootLayoutNav
+    //    redirects to /login while the exchange is still in flight (race condition).
+    const init = async () => {
+      const initialUrl = await Linking.getInitialURL();
+      if (initialUrl) await handleDeepLink(initialUrl);
+
+      const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id).finally(() => setLoading(false));
-      } else {
-        setLoading(false);
+        await fetchProfile(session.user.id);
       }
-    });
+      setLoading(false);
+    };
+    init();
 
     // 2. Auth state changes (including PASSWORD_RECOVERY and OAuth SIGNED_IN)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -288,10 +318,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    // 3. Handle deep link that launched the app (cold start)
-    Linking.getInitialURL().then(handleDeepLink);
-
-    // 4. Handle deep links while app is already open (warm start)
+    // 3. Handle deep links while app is already open (warm start).
+    //    Cold-start is handled inside init() above to avoid race conditions.
     const linkSub = Linking.addEventListener("url", ({ url }) => handleDeepLink(url));
 
     return () => {

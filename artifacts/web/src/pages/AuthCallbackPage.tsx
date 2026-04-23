@@ -32,13 +32,16 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        // PKCE OAuth: URL carries a code that we exchange for a session
+        // PKCE flow: URL carries a one-time code (OAuth sign-in OR password recovery).
+        // We pass ?type=recovery in the redirectTo URL for recovery flows so we
+        // can distinguish them from OAuth logins and redirect to /redefinir-senha.
         const code = new URLSearchParams(search).get("code");
+        const flowType = new URLSearchParams(search).get("type");
         if (code) {
           const { error: err } = await supabase.auth.exchangeCodeForSession(code);
           if (!cancelled) {
             if (err) { setError(err.message); return; }
-            setLocation("/app");
+            setLocation(flowType === "recovery" ? "/redefinir-senha" : "/app");
           }
           return;
         }

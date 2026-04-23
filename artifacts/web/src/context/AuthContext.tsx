@@ -288,8 +288,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const resetPassword = async (email: string) => {
     const base = window.location.origin;
     const basePath = import.meta.env.BASE_URL ?? "/web/";
+    // Route recovery through /auth/callback (already in Supabase allowlist for OAuth).
+    // We pass ?type=recovery so AuthCallbackPage can redirect to /redefinir-senha
+    // instead of /app after the PKCE code exchange.
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${base}${basePath}redefinir-senha`,
+      redirectTo: `${base}${basePath}auth/callback?type=recovery`,
     });
     return { error: error?.message ?? null };
   };
