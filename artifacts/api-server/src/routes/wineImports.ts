@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { resolveUserId } from "../lib/planCheck.js";
+import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router: IRouter = Router();
 
@@ -70,6 +71,39 @@ async function getOrCreateCredits(userId: string): Promise<{
   return existing as { credits_remaining: number; credits_total: number; period_start: string };
 }
 
+const EXTRACT_SYSTEM_PROMPT = `Você é um assistente especializado em extrair nomes de marcas de vinho de consultas de usuários para um banco de dados profissional da indústria vinícola brasileira.
+
+Sua ÚNICA função é identificar e normalizar o nome da marca de vinho que o usuário está buscando.
+
+REGRAS ESTRITAS:
+1. Se o usuário digitou um nome de marca (mesmo com erros ortográficos, abreviações ou variações), retorne APENAS o nome normalizado da marca. Exemplos:
+   - "chandon" → "Chandon"
+   - "vuve clicot" → "Veuve Clicquot"
+   - "moet" → "Moët & Chandon"
+   - "penfolds bin 389" → "Penfolds"
+   - "santa carolina cabernet" → "Santa Carolina"
+
+2. Se a consulta NÃO for sobre uma marca específica (ex: perguntas sobre distribuidores, países, regiões, tipos de vinho, preços, ou qualquer outra coisa que não seja identificar uma marca), retorne exatamente: FORA_DO_ESCOPO
+
+3. Retorne APENAS o nome da marca ou FORA_DO_ESCOPO — sem explicações, pontuação extra, aspas ou qualquer outro texto.
+
+4. Mantenha o nome no idioma original da marca (francês, italiano, português, inglês etc.).`;
+
+async function extractBrandName(userQuery: string): Promise<string | null> {
+  const completion = await openai.chat.completions.create({
+    model: "gpt-5-nano",
+    max_completion_tokens: 64,
+    messages: [
+      { role: "system", content: EXTRACT_SYSTEM_PROMPT },
+      { role: "user", content: userQuery },
+    ],
+  });
+
+  const result = completion.choices[0]?.message?.content?.trim() ?? "";
+  if (!result || result === "FORA_DO_ESCOPO") return null;
+  return result;
+}
+
 router.get("/wine-imports/credits", async (req: Request, res: Response) => {
   const userId = await resolveUserId(req, res);
   if (!userId) return;
@@ -96,7 +130,18 @@ router.get("/wine-imports/search", async (req: Request, res: Response) => {
     return res.json({ data: [], credits_remaining: credits.credits_remaining, credits_total: credits.credits_total });
   }
 
-  const pattern = `%${q}%`;
+  const brandName = await extractBrandName(q);
+
+  if (!brandName) {
+    return res.status(422).json({
+      error: "Consulta fora do escopo",
+      message: "Por favor, pesquise pelo nome de uma marca específica de vinho.",
+      credits_remaining: credits.credits_remaining,
+      credits_total: credits.credits_total,
+    });
+  }
+
+  const pattern = `%${brandName}%`;
   const { data, error } = await supabaseAdmin
     .from("wine_imports")
     .select("id, marca_completa, marca_relatorio, pais_de_origem, distribuidor")
@@ -118,10 +163,20 @@ router.get("/wine-imports/search", async (req: Request, res: Response) => {
       .update({ credits_remaining: newRemaining, updated_at: new Date().toISOString() })
       .eq("user_id", userId);
 
-    return res.json({ data: rows, credits_remaining: newRemaining, credits_total: credits.credits_total });
+    return res.json({
+      data: rows,
+      brand_extracted: brandName,
+      credits_remaining: newRemaining,
+      credits_total: credits.credits_total,
+    });
   }
 
-  return res.json({ data: [], credits_remaining: credits.credits_remaining, credits_total: credits.credits_total });
+  return res.json({
+    data: [],
+    brand_extracted: brandName,
+    credits_remaining: credits.credits_remaining,
+    credits_total: credits.credits_total,
+  });
 });
 
 export default router;

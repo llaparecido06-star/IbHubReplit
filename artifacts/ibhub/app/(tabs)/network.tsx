@@ -755,7 +755,8 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
   const [creditsTotal, setCreditsTotal] = useState(3);
   const [creditsLoading, setCreditsLoading] = useState(true);
   const [searching, setSearching]       = useState(false);
-  const [result, setResult]             = useState<WineRecord | null | "not_found">(null);
+  const [result, setResult]             = useState<WineRecord | null | "not_found" | "out_of_scope">(null);
+  const [brandExtracted, setBrandExtracted] = useState<string | null>(null);
 
   const exhausted = credits === 0;
   const creditColor = (credits ?? 3) >= 2 ? "#16a34a" : (credits ?? 3) === 1 ? "#d97706" : "#dc2626";
@@ -789,6 +790,7 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
     if (!q || searching || exhausted) return;
     setSearching(true);
     setResult(null);
+    setBrandExtracted(null);
     try {
       const res = await fetch(
         `${process.env.EXPO_PUBLIC_API_URL}/wine-imports/search?q=${encodeURIComponent(q)}`,
@@ -800,14 +802,21 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
         setSearching(false);
         return;
       }
+      if (res.status === 422) {
+        setResult("out_of_scope");
+        setSearching(false);
+        return;
+      }
       if (!res.ok) throw new Error("server error");
       const json = await res.json() as {
         data: { id: number; marca_completa: string; marca_relatorio: string | null; pais_de_origem: string | null; distribuidor: string | null }[];
+        brand_extracted: string | null;
         credits_remaining: number;
         credits_total: number;
       };
       setCredits(json.credits_remaining);
       setCreditsTotal(json.credits_total);
+      if (json.brand_extracted) setBrandExtracted(json.brand_extracted);
       const rows = json.data ?? [];
       if (rows.length > 0) {
         const first = rows[0];
@@ -958,13 +967,26 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
               </View>
               <View>
                 <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>Inteligência Artificial</Text>
-                <Text style={[styles.kpiValue, { fontSize: 16, color: colors.navy }]}>Analisando mercado…</Text>
+                <Text style={[styles.kpiValue, { fontSize: 16, color: colors.navy }]}>Identificando a marca…</Text>
                 <Text style={[styles.kpiPeriod, { color: colors.mutedForeground }]}>
-                  Consultando importadores e exportadores
+                  Consultando importadores e distribuidores
                 </Text>
               </View>
             </View>
           </View>
+        </View>
+      )}
+
+      {/* ── Out of scope ── */}
+      {!searching && result === "out_of_scope" && (
+        <View style={[styles.lockedCard, { backgroundColor: "#fff", borderColor: "#fbbf24" }]}>
+          <View style={[styles.lockedIconBox, { backgroundColor: colors.gold + "15" }]}>
+            <Feather name="alert-circle" size={22} color={colors.gold} />
+          </View>
+          <Text style={[styles.lockedTitle, { color: colors.navy }]}>Pesquise pelo nome da marca</Text>
+          <Text style={[styles.lockedSub, { color: colors.mutedForeground }]}>
+            Esta busca aceita apenas nomes de marcas específicas. Digite o nome da marca que deseja consultar — por exemplo: "Casillero del Diablo" ou "Veuve Clicquot".
+          </Text>
         </View>
       )}
 
@@ -974,21 +996,27 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
           <View style={[styles.lockedIconBox, { backgroundColor: colors.gold + "15" }]}>
             <Feather name="search" size={22} color={colors.gold} />
           </View>
-          <Text style={[styles.lockedTitle, { color: colors.navy }]}>Vinho não encontrado</Text>
+          <Text style={[styles.lockedTitle, { color: colors.navy }]}>
+            {brandExtracted ? `"${brandExtracted}" não encontrado` : "Vinho não encontrado"}
+          </Text>
           <Text style={[styles.lockedSub, { color: colors.mutedForeground }]}>
-            Não encontramos esse vinho na base de dados. Tente outro nome ou variação.
+            {brandExtracted
+              ? `A IA identificou a marca "${brandExtracted}", mas ela ainda não está na base de dados. Tente outro nome ou variação.`
+              : "Não encontramos esse vinho na base de dados. Tente outro nome ou variação."}
           </Text>
         </View>
       )}
 
       {/* ── Result — KPI cards matching Visão Geral ── */}
-      {!searching && result && result !== "not_found" && (
+      {!searching && result && result !== "not_found" && result !== "out_of_scope" && (
         <View style={[styles.kpiList, { paddingTop: 12 }]}>
 
           {/* Brand header card */}
           <View style={[styles.kpiCard, { backgroundColor: colors.gold, borderColor: colors.gold, flexDirection: "column", alignItems: "flex-start", gap: 2 }]}>
             <Text style={{ fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.75)", letterSpacing: 0.8, textTransform: "uppercase" }}>
-              Resultado encontrado
+              {brandExtracted && brandExtracted.toLowerCase() !== result.marcaCompleta.toLowerCase()
+                ? `IA identificou: ${brandExtracted}`
+                : "Resultado encontrado"}
             </Text>
             <Text style={{ fontSize: 18, fontWeight: "900", color: "#fff", lineHeight: 24 }}>
               {result.marcaCompleta}
