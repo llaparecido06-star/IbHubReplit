@@ -1717,29 +1717,20 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Sub-tab bar: Feed | Busca com IA — same style as main Mercado tabs */}
-      <View style={[styles.mainTabRow, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+      {/* Sub-tab bar: Feed | 🔍 IA — same pill style as Visão Geral period filter */}
+      <View style={[styles.periodRow, { backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border }]}>
         {([
-          { key: "feed",   label: "Feed", icon: "radio"  },
-          { key: "search", label: "🔍 IA", icon: null   },
-        ] as { key: IdealBISubTab; label: string; icon: any }[]).map(tab => {
+          { key: "feed",   label: "Feed"  },
+          { key: "search", label: "🔍 IA" },
+        ] as { key: IdealBISubTab; label: string }[]).map(tab => {
           const active = idealbiSubTab === tab.key;
           return (
             <TouchableOpacity
               key={tab.key}
-              style={[
-                styles.mainTabBtn,
-                active && { backgroundColor: "#fff", borderColor: colors.border },
-              ]}
+              style={[styles.periodBtn, active && [styles.periodBtnActive, { backgroundColor: colors.gold }]]}
               onPress={() => setIdealbiSubTab(tab.key)}
             >
-              {tab.icon && (
-                <Feather name={tab.icon} size={14} color={active ? colors.navy : colors.mutedForeground} />
-              )}
-              <Text style={[styles.mainTabText, {
-                color: active ? colors.navy : colors.mutedForeground,
-                fontWeight: active ? "700" : "500",
-              }]}>
+              <Text style={[styles.periodBtnText, { color: active ? "#fff" : colors.mutedForeground }]}>
                 {tab.label}
               </Text>
             </TouchableOpacity>
