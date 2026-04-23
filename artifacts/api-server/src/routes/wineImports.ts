@@ -13,26 +13,38 @@ const supabaseAdmin = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 );
 
-const CREDITS_BY_PLAN: Record<string, number> = {
+const CREDITS_FALLBACK: Record<string, number> = {
   free:      0,
   premium:   3,
   business:  10,
   exclusive: 25,
 };
-const DEFAULT_CREDITS = 0;
 
 function currentPeriodStart(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
-async function getUserPlan(userId: string): Promise<string> {
-  const { data } = await supabaseAdmin
+async function getPlanCredits(userId: string): Promise<number> {
+  const { data: profile } = await supabaseAdmin
     .from("profiles")
     .select("plan")
     .eq("id", userId)
     .single();
-  return (data?.plan as string | null)?.toLowerCase() ?? "free";
+
+  const planId = (profile?.plan as string | null)?.toLowerCase() ?? "free";
+
+  const { data: planRow } = await supabaseAdmin
+    .from("plans")
+    .select("ai_search_credits")
+    .eq("id", planId)
+    .maybeSingle();
+
+  if (planRow && typeof planRow.ai_search_credits === "number") {
+    return planRow.ai_search_credits;
+  }
+
+  return CREDITS_FALLBACK[planId] ?? 0;
 }
 
 async function getOrCreateCredits(userId: string): Promise<{
@@ -49,8 +61,7 @@ async function getOrCreateCredits(userId: string): Promise<{
     .single();
 
   if (!existing) {
-    const plan  = await getUserPlan(userId);
-    const total = CREDITS_BY_PLAN[plan] ?? DEFAULT_CREDITS;
+    const total = await getPlanCredits(userId);
     await supabaseAdmin.from("ai_search_credits").insert({
       user_id: userId,
       credits_remaining: total,
@@ -61,8 +72,7 @@ async function getOrCreateCredits(userId: string): Promise<{
   }
 
   if (existing.period_start < period) {
-    const plan  = await getUserPlan(userId);
-    const total = CREDITS_BY_PLAN[plan] ?? DEFAULT_CREDITS;
+    const total = await getPlanCredits(userId);
     await supabaseAdmin
       .from("ai_search_credits")
       .update({ credits_remaining: total, credits_total: total, period_start: period, updated_at: new Date().toISOString() })

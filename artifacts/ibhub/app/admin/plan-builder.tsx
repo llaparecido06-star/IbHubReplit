@@ -61,6 +61,7 @@ interface Plan {
   sort_order: number;
   delivery_strategy?: DeliveryStrategy;
   stripe_price_id?: string | null;
+  ai_search_credits?: number | null;
 }
 
 function centsToString(cents: number): string {
@@ -100,6 +101,7 @@ export default function AdminPlanBuilderScreen() {
   const [editFeatures, setEditFeatures]     = useState<string[]>([]);
   const [editDelivery, setEditDelivery]     = useState<DeliveryStrategy>("NONE");
   const [editStripeId, setEditStripeId]     = useState("");
+  const [editAiCredits, setEditAiCredits]   = useState("0");
 
   const [marketPerms, setMarketPerms]       = useState<API.MarketPermission[]>([]);
   const [loadingMp, setLoadingMp]           = useState(true);
@@ -154,6 +156,7 @@ export default function AdminPlanBuilderScreen() {
     setEditFeatures([...plan.features]);
     setEditDelivery((plan.delivery_strategy ?? "NONE") as DeliveryStrategy);
     setEditStripeId(plan.stripe_price_id ?? "");
+    setEditAiCredits(String(plan.ai_search_credits ?? 0));
     setShowEditModal(true);
   };
 
@@ -167,6 +170,7 @@ export default function AdminPlanBuilderScreen() {
     setEditFeatures([]);
     setEditDelivery("NONE");
     setEditStripeId("");
+    setEditAiCredits("0");
     setShowNewModal(true);
   };
 
@@ -184,9 +188,10 @@ export default function AdminPlanBuilderScreen() {
       const original_price_cents = parsePriceString(editOriginalPrice) || null;
       const stripeId             = editStripeId.trim() || null;
       const description          = editDescription.trim() || null;
+      const ai_search_credits    = Math.max(0, parseInt(editAiCredits, 10) || 0);
       const { error: err } = await supabase
         .from("plans")
-        .update({ name: editName, subtitle: editSubtitle, description, price_cents, original_price_cents, features: editFeatures, delivery_strategy: editDelivery, stripe_price_id: stripeId })
+        .update({ name: editName, subtitle: editSubtitle, description, price_cents, original_price_cents, features: editFeatures, delivery_strategy: editDelivery, stripe_price_id: stripeId, ai_search_credits })
         .eq("id", editPlan.id);
       if (err) throw err;
       Alert.alert("Sucesso", "Plano atualizado.");
@@ -208,9 +213,10 @@ export default function AdminPlanBuilderScreen() {
       const newId                = toSlug(editName) || `plano_${Date.now()}`;
       const stripeId             = editStripeId.trim() || null;
       const description          = editDescription.trim() || null;
+      const ai_search_credits    = Math.max(0, parseInt(editAiCredits, 10) || 0);
       const { error: err } = await supabase
         .from("plans")
-        .insert({ id: newId, name: editName, subtitle: editSubtitle, description, price_cents, original_price_cents, features: editFeatures, delivery_strategy: editDelivery, stripe_price_id: stripeId, is_active: true, sort_order: plans.length });
+        .insert({ id: newId, name: editName, subtitle: editSubtitle, description, price_cents, original_price_cents, features: editFeatures, delivery_strategy: editDelivery, stripe_price_id: stripeId, ai_search_credits, is_active: true, sort_order: plans.length });
       if (err) throw err;
       Alert.alert("Sucesso", "Novo plano criado.");
       setShowNewModal(false);
@@ -346,6 +352,25 @@ export default function AdminPlanBuilderScreen() {
                 />
                 <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 4 }}>
                   Deixe em branco para planos gratuitos. Encontre em Stripe → Products → seu produto → Price ID.
+                </Text>
+              </View>
+
+              {/* AI Search Credits */}
+              <View style={styles.mField}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                  <Feather name="zap" size={12} color={colors.gold} />
+                  <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>CONSULTAS IA/MÊS (Busca Ideal.BI)</Text>
+                </View>
+                <TextInput
+                  style={[styles.mInput, { borderColor: colors.border, color: colors.foreground }]}
+                  placeholder="0"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={editAiCredits}
+                  onChangeText={setEditAiCredits}
+                  keyboardType="number-pad"
+                />
+                <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 4 }}>
+                  Número de pesquisas de marca que o usuário pode fazer por mês. 0 = sem acesso à Busca com IA.
                 </Text>
               </View>
 
@@ -541,6 +566,16 @@ export default function AdminPlanBuilderScreen() {
                     </View>
                   </View>
                 )}
+
+                {/* AI Credits badge */}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: (plan.ai_search_credits ?? 0) > 0 ? colors.gold + "15" : colors.background, borderWidth: 1, borderColor: (plan.ai_search_credits ?? 0) > 0 ? colors.gold + "50" : colors.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                    <Feather name="zap" size={11} color={(plan.ai_search_credits ?? 0) > 0 ? colors.gold : colors.mutedForeground} />
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: (plan.ai_search_credits ?? 0) > 0 ? colors.gold : colors.mutedForeground }}>
+                      {(plan.ai_search_credits ?? 0) > 0 ? `${plan.ai_search_credits} consultas IA/mês` : "Sem busca IA"}
+                    </Text>
+                  </View>
+                </View>
 
                 {plan.features.length === 0 && (
                   <Text style={[styles.noFeatures, { color: colors.mutedForeground }]}>Nenhum recurso ativo</Text>
