@@ -488,7 +488,9 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
 
   const handleSignOut = async () => {
     await signOut();
-    setLocation("/");
+    // Use hard navigation to clear all in-memory state and force login page
+    const basePath = (import.meta.env.BASE_URL as string) ?? "/web/";
+    window.location.href = `${basePath}login`;
   };
 
   const openConnections = async () => {

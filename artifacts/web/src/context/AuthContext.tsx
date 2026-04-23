@@ -278,8 +278,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    // Clear state immediately so navigation after signOut sees session = null
+    // Always clear local state, even if the Supabase API call fails
+    try { await supabase.auth.signOut(); } catch {}
     setSession(null);
     setUser(null);
     setProfile(null);
