@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, memo } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -6,6 +6,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -34,19 +35,19 @@ const ALL_GENERAL_FEATURES = [
 ];
 
 const DEFAULT_PLANS = [
-  { id: "gratuito",     name: "Gratuito",     subtitle: "Acesso básico à plataforma",                  price_cents: 0,     features: [], is_active: true, sort_order: 0 },
-  { id: "profissional", name: "Profissional", subtitle: "Para profissionais do vinho",                  price_cents: 14990, features: [], is_active: true, sort_order: 1 },
-  { id: "empresas",     name: "Empresas",     subtitle: "Para negócios, distribuidoras e importadoras", price_cents: 29990, features: [], is_active: true, sort_order: 2 },
-  { id: "premium",      name: "Premium",      subtitle: "Acesso completo à plataforma ibhub",           price_cents: 49990, features: ALL_GENERAL_FEATURES, is_active: true, sort_order: 3 },
+  { id: "gratuito",     name: "Gratuito",     subtitle: "Acesso básico à plataforma",                  price_cents: 0,     features: [], is_active: true, sort_order: 0, ai_search_credits: 0 },
+  { id: "profissional", name: "Profissional", subtitle: "Para profissionais do vinho",                  price_cents: 14990, features: [], is_active: true, sort_order: 1, ai_search_credits: 3 },
+  { id: "empresas",     name: "Empresas",     subtitle: "Para negócios, distribuidoras e importadoras", price_cents: 29990, features: [], is_active: true, sort_order: 2, ai_search_credits: 10 },
+  { id: "premium",      name: "Premium",      subtitle: "Acesso completo à plataforma ibhub",           price_cents: 49990, features: ALL_GENERAL_FEATURES, is_active: true, sort_order: 3, ai_search_credits: 25 },
 ];
 
 type DeliveryStrategy = "RANDOM_DAILY" | "SEQUENTIAL_MONTHLY" | "FULL_ACCESS" | "NONE";
 
 const DELIVERY_STRATEGIES: { value: DeliveryStrategy; label: string; desc: string }[] = [
-  { value: "NONE",               label: "Nenhuma",              desc: "Sem desbloqueio automático" },
-  { value: "FULL_ACCESS",        label: "Acesso Total",         desc: "Todos os slides liberados imediatamente" },
-  { value: "SEQUENTIAL_MONTHLY", label: "Sequencial Mensal",    desc: "Libera progressivamente ao longo de 30 dias" },
-  { value: "RANDOM_DAILY",       label: "Aleatório Diário",     desc: "Libera 1 slide aleatório por dia" },
+  { value: "NONE",               label: "Nenhuma",           desc: "Sem desbloqueio automático" },
+  { value: "FULL_ACCESS",        label: "Acesso Total",      desc: "Todos os slides liberados imediatamente" },
+  { value: "SEQUENTIAL_MONTHLY", label: "Sequencial Mensal", desc: "Libera progressivamente ao longo de 30 dias" },
+  { value: "RANDOM_DAILY",       label: "Aleatório Diário",  desc: "Libera 1 slide aleatório por dia" },
 ];
 
 interface Plan {
@@ -64,6 +65,18 @@ interface Plan {
   ai_search_credits?: number | null;
 }
 
+interface ModalState {
+  name: string;
+  subtitle: string;
+  description: string;
+  price: string;
+  originalPrice: string;
+  features: string[];
+  delivery: DeliveryStrategy;
+  stripeId: string;
+  aiCredits: string;
+}
+
 function centsToString(cents: number): string {
   if (cents === 0) return "Grátis";
   return `R$ ${(cents / 100).toFixed(2).replace(".", ",")}`;
@@ -79,7 +92,234 @@ function toSlug(s: string): string {
   return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
 }
 
+// ─── Plan Modal ────────────────────────────────────────────────────────────────
+interface PlanModalProps {
+  visible: boolean;
+  isNew: boolean;
+  editPlan: Plan | null;
+  state: ModalState;
+  saving: boolean;
+  marketPerms: API.MarketPermission[];
+  loadingMp: boolean;
+  onChange: (field: keyof ModalState, value: any) => void;
+  onToggleFeature: (f: string) => void;
+  onToggleMarket: (mp: API.MarketPermission) => void;
+  onSave: () => void;
+  onClose: () => void;
+}
 
+const PlanModal = memo(({
+  visible, isNew, editPlan, state, saving,
+  marketPerms, loadingMp,
+  onChange, onToggleFeature, onToggleMarket,
+  onSave, onClose,
+}: PlanModalProps) => {
+  const colors = useColors();
+
+  const orig = parsePriceString(state.originalPrice);
+  const curr = parsePriceString(state.price);
+  const discountPct = orig > 0 && curr > 0 && orig > curr ? Math.round(((orig - curr) / orig) * 100) : 0;
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={s.overlay}>
+        <View style={[s.modalSheet, { backgroundColor: "#fff" }]}>
+          {/* Header */}
+          <View style={s.modalHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.modalTitle, { color: colors.navy }]}>
+                {isNew ? "Novo Plano" : `Editar: ${editPlan?.name}`}
+              </Text>
+              {!isNew && editPlan && (
+                <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 1 }}>
+                  ID: {editPlan.id}
+                </Text>
+              )}
+            </View>
+            <TouchableOpacity onPress={onClose} style={s.modalCloseBtn} hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}>
+              <Feather name="x" size={20} color={colors.navy} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ gap: 20, paddingBottom: 16 }}>
+
+            {/* ── Identidade ── */}
+            <Section label="Identidade">
+              <Field label="NOME DO PLANO">
+                <TextInput style={[s.input, { borderColor: colors.border, color: colors.foreground }]}
+                  placeholder="Ex: Premium" placeholderTextColor={colors.mutedForeground}
+                  value={state.name} onChangeText={v => onChange("name", v)} />
+              </Field>
+              <Field label="SUBTÍTULO">
+                <TextInput style={[s.input, { borderColor: colors.border, color: colors.foreground }]}
+                  placeholder="Ex: Para profissionais do vinho" placeholderTextColor={colors.mutedForeground}
+                  value={state.subtitle} onChangeText={v => onChange("subtitle", v)} />
+              </Field>
+              <Field label="DESCRIÇÃO (marketing)" hint="Aparece nas telas de assinatura. Deixe em branco para não exibir.">
+                <TextInput style={[s.input, { borderColor: colors.border, color: colors.foreground, minHeight: 72, textAlignVertical: "top", paddingTop: 10 }]}
+                  placeholder="Ex: Ideal para sommeliers que precisam de visibilidade e dados estratégicos." placeholderTextColor={colors.mutedForeground}
+                  value={state.description} onChangeText={v => onChange("description", v)} multiline numberOfLines={3} />
+              </Field>
+            </Section>
+
+            {/* ── Preço ── */}
+            <Section label="Precificação">
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Field label='PREÇO "DE:" (R$)'>
+                    <TextInput style={[s.input, { borderColor: colors.border, color: colors.foreground }]}
+                      placeholder="Deixe vazio para não mostrar desconto" placeholderTextColor={colors.mutedForeground}
+                      value={state.originalPrice} onChangeText={v => onChange("originalPrice", v)} keyboardType="decimal-pad" />
+                  </Field>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Field label='PREÇO "POR:" (R$)'>
+                    <TextInput style={[s.input, { borderColor: colors.border, color: colors.foreground }]}
+                      placeholder="0,00" placeholderTextColor={colors.mutedForeground}
+                      value={state.price} onChangeText={v => onChange("price", v)} keyboardType="decimal-pad" />
+                  </Field>
+                </View>
+              </View>
+              {discountPct > 0 && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#f0fdf4", borderRadius: 8, padding: 8 }}>
+                  <Feather name="tag" size={13} color="#059669" />
+                  <Text style={{ fontSize: 12, color: "#059669", fontWeight: "700" }}>
+                    De {centsToString(orig)} por {centsToString(curr)} · -{discountPct}% de desconto
+                  </Text>
+                </View>
+              )}
+              <Field label="STRIPE PRICE ID" hint="Deixe em branco para planos gratuitos. Encontre em Stripe → Products → Price ID.">
+                <TextInput style={[s.input, { borderColor: colors.border, color: colors.foreground, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }]}
+                  placeholder="price_1AbCdEfGhIjKlMnOpQrStUv" placeholderTextColor={colors.mutedForeground}
+                  value={state.stripeId} onChangeText={v => onChange("stripeId", v)} autoCapitalize="none" autoCorrect={false} />
+              </Field>
+            </Section>
+
+            {/* ── Ideal.BI ── */}
+            <Section label="Ideal.BI — Busca com IA">
+              <Field label="CONSULTAS IA / MÊS" hint="0 = sem acesso à Busca com IA. Renovado todo dia 1º do mês.">
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View style={[s.input, { borderColor: colors.border, flex: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 12 }]}>
+                    <Feather name="zap" size={14} color={colors.gold} style={{ marginRight: 6 }} />
+                    <TextInput style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: Platform.OS === "ios" ? 12 : 10 }}
+                      placeholder="0" placeholderTextColor={colors.mutedForeground}
+                      value={state.aiCredits} onChangeText={v => onChange("aiCredits", v.replace(/[^0-9]/g, ""))} keyboardType="number-pad" />
+                    <Text style={{ fontSize: 13, color: colors.mutedForeground }}>consultas</Text>
+                  </View>
+                </View>
+              </Field>
+            </Section>
+
+            {/* ── Slides ── */}
+            <Section label="Estratégia de Slides">
+              <View style={{ gap: 6 }}>
+                {DELIVERY_STRATEGIES.map((ds) => {
+                  const active = state.delivery === ds.value;
+                  return (
+                    <TouchableOpacity
+                      key={ds.value}
+                      style={[s.toggleRow, { borderColor: active ? "#8b5cf6" : colors.border, backgroundColor: active ? "#8b5cf608" : "transparent" }]}
+                      onPress={() => onChange("delivery", ds.value)}
+                    >
+                      <Feather name={active ? "check-circle" : "circle"} size={16} color={active ? "#8b5cf6" : colors.mutedForeground} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: active ? colors.navy : colors.foreground }}>{ds.label}</Text>
+                        <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 1 }}>{ds.desc}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </Section>
+
+            {/* ── Funcionalidades ── */}
+            <Section label="Funcionalidades Gerais">
+              <View style={{ gap: 6 }}>
+                {ALL_GENERAL_FEATURES.map((f) => {
+                  const active = state.features.includes(f);
+                  return (
+                    <TouchableOpacity
+                      key={f}
+                      style={[s.toggleRow, { borderColor: active ? colors.gold : colors.border, backgroundColor: active ? colors.gold + "0d" : "transparent" }]}
+                      onPress={() => onToggleFeature(f)}
+                    >
+                      <Feather name={active ? "check-square" : "square"} size={16} color={active ? colors.gold : colors.mutedForeground} />
+                      <Text style={{ fontSize: 13, color: active ? colors.navy : colors.foreground, flex: 1 }}>{f}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </Section>
+
+            {/* ── Dados de Mercado ── */}
+            <Section label="Dados de Mercado (Ideal.BI Feed)">
+              {loadingMp ? (
+                <ActivityIndicator size="small" color={colors.gold} />
+              ) : marketPerms.length === 0 ? (
+                <Text style={{ fontSize: 13, color: colors.mutedForeground }}>Nenhuma permissão de mercado cadastrada ainda.</Text>
+              ) : (
+                <View style={{ gap: 6 }}>
+                  {marketPerms.map((mp) => {
+                    const key = `mercado:${mp.id}`;
+                    const active = state.features.includes(key);
+                    return (
+                      <TouchableOpacity
+                        key={mp.id}
+                        style={[s.toggleRow, { borderColor: active ? "#10b981" : colors.border, backgroundColor: active ? "#10b98108" : "transparent" }]}
+                        onPress={() => onToggleMarket(mp)}
+                      >
+                        <Feather name={active ? "check-square" : "square"} size={16} color={active ? "#10b981" : colors.mutedForeground} />
+                        <Feather name={mp.icon as any} size={14} color={active ? "#10b981" : colors.mutedForeground} />
+                        <Text style={{ fontSize: 13, color: active ? colors.navy : colors.foreground, flex: 1 }}>{mp.title}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </Section>
+          </ScrollView>
+
+          {/* Save button */}
+          <TouchableOpacity
+            style={[s.saveBtn, { backgroundColor: saving ? colors.gold + "90" : colors.gold }]}
+            onPress={onSave} disabled={saving}
+          >
+            {saving
+              ? <ActivityIndicator color="#fff" />
+              : <><Feather name="check" size={16} color="#fff" /><Text style={s.saveBtnText}>{isNew ? "Criar Plano" : "Salvar Alterações"}</Text></>
+            }
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+});
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function Section({ label, children }: { label: string; children: React.ReactNode }) {
+  const colors = useColors();
+  return (
+    <View style={{ gap: 10 }}>
+      <Text style={{ fontSize: 11, fontWeight: "800", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.9 }}>
+        {label}
+      </Text>
+      {children}
+    </View>
+  );
+}
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  const colors = useColors();
+  return (
+    <View style={{ gap: 4 }}>
+      <Text style={{ fontSize: 10, fontWeight: "700", color: colors.mutedForeground, letterSpacing: 0.5 }}>{label}</Text>
+      {children}
+      {hint && <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{hint}</Text>}
+    </View>
+  );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function AdminPlanBuilderScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -90,48 +330,37 @@ export default function AdminPlanBuilderScreen() {
   const [error,   setError]   = useState<string | null>(null);
   const [saving,  setSaving]  = useState(false);
 
-  const [editPlan, setEditPlan]             = useState<Plan | null>(null);
-  const [showEditModal, setShowEditModal]   = useState(false);
-  const [showNewModal, setShowNewModal]     = useState(false);
-  const [editName, setEditName]             = useState("");
-  const [editSubtitle, setEditSubtitle]     = useState("");
-  const [editPrice, setEditPrice]           = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [editOriginalPrice, setEditOriginalPrice] = useState("");
-  const [editFeatures, setEditFeatures]     = useState<string[]>([]);
-  const [editDelivery, setEditDelivery]     = useState<DeliveryStrategy>("NONE");
-  const [editStripeId, setEditStripeId]     = useState("");
-  const [editAiCredits, setEditAiCredits]   = useState("0");
+  const [editPlan,      setEditPlan]      = useState<Plan | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showNewModal,  setShowNewModal]  = useState(false);
 
-  const [marketPerms, setMarketPerms]       = useState<API.MarketPermission[]>([]);
-  const [loadingMp, setLoadingMp]           = useState(true);
+  const emptyModal = (): ModalState => ({
+    name: "", subtitle: "", description: "", price: "0",
+    originalPrice: "", features: [], delivery: "NONE", stripeId: "", aiCredits: "0",
+  });
+
+  const [modalState, setModalState] = useState<ModalState>(emptyModal());
+
+  const [marketPerms, setMarketPerms] = useState<API.MarketPermission[]>([]);
+  const [loadingMp,   setLoadingMp]   = useState(true);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
   const loadPlans = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
-      let { data, error: err } = await supabase
-        .from("plans")
-        .select("*")
-        .order("sort_order", { ascending: true });
+      let { data, error: err } = await supabase.from("plans").select("*").order("sort_order", { ascending: true });
       if (err) throw err;
       if (!data || data.length === 0) {
-        const { data: seeded, error: seedErr } = await supabase
-          .from("plans")
-          .insert(DEFAULT_PLANS)
-          .select();
+        const { data: seeded, error: seedErr } = await supabase.from("plans").insert(DEFAULT_PLANS).select();
         if (seedErr) throw seedErr;
         data = seeded;
       }
       setPlans((data ?? []) as Plan[]);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao carregar planos");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, []);
 
   const loadMarketPerms = useCallback(async () => {
@@ -141,368 +370,129 @@ export default function AdminPlanBuilderScreen() {
     setLoadingMp(false);
   }, []);
 
-  useEffect(() => {
-    loadPlans();
-    loadMarketPerms();
-  }, [loadPlans, loadMarketPerms]);
+  useEffect(() => { loadPlans(); loadMarketPerms(); }, [loadPlans, loadMarketPerms]);
 
-  const openEdit = (plan: Plan) => {
-    setEditPlan(plan);
-    setEditName(plan.name);
-    setEditSubtitle(plan.subtitle);
-    setEditDescription(plan.description ?? "");
-    setEditPrice(plan.price_cents === 0 ? "0" : (plan.price_cents / 100).toFixed(2).replace(".", ","));
-    setEditOriginalPrice(plan.original_price_cents ? (plan.original_price_cents / 100).toFixed(2).replace(".", ",") : "");
-    setEditFeatures([...plan.features]);
-    setEditDelivery((plan.delivery_strategy ?? "NONE") as DeliveryStrategy);
-    setEditStripeId(plan.stripe_price_id ?? "");
-    setEditAiCredits(String(plan.ai_search_credits ?? 0));
-    setShowEditModal(true);
-  };
+  const planToModal = (plan: Plan): ModalState => ({
+    name:          plan.name,
+    subtitle:      plan.subtitle,
+    description:   plan.description ?? "",
+    price:         plan.price_cents === 0 ? "0" : (plan.price_cents / 100).toFixed(2).replace(".", ","),
+    originalPrice: plan.original_price_cents ? (plan.original_price_cents / 100).toFixed(2).replace(".", ",") : "",
+    features:      [...plan.features],
+    delivery:      (plan.delivery_strategy ?? "NONE") as DeliveryStrategy,
+    stripeId:      plan.stripe_price_id ?? "",
+    aiCredits:     String(plan.ai_search_credits ?? 0),
+  });
 
-  const openNew = () => {
-    setEditPlan(null);
-    setEditName("");
-    setEditSubtitle("");
-    setEditDescription("");
-    setEditPrice("0");
-    setEditOriginalPrice("");
-    setEditFeatures([]);
-    setEditDelivery("NONE");
-    setEditStripeId("");
-    setEditAiCredits("0");
-    setShowNewModal(true);
-  };
+  const openEdit = (plan: Plan) => { setEditPlan(plan); setModalState(planToModal(plan)); setShowEditModal(true); };
+  const openNew  = () => { setEditPlan(null); setModalState(emptyModal()); setShowNewModal(true); };
 
-  const toggleFeature = (f: string) =>
-    setEditFeatures((prev) => prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]);
+  const handleChange = (field: keyof ModalState, value: any) =>
+    setModalState(prev => ({ ...prev, [field]: value }));
 
-  const toggleMarketFeature = (mp: API.MarketPermission) =>
-    toggleFeature(`mercado:${mp.id}`);
+  const handleToggleFeature = (f: string) =>
+    setModalState(prev => ({
+      ...prev,
+      features: prev.features.includes(f) ? prev.features.filter(x => x !== f) : [...prev.features, f],
+    }));
+
+  const handleToggleMarket = (mp: API.MarketPermission) =>
+    handleToggleFeature(`mercado:${mp.id}`);
+
+  const buildPayload = () => ({
+    name:                  modalState.name,
+    subtitle:              modalState.subtitle,
+    description:           modalState.description.trim() || null,
+    price_cents:           parsePriceString(modalState.price),
+    original_price_cents:  parsePriceString(modalState.originalPrice) || null,
+    features:              modalState.features,
+    delivery_strategy:     modalState.delivery,
+    stripe_price_id:       modalState.stripeId.trim() || null,
+    ai_search_credits:     Math.max(0, parseInt(modalState.aiCredits, 10) || 0),
+  });
 
   const handleSaveEdit = async () => {
     if (!editPlan) return;
     setSaving(true);
     try {
-      const price_cents          = parsePriceString(editPrice);
-      const original_price_cents = parsePriceString(editOriginalPrice) || null;
-      const stripeId             = editStripeId.trim() || null;
-      const description          = editDescription.trim() || null;
-      const ai_search_credits    = Math.max(0, parseInt(editAiCredits, 10) || 0);
-      const { error: err } = await supabase
-        .from("plans")
-        .update({ name: editName, subtitle: editSubtitle, description, price_cents, original_price_cents, features: editFeatures, delivery_strategy: editDelivery, stripe_price_id: stripeId, ai_search_credits })
-        .eq("id", editPlan.id);
+      const { error: err } = await supabase.from("plans").update(buildPayload()).eq("id", editPlan.id);
       if (err) throw err;
       Alert.alert("Sucesso", "Plano atualizado.");
       setShowEditModal(false);
       void loadPlans();
     } catch (e: unknown) {
       Alert.alert("Erro", e instanceof Error ? e.message : "Erro ao salvar plano.");
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
   const handleCreateNew = async () => {
-    if (!editName.trim()) { Alert.alert("Erro", "Informe o nome do plano."); return; }
+    if (!modalState.name.trim()) { Alert.alert("Erro", "Informe o nome do plano."); return; }
     setSaving(true);
     try {
-      const price_cents          = parsePriceString(editPrice);
-      const original_price_cents = parsePriceString(editOriginalPrice) || null;
-      const newId                = toSlug(editName) || `plano_${Date.now()}`;
-      const stripeId             = editStripeId.trim() || null;
-      const description          = editDescription.trim() || null;
-      const ai_search_credits    = Math.max(0, parseInt(editAiCredits, 10) || 0);
-      const { error: err } = await supabase
-        .from("plans")
-        .insert({ id: newId, name: editName, subtitle: editSubtitle, description, price_cents, original_price_cents, features: editFeatures, delivery_strategy: editDelivery, stripe_price_id: stripeId, ai_search_credits, is_active: true, sort_order: plans.length });
+      const newId = toSlug(modalState.name) || `plano_${Date.now()}`;
+      const { error: err } = await supabase.from("plans").insert({ id: newId, is_active: true, sort_order: plans.length, ...buildPayload() });
       if (err) throw err;
       Alert.alert("Sucesso", "Novo plano criado.");
       setShowNewModal(false);
       void loadPlans();
     } catch (e: unknown) {
       Alert.alert("Erro", e instanceof Error ? e.message : "Erro ao criar plano.");
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
+  };
+
+  const handleToggleActive = async (plan: Plan) => {
+    const { error: err } = await supabase.from("plans").update({ is_active: !plan.is_active }).eq("id", plan.id);
+    if (err) Alert.alert("Erro", err.message);
+    else setPlans(prev => prev.map(p => p.id === plan.id ? { ...p, is_active: !p.is_active } : p));
   };
 
   const handleDelete = (plan: Plan) => {
     Alert.alert("Excluir plano", `Excluir o plano "${plan.name}"? Esta ação é irreversível.`, [
       { text: "Cancelar", style: "cancel" },
-      {
-        text: "Excluir", style: "destructive",
-        onPress: async () => {
-          const { error: err } = await supabase.from("plans").delete().eq("id", plan.id);
-          if (err) Alert.alert("Erro", err.message);
-          else loadPlans();
-        },
-      },
+      { text: "Excluir", style: "destructive", onPress: async () => {
+        const { error: err } = await supabase.from("plans").delete().eq("id", plan.id);
+        if (err) Alert.alert("Erro", err.message);
+        else loadPlans();
+      }},
     ]);
   };
 
-  const PlanModal = ({ visible, isNew }: { visible: boolean; isNew: boolean }) => (
-    <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.overlay}>
-        <View style={[styles.editModal, { backgroundColor: "#fff" }]}>
-          <TouchableOpacity
-            style={styles.modalClose}
-            onPress={() => isNew ? setShowNewModal(false) : setShowEditModal(false)}
-          >
-            <Feather name="x" size={18} color="#6b7280" />
-          </TouchableOpacity>
-          <Text style={[styles.modalTitle, { color: colors.navy }]}>
-            {isNew ? "Novo Plano" : `Editar: ${editPlan?.name}`}
-          </Text>
-
-          <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 500 }}>
-            <View style={{ gap: 14 }}>
-              <View style={styles.mField}>
-                <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>NOME</Text>
-                <TextInput
-                  style={[styles.mInput, { borderColor: colors.border, color: colors.foreground }]}
-                  placeholder="Ex: Premium"
-                  placeholderTextColor={colors.mutedForeground}
-                  value={editName}
-                  onChangeText={setEditName}
-                />
-              </View>
-              <View style={styles.mField}>
-                <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>SUBTÍTULO</Text>
-                <TextInput
-                  style={[styles.mInput, { borderColor: colors.border, color: colors.foreground }]}
-                  placeholder="Ex: Para profissionais do vinho"
-                  placeholderTextColor={colors.mutedForeground}
-                  value={editSubtitle}
-                  onChangeText={setEditSubtitle}
-                />
-              </View>
-
-              <View style={styles.mField}>
-                <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>DESCRIÇÃO (marketing)</Text>
-                <TextInput
-                  style={[styles.mInput, { borderColor: colors.border, color: colors.foreground, minHeight: 72, textAlignVertical: "top", paddingTop: 10 }]}
-                  placeholder="Ex: Ideal para sommerliers e consultores que precisam de visibilidade e dados estratégicos de mercado."
-                  placeholderTextColor={colors.mutedForeground}
-                  value={editDescription}
-                  onChangeText={setEditDescription}
-                  multiline
-                  numberOfLines={3}
-                />
-                <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 4 }}>
-                  Aparece como copy de marketing nas telas de assinatura. Deixe em branco para não exibir.
-                </Text>
-              </View>
-
-              {/* Pricing — "De: / Por:" */}
-              <View style={styles.mField}>
-                <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>PREÇO ORIGINAL "DE:" (R$)</Text>
-                <TextInput
-                  style={[styles.mInput, { borderColor: colors.border, color: colors.foreground }]}
-                  placeholder="Ex: 199,90 — deixe vazio para não mostrar desconto"
-                  placeholderTextColor={colors.mutedForeground}
-                  value={editOriginalPrice}
-                  onChangeText={setEditOriginalPrice}
-                  keyboardType="decimal-pad"
-                />
-                {/* Live discount preview */}
-                {(() => {
-                  const orig = parsePriceString(editOriginalPrice);
-                  const curr = parsePriceString(editPrice);
-                  if (orig > 0 && curr > 0 && orig > curr) {
-                    const pct = Math.round(((orig - curr) / orig) * 100);
-                    return (
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 }}>
-                        <Text style={{ fontSize: 12, color: colors.mutedForeground, textDecorationLine: "line-through" }}>
-                          De: {centsToString(orig)}
-                        </Text>
-                        <Text style={{ fontSize: 12, color: "#059669", fontWeight: "700" }}>
-                          Por: {centsToString(curr)} · -{pct}% desconto
-                        </Text>
-                      </View>
-                    );
-                  }
-                  return null;
-                })()}
-              </View>
-
-              <View style={styles.mField}>
-                <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>PREÇO REAL "POR:" (R$)</Text>
-                <TextInput
-                  style={[styles.mInput, { borderColor: colors.border, color: colors.foreground }]}
-                  placeholder="0,00"
-                  placeholderTextColor={colors.mutedForeground}
-                  value={editPrice}
-                  onChangeText={setEditPrice}
-                  keyboardType="decimal-pad"
-                />
-              </View>
-
-              <View style={styles.mField}>
-                <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>STRIPE PRICE ID</Text>
-                <TextInput
-                  style={[styles.mInput, { borderColor: colors.border, color: colors.foreground, fontFamily: "monospace" }]}
-                  placeholder="price_1AbCdEfGhIjKlMnOpQrStUv"
-                  placeholderTextColor={colors.mutedForeground}
-                  value={editStripeId}
-                  onChangeText={setEditStripeId}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 4 }}>
-                  Deixe em branco para planos gratuitos. Encontre em Stripe → Products → seu produto → Price ID.
-                </Text>
-              </View>
-
-              {/* AI Search Credits */}
-              <View style={styles.mField}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                  <Feather name="zap" size={12} color={colors.gold} />
-                  <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>CONSULTAS IA/MÊS (Busca Ideal.BI)</Text>
-                </View>
-                <TextInput
-                  style={[styles.mInput, { borderColor: colors.border, color: colors.foreground }]}
-                  placeholder="0"
-                  placeholderTextColor={colors.mutedForeground}
-                  value={editAiCredits}
-                  onChangeText={setEditAiCredits}
-                  keyboardType="number-pad"
-                />
-                <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 4 }}>
-                  Número de pesquisas de marca que o usuário pode fazer por mês. 0 = sem acesso à Busca com IA.
-                </Text>
-              </View>
-
-              {/* Delivery Strategy */}
-              <View style={styles.mField}>
-                <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>ESTRATÉGIA DE SLIDES</Text>
-                <View style={{ gap: 6, marginTop: 4 }}>
-                  {DELIVERY_STRATEGIES.map((ds) => {
-                    const active = editDelivery === ds.value;
-                    return (
-                      <TouchableOpacity
-                        key={ds.value}
-                        style={[styles.featureToggle, { borderColor: active ? "#8b5cf6" : colors.border, backgroundColor: active ? "#8b5cf610" : "transparent" }]}
-                        onPress={() => setEditDelivery(ds.value)}
-                      >
-                        <Feather name={active ? "check-circle" : "circle"} size={16} color={active ? "#8b5cf6" : colors.mutedForeground} />
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.featureToggleText, { color: active ? colors.navy : colors.foreground, flex: undefined }]}>{ds.label}</Text>
-                          <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 1 }}>{ds.desc}</Text>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {/* General features */}
-              <View style={styles.mField}>
-                <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>FUNCIONALIDADES GERAIS</Text>
-                <View style={{ gap: 6, marginTop: 4 }}>
-                  {ALL_GENERAL_FEATURES.map((f) => {
-                    const active = editFeatures.includes(f);
-                    return (
-                      <TouchableOpacity
-                        key={f}
-                        style={[styles.featureToggle, { borderColor: active ? colors.gold : colors.border, backgroundColor: active ? colors.gold + "10" : "transparent" }]}
-                        onPress={() => toggleFeature(f)}
-                      >
-                        <Feather name={active ? "check-square" : "square"} size={16} color={active ? colors.gold : colors.mutedForeground} />
-                        <Text style={[styles.featureToggleText, { color: active ? colors.navy : colors.foreground }]}>{f}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {/* Market permissions */}
-              <View style={styles.mField}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                  <Feather name="bar-chart-2" size={12} color={colors.gold} />
-                  <Text style={[styles.mLabel, { color: colors.mutedForeground }]}>DADOS DE MERCADO</Text>
-                </View>
-                {loadingMp ? (
-                  <ActivityIndicator size="small" color={colors.gold} />
-                ) : marketPerms.length === 0 ? (
-                  <Text style={[styles.emptyHint, { color: colors.mutedForeground }]}>
-                    Nenhuma permissão de mercado cadastrada ainda.
-                  </Text>
-                ) : (
-                  <View style={{ gap: 6 }}>
-                    {marketPerms.map((mp) => {
-                      const key = `mercado:${mp.id}`;
-                      const active = editFeatures.includes(key);
-                      return (
-                        <TouchableOpacity
-                          key={mp.id}
-                          style={[styles.featureToggle, { borderColor: active ? "#10b981" : colors.border, backgroundColor: active ? "#10b98110" : "transparent" }]}
-                          onPress={() => toggleMarketFeature(mp)}
-                        >
-                          <Feather name={active ? "check-square" : "square"} size={16} color={active ? "#10b981" : colors.mutedForeground} />
-                          <Feather name={mp.icon as any} size={14} color={active ? "#10b981" : colors.mutedForeground} />
-                          <Text style={[styles.featureToggleText, { color: active ? colors.navy : colors.foreground }]}>{mp.title}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                )}
-              </View>
-            </View>
-          </ScrollView>
-
-          <TouchableOpacity
-            style={[styles.mSaveBtn, { backgroundColor: saving ? colors.gold + "80" : colors.gold, marginTop: 14 }]}
-            onPress={isNew ? handleCreateNew : handleSaveEdit}
-            disabled={saving}
-          >
-            {saving
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.mSaveBtnText}>{isNew ? "Criar Plano" : "Salvar Alterações"}</Text>
-            }
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
-
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+    <View style={[s.container, { backgroundColor: colors.background }]}>
+      {/* Header */}
+      <View style={[s.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => setDrawerOpen(true)}>
           <Feather name="menu" size={22} color={colors.navy} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.navy }]}>Plan Builder</Text>
+        <Text style={[s.headerTitle, { color: colors.navy }]}>Plan Builder</Text>
         <TouchableOpacity onPress={loadPlans}>
           <Feather name="refresh-cw" size={20} color={colors.navy} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, rowGap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
-        <View style={styles.heroRow}>
-          <View style={{ flex: 1, gap: 3 }}>
-            <Text style={[styles.heroTitle, { color: colors.navy }]}>Plan Builder</Text>
-            <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>
-              Planos de assinatura e permissões de acesso
-            </Text>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
+        {/* Hero row */}
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ fontSize: 20, fontWeight: "900", color: colors.navy }}>Plan Builder</Text>
+            <Text style={{ fontSize: 13, color: colors.mutedForeground }}>Planos de assinatura e permissões de acesso</Text>
           </View>
-          <TouchableOpacity style={[styles.newBtn, { backgroundColor: colors.gold }]} onPress={openNew}>
+          <TouchableOpacity style={[s.newBtn, { backgroundColor: colors.gold }]} onPress={openNew}>
             <Feather name="plus" size={14} color="#fff" />
-            <Text style={styles.newBtnText}>Novo Plano</Text>
+            <Text style={s.newBtnText}>Novo Plano</Text>
           </TouchableOpacity>
         </View>
 
         {loading ? (
-          <View style={{ alignItems: "center", paddingVertical: 32 }}>
+          <View style={{ alignItems: "center", paddingVertical: 40 }}>
             <ActivityIndicator size="large" color={colors.gold} />
-            <Text style={[{ color: colors.mutedForeground, marginTop: 10, fontSize: 13 }]}>Carregando planos...</Text>
+            <Text style={{ color: colors.mutedForeground, marginTop: 10, fontSize: 13 }}>Carregando planos...</Text>
           </View>
         ) : error ? (
-          <View style={{ alignItems: "center", paddingVertical: 32, gap: 12 }}>
+          <View style={{ alignItems: "center", paddingVertical: 40, gap: 12 }}>
             <Feather name="alert-circle" size={32} color="#dc2626" />
             <Text style={{ color: "#dc2626", fontSize: 13, textAlign: "center" }}>{error}</Text>
-            <TouchableOpacity style={[styles.retryBtn, { backgroundColor: colors.gold }]} onPress={loadPlans}>
+            <TouchableOpacity style={{ backgroundColor: colors.gold, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 }} onPress={loadPlans}>
               <Text style={{ color: "#fff", fontWeight: "700" }}>Tentar novamente</Text>
             </TouchableOpacity>
           </View>
@@ -510,56 +500,91 @@ export default function AdminPlanBuilderScreen() {
           plans.map((plan) => {
             const generalFeats = plan.features.filter(f => !f.startsWith("mercado:"));
             const marketFeats  = plan.features.filter(f => f.startsWith("mercado:"));
+            const aiCredits    = plan.ai_search_credits ?? 0;
+
             return (
-              <View key={plan.id} style={[styles.planCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-                <View style={styles.planTopRow}>
+              <View key={plan.id} style={[s.planCard, { backgroundColor: "#fff", borderColor: colors.border, opacity: plan.is_active ? 1 : 0.6 }]}>
+                {/* Top row */}
+                <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.planName, { color: colors.navy }]}>{plan.name}</Text>
-                    <Text style={[styles.planSub, { color: colors.mutedForeground }]}>{plan.subtitle}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <Text style={{ fontSize: 16, fontWeight: "900", color: colors.navy }}>{plan.name}</Text>
+                      <View style={{ backgroundColor: plan.is_active ? "#dcfce7" : "#f3f4f6", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                        <Text style={{ fontSize: 10, fontWeight: "700", color: plan.is_active ? "#16a34a" : "#6b7280" }}>
+                          {plan.is_active ? "Ativo" : "Inativo"}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>{plan.subtitle}</Text>
+                    <Text style={{ fontSize: 10, color: colors.mutedForeground, marginTop: 1, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }}>
+                      id: {plan.id}
+                    </Text>
                   </View>
-                  <View style={{ alignItems: "flex-end" }}>
+                  <View style={{ alignItems: "flex-end", gap: 2 }}>
                     {plan.original_price_cents && plan.original_price_cents > plan.price_cents && (
                       <Text style={{ fontSize: 11, color: colors.mutedForeground, textDecorationLine: "line-through" }}>
                         {centsToString(plan.original_price_cents)}
                       </Text>
                     )}
-                    <Text style={[styles.planPrice, { color: colors.navy }]}>{centsToString(plan.price_cents)}</Text>
+                    <Text style={{ fontSize: 17, fontWeight: "900", color: colors.navy }}>{centsToString(plan.price_cents)}</Text>
                     {plan.original_price_cents && plan.original_price_cents > plan.price_cents && (
                       <Text style={{ fontSize: 10, color: "#059669", fontWeight: "700" }}>
                         -{Math.round(((plan.original_price_cents - plan.price_cents) / plan.original_price_cents) * 100)}% OFF
                       </Text>
                     )}
                   </View>
-                  <TouchableOpacity style={[styles.editBtn, { borderColor: colors.border }]} onPress={() => openEdit(plan)}>
-                    <Feather name="edit-2" size={13} color={colors.foreground} />
-                    <Text style={[styles.editBtnText, { color: colors.foreground }]}>Editar</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => handleDelete(plan)}>
-                    <Feather name="trash-2" size={18} color="#dc2626" />
-                  </TouchableOpacity>
                 </View>
 
+                {/* Badges row */}
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+                  {/* AI Credits */}
+                  <View style={[s.badge, { backgroundColor: aiCredits > 0 ? colors.gold + "15" : "#f3f4f6", borderColor: aiCredits > 0 ? colors.gold + "50" : "#e5e7eb" }]}>
+                    <Feather name="zap" size={11} color={aiCredits > 0 ? colors.gold : "#9ca3af"} />
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: aiCredits > 0 ? colors.gold : "#9ca3af" }}>
+                      {aiCredits > 0 ? `${aiCredits} consultas IA/mês` : "Sem busca IA"}
+                    </Text>
+                  </View>
+                  {/* Delivery */}
+                  {plan.delivery_strategy && plan.delivery_strategy !== "NONE" && (
+                    <View style={[s.badge, { backgroundColor: "#ede9fe", borderColor: "#ddd6fe" }]}>
+                      <Feather name="layers" size={11} color="#7c3aed" />
+                      <Text style={{ fontSize: 11, fontWeight: "600", color: "#7c3aed" }}>
+                        {DELIVERY_STRATEGIES.find(d => d.value === plan.delivery_strategy)?.label ?? plan.delivery_strategy}
+                      </Text>
+                    </View>
+                  )}
+                  {/* Stripe */}
+                  {plan.stripe_price_id && (
+                    <View style={[s.badge, { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }]}>
+                      <Feather name="credit-card" size={11} color="#059669" />
+                      <Text style={{ fontSize: 11, fontWeight: "600", color: "#059669" }}>Stripe</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Features */}
                 {generalFeats.length > 0 && (
-                  <View style={styles.featureChips}>
-                    {generalFeats.map((f) => (
-                      <View key={f} style={[styles.chip, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                        <Text style={[styles.chipText, { color: colors.foreground }]}>{f}</Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                    {generalFeats.map(f => (
+                      <View key={f} style={[s.chip, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                        <Text style={{ fontSize: 11, color: colors.foreground }}>{f}</Text>
                       </View>
                     ))}
                   </View>
                 )}
 
                 {marketFeats.length > 0 && (
-                  <View style={{ gap: 4 }}>
-                    <Text style={[styles.chipSection, { color: colors.mutedForeground }]}>Dados de Mercado</Text>
-                    <View style={styles.featureChips}>
-                      {marketFeats.map((f) => {
+                  <View style={{ marginTop: 8 }}>
+                    <Text style={{ fontSize: 10, fontWeight: "700", color: "#10b981", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
+                      Dados de Mercado
+                    </Text>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                      {marketFeats.map(f => {
                         const mp = marketPerms.find(p => `mercado:${p.id}` === f);
-                        const label = mp?.title ?? f.replace("mercado:", "");
                         return (
-                          <View key={f} style={[styles.chip, { backgroundColor: "#10b98110", borderColor: "#10b98140" }]}>
-                            <Feather name={(mp?.icon ?? "bar-chart-2") as any} size={11} color="#10b981" />
-                            <Text style={[styles.chipText, { color: "#065f46" }]}>{label}</Text>
+                          <View key={f} style={[s.chip, { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }]}>
+                            <Feather name={(mp?.icon ?? "bar-chart-2") as any} size={10} color="#10b981" />
+                            <Text style={{ fontSize: 11, color: "#065f46" }}>{mp?.title ?? f.replace("mercado:", "")}</Text>
                           </View>
                         );
                       })}
@@ -567,66 +592,92 @@ export default function AdminPlanBuilderScreen() {
                   </View>
                 )}
 
-                {/* AI Credits badge */}
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: (plan.ai_search_credits ?? 0) > 0 ? colors.gold + "15" : colors.background, borderWidth: 1, borderColor: (plan.ai_search_credits ?? 0) > 0 ? colors.gold + "50" : colors.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
-                    <Feather name="zap" size={11} color={(plan.ai_search_credits ?? 0) > 0 ? colors.gold : colors.mutedForeground} />
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: (plan.ai_search_credits ?? 0) > 0 ? colors.gold : colors.mutedForeground }}>
-                      {(plan.ai_search_credits ?? 0) > 0 ? `${plan.ai_search_credits} consultas IA/mês` : "Sem busca IA"}
+                {/* Action row */}
+                <View style={[s.actionRow, { borderTopColor: colors.border }]}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Switch
+                      value={plan.is_active}
+                      onValueChange={() => handleToggleActive(plan)}
+                      trackColor={{ false: "#e5e7eb", true: colors.gold + "80" }}
+                      thumbColor={plan.is_active ? colors.gold : "#9ca3af"}
+                    />
+                    <Text style={{ fontSize: 12, color: colors.mutedForeground }}>
+                      {plan.is_active ? "Visível" : "Oculto"}
                     </Text>
                   </View>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <TouchableOpacity style={[s.actionBtn, { borderColor: colors.border }]} onPress={() => openEdit(plan)}>
+                      <Feather name="edit-2" size={13} color={colors.foreground} />
+                      <Text style={{ fontSize: 12, fontWeight: "600", color: colors.foreground }}>Editar</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[s.actionBtn, { borderColor: "#fca5a5" }]} onPress={() => handleDelete(plan)}>
+                      <Feather name="trash-2" size={13} color="#dc2626" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-
-                {plan.features.length === 0 && (
-                  <Text style={[styles.noFeatures, { color: colors.mutedForeground }]}>Nenhum recurso ativo</Text>
-                )}
               </View>
             );
           })
         )}
-
       </ScrollView>
 
-      <PlanModal visible={showEditModal} isNew={false} />
-      <PlanModal visible={showNewModal} isNew={true} />
+      <PlanModal
+        visible={showEditModal}
+        isNew={false}
+        editPlan={editPlan}
+        state={modalState}
+        saving={saving}
+        marketPerms={marketPerms}
+        loadingMp={loadingMp}
+        onChange={handleChange}
+        onToggleFeature={handleToggleFeature}
+        onToggleMarket={handleToggleMarket}
+        onSave={handleSaveEdit}
+        onClose={() => setShowEditModal(false)}
+      />
+      <PlanModal
+        visible={showNewModal}
+        isNew={true}
+        editPlan={null}
+        state={modalState}
+        saving={saving}
+        marketPerms={marketPerms}
+        loadingMp={loadingMp}
+        onChange={handleChange}
+        onToggleFeature={handleToggleFeature}
+        onToggleMarket={handleToggleMarket}
+        onSave={handleCreateNew}
+        onClose={() => setShowNewModal(false)}
+      />
 
       <AdminDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} activeRoute="/admin/plan-builder" />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container:         { flex: 1 },
-  header:            { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
-  headerTitle:       { fontSize: 18, fontWeight: "700" },
-  heroRow:           { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  heroTitle:         { fontSize: 22, fontWeight: "800" },
-  heroSub:           { fontSize: 13, lineHeight: 18 },
-  newBtn:            { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10 },
-  newBtnText:        { color: "#fff", fontSize: 13, fontWeight: "700" },
-  planCard:          { borderRadius: 12, borderWidth: 1, padding: 16, gap: 12 },
-  planTopRow:        { flexDirection: "row", alignItems: "center", gap: 8 },
-  planName:          { fontSize: 16, fontWeight: "800" },
-  planSub:           { fontSize: 12, marginTop: 2, lineHeight: 16 },
-  planPrice:         { fontSize: 15, fontWeight: "700" },
-  editBtn:           { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8 },
-  editBtnText:       { fontSize: 13 },
-  featureChips:      { flexDirection: "row", flexWrap: "wrap", gap: 7 },
-  chip:              { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 16 },
-  chipText:          { fontSize: 12 },
-  chipSection:       { fontSize: 11, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 },
-  noFeatures:        { fontSize: 13, fontStyle: "italic" },
-  retryBtn:          { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
-  overlay:           { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center", padding: 20 },
-  editModal:         { width: "100%", maxWidth: 420, borderRadius: 16, padding: 20, gap: 10 },
-  modalClose:        { position: "absolute", top: 14, right: 14, zIndex: 10 },
-  modalTitle:        { fontSize: 17, fontWeight: "700", marginBottom: 4 },
-  mField:            { gap: 6 },
-  mLabel:            { fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
-  mInput:            { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 11, fontSize: 14 },
-  featureToggle:     { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, borderWidth: 1 },
-  featureToggleText: { fontSize: 14, flex: 1 },
-  mSaveBtn:          { paddingVertical: 15, borderRadius: 10, alignItems: "center" },
-  mSaveBtnText:      { color: "#fff", fontSize: 15, fontWeight: "700" },
-  emptyHint:         { fontSize: 13, fontStyle: "italic" },
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  container:   { flex: 1 },
+  header:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
+  headerTitle: { fontSize: 17, fontWeight: "800" },
+  newBtn:      { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10 },
+  newBtnText:  { color: "#fff", fontSize: 13, fontWeight: "800" },
+
+  planCard:   { borderRadius: 14, borderWidth: 1, padding: 14, gap: 0 },
+  badge:      { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  chip:       { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  actionRow:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderTopWidth: 1, marginTop: 12, paddingTop: 10 },
+  actionBtn:  { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+
+  overlay:     { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  modalSheet:  { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 0, maxHeight: "92%", flex: 0, flexShrink: 1 },
+  modalHeader: { flexDirection: "row", alignItems: "flex-start", marginBottom: 16 },
+  modalTitle:  { fontSize: 18, fontWeight: "900" },
+  modalCloseBtn: { padding: 4, marginLeft: 8 },
+
+  input:    { borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: Platform.OS === "ios" ? 12 : 10, fontSize: 14 },
+  toggleRow: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1.5, borderRadius: 10, padding: 10 },
+
+  saveBtn:     { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, paddingVertical: 14, marginTop: 12, marginBottom: Platform.OS === "ios" ? 24 : 12 },
+  saveBtnText: { color: "#fff", fontSize: 15, fontWeight: "800" },
 });

@@ -15,6 +15,7 @@ import {
   Camera,
   Check,
   CircleCheck,
+  Circle,
   ChevronDown,
   ChevronRight,
   ChevronLeft,
@@ -81,6 +82,8 @@ import {
   Slash,
   SlidersHorizontal,
   Smartphone,
+  Square,
+  SquareCheck,
   Star,
   Tag,
   Trash2,
@@ -103,6 +106,7 @@ import {
   ThumbsUp,
   Sparkles,
   Radio,
+  CreditCard,
 } from "lucide-react-native";
 import React from "react";
 import { Text, View } from "react-native";
@@ -125,6 +129,10 @@ const FEATHER_MAP: Record<string, React.ComponentType<any>> = {
   camera: Camera,
   check: Check,
   "check-circle": CircleCheck,
+  "check-square": SquareCheck,
+  circle: Circle,
+  "credit-card": CreditCard,
+  square: Square,
   "chevron-down": ChevronDown,
   "chevron-right": ChevronRight,
   "chevron-left": ChevronLeft,
