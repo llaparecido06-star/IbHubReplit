@@ -42,6 +42,23 @@ import { usePaginatedQuery } from "@/hooks/usePaginatedQuery";
 
 type Period    = "mes" | "trimestre" | "ano";
 type MercadoTab = "visao" | "apresentacoes" | "idealbi";
+type IdealBISubTab = "feed" | "search";
+
+// ─── Ideal.BI Search Mock Data ─────────────────────────────────────────────────
+interface WineRecord {
+  marcaCompleta: string;
+  paisDeOrigem: string;
+  exportador: string;
+  distribuidor: string;
+}
+
+const WINE_MOCK_DATA: WineRecord[] = [
+  { marcaCompleta: "Casillero del Diablo Reserva",     paisDeOrigem: "Chile",     exportador: "Concha y Toro",          distribuidor: "VCT Brasil"             },
+  { marcaCompleta: "Penfolds Bin 389 Cabernet Shiraz", paisDeOrigem: "Austrália", exportador: "Treasury Wine Estates",  distribuidor: "Mistral Brasil"          },
+  { marcaCompleta: "Santa Julia Magna",                paisDeOrigem: "Argentina", exportador: "Zuccardi Valle de Uco",  distribuidor: "Cantu Importadora"       },
+  { marcaCompleta: "Passo Fundo Malbec",               paisDeOrigem: "Brasil",    exportador: "Vinícola Panceri",       distribuidor: "Vinho Sul Distribuidora" },
+  { marcaCompleta: "Sogrape Porca de Murça",           paisDeOrigem: "Portugal",  exportador: "Sogrape Vinhos",         distribuidor: "Expand Importadora"      },
+];
 
 interface TooltipState {
   visible: boolean;
@@ -733,6 +750,224 @@ function ApresentacoesView({ colors, bottomPad, session, isAdmin }: { colors: an
   );
 }
 
+// ─── Ideal.BI Busca com IA ────────────────────────────────────────────────────
+
+function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof useColors>; bottomPad: number }) {
+  const router = useRouter();
+  const [query, setQuery]         = useState("");
+  const [credits, setCredits]     = useState(3);
+  const [searching, setSearching] = useState(false);
+  const [result, setResult]       = useState<WineRecord | null | "not_found">(null);
+  const exhausted = credits === 0;
+
+  const handleSearch = async () => {
+    const q = query.trim();
+    if (!q || searching || exhausted) return;
+    setSearching(true);
+    setResult(null);
+    await new Promise(r => setTimeout(r, 2000));
+    const found = WINE_MOCK_DATA.find(w =>
+      w.marcaCompleta.toLowerCase().includes(q.toLowerCase())
+    );
+    if (found) {
+      setResult(found);
+      setCredits(c => Math.max(0, c - 1));
+    } else {
+      setResult("not_found");
+    }
+    setSearching(false);
+  };
+
+  return (
+    <ScrollView
+      contentContainerStyle={{ padding: 16, paddingBottom: bottomPad, gap: 16 }}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
+      {/* Header row — title + credit badge */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+        <View>
+          <Text style={{ fontSize: 17, fontWeight: "800", color: colors.navy }}>Busca com IA</Text>
+          <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 2 }}>
+            Descubra quem importa e exporta
+          </Text>
+        </View>
+        <View style={{
+          flexDirection: "row", alignItems: "center", gap: 5,
+          backgroundColor: exhausted ? "#fef2f2" : "#fefce8",
+          borderWidth: 1, borderColor: exhausted ? "#fca5a5" : "#fde68a",
+          paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
+        }}>
+          <Text style={{ fontSize: 14 }}>⚡</Text>
+          <Text style={{ fontSize: 12, fontWeight: "700", color: exhausted ? "#dc2626" : "#92400e" }}>
+            {credits} {credits === 1 ? "consulta restante" : "consultas restantes"}
+          </Text>
+        </View>
+      </View>
+
+      {/* Description card */}
+      <View style={{ backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 14, gap: 8 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: "#c9a84c18", alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ fontSize: 18 }}>🍷</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>Inteligência de Mercado</Text>
+            <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>
+              Digite o nome de um vinho e descubra exportadores e distribuidores.
+            </Text>
+          </View>
+        </View>
+        <Text style={{ fontSize: 11, color: colors.mutedForeground, fontStyle: "italic" }}>
+          Sugestões: Casillero del Diablo, Penfolds Bin 389, Santa Julia, Sogrape
+        </Text>
+      </View>
+
+      {/* Search bar */}
+      <View style={{
+        flexDirection: "row", alignItems: "center", gap: 10,
+        backgroundColor: "#fff", borderWidth: 1.5,
+        borderColor: exhausted ? "#fca5a5" : colors.border,
+        borderRadius: 14, paddingHorizontal: 14, paddingVertical: 4,
+      }}>
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder={exhausted ? "Limite de consultas esgotado" : "Ex: Casillero del Diablo Reserva…"}
+          placeholderTextColor={colors.mutedForeground}
+          style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: 12 }}
+          editable={!exhausted && !searching}
+          onSubmitEditing={handleSearch}
+          returnKeyType="search"
+        />
+        <TouchableOpacity
+          onPress={handleSearch}
+          disabled={!query.trim() || searching || exhausted}
+          style={{
+            width: 36, height: 36, borderRadius: 10,
+            backgroundColor: (!query.trim() || searching || exhausted) ? colors.border : colors.gold,
+            alignItems: "center", justifyContent: "center",
+          }}
+        >
+          {searching
+            ? <ActivityIndicator size="small" color="#fff" />
+            : <Feather name="search" size={16} color="#fff" />
+          }
+        </TouchableOpacity>
+      </View>
+
+      {/* Loading / analysing state */}
+      {searching && (
+        <View style={{
+          backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: colors.border,
+          padding: 24, alignItems: "center", gap: 14,
+        }}>
+          <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: "#c9a84c18", alignItems: "center", justifyContent: "center" }}>
+            <ActivityIndicator size="large" color={colors.gold} />
+          </View>
+          <Text style={{ fontSize: 15, fontWeight: "700", color: colors.navy }}>Analisando mercado…</Text>
+          <Text style={{ fontSize: 12, color: colors.mutedForeground, textAlign: "center" }}>
+            Consultando base de dados de importadores e exportadores
+          </Text>
+        </View>
+      )}
+
+      {/* Not found state */}
+      {!searching && result === "not_found" && (
+        <View style={{
+          backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: colors.border,
+          padding: 20, alignItems: "center", gap: 10,
+        }}>
+          <Text style={{ fontSize: 28 }}>🔍</Text>
+          <Text style={{ fontSize: 15, fontWeight: "700", color: colors.navy }}>Vinho não encontrado</Text>
+          <Text style={{ fontSize: 13, color: colors.mutedForeground, textAlign: "center" }}>
+            Não encontramos esse vinho na base de dados. Tente outro nome ou variação.
+          </Text>
+        </View>
+      )}
+
+      {/* Result card */}
+      {!searching && result && result !== "not_found" && (
+        <View style={{
+          backgroundColor: "#fff", borderRadius: 16, borderWidth: 1.5,
+          borderColor: colors.gold + "60", overflow: "hidden",
+        }}>
+          {/* Card header with gold accent */}
+          <View style={{ backgroundColor: colors.gold, paddingHorizontal: 16, paddingVertical: 12 }}>
+            <Text style={{ fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.8)", letterSpacing: 1, textTransform: "uppercase" }}>
+              Resultado encontrado
+            </Text>
+            <Text style={{ fontSize: 19, fontWeight: "900", color: "#fff", marginTop: 3 }}>
+              {result.marcaCompleta}
+            </Text>
+          </View>
+
+          {/* Data rows */}
+          <View style={{ padding: 16, gap: 12 }}>
+            {[
+              { emoji: "🌍", label: "País de Origem",  value: result.paisDeOrigem },
+              { emoji: "📤", label: "Exportador",       value: result.exportador   },
+              { emoji: "🚚", label: "Distribuidor BR",  value: result.distribuidor },
+            ].map(row => (
+              <View key={row.label} style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ fontSize: 18 }}>{row.emoji}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                    {row.label}
+                  </Text>
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: colors.navy, marginTop: 1 }}>
+                    {row.value}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          {/* Credits deducted notice */}
+          <View style={{ backgroundColor: colors.background, paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Feather name="check-circle" size={13} color="#16a34a" />
+            <Text style={{ fontSize: 12, color: colors.mutedForeground }}>
+              1 consulta utilizada · {credits} restante{credits !== 1 ? "s" : ""}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* Paywall banner */}
+      {exhausted && (
+        <View style={{
+          backgroundColor: "#fff", borderRadius: 16, borderWidth: 1.5, borderColor: "#fca5a5",
+          padding: 20, alignItems: "center", gap: 12,
+        }}>
+          <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: "#fef2f2", alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ fontSize: 28 }}>🔒</Text>
+          </View>
+          <Text style={{ fontSize: 17, fontWeight: "800", color: colors.navy, textAlign: "center" }}>
+            Limite de consultas esgotado
+          </Text>
+          <Text style={{ fontSize: 13, color: colors.mutedForeground, textAlign: "center", lineHeight: 20 }}>
+            Faça o upgrade de plano para continuar descobrindo quem importa e exporta vinhos no mercado.
+          </Text>
+          <TouchableOpacity
+            style={{
+              flexDirection: "row", alignItems: "center", gap: 8,
+              backgroundColor: colors.gold, paddingHorizontal: 28, paddingVertical: 14,
+              borderRadius: 12, width: "100%" as any, justifyContent: "center",
+            }}
+            onPress={() => router.push("/subscription")}
+            activeOpacity={0.85}
+          >
+            <Feather name="zap" size={15} color="#fff" />
+            <Text style={{ color: "#fff", fontWeight: "800", fontSize: 15 }}>Fazer Upgrade</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
 // ─── Ideal.BI Feed (Mobile) ───────────────────────────────────────────────────
 
 function IdealBIAvatar({ src, name, size = 36 }: { src?: string | null; name: string; size?: number }) {
@@ -1208,6 +1443,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
 }) {
   const router = useRouter();
   const { hasFeature: permHasFeature } = usePermissions();
+  const [idealbiSubTab, setIdealbiSubTab] = useState<IdealBISubTab>("feed");
   const [newContent, setNewContent] = useState("");
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<"image" | "video" | null>(null);
@@ -1401,40 +1637,79 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
   ) : null;
 
   return (
-    <FlatList
-      data={posts}
-      keyExtractor={p => p.id}
-      contentContainerStyle={{ paddingTop: 12, paddingBottom: bottomPad, flexGrow: 1 }}
-      showsVerticalScrollIndicator={false}
-      ListHeaderComponent={AdminHeader}
-      ListEmptyComponent={loading ? (
-        <ActivityIndicator size="large" color={colors.gold} style={{ marginTop: 60 }} />
+    <View style={{ flex: 1 }}>
+      {/* Sub-tab bar: Feed | Busca com IA */}
+      <View style={{
+        flexDirection: "row", backgroundColor: "#fff",
+        borderBottomWidth: 1, borderBottomColor: colors.border,
+        paddingHorizontal: 16, gap: 4,
+      }}>
+        {([
+          { key: "feed",   label: "Feed",   icon: "radio"  },
+          { key: "search", label: null,     icon: "search" },
+        ] as { key: IdealBISubTab; label: string | null; icon: any }[]).map(tab => {
+          const active = idealbiSubTab === tab.key;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              onPress={() => setIdealbiSubTab(tab.key)}
+              style={{
+                flexDirection: "row", alignItems: "center", gap: 5,
+                paddingHorizontal: 14, paddingVertical: 10,
+                borderBottomWidth: 2,
+                borderBottomColor: active ? colors.gold : "transparent",
+              }}
+            >
+              <Feather name={tab.icon} size={13} color={active ? colors.gold : colors.mutedForeground} />
+              {tab.label && (
+                <Text style={{ fontSize: 13, fontWeight: active ? "700" : "500", color: active ? colors.navy : colors.mutedForeground }}>
+                  {tab.label}
+                </Text>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {idealbiSubTab === "search" ? (
+        <IdealBISearchView colors={colors} bottomPad={bottomPad} />
       ) : (
-        <View style={{ alignItems: "center", paddingTop: 60, gap: 12 }}>
-          <Text style={{ fontSize: 36 }}>📡</Text>
-          <Text style={{ fontSize: 15, color: colors.mutedForeground, textAlign: "center" }}>
-            {"Nenhuma publicação ainda.\nFique ligado para novidades da Ideal.BI."}
-          </Text>
-        </View>
-      )}
-      renderItem={({ item }) => (
-        <MarketPostCardMobile
-          post={item}
-          userId={userId}
-          onLikeToggle={handleLikeToggle}
-          colors={colors}
+        <FlatList
+          data={posts}
+          keyExtractor={p => p.id}
+          contentContainerStyle={{ paddingTop: 12, paddingBottom: bottomPad, flexGrow: 1 }}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={AdminHeader}
+          ListEmptyComponent={loading ? (
+            <ActivityIndicator size="large" color={colors.gold} style={{ marginTop: 60 }} />
+          ) : (
+            <View style={{ alignItems: "center", paddingTop: 60, gap: 12 }}>
+              <Text style={{ fontSize: 36 }}>📡</Text>
+              <Text style={{ fontSize: 15, color: colors.mutedForeground, textAlign: "center" }}>
+                {"Nenhuma publicação ainda.\nFique ligado para novidades da Ideal.BI."}
+              </Text>
+            </View>
+          )}
+          renderItem={({ item }) => (
+            <MarketPostCardMobile
+              post={item}
+              userId={userId}
+              onLikeToggle={handleLikeToggle}
+              colors={colors}
+            />
+          )}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.3}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={{ paddingVertical: 16, alignItems: "center" }}>
+                <ActivityIndicator color={colors.gold} size="small" />
+              </View>
+            ) : null
+          }
         />
       )}
-      onEndReached={loadMore}
-      onEndReachedThreshold={0.3}
-      ListFooterComponent={
-        loadingMore ? (
-          <View style={{ paddingVertical: 16, alignItems: "center" }}>
-            <ActivityIndicator color={colors.gold} size="small" />
-          </View>
-        ) : null
-      }
-    />
+    </View>
   );
 }
 
