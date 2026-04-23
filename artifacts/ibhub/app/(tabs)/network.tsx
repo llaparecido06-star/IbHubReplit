@@ -459,6 +459,7 @@ function SlideViewerModal({
   colors: any;
   session: any;
 }) {
+  const insets = useSafeAreaInsets();
   const [slides, setSlides]   = useState<API.PresentationSlide[]>([]);
   const [total, setTotal]     = useState(0);
   const [unlocked, setUnlocked] = useState(0);
@@ -522,9 +523,9 @@ function SlideViewerModal({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <View style={[sliderStyles.container, { backgroundColor: "#000" }]}>
-        {/* Header */}
-        <View style={[sliderStyles.modalHeader, { backgroundColor: "rgba(0,0,0,0.7)" }]}>
-          <TouchableOpacity onPress={onClose} style={sliderStyles.closeBtn}>
+        {/* Header — paddingTop uses real safe area so X is always tappable on iPhone */}
+        <View style={[sliderStyles.modalHeader, { backgroundColor: "rgba(0,0,0,0.7)", paddingTop: (insets.top || (Platform.OS === "ios" ? 52 : 20)) + 10 }]}>
+          <TouchableOpacity onPress={onClose} style={sliderStyles.closeBtn} hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}>
             <Feather name="x" size={22} color="#fff" />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
@@ -575,7 +576,7 @@ function SlideViewerModal({
 
 const sliderStyles = StyleSheet.create({
   container:       { flex: 1, backgroundColor: "#000" },
-  modalHeader:     { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingTop: Platform.OS === "ios" ? 52 : 20, paddingBottom: 14 },
+  modalHeader:     { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingBottom: 14 },
   closeBtn:        { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   modalTitle:      { fontSize: 15, fontWeight: "700", color: "#fff" },
   slideCounter:    { fontSize: 11, color: "#9ca3af", marginTop: 2 },

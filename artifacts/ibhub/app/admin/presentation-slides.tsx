@@ -156,6 +156,30 @@ export default function AdminPresentationSlidesScreen() {
     Alert.alert("Concluído", `${done} slide(s) processado(s).`);
   };
 
+  const handleMoveSlide = async (slide: Slide, direction: "up" | "down") => {
+    const sorted = [...slides].sort((a, b) => a.sequence_order - b.sequence_order);
+    const idx = sorted.findIndex(s => s.id === slide.id);
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= sorted.length) return;
+
+    const target = sorted[swapIdx];
+    const aOrder = slide.sequence_order;
+    const bOrder = target.sequence_order;
+
+    // Swap sequence_order values in DB
+    await supabase.from("slides").update({ sequence_order: bOrder }).eq("id", slide.id);
+    await supabase.from("slides").update({ sequence_order: aOrder }).eq("id", target.id);
+
+    // Update local state
+    setSlides(prev =>
+      prev.map(s => {
+        if (s.id === slide.id) return { ...s, sequence_order: bOrder };
+        if (s.id === target.id) return { ...s, sequence_order: aOrder };
+        return s;
+      }).sort((a, b) => a.sequence_order - b.sequence_order)
+    );
+  };
+
   const handleDeleteSlide = (slide: Slide) => {
     Alert.alert(
       "Remover slide",
@@ -274,17 +298,40 @@ export default function AdminPresentationSlidesScreen() {
               <View style={{ gap: 8 }}>
                 {slides.map((slide, idx) => (
                   <View key={slide.id} style={[styles.slideRow, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                    {/* Order badge */}
                     <View style={[styles.slideIndex, { backgroundColor: colors.gold + "18" }]}>
                       <Text style={[styles.slideIndexText, { color: colors.gold }]}>{idx + 1}</Text>
                     </View>
+
+                    {/* Info */}
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.slidePath, { color: colors.foreground }]} numberOfLines={1}>
                         {slide.storage_path.split("/").pop()}
                       </Text>
                       <Text style={[styles.slideMeta, { color: colors.mutedForeground }]}>
-                        Ordem: {slide.sequence_order} · {new Date(slide.created_at).toLocaleDateString("pt-BR")}
+                        seq: {slide.sequence_order} · {new Date(slide.created_at).toLocaleDateString("pt-BR")}
                       </Text>
                     </View>
+
+                    {/* Move up / down */}
+                    <View style={{ flexDirection: "column", gap: 2 }}>
+                      <TouchableOpacity
+                        onPress={() => handleMoveSlide(slide, "up")}
+                        disabled={idx === 0}
+                        style={[styles.orderBtn, { opacity: idx === 0 ? 0.25 : 1, borderColor: colors.border }]}
+                      >
+                        <Feather name="chevron-up" size={16} color={colors.navy} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleMoveSlide(slide, "down")}
+                        disabled={idx === slides.length - 1}
+                        style={[styles.orderBtn, { opacity: idx === slides.length - 1 ? 0.25 : 1, borderColor: colors.border }]}
+                      >
+                        <Feather name="chevron-down" size={16} color={colors.navy} />
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Delete */}
                     <TouchableOpacity onPress={() => handleDeleteSlide(slide)} style={styles.deleteBtn}>
                       <Feather name="trash-2" size={18} color="#dc2626" />
                     </TouchableOpacity>
@@ -323,4 +370,5 @@ const styles = StyleSheet.create({
   slidePath:          { fontSize: 13, fontWeight: "600" },
   slideMeta:          { fontSize: 11, marginTop: 2 },
   deleteBtn:          { padding: 6 },
+  orderBtn:           { width: 28, height: 28, borderRadius: 6, borderWidth: 1, alignItems: "center", justifyContent: "center" },
 });
