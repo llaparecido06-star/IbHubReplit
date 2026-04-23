@@ -552,7 +552,7 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
   ] : NAV_ITEMS;
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: BG, fontFamily: "'Inter', -apple-system, sans-serif" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: isMobile ? "#f2f3f5" : BG, fontFamily: "'Inter', -apple-system, sans-serif" }}>
       {/* ── Top bar ────────────────────────── */}
       <header style={{
         backgroundColor: WHITE, borderBottom: `1px solid ${BORDER}`,
@@ -592,6 +592,25 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
         )}
 
         <button onClick={() => setLocation("/app/notificacoes")} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, display: "flex", alignItems: "center", padding: 4 }} title="Notificações">{I.bell}</button>
+
+        {/* ── Create post (mobile gold + button) ── */}
+        {isMobile && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            style={{
+              width: 34, height: 34, borderRadius: "50%",
+              backgroundColor: GOLD, border: "none",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer", flexShrink: 0,
+              boxShadow: "0 2px 8px rgba(201,168,76,0.4)",
+            }}
+            title="Criar publicação"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
+        )}
 
         {/* ── Profile / Company dropdown ── */}
         <div style={{ position: "relative" }}>
@@ -821,20 +840,21 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
         )}
 
         {/* ── Main ─────────────────────────── */}
-        <main style={{ flex: 1, minWidth: 0, padding: isMobile ? "0 10px 74px" : undefined }}>{children}</main>
+        <main style={{ flex: 1, minWidth: 0, padding: isMobile ? "0 0 70px" : undefined }}>{children}</main>
       </div>
 
       {/* ── Mobile Bottom Tab Bar ─────────── */}
       {isMobile && (
         <nav style={{
           position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 300,
-          height: 58, backgroundColor: WHITE, borderTop: `1px solid ${BORDER}`,
+          height: 62, backgroundColor: WHITE, borderTop: `1px solid ${BORDER}`,
           display: "flex", alignItems: "stretch",
-          boxShadow: "0 -2px 12px rgba(0,0,0,0.08)",
+          boxShadow: "0 -2px 12px rgba(0,0,0,0.06)",
+          paddingBottom: "env(safe-area-inset-bottom, 0px)",
         }}>
           {(activeCompany ? [
-            { path: "/app",               label: "Início",     icon: I.home },
-            { path: "/app/mensagens",     label: "Chat",       icon: I.msg },
+            { path: "/app",               label: "Início",        icon: I.home },
+            { path: "/app/mensagens",     label: "Chat",          icon: I.msg },
             { path: "/app/oportunidades", label: "Oportunidades", icon: I.brief },
             { path: `/app/empresa/${activeCompany.id}`, label: "Empresa", icon: I.company },
           ] : [
@@ -851,31 +871,18 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
                 onClick={() => setLocation(item.path)}
                 style={{
                   flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
-                  justifyContent: "center", gap: 3,
+                  justifyContent: "center", gap: 3, paddingTop: 6,
                   background: "none", border: "none", cursor: "pointer",
-                  color: active ? GOLD : MUTED,
-                  fontSize: 9, fontWeight: active ? 700 : 500,
-                  borderTop: active ? `2px solid ${GOLD}` : "2px solid transparent",
+                  color: active ? GOLD : "#9ca3af",
+                  fontSize: 10, fontWeight: 600,
                   transition: "color 0.15s",
                 }}
               >
-                <span style={{ display: "flex", opacity: active ? 1 : 0.6, transform: active ? "scale(1.1)" : "scale(1)", transition: "transform 0.15s" }}>{item.icon}</span>
+                <span style={{ display: "flex", color: active ? GOLD : "#9ca3af", transition: "color 0.15s" }}>{item.icon}</span>
                 {item.label}
               </button>
             );
           })}
-          <button
-            onClick={() => setShowCreateModal(true)}
-            style={{
-              width: 44, height: 44, borderRadius: "50%",
-              backgroundColor: GOLD, border: "none", cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: "0 2px 8px rgba(201,168,76,0.4)",
-              alignSelf: "center", marginRight: 8, flexShrink: 0,
-              fontSize: 22, color: NAVY, fontWeight: 800,
-            }}
-            title="Criar publicação"
-          >+</button>
         </nav>
       )}
 

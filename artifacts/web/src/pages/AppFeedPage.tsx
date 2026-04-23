@@ -239,7 +239,7 @@ function PostCard({
   };
 
   return (
-    <div style={{
+    <div className="post-card" style={{
       backgroundColor: WHITE,
       border: `1px solid ${BORDER}`,
       borderRadius: 14,
@@ -551,7 +551,7 @@ function PostTrigger({
   const name = activeCompany ? activeCompany.name : (profile?.full_name ?? "Usuário");
   const avatarSrc = activeCompany ? activeCompany.avatar_url : profile?.avatar_url;
   return (
-    <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 14, marginBottom: 14 }}>
+    <div className="feed-post-trigger" style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 14, marginBottom: 14 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <Avatar src={avatarSrc} name={name} size={40} bg={activeCompany ? GOLD : "#722f37"} />
         <button onClick={openModal} style={{
@@ -836,6 +836,24 @@ export default function AppFeedPage() {
 
   return (
     <AppShell onPostCreated={load}>
+      <style>{`
+        @media (max-width: 767px) {
+          .post-card {
+            border: none !important;
+            border-radius: 0 !important;
+            margin-bottom: 8px !important;
+            box-shadow: none !important;
+          }
+          .feed-greeting {
+            padding: 14px 16px 0;
+          }
+          .feed-post-trigger {
+            border-radius: 0 !important;
+            border-left: none !important;
+            border-right: none !important;
+          }
+        }
+      `}</style>
       {/* Greeting / Company Banner */}
       {activeCompany ? (
         <div style={{ marginBottom: 14, backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", gap: 12 }}>
@@ -850,7 +868,7 @@ export default function AppFeedPage() {
           </div>
         </div>
       ) : (
-        <div style={{ marginBottom: 14 }}>
+        <div className="feed-greeting" style={{ marginBottom: 14 }}>
           <h1 style={{ fontSize: 20, fontWeight: 900, color: NAVY, margin: "0 0 2px" }}>Olá, {firstName} 👋</h1>
           <p style={{ fontSize: 13, color: MUTED, margin: 0 }}>Veja as últimas atualizações</p>
         </div>
