@@ -515,7 +515,7 @@ function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idea
   };
 
   return (
-    <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden" }}>
+    <div className="mercado-post-card" style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden" }}>
       {/* Author header */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px 10px" }}>
         <div
@@ -890,6 +890,17 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
   );
 }
 
+/* ─── Window width hook ──────────────────── */
+function useWindowWidth() {
+  const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1280);
+  useEffect(() => {
+    const h = () => setW(window.innerWidth);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+  return w;
+}
+
 /* ─── Main Page ───────────────────────────────────────────────────────────── */
 
 export default function MercadoPage() {
@@ -897,6 +908,7 @@ export default function MercadoPage() {
   const { hasFeature, isLoading: permLoading } = usePermissions();
   const [period, setPeriod] = useState<Period>("ano");
   const [mainTab, setMainTab] = useState<MercadoTab>("visao");
+  const isMobile = useWindowWidth() < 768;
   const [data, setData] = useState<MarketOverview>(MARKET_FALLBACK.ano);
   const [loading, setLoading] = useState(false);
   useEffect(() => {
@@ -908,184 +920,253 @@ export default function MercadoPage() {
     });
   }, [period, mainTab]);
 
+  const isAdmin = profile?.is_admin ?? false;
+  const canMarket = (key: string) => isAdmin || hasFeature(`mercado:${key}`);
+
+  /* ── Tab / Period definitions ── */
   const PERIODS: { key: Period; label: string }[] = [
     { key: "mes", label: "Mês" },
     { key: "trimestre", label: "Trimestre" },
     { key: "ano", label: "Ano" },
   ];
-
-  const TABS: { key: MercadoTab; label: string }[] = [
-    { key: "visao",         label: "📊 Visão Geral" },
-    { key: "idealbi",       label: "📡 Ideal.BI" },
-    { key: "apresentacoes", label: "📋 Apresentações" },
+  const TABS: { key: MercadoTab; label: string; icon: string }[] = [
+    { key: "visao",         label: "Visão Geral", icon: "📊" },
+    { key: "idealbi",       label: "Ideal.BI",    icon: "📡" },
+    { key: "apresentacoes", label: "Relatórios",  icon: "📋" },
   ];
 
-  const isAdmin = profile?.is_admin ?? false;
-  const canMarket = (key: string) => isAdmin || hasFeature(`mercado:${key}`);
+  /* ── Shared content renderer ── */
+  const renderContent = () => {
+    if (mainTab === "apresentacoes") {
+      if (permLoading) return (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 200 }}>
+          <div style={{ width: 32, height: 32, borderRadius: "50%", border: "3px solid #c9a84c", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+        </div>
+      );
+      if (!hasFeature("mercado:apresentacoes") && !(profile?.is_admin)) return (
+        <div style={{ textAlign: "center", padding: "60px 20px" }}>
+          <div style={{ fontSize: 44, marginBottom: 16 }}>🔒</div>
+          <h3 style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Apresentações de Mercado</h3>
+          <p style={{ fontSize: 14, color: MUTED, maxWidth: 400, margin: "0 auto 20px" }}>
+            Acesse relatórios e apresentações exclusivos do mercado vitivinícola. Disponível nos planos com acesso ao mercado de dados.
+          </p>
+          <a href="/assinar" style={{ display: "inline-block", padding: "10px 24px", backgroundColor: GOLD, color: NAVY, borderRadius: 10, fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
+            Ver Planos
+          </a>
+        </div>
+      );
+      return <ApresentacoesPanel isAdmin={profile?.is_admin ?? false} />;
+    }
+    if (mainTab === "idealbi") return (
+      <IdealBIFeed userId={user?.id ?? ""} isAdmin={profile?.is_admin ?? false} />
+    );
+    if (loading) return (
+      <div style={{ textAlign: "center", padding: 60, color: "#aaa" }}>⏳ Carregando dados...</div>
+    );
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? 8 : 20, padding: isMobile ? "0 0 70px" : 0 }}>
+        {/* KPI Cards */}
+        {canMarket("kpis") ? (
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fill, minmax(240px, 1fr))",
+            gap: isMobile ? 1 : 14,
+            backgroundColor: isMobile ? BORDER : "transparent",
+          }}>
+            {data.kpis.map((kpi) => (
+              <div key={kpi.label} className="mercado-card" style={{ backgroundColor: WHITE, border: isMobile ? "none" : "1px solid #e8eaed", borderRadius: isMobile ? 0 : 14, padding: isMobile ? "14px 16px" : 20 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                  <div style={{ width: 40, height: 40, backgroundColor: `${GOLD}18`, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
+                    {kpi.icon === "Globe" ? "🌍" : kpi.icon === "TrendingUp" ? "📈" : "📊"}
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: kpi.change >= 0 ? "#16a34a" : "#dc2626" }}>
+                    {kpi.change >= 0 ? "↑" : "↓"} {Math.abs(kpi.change)}%
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: "#8a93a2" }}>{kpi.label}</div>
+                <div style={{ fontSize: 12, color: "#aaa" }}>{kpi.period}</div>
+                <div style={{ fontSize: 20, fontWeight: 900, color: NAVY, marginTop: 4 }}>{kpi.value}</div>
+                {kpi.source && !isMobile && (
+                  <div style={{ fontSize: 11, color: "#aaa", marginTop: 6 }}>Fonte: {kpi.source}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ margin: isMobile ? "0" : undefined }}><LockedBlock title="KPIs de Mercado" /></div>
+        )}
+
+        {/* Separator for mobile */}
+        {isMobile && <div style={{ height: 8, backgroundColor: "#f2f3f5" }} />}
+
+        {/* Charts */}
+        {canMarket("graficos") ? (
+          <>
+            <div className="mercado-card" style={{ backgroundColor: WHITE, border: isMobile ? "none" : "1px solid #e8eaed", borderRadius: isMobile ? 0 : 14, padding: isMobile ? "16px" : 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                <span style={{ color: GOLD }}>📈</span>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0 }}>Exportações × Importações</h3>
+              </div>
+              <AreaChart data={data.chart_area} />
+            </div>
+            {isMobile && <div style={{ height: 8, backgroundColor: "#f2f3f5" }} />}
+            <div className="mercado-card" style={{ backgroundColor: WHITE, border: isMobile ? "none" : "1px solid #e8eaed", borderRadius: isMobile ? 0 : 14, padding: isMobile ? "16px" : 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                <span style={{ color: GOLD }}>📊</span>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0 }}>Produção Nacional (Índice)</h3>
+              </div>
+              <BarChart data={data.chart_bar} />
+            </div>
+          </>
+        ) : (
+          <div style={{ margin: isMobile ? "0" : undefined }}><LockedBlock title="Gráficos de Mercado" /></div>
+        )}
+
+        {isMobile && <div style={{ height: 8, backgroundColor: "#f2f3f5" }} />}
+
+        {/* Tendências */}
+        {canMarket("tendencias") ? (
+          <div className="mercado-card" style={{ backgroundColor: WHITE, border: isMobile ? "none" : "1px solid #e8eaed", borderRadius: isMobile ? 0 : 14, padding: isMobile ? "16px" : 20 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+              <span>🔥</span>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0 }}>Tendências do Período</h3>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {data.tendencias.map((t) => (
+                <div key={t.title} style={{ display: "flex", gap: 12, padding: 12, backgroundColor: "#f9fafb", borderRadius: 10 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, flexShrink: 0, backgroundColor: t.pos ? "#dcfce7" : "#fef2f2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>
+                    {t.pos ? "📈" : "📉"}
+                  </div>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{t.title}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: t.pos ? "#16a34a" : "#dc2626" }}>
+                        {t.pos ? "+" : ""}{t.change}%
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 12, color: "#8a93a2", margin: 0, lineHeight: 1.5 }}>{t.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div style={{ margin: isMobile ? "0" : undefined }}><LockedBlock title="Tendências do Período" /></div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <AppShell>
-      <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 16px" }}>
-        {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
-          <div>
-            <h1 style={{ fontSize: 24, fontWeight: 900, color: NAVY, margin: 0 }}>Mercado</h1>
-            <p style={{ fontSize: 14, color: "#8a93a2", margin: "4px 0 0" }}>Dados e indicadores do setor vitivinícola brasileiro</p>
+      <style>{`
+        @media (max-width: 767px) {
+          .mercado-post-card {
+            border-radius: 0 !important;
+            border-left: none !important;
+            border-right: none !important;
+            margin-bottom: 8px;
+          }
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
+
+      {isMobile ? (
+        /* ══ MOBILE LAYOUT ══════════════════════════════ */
+        <div style={{ backgroundColor: "#f2f3f5", minHeight: "100vh" }}>
+          {/* Sticky header */}
+          <div style={{ backgroundColor: WHITE, borderBottom: `1px solid ${BORDER}`, padding: "14px 16px 12px", position: "sticky", top: 56, zIndex: 100 }}>
+            <h1 style={{ fontSize: 20, fontWeight: 900, color: NAVY, margin: 0 }}>Mercado</h1>
+            <p style={{ fontSize: 12, color: MUTED, margin: "2px 0 0" }}>Dados e indicadores do setor vitivinícola</p>
           </div>
+
+          {/* Sticky tabs row */}
+          <div style={{ position: "sticky", top: 113, zIndex: 99, backgroundColor: WHITE, borderBottom: `1px solid ${BORDER}`, display: "flex", padding: "8px 10px", gap: 4 }}>
+            {TABS.map(t => {
+              const active = mainTab === t.key;
+              return (
+                <button key={t.key} onClick={() => setMainTab(t.key)} style={{
+                  flex: 1, padding: "8px 6px", borderRadius: 8,
+                  border: active ? `1px solid ${BORDER}` : "1px solid transparent",
+                  background: "none", cursor: "pointer",
+                  fontSize: 11, fontWeight: active ? 700 : 500,
+                  color: active ? GOLD : MUTED,
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+                  transition: "color 0.15s",
+                }}>
+                  <span style={{ fontSize: 16 }}>{t.icon}</span>
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Period row — only for Visão Geral */}
           {mainTab === "visao" && (
-            <div style={{ display: "flex", gap: 6 }}>
-              {PERIODS.map((p) => (
-                <button
-                  key={p.key}
-                  onClick={() => setPeriod(p.key)}
-                  style={{
-                    padding: "7px 16px",
-                    borderRadius: 20,
+            <div style={{ backgroundColor: WHITE, display: "flex", gap: 6, padding: "10px 16px 10px", borderBottom: `1px solid ${BORDER}` }}>
+              {PERIODS.map(p => {
+                const active = period === p.key;
+                return (
+                  <button key={p.key} onClick={() => setPeriod(p.key)} style={{
+                    flex: 1, padding: "8px 0", borderRadius: 20,
+                    border: `1px solid ${active ? GOLD : BORDER}`,
+                    backgroundColor: active ? GOLD : WHITE,
+                    color: active ? WHITE : "#555",
+                    fontSize: 13, fontWeight: active ? 700 : 500,
+                    cursor: "pointer", fontFamily: "inherit",
+                  }}>
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Content */}
+          {renderContent()}
+        </div>
+      ) : (
+        /* ══ DESKTOP LAYOUT ═════════════════════════════ */
+        <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 16px" }}>
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+            <div>
+              <h1 style={{ fontSize: 24, fontWeight: 900, color: NAVY, margin: 0 }}>Mercado</h1>
+              <p style={{ fontSize: 14, color: "#8a93a2", margin: "4px 0 0" }}>Dados e indicadores do setor vitivinícola brasileiro</p>
+            </div>
+            {mainTab === "visao" && (
+              <div style={{ display: "flex", gap: 6 }}>
+                {PERIODS.map((p) => (
+                  <button key={p.key} onClick={() => setPeriod(p.key)} style={{
+                    padding: "7px 16px", borderRadius: 20,
                     border: `1px solid ${period === p.key ? GOLD : "#e8eaed"}`,
                     backgroundColor: period === p.key ? GOLD : WHITE,
                     color: period === p.key ? WHITE : "#555",
-                    fontSize: 13,
-                    fontWeight: period === p.key ? 700 : 500,
+                    fontSize: 13, fontWeight: period === p.key ? 700 : 500,
                     cursor: "pointer",
-                  }}
-                >{p.label}</button>
-              ))}
-            </div>
-          )}
-        </div>
+                  }}>{p.label}</button>
+                ))}
+              </div>
+            )}
+          </div>
 
-        {/* Tabs */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 20, borderBottom: "2px solid #e8eaed", paddingBottom: 0 }}>
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setMainTab(t.key)}
-              style={{
-                background: "none", border: "none",
-                padding: "10px 16px",
+          {/* Underline tabs */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 20, borderBottom: "2px solid #e8eaed" }}>
+            {TABS.map((t) => (
+              <button key={t.key} onClick={() => setMainTab(t.key)} style={{
+                background: "none", border: "none", padding: "10px 16px",
                 borderBottom: mainTab === t.key ? `2px solid ${GOLD}` : "2px solid transparent",
                 color: mainTab === t.key ? GOLD : "#8a93a2",
                 fontWeight: mainTab === t.key ? 700 : 500,
-                fontSize: 14, cursor: "pointer",
-                marginBottom: -2, transition: "all 0.15s",
-              }}
-            >{t.label}</button>
-          ))}
-        </div>
-
-        {/* Content */}
-        {mainTab === "apresentacoes" ? (
-          permLoading ? (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 200 }}>
-              <div style={{ width: 32, height: 32, borderRadius: "50%", border: "3px solid #c9a84c", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
-            </div>
-          ) : !hasFeature("mercado:apresentacoes") && !(profile?.is_admin) ? (
-            <div style={{ textAlign: "center", padding: "60px 20px" }}>
-              <div style={{ fontSize: 44, marginBottom: 16 }}>🔒</div>
-              <h3 style={{ fontSize: 18, fontWeight: 800, color: "#0d1b2a", marginBottom: 8 }}>Apresentações de Mercado</h3>
-              <p style={{ fontSize: 14, color: "#7a8494", maxWidth: 400, margin: "0 auto 20px" }}>
-                Acesse relatórios e apresentações exclusivos do mercado vitivinícola. Disponível nos planos com acesso ao mercado de dados.
-              </p>
-              <a href="/assinar" style={{ display: "inline-block", padding: "10px 24px", backgroundColor: "#c9a84c", color: "#0d1b2a", borderRadius: 10, fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
-                Ver Planos
-              </a>
-            </div>
-          ) : (
-            <ApresentacoesPanel isAdmin={profile?.is_admin ?? false} />
-          )
-        ) : mainTab === "idealbi" ? (
-          <IdealBIFeed
-            userId={user?.id ?? ""}
-            isAdmin={profile?.is_admin ?? false}
-          />
-        ) : loading ? (
-          <div style={{ textAlign: "center", padding: 60, color: "#aaa" }}>⏳ Carregando dados...</div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-            {/* KPI Cards */}
-            {canMarket("kpis") ? (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
-                {data.kpis.map((kpi) => (
-                  <div key={kpi.label} style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                      <div style={{ width: 42, height: 42, backgroundColor: `${GOLD}18`, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>
-                        {kpi.icon === "Globe" ? "🌍" : kpi.icon === "TrendingUp" ? "📈" : "📊"}
-                      </div>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: kpi.change >= 0 ? "#16a34a" : "#dc2626" }}>
-                        {kpi.change >= 0 ? "↑" : "↓"} {Math.abs(kpi.change)}%
-                      </span>
-                    </div>
-                    <div style={{ fontSize: 12, color: "#8a93a2" }}>{kpi.label}</div>
-                    <div style={{ fontSize: 12, color: "#aaa" }}>{kpi.period}</div>
-                    <div style={{ fontSize: 22, fontWeight: 900, color: NAVY, marginTop: 4 }}>{kpi.value}</div>
-                    {kpi.source && (
-                      <div style={{ fontSize: 11, color: "#aaa", marginTop: 6 }}>Fonte: {kpi.source}</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <LockedBlock title="KPIs de Mercado" />
-            )}
-
-            {/* Charts */}
-            {canMarket("graficos") ? (
-              <>
-                <div style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                    <span style={{ color: GOLD }}>📈</span>
-                    <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0 }}>Exportações × Importações</h3>
-                  </div>
-                  <AreaChart data={data.chart_area} />
-                </div>
-                <div style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                    <span style={{ color: GOLD }}>📊</span>
-                    <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0 }}>Produção Nacional (Índice)</h3>
-                  </div>
-                  <BarChart data={data.chart_bar} />
-                </div>
-              </>
-            ) : (
-              <LockedBlock title="Gráficos de Mercado" />
-            )}
-
-            {/* Tendências */}
-            {canMarket("tendencias") ? (
-              <div style={{ backgroundColor: WHITE, border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                  <span>🔥</span>
-                  <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0 }}>Tendências do Período</h3>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  {data.tendencias.map((t) => (
-                    <div key={t.title} style={{ display: "flex", gap: 14, padding: 14, backgroundColor: "#f9fafb", borderRadius: 10 }}>
-                      <div style={{
-                        width: 42, height: 42, borderRadius: 10, flexShrink: 0,
-                        backgroundColor: t.pos ? "#dcfce7" : "#fef2f2",
-                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18,
-                      }}>
-                        {t.pos ? "📈" : "📉"}
-                      </div>
-                      <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                          <span style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{t.title}</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: t.pos ? "#16a34a" : "#dc2626" }}>
-                            {t.pos ? "+" : ""}{t.change}%
-                          </span>
-                        </div>
-                        <p style={{ fontSize: 13, color: "#8a93a2", margin: 0, lineHeight: 1.5 }}>{t.desc}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <LockedBlock title="Tendências do Período" />
-            )}
+                fontSize: 14, cursor: "pointer", marginBottom: -2, transition: "all 0.15s",
+              }}>{t.icon} {t.label}</button>
+            ))}
           </div>
-        )}
-      </div>
+
+          {/* Content */}
+          {renderContent()}
+        </div>
+      )}
     </AppShell>
   );
 }
