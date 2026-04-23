@@ -746,14 +746,41 @@ function ApresentacoesView({ colors, bottomPad, session, isAdmin }: { colors: an
 
 function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof useColors>; bottomPad: number }) {
   const router = useRouter();
-  const [query, setQuery]         = useState("");
-  const [credits, setCredits]     = useState(3);
-  const [searching, setSearching] = useState(false);
-  const [result, setResult]       = useState<WineRecord | null | "not_found">(null);
-  const exhausted = credits === 0;
+  const { session } = useAuth();
 
-  const creditColor = credits >= 2 ? "#16a34a" : credits === 1 ? "#d97706" : "#dc2626";
-  const creditBg    = credits >= 2 ? "#dcfce7" : credits === 1 ? "#fef3c7" : "#fef2f2";
+  const [query, setQuery]               = useState("");
+  const [credits, setCredits]           = useState<number | null>(null);
+  const [creditsTotal, setCreditsTotal] = useState(3);
+  const [creditsLoading, setCreditsLoading] = useState(true);
+  const [searching, setSearching]       = useState(false);
+  const [result, setResult]             = useState<WineRecord | null | "not_found">(null);
+
+  const exhausted = credits === 0;
+  const creditColor = (credits ?? 3) >= 2 ? "#16a34a" : (credits ?? 3) === 1 ? "#d97706" : "#dc2626";
+  const creditBg    = (credits ?? 3) >= 2 ? "#dcfce7" : (credits ?? 3) === 1 ? "#fef3c7" : "#fef2f2";
+
+  const authHeader = (): HeadersInit =>
+    session?.access_token
+      ? { Authorization: `Bearer ${session.access_token}` }
+      : {};
+
+  const loadCredits = useCallback(async () => {
+    if (!session?.access_token) return;
+    try {
+      const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/wine-imports/credits`, {
+        headers: authHeader(),
+      });
+      if (!res.ok) return;
+      const json = await res.json() as { credits_remaining: number; credits_total: number };
+      setCredits(json.credits_remaining);
+      setCreditsTotal(json.credits_total);
+    } catch {
+    } finally {
+      setCreditsLoading(false);
+    }
+  }, [session?.access_token]);
+
+  useEffect(() => { loadCredits(); }, [loadCredits]);
 
   const handleSearch = async () => {
     const q = query.trim();
@@ -762,10 +789,23 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
     setResult(null);
     try {
       const res = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/wine-imports/search?q=${encodeURIComponent(q)}`
+        `${process.env.EXPO_PUBLIC_API_URL}/wine-imports/search?q=${encodeURIComponent(q)}`,
+        { headers: authHeader() }
       );
+      if (res.status === 402) {
+        setCredits(0);
+        setResult("not_found");
+        setSearching(false);
+        return;
+      }
       if (!res.ok) throw new Error("server error");
-      const json = await res.json() as { data: { id: number; marca_completa: string; marca_relatorio: string | null; distribuidor: string | null }[] };
+      const json = await res.json() as {
+        data: { id: number; marca_completa: string; marca_relatorio: string | null; distribuidor: string | null }[];
+        credits_remaining: number;
+        credits_total: number;
+      };
+      setCredits(json.credits_remaining);
+      setCreditsTotal(json.credits_total);
       const rows = json.data ?? [];
       if (rows.length > 0) {
         const first = rows[0];
@@ -775,7 +815,6 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
           marcaRelatorio: first.marca_relatorio ?? undefined,
           distribuidor: first.distribuidor ?? "—",
         });
-        setCredits(c => Math.max(0, c - 1));
       } else {
         setResult("not_found");
       }
@@ -796,22 +835,29 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
         <View style={[styles.kpiCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
           <View style={styles.kpiLeft}>
             <View style={[styles.kpiIconBox, { backgroundColor: colors.gold + "18" }]}>
-              <Feather name="zap" size={20} color={colors.gold} />
+              {creditsLoading
+                ? <ActivityIndicator size="small" color={colors.gold} />
+                : <Feather name="zap" size={20} color={colors.gold} />
+              }
             </View>
             <View>
               <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>Consultas Restantes</Text>
-              <Text style={[styles.kpiPeriod, { color: colors.mutedForeground }]}>Ideal.BI · Busca com IA</Text>
+              <Text style={[styles.kpiPeriod, { color: colors.mutedForeground }]}>
+                Ideal.BI · Busca com IA · {creditsTotal}/mês
+              </Text>
               <Text style={[styles.kpiValue, { color: exhausted ? "#dc2626" : colors.navy }]}>
-                {credits}
+                {creditsLoading ? "—" : String(credits ?? "—")}
               </Text>
             </View>
           </View>
           <View style={styles.kpiRight}>
-            <View style={{ backgroundColor: creditBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
-              <Text style={{ fontSize: 12, fontWeight: "700", color: creditColor }}>
-                {exhausted ? "Esgotado" : credits === 1 ? "Crítico" : "Ativo"}
-              </Text>
-            </View>
+            {!creditsLoading && (
+              <View style={{ backgroundColor: creditBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 12, fontWeight: "700", color: creditColor }}>
+                  {exhausted ? "Esgotado" : credits === 1 ? "Crítico" : "Ativo"}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       </View>
