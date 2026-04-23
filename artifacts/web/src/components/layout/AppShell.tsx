@@ -488,9 +488,7 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
 
   const handleSignOut = async () => {
     await signOut();
-    // Use hard navigation to clear all in-memory state and force login page
-    const basePath = (import.meta.env.BASE_URL as string) ?? "/web/";
-    window.location.href = `${basePath}login`;
+    // Navigation is handled by PrivateRoute's useEffect after session clears in React state
   };
 
   const openConnections = async () => {

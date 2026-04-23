@@ -278,8 +278,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    // Always clear local state, even if the Supabase API call fails
-    try { await supabase.auth.signOut(); } catch {}
+    // scope:'local' clears storage without a network call — works even offline
+    try { await supabase.auth.signOut({ scope: "local" }); } catch {}
     setSession(null);
     setUser(null);
     setProfile(null);
