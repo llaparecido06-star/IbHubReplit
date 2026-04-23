@@ -627,8 +627,227 @@ function LockedBlock({ title }: { title: string }) {
   );
 }
 
+/* ─── Ideal.BI Busca com IA ─────────────────────────────────── */
+function IdealBISearch({ userId }: { userId: string }) {
+  const [query, setQuery] = useState("");
+  const [credits, setCredits] = useState<number | null>(null);
+  const [creditsTotal, setCreditsTotal] = useState(3);
+  const [creditsLoading, setCreditsLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
+  type WineResult = { marcaCompleta: string; marcaRelatorio?: string; paisDeOrigem?: string; distribuidor: string };
+  const [result, setResult] = useState<WineResult | null | "not_found" | "out_of_scope">(null);
+  const [brandExtracted, setBrandExtracted] = useState<string | null>(null);
+
+  const exhausted = credits === 0;
+  const creditColor = (credits ?? 3) >= 2 ? "#16a34a" : (credits ?? 3) === 1 ? "#d97706" : "#dc2626";
+  const creditBg    = (credits ?? 3) >= 2 ? "#dcfce7" : (credits ?? 3) === 1 ? "#fef3c7" : "#fef2f2";
+
+  const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
+    ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
+
+  const getAuthHeader = async (): Promise<HeadersInit> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+  };
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const headers = await getAuthHeader();
+        const res = await fetch(`${apiBase}/wine-imports/credits`, { headers });
+        if (!res.ok) return;
+        const json = await res.json() as { credits_remaining: number; credits_total: number };
+        setCredits(json.credits_remaining);
+        setCreditsTotal(json.credits_total);
+      } catch { } finally { setCreditsLoading(false); }
+    })();
+  }, [userId]);
+
+  const handleSearch = async () => {
+    const q = query.trim();
+    if (!q || searching || exhausted) return;
+    setSearching(true);
+    setResult(null);
+    setBrandExtracted(null);
+    try {
+      const headers = await getAuthHeader();
+      const res = await fetch(`${apiBase}/wine-imports/search?q=${encodeURIComponent(q)}`, { headers });
+      if (res.status === 402) { setCredits(0); setResult("not_found"); setSearching(false); return; }
+      if (res.status === 422) { setResult("out_of_scope"); setSearching(false); return; }
+      if (!res.ok) throw new Error("server error");
+      const json = await res.json() as {
+        data: { marca_completa: string; marca_relatorio: string | null; pais_de_origem: string | null; distribuidor: string | null }[];
+        brand_extracted: string | null;
+        credits_remaining: number;
+        credits_total: number;
+      };
+      setCredits(json.credits_remaining);
+      setCreditsTotal(json.credits_total);
+      if (json.brand_extracted) setBrandExtracted(json.brand_extracted);
+      const rows = json.data ?? [];
+      if (rows.length > 0) {
+        const f = rows[0];
+        setResult({ marcaCompleta: f.marca_completa, marcaRelatorio: f.marca_relatorio ?? undefined, paisDeOrigem: f.pais_de_origem ?? undefined, distribuidor: f.distribuidor ?? "—" });
+      } else {
+        setResult("not_found");
+      }
+    } catch { setResult("not_found"); }
+    setSearching(false);
+  };
+
+  return (
+    <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 16, paddingBottom: 80 }}>
+
+      {/* Credits card */}
+      <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "16px 20px", display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
+          {creditsLoading ? (
+            <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${GOLD}`, borderTopColor: "transparent", animation: "spin 0.7s linear infinite" }} />
+          ) : "🤖"}
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 12, color: MUTED, fontWeight: 600, marginBottom: 2 }}>Consultas de IA</div>
+          {creditsLoading ? (
+            <div style={{ fontSize: 14, color: MUTED }}>Carregando...</div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 18, fontWeight: 900, color: NAVY }}>{credits}</span>
+              <span style={{ fontSize: 13, color: MUTED }}>de {creditsTotal} restantes</span>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 20, backgroundColor: creditBg, color: creditColor }}>
+                {(credits ?? 0) >= 2 ? "OK" : (credits ?? 0) === 1 ? "Última" : "Esgotado"}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Search bar */}
+      <div style={{ display: "flex", gap: 8 }}>
+        <input
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && handleSearch()}
+          placeholder="Pesquise uma marca de vinho (ex: Concha y Toro)…"
+          disabled={exhausted}
+          style={{
+            flex: 1, padding: "12px 16px", border: `1px solid ${BORDER}`,
+            borderRadius: 12, fontSize: 14, fontFamily: "inherit", outline: "none",
+            backgroundColor: exhausted ? "#f9f9f9" : WHITE, color: NAVY,
+            boxSizing: "border-box" as const,
+          }}
+        />
+        <button
+          onClick={handleSearch}
+          disabled={!query.trim() || searching || exhausted}
+          style={{
+            padding: "12px 20px", borderRadius: 12, border: "none",
+            backgroundColor: (!query.trim() || searching || exhausted) ? `${GOLD}55` : GOLD,
+            color: WHITE, fontWeight: 700, fontSize: 14, cursor: (!query.trim() || searching || exhausted) ? "not-allowed" : "pointer",
+            display: "flex", alignItems: "center", gap: 6, fontFamily: "inherit", flexShrink: 0,
+          }}
+        >
+          {searching ? (
+            <div style={{ width: 16, height: 16, borderRadius: "50%", border: "2px solid #fff", borderTopColor: "transparent", animation: "spin 0.7s linear infinite" }} />
+          ) : "🔍"}
+          {searching ? "Buscando…" : "Buscar"}
+        </button>
+      </div>
+
+      {/* Info hint */}
+      {!result && !searching && (
+        <div style={{ backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "14px 16px" }}>
+          <div style={{ fontSize: 13, color: NAVY, fontWeight: 600, marginBottom: 4 }}>🍷 Como funciona</div>
+          <div style={{ fontSize: 13, color: MUTED, lineHeight: 1.6 }}>
+            Digite o nome de uma marca de vinho para encontrar importadores e distribuidores brasileiros. A IA identifica a marca mesmo com variações de grafia.
+          </div>
+        </div>
+      )}
+
+      {/* Loading */}
+      {searching && (
+        <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>🤖</div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>Consultando base de dados…</div>
+          <div style={{ fontSize: 12, marginTop: 4 }}>A IA está identificando a marca e buscando distribuidores</div>
+        </div>
+      )}
+
+      {/* Out of scope */}
+      {!searching && result === "out_of_scope" && (
+        <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 24, textAlign: "center" }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Consulta fora do escopo</div>
+          <div style={{ fontSize: 14, color: MUTED, lineHeight: 1.6 }}>Por favor, pesquise pelo nome de uma marca específica de vinho.</div>
+        </div>
+      )}
+
+      {/* Not found */}
+      {!searching && result === "not_found" && (
+        <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 24, textAlign: "center" }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>📭</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Marca não encontrada</div>
+          <div style={{ fontSize: 14, color: MUTED, lineHeight: 1.6 }}>
+            {brandExtracted
+              ? `A IA identificou a marca "${brandExtracted}", mas ela ainda não está na base de dados.`
+              : "Não encontramos esse vinho. Tente outro nome ou variação."}
+          </div>
+        </div>
+      )}
+
+      {/* No credits */}
+      {exhausted && !searching && result === null && (
+        <div style={{ backgroundColor: "#fef2f2", border: "1px solid #fecaca", borderRadius: 14, padding: 24, textAlign: "center" }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>❌</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "#991b1b", marginBottom: 8 }}>Créditos esgotados</div>
+          <div style={{ fontSize: 14, color: "#dc2626", lineHeight: 1.6 }}>Você usou todas as consultas disponíveis. Novos créditos são liberados mensalmente.</div>
+        </div>
+      )}
+
+      {/* Result */}
+      {!searching && result && result !== "not_found" && result !== "out_of_scope" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* Brand header card (gold) */}
+          <div style={{ backgroundColor: GOLD, borderRadius: 14, padding: "16px 20px" }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.75)", letterSpacing: 0.8, textTransform: "uppercase" as const, marginBottom: 4 }}>
+              {brandExtracted && brandExtracted.toLowerCase() !== result.marcaCompleta.toLowerCase()
+                ? `IA identificou: ${brandExtracted}`
+                : "Resultado encontrado"}
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: WHITE, lineHeight: 1.3, marginBottom: 8 }}>{result.marcaCompleta}</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }}>
+              ✓ 1 consulta utilizada · {credits} restante{credits !== 1 ? "s" : ""}
+            </div>
+          </div>
+
+          {/* Data KPI cards */}
+          {([
+            ...(result.marcaRelatorio && result.marcaRelatorio !== result.marcaCompleta
+              ? [{ icon: "🏷️", label: "Marca no Relatório", value: result.marcaRelatorio }]
+              : []),
+            ...(result.paisDeOrigem
+              ? [{ icon: "🌍", label: "País de Origem", value: result.paisDeOrigem }]
+              : []),
+            { icon: "📦", label: "Distribuidor BR", value: result.distribuidor },
+          ] as { icon: string; label: string; value: string }[]).map(row => (
+            <div key={row.label} style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
+                {row.icon}
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: MUTED, fontWeight: 600 }}>{row.label}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginTop: 2 }}>{row.value}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) {
   const { hasFeature } = usePermissions();
+  const [subTab, setSubTab] = useState<"feed" | "search">("feed");
   const [posts, setPosts] = useState<MarketPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -768,6 +987,39 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+      {/* Sub-tabs: Feed | Busca IA */}
+      <div style={{ display: "flex", gap: 8, paddingBottom: 4 }}>
+        {([
+          { key: "feed",   label: "Feed",     icon: "📡" },
+          { key: "search", label: "Busca IA", icon: "🤖" },
+        ] as const).map(t => (
+          <button
+            key={t.key}
+            onClick={() => setSubTab(t.key)}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "8px 18px", borderRadius: 20,
+              border: subTab === t.key ? `2px solid ${GOLD}` : `1px solid ${BORDER}`,
+              backgroundColor: subTab === t.key ? `${GOLD}12` : WHITE,
+              color: subTab === t.key ? GOLD : MUTED,
+              fontWeight: subTab === t.key ? 700 : 500,
+              fontSize: 14, cursor: "pointer", fontFamily: "inherit",
+              transition: "all 0.15s",
+            }}
+          >
+            <span>{t.icon}</span>
+            <span>{t.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Busca IA view */}
+      {subTab === "search" && <IdealBISearch userId={userId} />}
+
+      {/* Feed view */}
+      {subTab === "feed" && <>
+
       {/* Admin create post */}
       {isAdmin && (
         <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16 }}>
@@ -886,6 +1138,7 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
           />
         ))
       )}
+      </>}
     </div>
   );
 }
