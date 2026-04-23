@@ -54,6 +54,16 @@ const NAV_ITEMS = [
   { path: "/app/notificacoes",  label: "Notificações",   icon: I.bell },
 ];
 
+function useWindowWidth() {
+  const [width, setWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 1280);
+  useEffect(() => {
+    const h = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+  return width;
+}
+
 function isActive(current: string, path: string) {
   if (path === "/app") return current === "/app" || current === "/app/";
   return current.startsWith(path);
@@ -487,6 +497,7 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
   const [stats, setStats]           = useState({ connections: 0, followers: 0, following: 0 });
   const [companyPages, setCompanyPages] = useState<WebCompanyPage[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const isMobile = useWindowWidth() < 768;
   const [userMenuOpen, setUserMenuOpen]   = useState(false);
   const [search, setSearch] = useState("");
   const [peopleModal, setPeopleModal] = useState<{ title: string; list: ProfilePerson[] } | null>(null);
@@ -546,29 +557,37 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
       <header style={{
         backgroundColor: WHITE, borderBottom: `1px solid ${BORDER}`,
         position: "sticky", top: 0, zIndex: 200, height: 56,
-        display: "flex", alignItems: "center", padding: "0 24px", gap: 16,
+        display: "flex", alignItems: "center",
+        padding: isMobile ? "0 12px" : "0 24px",
+        gap: isMobile ? 8 : 16,
       }}>
-        <img src={`${import.meta.env.BASE_URL}logo-ibhub.png`} alt="ibhub" onClick={() => setLocation("/app")} style={{ height: 32, cursor: "pointer", flexShrink: 0, objectFit: "contain" }} />
+        <img src={`${import.meta.env.BASE_URL}logo-ibhub.png`} alt="ibhub" onClick={() => setLocation("/app")} style={{ height: 28, cursor: "pointer", flexShrink: 0, objectFit: "contain" }} />
 
-        <div
-          style={{ flex: 1, maxWidth: 400, display: "flex", alignItems: "center", gap: 8, backgroundColor: "#f2f2ed", borderRadius: 24, padding: "7px 14px", cursor: "text" }}
-          onClick={() => setLocation("/app/busca")}
-        >
-          {I.search}
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter" && search.trim()) setLocation("/app/busca"); }}
-            onClick={e => { e.stopPropagation(); setLocation("/app/busca"); }}
-            placeholder="Buscar pessoas, empresas, hashtags..."
-            readOnly
-            style={{ border: "none", background: "none", outline: "none", fontSize: 13, color: NAVY, width: "100%", cursor: "pointer" }}
-          />
-        </div>
+        {!isMobile && (
+          <div
+            style={{ flex: 1, maxWidth: 400, display: "flex", alignItems: "center", gap: 8, backgroundColor: "#f2f2ed", borderRadius: 24, padding: "7px 14px", cursor: "text" }}
+            onClick={() => setLocation("/app/busca")}
+          >
+            {I.search}
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && search.trim()) setLocation("/app/busca"); }}
+              onClick={e => { e.stopPropagation(); setLocation("/app/busca"); }}
+              placeholder="Buscar pessoas, empresas, hashtags..."
+              readOnly
+              style={{ border: "none", background: "none", outline: "none", fontSize: 13, color: NAVY, width: "100%", cursor: "pointer" }}
+            />
+          </div>
+        )}
 
         <div style={{ flex: 1 }} />
 
-        {profile?.is_admin && (
+        {isMobile && (
+          <button onClick={() => setLocation("/app/busca")} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, display: "flex", alignItems: "center", padding: 6 }} title="Buscar">{I.search}</button>
+        )}
+
+        {!isMobile && profile?.is_admin && (
           <button onClick={() => setLocation("/admin")} style={{ background: "none", border: `1px solid ${GOLD}55`, borderRadius: 7, padding: "5px 10px", fontSize: 12, fontWeight: 700, color: GOLD, cursor: "pointer" }}>⚙ Admin</button>
         )}
 
@@ -688,9 +707,10 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
       </header>
 
       {/* ── Body ───────────────────────────── */}
-      <div style={{ display: "flex", maxWidth: 1180, margin: "0 auto", padding: "20px 16px", gap: 20, alignItems: "flex-start" }}>
+      <div style={{ display: "flex", maxWidth: 1180, margin: "0 auto", padding: isMobile ? "12px 0 0" : "20px 16px", gap: 20, alignItems: "flex-start" }}>
 
         {/* ── Sidebar ──────────────────────── */}
+        {!isMobile && (
         <aside style={{ width: 250, flexShrink: 0, position: "sticky", top: 76, maxHeight: "calc(100vh - 96px)", overflowY: "auto" }}>
 
           {/* ── Company mode banner ── */}
@@ -798,10 +818,66 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
             </div>
           )}
         </aside>
+        )}
 
         {/* ── Main ─────────────────────────── */}
-        <main style={{ flex: 1, minWidth: 0 }}>{children}</main>
+        <main style={{ flex: 1, minWidth: 0, padding: isMobile ? "0 10px 74px" : undefined }}>{children}</main>
       </div>
+
+      {/* ── Mobile Bottom Tab Bar ─────────── */}
+      {isMobile && (
+        <nav style={{
+          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 300,
+          height: 58, backgroundColor: WHITE, borderTop: `1px solid ${BORDER}`,
+          display: "flex", alignItems: "stretch",
+          boxShadow: "0 -2px 12px rgba(0,0,0,0.08)",
+        }}>
+          {(activeCompany ? [
+            { path: "/app",               label: "Início",     icon: I.home },
+            { path: "/app/mensagens",     label: "Chat",       icon: I.msg },
+            { path: "/app/oportunidades", label: "Oportunidades", icon: I.brief },
+            { path: `/app/empresa/${activeCompany.id}`, label: "Empresa", icon: I.company },
+          ] : [
+            { path: "/app",               label: "Início",     icon: I.home },
+            { path: "/app/mercado",       label: "Mercado",    icon: I.market },
+            { path: "/app/mensagens",     label: "Chat",       icon: I.msg },
+            { path: "/app/oportunidades", label: "Opor.",      icon: I.brief },
+            { path: "/app/perfil",        label: "Perfil",     icon: I.company },
+          ]).map(item => {
+            const active = isActive(location, item.path);
+            return (
+              <button
+                key={item.path}
+                onClick={() => setLocation(item.path)}
+                style={{
+                  flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
+                  justifyContent: "center", gap: 3,
+                  background: "none", border: "none", cursor: "pointer",
+                  color: active ? GOLD : MUTED,
+                  fontSize: 9, fontWeight: active ? 700 : 500,
+                  borderTop: active ? `2px solid ${GOLD}` : "2px solid transparent",
+                  transition: "color 0.15s",
+                }}
+              >
+                <span style={{ display: "flex", opacity: active ? 1 : 0.6, transform: active ? "scale(1.1)" : "scale(1)", transition: "transform 0.15s" }}>{item.icon}</span>
+                {item.label}
+              </button>
+            );
+          })}
+          <button
+            onClick={() => setShowCreateModal(true)}
+            style={{
+              width: 44, height: 44, borderRadius: "50%",
+              backgroundColor: GOLD, border: "none", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 2px 8px rgba(201,168,76,0.4)",
+              alignSelf: "center", marginRight: 8, flexShrink: 0,
+              fontSize: 22, color: NAVY, fontWeight: 800,
+            }}
+            title="Criar publicação"
+          >+</button>
+        </nav>
+      )}
 
       {/* Global CreatePost Modal */}
       {showCreateModal && profile && (

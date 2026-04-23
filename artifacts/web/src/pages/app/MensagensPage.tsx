@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
+
 import {
   fetchWebConversations,
   fetchWebMessages,
@@ -16,6 +17,16 @@ const WHITE  = "#ffffff";
 const BG     = "#f5f5f0";
 const BORDER = "#e8e8e3";
 const MUTED  = "#7a8494";
+
+function useIsMobile() {
+  const [mobile, setMobile] = useState(typeof window !== "undefined" ? window.innerWidth < 768 : false);
+  useEffect(() => {
+    const h = () => setMobile(window.innerWidth < 768);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+  return mobile;
+}
 
 const IMG_EXTS = ["jpg", "jpeg", "png", "gif", "webp", "svg", "avif"];
 function isImageUrl(url: string) {
@@ -111,6 +122,7 @@ function XIcon({ size = 14, color = MUTED }: { size?: number; color?: string }) 
 export default function MensagensPage() {
   const { profile, user, activeCompany } = useAuth();
   const userId = profile?.id ?? user?.id ?? "";
+  const isMobile = useIsMobile();
 
   const [conversations, setConversations] = useState<WebConversation[]>([]);
   const [selected, setSelected]           = useState<WebConversation | null>(null);
@@ -243,14 +255,16 @@ export default function MensagensPage() {
           </div>
         )}
 
-        <h1 style={{ fontSize: 22, fontWeight: 900, color: NAVY, marginBottom: 16 }}>
-          {activeCompany ? "Chat da Empresa" : "Mensagens"}
-        </h1>
+        {!isMobile && (
+          <h1 style={{ fontSize: 22, fontWeight: 900, color: NAVY, marginBottom: 16 }}>
+            {activeCompany ? "Chat da Empresa" : "Mensagens"}
+          </h1>
+        )}
 
-        <div style={{ display: "flex", height: "calc(100vh - 180px)", backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, overflow: "hidden" }}>
+        <div style={{ display: "flex", height: isMobile ? "calc(100vh - 130px)" : "calc(100vh - 180px)", backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: isMobile ? 12 : 16, overflow: "hidden" }}>
 
           {/* ── Sidebar ── */}
-          <div style={{ width: 280, flexShrink: 0, borderRight: `1px solid ${BORDER}`, display: "flex", flexDirection: "column" }}>
+          <div style={{ width: isMobile ? "100%" : 280, flexShrink: 0, borderRight: isMobile && selected ? "none" : `1px solid ${BORDER}`, display: isMobile && selected ? "none" : "flex", flexDirection: "column" }}>
             <div style={{ padding: "12px 12px 8px" }}>
               <input
                 value={search}
@@ -310,7 +324,7 @@ export default function MensagensPage() {
           </div>
 
           {/* ── Message thread ── */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+          <div style={{ flex: 1, display: isMobile && !selected ? "none" : "flex", flexDirection: "column", minWidth: 0, width: isMobile ? "100%" : undefined }}>
             {!selected ? (
               <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: MUTED }}>
                 <div style={{ fontSize: 48, marginBottom: 12 }}>💬</div>
@@ -320,7 +334,10 @@ export default function MensagensPage() {
             ) : (
               <>
                 {/* Thread header */}
-                <div style={{ padding: "14px 18px", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                <div style={{ padding: "10px 14px", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                  {isMobile && (
+                    <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", cursor: "pointer", color: GOLD, padding: "4px 8px 4px 0", fontSize: 22, lineHeight: 1, flexShrink: 0 }}>‹</button>
+                  )}
                   <Avatar src={getConvoAvatar(selected)} name={getConvoName(selected)} size={38} />
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{getConvoName(selected)}</div>
