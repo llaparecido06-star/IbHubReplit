@@ -31,7 +31,7 @@ export default function ReferralPage() {
     }).finally(() => setLoading(false));
   }, [profile?.id]);
 
-  const inviteLink = `${window.location.origin}/web/cadastro?ref=${referralCode}`;
+  const inviteLink = `${window.location.origin}${import.meta.env.BASE_URL}cadastro?ref=${referralCode}`;
 
   const copyCode = () => {
     navigator.clipboard.writeText(referralCode).then(() => {

@@ -274,7 +274,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const getRedirectUrl = () => {
     const base = window.location.origin;
-    const basePath = import.meta.env.BASE_URL ?? "/web/";
+    const basePath = import.meta.env.BASE_URL ?? "/";
     return `${base}${basePath}auth/callback`;
   };
 
@@ -296,7 +296,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const resetPassword = async (email: string) => {
     const base = window.location.origin;
-    const basePath = import.meta.env.BASE_URL ?? "/web/";
+    const basePath = import.meta.env.BASE_URL ?? "/";
     // Route recovery through /auth/callback (already in Supabase allowlist for OAuth).
     // We pass ?type=recovery so AuthCallbackPage can redirect to /redefinir-senha
     // instead of /app after the PKCE code exchange.

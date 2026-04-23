@@ -60,7 +60,7 @@ export default function LoginPage() {
       <div style={{ width: "100%", maxWidth: 440 }}>
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 36 }}>
-          <img src="/web/logo-ibhub.png" alt="ibhub" style={{ height: 52, objectFit: "contain" }} />
+          <img src={`${import.meta.env.BASE_URL}logo-ibhub.png`} alt="ibhub" style={{ height: 52, objectFit: "contain" }} />
         </div>
 
         {/* Card */}
