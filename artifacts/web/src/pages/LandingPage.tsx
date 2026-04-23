@@ -175,7 +175,7 @@ export default function LandingPage() {
         height: 58, position: "sticky", top: 0, zIndex: 200,
       }}>
         {/* Logo */}
-        <span style={{ fontSize: 20, fontWeight: 900, color: gold, letterSpacing: -0.3 }}>ibhub</span>
+        <img src="/web/logo-ibhub.png" alt="ibhub" style={{ height: 30, objectFit: "contain" }} />
 
         {/* Nav links */}
         <div style={{ display: "flex", gap: 36, alignItems: "center" }}>

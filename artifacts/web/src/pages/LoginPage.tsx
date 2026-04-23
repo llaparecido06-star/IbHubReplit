@@ -60,15 +60,7 @@ export default function LoginPage() {
       <div style={{ width: "100%", maxWidth: 440 }}>
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 36 }}>
-          <div style={{ fontSize: 32, fontWeight: 900, color: "#0d1b2a", letterSpacing: -0.5, marginBottom: 6 }}>ibhub</div>
-          <div style={{
-            display: "inline-block",
-            backgroundColor: "#0d1b2a",
-            padding: "3px 10px",
-            borderRadius: 4,
-          }}>
-            <span style={{ fontSize: 9, fontWeight: 800, color: "#c9a84c", letterSpacing: 2.5 }}>REDE DO VINHO</span>
-          </div>
+          <img src="/web/logo-ibhub.png" alt="ibhub" style={{ height: 52, objectFit: "contain" }} />
         </div>
 
         {/* Card */}

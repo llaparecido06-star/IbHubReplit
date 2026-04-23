@@ -211,11 +211,7 @@ export default function CadastroPage() {
         borderBottom: "1px solid rgba(255,255,255,0.08)",
         gap: 12,
       }}>
-        <span style={{ fontSize: 22, fontWeight: 900, color: "#c9a84c" }}>ibhub</span>
-        <span style={{
-          fontSize: 8, fontWeight: 800, color: "#c9a84c",
-          backgroundColor: "rgba(201,168,76,0.12)", padding: "2px 7px", borderRadius: 4, letterSpacing: 2.5,
-        }}>REDE DO VINHO</span>
+        <img src="/web/logo-ibhub.png" alt="ibhub" style={{ height: 34, objectFit: "contain" }} />
       </div>
 
       {/* Progress */}
