@@ -1,5 +1,15 @@
 import { Link } from "wouter";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+function useIsMobile() {
+  const [mobile, setMobile] = useState(typeof window !== "undefined" ? window.innerWidth < 768 : false);
+  useEffect(() => {
+    const h = () => setMobile(window.innerWidth < 768);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+  return mobile;
+}
 
 /* ─── Paleta ─────────────────────────────── */
 const navy  = "#0d1b2a";
@@ -163,6 +173,9 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 
 /* ─── Landing Page ───────────────────────── */
 export default function LandingPage() {
+  const isMobile = useIsMobile();
+  const [menuOpen, setMenuOpen] = useState(false);
+
   return (
     <div style={{ fontFamily: "'Inter', -apple-system, sans-serif", color: navy, backgroundColor: bg, margin: 0, padding: 0 }}>
 
@@ -170,32 +183,73 @@ export default function LandingPage() {
       <nav style={{
         backgroundColor: white,
         borderBottom: "1px solid #eaeae5",
-        padding: "0 32px",
+        padding: isMobile ? "0 16px" : "0 32px",
         display: "flex", alignItems: "center", justifyContent: "space-between",
         height: 58, position: "sticky", top: 0, zIndex: 200,
+        flexWrap: "wrap",
       }}>
         {/* Logo */}
-        <img src={`${import.meta.env.BASE_URL}logo-ibhub.png`} alt="ibhub" style={{ height: 30, objectFit: "contain" }} />
+        <img src={`${import.meta.env.BASE_URL}logo-ibhub.png`} alt="ibhub" style={{ height: 28, objectFit: "contain" }} />
 
-        {/* Nav links */}
-        <div style={{ display: "flex", gap: 36, alignItems: "center" }}>
-          {["Recursos", "Planos", "Depoimentos", "FAQ"].map((l) => (
-            <a
-              key={l}
-              href={`#${l.toLowerCase()}`}
-              style={{ fontSize: 14, color: "#555", textDecoration: "none", fontWeight: 500 }}
-            >{l}</a>
-          ))}
-        </div>
+        {isMobile ? (
+          /* ── Mobile: Entrar + Hambúrguer ── */
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Link href="/login" style={{ fontSize: 13, fontWeight: 600, color: navy, textDecoration: "none" }}>Entrar</Link>
+            <Link href="/cadastro" style={{
+              fontSize: 13, fontWeight: 700, color: navy, textDecoration: "none",
+              backgroundColor: gold, padding: "7px 14px", borderRadius: 8,
+            }}>Cadastrar</Link>
+            <button
+              onClick={() => setMenuOpen(!menuOpen)}
+              style={{ background: "none", border: "none", cursor: "pointer", padding: "6px", display: "flex", flexDirection: "column", gap: 5, marginLeft: 4 }}
+              aria-label="Menu"
+            >
+              <span style={{ display: "block", width: 22, height: 2, backgroundColor: menuOpen ? gold : navy, borderRadius: 2, transition: "background 0.2s" }} />
+              <span style={{ display: "block", width: 22, height: 2, backgroundColor: menuOpen ? gold : navy, borderRadius: 2, transition: "background 0.2s" }} />
+              <span style={{ display: "block", width: 16, height: 2, backgroundColor: menuOpen ? gold : navy, borderRadius: 2, transition: "background 0.2s" }} />
+            </button>
+          </div>
+        ) : (
+          /* ── Desktop: links + ações ── */
+          <>
+            <div style={{ display: "flex", gap: 36, alignItems: "center" }}>
+              {["Recursos", "Planos", "Depoimentos", "FAQ"].map((l) => (
+                <a key={l} href={`#${l.toLowerCase()}`}
+                  style={{ fontSize: 14, color: "#555", textDecoration: "none", fontWeight: 500 }}
+                >{l}</a>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <Link href="/login" style={{ fontSize: 14, fontWeight: 600, color: navy, textDecoration: "none" }}>Entrar</Link>
+              <Link href="/cadastro" style={{
+                fontSize: 14, fontWeight: 700, color: navy, textDecoration: "none",
+                backgroundColor: gold, padding: "8px 20px", borderRadius: 8,
+              }}>Cadastrar-se</Link>
+            </div>
+          </>
+        )}
 
-        {/* Actions */}
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <Link href="/login" style={{ fontSize: 14, fontWeight: 600, color: navy, textDecoration: "none" }}>Entrar</Link>
-          <Link href="/cadastro" style={{
-            fontSize: 14, fontWeight: 700, color: navy, textDecoration: "none",
-            backgroundColor: gold, padding: "8px 20px", borderRadius: 8,
-          }}>Cadastrar-se</Link>
-        </div>
+        {/* ── Mobile dropdown menu ── */}
+        {isMobile && menuOpen && (
+          <div style={{
+            width: "100%", backgroundColor: white,
+            borderTop: "1px solid #eaeae5",
+            padding: "12px 0 16px",
+          }}>
+            {["Recursos", "Planos", "Depoimentos", "FAQ"].map((l) => (
+              <a
+                key={l}
+                href={`#${l.toLowerCase()}`}
+                onClick={() => setMenuOpen(false)}
+                style={{
+                  display: "block", padding: "12px 16px",
+                  fontSize: 15, fontWeight: 500, color: navy,
+                  textDecoration: "none", borderBottom: "1px solid #f0f0eb",
+                }}
+              >{l}</a>
+            ))}
+          </div>
+        )}
       </nav>
 
       {/* ── Hero ───────────────────────────── */}
@@ -462,12 +516,12 @@ export default function LandingPage() {
       <footer style={{
         backgroundColor: white,
         borderTop: "1px solid #eaeae5",
-        padding: "24px 32px",
+        padding: isMobile ? "20px 16px" : "24px 32px",
         display: "flex", alignItems: "center", justifyContent: "space-between",
         flexWrap: "wrap", gap: 12,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <span style={{ fontSize: 17, fontWeight: 900, color: gold }}>ibhub</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <img src={`${import.meta.env.BASE_URL}logo-ibhub.png`} alt="ibhub" style={{ height: 24, objectFit: "contain" }} />
           <span style={{ fontSize: 13, color: "#9a9a8e" }}>© 2026 ibhub. Todos os direitos reservados.</span>
         </div>
         <div style={{ display: "flex", gap: 24 }}>
