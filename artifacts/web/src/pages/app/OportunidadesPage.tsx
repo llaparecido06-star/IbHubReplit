@@ -60,10 +60,26 @@ const chip = (label: string, active: boolean, onClick: () => void) => (
   </button>
 );
 
+function useWindowWidth() {
+  const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1280);
+  useEffect(() => {
+    const h = () => setW(window.innerWidth);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+  return w;
+}
+
+const BG   = "#f2f3f5";
+const WHITE = "#fff";
+const BORDER = "#e8eaed";
+const MUTED  = "#8a93a2";
+
 export default function OportunidadesPage() {
   const { user, profile } = useAuth();
   const { hasFeature } = usePermissions();
   const canPublishVagas = (profile?.is_admin ?? false) || hasFeature("Publicar Vagas");
+  const isMobile = useWindowWidth() < 768;
   const [lockedPublish, setLockedPublish] = useState(false);
   const [location, setLocation] = useLocation();
 
@@ -233,6 +249,280 @@ export default function OportunidadesPage() {
     cursor: "pointer",
     transition: "box-shadow 0.15s",
   };
+
+  /* ─────────────────────────── MOBILE LAYOUT ─────────────────────────── */
+  if (isMobile) {
+    const filterChips = (() => {
+      if (tab === "market") return (
+        <>
+          {(["recente", "expirando", "mais-visualizados"] as MarketSort[]).map((s) => {
+            const lbl = s === "recente" ? "Mais recentes" : s === "expirando" ? "Expirando" : "Mais vistos";
+            return chip(lbl, marketSort === s, () => setMarketSort(s));
+          })}
+          <span style={{ color: "#ccc", lineHeight: "30px" }}>|</span>
+          {MARKET_CATS.map(c => chip(c, marketCat === c, () => setMarketCat(marketCat === c ? null : c)))}
+        </>
+      );
+      if (tab === "vagas") return (
+        <>
+          {MODALIDADES.map(m => chip(m, vagasModalidade === m, () => setVagasModalidade(vagasModalidade === m ? null : m)))}
+          <span style={{ color: "#ccc", lineHeight: "30px" }}>|</span>
+          {CONTRATOS.map(c => chip(c, vagasContrato === c, () => setVagasContrato(vagasContrato === c ? null : c)))}
+        </>
+      );
+      return <>{EVENTO_TIPOS.map(t => chip(t, eventoTipo === t, () => setEventoTipo(eventoTipo === t ? null : t)))}</>;
+    })();
+
+    return (
+      <AppShell>
+        <div style={{ backgroundColor: BG, minHeight: "100vh" }}>
+
+          {/* Sticky header */}
+          <div style={{ position: "sticky", top: 56, zIndex: 20, backgroundColor: WHITE, borderBottom: `1px solid ${BORDER}` }}>
+            {/* Title row */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px 10px" }}>
+              <span style={{ fontSize: 20, fontWeight: 900, color: NAVY }}>Oportunidades</span>
+              <button
+                onClick={() => {
+                  if (!canPublishVagas) { setLockedPublish(true); return; }
+                  setShowCreate(true);
+                  setCreateTab(tab === "vagas" ? "vaga" : "marketplace");
+                }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  padding: "7px 14px", borderRadius: 20, border: "none",
+                  backgroundColor: canPublishVagas ? GOLD : BG,
+                  color: canPublishVagas ? WHITE : MUTED,
+                  fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  ...(canPublishVagas ? {} : { border: `1px solid ${BORDER}` }),
+                }}
+              >
+                {canPublishVagas ? "+" : "🔒"} {canPublishVagas ? (tab === "eventos" ? "Evento" : "Publicar") : "Empresas"}
+              </button>
+            </div>
+
+            {/* Search */}
+            <div style={{ padding: "0 16px 10px" }}>
+              <div style={{ backgroundColor: BG, borderRadius: 10, padding: "9px 14px", display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 15 }}>🔍</span>
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Buscar..."
+                  style={{ flex: 1, background: "none", border: "none", outline: "none", fontSize: 14, color: NAVY, fontFamily: "inherit" }}
+                />
+                {search && (
+                  <button onClick={() => setSearch("")} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 15, padding: 0 }}>✕</button>
+                )}
+              </div>
+            </div>
+
+            {/* Pill tabs */}
+            <div style={{ display: "flex", padding: "0 16px", gap: 8, paddingBottom: 12 }}>
+              {tabs.map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  style={{
+                    flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                    padding: "8px 4px", borderRadius: 10, border: "none",
+                    backgroundColor: tab === t.key ? GOLD : BG,
+                    color: tab === t.key ? WHITE : MUTED,
+                    fontWeight: tab === t.key ? 700 : 500, fontSize: 13,
+                    cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >
+                  {t.icon} {t.label}
+                  {t.count > 0 && (
+                    <span style={{
+                      fontSize: 11, fontWeight: 700, padding: "1px 6px", borderRadius: 10,
+                      backgroundColor: tab === t.key ? "rgba(255,255,255,0.3)" : BORDER,
+                      color: tab === t.key ? WHITE : MUTED,
+                    }}>{t.count}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Filter chips (horizontal scroll) */}
+            <div style={{ display: "flex", gap: 8, padding: "0 16px 12px", overflowX: "auto", scrollbarWidth: "none" as const, borderTop: `1px solid ${BORDER}`, paddingTop: 10 }}>
+              {filterChips}
+            </div>
+          </div>
+
+          {/* Content */}
+          <div style={{ padding: "12px 16px 80px", display: "flex", flexDirection: "column", gap: 10 }}>
+            {loading ? (
+              <div style={{ textAlign: "center", padding: 40, color: MUTED }}>⏳ Carregando...</div>
+            ) : (
+              <>
+                {/* ── Market ── */}
+                {tab === "market" && (
+                  filteredMarket.length === 0
+                    ? <EmptyState icon="🛍️" title="Nenhum produto encontrado" sub="Tente ajustar os filtros." />
+                    : filteredMarket.map(item => {
+                        const novo = isNew(item.created_at);
+                        const urgente = isUrgent(item.expires_at);
+                        return (
+                          <div
+                            key={item.id}
+                            onClick={() => setLocation(`/app/oportunidades/${item.id}`)}
+                            style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden", cursor: "pointer" }}
+                          >
+                            {item.cover_image_url && (
+                              <img src={item.cover_image_url} alt={item.title} style={{ width: "100%", height: 160, objectFit: "cover" }} />
+                            )}
+                            <div style={{ padding: 14 }}>
+                              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                                {novo && <span style={{ backgroundColor: "#dcfce7", color: "#16a34a", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>Novo</span>}
+                                {urgente && <span style={{ backgroundColor: "#fef2f2", color: "#dc2626", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>Urgente</span>}
+                                {item.category && <span style={{ backgroundColor: BG, color: MUTED, fontSize: 11, padding: "2px 8px", borderRadius: 6 }}>{item.category}</span>}
+                              </div>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                                <span style={{ fontSize: 16, fontWeight: 700, color: NAVY, flex: 1, lineHeight: 1.3 }}>{item.title}</span>
+                                <button onClick={e => { e.stopPropagation(); handleToggleSave(item); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, padding: "0 0 0 8px", color: item.is_saved ? GOLD : MUTED }}>
+                                  {item.is_saved ? "🔖" : "📎"}
+                                </button>
+                              </div>
+                              {item.company && <div style={{ fontSize: 13, color: MUTED, marginBottom: 4 }}>🏢 {item.company}</div>}
+                              {item.price && <div style={{ fontSize: 14, fontWeight: 700, color: GOLD, marginBottom: 4 }}>{item.price}</div>}
+                              {item.location && <div style={{ fontSize: 13, color: MUTED, marginBottom: 4 }}>📍 {item.location}</div>}
+                              {item.expires_at && <div style={{ fontSize: 12, color: urgente ? "#dc2626" : "#aaa" }}>⏰ Expira: {fmtDate(item.expires_at)}</div>}
+                            </div>
+                          </div>
+                        );
+                      })
+                )}
+
+                {/* ── Vagas ── */}
+                {tab === "vagas" && (
+                  filteredVagas.length === 0
+                    ? <EmptyState icon="💼" title="Nenhuma vaga encontrada" sub="Tente ajustar os filtros." />
+                    : filteredVagas.map(item => {
+                        const nova = isNew(item.created_at);
+                        const isRemote = (item.location ?? "").toLowerCase().includes("remot") || (item.location ?? "").toLowerCase().includes("online");
+                        return (
+                          <div
+                            key={item.id}
+                            onClick={() => setLocation(`/app/oportunidades/${item.id}`)}
+                            style={{ backgroundColor: WHITE, border: `1px solid ${item.is_applied ? GOLD : BORDER}`, borderRadius: 14, padding: 14, cursor: "pointer" }}
+                          >
+                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                              {nova && <span style={{ backgroundColor: "#dcfce7", color: "#16a34a", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>Nova</span>}
+                              {item.location && (
+                                <span style={{ backgroundColor: isRemote ? "#ede9fe" : "#f0f9ff", color: isRemote ? "#7c3aed" : "#0369a1", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>
+                                  {isRemote ? "Remoto" : "Presencial"}
+                                </span>
+                              )}
+                              {item.contract_type && <span style={{ backgroundColor: BG, color: MUTED, fontSize: 11, padding: "2px 8px", borderRadius: 6 }}>{item.contract_type}</span>}
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                              <span style={{ fontSize: 16, fontWeight: 700, color: NAVY, flex: 1 }}>{item.title}</span>
+                              {item.is_applied
+                                ? <span style={{ fontSize: 12, color: GOLD, fontWeight: 700, backgroundColor: `${GOLD}18`, padding: "3px 10px", borderRadius: 8 }}>✓ Candidatado</span>
+                                : <button onClick={e => { e.stopPropagation(); handleToggleSave(item); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: item.is_saved ? GOLD : MUTED }}>
+                                    {item.is_saved ? "🔖" : "📎"}
+                                  </button>
+                              }
+                            </div>
+                            <div style={{ display: "flex", gap: 12, color: MUTED, fontSize: 13, flexWrap: "wrap" }}>
+                              {item.company && <span>🏢 {item.company}</span>}
+                              {item.location && <span>📍 {item.location}</span>}
+                            </div>
+                            {(item.salary || (item.applications_count ?? 0) > 0) && (
+                              <div style={{ display: "flex", gap: 12, marginTop: 6, alignItems: "center" }}>
+                                {item.salary && <span style={{ color: GOLD, fontWeight: 700, fontSize: 14 }}>{item.salary}</span>}
+                                {(item.applications_count ?? 0) > 0 && <span style={{ color: MUTED, fontSize: 12 }}>👥 {item.applications_count} candidato{item.applications_count !== 1 ? "s" : ""}</span>}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                )}
+
+                {/* ── Eventos ── */}
+                {tab === "eventos" && (
+                  upcomingEvents.length === 0 && pastEvents.length === 0
+                    ? <EmptyState icon="📅" title="Nenhum evento encontrado" sub="Novos eventos serão publicados em breve." />
+                    : <>
+                        {upcomingEvents.length > 0 && <>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, paddingLeft: 4 }}>Próximos Eventos</div>
+                          {upcomingEvents.map(ev => <EventCard key={ev.id} ev={ev} onToggle={handleEventToggle} />)}
+                        </>}
+                        {pastEvents.length > 0 && <>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, paddingLeft: 4, marginTop: 8 }}>Eventos Passados</div>
+                          {pastEvents.map(ev => <EventCard key={ev.id} ev={ev} onToggle={handleEventToggle} past />)}
+                        </>}
+                      </>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* ── Modals (shared) ── */}
+        {showCreate && (
+          <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={() => setShowCreate(false)}>
+            <div style={{ backgroundColor: WHITE, borderRadius: "22px 22px 0 0", width: "100%", maxWidth: 600, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+              <div style={{ padding: "20px 24px 16px", borderBottom: `1px solid ${BORDER}`, position: "sticky", top: 0, backgroundColor: WHITE, zIndex: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: NAVY }}>Publicar Oportunidade</h2>
+                <button onClick={() => setShowCreate(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#aaa" }}>✕</button>
+              </div>
+              <div style={{ padding: "20px 24px 60px", display: "flex", flexDirection: "column", gap: 14 }}>
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 700, color: NAVY, display: "block", marginBottom: 8 }}>Tipo *</label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {([["marketplace", "🛍️ Marketplace"], ["vaga", "💼 Vaga"]] as const).map(([key, label]) => (
+                      <button key={key} onClick={() => setCreateTab(key)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: `1.5px solid ${createTab === key ? GOLD : BORDER}`, backgroundColor: createTab === key ? `${GOLD}15` : WHITE, color: createTab === key ? GOLD : MUTED, fontWeight: createTab === key ? 700 : 500, fontSize: 14, cursor: "pointer" }}>{label}</button>
+                    ))}
+                  </div>
+                </div>
+                <input placeholder="Título *" value={createForm.title} onChange={e => setCreateForm(f => ({ ...f, title: e.target.value }))} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+                <textarea placeholder="Descrição (opcional)" value={createForm.description} onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))} rows={3} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }} />
+                {createTab === "marketplace" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <input placeholder="Categoria (ex: Vinho)" value={createForm.category} onChange={e => setCreateForm(f => ({ ...f, category: e.target.value }))} style={{ padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none" }} />
+                    <input placeholder="Preço (ex: R$ 89,90)" value={createForm.price} onChange={e => setCreateForm(f => ({ ...f, price: e.target.value }))} style={{ padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none" }} />
+                  </div>
+                )}
+                {createTab === "vaga" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <input placeholder="Salário (ex: R$ 4.000–6.000)" value={createForm.salary} onChange={e => setCreateForm(f => ({ ...f, salary: e.target.value }))} style={{ padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none" }} />
+                    <select value={createForm.contract_type} onChange={e => setCreateForm(f => ({ ...f, contract_type: e.target.value }))} style={{ padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none", backgroundColor: WHITE }}>
+                      <option value="">Tipo de contrato</option>
+                      {CONTRATOS.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                )}
+                <input placeholder="Empresa" value={createForm.company} onChange={e => setCreateForm(f => ({ ...f, company: e.target.value }))} style={{ padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none" }} />
+                <input placeholder="Localização" value={createForm.location} onChange={e => setCreateForm(f => ({ ...f, location: e.target.value }))} style={{ padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none" }} />
+                <input placeholder="E-mail de contato" value={createForm.contact_email} onChange={e => setCreateForm(f => ({ ...f, contact_email: e.target.value }))} style={{ padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none" }} />
+                <div>
+                  <label style={{ fontSize: 12, color: MUTED, display: "block", marginBottom: 4 }}>Expira em</label>
+                  <input type="date" value={createForm.expires_at} onChange={e => setCreateForm(f => ({ ...f, expires_at: e.target.value }))} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+                </div>
+                <button onClick={handleCreate} disabled={!createForm.title.trim() || creating} style={{ padding: "14px 0", backgroundColor: !createForm.title.trim() || creating ? "#ccc" : GOLD, color: WHITE, border: "none", borderRadius: 12, fontSize: 15, fontWeight: 800, cursor: !createForm.title.trim() || creating ? "not-allowed" : "pointer" }}>
+                  {creating ? "Publicando..." : "✓ Publicar oportunidade"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {lockedPublish && (
+          <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setLockedPublish(false)}>
+            <div style={{ backgroundColor: WHITE, borderRadius: 18, padding: 40, maxWidth: 380, width: "90%", textAlign: "center" }} onClick={e => e.stopPropagation()}>
+              <div style={{ fontSize: 44, marginBottom: 16 }}>🔒</div>
+              <h3 style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Publicar Vagas e Oportunidades</h3>
+              <p style={{ fontSize: 14, color: MUTED, marginBottom: 24, lineHeight: 1.6 }}>A publicação de vagas e oportunidades está disponível em planos que incluem a funcionalidade "Publicar Vagas".</p>
+              <a href="/assinar" style={{ display: "inline-block", padding: "11px 28px", backgroundColor: GOLD, color: NAVY, borderRadius: 10, fontWeight: 800, fontSize: 14, textDecoration: "none" }}>Ver Planos</a>
+              <button onClick={() => setLockedPublish(false)} style={{ display: "block", margin: "12px auto 0", background: "none", border: "none", fontSize: 13, color: MUTED, cursor: "pointer" }}>Fechar</button>
+            </div>
+          </div>
+        )}
+      </AppShell>
+    );
+  }
+  /* ─────────────────────────── END MOBILE ─────────────────────────── */
 
   return (
     <AppShell>
