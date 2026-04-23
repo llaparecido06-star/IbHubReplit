@@ -3,7 +3,15 @@ import { createClient } from "@supabase/supabase-js";
 import { resolveUserId } from "../lib/planCheck.js";
 import OpenAI from "openai";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Lazy singleton — created on first use so the server starts even if the key is missing
+let _openai: OpenAI | null = null;
+function getOpenAI(): OpenAI {
+  if (!_openai) {
+    if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not set");
+    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  return _openai;
+}
 
 const router: IRouter = Router();
 
@@ -102,7 +110,7 @@ REGRAS ESTRITAS:
 4. Mantenha o nome no idioma original da marca (francês, italiano, português, inglês etc.).`;
 
 async function extractBrandName(userQuery: string): Promise<string | null> {
-  const completion = await openai.chat.completions.create({
+  const completion = await getOpenAI().chat.completions.create({
     model: "gpt-4o-mini",
     max_completion_tokens: 64,
     messages: [
