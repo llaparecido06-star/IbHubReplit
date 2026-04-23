@@ -27,17 +27,19 @@ export interface UserProfile {
 }
 
 /**
- * Applies a delivery strategy at the PRESENTATION level.
+ * Applies a delivery strategy at the slide level.
  *
- * - FULL_ACCESS:        unlocks all slides of every presentation
- * - SEQUENTIAL_MONTHLY: unlocks one presentation per elapsed 30-day period, in order
- * - RANDOM_DAILY:       unlocks exactly one random locked presentation
+ * - FULL_ACCESS:        unlocks all slides of every presentation immediately
+ * - SEQUENTIAL_MONTHLY: divides total slides by 30 days; unlocks the proportional
+ *                        number of slides (in sequence_order) based on days elapsed
+ *                        since the user's account was created. After 30 days all slides
+ *                        are fully unlocked.
+ * - RANDOM_DAILY:       unlocks exactly one random locked presentation per day (cron only)
  * - NONE:               no-op
  *
  * Presentations are expected to be passed in canonical display order (sorted by created_at asc).
  * Slide-level `user_unlocked_slides` rows are used for persistence and serve as the
- * authoritative unlock record; a presentation is considered "unlocked" when ALL of its
- * slides appear in `user_unlocked_slides` for that user.
+ * authoritative unlock record.
  */
 export async function applyDeliveryStrategy(
   userId: string,
@@ -73,11 +75,23 @@ export async function applyDeliveryStrategy(
   }
 
   if (strategy === "SEQUENTIAL_MONTHLY") {
+    // All slides flattened in canonical order (presentation order → sequence_order within each)
+    const allSlides = presentations.flatMap((p) =>
+      [...p.slides].sort((a, b) => a.sequence_order - b.sequence_order),
+    );
+    const totalSlides = allSlides.length;
+    if (totalSlides === 0) return;
+
+    // How many days has this user been active?
     const createdAt = new Date(profile.created_at);
     const now = new Date();
-    const monthsElapsed = Math.max(1, Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24 * 30)));
-    const targetCount = Math.min(presentations.length, monthsElapsed);
-    const toUnlock = presentations.slice(0, targetCount).flatMap((p) => p.slides).filter((s) => !unlockedIds.has(s.id));
+    const daysElapsed = Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24));
+
+    // Unlock (totalSlides / 30) slides per day, capped at totalSlides
+    const slidesPerDay = totalSlides / 30;
+    const targetCount = Math.min(totalSlides, Math.ceil(daysElapsed * slidesPerDay));
+
+    const toUnlock = allSlides.slice(0, targetCount).filter((s) => !unlockedIds.has(s.id));
     if (toUnlock.length === 0) return;
     await supabaseAdmin
       .from("user_unlocked_slides")

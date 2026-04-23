@@ -46,7 +46,7 @@ type DeliveryStrategy = "RANDOM_DAILY" | "SEQUENTIAL_MONTHLY" | "FULL_ACCESS" | 
 const DELIVERY_STRATEGIES: { value: DeliveryStrategy; label: string; desc: string }[] = [
   { value: "NONE",               label: "Nenhuma",           desc: "Sem desbloqueio automático" },
   { value: "FULL_ACCESS",        label: "Acesso Total",      desc: "Todos os slides liberados imediatamente" },
-  { value: "SEQUENTIAL_MONTHLY", label: "Sequencial Mensal", desc: "Libera progressivamente ao longo de 30 dias" },
+  { value: "SEQUENTIAL_MONTHLY", label: "Sequencial Mensal", desc: "Divide os slides por 30 dias e libera em sequência diariamente" },
   { value: "RANDOM_DAILY",       label: "Aleatório Diário",  desc: "Libera 1 slide aleatório por dia" },
 ];
 
