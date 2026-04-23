@@ -1,7 +1,9 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { resolveUserId } from "../lib/planCheck.js";
-import { openai } from "@workspace/integrations-openai-ai-server";
+import OpenAI from "openai";
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const router: IRouter = Router();
 
@@ -91,7 +93,7 @@ REGRAS ESTRITAS:
 
 async function extractBrandName(userQuery: string): Promise<string | null> {
   const completion = await openai.chat.completions.create({
-    model: "gpt-5-nano",
+    model: "gpt-4o-mini",
     max_completion_tokens: 64,
     messages: [
       { role: "system", content: EXTRACT_SYSTEM_PROMPT },
