@@ -46,19 +46,11 @@ type IdealBISubTab = "feed" | "search";
 
 // ─── Ideal.BI Search Mock Data ─────────────────────────────────────────────────
 interface WineRecord {
+  id?: number;
   marcaCompleta: string;
-  paisDeOrigem: string;
-  exportador: string;
+  marcaRelatorio?: string;
   distribuidor: string;
 }
-
-const WINE_MOCK_DATA: WineRecord[] = [
-  { marcaCompleta: "Casillero del Diablo Reserva",     paisDeOrigem: "Chile",     exportador: "Concha y Toro",          distribuidor: "VCT Brasil"             },
-  { marcaCompleta: "Penfolds Bin 389 Cabernet Shiraz", paisDeOrigem: "Austrália", exportador: "Treasury Wine Estates",  distribuidor: "Mistral Brasil"          },
-  { marcaCompleta: "Santa Julia Magna",                paisDeOrigem: "Argentina", exportador: "Zuccardi Valle de Uco",  distribuidor: "Cantu Importadora"       },
-  { marcaCompleta: "Passo Fundo Malbec",               paisDeOrigem: "Brasil",    exportador: "Vinícola Panceri",       distribuidor: "Vinho Sul Distribuidora" },
-  { marcaCompleta: "Sogrape Porca de Murça",           paisDeOrigem: "Portugal",  exportador: "Sogrape Vinhos",         distribuidor: "Expand Importadora"      },
-];
 
 interface TooltipState {
   visible: boolean;
@@ -768,14 +760,26 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
     if (!q || searching || exhausted) return;
     setSearching(true);
     setResult(null);
-    await new Promise(r => setTimeout(r, 2000));
-    const found = WINE_MOCK_DATA.find(w =>
-      w.marcaCompleta.toLowerCase().includes(q.toLowerCase())
-    );
-    if (found) {
-      setResult(found);
-      setCredits(c => Math.max(0, c - 1));
-    } else {
+    try {
+      const res = await fetch(
+        `${process.env.EXPO_PUBLIC_API_URL}/wine-imports/search?q=${encodeURIComponent(q)}`
+      );
+      if (!res.ok) throw new Error("server error");
+      const json = await res.json() as { data: { id: number; marca_completa: string; marca_relatorio: string | null; distribuidor: string | null }[] };
+      const rows = json.data ?? [];
+      if (rows.length > 0) {
+        const first = rows[0];
+        setResult({
+          id: first.id,
+          marcaCompleta: first.marca_completa,
+          marcaRelatorio: first.marca_relatorio ?? undefined,
+          distribuidor: first.distribuidor ?? "—",
+        });
+        setCredits(c => Math.max(0, c - 1));
+      } else {
+        setResult("not_found");
+      }
+    } catch {
       setResult("not_found");
     }
     setSearching(false);
@@ -950,9 +954,10 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
 
           {/* Data KPI cards */}
           {([
-            { icon: "globe",     label: "País de Origem", value: result.paisDeOrigem },
-            { icon: "upload",    label: "Exportador",      value: result.exportador   },
-            { icon: "truck",     label: "Distribuidor BR", value: result.distribuidor },
+            ...(result.marcaRelatorio && result.marcaRelatorio !== result.marcaCompleta
+              ? [{ icon: "tag",   label: "Marca no Relatório", value: result.marcaRelatorio }]
+              : []),
+            { icon: "package",  label: "Distribuidor BR",  value: result.distribuidor },
           ] as { icon: any; label: string; value: string }[]).map(row => (
             <View key={row.label} style={[styles.kpiCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
               <View style={styles.kpiLeft}>

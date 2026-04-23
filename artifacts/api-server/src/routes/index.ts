@@ -9,6 +9,7 @@ import uploadsRouter from "./uploads";
 import marketRouter from "./market";
 import communityRouter from "./community";
 import profileRouter from "./profile";
+import wineImportsRouter from "./wineImports";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(uploadsRouter);
 router.use(marketRouter);
 router.use(communityRouter);
 router.use(profileRouter);
+router.use(wineImportsRouter);
 
 export default router;
