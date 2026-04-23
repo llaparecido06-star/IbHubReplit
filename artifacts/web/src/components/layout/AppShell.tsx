@@ -10,6 +10,7 @@ import {
   WebCompanyPage,
   ProfilePerson,
   createWebPost,
+  uploadWebPostImage,
   uploadWebPostVideo,
   addWineEntry,
 } from "@/services/api";
@@ -59,8 +60,8 @@ function isActive(current: string, path: string) {
 }
 
 function Avatar({ src, name, size = 36, bg = "#722f37" }: { src?: string | null; name: string; size?: number; bg?: string }) {
-  if (src) return <img src={src} alt={name} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
-  return (
+  const [imgError, setImgError] = React.useState(false);
+  const fallback = (
     <div style={{
       width: size, height: size, borderRadius: "50%", backgroundColor: bg,
       display: "flex", alignItems: "center", justifyContent: "center",
@@ -69,6 +70,10 @@ function Avatar({ src, name, size = 36, bg = "#722f37" }: { src?: string | null;
       {(name?.[0] ?? "U").toUpperCase()}
     </div>
   );
+  if (src && !imgError) {
+    return <img src={src} alt={name} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} onError={() => setImgError(true)} />;
+  }
+  return fallback;
 }
 
 /* ─── CreatePost Modal ───────────────────── */
@@ -193,7 +198,16 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
   const handleSubmit = async () => {
     if (!canSubmit() || submitting) return;
     setSubmitting(true);
+    let image_url: string | null = null;
     let video_url: string | null = null;
+    if (tab === "foto" && imageFile) {
+      image_url = await uploadWebPostImage(imageFile, userId);
+      if (!image_url) {
+        setSubmitting(false);
+        alert("Erro ao enviar imagem. Tente novamente.");
+        return;
+      }
+    }
     if (tab === "video" && videoFile) {
       video_url = await uploadWebPostVideo(videoFile, userId);
       if (!video_url) {
@@ -205,6 +219,7 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
     await createWebPost({
       user_id: userId,
       content: buildContent(),
+      image_url: image_url ?? null,
       video_url: video_url ?? null,
       company_page_id: companyPageId ?? null,
     });
