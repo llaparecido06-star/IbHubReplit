@@ -194,7 +194,7 @@ export default function MeuPerfilPage() {
           </div>
 
           {/* Profile card */}
-          <div style={{ backgroundColor: "#fff", padding: "0 16px 20px", marginBottom: 10 }}>
+          <div style={{ backgroundColor: "#fff", padding: "0 16px 20px", marginBottom: 10, position: "relative", zIndex: 1 }}>
             {/* Avatar + edit */}
             <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginTop: -(COVER_H * 0.38) }}>
               <div style={{ border: "3px solid #fff", borderRadius: "50%", boxShadow: "0 2px 8px rgba(0,0,0,0.12)" }}>
