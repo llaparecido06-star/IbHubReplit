@@ -49,6 +49,7 @@ interface WineRecord {
   id?: number;
   marcaCompleta: string;
   marcaRelatorio?: string;
+  paisDeOrigem?: string;
   distribuidor: string;
 }
 
@@ -800,7 +801,7 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
       }
       if (!res.ok) throw new Error("server error");
       const json = await res.json() as {
-        data: { id: number; marca_completa: string; marca_relatorio: string | null; distribuidor: string | null }[];
+        data: { id: number; marca_completa: string; marca_relatorio: string | null; pais_de_origem: string | null; distribuidor: string | null }[];
         credits_remaining: number;
         credits_total: number;
       };
@@ -813,6 +814,7 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
           id: first.id,
           marcaCompleta: first.marca_completa,
           marcaRelatorio: first.marca_relatorio ?? undefined,
+          paisDeOrigem: first.pais_de_origem ?? undefined,
           distribuidor: first.distribuidor ?? "—",
         });
       } else {
@@ -1001,9 +1003,12 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
           {/* Data KPI cards */}
           {([
             ...(result.marcaRelatorio && result.marcaRelatorio !== result.marcaCompleta
-              ? [{ icon: "tag",   label: "Marca no Relatório", value: result.marcaRelatorio }]
+              ? [{ icon: "tag",     label: "Marca no Relatório", value: result.marcaRelatorio }]
               : []),
-            { icon: "package",  label: "Distribuidor BR",  value: result.distribuidor },
+            ...(result.paisDeOrigem
+              ? [{ icon: "globe",   label: "País de Origem",     value: result.paisDeOrigem  }]
+              : []),
+            { icon: "package",    label: "Distribuidor BR",      value: result.distribuidor  },
           ] as { icon: any; label: string; value: string }[]).map(row => (
             <View key={row.label} style={[styles.kpiCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
               <View style={styles.kpiLeft}>

@@ -11,12 +11,12 @@ const supabaseAdmin = createClient(
 );
 
 const CREDITS_BY_PLAN: Record<string, number> = {
-  free:      3,
-  premium:   10,
-  business:  30,
-  exclusive: 100,
+  free:      0,
+  premium:   3,
+  business:  10,
+  exclusive: 25,
 };
-const DEFAULT_CREDITS = 3;
+const DEFAULT_CREDITS = 0;
 
 function currentPeriodStart(): string {
   const d = new Date();
@@ -99,7 +99,7 @@ router.get("/wine-imports/search", async (req: Request, res: Response) => {
   const pattern = `%${q}%`;
   const { data, error } = await supabaseAdmin
     .from("wine_imports")
-    .select("id, marca_completa, marca_relatorio, distribuidor")
+    .select("id, marca_completa, marca_relatorio, pais_de_origem, distribuidor")
     .or(`marca_completa.ilike.${pattern},marca_relatorio.ilike.${pattern}`)
     .order("marca_completa")
     .limit(20);
