@@ -733,14 +733,14 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
           </div>
 
           {/* Nav + Criar publicação */}
-          <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "8px 0", marginBottom: 12 }}>
+          <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "4px 0", marginBottom: 10 }}>
             {currentNavItems.map((item) => {
               const active = isActive(location, item.path);
               return (
                 <button key={item.path} onClick={() => setLocation(item.path)} style={{
-                  display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 16px",
+                  display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "7px 14px",
                   background: active ? `${GOLD}12` : "none", border: "none", cursor: "pointer",
-                  color: active ? GOLD : NAVY, fontSize: 14, fontWeight: active ? 700 : 500,
+                  color: active ? GOLD : NAVY, fontSize: 13, fontWeight: active ? 700 : 500,
                   borderLeft: active ? `3px solid ${GOLD}` : "3px solid transparent",
                   textAlign: "left", transition: "all 0.12s",
                 }}>
@@ -750,13 +750,13 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
                 </button>
               );
             })}
-            <div style={{ padding: "10px 12px 8px" }}>
+            <div style={{ padding: "7px 10px 6px" }}>
               <button onClick={() => setShowCreateModal(true)} style={{
-                width: "100%", padding: "11px 0", backgroundColor: GOLD, color: NAVY,
-                fontWeight: 800, fontSize: 14, border: "none", borderRadius: 10, cursor: "pointer",
+                width: "100%", padding: "9px 0", backgroundColor: GOLD, color: NAVY,
+                fontWeight: 800, fontSize: 13, border: "none", borderRadius: 9, cursor: "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
               }}>
-                <span style={{ fontSize: 16 }}>+</span> {activeCompany ? "Publicar como Empresa" : "Criar publicação"}
+                <span style={{ fontSize: 15 }}>+</span> {activeCompany ? "Publicar como Empresa" : "Criar publicação"}
               </button>
             </div>
           </div>
@@ -776,7 +776,7 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
                 { label: "Usuários Bloqueados", icon: "🚫",       path: "/app/bloqueados" },
                 { label: "Configurações",       icon: I.settings,  path: "/minha-conta" },
               ].map(({ label, icon, path }) => (
-                <button key={label} onClick={() => setLocation(path)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, color: MUTED, textAlign: "left" }}>
+                <button key={label} onClick={() => setLocation(path)} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "6px 14px", background: "none", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 500, color: MUTED, textAlign: "left" }}>
                   {icon}{label}
                 </button>
               ))}
