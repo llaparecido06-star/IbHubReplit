@@ -1661,30 +1661,29 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Sub-tab bar: Feed | Busca com IA */}
-      <View style={{
-        flexDirection: "row", backgroundColor: "#fff",
-        borderBottomWidth: 1, borderBottomColor: colors.border,
-        paddingHorizontal: 16, gap: 4,
-      }}>
+      {/* Sub-tab bar: Feed | Busca com IA — same style as main Mercado tabs */}
+      <View style={[styles.mainTabRow, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         {([
           { key: "feed",   label: "Feed", icon: "radio"  },
-          { key: "search", label: "IA",   icon: "search" },
+          { key: "search", label: "🔍 IA", icon: null   },
         ] as { key: IdealBISubTab; label: string; icon: any }[]).map(tab => {
           const active = idealbiSubTab === tab.key;
           return (
             <TouchableOpacity
               key={tab.key}
+              style={[
+                styles.mainTabBtn,
+                active && { backgroundColor: "#fff", borderColor: colors.border },
+              ]}
               onPress={() => setIdealbiSubTab(tab.key)}
-              style={{
-                flexDirection: "row", alignItems: "center", gap: 5,
-                paddingHorizontal: 14, paddingVertical: 10,
-                borderBottomWidth: 2,
-                borderBottomColor: active ? colors.gold : "transparent",
-              }}
             >
-              <Feather name={tab.icon} size={13} color={active ? colors.gold : colors.mutedForeground} />
-              <Text style={{ fontSize: 13, fontWeight: active ? "700" : "500", color: active ? colors.navy : colors.mutedForeground }}>
+              {tab.icon && (
+                <Feather name={tab.icon} size={14} color={active ? colors.navy : colors.mutedForeground} />
+              )}
+              <Text style={[styles.mainTabText, {
+                color: active ? colors.navy : colors.mutedForeground,
+                fontWeight: active ? "700" : "500",
+              }]}>
                 {tab.label}
               </Text>
             </TouchableOpacity>
