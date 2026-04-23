@@ -533,7 +533,7 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
         position: "sticky", top: 0, zIndex: 200, height: 56,
         display: "flex", alignItems: "center", padding: "0 24px", gap: 16,
       }}>
-        <span style={{ fontSize: 18, fontWeight: 900, color: GOLD, cursor: "pointer", flexShrink: 0, letterSpacing: -0.3 }} onClick={() => setLocation("/app")}>ibhub</span>
+        <img src="/web/logo-ibhub.png" alt="ibhub" onClick={() => setLocation("/app")} style={{ height: 32, cursor: "pointer", flexShrink: 0, objectFit: "contain" }} />
 
         <div
           style={{ flex: 1, maxWidth: 400, display: "flex", alignItems: "center", gap: 8, backgroundColor: "#f2f2ed", borderRadius: 24, padding: "7px 14px", cursor: "text" }}
