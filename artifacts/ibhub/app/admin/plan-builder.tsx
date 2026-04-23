@@ -124,7 +124,7 @@ const PlanModal = memo(({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={s.overlay}>
         <View style={[s.modalSheet, { backgroundColor: "#fff" }]}>
-          {/* Header */}
+          {/* Header — fixed outside scroll */}
           <View style={s.modalHeader}>
             <View style={{ flex: 1 }}>
               <Text style={[s.modalTitle, { color: colors.navy }]}>
@@ -141,7 +141,7 @@ const PlanModal = memo(({
             </TouchableOpacity>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ gap: 20, paddingBottom: 16 }}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 20, paddingBottom: 32 }}>
 
             {/* ── Identidade ── */}
             <Section label="Identidade">
@@ -277,18 +277,18 @@ const PlanModal = memo(({
                 </View>
               )}
             </Section>
-          </ScrollView>
 
-          {/* Save button */}
-          <TouchableOpacity
-            style={[s.saveBtn, { backgroundColor: saving ? colors.gold + "90" : colors.gold }]}
-            onPress={onSave} disabled={saving}
-          >
-            {saving
-              ? <ActivityIndicator color="#fff" />
-              : <><Feather name="check" size={16} color="#fff" /><Text style={s.saveBtnText}>{isNew ? "Criar Plano" : "Salvar Alterações"}</Text></>
-            }
-          </TouchableOpacity>
+            {/* Save button — inside scroll so it's always reachable */}
+            <TouchableOpacity
+              style={[s.saveBtn, { backgroundColor: saving ? colors.gold + "90" : colors.gold }]}
+              onPress={onSave} disabled={saving}
+            >
+              {saving
+                ? <ActivityIndicator color="#fff" />
+                : <><Feather name="check" size={16} color="#fff" /><Text style={s.saveBtnText}>{isNew ? "Criar Plano" : "Salvar Alterações"}</Text></>
+              }
+            </TouchableOpacity>
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -670,7 +670,7 @@ const s = StyleSheet.create({
   actionBtn:  { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
 
   overlay:     { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
-  modalSheet:  { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 0, maxHeight: "92%", flex: 0, flexShrink: 1 },
+  modalSheet:  { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 0, maxHeight: "92%" },
   modalHeader: { flexDirection: "row", alignItems: "flex-start", marginBottom: 16 },
   modalTitle:  { fontSize: 18, fontWeight: "900" },
   modalCloseBtn: { padding: 4, marginLeft: 8 },
