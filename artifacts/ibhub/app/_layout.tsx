@@ -256,7 +256,10 @@ function RootLayoutNav() {
   // Google/Apple users who skipped completion are always intercepted.
   useEffect(() => {
     if (loading || isRecovering || mustChangePassword || !session || !needsProfileCompletion) return;
-    if (pathname.includes("social-complete") || pathname.includes("auth")) return;
+    // Block redirect when user is on any auth/registration screen.
+    // Note: Expo Router strips group names, so (auth)/register → /register, not /auth/register.
+    const blockPaths = ["social-complete", "register", "login", "reset-password", "forgot-password", "auth"];
+    if (blockPaths.some(p => pathname.includes(p))) return;
     router.replace("/social-complete" as any);
   }, [loading, isRecovering, mustChangePassword, session, needsProfileCompletion, pathname]);
 

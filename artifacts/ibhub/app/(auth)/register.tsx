@@ -104,7 +104,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { signUp, refreshProfileByUserId } = useAuth();
+  const { signUp, refreshProfileByUserId, clearProfileCompletion } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [step, setStep] = useState(1);
@@ -318,6 +318,11 @@ export default function RegisterScreen() {
         setError(err);
         return;
       }
+
+      // Immediately clear the profile-completion flag so the layout guard
+      // doesn't redirect this email/password sign-up to the social-complete screen
+      // before the profile upsert below (step 4) finishes.
+      clearProfileCompletion();
 
       // 2. Obter o usuário recém-criado
       const { data: { user: currentUser } } = await supabase.auth.getUser();
