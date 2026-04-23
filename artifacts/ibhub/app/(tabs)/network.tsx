@@ -760,6 +760,9 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
   const [result, setResult]       = useState<WineRecord | null | "not_found">(null);
   const exhausted = credits === 0;
 
+  const creditColor = credits >= 2 ? "#16a34a" : credits === 1 ? "#d97706" : "#dc2626";
+  const creditBg    = credits >= 2 ? "#dcfce7" : credits === 1 ? "#fef3c7" : "#fef2f2";
+
   const handleSearch = async () => {
     const q = query.trim();
     if (!q || searching || exhausted) return;
@@ -780,188 +783,208 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
 
   return (
     <ScrollView
-      contentContainerStyle={{ padding: 16, paddingBottom: bottomPad, gap: 16 }}
+      contentContainerStyle={{ paddingBottom: bottomPad }}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
-      {/* Header row — title + credit badge */}
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-        <View>
-          <Text style={{ fontSize: 17, fontWeight: "800", color: colors.navy }}>Busca com IA</Text>
-          <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 2 }}>
-            Descubra quem importa e exporta
-          </Text>
-        </View>
-        <View style={{
-          flexDirection: "row", alignItems: "center", gap: 5,
-          backgroundColor: exhausted ? "#fef2f2" : "#fefce8",
-          borderWidth: 1, borderColor: exhausted ? "#fca5a5" : "#fde68a",
-          paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
-        }}>
-          <Text style={{ fontSize: 14 }}>⚡</Text>
-          <Text style={{ fontSize: 12, fontWeight: "700", color: exhausted ? "#dc2626" : "#92400e" }}>
-            {credits} {credits === 1 ? "consulta restante" : "consultas restantes"}
-          </Text>
+      {/* ── Credits KPI card — same style as Visão Geral KPIs ── */}
+      <View style={[styles.kpiList, { paddingTop: 12 }]}>
+        <View style={[styles.kpiCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+          <View style={styles.kpiLeft}>
+            <View style={[styles.kpiIconBox, { backgroundColor: colors.gold + "18" }]}>
+              <Feather name="zap" size={20} color={colors.gold} />
+            </View>
+            <View>
+              <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>Consultas Restantes</Text>
+              <Text style={[styles.kpiPeriod, { color: colors.mutedForeground }]}>Ideal.BI · Busca com IA</Text>
+              <Text style={[styles.kpiValue, { color: exhausted ? "#dc2626" : colors.navy }]}>
+                {credits}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.kpiRight}>
+            <View style={{ backgroundColor: creditBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
+              <Text style={{ fontSize: 12, fontWeight: "700", color: creditColor }}>
+                {exhausted ? "Esgotado" : credits === 1 ? "Crítico" : "Ativo"}
+              </Text>
+            </View>
+          </View>
         </View>
       </View>
 
-      {/* Description card */}
-      <View style={{ backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 14, gap: 8 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: "#c9a84c18", alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ fontSize: 18 }}>🍷</Text>
+      {/* ── Paywall (only visible when exhausted) ── */}
+      {exhausted && (
+        <View style={[styles.lockedCard, { backgroundColor: "#fff", borderColor: "#fca5a5" }]}>
+          <View style={[styles.lockedIconBox, { backgroundColor: "#fef2f2" }]}>
+            <Feather name="lock" size={22} color="#dc2626" />
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>Inteligência de Mercado</Text>
-            <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>
-              Digite o nome de um vinho e descubra exportadores e distribuidores.
-            </Text>
-          </View>
-        </View>
-        <Text style={{ fontSize: 11, color: colors.mutedForeground, fontStyle: "italic" }}>
-          Sugestões: Casillero del Diablo, Penfolds Bin 389, Santa Julia, Sogrape
-        </Text>
-      </View>
-
-      {/* Search bar */}
-      <View style={{
-        flexDirection: "row", alignItems: "center", gap: 10,
-        backgroundColor: "#fff", borderWidth: 1.5,
-        borderColor: exhausted ? "#fca5a5" : colors.border,
-        borderRadius: 14, paddingHorizontal: 14, paddingVertical: 4,
-      }}>
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder={exhausted ? "Limite de consultas esgotado" : "Ex: Casillero del Diablo Reserva…"}
-          placeholderTextColor={colors.mutedForeground}
-          style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: 12 }}
-          editable={!exhausted && !searching}
-          onSubmitEditing={handleSearch}
-          returnKeyType="search"
-        />
-        <TouchableOpacity
-          onPress={handleSearch}
-          disabled={!query.trim() || searching || exhausted}
-          style={{
-            width: 36, height: 36, borderRadius: 10,
-            backgroundColor: (!query.trim() || searching || exhausted) ? colors.border : colors.gold,
-            alignItems: "center", justifyContent: "center",
-          }}
-        >
-          {searching
-            ? <ActivityIndicator size="small" color="#fff" />
-            : <Feather name="search" size={16} color="#fff" />
-          }
-        </TouchableOpacity>
-      </View>
-
-      {/* Loading / analysing state */}
-      {searching && (
-        <View style={{
-          backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: colors.border,
-          padding: 24, alignItems: "center", gap: 14,
-        }}>
-          <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: "#c9a84c18", alignItems: "center", justifyContent: "center" }}>
-            <ActivityIndicator size="large" color={colors.gold} />
-          </View>
-          <Text style={{ fontSize: 15, fontWeight: "700", color: colors.navy }}>Analisando mercado…</Text>
-          <Text style={{ fontSize: 12, color: colors.mutedForeground, textAlign: "center" }}>
-            Consultando base de dados de importadores e exportadores
+          <Text style={[styles.lockedTitle, { color: colors.navy }]}>Limite de consultas esgotado</Text>
+          <Text style={[styles.lockedSub, { color: colors.mutedForeground }]}>
+            Faça o upgrade de plano para continuar descobrindo quem importa e exporta vinhos no mercado.
           </Text>
+          <TouchableOpacity
+            style={{ marginTop: 4, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.gold, paddingHorizontal: 22, paddingVertical: 11, borderRadius: 10 }}
+            onPress={() => router.push("/subscription")}
+            activeOpacity={0.8}
+          >
+            <Feather name="zap" size={14} color="#fff" />
+            <Text style={{ color: "#fff", fontWeight: "800", fontSize: 14 }}>Fazer Upgrade</Text>
+          </TouchableOpacity>
         </View>
       )}
 
-      {/* Not found state */}
-      {!searching && result === "not_found" && (
+      {/* ── Search section ── */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 12, gap: 10 }}>
+        {/* Section label */}
+        <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.8 }}>
+          Pesquisar vinho
+        </Text>
+
+        {/* Search input — ChatGPT style */}
         <View style={{
-          backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: colors.border,
-          padding: 20, alignItems: "center", gap: 10,
+          flexDirection: "row", alignItems: "center", gap: 10,
+          backgroundColor: "#fff", borderWidth: 1.5,
+          borderColor: exhausted ? "#fca5a5" : searching ? colors.gold : colors.border,
+          borderRadius: 14, paddingLeft: 14, paddingRight: 8, paddingVertical: 4,
         }}>
-          <Text style={{ fontSize: 28 }}>🔍</Text>
-          <Text style={{ fontSize: 15, fontWeight: "700", color: colors.navy }}>Vinho não encontrado</Text>
-          <Text style={{ fontSize: 13, color: colors.mutedForeground, textAlign: "center" }}>
+          <Feather name="search" size={16} color={colors.mutedForeground} style={{ marginRight: 2 }} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder={exhausted ? "Limite de consultas esgotado" : "Ex: Casillero del Diablo Reserva…"}
+            placeholderTextColor={colors.mutedForeground}
+            style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: 13 }}
+            editable={!exhausted && !searching}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
+          />
+          <TouchableOpacity
+            onPress={handleSearch}
+            disabled={!query.trim() || searching || exhausted}
+            style={{
+              flexDirection: "row", alignItems: "center", gap: 5,
+              paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10,
+              backgroundColor: (!query.trim() || searching || exhausted) ? colors.border : colors.gold,
+            }}
+          >
+            {searching ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Feather name="search" size={13} color="#fff" />
+                <Text style={{ fontSize: 12, fontWeight: "800", color: "#fff", letterSpacing: 0.5 }}>IA</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Suggestion chips — same style as period filter */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16, paddingHorizontal: 16 }}>
+          <View style={{ flexDirection: "row", gap: 8, paddingBottom: 4 }}>
+            {["Casillero del Diablo", "Penfolds Bin 389", "Santa Julia", "Passo Fundo Malbec", "Sogrape"].map(s => (
+              <TouchableOpacity
+                key={s}
+                style={[styles.periodBtn, { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border }]}
+                onPress={() => { if (!exhausted && !searching) { setQuery(s); } }}
+                disabled={exhausted || searching}
+              >
+                <Text style={[styles.periodBtnText, { color: colors.mutedForeground }]}>{s}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+
+      {/* ── Loading state ── */}
+      {searching && (
+        <View style={[styles.kpiList, { paddingTop: 12 }]}>
+          <View style={[styles.kpiCard, { backgroundColor: "#fff", borderColor: colors.gold + "40" }]}>
+            <View style={styles.kpiLeft}>
+              <View style={[styles.kpiIconBox, { backgroundColor: colors.gold + "18" }]}>
+                <ActivityIndicator size="small" color={colors.gold} />
+              </View>
+              <View>
+                <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>Inteligência Artificial</Text>
+                <Text style={[styles.kpiValue, { fontSize: 16, color: colors.navy }]}>Analisando mercado…</Text>
+                <Text style={[styles.kpiPeriod, { color: colors.mutedForeground }]}>
+                  Consultando importadores e exportadores
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* ── Not found ── */}
+      {!searching && result === "not_found" && (
+        <View style={[styles.lockedCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+          <View style={[styles.lockedIconBox, { backgroundColor: colors.gold + "15" }]}>
+            <Feather name="search" size={22} color={colors.gold} />
+          </View>
+          <Text style={[styles.lockedTitle, { color: colors.navy }]}>Vinho não encontrado</Text>
+          <Text style={[styles.lockedSub, { color: colors.mutedForeground }]}>
             Não encontramos esse vinho na base de dados. Tente outro nome ou variação.
           </Text>
         </View>
       )}
 
-      {/* Result card */}
+      {/* ── Result — KPI cards matching Visão Geral ── */}
       {!searching && result && result !== "not_found" && (
-        <View style={{
-          backgroundColor: "#fff", borderRadius: 16, borderWidth: 1.5,
-          borderColor: colors.gold + "60", overflow: "hidden",
-        }}>
-          {/* Card header with gold accent */}
-          <View style={{ backgroundColor: colors.gold, paddingHorizontal: 16, paddingVertical: 12 }}>
-            <Text style={{ fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.8)", letterSpacing: 1, textTransform: "uppercase" }}>
+        <View style={[styles.kpiList, { paddingTop: 12 }]}>
+
+          {/* Brand header card */}
+          <View style={[styles.kpiCard, { backgroundColor: colors.gold, borderColor: colors.gold, flexDirection: "column", alignItems: "flex-start", gap: 2 }]}>
+            <Text style={{ fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.75)", letterSpacing: 0.8, textTransform: "uppercase" }}>
               Resultado encontrado
             </Text>
-            <Text style={{ fontSize: 19, fontWeight: "900", color: "#fff", marginTop: 3 }}>
+            <Text style={{ fontSize: 18, fontWeight: "900", color: "#fff", lineHeight: 24 }}>
               {result.marcaCompleta}
             </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
+              <Feather name="check-circle" size={12} color="rgba(255,255,255,0.8)" />
+              <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.8)" }}>
+                1 consulta utilizada · {credits} restante{credits !== 1 ? "s" : ""}
+              </Text>
+            </View>
           </View>
 
-          {/* Data rows */}
-          <View style={{ padding: 16, gap: 12 }}>
-            {[
-              { emoji: "🌍", label: "País de Origem",  value: result.paisDeOrigem },
-              { emoji: "📤", label: "Exportador",       value: result.exportador   },
-              { emoji: "🚚", label: "Distribuidor BR",  value: result.distribuidor },
-            ].map(row => (
-              <View key={row.label} style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
-                  <Text style={{ fontSize: 18 }}>{row.emoji}</Text>
+          {/* Data KPI cards */}
+          {([
+            { icon: "globe",     label: "País de Origem", value: result.paisDeOrigem },
+            { icon: "upload",    label: "Exportador",      value: result.exportador   },
+            { icon: "truck",     label: "Distribuidor BR", value: result.distribuidor },
+          ] as { icon: any; label: string; value: string }[]).map(row => (
+            <View key={row.label} style={[styles.kpiCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+              <View style={styles.kpiLeft}>
+                <View style={[styles.kpiIconBox, { backgroundColor: colors.gold + "18" }]}>
+                  <Feather name={row.icon} size={20} color={colors.gold} />
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 }}>
-                    {row.label}
-                  </Text>
-                  <Text style={{ fontSize: 14, fontWeight: "700", color: colors.navy, marginTop: 1 }}>
-                    {row.value}
-                  </Text>
+                <View>
+                  <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>{row.label}</Text>
+                  <Text style={[styles.kpiValue, { fontSize: 16, color: colors.navy }]}>{row.value}</Text>
                 </View>
               </View>
-            ))}
-          </View>
-
-          {/* Credits deducted notice */}
-          <View style={{ backgroundColor: colors.background, paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Feather name="check-circle" size={13} color="#16a34a" />
-            <Text style={{ fontSize: 12, color: colors.mutedForeground }}>
-              1 consulta utilizada · {credits} restante{credits !== 1 ? "s" : ""}
-            </Text>
-          </View>
+            </View>
+          ))}
         </View>
       )}
 
-      {/* Paywall banner */}
-      {exhausted && (
-        <View style={{
-          backgroundColor: "#fff", borderRadius: 16, borderWidth: 1.5, borderColor: "#fca5a5",
-          padding: 20, alignItems: "center", gap: 12,
-        }}>
-          <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: "#fef2f2", alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ fontSize: 28 }}>🔒</Text>
+      {/* ── Empty state hint (no search yet) ── */}
+      {!searching && result === null && !exhausted && (
+        <View style={[styles.kpiList, { paddingTop: 12 }]}>
+          <View style={[styles.kpiCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+            <View style={styles.kpiLeft}>
+              <View style={[styles.kpiIconBox, { backgroundColor: colors.gold + "18" }]}>
+                <Feather name="info" size={20} color={colors.gold} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>Como funciona</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: colors.navy, marginTop: 2, lineHeight: 18 }}>
+                  Digite o nome de um vinho para descobrir exportadores e distribuidores no Brasil.
+                </Text>
+              </View>
+            </View>
           </View>
-          <Text style={{ fontSize: 17, fontWeight: "800", color: colors.navy, textAlign: "center" }}>
-            Limite de consultas esgotado
-          </Text>
-          <Text style={{ fontSize: 13, color: colors.mutedForeground, textAlign: "center", lineHeight: 20 }}>
-            Faça o upgrade de plano para continuar descobrindo quem importa e exporta vinhos no mercado.
-          </Text>
-          <TouchableOpacity
-            style={{
-              flexDirection: "row", alignItems: "center", gap: 8,
-              backgroundColor: colors.gold, paddingHorizontal: 28, paddingVertical: 14,
-              borderRadius: 12, width: "100%" as any, justifyContent: "center",
-            }}
-            onPress={() => router.push("/subscription")}
-            activeOpacity={0.85}
-          >
-            <Feather name="zap" size={15} color="#fff" />
-            <Text style={{ color: "#fff", fontWeight: "800", fontSize: 15 }}>Fazer Upgrade</Text>
-          </TouchableOpacity>
         </View>
       )}
     </ScrollView>
@@ -1645,9 +1668,9 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
         paddingHorizontal: 16, gap: 4,
       }}>
         {([
-          { key: "feed",   label: "Feed",   icon: "radio"  },
-          { key: "search", label: null,     icon: "search" },
-        ] as { key: IdealBISubTab; label: string | null; icon: any }[]).map(tab => {
+          { key: "feed",   label: "Feed", icon: "radio"  },
+          { key: "search", label: "IA",   icon: "search" },
+        ] as { key: IdealBISubTab; label: string; icon: any }[]).map(tab => {
           const active = idealbiSubTab === tab.key;
           return (
             <TouchableOpacity
@@ -1661,11 +1684,9 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
               }}
             >
               <Feather name={tab.icon} size={13} color={active ? colors.gold : colors.mutedForeground} />
-              {tab.label && (
-                <Text style={{ fontSize: 13, fontWeight: active ? "700" : "500", color: active ? colors.navy : colors.mutedForeground }}>
-                  {tab.label}
-                </Text>
-              )}
+              <Text style={{ fontSize: 13, fontWeight: active ? "700" : "500", color: active ? colors.navy : colors.mutedForeground }}>
+                {tab.label}
+              </Text>
             </TouchableOpacity>
           );
         })}
