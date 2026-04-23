@@ -107,17 +107,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id).finally(() => setLoading(false));
-      } else {
+    let initialResolved = false;
+
+    // Safety net: if getSession() hangs or throws and loading never clears, force-resolve after 4s
+    const safetyTimer = setTimeout(() => {
+      if (!initialResolved) {
+        initialResolved = true;
         setLoading(false);
       }
-    });
+    }, 4000);
+
+    const resolveInitial = () => {
+      if (!initialResolved) {
+        initialResolved = true;
+        clearTimeout(safetyTimer);
+      }
+    };
+
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        resolveInitial();
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          fetchProfile(session.user.id).finally(() => setLoading(false));
+        } else {
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        // Refresh token invalid or network error — treat as signed out
+        resolveInitial();
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+      });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // If Supabase fires SIGNED_OUT due to an invalid token refresh, clear loading
+      if (event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
+        resolveInitial();
+        if (!session) setLoading(false);
+      }
+
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
@@ -161,7 +194,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    return () => { subscription.unsubscribe(); };
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(safetyTimer);
+    };
   }, [fetchProfile]);
 
   // Realtime: detect when admin updates this user's profile (ban, plan, courtesy, etc.)
