@@ -131,6 +131,7 @@ export default function MensagensPage() {
   const [loading, setLoading]             = useState(true);
   const [sending, setSending]             = useState(false);
   const [search, setSearch]               = useState("");
+  const [showNewConvo, setShowNewConvo]   = useState(false);
 
   // Attachment state
   const [attachFile, setAttachFile]       = useState<File | null>(null);
@@ -229,6 +230,240 @@ export default function MensagensPage() {
   const busy = sending || uploading;
   const canSend = (newMsg.trim().length > 0 || attachFile !== null) && !busy;
 
+  // ── Shared thread JSX ──────────────────────────────────────────────────────
+  const threadJSX = selected ? (
+    <>
+      {/* Messages */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: 10, backgroundColor: "#f9f9f7" }}>
+        {messages.length === 0 && (
+          <div style={{ textAlign: "center", color: MUTED, fontSize: 13, marginTop: 24 }}>Nenhuma mensagem ainda. Diga olá! 👋</div>
+        )}
+        {messages.map(msg => {
+          const isMe = msg.sender_id === userId;
+          const attach = parseAttachment(msg.content);
+          return (
+            <div key={msg.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", gap: 8 }}>
+              {!isMe && <Avatar src={msg.sender?.avatar_url} name={msg.sender?.full_name ?? "?"} size={30} />}
+              <div style={{ maxWidth: "76%" }}>
+                {!isMe && (
+                  <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>{msg.sender?.full_name}</div>
+                )}
+                <div style={{
+                  backgroundColor: isMe ? GOLD : WHITE,
+                  color: NAVY,
+                  borderRadius: isMe ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                  padding: attach ? "8px" : "10px 14px",
+                  fontSize: 14, lineHeight: 1.55,
+                  border: isMe ? "none" : `1px solid ${BORDER}`,
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+                }}>
+                  {attach
+                    ? <AttachmentBubble url={attach.url} label={attach.label} isMe={isMe} />
+                    : msg.content
+                  }
+                </div>
+                <div style={{ fontSize: 10, color: MUTED, marginTop: 3, textAlign: isMe ? "right" : "left" }}>
+                  {timeAgo(msg.created_at)}
+                </div>
+              </div>
+              {isMe && <Avatar src={profile?.avatar_url} name={profile?.full_name ?? "Eu"} size={30} />}
+            </div>
+          );
+        })}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Attachment preview */}
+      {attachFile && (
+        <div style={{ padding: "8px 16px 0", flexShrink: 0, backgroundColor: WHITE }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, backgroundColor: BG, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "8px 12px" }}>
+            {attachPreview ? (
+              <img src={attachPreview} alt="preview" style={{ width: 44, height: 44, borderRadius: 6, objectFit: "cover" }} />
+            ) : (
+              <span style={{ fontSize: 22 }}>📎</span>
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{attachFile.name}</div>
+              <div style={{ fontSize: 11, color: MUTED }}>{(attachFile.size / 1024).toFixed(0)} KB</div>
+            </div>
+            <button onClick={clearAttach} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
+              <XIcon size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Input bar */}
+      <div style={{ padding: "10px 16px 14px", borderTop: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0, backgroundColor: WHITE }}>
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          style={{ flexShrink: 0, width: 38, height: 38, border: `1px solid ${BORDER}`, borderRadius: 19, backgroundColor: WHITE, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", outline: "none" }}
+        >
+          <ClipIcon size={18} color={attachFile ? GOLD : MUTED} />
+        </button>
+        <input
+          value={newMsg}
+          onChange={e => setNewMsg(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+          placeholder="Escreva uma mensagem…"
+          style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 24, padding: "10px 16px", fontSize: 14, outline: "none", fontFamily: "inherit", backgroundColor: "#f9f9f7" }}
+        />
+        <button
+          onClick={handleSend}
+          disabled={!canSend}
+          style={{ flexShrink: 0, width: 38, height: 38, border: "none", borderRadius: 19, backgroundColor: canSend ? GOLD : `${GOLD}40`, cursor: canSend ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", outline: "none" }}
+        >
+          {busy ? <span style={{ fontSize: 13 }}>⏳</span> : <SendIcon size={16} color={canSend ? NAVY : "#999"} />}
+        </button>
+      </div>
+    </>
+  ) : null;
+
+  // ── Mobile layout ───────────────────────────────────────────────────────────
+  if (isMobile) {
+    // Thread view (conversation open)
+    if (selected) {
+      return (
+        <AppShell>
+          <input ref={fileInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" style={{ display: "none" }} onChange={handleFileChange} />
+          <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 56px)" }}>
+            {/* Thread header */}
+            <div style={{ backgroundColor: WHITE, borderBottom: `1px solid ${BORDER}`, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0, position: "sticky", top: 56, zIndex: 20 }}>
+              <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 24, color: GOLD, lineHeight: 1, padding: "0 8px 0 0", flexShrink: 0 }}>‹</button>
+              <Avatar src={getConvoAvatar(selected)} name={getConvoName(selected)} size={40} />
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>{getConvoName(selected)}</div>
+                {selected.participant && <div style={{ fontSize: 12, color: MUTED }}>Profissional do vinho</div>}
+              </div>
+            </div>
+            {threadJSX}
+          </div>
+        </AppShell>
+      );
+    }
+
+    // Conversation list view
+    return (
+      <AppShell>
+        <input ref={fileInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" style={{ display: "none" }} onChange={handleFileChange} />
+        <div style={{ backgroundColor: "#f2f3f5", minHeight: "100vh", paddingBottom: 80 }}>
+
+          {/* Sticky header */}
+          <div style={{ position: "sticky", top: 56, zIndex: 20, backgroundColor: WHITE, borderBottom: `1px solid ${BORDER}`, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 20, fontWeight: 900, color: NAVY }}>
+              {activeCompany ? `Chat – ${activeCompany.name}` : "Mensagens"}
+            </span>
+            <button
+              onClick={() => setShowNewConvo(v => !v)}
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: showNewConvo ? `${GOLD}20` : GOLD, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}
+            >
+              ✏️
+            </button>
+          </div>
+
+          {/* Company mode banner */}
+          {activeCompany && (
+            <div style={{ backgroundColor: `${GOLD}12`, borderBottom: `1px solid ${GOLD}30`, padding: "10px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+              {activeCompany.avatar_url
+                ? <img src={activeCompany.avatar_url} alt={activeCompany.name} style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover" }} />
+                : <div style={{ width: 32, height: 32, borderRadius: "50%", backgroundColor: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: WHITE }}>{activeCompany.name[0]}</div>
+              }
+              <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>Modo Empresa ativo</div>
+            </div>
+          )}
+
+          {/* Nova conversa panel */}
+          {showNewConvo && (
+            <div style={{ backgroundColor: WHITE, borderBottom: `1px solid ${BORDER}`, padding: "14px 16px" }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: NAVY, marginBottom: 4 }}>Nova conversa</div>
+              <div style={{ fontSize: 12, color: MUTED, marginBottom: 10 }}>Conecte-se com alguém da sua rede para iniciar uma conversa</div>
+              <button
+                onClick={() => { setShowNewConvo(false); }}
+                style={{ padding: "9px 18px", backgroundColor: GOLD, color: NAVY, border: "none", borderRadius: 20, fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+              >
+                Ver rede de conexões →
+              </button>
+            </div>
+          )}
+
+          {/* Search bar */}
+          <div style={{ backgroundColor: WHITE, padding: "10px 16px 10px", marginBottom: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, backgroundColor: "#f2f3f5", borderRadius: 20, padding: "9px 14px" }}>
+              <span style={{ fontSize: 14, color: MUTED, lineHeight: 1 }}>🔍</span>
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Buscar conversas..."
+                style={{ flex: 1, border: "none", background: "none", outline: "none", fontSize: 14, fontFamily: "inherit", color: NAVY }}
+              />
+              {search && (
+                <button onClick={() => setSearch("")} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center" }}>
+                  <XIcon size={14} color={MUTED} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Conversation list */}
+          <div style={{ backgroundColor: WHITE }}>
+            {loading ? (
+              <div style={{ textAlign: "center", padding: 40, color: MUTED, fontSize: 13 }}>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>💬</div>Carregando…
+              </div>
+            ) : filteredConvos.length === 0 ? (
+              <div style={{ padding: "48px 24px", textAlign: "center" }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>💬</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 8 }}>O brinde começa com um "Olá"</div>
+                <div style={{ fontSize: 13, color: MUTED, marginBottom: 20 }}>Inicie uma conversa com alguém da sua rede</div>
+                <button
+                  onClick={() => setShowNewConvo(true)}
+                  style={{ padding: "11px 22px", backgroundColor: GOLD, color: NAVY, border: "none", borderRadius: 20, fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+                >
+                  ✏️ Nova conversa
+                </button>
+              </div>
+            ) : (
+              filteredConvos.map((convo, i) => (
+                <button
+                  key={convo.id}
+                  onClick={() => loadMessages(convo)}
+                  style={{
+                    display: "flex", alignItems: "center", width: "100%", padding: "14px 16px", gap: 14,
+                    border: "none", borderBottom: i < filteredConvos.length - 1 ? `1px solid ${BORDER}` : "none",
+                    backgroundColor: "transparent", cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                  }}
+                >
+                  <Avatar src={getConvoAvatar(convo)} name={getConvoName(convo)} size={52} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                      <span style={{ fontSize: 15, fontWeight: convo.unread_count > 0 ? 800 : 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "65%" }}>
+                        {getConvoName(convo)}
+                      </span>
+                      {convo.last_message_at && (
+                        <span style={{ fontSize: 11, color: MUTED, flexShrink: 0 }}>{timeAgo(convo.last_message_at)}</span>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: 13, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, fontWeight: convo.unread_count > 0 ? 600 : 400, color: convo.unread_count > 0 ? NAVY : MUTED }}>
+                        {convo.last_message ?? "Iniciar conversa"}
+                      </span>
+                      {convo.unread_count > 0 && (
+                        <div style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: GOLD, color: WHITE, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginLeft: 8 }}>
+                          {convo.unread_count}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
+  // ── Desktop layout ──────────────────────────────────────────────────────────
   return (
     <AppShell>
       {/* Hidden file input */}
@@ -255,16 +490,14 @@ export default function MensagensPage() {
           </div>
         )}
 
-        {!isMobile && (
-          <h1 style={{ fontSize: 22, fontWeight: 900, color: NAVY, marginBottom: 16 }}>
-            {activeCompany ? "Chat da Empresa" : "Mensagens"}
-          </h1>
-        )}
+        <h1 style={{ fontSize: 22, fontWeight: 900, color: NAVY, marginBottom: 16 }}>
+          {activeCompany ? "Chat da Empresa" : "Mensagens"}
+        </h1>
 
-        <div style={{ display: "flex", height: isMobile ? "calc(100vh - 130px)" : "calc(100vh - 180px)", backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: isMobile ? 12 : 16, overflow: "hidden" }}>
+        <div style={{ display: "flex", height: "calc(100vh - 180px)", backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, overflow: "hidden" }}>
 
           {/* ── Sidebar ── */}
-          <div style={{ width: isMobile ? "100%" : 280, flexShrink: 0, borderRight: isMobile && selected ? "none" : `1px solid ${BORDER}`, display: isMobile && selected ? "none" : "flex", flexDirection: "column" }}>
+          <div style={{ width: 280, flexShrink: 0, borderRight: `1px solid ${BORDER}`, display: "flex", flexDirection: "column" }}>
             <div style={{ padding: "12px 12px 8px" }}>
               <input
                 value={search}
@@ -324,7 +557,7 @@ export default function MensagensPage() {
           </div>
 
           {/* ── Message thread ── */}
-          <div style={{ flex: 1, display: isMobile && !selected ? "none" : "flex", flexDirection: "column", minWidth: 0, width: isMobile ? "100%" : undefined }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
             {!selected ? (
               <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: MUTED }}>
                 <div style={{ fontSize: 48, marginBottom: 12 }}>💬</div>
@@ -334,124 +567,14 @@ export default function MensagensPage() {
             ) : (
               <>
                 {/* Thread header */}
-                <div style={{ padding: "10px 14px", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                  {isMobile && (
-                    <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", cursor: "pointer", color: GOLD, padding: "4px 8px 4px 0", fontSize: 22, lineHeight: 1, flexShrink: 0 }}>‹</button>
-                  )}
+                <div style={{ padding: "12px 16px", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
                   <Avatar src={getConvoAvatar(selected)} name={getConvoName(selected)} size={38} />
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{getConvoName(selected)}</div>
                     {selected.participant && <div style={{ fontSize: 12, color: MUTED }}>Profissional do vinho</div>}
                   </div>
                 </div>
-
-                {/* Messages */}
-                <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
-                  {messages.length === 0 && (
-                    <div style={{ textAlign: "center", color: MUTED, fontSize: 13, marginTop: 24 }}>Nenhuma mensagem ainda. Diga olá! 👋</div>
-                  )}
-                  {messages.map(msg => {
-                    const isMe = msg.sender_id === userId;
-                    const attach = parseAttachment(msg.content);
-                    return (
-                      <div key={msg.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", gap: 8 }}>
-                        {!isMe && <Avatar src={msg.sender?.avatar_url} name={msg.sender?.full_name ?? "?"} size={30} />}
-                        <div style={{ maxWidth: "72%" }}>
-                          {!isMe && (
-                            <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>{msg.sender?.full_name}</div>
-                          )}
-                          <div style={{
-                            backgroundColor: isMe ? GOLD : BG,
-                            color: NAVY,
-                            borderRadius: isMe ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                            padding: attach ? "8px" : "10px 14px",
-                            fontSize: 13, lineHeight: 1.55,
-                            border: isMe ? "none" : `1px solid ${BORDER}`,
-                          }}>
-                            {attach
-                              ? <AttachmentBubble url={attach.url} label={attach.label} isMe={isMe} />
-                              : msg.content
-                            }
-                          </div>
-                          <div style={{ fontSize: 10, color: MUTED, marginTop: 3, textAlign: isMe ? "right" : "left" }}>
-                            {timeAgo(msg.created_at)}
-                          </div>
-                        </div>
-                        {isMe && <Avatar src={profile?.avatar_url} name={profile?.full_name ?? "Eu"} size={30} />}
-                      </div>
-                    );
-                  })}
-                  <div ref={bottomRef} />
-                </div>
-
-                {/* Attachment preview */}
-                {attachFile && (
-                  <div style={{ padding: "8px 18px 0", flexShrink: 0 }}>
-                    <div style={{ display: "inline-flex", alignItems: "center", gap: 8, backgroundColor: BG, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "8px 12px", maxWidth: "100%" }}>
-                      {attachPreview ? (
-                        <img src={attachPreview} alt="preview" style={{ width: 44, height: 44, borderRadius: 6, objectFit: "cover" }} />
-                      ) : (
-                        <span style={{ fontSize: 22 }}>📎</span>
-                      )}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{attachFile.name}</div>
-                        <div style={{ fontSize: 11, color: MUTED }}>{(attachFile.size / 1024).toFixed(0)} KB</div>
-                      </div>
-                      <button onClick={clearAttach} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
-                        <XIcon size={14} />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Input bar */}
-                <div style={{ padding: "10px 18px 14px", borderTop: `1px solid ${BORDER}`, display: "flex", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
-                  {/* Clip / Attach */}
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    title="Anexar arquivo"
-                    style={{
-                      flexShrink: 0, width: 40, height: 40, border: `1px solid ${BORDER}`,
-                      borderRadius: 20, backgroundColor: WHITE, cursor: "pointer",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      color: attachFile ? GOLD : MUTED,
-                      outline: "none",
-                    }}
-                  >
-                    <ClipIcon size={18} color={attachFile ? GOLD : MUTED} />
-                  </button>
-
-                  {/* Text input */}
-                  <input
-                    value={newMsg}
-                    onChange={e => setNewMsg(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                    placeholder="Escreva uma mensagem…"
-                    style={{
-                      flex: 1, border: `1px solid ${BORDER}`, borderRadius: 24,
-                      padding: "10px 16px", fontSize: 14, outline: "none", fontFamily: "inherit",
-                    }}
-                  />
-
-                  {/* Send */}
-                  <button
-                    onClick={handleSend}
-                    disabled={!canSend}
-                    title="Enviar"
-                    style={{
-                      flexShrink: 0, width: 40, height: 40, border: "none", borderRadius: 20,
-                      backgroundColor: canSend ? GOLD : `${GOLD}40`,
-                      cursor: canSend ? "pointer" : "default",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      outline: "none",
-                    }}
-                  >
-                    {busy
-                      ? <span style={{ fontSize: 14 }}>⏳</span>
-                      : <SendIcon size={16} color={canSend ? NAVY : "#999"} />
-                    }
-                  </button>
-                </div>
+                {threadJSX}
               </>
             )}
           </div>
