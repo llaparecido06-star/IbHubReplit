@@ -2,6 +2,16 @@ import React, { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
+
+function useWindowWidth() {
+  const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1280);
+  useEffect(() => {
+    const h = () => setW(window.innerWidth);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+  return w;
+}
 import {
   fetchProfileStats,
   fetchUserPosts,
@@ -115,6 +125,8 @@ type ProfileTab = "publicacoes" | "sobre";
 export default function MeuPerfilPage() {
   const { profile, user } = useAuth();
   const [, setLocation] = useLocation();
+  const width = useWindowWidth();
+  const isMobile = width < 768;
 
   const [stats, setStats] = useState({ connections: 0, followers: 0, following: 0 });
   const [posts, setPosts] = useState<Post[]>([]);
@@ -149,6 +161,224 @@ export default function MeuPerfilPage() {
     const list = await fetchFollowingList(userId);
     setPeopleModal({ title: "Seguindo", list });
   };
+
+  const completion = (() => {
+    if (!profile) return 0;
+    const fields = [
+      !!profile.full_name,
+      !!profile.username,
+      !!(profile as any).headline,
+      !!(profile as any).bio,
+      !!(profile as any).avatar_url,
+      !!((profile as any).areas_of_expertise ?? []).length,
+      !!(((profile as any).certifications ?? []) as string[]).length,
+      !!(profile as any).company || !!(profile as any).position,
+    ];
+    return Math.round((fields.filter(Boolean).length / fields.length) * 100);
+  })();
+
+  if (isMobile) {
+    const COVER_H = 120;
+    return (
+      <AppShell>
+        <div style={{ backgroundColor: "#f2f3f5", minHeight: "100vh", paddingBottom: 80 }}>
+
+          {/* Cover */}
+          <div style={{ height: COVER_H, background: "linear-gradient(135deg, #722f37 0%, #9b3a4a 60%, #c9a84c 100%)", position: "relative" }}>
+            <button
+              onClick={() => setLocation("/minha-conta")}
+              style={{ position: "absolute", top: 14, right: 14, width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(0,0,0,0.28)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+            >
+              <span style={{ fontSize: 18 }}>⚙️</span>
+            </button>
+          </div>
+
+          {/* Profile card */}
+          <div style={{ backgroundColor: "#fff", padding: "0 16px 20px", marginBottom: 10 }}>
+            {/* Avatar + edit */}
+            <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginTop: -(COVER_H * 0.38) }}>
+              <div style={{ border: "3px solid #fff", borderRadius: "50%", boxShadow: "0 2px 8px rgba(0,0,0,0.12)" }}>
+                <Avatar src={(profile as any)?.avatar_url} name={displayName} size={80} />
+              </div>
+              <button
+                onClick={() => setLocation("/minha-conta")}
+                style={{ marginBottom: 4, padding: "8px 16px", backgroundColor: "#fff", color: NAVY, border: `1px solid ${BORDER}`, borderRadius: 20, fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+              >
+                Editar perfil
+              </button>
+            </div>
+
+            {/* Name + plan */}
+            <div style={{ marginTop: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 19, fontWeight: 900, color: NAVY }}>{displayName}</span>
+                <PlanBadge plan={(profile as any)?.plan} />
+              </div>
+              {username && <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>{username}</div>}
+              {headline && <div style={{ fontSize: 13, color: MUTED, marginTop: 3 }}>{headline}</div>}
+              {(position || company) && (
+                <div style={{ fontSize: 13, color: NAVY, marginTop: 3 }}>
+                  {[position, company].filter(Boolean).join(" · ")}
+                </div>
+              )}
+            </div>
+
+            {/* Stats row — 4 stats with dividers */}
+            <div style={{ display: "flex", marginTop: 16, paddingTop: 14, borderTop: `1px solid ${BORDER}` }}>
+              {[
+                { label: "Posts", value: posts.length, onClick: undefined as (() => void) | undefined },
+                { label: "Seguidores", value: stats.followers, onClick: openFollowers },
+                { label: "Seguindo", value: stats.following, onClick: openFollowing },
+                { label: "Conexões", value: stats.connections, onClick: openConnections },
+              ].map((s, i, arr) => (
+                <React.Fragment key={s.label}>
+                  <div
+                    onClick={s.onClick}
+                    style={{ flex: 1, textAlign: "center", cursor: s.onClick ? "pointer" : "default" }}
+                  >
+                    <div style={{ fontSize: 17, fontWeight: 900, color: GOLD }}>{s.value}</div>
+                    <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{s.label}</div>
+                  </div>
+                  {i < arr.length - 1 && <div style={{ width: 1, backgroundColor: BORDER, margin: "0 2px" }} />}
+                </React.Fragment>
+              ))}
+            </div>
+
+            {/* Bio */}
+            {bio && (
+              <p style={{ fontSize: 14, color: NAVY, lineHeight: 1.65, margin: "14px 0 0", whiteSpace: "pre-wrap" }}>{bio}</p>
+            )}
+
+            {/* Completion bar */}
+            {completion < 100 && (
+              <div
+                onClick={() => setLocation("/minha-conta")}
+                style={{ marginTop: 14, backgroundColor: "#f8fafc", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "12px 14px", cursor: "pointer" }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>Completar perfil — {completion}%</span>
+                  <span style={{ color: GOLD, fontSize: 14 }}>›</span>
+                </div>
+                <div style={{ height: 6, backgroundColor: BORDER, borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${completion}%`, backgroundColor: GOLD, borderRadius: 3 }} />
+                </div>
+                <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>
+                  {completion < 50 ? "Adicione bio, foto e áreas de atuação." :
+                   completion < 80 ? "Quase lá! Adicione certificações ou cargo." :
+                   "Adicione uma certificação para completar 100%."}
+                </div>
+              </div>
+            )}
+
+            {/* Areas of expertise tags */}
+            {((profile as any)?.areas_of_expertise ?? []).length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
+                {((profile as any).areas_of_expertise as string[]).map(tag => (
+                  <span key={tag} style={{ backgroundColor: "#f2f3f5", border: `1px solid ${BORDER}`, borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 600, color: NAVY }}>{tag}</span>
+                ))}
+              </div>
+            )}
+
+            {/* Action cards */}
+            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              {[
+                { icon: "🏢", label: "Empresa", sub: "Minha página", onClick: () => setLocation("/app/empresa") },
+                { icon: "👥", label: "Conexões", sub: `${stats.connections} contatos`, onClick: openConnections },
+                { icon: "⭐", label: "Plano", sub: (profile as any)?.plan ?? "Gratuito", onClick: () => setLocation("/minha-conta") },
+              ].map(card => (
+                <button
+                  key={card.label}
+                  onClick={card.onClick}
+                  style={{ flex: 1, backgroundColor: "#f8fafc", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "12px 8px", cursor: "pointer", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}
+                >
+                  <span style={{ fontSize: 20 }}>{card.icon}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{card.label}</span>
+                  <span style={{ fontSize: 11, color: MUTED }}>{card.sub}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div style={{ backgroundColor: "#fff", display: "flex", borderBottom: `1px solid ${BORDER}`, marginBottom: 10 }}>
+            {(["publicacoes", "sobre"] as ProfileTab[]).map(t => {
+              const labels: Record<ProfileTab, string> = { publicacoes: "Publicações", sobre: "Sobre" };
+              const active = tab === t;
+              return (
+                <button key={t} onClick={() => setTab(t)} style={{
+                  flex: 1, padding: "14px 8px", background: "none", border: "none", cursor: "pointer",
+                  fontSize: 13, fontWeight: active ? 800 : 500,
+                  color: active ? GOLD : MUTED,
+                  borderBottom: active ? `2px solid ${GOLD}` : "2px solid transparent",
+                  fontFamily: "inherit",
+                }}>
+                  {labels[t]}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Tab content */}
+          <div style={{ padding: "0 0 12px" }}>
+            {tab === "publicacoes" ? (
+              loadingPosts ? (
+                <div style={{ textAlign: "center", padding: 40, color: MUTED }}>
+                  <div style={{ fontSize: 24, marginBottom: 8 }}>🍷</div>Carregando…
+                </div>
+              ) : posts.length === 0 ? (
+                <div style={{ backgroundColor: "#fff", margin: "0 0 10px", padding: "40px 24px", textAlign: "center" }}>
+                  <div style={{ fontSize: 36, marginBottom: 10 }}>📝</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 6 }}>Nenhuma publicação ainda</div>
+                  <div style={{ fontSize: 13, color: MUTED }}>Compartilhe seu conhecimento sobre vinho</div>
+                </div>
+              ) : (
+                <div style={{ padding: "0 12px" }}>
+                  {posts.map(post => <MiniPostCard key={post.id} post={post} />)}
+                </div>
+              )
+            ) : (
+              <div style={{ backgroundColor: "#fff", padding: "20px 16px" }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: NAVY, marginBottom: 12 }}>Sobre mim</div>
+                {bio ? (
+                  <p style={{ fontSize: 14, color: NAVY, lineHeight: 1.7, margin: "0 0 14px" }}>{bio}</p>
+                ) : (
+                  <p style={{ fontSize: 14, color: MUTED, margin: "0 0 14px" }}>Nenhuma bio adicionada ainda.</p>
+                )}
+                {(position || company) && (
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: `${GOLD}20`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <span style={{ fontSize: 15 }}>🏢</span>
+                    </div>
+                    <div>
+                      {position && <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{position}</div>}
+                      {company && <div style={{ fontSize: 12, color: MUTED }}>{company}</div>}
+                    </div>
+                  </div>
+                )}
+                {Array.isArray((profile as any)?.certifications) && ((profile as any).certifications as string[]).length > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Certificações</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {((profile as any).certifications as string[]).map(cert => (
+                        <span key={cert} style={{ backgroundColor: `${NAVY}12`, border: `1px solid ${NAVY}25`, borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 600, color: NAVY }}>{cert}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <button onClick={() => setLocation("/minha-conta")} style={{ marginTop: 16, padding: "9px 20px", backgroundColor: `${GOLD}15`, color: GOLD, border: `1px solid ${GOLD}50`, borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                  Editar informações
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {peopleModal && (
+          <PeopleListModal title={peopleModal.title} list={peopleModal.list} onClose={() => setPeopleModal(null)} />
+        )}
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>

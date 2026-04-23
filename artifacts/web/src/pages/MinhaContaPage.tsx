@@ -1,6 +1,16 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
+
+function useWindowWidth() {
+  const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1280);
+  useEffect(() => {
+    const h = () => setW(window.innerWidth);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+  return w;
+}
 import { createPortalSession } from "@/services/stripe";
 import { AppShell } from "@/components/layout/AppShell";
 import { getEntitlementStatus } from "@/utils/entitlement";
@@ -83,7 +93,10 @@ function Toggle({ label, desc, value, onChange }: { label: string; desc?: string
 export default function MinhaContaPage() {
   const { session, profile, signOut, patchProfile } = useAuth();
   const [, setLocation] = useLocation();
+  const width = useWindowWidth();
+  const isMobile = width < 768;
   const [activeSection, setActiveSection] = useState<Section>("perfil");
+  const [mobileView, setMobileView] = useState<"menu" | Section>("menu");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
 
@@ -416,6 +429,131 @@ export default function MinhaContaPage() {
 
       default: return null;
     }
+  }
+
+  if (isMobile) {
+    const name    = profile?.full_name ?? "Usuário";
+    const initial = name.charAt(0).toUpperCase();
+    const planRaw = profile?.plan ?? profile?.subscription_tier ?? "gratuito";
+    const planColors: Record<string, string> = { exclusive: "#7B2FBE", executivo: "#7B2FBE", business: "#1a56db", premium: GOLD, profissional: GOLD };
+    const planColorVal = planColors[planRaw.toLowerCase()] ?? "#6b7280";
+    const planLabelMap: Record<string, string> = { exclusive: "Executivo", executivo: "Executivo", business: "Business", empresa: "Business", premium: "Premium", profissional: "Premium", free: "Gratuito", gratuito: "Gratuito" };
+    const planLabelVal = planLabelMap[planRaw.toLowerCase()] ?? "Gratuito";
+
+    const sectionTitles: Record<Section, string> = {
+      perfil: "Editar Perfil",
+      assinatura: "Assinatura",
+      notificacoes: "Notificações",
+      privacidade: "Privacidade",
+      seguranca: "Segurança",
+    };
+
+    const menuGroups: { title: string; rows: { icon: string; label: string; sub: string; section: Section }[] }[] = [
+      {
+        title: "CONTA",
+        rows: [
+          { icon: "👤", label: "Editar Perfil", sub: "Nome, bio, foto e cargo", section: "perfil" },
+          { icon: "⭐", label: "Assinatura", sub: "Plano e cobrança", section: "assinatura" },
+        ],
+      },
+      {
+        title: "PREFERÊNCIAS",
+        rows: [
+          { icon: "🔔", label: "Notificações", sub: "Preferências de aviso", section: "notificacoes" },
+          { icon: "🔒", label: "Privacidade", sub: "Visibilidade do perfil", section: "privacidade" },
+          { icon: "🛡️", label: "Segurança", sub: "Senha e e-mail", section: "seguranca" },
+        ],
+      },
+    ];
+
+    if (mobileView !== "menu") {
+      return (
+        <AppShell>
+          <div style={{ backgroundColor: "#f5f5f0", minHeight: "100vh", paddingBottom: 80 }}>
+            <div style={{ position: "sticky", top: 56, zIndex: 20, backgroundColor: "#fff", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", padding: "14px 16px", gap: 12 }}>
+              <button
+                onClick={() => setMobileView("menu")}
+                style={{ background: "none", border: "none", cursor: "pointer", padding: "4px 8px 4px 0", fontSize: 20, color: NAVY, display: "flex", alignItems: "center" }}
+              >
+                ‹
+              </button>
+              <span style={{ fontSize: 18, fontWeight: 800, color: NAVY }}>{sectionTitles[mobileView]}</span>
+            </div>
+            <div style={{ padding: "16px" }}>
+              {renderSection()}
+            </div>
+          </div>
+        </AppShell>
+      );
+    }
+
+    return (
+      <AppShell>
+        <div style={{ backgroundColor: "#f2f3f5", minHeight: "100vh", paddingBottom: 80 }}>
+          {/* Sticky header */}
+          <div style={{ position: "sticky", top: 56, zIndex: 20, backgroundColor: "#fff", borderBottom: `1px solid ${BORDER}`, padding: "16px 16px 14px" }}>
+            <span style={{ fontSize: 20, fontWeight: 900, color: NAVY }}>Configurações</span>
+          </div>
+
+          {/* User card */}
+          <div style={{ backgroundColor: "#fff", margin: "12px 16px 0", borderRadius: 14, padding: "16px", display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ width: 52, height: 52, borderRadius: 26, overflow: "hidden", backgroundColor: "#722f37", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 900, color: WHITE, flexShrink: 0 }}>
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : initial}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
+              <span style={{ fontSize: 11, fontWeight: 700, color: WHITE, backgroundColor: planColorVal, padding: "2px 8px", borderRadius: 100, display: "inline-block", marginTop: 4 }}>
+                {planLabelVal}
+              </span>
+            </div>
+          </div>
+
+          {/* Menu sections */}
+          {menuGroups.map(group => (
+            <div key={group.title} style={{ marginTop: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: 0.8, textTransform: "uppercase", padding: "0 16px 6px" }}>
+                {group.title}
+              </div>
+              <div style={{ backgroundColor: "#fff" }}>
+                {group.rows.map((row, i) => (
+                  <button
+                    key={row.label}
+                    onClick={() => { setMobileView(row.section); setActiveSection(row.section); }}
+                    style={{
+                      width: "100%", display: "flex", alignItems: "center", padding: "14px 16px", gap: 14,
+                      background: "none", border: "none",
+                      borderBottom: i < group.rows.length - 1 ? `1px solid ${BORDER}` : "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <div style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: "#f2f3f5", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 19, flexShrink: 0 }}>
+                      {row.icon}
+                    </div>
+                    <div style={{ flex: 1, textAlign: "left" }}>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: NAVY }}>{row.label}</div>
+                      <div style={{ fontSize: 12, color: MUTED, marginTop: 1 }}>{row.sub}</div>
+                    </div>
+                    <span style={{ color: MUTED, fontSize: 20, lineHeight: 1 }}>›</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {/* Sign out */}
+          <div style={{ margin: "24px 16px 0" }}>
+            <button
+              onClick={async () => { await signOut(); setLocation("/"); }}
+              style={{ width: "100%", backgroundColor: "#fff", color: "#dc2626", border: "none", borderRadius: 14, padding: "16px", fontSize: 15, fontWeight: 700, cursor: "pointer", textAlign: "center" }}
+            >
+              Sair da conta
+            </button>
+          </div>
+        </div>
+      </AppShell>
+    );
   }
 
   return (
