@@ -125,9 +125,9 @@ function VideoPlayer({ videoUrl, isVisible }: { videoUrl: string; isVisible: boo
     <View style={videoStyles.container}>
       <VideoView
         player={player}
-        contentFit="cover"
+        contentFit="contain"
         style={videoStyles.video}
-        allowsFullscreen={false}
+        allowsFullscreen
       />
       {isLoading && (
         <View style={videoStyles.loadingOverlay}>
@@ -148,8 +148,8 @@ function VideoPlayer({ videoUrl, isVisible }: { videoUrl: string; isVisible: boo
 const videoStyles = StyleSheet.create({
   container: {
     marginTop: 10,
-    width: "100%",
-    height: Math.round(SCREEN_WIDTH * (16 / 9)),
+    width: IMG_WIDTH,
+    aspectRatio: 16 / 9,
     borderRadius: 12,
     overflow: "hidden",
     backgroundColor: "#000",
@@ -234,25 +234,28 @@ const IMG_MAX_HEIGHT = Math.round(IMG_WIDTH * 1.35); // cap portrait at ~4:3 tal
 const IMG_DEFAULT_HEIGHT = Math.round(IMG_WIDTH * 0.75); // 4:3 landscape default
 
 /** Renders a single image with its natural aspect ratio (capped at portrait max) */
-function AdaptiveImage({
+export function AdaptiveImage({
   uri,
+  width = IMG_WIDTH,
   priority = "normal",
   style,
 }: {
   uri: string;
+  width?: number;
   priority?: "high" | "normal" | "low";
   style?: object;
 }) {
-  const [height, setHeight] = useState(IMG_DEFAULT_HEIGHT);
+  const maxH = Math.round(width * 1.35);
+  const [height, setHeight] = useState(Math.round(width * 0.75));
   return (
     <Image
       source={{ uri }}
-      style={[{ width: IMG_WIDTH, height, borderRadius: 12, backgroundColor: "#f0f2f5" }, style]}
+      style={[{ width, height, borderRadius: 12, backgroundColor: "#f0f2f5" }, style]}
       contentFit="cover"
       onLoad={(e) => {
         const { width: w, height: h } = e.source;
         if (w > 0 && h > 0) {
-          setHeight(Math.round(Math.min(IMG_WIDTH * (h / w), IMG_MAX_HEIGHT)));
+          setHeight(Math.round(Math.min(width * (h / w), maxH)));
         }
       }}
       placeholder={{ color: "#e8edf2" }}

@@ -346,15 +346,13 @@ function PostCard({
         )
       )}
 
-      {/* Video — reels portrait format */}
+      {/* Video */}
       {post.video_url && (
-        <div style={{ display: "flex", justifyContent: "center", background: "#000" }}>
-          <video
-            src={post.video_url}
-            controls
-            style={{ width: "100%", maxWidth: 340, aspectRatio: "9/16", display: "block", background: "#000" }}
-          />
-        </div>
+        <video
+          src={post.video_url}
+          controls
+          style={{ width: "100%", maxHeight: 640, display: "block", background: "#000" }}
+        />
       )}
 
       {/* Stats */}

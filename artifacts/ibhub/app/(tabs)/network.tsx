@@ -34,6 +34,7 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { usePermissions } from "@/context/PermissionsContext";
 import { PaywallScreen } from "@/components/ui/PaywallScreen";
+import { AdaptiveImage } from "@/components/feed/PostCard";
 import * as API from "@/services/api";
 import { compressPostImage } from "@/utils/compressImage";
 import { usePaginatedQuery } from "@/hooks/usePaginatedQuery";
@@ -174,7 +175,8 @@ function NetworkPostVideo({ uri }: { uri: string }) {
       player={player}
       nativeControls
       contentFit="contain"
-      style={{ width: "100%", height: 220, backgroundColor: "#000" } as any}
+      allowsFullscreen
+      style={{ width: "100%", aspectRatio: 16 / 9, backgroundColor: "#000" } as any}
     />
   );
 }
@@ -1474,7 +1476,7 @@ function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors 
       </Text>
 
       {post.image_url ? (
-        <Image source={{ uri: post.image_url }} style={{ width: "100%", height: 220 } as any} contentFit="cover" />
+        <AdaptiveImage uri={post.image_url} width={Dimensions.get("window").width} style={{ borderRadius: 0 }} />
       ) : null}
       {post.video_url ? (
         <NetworkPostVideo uri={post.video_url} />

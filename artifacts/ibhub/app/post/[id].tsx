@@ -25,7 +25,7 @@ import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
 import type { AppComment } from "@/services/api";
 import { friendlyErrorMessage } from "@/hooks/useAsyncAction";
-import { Post } from "@/components/feed/PostCard";
+import { Post, AdaptiveImage } from "@/components/feed/PostCard";
 import { LikesModal } from "@/components/feed/LikesModal";
 import { formatRelativeDate } from "@/utils/dateUtils";
 
@@ -36,7 +36,7 @@ type FlatItem = AppComment & { isReply: boolean; depth: number };
 function PostDetailVideo({ uri }: { uri: string }) {
   const player = useVideoPlayer(uri, (p) => { p.loop = true; });
   return (
-    <VideoView player={player} nativeControls contentFit="cover" style={{ width: "100%", height: "100%" }} />
+    <VideoView player={player} nativeControls contentFit="contain" allowsFullscreen style={{ width: "100%", height: "100%" }} />
   );
 }
 
@@ -456,17 +456,18 @@ export default function PostDetailScreen() {
                   if (imageUrls.length === 0) return null;
                   if (imageUrls.length === 1) {
                     return (
-                      <Image
-                        source={{ uri: imageUrls[0] }}
-                        style={{ width: "100%", height: SCREEN_W * 0.56, borderRadius: 12, marginTop: 8 }}
-                        contentFit="cover"
+                      <AdaptiveImage
+                        uri={imageUrls[0]}
+                        width={SCREEN_W}
+                        priority="high"
+                        style={{ borderRadius: 12, marginTop: 8 }}
                       />
                     );
                   }
                   return (
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }} contentContainerStyle={{ gap: 8 }}>
                       {imageUrls.map((uri, i) => (
-                        <Image key={i} source={{ uri }} style={{ width: SCREEN_W - 80, height: (SCREEN_W - 80) * 0.6, borderRadius: 12 }} contentFit="cover" />
+                        <AdaptiveImage key={i} uri={uri} width={SCREEN_W - 80} style={{ borderRadius: 12 }} />
                       ))}
                     </ScrollView>
                   );
@@ -474,7 +475,7 @@ export default function PostDetailScreen() {
 
                 {/* Video */}
                 {post.video_url && (
-                  <View style={{ marginTop: 8, width: "100%", height: SCREEN_W * 0.56, borderRadius: 12, overflow: "hidden", backgroundColor: "#000" }}>
+                  <View style={{ marginTop: 8, width: "100%", aspectRatio: 16 / 9, borderRadius: 12, overflow: "hidden", backgroundColor: "#000" }}>
                     <PostDetailVideo uri={post.video_url} />
                   </View>
                 )}

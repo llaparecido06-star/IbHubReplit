@@ -257,14 +257,14 @@ function InlineVideoPlayer({ videoUrl }: { videoUrl: string }) {
   return (
     <TouchableOpacity
       onPress={() => { if (player.playing) player.pause(); else player.play(); }}
-      style={{ width: "100%", height: Math.round(SCREEN_WIDTH * (16 / 9)), borderRadius: 10, overflow: "hidden", backgroundColor: "#000", marginTop: 8 }}
+      style={{ width: "100%", aspectRatio: 16 / 9, borderRadius: 10, overflow: "hidden", backgroundColor: "#000", marginTop: 8 }}
       activeOpacity={0.9}
     >
       <VideoView
         player={player}
-        contentFit="cover"
+        contentFit="contain"
         style={{ width: "100%", height: "100%" }}
-        allowsFullscreen={false}
+        allowsFullscreen
       />
       <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
         <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", paddingLeft: 3 }}>
