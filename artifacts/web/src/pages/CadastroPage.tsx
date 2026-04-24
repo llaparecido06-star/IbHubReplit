@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { supabase, getCachedSession } from "@/lib/supabase";
 import { usePlans, formatPlanPrice, formatOriginalPrice, calcDiscount } from "@/hooks/usePlans";
 
 const TOTAL_STEPS = 3;
@@ -149,7 +149,10 @@ export default function CadastroPage() {
       const { error: err } = await signUp(email, password, fullName);
       if (err) { setLoading(false); setError(err); return; }
 
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      // Use getCachedSession() instead of supabase.auth.getUser() to avoid
+      // re-acquiring the navigator lock right after signInWithPassword released it.
+      const session = await getCachedSession();
+      const currentUser = session?.user ?? null;
       if (currentUser) {
         setLoadingMsg("Finalizando perfil...");
         await supabase.from("profiles").upsert({

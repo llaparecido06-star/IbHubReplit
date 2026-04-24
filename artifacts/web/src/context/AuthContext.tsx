@@ -239,7 +239,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       return { error: msg };
     }
-    const { data: { user: authedUser } } = await supabase.auth.getUser();
+    // Use getCachedSession() instead of supabase.auth.getUser() to avoid re-acquiring
+    // the navigator lock immediately after signInWithPassword released it.
+    const session = await getCachedSession();
+    const authedUser = session?.user ?? null;
     if (authedUser) {
       const { data: prof } = await supabase
         .from("profiles")
