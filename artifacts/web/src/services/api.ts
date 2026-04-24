@@ -734,6 +734,8 @@ export interface WebMessage {
   sender_id: string;
   content: string;
   created_at: string;
+  message_type?: string | null;
+  media_url?: string | null;
   sender?: { id: string; full_name: string; avatar_url?: string | null };
 }
 
@@ -823,8 +825,10 @@ export async function fetchWebMessages(conversationId: string): Promise<WebMessa
         id:              m.id,
         conversation_id: m.conversation_id,
         sender_id:       m.sender_id,
-        content:         m.content,
+        content:         m.content ?? "",
         created_at:      m.created_at,
+        message_type:    m.message_type ?? null,
+        media_url:       m.media_url ?? null,
         sender: {
           id:         m.sender_id,
           full_name:  m.sender_name  ?? null,
@@ -837,7 +841,7 @@ export async function fetchWebMessages(conversationId: string): Promise<WebMessa
     console.warn("get_conversation_messages RPC unavailable, using direct query:", rpcError?.message);
     const { data } = await supabase
       .from("messages")
-      .select("id, conversation_id, sender_id, content, created_at")
+      .select("id, conversation_id, sender_id, content, created_at, message_type, media_url")
       .eq("conversation_id", conversationId)
       .order("created_at", { ascending: true })
       .limit(200);

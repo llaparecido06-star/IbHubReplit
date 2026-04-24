@@ -2417,6 +2417,7 @@ export async function uploadChatMedia(
   conversationId: string,
   uri: string,
   mimeType: string,
+  fileObj?: File | null,
 ): Promise<string | null> {
   try {
     const safeMime = mimeType || "image/jpeg";
@@ -2436,10 +2437,15 @@ export async function uploadChatMedia(
     formData.append("mimeType", safeMime);
 
     if (Platform.OS === "web") {
-      // On web, uri is typically a blob: URL — fetch it to get a Blob object
-      const blobRes = await fetch(uri);
-      const blob = await blobRes.blob();
-      formData.append("file", blob, fileName);
+      if (fileObj) {
+        // Prefer the native File object — the blob URL may be revoked by the time we fetch it
+        formData.append("file", fileObj, fileName);
+      } else {
+        // Fallback: fetch the URI (blob: or data: URL) and convert to Blob
+        const blobRes = await fetch(uri);
+        const blob = await blobRes.blob();
+        formData.append("file", blob, fileName);
+      }
     } else {
       // On native (iOS/Android), copy ph:// and content:// URIs to file:// first
       let localUri = uri;

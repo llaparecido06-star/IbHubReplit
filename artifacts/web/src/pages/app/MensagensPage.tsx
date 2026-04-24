@@ -244,7 +244,15 @@ export default function MensagensPage() {
         )}
         {messages.map(msg => {
           const isMe = msg.sender_id === userId;
-          const attach = parseAttachment(msg.content);
+          // Resolve attachment: mobile sends media_url + message_type; web sends [attachment]: in content
+          const mobileMediaUrl = msg.media_url && msg.message_type && msg.message_type !== "text"
+            ? msg.media_url : null;
+          const attach = mobileMediaUrl
+            ? { url: mobileMediaUrl, label: msg.content || undefined }
+            : parseAttachment(msg.content ?? "");
+          const isMedia = !!attach;
+          const isImageMsg = msg.message_type === "image" ||
+            (isMedia && attach && isImageUrl(attach.url));
           return (
             <div key={msg.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", gap: 8 }}>
               {!isMe && <Avatar src={msg.sender?.avatar_url} name={msg.sender?.full_name ?? "?"} size={30} />}
@@ -256,14 +264,14 @@ export default function MensagensPage() {
                   backgroundColor: isMe ? GOLD : WHITE,
                   color: NAVY,
                   borderRadius: isMe ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                  padding: attach ? "8px" : "10px 14px",
+                  padding: isMedia ? (isImageMsg ? "4px" : "8px") : "10px 14px",
                   fontSize: 14, lineHeight: 1.55,
                   border: isMe ? "none" : `1px solid ${BORDER}`,
                   boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
                 }}>
                   {attach
                     ? <AttachmentBubble url={attach.url} label={attach.label} isMe={isMe} />
-                    : msg.content
+                    : (msg.content || "")
                   }
                 </div>
                 <div style={{ fontSize: 10, color: MUTED, marginTop: 3, textAlign: isMe ? "right" : "left" }}>

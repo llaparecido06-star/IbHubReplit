@@ -451,7 +451,8 @@ export default function GroupChatScreen() {
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
       setUploading(true);
-      const url = await API.uploadChatMedia(id, asset.uri, asset.mimeType ?? "application/octet-stream");
+      const fileObj = (asset as any).file as File | undefined;
+      const url = await API.uploadChatMedia(id, asset.uri, asset.mimeType ?? "application/octet-stream", fileObj);
       setUploading(false);
       if (!url) { Alert.alert("Erro", "Não foi possível enviar o arquivo."); return; }
       const saved = await API.sendMediaMessage(id, user.id, url, "file", asset.name ?? "arquivo", activeCompany?.id ?? null);

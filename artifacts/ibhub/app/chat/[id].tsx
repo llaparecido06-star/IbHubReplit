@@ -469,7 +469,8 @@ export default function ChatScreen() {
       const asset = result.assets[0];
       setUploading(true);
       setUploadStatus(`Enviando ${asset.name ?? "arquivo"}...`);
-      const url = await API.uploadChatMedia(id, asset.uri, asset.mimeType ?? "application/octet-stream");
+      const fileObj = (asset as any).file as File | undefined;
+      const url = await API.uploadChatMedia(id, asset.uri, asset.mimeType ?? "application/octet-stream", fileObj);
       setUploading(false);
       setUploadStatus(null);
       if (!url) { Alert.alert("Erro", "Não foi possível enviar o arquivo."); return; }
