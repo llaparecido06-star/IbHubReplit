@@ -3,13 +3,16 @@ import { createClient } from "@supabase/supabase-js";
 import { resolveUserId } from "../lib/planCheck.js";
 import OpenAI from "openai";
 
-// Lazy singleton — supports both Replit AI Integrations key and a direct OPENAI_API_KEY
+// Lazy singleton — prioriza OPENAI_API_KEY direto; cai para integração Replit se ausente
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
   if (!_openai) {
-    const apiKey  = process.env.AI_INTEGRATIONS_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY;
-    const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
-    if (!apiKey) throw new Error("OpenAI API key not configured (set OPENAI_API_KEY or use Replit AI Integrations)");
+    const directKey = process.env.OPENAI_API_KEY;
+    const integKey  = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+    const apiKey    = directKey ?? integKey;
+    if (!apiKey) throw new Error("OpenAI API key não configurada (defina OPENAI_API_KEY nos secrets)");
+    // Usa o proxy Replit apenas quando não há chave direta
+    const baseURL = directKey ? undefined : process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
     _openai = new OpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) });
   }
   return _openai;
