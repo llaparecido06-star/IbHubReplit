@@ -5,7 +5,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { supabase } from "@/lib/supabase";
 import {
   fetchPostById, fetchPostComments, addPostComment, toggleLikePost, toggleBookmarkPost,
-  Post, AppComment,
+  changeReactionPost, Post, AppComment, ReactionType,
 } from "@/services/api";
 import { formatRelativeDate as relativeDate } from "@/utils/dateUtils";
 
@@ -14,6 +14,39 @@ const NAVY = "#0d1b2a";
 const BG = "#f5f5f0";
 const BORDER = "#e8e8e3";
 const MUTED = "#7a8494";
+
+const REACTIONS: { type: ReactionType; emoji: string; label: string; color: string }[] = [
+  { type: "curtir",   emoji: "👍", label: "Curtir",    color: "#1a56db" },
+  { type: "saude",    emoji: "🍷", label: "Saúde!",    color: "#c9a84c" },
+  { type: "destaque", emoji: "⭐", label: "Destaque!", color: "#f59e0b" },
+  { type: "incrivel", emoji: "🔥", label: "Incrível!", color: "#ef4444" },
+];
+const reactionLabel = (r?: ReactionType | null) => REACTIONS.find(x => x.type === r)?.label ?? "Curtir";
+const reactionEmoji = (r?: ReactionType | null) => r ? (REACTIONS.find(x => x.type === r)?.emoji ?? "👍") : "";
+const reactionColor = (r?: ReactionType | null) => REACTIONS.find(x => x.type === r)?.color ?? MUTED;
+
+const LikeIcon = ({ filled }: { filled: boolean }) => (
+  <svg width="18" height="18" fill={filled ? GOLD : "none"} stroke={filled ? GOLD : MUTED} strokeWidth="2" viewBox="0 0 24 24">
+    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/>
+    <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+  </svg>
+);
+const CommentIcon = () => (
+  <svg width="18" height="18" fill="none" stroke={MUTED} strokeWidth="2" viewBox="0 0 24 24">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+);
+const ShareIcon = () => (
+  <svg width="18" height="18" fill="none" stroke={MUTED} strokeWidth="2" viewBox="0 0 24 24">
+    <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+  </svg>
+);
+const BookmarkIcon = ({ filled }: { filled: boolean }) => (
+  <svg width="18" height="18" fill={filled ? NAVY : "none"} stroke={NAVY} strokeWidth="2" viewBox="0 0 24 24">
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+  </svg>
+);
 
 function Avatar({ url, name, size = 40 }: { url?: string | null; name?: string | null; size?: number }) {
   return (
@@ -93,7 +126,11 @@ export default function PostDetalhePage() {
   const [commentText, setCommentText] = useState("");
   const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const pickerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shareRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     if (!postId) return;
@@ -155,17 +192,6 @@ export default function PostDetalhePage() {
     return () => { supabase.removeChannel(ch); };
   }, [postId, profile?.id]);
 
-  const handleLike = async () => {
-    if (!post || !profile?.id) return;
-    const wasLiked = !!post.is_liked;
-    // Optimistic update
-    setPost(prev => prev ? { ...prev, is_liked: !wasLiked, likes_count: prev.likes_count + (wasLiked ? -1 : 1) } : prev);
-    const ok = await toggleLikePost(post.id, profile.id, wasLiked, post.reaction_type ?? undefined, companyId, profile.full_name ?? undefined);
-    if (!ok) {
-      // Revert optimistic update on failure
-      setPost(prev => prev ? { ...prev, is_liked: wasLiked, likes_count: prev.likes_count + (wasLiked ? 1 : -1) } : prev);
-    }
-  };
 
   const handleBookmark = async () => {
     if (!post || !profile?.id) return;
@@ -191,6 +217,40 @@ export default function PostDetalhePage() {
 
   const handleReply = (id: string, name: string) => {
     setReplyTo({ id, name });
+    inputRef.current?.focus();
+  };
+
+  useEffect(() => {
+    if (!showShare) return;
+    const handler = (e: MouseEvent) => { if (shareRef.current && !shareRef.current.contains(e.target as Node)) setShowShare(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showShare]);
+
+  const startPicker = () => { pickerTimer.current = setTimeout(() => setShowPicker(true), 350); };
+  const cancelPicker = () => { if (pickerTimer.current) clearTimeout(pickerTimer.current); };
+  const hidePicker = () => { cancelPicker(); setShowPicker(false); };
+  const keepPicker = () => { if (pickerTimer.current) clearTimeout(pickerTimer.current); };
+
+  const handleReact = async (reaction: ReactionType = "curtir") => {
+    if (!post || !profile?.id) return;
+    hidePicker();
+    const wasLiked = !!post.is_liked;
+    const isSameReaction = wasLiked && post.reaction_type === reaction;
+    if (isSameReaction) {
+      setPost(prev => prev ? { ...prev, is_liked: false, reaction_type: null, likes_count: Math.max(0, prev.likes_count - 1) } : prev);
+      await toggleLikePost(post.id, profile.id, true, reaction, companyId, profile.full_name ?? undefined);
+    } else if (wasLiked) {
+      setPost(prev => prev ? { ...prev, reaction_type: reaction } : prev);
+      await changeReactionPost(post.id, profile.id, reaction, companyId);
+    } else {
+      setPost(prev => prev ? { ...prev, is_liked: true, reaction_type: reaction, likes_count: prev.likes_count + 1 } : prev);
+      await toggleLikePost(post.id, profile.id, false, reaction, companyId, profile.full_name ?? undefined);
+    }
+  };
+
+  const handleFocusComment = () => {
+    inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     inputRef.current?.focus();
   };
 
@@ -257,19 +317,86 @@ export default function PostDetalhePage() {
             )}
             {post.video_url && <PostDetailVideo src={post.video_url} />}
 
-            <div style={{ display: "flex", gap: 20, paddingTop: 12, borderTop: `1px solid ${BORDER}`, alignItems: "center" }}>
+            {/* Action bar — identical style to feed */}
+            <div style={{ display: "flex", borderTop: `1px solid ${BORDER}`, paddingTop: 4, marginTop: 4, position: "relative" }}>
+              {/* Curtir */}
+              <div style={{ flex: 1, position: "relative" }}>
+                <button
+                  onMouseEnter={startPicker} onMouseLeave={cancelPicker}
+                  onClick={() => showPicker ? undefined : handleReact(post.reaction_type ?? "curtir")}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", background: "none", border: "none", cursor: "pointer", padding: "10px 0", color: post.is_liked ? reactionColor(post.reaction_type) : MUTED, fontSize: 13, fontWeight: 600 }}
+                  onMouseDown={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
+                  onMouseUp={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+                >
+                  {post.is_liked ? <span style={{ fontSize: 16 }}>{reactionEmoji(post.reaction_type)}</span> : <LikeIcon filled={false} />}
+                  {reactionLabel(post.is_liked ? post.reaction_type : null)}
+                </button>
+                {showPicker && (
+                  <div
+                    onMouseEnter={keepPicker} onMouseLeave={hidePicker}
+                    style={{ position: "absolute", bottom: "100%", left: 0, display: "flex", gap: 6, backgroundColor: "#fff", border: `1px solid ${BORDER}`, borderRadius: 28, padding: "8px 12px", boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 40, whiteSpace: "nowrap" }}
+                  >
+                    {REACTIONS.map(r => (
+                      <button key={r.type} onClick={() => handleReact(r.type)} title={r.label}
+                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: 24, borderRadius: 8, padding: 4, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, transition: "transform .15s" }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.35)"; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }}
+                      >
+                        {r.emoji}
+                        <span style={{ fontSize: 10, color: MUTED, fontWeight: 600 }}>{r.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Comentar */}
               <button
-                onClick={handleLike}
-                style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", color: post.is_liked ? "#e74c3c" : MUTED, fontWeight: 700, fontSize: 14 }}
+                onClick={handleFocusComment}
+                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "none", border: "none", cursor: "pointer", padding: "10px 0", color: MUTED, fontSize: 13, fontWeight: 600 }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
               >
-                {post.is_liked ? "❤️" : "🤍"} {post.likes_count}
+                <CommentIcon /><span>Comentar</span>
               </button>
-              <span style={{ color: MUTED, fontSize: 14 }}>💬 {post.comments_count}</span>
-              <button
-                onClick={handleBookmark}
-                style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: post.is_bookmarked ? GOLD : MUTED, fontSize: 18 }}
+
+              {/* Compartilhar */}
+              <div ref={shareRef} style={{ flex: 1, position: "relative" }}>
+                <button
+                  onClick={() => setShowShare(p => !p)}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", background: "none", border: "none", cursor: "pointer", padding: "10px 0", color: MUTED, fontSize: 13, fontWeight: 600 }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+                >
+                  <ShareIcon /><span>Compartilhar</span>
+                </button>
+                {showShare && (
+                  <div style={{ position: "absolute", bottom: "100%", right: 0, backgroundColor: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 40, minWidth: 180, overflow: "hidden" }}>
+                    {[
+                      { label: "Copiar link", icon: "🔗", action: () => { navigator.clipboard.writeText(window.location.href); setShowShare(false); } },
+                      { label: "WhatsApp", icon: "📱", action: () => { window.open(`https://wa.me/?text=${encodeURIComponent(window.location.href)}`,"_blank"); setShowShare(false); } },
+                      { label: "Instagram DM", icon: "📸", action: () => { navigator.clipboard.writeText(window.location.href); setShowShare(false); } },
+                      { label: "Enviar no chat", icon: "✉️", action: () => { setLocation(`/app/mensagens?share=${post.id}`); setShowShare(false); } },
+                    ].map(item => (
+                      <button key={item.label} onClick={item.action}
+                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, color: NAVY, textAlign: "left" }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}10`; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+                      >
+                        <span style={{ fontSize: 16 }}>{item.icon}</span>{item.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Salvar */}
+              <button onClick={handleBookmark}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", padding: "10px 12px", color: MUTED }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
               >
-                {post.is_bookmarked ? "🔖" : "🏷️"}
+                <BookmarkIcon filled={!!post.is_bookmarked} />
               </button>
             </div>
           </div>

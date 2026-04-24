@@ -94,9 +94,13 @@ function PostCard({ post }: { post: Post }) {
       {content && <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.65, whiteSpace: "pre-wrap", wordBreak: "break-word", marginBottom: images.length ? 10 : 0 }}>{displayContent}</div>}
       {images.length > 0 && (
         <div style={{ display: "flex", gap: 6, marginTop: content ? 10 : 0, flexWrap: images.length > 2 ? "wrap" : "nowrap" }}>
-          {images.slice(0, 4).map((img, i) => (
-            <img key={i} src={img} alt="" style={{ flex: 1, minWidth: 0, maxHeight: 220, objectFit: "cover", borderRadius: 10, width: images.length === 1 ? "100%" : undefined }} />
-          ))}
+          {images.slice(0, 4).map((img, i) =>
+            images.length === 1 ? (
+              <img key={i} src={img} alt="" style={{ width: "100%", maxHeight: 400, objectFit: "contain", borderRadius: 10, backgroundColor: "#f2f3f5", display: "block" }} />
+            ) : (
+              <img key={i} src={img} alt="" style={{ flex: 1, minWidth: 0, height: 180, objectFit: "cover", borderRadius: 10 }} />
+            )
+          )}
         </div>
       )}
       <div style={{ display: "flex", gap: 18, marginTop: 12, fontSize: 13, color: MUTED, alignItems: "center" }}>
@@ -322,10 +326,10 @@ export default function PerfilUsuarioPage() {
         </button>
 
         {/* Profile card */}
-        <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, overflow: "hidden", marginBottom: 14 }}>
+        <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, marginBottom: 14 }}>
 
           {/* Cover */}
-          <div style={{ height: 120, background: `linear-gradient(135deg, ${NAVY} 0%, #1e3a5f 60%, #2a4a6b 100%)`, position: "relative" }}>
+          <div style={{ height: 120, background: `linear-gradient(135deg, ${NAVY} 0%, #1e3a5f 60%, #2a4a6b 100%)`, position: "relative", borderRadius: "16px 16px 0 0", overflow: "hidden" }}>
             <div style={{ position: "absolute", width: 240, height: 240, borderRadius: "50%", top: -90, right: -50, backgroundColor: "rgba(201,168,76,0.12)" }} />
             <div style={{ position: "absolute", width: 160, height: 160, borderRadius: "50%", bottom: -50, left: -30, backgroundColor: "rgba(201,168,76,0.07)" }} />
             <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 3, backgroundColor: GOLD, opacity: 0.6 }} />

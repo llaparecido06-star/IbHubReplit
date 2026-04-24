@@ -244,9 +244,9 @@ export default function PublicProfilePage() {
 
         {/* Profile card */}
         <div style={{ maxWidth: 520, margin: "0 auto", padding: "24px 16px 80px" }}>
-          <div style={{ background: WHITE, borderRadius: 18, overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+          <div style={{ background: WHITE, borderRadius: 18, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
             {/* Cover */}
-            <div style={{ height: 90, background: `linear-gradient(135deg, ${NAVY} 0%, #1e3a5f 100%)` }} />
+            <div style={{ height: 90, background: `linear-gradient(135deg, ${NAVY} 0%, #1e3a5f 100%)`, borderRadius: "18px 18px 0 0" }} />
 
             {/* Avatar + name row */}
             <div style={{ padding: "0 20px 20px", position: "relative" }}>
