@@ -230,8 +230,10 @@ function RootLayoutNav() {
   const didNavigateIn = useRef(false);
   const manutencao = isEnabled("manutencao");
 
-  // Auth routes that must remain accessible during maintenance so admins can sign in
-  const isAuthPath = pathname.includes("login") || pathname.includes("auth");
+  // Auth routes that must remain accessible without a session
+  const isAuthPath = ["login", "register", "forgot-password", "reset-password", "auth"].some(
+    (p) => pathname.includes(p),
+  );
 
   useEffect(() => {
     if (loading || isRecovering || mustChangePassword || flagsLoading) return;
