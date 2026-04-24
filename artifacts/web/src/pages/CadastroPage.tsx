@@ -211,7 +211,7 @@ export default function CadastroPage() {
         borderBottom: "1px solid rgba(255,255,255,0.08)",
         gap: 12,
       }}>
-        <img src={`${import.meta.env.BASE_URL}logo-ibhub.png`} alt="ibhub" style={{ height: 34, objectFit: "contain" }} />
+        <img src={`${import.meta.env.BASE_URL}logo-ibhub-branco.png`} alt="ibhub" style={{ height: 34, objectFit: "contain" }} />
       </div>
 
       {/* Progress */}
