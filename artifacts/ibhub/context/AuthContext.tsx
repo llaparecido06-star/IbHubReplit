@@ -536,8 +536,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetPassword = async (email: string) => {
+    // Use Linking.createURL so the scheme adapts correctly across environments:
+    // - Development (Expo Go): exp://.../@/reset-password
+    // - Production native build: ibhub://reset-password
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: "ibhub://reset-password",
+      redirectTo: Linking.createURL("reset-password"),
     });
     return { error: error?.message ?? null };
   };

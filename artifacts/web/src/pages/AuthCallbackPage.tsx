@@ -16,33 +16,37 @@ export default function AuthCallbackPage() {
 
     async function handleCallback() {
       try {
-        const hash = window.location.hash;
+        const hash   = window.location.hash;
         const search = window.location.search;
-        const params = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : search.slice(1));
-        const type = params.get("type");
+        const searchParams = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+        const hashParams   = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : "");
 
-        // Password recovery: fragment carries access + refresh tokens
-        if (type === "recovery") {
-          const accessToken = params.get("access_token");
-          const refreshToken = params.get("refresh_token");
-          if (accessToken && refreshToken) {
-            await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-          }
-          if (!cancelled) setLocation("/redefinir-senha");
-          return;
-        }
+        const code     = searchParams.get("code");
+        const flowType = searchParams.get("type");
 
-        // PKCE flow: URL carries a one-time code (OAuth sign-in OR password recovery).
-        // We pass ?type=recovery in the redirectTo URL for recovery flows so we
-        // can distinguish them from OAuth logins and redirect to /redefinir-senha.
-        const code = new URLSearchParams(search).get("code");
-        const flowType = new URLSearchParams(search).get("type");
+        // ── PKCE flow ─────────────────────────────────────────────────────────
+        // Supabase sends a one-time ?code=xxx for both OAuth sign-in and password
+        // recovery. We pass ?type=recovery in the redirectTo so we can tell them apart.
         if (code) {
           const { error: err } = await supabase.auth.exchangeCodeForSession(code);
           if (!cancelled) {
             if (err) { setError(err.message); return; }
             setLocation(flowType === "recovery" ? "/redefinir-senha" : "/app");
           }
+          return;
+        }
+
+        // ── Implicit / magic-link flow ─────────────────────────────────────────
+        // Token fragment: #access_token=...&type=recovery (older Supabase projects
+        // or when PKCE is disabled). type is in the hash, not the query string.
+        const hashType = hashParams.get("type") ?? searchParams.get("type");
+        if (hashType === "recovery") {
+          const accessToken  = hashParams.get("access_token");
+          const refreshToken = hashParams.get("refresh_token");
+          if (accessToken && refreshToken) {
+            await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+          }
+          if (!cancelled) setLocation("/redefinir-senha");
           return;
         }
 
