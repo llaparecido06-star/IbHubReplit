@@ -199,54 +199,11 @@ router.get("/feed/posts", async (req: Request, res: Response) => {
   const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
   const since = req.query.since as string | undefined;
 
-  // Pool size: fetch enough posts to score and paginate from.
-  // Always fetch from the beginning (no DB offset) so scoring is consistent across pages.
-  const poolSize = Math.min(Math.max(offset + limit * 4, 120), 300);
-
-  // Fetch shadowban list + user graph data in parallel using admin client.
-  const [shadowbannedRes, profileRes, connectionsRes, followsRes] = await Promise.all([
-    supabaseAdmin.from("profiles").select("id").eq("is_shadowbanned", true),
-    supabaseAdmin.from("profiles").select("areas, company").eq("id", currentUserId).single(),
-    supabaseAdmin
-      .from("connections")
-      .select("requester_id, receiver_id")
-      .or(`requester_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
-      .eq("status", "accepted"),
-    supabaseAdmin.from("follows").select("following_id").eq("follower_id", currentUserId),
-  ]);
-
+  // Fetch only the shadowban list — no scoring data needed for chronological feed.
+  const shadowbannedRes = await supabaseAdmin.from("profiles").select("id").eq("is_shadowbanned", true);
   const bannedIds = (shadowbannedRes.data ?? [])
     .map((p: { id: string }) => p.id)
     .filter((id: string) => id !== currentUserId);
-
-  // Build connection/follow sets
-  const connectionUserIds = new Set<string>();
-  (connectionsRes.data ?? []).forEach((c: any) => {
-    const otherId = c.requester_id === currentUserId ? c.receiver_id : c.requester_id;
-    connectionUserIds.add(otherId);
-  });
-  const followingUserIds = new Set<string>(
-    (followsRes.data ?? []).map((f: any) => f.following_id as string),
-  );
-
-  // Build area/company match set from profiles
-  const userAreas: string[] = (profileRes.data?.areas ?? []).map((a: string) => a.toLowerCase());
-  const userCompany: string | null = profileRes.data?.company?.toLowerCase() ?? null;
-
-  let areaMatchUserIds = new Set<string>();
-  if (userAreas.length > 0 || userCompany) {
-    const { data: areaProfiles } = await supabaseAdmin
-      .from("profiles")
-      .select("id, areas, company")
-      .neq("id", currentUserId)
-      .limit(500);
-    (areaProfiles ?? []).forEach((p: any) => {
-      const pAreas: string[] = (p.areas ?? []).map((a: string) => a.toLowerCase());
-      const hasAreaMatch = pAreas.some((a) => userAreas.includes(a));
-      const hasCompanyMatch = userCompany && p.company && p.company.toLowerCase() === userCompany;
-      if (hasAreaMatch || hasCompanyMatch) areaMatchUserIds.add(p.id as string);
-    });
-  }
 
   // Create a per-request client scoped to the user's JWT so RLS is respected.
   const userClient = createClient(supabaseUrl!, supabaseAnonKey!, {
@@ -254,12 +211,12 @@ router.get("/feed/posts", async (req: Request, res: Response) => {
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
 
-  // Fetch the pool chronologically (scoring will reorder)
+  // Fetch posts in chronological order — newest first.
   let postsQuery = userClient
     .from("posts")
     .select("id, user_id, company_page_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count, view_count, location, hashtags, poll, created_at")
     .order("created_at", { ascending: false })
-    .range(0, poolSize - 1);
+    .range(offset, offset + limit - 1);
 
   if (since) {
     postsQuery = postsQuery.gt("created_at", since);
@@ -275,27 +232,7 @@ router.get("/feed/posts", async (req: Request, res: Response) => {
     return;
   }
 
-  // Score each post by tier + freshness decay
-  const now = Date.now();
-  const scored = (rawPosts ?? []).map((post: any) => {
-    const hoursOld = (now - new Date(post.created_at).getTime()) / 3_600_000;
-    const freshness = 100 / (hoursOld + 2); // max ~50, decays with time
-    let tier = 0;
-    if (post.user_id) {
-      if (connectionUserIds.has(post.user_id)) tier = 1000;
-      else if (followingUserIds.has(post.user_id)) tier = 500;
-      else if (areaMatchUserIds.has(post.user_id)) tier = 200;
-    }
-    return { post, _score: tier + freshness };
-  });
-
-  // Sort by score descending (higher tier + fresher posts first)
-  scored.sort((a, b) => b._score - a._score);
-
-  // Paginate from the scored pool
-  const page = scored.slice(offset, offset + limit).map((s) => s.post);
-
-  res.json({ posts: page });
+  res.json({ posts: rawPosts ?? [] });
 });
 
 /**
