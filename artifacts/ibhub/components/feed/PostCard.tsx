@@ -232,10 +232,10 @@ function PlanBadge({ plan, colors }: { plan?: string; colors: any }) {
 }
 
 const IMG_WIDTH = SCREEN_WIDTH - 28;
-const IMG_MAX_HEIGHT = Math.round(IMG_WIDTH * 1.35); // cap portrait at ~4:3 tall
-const IMG_DEFAULT_HEIGHT = Math.round(IMG_WIDTH * 0.75); // 4:3 landscape default
+const IMG_MAX_HEIGHT = Math.round(IMG_WIDTH * 1.78); // allow up to ~9:16 portrait
+const IMG_DEFAULT_HEIGHT = Math.round(IMG_WIDTH * 0.5625); // 16:9 landscape default
 
-/** Renders a single image with its natural aspect ratio (capped at portrait max) */
+/** Renders a single image at its natural aspect ratio (no cropping). */
 export function AdaptiveImage({
   uri,
   width = IMG_WIDTH,
@@ -247,13 +247,13 @@ export function AdaptiveImage({
   priority?: "high" | "normal" | "low";
   style?: object;
 }) {
-  const maxH = Math.round(width * 1.35);
-  const [height, setHeight] = useState(Math.round(width * 0.75));
+  const maxH = Math.round(width * 1.78);
+  const [height, setHeight] = useState(Math.round(width * 0.5625));
   return (
     <Image
       source={{ uri }}
-      style={[{ width, height, borderRadius: 12, backgroundColor: "#f0f2f5" }, style]}
-      contentFit="cover"
+      style={[{ width, height, borderRadius: 12, backgroundColor: "#0d1b2a08" }, style]}
+      contentFit="contain"
       onLoad={(e) => {
         const { width: w, height: h } = e.source;
         if (w > 0 && h > 0) {
@@ -269,7 +269,6 @@ export function AdaptiveImage({
 
 function ImageCarousel({ imageUrls }: { imageUrls: string[] }) {
   const [currentIndex, setCurrentIndex] = useState(0);
-  // Carousel height driven by the first image's natural ratio
   const [carouselHeight, setCarouselHeight] = useState(IMG_DEFAULT_HEIGHT);
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -300,10 +299,9 @@ function ImageCarousel({ imageUrls }: { imageUrls: string[] }) {
           <Image
             key={i}
             source={{ uri }}
-            style={{ width: IMG_WIDTH, height: carouselHeight, borderRadius: 12, backgroundColor: "#f0f2f5" }}
-            contentFit="cover"
+            style={{ width: IMG_WIDTH, height: carouselHeight, borderRadius: 12, backgroundColor: "#0d1b2a08" }}
+            contentFit="contain"
             onLoad={(e) => {
-              // Only the first image sets the carousel height
               if (i === 0) {
                 const { width: w, height: h } = e.source;
                 if (w > 0 && h > 0) {
@@ -319,13 +317,7 @@ function ImageCarousel({ imageUrls }: { imageUrls: string[] }) {
       </ScrollView>
       <View style={styles.dotsRow}>
         {imageUrls.map((_, i) => (
-          <View
-            key={i}
-            style={[
-              styles.dot,
-              i === currentIndex ? styles.dotActive : styles.dotInactive,
-            ]}
-          />
+          <View key={i} style={[styles.dot, i === currentIndex ? styles.dotActive : styles.dotInactive]} />
         ))}
       </View>
     </View>
