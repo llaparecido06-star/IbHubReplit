@@ -98,7 +98,7 @@ export default function LoginScreen() {
           {/* Logo + tagline */}
           <View style={styles.logoSection}>
             <Image
-              source={require("@/assets/images/logo_light.png")}
+              source={require("@/assets/images/logo_dark.png")}
               style={styles.logoImage}
               contentFit="contain"
             />

@@ -704,7 +704,7 @@ export default function FeedScreen() {
       <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => setShowAccountMenu(true)} activeOpacity={0.8}>
           <Image
-            source={require("@/assets/images/logo_light.png")}
+            source={require("@/assets/images/logo_dark.png")}
             style={{ width: 80, height: 34 }}
             contentFit="contain"
           />
