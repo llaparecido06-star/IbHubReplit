@@ -100,14 +100,20 @@ interface CreatePostModalProps {
 }
 
 function CreatePostModal({ profile, userId, companyPageId, companyName, companyAvatar, onClose, onCreated }: CreatePostModalProps) {
+  const isMobile = useWindowWidth() < 768;
   const [tab, setTab]           = useState<PostTab>("texto");
   const [content, setContent]   = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Foto
+  // Foto (shared between foto tab and vinho tab)
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const imgInputRef = useRef<HTMLInputElement>(null);
+
+  // Wine photo (separate picker for vinho tab)
+  const [wineImageFile, setWineImageFile] = useState<File | null>(null);
+  const [wineImagePreview, setWineImagePreview] = useState<string | null>(null);
+  const wineImgInputRef = useRef<HTMLInputElement>(null);
 
   // Vídeo
   const [videoFile, setVideoFile]       = useState<File | null>(null);
@@ -167,6 +173,15 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
     reader.readAsDataURL(file);
   };
 
+  const handleWineImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setWineImageFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setWineImagePreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
   const buildContent = (): string => {
     if (tab === "texto") return content;
     if (tab === "foto")  return content;
@@ -215,6 +230,14 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
       if (!image_url) {
         setSubmitting(false);
         alert("Erro ao enviar imagem. Tente novamente.");
+        return;
+      }
+    }
+    if (tab === "vinho" && wineImageFile) {
+      image_url = await uploadWebPostImage(wineImageFile, userId);
+      if (!image_url) {
+        setSubmitting(false);
+        alert("Erro ao enviar foto do vinho. Tente novamente.");
         return;
       }
     }
@@ -267,17 +290,29 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 1000,
-      backgroundColor: "rgba(0,0,0,0.45)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      padding: "16px",
+      backgroundColor: isMobile ? "rgba(0,0,0,0.6)" : "rgba(0,0,0,0.45)",
+      display: "flex",
+      alignItems: isMobile ? "flex-end" : "center",
+      justifyContent: "center",
+      padding: isMobile ? 0 : "16px",
     }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={{
-        backgroundColor: WHITE, borderRadius: 16, width: "100%", maxWidth: 560,
-        maxHeight: "90vh", overflowY: "auto",
+        backgroundColor: WHITE,
+        borderRadius: isMobile ? "16px 16px 0 0" : 16,
+        width: "100%",
+        maxWidth: isMobile ? "100%" : 560,
+        maxHeight: isMobile ? "92vh" : "90vh",
+        overflowY: "auto",
         boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
       }}>
+        {/* Mobile drag handle */}
+        {isMobile && (
+          <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
+            <div style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: BORDER }} />
+          </div>
+        )}
         {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${BORDER}` }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: isMobile ? "10px 16px" : "16px 20px", borderBottom: `1px solid ${BORDER}` }}>
           <h2 style={{ fontSize: 16, fontWeight: 800, color: NAVY, margin: 0 }}>Criar publicação</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, display: "flex" }}>
             {I.x}
@@ -285,7 +320,7 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
         </div>
 
         {/* Author row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 20px 0" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: isMobile ? "12px 16px 0" : "14px 20px 0" }}>
           <Avatar src={avatarSrc} name={name} size={44} bg={companyPageId ? "#c9a84c" : "#722f37"} />
           <div>
             <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{name}</div>
@@ -297,14 +332,16 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
         </div>
 
         {/* Tabs */}
-        <div style={{ display: "flex", gap: 4, padding: "12px 20px 0", overflowX: "auto" }}>
+        <div style={{ display: "flex", gap: 4, padding: isMobile ? "10px 16px 0" : "12px 20px 0", overflowX: "auto", scrollbarWidth: "none" }}>
           {TABS.map(t => (
             <button key={t.key} onClick={() => setTab(t.key)} style={{
               display: "flex", alignItems: "center", gap: 5,
-              padding: "6px 14px", borderRadius: 20, fontSize: 13, fontWeight: tab === t.key ? 700 : 500,
+              padding: isMobile ? "5px 12px" : "6px 14px",
+              borderRadius: 20, fontSize: isMobile ? 12 : 13, fontWeight: tab === t.key ? 700 : 500,
               border: `1px solid ${tab === t.key ? GOLD : BORDER}`,
               backgroundColor: tab === t.key ? `${GOLD}15` : WHITE,
               color: tab === t.key ? GOLD : MUTED, cursor: "pointer", whiteSpace: "nowrap",
+              flexShrink: 0,
             }}>
               {t.icon && <span style={{ color: tab === t.key ? GOLD : MUTED }}>{t.icon}</span>}
               {t.label}
@@ -313,27 +350,46 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
         </div>
 
         {/* Body */}
-        <div style={{ padding: "14px 20px" }}>
+        <div style={{ padding: isMobile ? "12px 16px" : "14px 20px" }}>
           {/* Always show text area for texto/foto/video/enquete */}
           {tab !== "vinho" && (
-            <textarea
-              autoFocus={tab === "texto"}
-              value={content}
-              onChange={e => setContent(e.target.value)}
-              placeholder={
-                tab === "texto"   ? "O que está acontecendo no mundo do vinho?" :
-                tab === "foto"    ? "Descreva a foto..." :
-                tab === "video"   ? "Sobre o vídeo..." :
-                "Pergunta da enquete..."
-              }
-              rows={4}
-              style={{
-                width: "100%", boxSizing: "border-box",
-                border: `1px solid ${BORDER}`, borderRadius: 10, padding: "12px 14px",
-                fontSize: 14, color: NAVY, lineHeight: 1.65,
-                resize: "none", outline: "none", fontFamily: "inherit",
-              }}
-            />
+            <>
+              <textarea
+                autoFocus={tab === "texto"}
+                value={content}
+                onChange={e => setContent(e.target.value)}
+                placeholder={
+                  tab === "texto"   ? "O que está acontecendo no mundo do vinho?" :
+                  tab === "foto"    ? "Descreva a foto..." :
+                  tab === "video"   ? "Sobre o vídeo..." :
+                  "Pergunta da enquete..."
+                }
+                rows={isMobile ? 5 : 4}
+                style={{
+                  width: "100%", boxSizing: "border-box",
+                  border: `1px solid ${BORDER}`, borderRadius: 10, padding: "12px 14px",
+                  fontSize: isMobile ? 16 : 14, color: NAVY, lineHeight: 1.65,
+                  resize: "none", outline: "none", fontFamily: "inherit",
+                }}
+              />
+              {/* Quick action bar — only on texto tab */}
+              {tab === "texto" && (
+                <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                  <button onClick={() => setTab("foto")} style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 20, border: `1px solid ${BORDER}`, background: WHITE, color: MUTED, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                    {I.image} Foto
+                  </button>
+                  <button onClick={() => setTab("video")} style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 20, border: `1px solid ${BORDER}`, background: WHITE, color: MUTED, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                    {I.video} Vídeo
+                  </button>
+                  <button onClick={() => setTab("enquete")} style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 20, border: `1px solid ${BORDER}`, background: WHITE, color: MUTED, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                    {I.poll} Enquete
+                  </button>
+                  <button onClick={() => setTab("vinho")} style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 20, border: `1px solid ${BORDER}`, background: WHITE, color: MUTED, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                    🍷 Vinho
+                  </button>
+                </div>
+              )}
+            </>
           )}
 
           {/* Foto */}
@@ -433,52 +489,77 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
           {/* Avaliação de Vinho */}
           {tab === "vinho" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {/* Wine photo */}
+              <input ref={wineImgInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleWineImageChange} />
+              {wineImagePreview ? (
+                <div style={{ position: "relative" }}>
+                  <img src={wineImagePreview} alt="" style={{ width: "100%", borderRadius: 10, maxHeight: 200, objectFit: "cover" }} />
+                  <button onClick={() => { setWineImageFile(null); setWineImagePreview(null); }} style={{
+                    position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.6)", border: "none",
+                    borderRadius: "50%", width: 28, height: 28, cursor: "pointer", color: WHITE, fontSize: 16,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>×</button>
+                </div>
+              ) : (
+                <button onClick={() => wineImgInputRef.current?.click()} style={{
+                  width: "100%", padding: "18px 0", backgroundColor: BG, border: `2px dashed ${BORDER}`,
+                  borderRadius: 10, cursor: "pointer", fontSize: 13, color: MUTED, fontFamily: "inherit",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                }}>
+                  📸 Adicionar foto do rótulo (opcional)
+                </button>
+              )}
               {/* Nome do vinho */}
-              <input value={wineName} onChange={e => setWineName(e.target.value)} placeholder="Nome do vinho *" style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, outline: "none", fontFamily: "inherit" }} />
+              <input value={wineName} onChange={e => setWineName(e.target.value)} placeholder="Nome do vinho *" style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: isMobile ? 16 : 14, outline: "none", fontFamily: "inherit" }} />
               {/* Uva e Safra */}
               <div style={{ display: "flex", gap: 8 }}>
-                <input value={wineGrape} onChange={e => setWineGrape(e.target.value)} placeholder="Uva/Casta (ex: Cabernet Sauvignon)" style={{ flex: 3, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, outline: "none", fontFamily: "inherit", minWidth: 0 }} />
-                <input value={wineSafra} onChange={e => setWineSafra(e.target.value)} placeholder="Safra" style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, outline: "none", fontFamily: "inherit", minWidth: 0 }} maxLength={4} />
+                <input value={wineGrape} onChange={e => setWineGrape(e.target.value)} placeholder="Uva/Casta" style={{ flex: 3, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: isMobile ? 16 : 14, outline: "none", fontFamily: "inherit", minWidth: 0 }} />
+                <input value={wineSafra} onChange={e => setWineSafra(e.target.value)} placeholder="Safra" style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: isMobile ? 16 : 14, outline: "none", fontFamily: "inherit", minWidth: 0 }} maxLength={4} />
               </div>
               {/* Produtor e País */}
               <div style={{ display: "flex", gap: 8 }}>
-                <input value={wineProducer} onChange={e => setWineProducer(e.target.value)} placeholder="Produtor (ex: Concha y Toro)" style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, outline: "none", fontFamily: "inherit", minWidth: 0 }} />
-                <input value={wineCountry} onChange={e => setWineCountry(e.target.value)} placeholder="País" style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, outline: "none", fontFamily: "inherit", minWidth: 0 }} />
+                <input value={wineProducer} onChange={e => setWineProducer(e.target.value)} placeholder="Produtor" style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: isMobile ? 16 : 14, outline: "none", fontFamily: "inherit", minWidth: 0 }} />
+                <input value={wineCountry} onChange={e => setWineCountry(e.target.value)} placeholder="País" style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: isMobile ? 16 : 14, outline: "none", fontFamily: "inherit", minWidth: 0 }} />
               </div>
               {/* Região */}
-              <input value={wineRegion} onChange={e => setWineRegion(e.target.value)} placeholder="Região" style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, outline: "none", fontFamily: "inherit" }} />
+              <input value={wineRegion} onChange={e => setWineRegion(e.target.value)} placeholder="Região (ex: Serra Gaúcha, Douro)" style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: isMobile ? 16 : 14, outline: "none", fontFamily: "inherit" }} />
               {/* EAN */}
-              <input value={wineEan} onChange={e => setWineEan(e.target.value)} placeholder="Código EAN (opcional — usado no ranking comunitário)" style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, outline: "none", fontFamily: "inherit" }} />
+              <input value={wineEan} onChange={e => setWineEan(e.target.value)} placeholder="🏷️ EAN (opcional — ranking comunitário)" style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: isMobile ? 15 : 14, outline: "none", fontFamily: "inherit" }} />
               {/* Pontuação */}
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <div style={{ background: BG, borderRadius: 10, padding: "12px 14px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                   <label style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>Pontuação</label>
-                  <span style={{ fontSize: 16, fontWeight: 900, color: GOLD }}>{wineScore}/100</span>
+                  <span style={{ fontSize: 18, fontWeight: 900, color: GOLD }}>{wineScore}/100</span>
                 </div>
                 <input type="range" min={0} max={100} value={wineScore} onChange={e => setWineScore(Number(e.target.value))}
-                  style={{ width: "100%", accentColor: GOLD }} />
-                <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
+                  style={{ width: "100%", accentColor: GOLD, height: isMobile ? 6 : 4 }} />
+                <div style={{ display: "flex", gap: 4, marginTop: 8, alignItems: "center" }}>
                   {[1,2,3,4,5].map(s => (
-                    <span key={s} style={{ fontSize: 20, color: s <= Math.round(wineScore / 20) ? GOLD : "#ddd" }}>⭐</span>
+                    <span key={s} style={{ fontSize: isMobile ? 24 : 20, color: s <= Math.round(wineScore / 20) ? GOLD : "#ddd", lineHeight: 1 }}>⭐</span>
                   ))}
+                  <span style={{ fontSize: 12, color: MUTED, marginLeft: 6 }}>
+                    {wineScore >= 95 ? "🏆 Lendário" : wineScore >= 90 ? "✨ Excelente" : wineScore >= 85 ? "👍 Muito bom" : wineScore >= 80 ? "🙂 Bom" : "Regular"}
+                  </span>
                 </div>
               </div>
               {/* Notas */}
-              <textarea value={wineNotes} onChange={e => setWineNotes(e.target.value)} placeholder="Notas de degustação, aromas, sabores..." rows={3} style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, outline: "none", resize: "none", fontFamily: "inherit" }} />
+              <textarea value={wineNotes} onChange={e => setWineNotes(e.target.value)} placeholder="Notas de degustação, aromas, sabores, harmonização..." rows={3} style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", fontSize: isMobile ? 15 : 14, outline: "none", resize: "none", fontFamily: "inherit" }} />
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, padding: "12px 20px", borderTop: `1px solid ${BORDER}` }}>
-          <button onClick={onClose} style={{ background: "none", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 20px", fontSize: 14, fontWeight: 600, color: MUTED, cursor: "pointer" }}>Cancelar</button>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, padding: isMobile ? "12px 16px 20px" : "12px 20px", borderTop: `1px solid ${BORDER}` }}>
+          <button onClick={onClose} style={{ background: "none", border: `1px solid ${BORDER}`, borderRadius: 8, padding: isMobile ? "11px 20px" : "9px 20px", fontSize: 14, fontWeight: 600, color: MUTED, cursor: "pointer" }}>Cancelar</button>
           <button
             onClick={handleSubmit}
             disabled={!canSubmit() || submitting}
             style={{
               backgroundColor: canSubmit() ? GOLD : `${GOLD}55`,
               color: NAVY, fontWeight: 800, fontSize: 14, border: "none",
-              borderRadius: 8, padding: "9px 28px", cursor: canSubmit() ? "pointer" : "default",
+              borderRadius: 8, padding: isMobile ? "11px 32px" : "9px 28px",
+              cursor: canSubmit() ? "pointer" : "default", flex: isMobile ? 1 : undefined,
+              fontFamily: "inherit",
             }}
           >
             {submitting ? "Publicando…" : "Publicar"}
