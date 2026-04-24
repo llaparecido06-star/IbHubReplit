@@ -1216,95 +1216,133 @@ export default function MercadoPage() {
     if (loading) return (
       <div style={{ textAlign: "center", padding: 60, color: "#aaa" }}>⏳ Carregando dados...</div>
     );
+    const cardStyle = (extra?: React.CSSProperties): React.CSSProperties => ({
+      backgroundColor: WHITE,
+      border: "1px solid #e8eaed",
+      borderRadius: 16,
+      padding: isMobile ? "16px" : 20,
+      ...extra,
+    });
+
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? 8 : 20, padding: isMobile ? "0 0 70px" : 0 }}>
+      <div style={{
+        display: "flex", flexDirection: "column", gap: 12,
+        padding: isMobile ? "14px 14px 80px" : 0,
+      }}>
         {/* KPI Cards */}
         {canMarket("kpis") ? (
           <div style={{
             display: "grid",
             gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fill, minmax(240px, 1fr))",
-            gap: isMobile ? 1 : 14,
-            backgroundColor: isMobile ? BORDER : "transparent",
+            gap: 10,
           }}>
-            {data.kpis.map((kpi) => (
-              <div key={kpi.label} className="mercado-card" style={{ backgroundColor: WHITE, border: isMobile ? "none" : "1px solid #e8eaed", borderRadius: isMobile ? 0 : 14, padding: isMobile ? "14px 16px" : 20 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                  <div style={{ width: 40, height: 40, backgroundColor: `${GOLD}18`, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
-                    {kpi.icon === "Globe" ? "🌍" : kpi.icon === "TrendingUp" ? "📈" : "📊"}
+            {data.kpis.map((kpi) => {
+              const isPos = kpi.change >= 0;
+              const icon = kpi.icon === "Globe" ? "🌍" : kpi.icon === "TrendingUp" ? "📈" : "📊";
+              return (
+                <div key={kpi.label} className="mercado-card" style={cardStyle({ padding: isMobile ? "14px 14px 16px" : 20 })}>
+                  {/* top row: icon + badge */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <div style={{
+                      width: 36, height: 36,
+                      backgroundColor: `${GOLD}1a`, borderRadius: 10,
+                      display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17,
+                    }}>
+                      {icon}
+                    </div>
+                    <span style={{
+                      fontSize: 11, fontWeight: 700,
+                      color: isPos ? "#15803d" : "#dc2626",
+                      backgroundColor: isPos ? "#dcfce7" : "#fef2f2",
+                      padding: "3px 8px", borderRadius: 20,
+                    }}>
+                      {isPos ? "▲" : "▼"} {Math.abs(kpi.change)}%
+                    </span>
                   </div>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: kpi.change >= 0 ? "#16a34a" : "#dc2626" }}>
-                    {kpi.change >= 0 ? "↑" : "↓"} {Math.abs(kpi.change)}%
-                  </span>
+                  {/* label */}
+                  <div style={{ fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 }}>
+                    {kpi.label}
+                  </div>
+                  {/* value */}
+                  <div style={{ fontSize: isMobile ? 19 : 22, fontWeight: 900, color: NAVY, lineHeight: 1.1, marginBottom: 4 }}>
+                    {kpi.value}
+                  </div>
+                  {/* period */}
+                  <div style={{ fontSize: 11, color: "#b0b8c4" }}>{kpi.period}</div>
+                  {kpi.source && !isMobile && (
+                    <div style={{ fontSize: 11, color: "#c0c8d4", marginTop: 6 }}>Fonte: {kpi.source}</div>
+                  )}
                 </div>
-                <div style={{ fontSize: 12, color: "#8a93a2" }}>{kpi.label}</div>
-                <div style={{ fontSize: 12, color: "#aaa" }}>{kpi.period}</div>
-                <div style={{ fontSize: 20, fontWeight: 900, color: NAVY, marginTop: 4 }}>{kpi.value}</div>
-                {kpi.source && !isMobile && (
-                  <div style={{ fontSize: 11, color: "#aaa", marginTop: 6 }}>Fonte: {kpi.source}</div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
-          <div style={{ margin: isMobile ? "0" : undefined }}><LockedBlock title="KPIs de Mercado" /></div>
+          <LockedBlock title="KPIs de Mercado" />
         )}
-
-        {/* Separator for mobile */}
-        {isMobile && <div style={{ height: 8, backgroundColor: "#f2f3f5" }} />}
 
         {/* Charts */}
         {canMarket("graficos") ? (
           <>
-            <div className="mercado-card" style={{ backgroundColor: WHITE, border: isMobile ? "none" : "1px solid #e8eaed", borderRadius: isMobile ? 0 : 14, padding: isMobile ? "16px" : 20 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                <span style={{ color: GOLD }}>📈</span>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0 }}>Exportações × Importações</h3>
+            <div className="mercado-card" style={cardStyle()}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                <span style={{ fontSize: 15 }}>📈</span>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: NAVY, margin: 0 }}>Exportações × Importações</h3>
               </div>
               <AreaChart data={data.chart_area} />
             </div>
-            {isMobile && <div style={{ height: 8, backgroundColor: "#f2f3f5" }} />}
-            <div className="mercado-card" style={{ backgroundColor: WHITE, border: isMobile ? "none" : "1px solid #e8eaed", borderRadius: isMobile ? 0 : 14, padding: isMobile ? "16px" : 20 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                <span style={{ color: GOLD }}>📊</span>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0 }}>Produção Nacional (Índice)</h3>
+            <div className="mercado-card" style={cardStyle()}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                <span style={{ fontSize: 15 }}>📊</span>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: NAVY, margin: 0 }}>Produção Nacional (Índice)</h3>
               </div>
               <BarChart data={data.chart_bar} />
             </div>
           </>
         ) : (
-          <div style={{ margin: isMobile ? "0" : undefined }}><LockedBlock title="Gráficos de Mercado" /></div>
+          <LockedBlock title="Gráficos de Mercado" />
         )}
-
-        {isMobile && <div style={{ height: 8, backgroundColor: "#f2f3f5" }} />}
 
         {/* Tendências */}
         {canMarket("tendencias") ? (
-          <div className="mercado-card" style={{ backgroundColor: WHITE, border: isMobile ? "none" : "1px solid #e8eaed", borderRadius: isMobile ? 0 : 14, padding: isMobile ? "16px" : 20 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-              <span>🔥</span>
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0 }}>Tendências do Período</h3>
+          <div className="mercado-card" style={cardStyle()}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+              <span style={{ fontSize: 15 }}>🔥</span>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: NAVY, margin: 0 }}>Tendências do Período</h3>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {data.tendencias.map((t) => (
-                <div key={t.title} style={{ display: "flex", gap: 12, padding: 12, backgroundColor: "#f9fafb", borderRadius: 10 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 10, flexShrink: 0, backgroundColor: t.pos ? "#dcfce7" : "#fef2f2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>
+                <div key={t.title} style={{
+                  display: "flex", gap: 12, padding: "12px 14px",
+                  backgroundColor: "#f8f9fb", borderRadius: 12,
+                  border: "1px solid #eef0f3",
+                }}>
+                  <div style={{
+                    width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+                    backgroundColor: t.pos ? "#dcfce7" : "#fef2f2",
+                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15,
+                  }}>
                     {t.pos ? "📈" : "📉"}
                   </div>
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{t.title}</span>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: t.pos ? "#16a34a" : "#dc2626" }}>
+                      <span style={{
+                        fontSize: 11, fontWeight: 700,
+                        color: t.pos ? "#15803d" : "#dc2626",
+                        backgroundColor: t.pos ? "#dcfce7" : "#fef2f2",
+                        padding: "2px 7px", borderRadius: 20,
+                      }}>
                         {t.pos ? "+" : ""}{t.change}%
                       </span>
                     </div>
-                    <p style={{ fontSize: 12, color: "#8a93a2", margin: 0, lineHeight: 1.5 }}>{t.desc}</p>
+                    <p style={{ fontSize: 12, color: "#8a93a2", margin: 0, lineHeight: 1.55 }}>{t.desc}</p>
                   </div>
                 </div>
               ))}
             </div>
           </div>
         ) : (
-          <div style={{ margin: isMobile ? "0" : undefined }}><LockedBlock title="Tendências do Período" /></div>
+          <LockedBlock title="Tendências do Período" />
         )}
       </div>
     );
