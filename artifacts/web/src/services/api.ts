@@ -261,24 +261,36 @@ export async function toggleLikePost(
   actorName?: string,
 ): Promise<boolean> {
   try {
-    if (companyPageId) {
-      if (isLiked) {
-        await supabase.from("likes").delete().match({ post_id: postId, company_page_id: companyPageId });
-        await supabase.rpc("decrement_post_likes", { p_post_id: postId });
+    if (isLiked) {
+      // UNLIKE — always a plain DELETE + decrement
+      if (companyPageId) {
+        const { error } = await supabase.from("likes").delete().match({ post_id: postId, company_page_id: companyPageId });
+        if (error) { console.warn("toggleLikePost delete (company):", error); return false; }
       } else {
-        await supabase.from("likes").upsert({ post_id: postId, user_id: userId, company_page_id: companyPageId, reaction_type: reaction }, { onConflict: "post_id,company_page_id" });
-        await supabase.rpc("increment_post_likes", { p_post_id: postId });
+        const { error } = await supabase.from("likes").delete().match({ post_id: postId, user_id: userId }).is("company_page_id", null);
+        if (error) { console.warn("toggleLikePost delete (personal):", error); return false; }
       }
+      await supabase.rpc("decrement_post_likes", { p_post_id: postId });
     } else {
-      if (isLiked) {
-        await supabase.from("likes").delete().match({ post_id: postId, user_id: userId }).is("company_page_id", null);
-        await supabase.rpc("decrement_post_likes", { p_post_id: postId });
-      } else {
-        await supabase.from("likes").upsert({ post_id: postId, user_id: userId, reaction_type: reaction }, { onConflict: "post_id,user_id" });
-        await supabase.rpc("increment_post_likes", { p_post_id: postId });
-        if (actorName) {
-          _dispatchSocialPush({ type: "like", postId, actorName });
+      // LIKE — use INSERT (not upsert) so unique constraint violations are detectable.
+      // If the row already exists the DB returns code 23505 (unique violation) and we
+      // do NOT call the RPC, preventing phantom double-counts.
+      const payload: Record<string, unknown> = { post_id: postId, user_id: userId, reaction_type: reaction };
+      if (companyPageId) payload.company_page_id = companyPageId;
+
+      const { error } = await supabase.from("likes").insert(payload);
+      if (error) {
+        if (error.code === "23505") {
+          // Already liked — the unique index caught it. State is already correct in DB.
+          return true;
         }
+        console.warn("toggleLikePost insert:", error);
+        return false;
+      }
+      // Row was freshly inserted — safe to increment
+      await supabase.rpc("increment_post_likes", { p_post_id: postId });
+      if (actorName && !companyPageId) {
+        _dispatchSocialPush({ type: "like", postId, actorName });
       }
     }
     return true;
@@ -2305,7 +2317,7 @@ export interface AppComment {
   replies?: AppComment[];
 }
 
-export async function fetchPostById(postId: string, currentUserId?: string): Promise<Post | null> {
+export async function fetchPostById(postId: string, currentUserId?: string, companyPageId?: string | null): Promise<Post | null> {
   try {
     const { data, error } = await supabase
       .from("posts")
@@ -2316,8 +2328,11 @@ export async function fetchPostById(postId: string, currentUserId?: string): Pro
     const profileMap = await _fetchProfilesMap([data.user_id]);
     const post = _normalisePost(data, profileMap);
     if (currentUserId) {
+      const likeQuery = companyPageId
+        ? supabase.from("likes").select("reaction_type").eq("post_id", postId).eq("company_page_id", companyPageId).maybeSingle()
+        : supabase.from("likes").select("reaction_type").eq("post_id", postId).eq("user_id", currentUserId).is("company_page_id", null).maybeSingle();
       const [likeRes, bookRes] = await Promise.all([
-        supabase.from("likes").select("reaction_type").eq("post_id", postId).eq("user_id", currentUserId).is("company_page_id", null).maybeSingle(),
+        likeQuery,
         supabase.from("bookmarks").select("post_id").eq("post_id", postId).eq("user_id", currentUserId).maybeSingle(),
       ]);
       return { ...post, is_liked: !!likeRes.data, reaction_type: (likeRes.data as any)?.reaction_type ?? null, is_bookmarked: !!bookRes.data };

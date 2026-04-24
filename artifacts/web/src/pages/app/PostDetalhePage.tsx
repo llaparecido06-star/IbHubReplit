@@ -83,8 +83,9 @@ function CommentItem({ comment, depth = 0, onReply }: { comment: AppComment; dep
 export default function PostDetalhePage() {
   const [, params] = useRoute("/app/posts/:id");
   const [, setLocation] = useLocation();
-  const { profile } = useAuth();
+  const { profile, activeCompany } = useAuth();
   const postId = params?.id;
+  const companyId = activeCompany?.id ?? null;
 
   const [post, setPost] = useState<Post | null>(null);
   const [comments, setComments] = useState<AppComment[]>([]);
@@ -98,13 +99,13 @@ export default function PostDetalhePage() {
     if (!postId) return;
     setLoading(true);
     const [p, c] = await Promise.all([
-      fetchPostById(postId, profile?.id),
+      fetchPostById(postId, profile?.id, companyId),
       fetchPostComments(postId, profile?.id),
     ]);
     setPost(p);
     setComments(c);
     setLoading(false);
-  }, [postId, profile?.id]);
+  }, [postId, profile?.id, companyId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -156,8 +157,14 @@ export default function PostDetalhePage() {
 
   const handleLike = async () => {
     if (!post || !profile?.id) return;
-    await toggleLikePost(post.id, profile.id, !!post.is_liked, post.reaction_type ?? undefined, null, profile.full_name ?? undefined);
-    setPost(prev => prev ? { ...prev, is_liked: !prev.is_liked, likes_count: prev.likes_count + (prev.is_liked ? -1 : 1) } : prev);
+    const wasLiked = !!post.is_liked;
+    // Optimistic update
+    setPost(prev => prev ? { ...prev, is_liked: !wasLiked, likes_count: prev.likes_count + (wasLiked ? -1 : 1) } : prev);
+    const ok = await toggleLikePost(post.id, profile.id, wasLiked, post.reaction_type ?? undefined, companyId, profile.full_name ?? undefined);
+    if (!ok) {
+      // Revert optimistic update on failure
+      setPost(prev => prev ? { ...prev, is_liked: wasLiked, likes_count: prev.likes_count + (wasLiked ? 1 : -1) } : prev);
+    }
   };
 
   const handleBookmark = async () => {
