@@ -327,6 +327,23 @@ export default function CadastroPage() {
                   />
                 </div>
 
+                <div>
+                  <label style={labelStyle}>Código de convite (opcional)</label>
+                  <input
+                    type="text"
+                    value={inviteCode}
+                    onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                    placeholder="Ex: ABCD1234"
+                    maxLength={16}
+                    style={{ ...inputStyle, fontFamily: "monospace", letterSpacing: 2, textTransform: "uppercase" }}
+                  />
+                  {inviteCode.trim() && (
+                    <p style={{ fontSize: 12, color: "#c9a84c", marginTop: 4, fontWeight: 600 }}>
+                      🍷 Convite detectado — será aplicado ao criar sua conta
+                    </p>
+                  )}
+                </div>
+
                 <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
                   <input type="checkbox" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} style={{ marginTop: 2, accentColor: "#c9a84c" }} />
                   <span style={{ fontSize: 13, color: "#0d1b2a", lineHeight: 1.5 }}>
@@ -386,22 +403,6 @@ export default function CadastroPage() {
                 <div>
                   <label style={labelStyle}>Cargo (opcional)</label>
                   <input type="text" value={role} onChange={(e) => setRole(e.target.value)} placeholder="Ex: Sommelier, Diretor" style={inputStyle} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Código de convite (opcional)</label>
-                  <input
-                    type="text"
-                    value={inviteCode}
-                    onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                    placeholder="Ex: ABCD1234"
-                    maxLength={16}
-                    style={{ ...inputStyle, fontFamily: "monospace", letterSpacing: 2, textTransform: "uppercase" }}
-                  />
-                  {inviteCode.trim() && (
-                    <p style={{ fontSize: 12, color: "#c9a84c", marginTop: 4, fontWeight: 600 }}>
-                      🍷 Você foi convidado — o convite será aplicado ao criar sua conta
-                    </p>
-                  )}
                 </div>
               </div>
 
