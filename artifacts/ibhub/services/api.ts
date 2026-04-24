@@ -1273,6 +1273,33 @@ export async function getUnreadNotifCount(userId: string): Promise<number> {
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isValidUUID = (s: string) => UUID_REGEX.test(s);
 
+export async function fetchProfileStats(userId: string): Promise<{ connections: number; followers: number; following: number }> {
+  try {
+    const [connsRes, followersRes, followingRes] = await Promise.all([
+      supabase
+        .from("connections")
+        .select("id", { count: "exact", head: true })
+        .or(`requester_id.eq.${userId},receiver_id.eq.${userId}`)
+        .eq("status", "accepted"),
+      supabase
+        .from("follows")
+        .select("id", { count: "exact", head: true })
+        .eq("following_id", userId),
+      supabase
+        .from("follows")
+        .select("id", { count: "exact", head: true })
+        .eq("follower_id", userId),
+    ]);
+    return {
+      connections: connsRes.count ?? 0,
+      followers:   followersRes.count ?? 0,
+      following:   followingRes.count ?? 0,
+    };
+  } catch {
+    return { connections: 0, followers: 0, following: 0 };
+  }
+}
+
 export async function fetchPublicProfile(userId: string) {
   try {
     let data: any = null;

@@ -34,6 +34,7 @@ import {
   fetchSuggestedConnections,
   fetchFollowers,
   fetchFollowing,
+  fetchProfileStats,
   fetchUserCompanyPages,
   fetchUserPosts,
   fetchCompanyPosts,
@@ -639,7 +640,7 @@ export default function ProfileScreen() {
   const [companyPages,   setCompanyPages]   = useState<CompanyPage[]>([]);
   const [loadingData,    setLoadingData]    = useState(true);
   const [refreshing,     setRefreshing]     = useState(false);
-
+  const [liveStats,      setLiveStats]      = useState({ connections: 0, followers: 0, following: 0 });
 
   // Engagement state
   const [profileViews,  setProfileViews]  = useState(0);
@@ -674,13 +675,14 @@ export default function ProfileScreen() {
     // Skip heavy personal data when in company mode (we show EmpresaProfileProxy anyway)
     if (isCompany) { setLoadingData(false); setRefreshing(false); return; }
     const areas = profile?.areas_of_expertise ?? [];
-    const [p, saved, wines, fr, fg, sg] = await Promise.all([
+    const [p, saved, wines, fr, fg, sg, ls] = await Promise.all([
       fetchUserPosts(user.id, user.id),
       fetchBookmarkedPosts(user.id),
       fetchWineCellar(user.id),
       fetchFollowers(user.id),
       fetchFollowing(user.id),
       fetchSuggestedConnections(user.id, areas, profile?.company ?? null, 8),
+      fetchProfileStats(user.id),
     ]);
     setPosts(p);
     setSavedPosts(saved);
@@ -689,6 +691,7 @@ export default function ProfileScreen() {
     setFollowing(fg);
     setFollowingSet(new Set(fg.map((f) => f.id)));
     setSuggestions(sg);
+    setLiveStats(ls);
     setLoadingData(false);
     setRefreshing(false);
   }, [user?.id, isCompany, refreshCompanyPages]);
@@ -968,10 +971,10 @@ export default function ProfileScreen() {
         {/* Stats */}
         <View style={[styles.statsRow, { borderColor: colors.border }]}>
           {[
-            { label: "Publicações", value: posts.length,                             onPress: undefined },
-            { label: "Seguidores",  value: profile?.followers_count  ?? followers.length,  onPress: () => setStatModal("followers") },
-            { label: "Seguindo",    value: profile?.following_count  ?? following.length,  onPress: () => setStatModal("following") },
-            { label: "Conexões",    value: profile?.connections_count ?? 0,            onPress: () => router.push("/conexoes" as any) },
+            { label: "Publicações", value: posts.length,            onPress: undefined },
+            { label: "Seguidores",  value: liveStats.followers,    onPress: () => setStatModal("followers") },
+            { label: "Seguindo",    value: liveStats.following,    onPress: () => setStatModal("following") },
+            { label: "Conexões",    value: liveStats.connections,  onPress: () => router.push("/conexoes" as any) },
           ].map((s, i, arr) => (
             <React.Fragment key={s.label}>
               <TouchableOpacity style={styles.stat} onPress={s.onPress} disabled={!s.onPress}>

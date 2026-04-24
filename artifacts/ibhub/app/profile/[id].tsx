@@ -73,17 +73,24 @@ export default function PublicProfileScreen() {
     const rid: string = (real as any)?.id ?? (API.isValidUUID(id) ? id : "");
     const isOwn = !!rid && currentUser?.id === rid;
 
-    const [following, connStatus, posts, wines, mutual] = rid
+    const [following, connStatus, posts, wines, mutual, liveStats] = rid
       ? await Promise.all([
           currentUser?.id ? API.checkIsFollowing(rid, currentUser.id)       : Promise.resolve(false),
           currentUser?.id ? API.checkConnectionStatus(rid, currentUser.id)  : Promise.resolve("none" as const),
           currentUser?.id ? API.fetchProfilePosts(rid, currentUser.id)       : Promise.resolve([]),
           isOwn ? API.fetchWineCellar(rid) : API.fetchPublicWineCellar(rid),
           currentUser?.id && !isOwn ? fetchMutualConnections(currentUser.id, rid) : Promise.resolve([]),
+          API.fetchProfileStats(rid),
         ])
-      : [false, "none" as const, [], [], []];
+      : [false, "none" as const, [], [], [], { connections: 0, followers: 0, following: 0 }];
 
-    if (real) setUserProfile({ ...FALLBACK_USER, ...real });
+    if (real) setUserProfile({
+      ...FALLBACK_USER,
+      ...real,
+      connections_count: (liveStats as any).connections,
+      followers_count:   (liveStats as any).followers,
+      following_count:   (liveStats as any).following,
+    });
     setResolvedId(rid);
     setIsFollowing(following);
     setConnectionStatus(connStatus);
