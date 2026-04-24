@@ -1237,16 +1237,18 @@ export default function MercadoPage() {
       }}>
         {/* KPI Cards */}
         {canMarket("kpis") ? (
-          <div style={{
+          <div style={isMobile ? {
+            display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 10,
+          } : {
             display: "grid",
-            gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fill, minmax(240px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
             gap: 10,
           }}>
             {data.kpis.map((kpi) => {
               const isPos = kpi.change >= 0;
               const icon = kpi.icon === "Globe" ? "🌍" : kpi.icon === "TrendingUp" ? "📈" : "📊";
               return (
-                <div key={kpi.label} className="mercado-card" style={cardStyle({ padding: isMobile ? "14px 14px 16px" : 20 })}>
+                <div key={kpi.label} className="mercado-card" style={cardStyle({ padding: isMobile ? "14px 14px 16px" : 20, ...(isMobile ? { flex: "0 0 calc(50% - 5px)" } : {}) })}>
                   {/* top row: icon + badge */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                     <div style={{

@@ -130,7 +130,7 @@ export default function PostDetalhePage() {
 
   const handleLike = async () => {
     if (!post || !profile?.id) return;
-    await toggleLikePost(post.id, profile.id, !!post.is_liked, post.reaction_type ?? undefined);
+    await toggleLikePost(post.id, profile.id, !!post.is_liked, post.reaction_type ?? undefined, null, profile.full_name ?? undefined);
     setPost(prev => prev ? { ...prev, is_liked: !prev.is_liked, likes_count: prev.likes_count + (prev.is_liked ? -1 : 1) } : prev);
   };
 
@@ -143,7 +143,7 @@ export default function PostDetalhePage() {
   const handleComment = async () => {
     if (!post || !profile?.id || !commentText.trim()) return;
     setSubmitting(true);
-    const c = await addPostComment(post.id, profile.id, commentText.trim(), replyTo?.id);
+    const c = await addPostComment(post.id, profile.id, commentText.trim(), replyTo?.id, profile.full_name ?? undefined);
     if (c) {
       setComments(prev => replyTo
         ? prev.map(cm => cm.id === replyTo.id ? { ...cm, replies: [...(cm.replies ?? []), c] } : cm)

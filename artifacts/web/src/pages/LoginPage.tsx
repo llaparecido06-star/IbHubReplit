@@ -59,8 +59,8 @@ export default function LoginPage() {
 
       <div style={{ width: "100%", maxWidth: 440 }}>
         {/* Logo */}
-        <div style={{ textAlign: "center", marginBottom: 36 }}>
-          <img src={`${import.meta.env.BASE_URL}logo-ibhub.png`} alt="ibhub" style={{ height: 52, objectFit: "contain" }} />
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 36 }}>
+          <img src={`${import.meta.env.BASE_URL}logo-ibhub.png`} alt="ibhub" style={{ height: 52, objectFit: "contain", display: "block" }} />
         </div>
 
         {/* Card */}

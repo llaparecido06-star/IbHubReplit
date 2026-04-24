@@ -204,6 +204,7 @@ export async function toggleLikePost(
   isLiked: boolean,
   reaction: ReactionType = "curtir",
   companyPageId?: string | null,
+  actorName?: string,
 ): Promise<boolean> {
   try {
     if (companyPageId) {
@@ -221,6 +222,9 @@ export async function toggleLikePost(
       } else {
         await supabase.from("likes").upsert({ post_id: postId, user_id: userId, reaction_type: reaction }, { onConflict: "post_id,user_id" });
         await supabase.rpc("increment_post_likes", { p_post_id: postId });
+        if (actorName) {
+          _dispatchSocialPush({ type: "like", postId, actorName });
+        }
       }
     }
     return true;
@@ -2259,7 +2263,7 @@ export async function fetchPostById(postId: string, currentUserId?: string): Pro
     const post = _normalisePost(data, profileMap);
     if (currentUserId) {
       const [likeRes, bookRes] = await Promise.all([
-        supabase.from("reactions").select("reaction_type").eq("post_id", postId).eq("user_id", currentUserId).maybeSingle(),
+        supabase.from("likes").select("reaction_type").eq("post_id", postId).eq("user_id", currentUserId).is("company_page_id", null).maybeSingle(),
         supabase.from("bookmarks").select("post_id").eq("post_id", postId).eq("user_id", currentUserId).maybeSingle(),
       ]);
       return { ...post, is_liked: !!likeRes.data, reaction_type: (likeRes.data as any)?.reaction_type ?? null, is_bookmarked: !!bookRes.data };
@@ -2306,7 +2310,29 @@ export async function fetchPostComments(postId: string, currentUserId?: string):
   }
 }
 
-export async function addPostComment(postId: string, userId: string, content: string, parentId?: string): Promise<AppComment | null> {
+async function _dispatchSocialPush(opts: {
+  type: "like" | "comment";
+  postId: string;
+  actorName: string;
+  commentText?: string;
+}): Promise<void> {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) return;
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
+      ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
+    await fetch(`${apiBase}/push/social`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ type: opts.type, postId: opts.postId, actorName: opts.actorName, commentText: opts.commentText }),
+    });
+  } catch {
+    // fire-and-forget
+  }
+}
+
+export async function addPostComment(postId: string, userId: string, content: string, parentId?: string, actorName?: string): Promise<AppComment | null> {
   try {
     const { data, error } = await supabase.from("comments").insert({
       post_id: postId,
@@ -2317,6 +2343,9 @@ export async function addPostComment(postId: string, userId: string, content: st
     if (error || !data) return null;
     const profileMap = await _fetchProfilesMap([userId]);
     const p = profileMap.get(userId);
+    if (actorName) {
+      _dispatchSocialPush({ type: "comment", postId, actorName, commentText: content });
+    }
     return { ...data as any, likes_count: 0, is_liked: false, author: p ? { id: p.id, full_name: p.full_name, avatar_url: p.avatar_url ?? null } : null, replies: [] };
   } catch (e) {
     console.warn("addPostComment:", e);

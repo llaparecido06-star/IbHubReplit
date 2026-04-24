@@ -834,9 +834,9 @@ export default function AppFeedPage() {
           ? { ...p, is_liked: true, reaction_type: reaction, likes_count: p.likes_count + 1 }
           : p
       ));
-      await toggleLikePost(postId, userId, false, reaction, companyId);
+      await toggleLikePost(postId, userId, false, reaction, companyId, profile?.full_name ?? undefined);
     }
-  }, [userId, posts, companyId]);
+  }, [userId, posts, companyId, profile]);
 
   const handleBookmark = useCallback(async (postId: string, isBookmarked: boolean) => {
     if (!userId) return;

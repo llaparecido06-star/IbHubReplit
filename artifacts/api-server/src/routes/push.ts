@@ -176,4 +176,98 @@ router.post("/push/send", async (req: Request, res: Response): Promise<void> => 
   res.json({ sent: messages.length });
 });
 
+// ─── POST /push/social ────────────────────────────────────────────────────────
+/**
+ * Sends a push notification to the post author when someone likes or comments
+ * on their post from the web app.
+ *
+ * Body: { type: "like"|"comment", postId: string, actorName: string, commentText?: string }
+ * Auth: Bearer token (resolves actorId — the person who acted)
+ */
+router.post("/push/social", async (req: Request, res: Response): Promise<void> => {
+  const actorId = await resolveUserId(req, res);
+  if (!actorId) return;
+
+  if (!checkRateLimit(actorId)) {
+    res.status(429).json({ error: "Muitas solicitações — tente novamente em breve." });
+    return;
+  }
+
+  const { type, postId, actorName, commentText } = req.body as {
+    type?: string;
+    postId?: string;
+    actorName?: string;
+    commentText?: string;
+  };
+
+  if (!type || !postId || !actorName) {
+    res.status(400).json({ error: "type, postId e actorName são obrigatórios" });
+    return;
+  }
+
+  // Fetch the post to get its author
+  const { data: postRow, error: postErr } = await supabaseAdmin
+    .from("posts")
+    .select("user_id")
+    .eq("id", postId)
+    .maybeSingle();
+
+  if (postErr || !postRow) {
+    res.status(404).json({ error: "Post não encontrado." });
+    return;
+  }
+
+  const authorId: string = postRow.user_id;
+
+  // Don't notify if actor is the post author
+  if (authorId === actorId) {
+    res.json({ sent: 0, skipped: "actor is author" });
+    return;
+  }
+
+  // Fetch push tokens for the post author
+  const { data: tokenRows, error: tokensErr } = await supabaseAdmin
+    .from("push_tokens")
+    .select("token")
+    .eq("user_id", authorId);
+
+  if (tokensErr) {
+    logger.error({ err: tokensErr, postId, authorId }, "DB error fetching push tokens for social push");
+    res.status(500).json({ error: "Erro ao buscar tokens." });
+    return;
+  }
+
+  const validTokens = (tokenRows ?? [])
+    .map((r: { token: string }) => r.token)
+    .filter((t: string) => typeof t === "string" && t.startsWith("ExponentPushToken["));
+
+  if (validTokens.length === 0) {
+    res.json({ sent: 0, skipped: "no valid tokens for author" });
+    return;
+  }
+
+  let title: string;
+  let body: string;
+
+  if (type === "comment") {
+    title = `💬 ${actorName} comentou na sua publicação`;
+    body = commentText ? (commentText.length > 80 ? commentText.slice(0, 80) + "…" : commentText) : "Veja o que disseram.";
+  } else {
+    title = `❤️ ${actorName} curtiu sua publicação`;
+    body = "Toque para ver.";
+  }
+
+  const messages: ExpoPushMessage[] = validTokens.map((token) => ({
+    to: token,
+    title,
+    body,
+    data: { postId, type },
+    sound: "default",
+  }));
+
+  await sendExpoPushNotifications(messages);
+  logger.info({ count: messages.length, postId, type, actorId }, "Social push dispatched");
+  res.json({ sent: messages.length });
+});
+
 export default router;
