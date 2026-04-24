@@ -239,7 +239,7 @@ function CreateGroupModal({ userId, onClose, onCreated }: CreateGroupModalProps)
   );
 }
 
-export default function GruposPage() {
+export function GruposContent() {
   const { profile, user, activeCompany } = useAuth();
   const { hasFeature } = usePermissions();
   const userId = profile?.id ?? user?.id ?? "";
@@ -280,7 +280,7 @@ export default function GruposPage() {
     await load();
   };
 
-  const handleCreated = async (g: Group) => {
+  const handleCreated = async (_g: Group) => {
     setShowCreate(false);
     await load();
   };
@@ -296,124 +296,122 @@ export default function GruposPage() {
   const filteredExplore = explore.filter(filter);
 
   return (
-    <AppShell>
-      <div style={{ maxWidth: 860, margin: "0 auto" }}>
-        {/* Company mode banner */}
-        {activeCompany && (
-          <div style={{ marginBottom: 16, backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
-            {activeCompany.avatar_url
-              ? <img src={activeCompany.avatar_url} alt={activeCompany.name} style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }} />
-              : <div style={{ width: 36, height: 36, borderRadius: "50%", backgroundColor: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: WHITE }}>{activeCompany.name[0]}</div>
-            }
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, letterSpacing: 0.5, textTransform: "uppercase" }}>Modo Empresa</div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>Grupos de {activeCompany.name}</div>
-            </div>
-          </div>
-        )}
-
-        {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+    <div style={{ maxWidth: 860, margin: "0 auto" }}>
+      {/* Company mode banner */}
+      {activeCompany && (
+        <div style={{ marginBottom: 16, backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+          {activeCompany.avatar_url
+            ? <img src={activeCompany.avatar_url} alt={activeCompany.name} style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }} />
+            : <div style={{ width: 36, height: 36, borderRadius: "50%", backgroundColor: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: WHITE }}>{activeCompany.name[0]}</div>
+          }
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 900, color: NAVY, margin: "0 0 4px" }}>Grupos</h1>
-            <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>
-              {activeCompany ? `Grupos em que ${activeCompany.name} participa` : "Comunidades de profissionais do vinho"}
-            </p>
+            <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, letterSpacing: 0.5, textTransform: "uppercase" }}>Modo Empresa</div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>Grupos de {activeCompany.name}</div>
           </div>
-          <button onClick={() => { if (!canCreateGroups) { setLockedCreate(true); return; } setShowCreate(true); }} style={{
-            backgroundColor: GOLD, color: WHITE, fontWeight: 800, fontSize: 13,
-            border: "none", borderRadius: 10, padding: "10px 18px", cursor: "pointer",
-          }}>
-            + Criar grupo
-          </button>
         </div>
+      )}
 
-        {/* DB error notice */}
-        {dbError && (
-          <div style={{ marginBottom: 16, backgroundColor: "#fff7ed", border: "1px solid #fdba74", borderRadius: 12, padding: "14px 18px", fontSize: 13, color: "#9a3412" }}>
-            <strong>⚠️ Tabela de grupos não encontrada.</strong> Execute a migração <code>migrations_v45_groups.sql</code> no Supabase SQL Editor para ativar os grupos.
-          </div>
-        )}
-
-        {/* Search */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
-          <svg width="16" height="16" fill="none" stroke={MUTED} strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar grupos..."
-            style={{ border: "none", outline: "none", fontSize: 14, flex: 1, fontFamily: "inherit" }} />
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 900, color: NAVY, margin: "0 0 4px" }}>Grupos</h1>
+          <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>
+            {activeCompany ? `Grupos em que ${activeCompany.name} participa` : "Comunidades de profissionais do vinho"}
+          </p>
         </div>
-
-        {/* Category tabs */}
-        <div style={{ display: "flex", gap: 6, marginBottom: 20, overflowX: "auto", paddingBottom: 4 }}>
-          {CATEGORIES.map(cat => (
-            <button key={cat} onClick={() => setActiveCategory(cat)} style={{
-              padding: "6px 16px", borderRadius: 20, fontSize: 13, fontWeight: activeCategory === cat ? 700 : 500,
-              border: `1px solid ${activeCategory === cat ? GOLD : BORDER}`,
-              backgroundColor: activeCategory === cat ? GOLD : WHITE,
-              color: activeCategory === cat ? WHITE : MUTED,
-              cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit",
-            }}>
-              {cat}
-            </button>
-          ))}
-        </div>
-
-        {loading ? (
-          <div style={{ textAlign: "center", padding: 80, color: MUTED }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>🍷</div>
-            Carregando grupos…
-          </div>
-        ) : (
-          <>
-            {/* Meus grupos */}
-            {filteredMine.length > 0 && (
-              <div style={{ marginBottom: 28 }}>
-                <h2 style={{ fontSize: 12, fontWeight: 800, color: MUTED, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 12px" }}>
-                  MEUS GRUPOS ({filteredMine.length})
-                </h2>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
-                  {filteredMine.map(g => (
-                    <GroupCard key={g.id} group={g} userId={userId} onJoin={handleJoin} onLeave={handleLeave} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Explorar */}
-            {filteredExplore.length > 0 && (
-              <div style={{ marginBottom: 28 }}>
-                <h2 style={{ fontSize: 12, fontWeight: 800, color: MUTED, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 12px" }}>
-                  EXPLORAR ({filteredExplore.length})
-                </h2>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
-                  {filteredExplore.map(g => (
-                    <GroupCard key={g.id} group={g} userId={userId} onJoin={handleJoin} onLeave={handleLeave} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {filteredMine.length === 0 && filteredExplore.length === 0 && !dbError && (
-              <div style={{ textAlign: "center", padding: "60px 0", color: MUTED }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
-                <p style={{ fontSize: 15, fontWeight: 700, color: NAVY }}>
-                  {search || activeCategory !== "Todos" ? "Nenhum grupo encontrado" : "Ainda não há grupos"}
-                </p>
-                <p style={{ fontSize: 13 }}>
-                  {search || activeCategory !== "Todos" ? "Tente outra busca ou categoria" : "Seja o primeiro a criar um grupo!"}
-                </p>
-                {!search && activeCategory === "Todos" && (
-                  <button onClick={() => { if (!canCreateGroups) { setLockedCreate(true); return; } setShowCreate(true); }} style={{
-                    marginTop: 16, padding: "10px 24px", backgroundColor: GOLD, color: WHITE,
-                    border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer",
-                  }}>
-                    + Criar grupo
-                  </button>
-                )}
-              </div>
-            )}
-          </>
-        )}
+        <button onClick={() => { if (!canCreateGroups) { setLockedCreate(true); return; } setShowCreate(true); }} style={{
+          backgroundColor: GOLD, color: WHITE, fontWeight: 800, fontSize: 13,
+          border: "none", borderRadius: 10, padding: "10px 18px", cursor: "pointer",
+        }}>
+          + Criar grupo
+        </button>
       </div>
+
+      {/* DB error notice */}
+      {dbError && (
+        <div style={{ marginBottom: 16, backgroundColor: "#fff7ed", border: "1px solid #fdba74", borderRadius: 12, padding: "14px 18px", fontSize: 13, color: "#9a3412" }}>
+          <strong>⚠️ Tabela de grupos não encontrada.</strong> Execute a migração <code>migrations_v45_groups.sql</code> no Supabase SQL Editor para ativar os grupos.
+        </div>
+      )}
+
+      {/* Search */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
+        <svg width="16" height="16" fill="none" stroke={MUTED} strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar grupos..."
+          style={{ border: "none", outline: "none", fontSize: 14, flex: 1, fontFamily: "inherit" }} />
+      </div>
+
+      {/* Category tabs */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 20, overflowX: "auto", paddingBottom: 4 }}>
+        {CATEGORIES.map(cat => (
+          <button key={cat} onClick={() => setActiveCategory(cat)} style={{
+            padding: "6px 16px", borderRadius: 20, fontSize: 13, fontWeight: activeCategory === cat ? 700 : 500,
+            border: `1px solid ${activeCategory === cat ? GOLD : BORDER}`,
+            backgroundColor: activeCategory === cat ? GOLD : WHITE,
+            color: activeCategory === cat ? WHITE : MUTED,
+            cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit",
+          }}>
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 80, color: MUTED }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>🍷</div>
+          Carregando grupos…
+        </div>
+      ) : (
+        <>
+          {/* Meus grupos */}
+          {filteredMine.length > 0 && (
+            <div style={{ marginBottom: 28 }}>
+              <h2 style={{ fontSize: 12, fontWeight: 800, color: MUTED, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 12px" }}>
+                MEUS GRUPOS ({filteredMine.length})
+              </h2>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
+                {filteredMine.map(g => (
+                  <GroupCard key={g.id} group={g} userId={userId} onJoin={handleJoin} onLeave={handleLeave} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Explorar */}
+          {filteredExplore.length > 0 && (
+            <div style={{ marginBottom: 28 }}>
+              <h2 style={{ fontSize: 12, fontWeight: 800, color: MUTED, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 12px" }}>
+                EXPLORAR ({filteredExplore.length})
+              </h2>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
+                {filteredExplore.map(g => (
+                  <GroupCard key={g.id} group={g} userId={userId} onJoin={handleJoin} onLeave={handleLeave} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {filteredMine.length === 0 && filteredExplore.length === 0 && !dbError && (
+            <div style={{ textAlign: "center", padding: "60px 0", color: MUTED }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
+              <p style={{ fontSize: 15, fontWeight: 700, color: NAVY }}>
+                {search || activeCategory !== "Todos" ? "Nenhum grupo encontrado" : "Ainda não há grupos"}
+              </p>
+              <p style={{ fontSize: 13 }}>
+                {search || activeCategory !== "Todos" ? "Tente outra busca ou categoria" : "Seja o primeiro a criar um grupo!"}
+              </p>
+              {!search && activeCategory === "Todos" && (
+                <button onClick={() => { if (!canCreateGroups) { setLockedCreate(true); return; } setShowCreate(true); }} style={{
+                  marginTop: 16, padding: "10px 24px", backgroundColor: GOLD, color: WHITE,
+                  border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer",
+                }}>
+                  + Criar grupo
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
 
       {showCreate && (
         <CreateGroupModal
@@ -439,6 +437,14 @@ export default function GruposPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+export default function GruposPage() {
+  return (
+    <AppShell>
+      <GruposContent />
     </AppShell>
   );
 }

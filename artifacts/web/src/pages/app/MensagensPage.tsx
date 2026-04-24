@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
+import { GruposContent } from "./GruposPage";
 
 import {
   fetchWebConversations,
@@ -10,6 +11,8 @@ import {
   WebConversation,
   WebMessage,
 } from "@/services/api";
+
+type ChatTab = "mensagens" | "grupos";
 
 const GOLD   = "#c9a84c";
 const NAVY   = "#0d1b2a";
@@ -124,6 +127,7 @@ export default function MensagensPage() {
   const userId = profile?.id ?? user?.id ?? "";
   const isMobile = useIsMobile();
 
+  const [chatTab, setChatTab]             = useState<ChatTab>("mensagens");
   const [conversations, setConversations] = useState<WebConversation[]>([]);
   const [selected, setSelected]           = useState<WebConversation | null>(null);
   const [messages, setMessages]           = useState<WebMessage[]>([]);
@@ -349,18 +353,44 @@ export default function MensagensPage() {
         <div style={{ backgroundColor: "#f2f3f5", minHeight: "100vh", paddingBottom: 80 }}>
 
           {/* Sticky header */}
-          <div style={{ position: "sticky", top: 56, zIndex: 20, backgroundColor: WHITE, borderBottom: `1px solid ${BORDER}`, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 20, fontWeight: 900, color: NAVY }}>
-              {activeCompany ? `Chat – ${activeCompany.name}` : "Mensagens"}
-            </span>
-            <button
-              onClick={() => setShowNewConvo(v => !v)}
-              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: showNewConvo ? `${GOLD}20` : GOLD, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}
-            >
-              ✏️
-            </button>
+          <div style={{ position: "sticky", top: 56, zIndex: 20, backgroundColor: WHITE, borderBottom: `1px solid ${BORDER}` }}>
+            <div style={{ padding: "14px 16px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 20, fontWeight: 900, color: NAVY }}>
+                {chatTab === "grupos" ? "Grupos" : (activeCompany ? `Chat – ${activeCompany.name}` : "Chat")}
+              </span>
+              {chatTab === "mensagens" && (
+                <button
+                  onClick={() => setShowNewConvo(v => !v)}
+                  style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: showNewConvo ? `${GOLD}20` : GOLD, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}
+                >
+                  ✏️
+                </button>
+              )}
+            </div>
+            {/* Tabs */}
+            <div style={{ display: "flex", gap: 0, padding: "10px 16px 0" }}>
+              {(["mensagens", "grupos"] as ChatTab[]).map(t => (
+                <button key={t} onClick={() => setChatTab(t)} style={{
+                  flex: 1, padding: "9px 4px", border: "none", background: "none", cursor: "pointer",
+                  fontFamily: "inherit", fontSize: 13, fontWeight: chatTab === t ? 800 : 500,
+                  color: chatTab === t ? NAVY : MUTED,
+                  borderBottom: chatTab === t ? `2px solid ${GOLD}` : "2px solid transparent",
+                  transition: "all 0.15s",
+                }}>
+                  {t === "mensagens" ? "💬 Mensagens" : "👥 Grupos"}
+                </button>
+              ))}
+            </div>
           </div>
 
+          {/* Grupos tab content */}
+          {chatTab === "grupos" && (
+            <div style={{ padding: "16px 14px 80px" }}>
+              <GruposContent />
+            </div>
+          )}
+
+          {chatTab === "mensagens" && <>
           {/* Company mode banner */}
           {activeCompany && (
             <div style={{ backgroundColor: `${GOLD}12`, borderBottom: `1px solid ${GOLD}30`, padding: "10px 16px", display: "flex", alignItems: "center", gap: 10 }}>
@@ -458,6 +488,7 @@ export default function MensagensPage() {
               ))
             )}
           </div>
+          </>}
         </div>
       </AppShell>
     );
@@ -490,11 +521,31 @@ export default function MensagensPage() {
           </div>
         )}
 
-        <h1 style={{ fontSize: 22, fontWeight: 900, color: NAVY, marginBottom: 16 }}>
-          {activeCompany ? "Chat da Empresa" : "Mensagens"}
-        </h1>
+        {/* Desktop tab switcher */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 900, color: NAVY, margin: 0 }}>
+            {chatTab === "grupos" ? "Grupos" : (activeCompany ? "Chat da Empresa" : "Mensagens")}
+          </h1>
+          <div style={{ display: "flex", gap: 4, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 4 }}>
+            {(["mensagens", "grupos"] as ChatTab[]).map(t => (
+              <button key={t} onClick={() => setChatTab(t)} style={{
+                padding: "7px 18px", borderRadius: 9, border: "none", cursor: "pointer",
+                fontFamily: "inherit", fontSize: 13, fontWeight: chatTab === t ? 700 : 500,
+                backgroundColor: chatTab === t ? GOLD : "transparent",
+                color: chatTab === t ? "#fff" : MUTED,
+                transition: "all 0.15s",
+              }}>
+                {t === "mensagens" ? "💬 Mensagens" : "👥 Grupos"}
+              </button>
+            ))}
+          </div>
+        </div>
 
-        <div style={{ display: "flex", height: "calc(100vh - 180px)", backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, overflow: "hidden" }}>
+        {chatTab === "grupos" && (
+          <GruposContent />
+        )}
+
+        {chatTab === "mensagens" && <div style={{ display: "flex", height: "calc(100vh - 200px)", backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, overflow: "hidden" }}>
 
           {/* ── Sidebar ── */}
           <div style={{ width: 280, flexShrink: 0, borderRight: `1px solid ${BORDER}`, display: "flex", flexDirection: "column" }}>
@@ -578,7 +629,7 @@ export default function MensagensPage() {
               </>
             )}
           </div>
-        </div>
+        </div>}
       </div>
     </AppShell>
   );

@@ -76,9 +76,9 @@ const BORDER = "#e8eaed";
 const MUTED  = "#8a93a2";
 
 export default function OportunidadesPage() {
-  const { user, profile } = useAuth();
+  const { user, profile, activeCompany } = useAuth();
   const { hasFeature } = usePermissions();
-  const canPublishVagas = (profile?.is_admin ?? false) || hasFeature("Publicar Vagas");
+  const canPublish = (profile?.is_admin ?? false) || (!!activeCompany);
   const isMobile = useWindowWidth() < 768;
   const [lockedPublish, setLockedPublish] = useState(false);
   const [location, setLocation] = useLocation();
@@ -106,13 +106,13 @@ export default function OportunidadesPage() {
   const [createTab, setCreateTab] = useState<"marketplace" | "vaga">("marketplace");
   const [creating, setCreating] = useState(false);
   const [createForm, setCreateForm] = useState({
-    title: "", description: "", category: "", company: "",
+    title: "", description: "", category: "", company: activeCompany?.name ?? "",
     location: "", price: "", salary: "", contract_type: "",
     contact_email: "", expires_at: "",
   });
 
   const resetCreateForm = () => setCreateForm({
-    title: "", description: "", category: "", company: "",
+    title: "", description: "", category: "", company: activeCompany?.name ?? "",
     location: "", price: "", salary: "", contract_type: "",
     contact_email: "", expires_at: "",
   });
@@ -284,20 +284,21 @@ export default function OportunidadesPage() {
               <span style={{ fontSize: 20, fontWeight: 900, color: NAVY }}>Oportunidades</span>
               <button
                 onClick={() => {
-                  if (!canPublishVagas) { setLockedPublish(true); return; }
+                  if (!canPublish) { setLockedPublish(true); return; }
+                  resetCreateForm();
                   setShowCreate(true);
                   setCreateTab(tab === "vagas" ? "vaga" : "marketplace");
                 }}
                 style={{
                   display: "flex", alignItems: "center", gap: 5,
                   padding: "7px 14px", borderRadius: 20, border: "none",
-                  backgroundColor: canPublishVagas ? GOLD : BG,
-                  color: canPublishVagas ? WHITE : MUTED,
+                  backgroundColor: canPublish ? GOLD : BG,
+                  color: canPublish ? WHITE : MUTED,
                   fontSize: 13, fontWeight: 700, cursor: "pointer",
-                  ...(canPublishVagas ? {} : { border: `1px solid ${BORDER}` }),
+                  ...(canPublish ? {} : { border: `1px solid ${BORDER}` }),
                 }}
               >
-                {canPublishVagas ? "+" : "🔒"} {canPublishVagas ? (tab === "eventos" ? "Evento" : "Publicar") : "Empresas"}
+                {canPublish ? "+" : "🔒"} {canPublish ? (tab === "eventos" ? "Evento" : "Publicar") : "Empresas"}
               </button>
             </div>
 
@@ -511,10 +512,10 @@ export default function OportunidadesPage() {
         {lockedPublish && (
           <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setLockedPublish(false)}>
             <div style={{ backgroundColor: WHITE, borderRadius: 18, padding: 40, maxWidth: 380, width: "90%", textAlign: "center" }} onClick={e => e.stopPropagation()}>
-              <div style={{ fontSize: 44, marginBottom: 16 }}>🔒</div>
-              <h3 style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Publicar Vagas e Oportunidades</h3>
-              <p style={{ fontSize: 14, color: MUTED, marginBottom: 24, lineHeight: 1.6 }}>A publicação de vagas e oportunidades está disponível em planos que incluem a funcionalidade "Publicar Vagas".</p>
-              <a href="/assinar" style={{ display: "inline-block", padding: "11px 28px", backgroundColor: GOLD, color: NAVY, borderRadius: 10, fontWeight: 800, fontSize: 14, textDecoration: "none" }}>Ver Planos</a>
+              <div style={{ fontSize: 44, marginBottom: 16 }}>🏢</div>
+              <h3 style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Identidade Empresarial Necessária</h3>
+              <p style={{ fontSize: 14, color: MUTED, marginBottom: 24, lineHeight: 1.6 }}>Para publicar vagas e oportunidades você precisa estar operando com uma identidade empresarial. Acesse seu perfil e selecione ou crie uma empresa.</p>
+              <a href="/perfil" style={{ display: "inline-block", padding: "11px 28px", backgroundColor: GOLD, color: NAVY, borderRadius: 10, fontWeight: 800, fontSize: 14, textDecoration: "none" }}>Ir para Perfil</a>
               <button onClick={() => setLockedPublish(false)} style={{ display: "block", margin: "12px auto 0", background: "none", border: "none", fontSize: 13, color: MUTED, cursor: "pointer" }}>Fechar</button>
             </div>
           </div>
@@ -535,7 +536,8 @@ export default function OportunidadesPage() {
           </div>
           <button
             onClick={() => {
-              if (!canPublishVagas) { setLockedPublish(true); return; }
+              if (!canPublish) { setLockedPublish(true); return; }
+              resetCreateForm();
               setShowCreate(true);
               setCreateTab(tab === "vagas" ? "vaga" : "marketplace");
             }}
@@ -948,13 +950,13 @@ export default function OportunidadesPage() {
           onClick={() => setLockedPublish(false)}>
           <div style={{ backgroundColor: "#fff", borderRadius: 18, padding: 40, maxWidth: 380, width: "90%", textAlign: "center" }}
             onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 44, marginBottom: 16 }}>🔒</div>
-            <h3 style={{ fontSize: 18, fontWeight: 800, color: "#0d1b2a", marginBottom: 8 }}>Publicar Vagas e Oportunidades</h3>
+            <div style={{ fontSize: 44, marginBottom: 16 }}>🏢</div>
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: "#0d1b2a", marginBottom: 8 }}>Identidade Empresarial Necessária</h3>
             <p style={{ fontSize: 14, color: "#7a8494", marginBottom: 24, lineHeight: 1.6 }}>
-              A publicação de vagas e oportunidades está disponível em planos que incluem a funcionalidade "Publicar Vagas".
+              Para publicar vagas e oportunidades você precisa estar operando com uma identidade empresarial. Acesse seu perfil e selecione ou crie uma empresa.
             </p>
-            <a href="/assinar" style={{ display: "inline-block", padding: "11px 28px", backgroundColor: "#c9a84c", color: "#0d1b2a", borderRadius: 10, fontWeight: 800, fontSize: 14, textDecoration: "none" }}>
-              Ver Planos
+            <a href="/perfil" style={{ display: "inline-block", padding: "11px 28px", backgroundColor: "#c9a84c", color: "#0d1b2a", borderRadius: 10, fontWeight: 800, fontSize: 14, textDecoration: "none" }}>
+              Ir para Perfil
             </a>
             <button onClick={() => setLockedPublish(false)} style={{ display: "block", margin: "12px auto 0", background: "none", border: "none", fontSize: 13, color: "#7a8494", cursor: "pointer" }}>Fechar</button>
           </div>
