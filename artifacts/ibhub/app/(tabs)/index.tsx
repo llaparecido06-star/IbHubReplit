@@ -501,8 +501,11 @@ export default function FeedScreen() {
     isPostingRef.current = true;
     setIsPublishing(true);
 
+    const daysMap: Record<string, number> = { "24 horas": 1, "3 dias": 3, "7 dias": 7, "2 semanas": 14 };
+    const pollDays = daysMap[pollDuration] ?? 3;
+    const pollExpiresAt = new Date(Date.now() + pollDays * 24 * 3600 * 1000).toISOString();
     const pollData = (postMode === "poll" && pollOptions.filter(o => o.trim()).length >= 2)
-      ? { options: pollOptions.filter(o => o.trim()).map(t => ({ text: t, votes: 0 })), total_votes: 0, closed: false }
+      ? { options: pollOptions.filter(o => o.trim()).map(t => ({ text: t, votes: 0 })), total_votes: 0, closed: false, expires_at: pollExpiresAt }
       : undefined;
 
     const tempPost: Post = {

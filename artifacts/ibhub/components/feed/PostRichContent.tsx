@@ -346,7 +346,8 @@ export function PostRichContent({ post, onVote }: Props) {
                 key={i}
                 activeOpacity={hasVoted || post.poll!.closed ? 1 : 0.75}
                 onPress={() => {
-                  if (!hasVoted && !post.poll!.closed) onVote?.(post.id, i);
+                  const isExpired = post.poll!.expires_at ? new Date(post.poll!.expires_at) < new Date() : false;
+                  if (!hasVoted && !post.poll!.closed && !isExpired) onVote?.(post.id, i);
                 }}
                 style={{
                   borderRadius: 8,
@@ -437,11 +438,19 @@ export function PostRichContent({ post, onVote }: Props) {
             <Text style={{ fontSize: 12, color: colors.mutedForeground }}>
               {post.poll.total_votes}{" "}
               {post.poll.total_votes === 1 ? "voto" : "votos"}
-              {post.poll.user_voted_index == null && !post.poll.closed
+              {post.poll.user_voted_index == null && !post.poll.closed && !(post.poll.expires_at && new Date(post.poll.expires_at) < new Date())
                 ? "  ·  Toque para votar"
                 : ""}
             </Text>
-            {post.poll.closed && (
+            {post.poll.expires_at && !post.poll.closed && (() => {
+              const d = new Date(post.poll.expires_at);
+              const diffMs = d.getTime() - Date.now();
+              if (diffMs <= 0) return null;
+              const diffH = Math.floor(diffMs / 3600000);
+              const label = diffH < 24 ? `${diffH}h` : `${Math.floor(diffH / 24)}d`;
+              return <Text style={{ fontSize: 12, color: colors.mutedForeground, marginLeft: 4 }}>· Encerra em {label}</Text>;
+            })()}
+            {(post.poll.closed || (post.poll.expires_at && new Date(post.poll.expires_at) < new Date())) && (
               <View
                 style={{
                   flexDirection: "row",

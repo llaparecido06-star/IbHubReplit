@@ -236,12 +236,14 @@ export async function fetchFeedPosts(
     const likedMap = new Map((likedRes.data ?? []).map((l: any) => [l.post_id, l.reaction_type ?? null]));
     const bookmarkedIds = new Set((bookmarkRes.data ?? []).map((b: any) => b.post_id));
 
-    return (await attachAuthorsToPosts(rawPosts, profileMap, companyMap)).map((post: any) => ({
-      ...post,
-      is_liked: likedMap.has(post.id),
-      reaction_type: likedMap.get(post.id) ?? null,
-      is_bookmarked: bookmarkedIds.has(post.id),
-    }));
+    return (await attachAuthorsToPosts(rawPosts, profileMap, companyMap)).map((post: any) => {
+      let poll = post.poll ?? null;
+      if (poll && poll.user_votes) {
+        const idx = poll.user_votes[currentUserId];
+        poll = { ...poll, user_voted_index: idx != null ? Number(idx) : null };
+      }
+      return { ...post, poll, is_liked: likedMap.has(post.id), reaction_type: likedMap.get(post.id) ?? null, is_bookmarked: bookmarkedIds.has(post.id) };
+    });
   } catch (e) {
     if (isNetworkError(e)) throw e;
     console.warn("fetchFeedPosts:", e);
@@ -493,12 +495,14 @@ export async function fetchNewPostsSince(since: string, currentUserId: string, a
     const likedMap = new Map((likedRes.data ?? []).map((l: any) => [l.post_id, l.reaction_type ?? null]));
     const bookmarkedIds = new Set((bookmarkRes.data ?? []).map((b: any) => b.post_id));
 
-    return (await attachAuthorsToPosts(rawPosts, profileMap, companyMap)).map((post: any) => ({
-      ...post,
-      is_liked: likedMap.has(post.id),
-      reaction_type: likedMap.get(post.id) ?? null,
-      is_bookmarked: bookmarkedIds.has(post.id),
-    }));
+    return (await attachAuthorsToPosts(rawPosts, profileMap, companyMap)).map((post: any) => {
+      let poll = post.poll ?? null;
+      if (poll && poll.user_votes) {
+        const idx = poll.user_votes[currentUserId];
+        poll = { ...poll, user_voted_index: idx != null ? Number(idx) : null };
+      }
+      return { ...post, poll, is_liked: likedMap.has(post.id), reaction_type: likedMap.get(post.id) ?? null, is_bookmarked: bookmarkedIds.has(post.id) };
+    });
   } catch (e) {
     console.warn("fetchNewPostsSince:", e);
     return [];
@@ -1534,8 +1538,9 @@ export async function voteOnPoll(postId: string, userId: string, optionIndex: nu
     const { data: post } = await supabase.from("posts").select("poll").eq("id", postId).single();
     if (!post?.poll) return;
 
-    const poll = post.poll as { options: { text: string; votes: number }[]; total_votes: number; closed: boolean; user_votes?: Record<string, number> };
+    const poll = post.poll as { options: { text: string; votes: number }[]; total_votes: number; closed: boolean; expires_at?: string; user_votes?: Record<string, number> };
     if (poll.closed) return;
+    if (poll.expires_at && new Date(poll.expires_at) < new Date()) return; // expired
     if (poll.user_votes?.[userId] != null) return; // already voted
 
     const newOptions = poll.options.map((opt: any, i: number) =>

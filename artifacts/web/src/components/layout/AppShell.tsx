@@ -17,6 +17,7 @@ import {
   markWebNotificationRead,
   markAllWebNotificationsRead,
   WebNotification,
+  Poll,
 } from "@/services/api";
 
 const GOLD   = "#c9a84c";
@@ -153,6 +154,9 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
 
   // Enquete
   const [pollOptions, setPollOptions] = useState(["", ""]);
+  const POLL_DURATIONS = ["1 dia", "3 dias", "7 dias", "2 semanas"];
+  const [pollDuration, setPollDuration] = useState("3 dias");
+  const [pollDurationOpen, setPollDurationOpen] = useState(false);
 
   // Avaliação de Vinho
   const [wineName, setWineName]       = useState("");
@@ -190,10 +194,8 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
     if (tab === "texto") return content;
     if (tab === "foto")  return content;
     if (tab === "video") return content;
-    if (tab === "enquete") {
-      const opts = pollOptions.filter(o => o.trim());
-      return [content, ...opts.map((o, i) => `${["🔵","🟡","🔴","🟢"][i] ?? "▸"} ${o}`)].filter(Boolean).join("\n");
-    }
+    if (tab === "enquete") return content;
+
     if (tab === "vinho") {
       const stars = Math.max(1, Math.min(5, Math.round(wineScore / 20)));
       const starsStr = "⭐".repeat(stars);
@@ -253,12 +255,21 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
         return;
       }
     }
+    let poll: Poll | null = null;
+    if (tab === "enquete") {
+      const opts = pollOptions.filter(o => o.trim());
+      const daysMap: Record<string, number> = { "1 dia": 1, "3 dias": 3, "7 dias": 7, "2 semanas": 14 };
+      const days = daysMap[pollDuration] ?? 3;
+      const expiresAt = new Date(Date.now() + days * 24 * 3600 * 1000).toISOString();
+      poll = { options: opts.map(t => ({ text: t, votes: 0 })), total_votes: 0, closed: false, expires_at: expiresAt };
+    }
     await createWebPost({
       user_id: userId,
       content: buildContent(),
       image_url: image_url ?? null,
       video_url: video_url ?? null,
       company_page_id: companyPageId ?? null,
+      poll,
     });
     if (tab === "vinho" && wineName.trim()) {
       addWineEntry({
@@ -478,6 +489,7 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
           {/* Enquete */}
           {tab === "enquete" && (
             <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 2 }}>📊 Opções da enquete</div>
               {pollOptions.map((opt, i) => (
                 <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <div style={{ width: 28, height: 28, borderRadius: "50%", backgroundColor: `${GOLD}20`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: GOLD, flexShrink: 0 }}>{i + 1}</div>
@@ -498,6 +510,28 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
                   fontSize: 13, color: MUTED, cursor: "pointer", textAlign: "left", fontFamily: "inherit",
                 }}>+ Adicionar opção</button>
               )}
+              {/* Duration picker */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
+                <span style={{ fontSize: 13, color: MUTED }}>⏱ Duração:</span>
+                <div style={{ position: "relative" }}>
+                  <button
+                    onClick={() => setPollDurationOpen(o => !o)}
+                    style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: "6px 12px", fontSize: 13, background: "white", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}
+                  >
+                    {pollDuration} <span style={{ fontSize: 10 }}>▾</span>
+                  </button>
+                  {pollDurationOpen && (
+                    <div style={{ position: "absolute", top: "100%", left: 0, backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 100, minWidth: 120, marginTop: 2 }}>
+                      {POLL_DURATIONS.map(d => (
+                        <button key={d} onClick={() => { setPollDuration(d); setPollDurationOpen(false); }}
+                          style={{ display: "block", width: "100%", padding: "9px 14px", background: d === pollDuration ? `${GOLD}15` : "none", border: "none", textAlign: "left", fontSize: 13, cursor: "pointer", color: d === pollDuration ? GOLD : NAVY, fontWeight: d === pollDuration ? 700 : 400, fontFamily: "inherit" }}>
+                          {d}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 

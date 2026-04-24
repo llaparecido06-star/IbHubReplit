@@ -4,6 +4,20 @@ import { supabase } from "@/lib/supabase";
 
 export type ReactionType = "curtir" | "saude" | "destaque" | "incrivel";
 
+export interface PollOption {
+  text: string;
+  votes: number;
+}
+
+export interface Poll {
+  options: PollOption[];
+  total_votes: number;
+  closed: boolean;
+  expires_at?: string | null;
+  user_votes?: Record<string, number>;
+  user_voted_index?: number | null;
+}
+
 export interface Post {
   id: string;
   user_id: string;
@@ -22,6 +36,7 @@ export interface Post {
   created_at: string;
   hashtags?: string[];
   location?: string | null;
+  poll?: Poll | null;
   author?: {
     id: string;
     full_name: string;
@@ -47,7 +62,7 @@ export interface SuggestedProfile {
 }
 
 const POST_SELECT = `id, user_id, company_page_id, content, image_url, image_urls, video_url,
-  likes_count, comments_count, shares_count, view_count, location, hashtags, created_at`;
+  likes_count, comments_count, shares_count, view_count, location, hashtags, poll, created_at`;
 
 async function _fetchProfilesMap(userIds: string[]): Promise<Map<string, any>> {
   if (!userIds.length) return new Map();
@@ -105,12 +120,19 @@ export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
     const likedMap = new Map((likedRes.data ?? []).map((l: any) => [l.post_id, l.reaction_type ?? "curtir"]));
     const bookmarkedIds = new Set((bookmarkRes.data ?? []).map((b: any) => b.post_id));
 
-    return rawPosts.map((raw: any) => ({
-      ..._normalisePost(raw, profileMap),
-      is_liked: likedMap.has(raw.id),
-      reaction_type: likedMap.get(raw.id) ?? null,
-      is_bookmarked: bookmarkedIds.has(raw.id),
-    }));
+    return rawPosts.map((raw: any) => {
+      const post = _normalisePost(raw, profileMap) as Post;
+      if (post.poll) {
+        const votedIndex = post.poll.user_votes?.[currentUserId] ?? null;
+        post.poll = { ...post.poll, user_voted_index: votedIndex != null ? Number(votedIndex) : null };
+      }
+      return {
+        ...post,
+        is_liked: likedMap.has(raw.id),
+        reaction_type: likedMap.get(raw.id) ?? null,
+        is_bookmarked: bookmarkedIds.has(raw.id),
+      };
+    });
   } catch (e) {
     console.warn("fetchFeedPosts:", e);
     return [];
@@ -155,20 +177,52 @@ export async function createWebPost(params: {
   image_url?: string | null;
   video_url?: string | null;
   company_page_id?: string | null;
+  poll?: Poll | null;
 }): Promise<Post | null> {
   try {
+    const { poll, ...rest } = params;
+    const insertData: Record<string, unknown> = { ...rest, likes_count: 0, comments_count: 0, shares_count: 0, view_count: 0 };
+    if (poll) insertData.poll = poll;
     const { data, error } = await supabase
       .from("posts")
-      .insert({ ...params, likes_count: 0, comments_count: 0, shares_count: 0, view_count: 0 })
+      .insert(insertData)
       .select(POST_SELECT)
       .single();
     if (error || !data) return null;
     const profileMap = await _fetchProfilesMap([data.user_id]);
-    return _normalisePost(data, profileMap);
+    const post = _normalisePost(data, profileMap) as Post;
+    if (post.poll && poll) post.poll = { ...post.poll, user_voted_index: null };
+    return post;
   } catch (e) {
     console.warn("createWebPost:", e);
     return null;
   }
+}
+
+export async function voteOnFeedPoll(postId: string, userId: string, optionIndex: number): Promise<Poll | null> {
+  try {
+    const { data: row } = await supabase.from("posts").select("poll").eq("id", postId).single();
+    if (!row?.poll) return null;
+    const poll = row.poll as Poll;
+    if (poll.closed) return null;
+    if (poll.expires_at && new Date(poll.expires_at) < new Date()) return { ...poll, closed: true, user_voted_index: poll.user_votes?.[userId] ?? null };
+    if (poll.user_votes?.[userId] != null) return { ...poll, user_voted_index: poll.user_votes[userId] };
+
+    const newOptions = poll.options.map((o, i) => i === optionIndex ? { ...o, votes: o.votes + 1 } : o);
+    const userVotes = { ...(poll.user_votes ?? {}), [userId]: optionIndex };
+    const updated: Poll = { ...poll, options: newOptions, total_votes: poll.total_votes + 1, user_votes: userVotes };
+    await supabase.from("posts").update({ poll: updated }).eq("id", postId);
+    return { ...updated, user_voted_index: optionIndex };
+  } catch (e) {
+    console.warn("voteOnFeedPoll:", e);
+    return null;
+  }
+}
+
+export async function fetchPollVoters(userIds: string[]): Promise<{ id: string; full_name: string | null; avatar_url: string | null; username: string | null }[]> {
+  if (!userIds.length) return [];
+  const { data } = await supabase.from("profiles").select("id, full_name, avatar_url, username").in("id", userIds);
+  return data ?? [];
 }
 
 export async function fetchCompanyFeedPosts(companyPageId: string, currentUserId: string): Promise<Post[]> {

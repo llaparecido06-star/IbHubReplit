@@ -62,6 +62,8 @@ export interface Post {
     options: { text: string; votes: number }[];
     total_votes: number;
     closed: boolean;
+    expires_at?: string | null;
+    user_votes?: Record<string, number>;
     user_voted_index?: number | null;
   };
   author?: {
@@ -200,6 +202,23 @@ interface PostCardProps {
 function fmtCount(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return String(n);
+}
+
+function pollIsExpired(expiresAt?: string | null): boolean {
+  if (!expiresAt) return false;
+  return new Date(expiresAt) < new Date();
+}
+
+function pollExpiryLabel(expiresAt?: string | null): string {
+  if (!expiresAt) return "";
+  const d = new Date(expiresAt);
+  const now = new Date();
+  const diffMs = d.getTime() - now.getTime();
+  if (diffMs < 0) return "Encerrada";
+  const diffH = Math.floor(diffMs / 3600000);
+  if (diffH < 24) return `Encerra em ${diffH}h`;
+  const diffD = Math.floor(diffH / 24);
+  return `Encerra em ${diffD} dia${diffD !== 1 ? "s" : ""}`;
 }
 
 function detectPostType(content: string): "wine" | "poll" | "text" {
@@ -551,6 +570,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
 
   const handleVote = (optionIndex: number) => {
     if (post.poll?.closed || post.poll?.user_voted_index != null) return;
+    if (pollIsExpired(post.poll?.expires_at)) return;
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onVote?.(post.id, optionIndex);
   };
@@ -755,10 +775,15 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
             <MaterialCommunityIcons name="poll" size={13} color={colors.mutedForeground} />
             <Text style={[styles.pollFooterText, { color: colors.mutedForeground }]}>
               {post.poll.total_votes} {post.poll.total_votes === 1 ? "voto" : "votos"}
-              {post.poll.user_voted_index == null && !post.poll.closed ? "  ·  Toque para votar" : ""}
+              {post.poll.user_voted_index == null && !post.poll.closed && !pollIsExpired(post.poll.expires_at) ? "  ·  Toque para votar" : ""}
             </Text>
+            {post.poll.expires_at && !post.poll.closed && (
+              <Text style={[styles.pollFooterText, { color: colors.mutedForeground, marginLeft: 4 }]}>
+                · {pollExpiryLabel(post.poll.expires_at)}
+              </Text>
+            )}
             <View style={{ flex: 1 }} />
-            {post.poll.closed && (
+            {(post.poll.closed || pollIsExpired(post.poll.expires_at)) && (
               <View style={[styles.closedBadge, { backgroundColor: colors.border + "80" }]}>
                 <Feather name="lock" size={10} color={colors.mutedForeground} />
                 <Text style={[styles.closedText, { color: colors.mutedForeground }]}>Encerrada</Text>

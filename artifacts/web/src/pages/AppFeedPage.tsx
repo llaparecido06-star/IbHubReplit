@@ -7,6 +7,7 @@ import StoriesBar from "@/components/stories/StoriesBar";
 import { supabase } from "@/lib/supabase";
 import {
   Post,
+  Poll,
   ReactionType,
   SuggestedProfile,
   WineCommunityRating,
@@ -19,6 +20,8 @@ import {
   fetchWebSuggestedConnections,
   sendWebConnectionRequest,
   fetchWineCommunityRankings,
+  voteOnFeedPoll,
+  fetchPollVoters,
 } from "@/services/api";
 import { formatRelativeDate } from "@/utils/dateUtils";
 
@@ -194,17 +197,164 @@ function reactionColor(r?: ReactionType | null): string {
   return REACTIONS.find(x => x.type === r)?.color ?? MUTED;
 }
 
+/* ─── PollDisplay ───────────────────────── */
+function PollDisplay({ poll, postId, currentUserId, onVote }: {
+  poll: Poll;
+  postId: string;
+  currentUserId: string;
+  onVote: (postId: string, updatedPoll: Poll) => void;
+}) {
+  const [voting, setVoting] = useState(false);
+  const [showVoters, setShowVoters] = useState(false);
+  const [voters, setVoters] = useState<{ id: string; full_name: string | null; avatar_url: string | null; username: string | null; optionIndex: number }[]>([]);
+  const [loadingVoters, setLoadingVoters] = useState(false);
+
+  const hasVoted = poll.user_voted_index != null;
+  const isExpired = poll.expires_at ? new Date(poll.expires_at) < new Date() : false;
+  const isClosed = poll.closed || isExpired;
+  const total = poll.total_votes;
+
+  const fmtExpiry = (iso: string) => {
+    const d = new Date(iso);
+    const now = new Date();
+    const diffMs = d.getTime() - now.getTime();
+    if (diffMs < 0) return "Encerrada";
+    const diffH = Math.floor(diffMs / 3600000);
+    if (diffH < 24) return `Encerra em ${diffH}h`;
+    const diffD = Math.floor(diffH / 24);
+    return `Encerra em ${diffD} dia${diffD !== 1 ? "s" : ""}`;
+  };
+
+  const handleVote = async (i: number) => {
+    if (voting || hasVoted || isClosed) return;
+    setVoting(true);
+    const updated = await voteOnFeedPoll(postId, currentUserId, i);
+    if (updated) onVote(postId, updated);
+    setVoting(false);
+  };
+
+  const handleShowVoters = async () => {
+    if (!hasVoted && !isClosed) return;
+    setShowVoters(true);
+    if (voters.length === 0 && poll.user_votes && Object.keys(poll.user_votes).length > 0) {
+      setLoadingVoters(true);
+      const ids = Object.keys(poll.user_votes);
+      const profiles = await fetchPollVoters(ids);
+      setVoters(profiles.map(p => ({ ...p, optionIndex: poll.user_votes![p.id] })));
+      setLoadingVoters(false);
+    }
+  };
+
+  return (
+    <div style={{ padding: "0 16px 12px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {poll.options.map((opt, i) => {
+          const pct = total > 0 ? Math.round((opt.votes / total) * 100) : 0;
+          const isMyVote = poll.user_voted_index === i;
+          const showBar = hasVoted || isClosed;
+          return (
+            <div key={i}
+              onClick={() => handleVote(i)}
+              style={{
+                position: "relative", borderRadius: 10, overflow: "hidden",
+                border: `2px solid ${isMyVote ? GOLD : BORDER}`,
+                cursor: (!hasVoted && !isClosed && !voting) ? "pointer" : "default",
+                background: WHITE,
+              }}
+            >
+              {showBar && (
+                <div style={{
+                  position: "absolute", top: 0, left: 0, bottom: 0, width: `${pct}%`,
+                  background: isMyVote ? `${GOLD}25` : "#f0f0f0",
+                  transition: "width 0.4s ease", borderRadius: 8,
+                }} />
+              )}
+              <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px" }}>
+                <span style={{ fontSize: 14, color: NAVY, fontWeight: isMyVote ? 700 : 400, display: "flex", alignItems: "center", gap: 6 }}>
+                  {isMyVote && <span style={{ fontSize: 12 }}>✓</span>}
+                  {opt.text}
+                </span>
+                {showBar && (
+                  <span style={{ fontSize: 13, fontWeight: 700, color: isMyVote ? GOLD : MUTED }}>{pct}%</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, fontSize: 12, color: MUTED }}>
+        <span>{total} voto{total !== 1 ? "s" : ""}</span>
+        {poll.expires_at && (
+          <span>· {fmtExpiry(poll.expires_at)}</span>
+        )}
+        {isClosed && <span style={{ color: "#dc2626", fontWeight: 700 }}>· Encerrada</span>}
+        {(hasVoted || isClosed) && total > 0 && (
+          <button
+            onClick={handleShowVoters}
+            style={{ background: "none", border: "none", color: GOLD, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0, marginLeft: "auto" }}
+          >
+            Ver quem votou
+          </button>
+        )}
+      </div>
+
+      {showVoters && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setShowVoters(false)}>
+          <div style={{ background: WHITE, borderRadius: 16, width: "90%", maxWidth: 420, maxHeight: "80vh", overflowY: "auto", padding: 20, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: NAVY }}>Votos ({total})</h3>
+              <button onClick={() => setShowVoters(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: MUTED }}>×</button>
+            </div>
+            {poll.options.map((opt, i) => {
+              const optVoters = voters.filter(v => v.optionIndex === i);
+              const pct = total > 0 ? Math.round((opt.votes / total) * 100) : 0;
+              if (opt.votes === 0 && !loadingVoters) return null;
+              return (
+                <div key={i} style={{ marginBottom: 16 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{opt.text}</span>
+                    <span style={{ fontSize: 12, color: MUTED }}>{opt.votes} voto{opt.votes !== 1 ? "s" : ""} · {pct}%</span>
+                  </div>
+                  {loadingVoters ? (
+                    <div style={{ fontSize: 12, color: MUTED }}>Carregando...</div>
+                  ) : optVoters.map(v => (
+                    <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                      {v.avatar_url
+                        ? <img src={v.avatar_url} alt="" style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                        : <div style={{ width: 32, height: 32, borderRadius: "50%", background: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: WHITE, flexShrink: 0 }}>{(v.full_name?.[0] ?? "?").toUpperCase()}</div>
+                      }
+                      <span style={{ fontSize: 13, color: NAVY }}>{v.full_name ?? v.username ?? "Usuário"}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+            {!loadingVoters && voters.length === 0 && (
+              <div style={{ fontSize: 13, color: MUTED, textAlign: "center", padding: "20px 0" }}>Detalhes dos votantes não disponíveis</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── PostCard ───────────────────────────── */
 function PostCard({
   post,
   currentUserId,
   onLike,
   onBookmark,
+  onPollVote,
 }: {
   post: Post;
   currentUserId: string;
   onLike: (id: string, isLiked: boolean, reaction: ReactionType) => void;
   onBookmark: (id: string, isBookmarked: boolean) => void;
+  onPollVote: (postId: string, updatedPoll: Poll) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
@@ -353,6 +503,11 @@ function PostCard({
           controls
           style={{ width: "100%", maxHeight: 640, display: "block", background: "#000" }}
         />
+      )}
+
+      {/* Poll */}
+      {post.poll && post.poll.options && post.poll.options.length > 0 && (
+        <PollDisplay poll={post.poll} postId={post.id} currentUserId={currentUserId} onVote={onPollVote} />
       )}
 
       {/* Stats */}
@@ -848,6 +1003,10 @@ export default function AppFeedPage() {
     await toggleBookmarkPost(postId, userId, isBookmarked);
   }, [userId]);
 
+  const handlePollVote = useCallback((postId: string, updatedPoll: Poll) => {
+    setPosts(prev => prev.map(p => p.id === postId ? { ...p, poll: updatedPoll } : p));
+  }, []);
+
   const handleConnect = useCallback(async (targetId: string) => {
     if (!userId) return;
     await sendWebConnectionRequest(targetId, userId);
@@ -924,6 +1083,7 @@ export default function AppFeedPage() {
                 currentUserId={userId}
                 onLike={handleLike}
                 onBookmark={handleBookmark}
+                onPollVote={handlePollVote}
               />
             ))
           )}
