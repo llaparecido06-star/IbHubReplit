@@ -404,7 +404,7 @@ export default function RegisterScreen() {
           <Feather name="arrow-left" size={22} color="#f5f0e8" />
         </TouchableOpacity>
         <Image
-          source={require("@/assets/images/logo_dark.png")}
+          source={require("@/assets/images/logo_light.png")}
           style={{ width: 90, height: 36 }}
           contentFit="contain"
         />
