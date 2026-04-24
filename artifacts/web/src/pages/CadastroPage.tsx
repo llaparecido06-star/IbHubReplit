@@ -43,7 +43,7 @@ export default function CadastroPage() {
   const { signUp, refreshProfileByUserId } = useAuth();
   const [, setLocation] = useLocation();
 
-  const [pendingRef] = useState<string>(() => {
+  const [inviteCode, setInviteCode] = useState<string>(() => {
     try {
       return new URLSearchParams(window.location.search).get("ref") ?? "";
     } catch { return ""; }
@@ -171,8 +171,8 @@ export default function CadastroPage() {
           plan: "gratuito", // always start free; paid plans activate after Stripe payment
         }, { onConflict: "id" });
 
-        if (pendingRef.trim()) {
-          await applyReferralCode(currentUser.id, pendingRef.trim());
+        if (inviteCode.trim()) {
+          await applyReferralCode(currentUser.id, inviteCode.trim());
         }
 
         await refreshProfileByUserId(currentUser.id);
@@ -386,6 +386,22 @@ export default function CadastroPage() {
                 <div>
                   <label style={labelStyle}>Cargo (opcional)</label>
                   <input type="text" value={role} onChange={(e) => setRole(e.target.value)} placeholder="Ex: Sommelier, Diretor" style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Código de convite (opcional)</label>
+                  <input
+                    type="text"
+                    value={inviteCode}
+                    onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                    placeholder="Ex: ABCD1234"
+                    maxLength={16}
+                    style={{ ...inputStyle, fontFamily: "monospace", letterSpacing: 2, textTransform: "uppercase" }}
+                  />
+                  {inviteCode.trim() && (
+                    <p style={{ fontSize: 12, color: "#c9a84c", marginTop: 4, fontWeight: 600 }}>
+                      🍷 Você foi convidado — o convite será aplicado ao criar sua conta
+                    </p>
+                  )}
                 </div>
               </div>
 
