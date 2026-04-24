@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase";
+import { supabase, bustSessionCache } from "@/lib/supabase";
 
 export interface ActiveCompany {
   id: string;
@@ -149,6 +149,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Bust the getCachedSession() cache so subsequent API calls use the fresh token
+      bustSessionCache();
+
       // If Supabase fires SIGNED_OUT due to an invalid token refresh, clear loading
       if (event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
         if (!session) finishLoading();

@@ -1,11 +1,11 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, getCachedSession } from "@/lib/supabase";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)
   ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
 
 async function adminFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token ?? "";
+  const session = await getCachedSession();
+  const token = session?.access_token ?? "";
   return fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {

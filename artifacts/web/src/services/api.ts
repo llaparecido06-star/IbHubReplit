@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, getCachedSession } from "@/lib/supabase";
 
 // ─── Feed / Posts ──────────────────────────────────────────────────────────────
 
@@ -94,7 +94,7 @@ export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
   try {
     // Use the authoritative API server endpoint for shadowban enforcement.
     // The server filters using the admin Supabase client; clients cannot bypass this.
-    const { data: { session } } = await supabase.auth.getSession();
+    const session = await getCachedSession();
     if (!session?.access_token) return [];
 
     const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
@@ -680,7 +680,7 @@ export interface PresentationSlide {
 
 export async function fetchPresentationSlides(presentationId: string): Promise<{ slides: PresentationSlide[]; total: number } | null> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const session = await getCachedSession();
     if (!session?.access_token) return null;
     const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
       ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
@@ -695,7 +695,7 @@ export async function fetchPresentationSlides(presentationId: string): Promise<{
 }
 
 export async function triggerPresentationAccess(presentationId: string): Promise<{ ok: boolean; reason?: string }> {
-  const { data: { session } } = await supabase.auth.getSession();
+  const session = await getCachedSession();
   if (!session?.access_token) return { ok: false, reason: "unauthenticated" };
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
     ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
@@ -874,8 +874,8 @@ export async function sendWebMessage(conversationId: string, senderId: string, c
 
 export async function uploadChatAttachment(file: File, userId: string): Promise<string | null> {
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token ?? "";
+    const sessionData = await getCachedSession();
+    const token = sessionData?.access_token ?? "";
 
     const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
       ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
@@ -990,8 +990,8 @@ export async function deleteCompanyProduct(productId: string): Promise<boolean> 
 
 export async function uploadPortfolioImage(file: File, userId: string): Promise<string | null> {
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token ?? "";
+    const sessionData = await getCachedSession();
+    const token = sessionData?.access_token ?? "";
 
     const fileBase64 = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -1379,7 +1379,7 @@ export async function createOpportunity(params: {
   try {
     const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
       ?? `${window.location.origin}/api`;
-    const session = await supabase.auth.getSession();
+    const session = await getCachedSession();
     const token = session?.data?.session?.access_token;
     const res = await fetch(`${apiBase}/community/opportunities`, {
       method: "POST",
@@ -1443,8 +1443,8 @@ export async function getCvSignedUrl(cvValue: string): Promise<string | null> {
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
     ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
 
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token ?? "";
+  const sessionData = await getCachedSession();
+  const token = sessionData?.access_token ?? "";
 
   try {
     const res = await fetch(`${apiBase}/cv/signed-url`, {
@@ -1848,7 +1848,7 @@ export async function createGroup(params: {
   try {
     const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
       ?? `${window.location.origin}/api`;
-    const session = await supabase.auth.getSession();
+    const session = await getCachedSession();
     const token = session?.data?.session?.access_token;
     const res = await fetch(`${apiBase}/community/groups`, {
       method: "POST",
@@ -1941,7 +1941,7 @@ export async function fetchMarketPosts(userId?: string): Promise<MarketPost[]> {
   try {
     const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
       ?? `${window.location.origin}/api`;
-    const session = await supabase.auth.getSession();
+    const session = await getCachedSession();
     const token = session?.data?.session?.access_token;
     const res = await fetch(`${apiBase}/market/posts?limit=30`, {
       headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -2004,7 +2004,7 @@ export async function createMarketPost(
   pollOptions?: MarketPollOption[] | null,
 ): Promise<MarketPost | null> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const session = await getCachedSession();
     if (!session?.access_token) return null;
     const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
       ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
@@ -2386,8 +2386,8 @@ async function _dispatchSocialPush(opts: {
   commentText?: string;
 }): Promise<void> {
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
+    const sessionData = await getCachedSession();
+    const token = sessionData?.access_token;
     if (!token) return;
     const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
       ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;

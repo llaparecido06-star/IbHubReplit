@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/context/AuthContext";
 import { usePermissions } from "@/context/PermissionsContext";
-import { supabase } from "@/lib/supabase";
+import { supabase, getCachedSession } from "@/lib/supabase";
 import {
   MARKET_FALLBACK, MarketOverview, Period, fetchMarketOverview,
   fetchMarketPresentations, fetchAllMarketPresentations,
@@ -672,7 +672,7 @@ function IdealBISearch({ userId }: { userId: string }) {
     ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
 
   const getAuthHeader = async (): Promise<HeadersInit> => {
-    const { data: { session } } = await supabase.auth.getSession();
+    const session = await getCachedSession();
     return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
   };
 

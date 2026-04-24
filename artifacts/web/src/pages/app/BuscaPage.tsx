@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
-import { supabase } from "@/lib/supabase";
+import { supabase, getCachedSession } from "@/lib/supabase";
 import { sendWebConnectionRequest } from "@/services/api";
 
 const GOLD   = "#c9a84c";
@@ -204,7 +204,7 @@ export default function BuscaPage() {
     const searchPostsViaApi = async (): Promise<{ data: any[] }> => {
       try {
         const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
-        const session = (await supabase.auth.getSession()).data.session;
+        const session = await getCachedSession();
         if (!session?.access_token) return { data: [] };
         const params = new URLSearchParams({ q: trimmed, limit: String(lim(20)) });
         const res = await fetch(`${apiBase}/search/posts?${params}`, { headers: { Authorization: `Bearer ${session.access_token}` } });
