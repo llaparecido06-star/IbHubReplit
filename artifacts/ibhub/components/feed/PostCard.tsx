@@ -229,23 +229,55 @@ function PlanBadge({ plan, colors }: { plan?: string; colors: any }) {
   );
 }
 
+const IMG_WIDTH = SCREEN_WIDTH - 28;
+const IMG_MAX_HEIGHT = Math.round(IMG_WIDTH * 1.35); // cap portrait at ~4:3 tall
+const IMG_DEFAULT_HEIGHT = Math.round(IMG_WIDTH * 0.75); // 4:3 landscape default
+
+/** Renders a single image with its natural aspect ratio (capped at portrait max) */
+function AdaptiveImage({
+  uri,
+  priority = "normal",
+  style,
+}: {
+  uri: string;
+  priority?: "high" | "normal" | "low";
+  style?: object;
+}) {
+  const [height, setHeight] = useState(IMG_DEFAULT_HEIGHT);
+  return (
+    <Image
+      source={{ uri }}
+      style={[{ width: IMG_WIDTH, height, borderRadius: 12, backgroundColor: "#f0f2f5" }, style]}
+      contentFit="cover"
+      onLoad={(e) => {
+        const { width: w, height: h } = e.source;
+        if (w > 0 && h > 0) {
+          setHeight(Math.round(Math.min(IMG_WIDTH * (h / w), IMG_MAX_HEIGHT)));
+        }
+      }}
+      placeholder={{ color: "#e8edf2" }}
+      transition={{ duration: 250 }}
+      priority={priority}
+    />
+  );
+}
+
 function ImageCarousel({ imageUrls }: { imageUrls: string[] }) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  // Carousel height driven by the first image's natural ratio
+  const [carouselHeight, setCarouselHeight] = useState(IMG_DEFAULT_HEIGHT);
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+    const idx = Math.round(e.nativeEvent.contentOffset.x / IMG_WIDTH);
     setCurrentIndex(idx);
   };
 
   if (imageUrls.length === 1) {
     return (
-      <Image
-        source={{ uri: imageUrls[0] }}
-        style={styles.image}
-        contentFit="cover"
-        placeholder={{ color: "#e8edf2" }}
-        transition={{ duration: 250 }}
+      <AdaptiveImage
+        uri={imageUrls[0]}
         priority="high"
+        style={{ marginTop: 10 }}
       />
     );
   }
@@ -257,14 +289,23 @@ function ImageCarousel({ imageUrls }: { imageUrls: string[] }) {
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={handleScroll}
-        style={styles.carouselScroll}
+        style={[styles.carouselScroll, { height: carouselHeight }]}
       >
         {imageUrls.map((uri, i) => (
           <Image
             key={i}
             source={{ uri }}
-            style={styles.carouselImage}
+            style={{ width: IMG_WIDTH, height: carouselHeight, borderRadius: 12, backgroundColor: "#f0f2f5" }}
             contentFit="cover"
+            onLoad={(e) => {
+              // Only the first image sets the carousel height
+              if (i === 0) {
+                const { width: w, height: h } = e.source;
+                if (w > 0 && h > 0) {
+                  setCarouselHeight(Math.round(Math.min(IMG_WIDTH * (h / w), IMG_MAX_HEIGHT)));
+                }
+              }
+            }}
             placeholder={{ color: "#e8edf2" }}
             transition={{ duration: 250 }}
             priority={i === 0 ? "high" : "normal"}
@@ -1118,23 +1159,11 @@ const styles = StyleSheet.create({
   seeMore:     { fontSize: 14, fontWeight: "600", marginTop: 4 },
   hashtags:    { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
   hashtag:     { fontSize: 14, fontWeight: "600" },
-  image: {
-    width: "100%",
-    height: SCREEN_WIDTH * 0.58,
-    borderRadius: 12,
-    marginTop: 10,
-  },
-
   carouselWrap: {
     marginTop: 10,
   },
   carouselScroll: {
-    width: "100%",
-  },
-  carouselImage: {
-    width: SCREEN_WIDTH - 28,
-    height: (SCREEN_WIDTH - 28) * 0.58,
-    borderRadius: 12,
+    width: IMG_WIDTH,
   },
   dotsRow: {
     flexDirection: "row",

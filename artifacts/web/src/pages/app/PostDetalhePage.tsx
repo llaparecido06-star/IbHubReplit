@@ -209,14 +209,18 @@ export default function PostDetalhePage() {
             <p style={{ fontSize: 16, color: NAVY, lineHeight: 1.65, marginBottom: 16 }}>{post.content}</p>
 
             {post.image_url && (
-              <img src={post.image_url} alt="" style={{ width: "100%", borderRadius: 10, maxHeight: 480, objectFit: "cover", marginBottom: 12 }} />
+              <img src={post.image_url} alt="" style={{ width: "100%", height: "auto", maxHeight: 640, objectFit: "contain", display: "block", backgroundColor: "#f2f3f5", borderRadius: 10, marginBottom: 12 }} />
             )}
             {post.image_urls && post.image_urls.length > 0 && !post.image_url && (
-              <div style={{ display: "grid", gridTemplateColumns: post.image_urls.length === 1 ? "1fr" : "1fr 1fr", gap: 4, marginBottom: 12 }}>
-                {post.image_urls.slice(0, 4).map((url, i) => (
-                  <img key={i} src={url} alt="" style={{ width: "100%", height: 220, objectFit: "cover", borderRadius: 8 }} />
-                ))}
-              </div>
+              post.image_urls.length === 1 ? (
+                <img src={post.image_urls[0]} alt="" style={{ width: "100%", height: "auto", maxHeight: 640, objectFit: "contain", display: "block", backgroundColor: "#f2f3f5", borderRadius: 10, marginBottom: 12 }} />
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: 12 }}>
+                  {post.image_urls.slice(0, 4).map((url, i) => (
+                    <img key={i} src={url} alt="" style={{ width: "100%", height: 220, objectFit: "cover", borderRadius: 8 }} />
+                  ))}
+                </div>
+              )
             )}
             {post.video_url && (
               <video

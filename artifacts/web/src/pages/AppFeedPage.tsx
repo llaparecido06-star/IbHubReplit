@@ -332,14 +332,18 @@ function PostCard({
 
       {/* Image */}
       {post.image_url && (
-        <img src={post.image_url} alt="" style={{ width: "100%", maxHeight: 480, objectFit: "cover", display: "block" }} />
+        <img src={post.image_url} alt="" style={{ width: "100%", height: "auto", maxHeight: 640, objectFit: "contain", display: "block", backgroundColor: "#f2f3f5" }} />
       )}
       {post.image_urls && post.image_urls.length > 0 && !post.image_url && (
-        <div style={{ display: "grid", gridTemplateColumns: post.image_urls.length === 1 ? "1fr" : "1fr 1fr", gap: 2 }}>
-          {post.image_urls.slice(0, 4).map((url, i) => (
-            <img key={i} src={url} alt="" style={{ width: "100%", height: 200, objectFit: "cover" }} />
-          ))}
-        </div>
+        post.image_urls.length === 1 ? (
+          <img src={post.image_urls[0]} alt="" style={{ width: "100%", height: "auto", maxHeight: 640, objectFit: "contain", display: "block", backgroundColor: "#f2f3f5" }} />
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+            {post.image_urls.slice(0, 4).map((url, i) => (
+              <img key={i} src={url} alt="" style={{ width: "100%", height: 220, objectFit: "cover" }} />
+            ))}
+          </div>
+        )
       )}
 
       {/* Video — reels portrait format */}

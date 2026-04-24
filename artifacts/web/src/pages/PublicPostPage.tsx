@@ -196,7 +196,7 @@ export default function PublicPostPage() {
             {/* Image */}
             {post.image_url && (
               <div style={{ padding: "0 20px 16px" }}>
-                <img src={post.image_url} alt="" style={{ width: "100%", borderRadius: 12, objectFit: "cover", maxHeight: 360 }} />
+                <img src={post.image_url} alt="" style={{ width: "100%", height: "auto", maxHeight: 640, objectFit: "contain", display: "block", backgroundColor: "#f2f3f5", borderRadius: 12 }} />
               </div>
             )}
 
