@@ -24,6 +24,7 @@ import {
   fetchPollVoters,
 } from "@/services/api";
 import { formatRelativeDate } from "@/utils/dateUtils";
+import { LikesModal } from "@/components/feed/LikesModal";
 
 const GOLD   = "#c9a84c";
 const NAVY   = "#0d1b2a";
@@ -377,12 +378,14 @@ function PostCard({
   onLike,
   onBookmark,
   onPollVote,
+  onOpenLikes,
 }: {
   post: Post;
   currentUserId: string;
   onLike: (id: string, isLiked: boolean, reaction: ReactionType) => void;
   onBookmark: (id: string, isBookmarked: boolean) => void;
   onPollVote: (postId: string, updatedPoll: Poll) => void;
+  onOpenLikes?: (id: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
@@ -536,10 +539,13 @@ function PostCard({
       {(post.likes_count > 0 || post.comments_count > 0) && (
         <div style={{ display: "flex", gap: 12, padding: "8px 16px", fontSize: 12, color: MUTED, borderTop: `1px solid ${BORDER}` }}>
           {post.likes_count > 0 && (
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <button
+              onClick={() => onOpenLikes?.(post.id)}
+              style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 12, padding: 0 }}
+            >
               <span>{post.is_liked ? reactionEmoji(post.reaction_type ?? "curtir") : "👍"}</span>
               {post.likes_count}
-            </span>
+            </button>
           )}
           {post.comments_count > 0 && <span style={{ marginLeft: "auto" }}>{post.comments_count} comentário{post.comments_count !== 1 ? "s" : ""}</span>}
         </div>
@@ -908,6 +914,7 @@ export default function AppFeedPage() {
   const [suggestions, setSuggestions] = useState<SuggestedProfile[]>([]);
   const [wineRankings, setWineRankings] = useState<WineCommunityRating[]>([]);
   const [loading, setLoading]         = useState(true);
+  const [likesModalPost, setLikesModalPost] = useState<{ id: string; count: number } | null>(null);
 
   const userId    = profile?.id ?? user?.id ?? "";
   const firstName = profile?.full_name?.split(" ")[0] ?? "Usuário";
@@ -1106,6 +1113,7 @@ export default function AppFeedPage() {
                 onLike={handleLike}
                 onBookmark={handleBookmark}
                 onPollVote={handlePollVote}
+                onOpenLikes={(id) => setLikesModalPost({ id, count: posts.find(p => p.id === id)?.likes_count ?? 0 })}
               />
             ))
           )}
@@ -1126,6 +1134,14 @@ export default function AppFeedPage() {
           .feed-right-panel { display: block !important; }
         }
       `}</style>
+
+      {/* Likes modal (quem curtiu) */}
+      <LikesModal
+        postId={likesModalPost?.id ?? null}
+        likesCount={likesModalPost?.count ?? 0}
+        visible={!!likesModalPost}
+        onClose={() => setLikesModalPost(null)}
+      />
     </AppShell>
   );
 }

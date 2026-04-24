@@ -2799,3 +2799,71 @@ export async function fetchWebGroupInfo(groupId: string): Promise<WebGroupInfo |
     };
   } catch { return null; }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// POST LIKES (quem curtiu)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface LikeUser {
+  id: string;
+  full_name: string;
+  avatar_url?: string | null;
+  headline?: string | null;
+  company_page_id?: string | null;
+  reaction_type?: string | null;
+}
+
+export async function fetchPostLikes(postId: string): Promise<LikeUser[]> {
+  try {
+    const { data, error } = await supabase
+      .from("likes")
+      .select("user_id, company_page_id, reaction_type")
+      .eq("post_id", postId)
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    if (error || !data) return [];
+
+    const userIds = [...new Set((data as any[]).map((l: any) => l.user_id).filter(Boolean))];
+    const companyIds = [...new Set((data as any[]).map((l: any) => l.company_page_id).filter(Boolean))];
+
+    const [profileRes, companyRes] = await Promise.all([
+      userIds.length > 0
+        ? supabase.from("profiles").select("id, full_name, avatar_url, headline").in("id", userIds)
+        : Promise.resolve({ data: [] }),
+      companyIds.length > 0
+        ? supabase.from("company_pages").select("id, name, avatar_url, industry").in("id", companyIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const profileMap = new Map((profileRes.data ?? []).map((p: any) => [p.id, p]));
+    const companyMap = new Map((companyRes.data ?? []).map((c: any) => [c.id, c]));
+
+    return (data as any[]).map((l: any) => {
+      if (l.company_page_id) {
+        const c = companyMap.get(l.company_page_id);
+        const p = profileMap.get(l.user_id);
+        return {
+          id: l.user_id,
+          full_name: c?.name ?? p?.full_name ?? "Empresa",
+          avatar_url: c?.avatar_url ?? null,
+          headline: c?.industry ?? null,
+          company_page_id: l.company_page_id,
+          reaction_type: l.reaction_type ?? null,
+        } as LikeUser;
+      }
+      const p = profileMap.get(l.user_id);
+      return {
+        id: l.user_id,
+        full_name: p?.full_name ?? "Usuário",
+        avatar_url: p?.avatar_url ?? null,
+        headline: p?.headline ?? null,
+        company_page_id: null,
+        reaction_type: l.reaction_type ?? null,
+      } as LikeUser;
+    });
+  } catch (e) {
+    console.warn("fetchPostLikes:", e);
+    return [];
+  }
+}
