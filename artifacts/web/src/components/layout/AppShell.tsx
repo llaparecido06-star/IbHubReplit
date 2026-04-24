@@ -332,22 +332,33 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
         </div>
 
         {/* Tabs */}
-        <div style={{ display: "flex", gap: 4, padding: isMobile ? "10px 16px 0" : "12px 20px 0", overflowX: "auto", scrollbarWidth: "none" }}>
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)} style={{
-              display: "flex", alignItems: "center", gap: 5,
-              padding: isMobile ? "5px 12px" : "6px 14px",
-              borderRadius: 20, fontSize: isMobile ? 12 : 13, fontWeight: tab === t.key ? 700 : 500,
-              border: `1px solid ${tab === t.key ? GOLD : BORDER}`,
-              backgroundColor: tab === t.key ? `${GOLD}15` : WHITE,
-              color: tab === t.key ? GOLD : MUTED, cursor: "pointer", whiteSpace: "nowrap",
-              flexShrink: 0,
+        {(() => {
+          const visibleTabs = isMobile ? TABS.filter(t => t.key !== "texto") : TABS;
+          return (
+            <div style={{
+              display: "flex", gap: isMobile ? 6 : 4,
+              padding: isMobile ? "12px 16px 0" : "12px 20px 0",
+              overflowX: isMobile ? "visible" : "auto",
+              scrollbarWidth: "none",
+              justifyContent: isMobile ? "center" : "flex-start",
             }}>
-              {t.icon && <span style={{ color: tab === t.key ? GOLD : MUTED }}>{t.icon}</span>}
-              {t.label}
-            </button>
-          ))}
-        </div>
+              {visibleTabs.map(t => (
+                <button key={t.key} onClick={() => setTab(t.key)} style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  padding: isMobile ? "8px 16px" : "6px 14px",
+                  borderRadius: 20, fontSize: isMobile ? 13 : 13, fontWeight: tab === t.key ? 700 : 500,
+                  border: `1px solid ${tab === t.key ? GOLD : BORDER}`,
+                  backgroundColor: tab === t.key ? `${GOLD}15` : WHITE,
+                  color: tab === t.key ? GOLD : MUTED, cursor: "pointer", whiteSpace: "nowrap",
+                  flexShrink: 0,
+                }}>
+                  {t.icon && <span style={{ color: tab === t.key ? GOLD : MUTED }}>{t.icon}</span>}
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          );
+        })()}
 
         {/* Body */}
         <div style={{ padding: isMobile ? "12px 16px" : "14px 20px" }}>
