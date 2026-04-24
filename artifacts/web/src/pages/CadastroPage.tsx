@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { supabase, getCachedSession } from "@/lib/supabase";
 import { usePlans, formatPlanPrice, formatOriginalPrice, calcDiscount } from "@/hooks/usePlans";
+import { applyReferralCode } from "@/services/api";
 
 const TOTAL_STEPS = 3;
 
@@ -41,6 +42,12 @@ function hintColor(state: ValidationState): string {
 export default function CadastroPage() {
   const { signUp, refreshProfileByUserId } = useAuth();
   const [, setLocation] = useLocation();
+
+  const [pendingRef] = useState<string>(() => {
+    try {
+      return new URLSearchParams(window.location.search).get("ref") ?? "";
+    } catch { return ""; }
+  });
 
   const [step, setStep] = useState(1);
   const [fullName, setFullName] = useState("");
@@ -163,6 +170,10 @@ export default function CadastroPage() {
           position: role.trim() || null,
           plan: "gratuito", // always start free; paid plans activate after Stripe payment
         }, { onConflict: "id" });
+
+        if (pendingRef.trim()) {
+          await applyReferralCode(currentUser.id, pendingRef.trim());
+        }
 
         await refreshProfileByUserId(currentUser.id);
       }

@@ -2746,6 +2746,33 @@ function _deriveReferralCode(userId: string): string {
   return userId.replace(/-/g, "").slice(0, 8).toUpperCase();
 }
 
+export async function applyReferralCode(newUserId: string, code: string): Promise<boolean> {
+  try {
+    if (!code.trim()) return false;
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("invited_by_id")
+      .eq("id", newUserId)
+      .maybeSingle();
+    if ((prof as any)?.invited_by_id) return true;
+    const { data: inviter } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("referral_code", code.trim().toUpperCase())
+      .maybeSingle();
+    if (!inviter?.id || inviter.id === newUserId) return false;
+    const { error } = await supabase
+      .from("profiles")
+      .update({ invited_by_id: inviter.id })
+      .eq("id", newUserId);
+    if (error) { console.error("applyReferralCode:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("applyReferralCode:", e);
+    return false;
+  }
+}
+
 export async function ensureReferralCode(userId: string): Promise<string> {
   try {
     const { data } = await supabase.from("profiles").select("referral_code").eq("id", userId).single();
