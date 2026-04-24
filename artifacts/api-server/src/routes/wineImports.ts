@@ -3,12 +3,14 @@ import { createClient } from "@supabase/supabase-js";
 import { resolveUserId } from "../lib/planCheck.js";
 import OpenAI from "openai";
 
-// Lazy singleton — created on first use so the server starts even if the key is missing
+// Lazy singleton — supports both Replit AI Integrations key and a direct OPENAI_API_KEY
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
   if (!_openai) {
-    if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not set");
-    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const apiKey  = process.env.AI_INTEGRATIONS_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY;
+    const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+    if (!apiKey) throw new Error("OpenAI API key not configured (set OPENAI_API_KEY or use Replit AI Integrations)");
+    _openai = new OpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) });
   }
   return _openai;
 }
