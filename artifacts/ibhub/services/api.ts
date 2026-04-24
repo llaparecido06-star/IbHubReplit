@@ -1347,14 +1347,15 @@ export async function fetchProfilePosts(userId: string, currentUserId: string): 
     const [profileMap, companyMap, likedRes, bookmarkRes] = await Promise.all([
       fetchProfilesForIds([userId]),
       fetchCompanyPagesForIds(companyIds),
-      supabase.from("likes").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
+      supabase.from("likes").select("post_id, reaction_type").eq("user_id", currentUserId).in("post_id", postIds),
       supabase.from("bookmarks").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
     ]);
-    const likedIds = new Set((likedRes.data ?? []).map((l: any) => l.post_id));
+    const likedMap = new Map((likedRes.data ?? []).map((l: any) => [l.post_id, l.reaction_type ?? "curtir"]));
     const bookmarkedIds = new Set((bookmarkRes.data ?? []).map((b: any) => b.post_id));
     return (await attachAuthorsToPosts(data, profileMap, companyMap)).map((post: any) => ({
       ...post,
-      is_liked: likedIds.has(post.id),
+      is_liked: likedMap.has(post.id),
+      reaction_type: likedMap.get(post.id) ?? null,
       is_bookmarked: bookmarkedIds.has(post.id),
     }));
   } catch (e) {

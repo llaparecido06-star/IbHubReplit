@@ -477,7 +477,7 @@ export async function fetchUserProfile(userId: string): Promise<UserProfile | nu
   }
 }
 
-export async function fetchUserPosts(userId: string): Promise<Post[]> {
+export async function fetchUserPosts(userId: string, currentUserId?: string): Promise<Post[]> {
   try {
     const { data, error } = await supabase
       .from("posts")
@@ -486,8 +486,24 @@ export async function fetchUserPosts(userId: string): Promise<Post[]> {
       .order("created_at", { ascending: false })
       .limit(20);
     if (error || !data || !data.length) return [];
-    const profileMap = await _fetchProfilesMap([userId]);
-    return data.map((raw: any) => _normalisePost(raw, profileMap));
+    const postIds = data.map((p: any) => p.id) as string[];
+    const [profileMap, likedRes, bookmarkRes] = await Promise.all([
+      _fetchProfilesMap([userId]),
+      currentUserId
+        ? supabase.from("likes").select("post_id, reaction_type").eq("user_id", currentUserId).is("company_page_id", null).in("post_id", postIds)
+        : Promise.resolve({ data: [] }),
+      currentUserId
+        ? supabase.from("bookmarks").select("post_id").eq("user_id", currentUserId).in("post_id", postIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+    const likedMap = new Map(((likedRes as any).data ?? []).map((l: any) => [l.post_id, l.reaction_type ?? "curtir"]));
+    const bookmarkedIds = new Set(((bookmarkRes as any).data ?? []).map((b: any) => b.post_id));
+    return data.map((raw: any) => ({
+      ..._normalisePost(raw, profileMap),
+      is_liked: likedMap.has(raw.id),
+      reaction_type: likedMap.get(raw.id) ?? null,
+      is_bookmarked: bookmarkedIds.has(raw.id),
+    }));
   } catch (e) {
     console.warn("fetchUserPosts:", e);
     return [];

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useLocation, useParams } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
@@ -12,9 +12,13 @@ import {
   toggleWebFollow,
   getOrCreateWebConversation,
   fetchPublicWineCellar,
+  toggleLikePost,
+  changeReactionPost,
+  toggleBookmarkPost,
   UserProfile,
   Post,
   WineEntry,
+  ReactionType,
 } from "@/services/api";
 
 const GOLD   = "#c9a84c";
@@ -79,34 +83,218 @@ function Tag({ label, color = GOLD }: { label: string; color?: string }) {
   );
 }
 
-function PostCard({ post }: { post: Post }) {
+/* ── Feed-style icons ── */
+const LikeIcon = ({ filled, color }: { filled: boolean; color?: string }) => (
+  <svg width="17" height="17" fill={filled ? (color ?? GOLD) : "none"} stroke={filled ? (color ?? GOLD) : MUTED} strokeWidth="2" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/>
+    <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+  </svg>
+);
+const CommentIcon = () => (
+  <svg width="17" height="17" fill="none" stroke={MUTED} strokeWidth="2" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+);
+const ShareIcon = () => (
+  <svg width="17" height="17" fill="none" stroke={MUTED} strokeWidth="2" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+    <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+  </svg>
+);
+const BookmarkIcon = ({ filled }: { filled: boolean }) => (
+  <svg width="17" height="17" fill={filled ? NAVY : "none"} stroke={NAVY} strokeWidth="2" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+  </svg>
+);
+
+const REACTIONS: { type: ReactionType; emoji: string; label: string; color: string }[] = [
+  { type: "curtir",   emoji: "👍", label: "Curtir",   color: GOLD },
+  { type: "saude",    emoji: "🥂", label: "Saúde!",   color: "#c0392b" },
+  { type: "destaque", emoji: "⭐", label: "Destaque", color: "#f39c12" },
+  { type: "incrivel", emoji: "🍷", label: "Incrível", color: WINE },
+];
+
+type PostCardProps = {
+  post: Post;
+  onLike: (postId: string) => void;
+  onReact: (postId: string, reaction: ReactionType) => void;
+  onBookmark: (postId: string) => void;
+};
+
+function PostCard({ post, onLike, onReact, onBookmark }: PostCardProps) {
   const [, setLocation] = useLocation();
+  const [showPicker, setShowPicker] = useState(false);
+  const pickerTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const content = post.content ?? "";
   const displayContent = content.length > 300 ? content.slice(0, 300).trimEnd() + "…" : content;
   const images: string[] = post.image_urls?.length ? post.image_urls : (post.image_url ? [post.image_url] : []);
+
+  const reactionInfo = post.reaction_type
+    ? REACTIONS.find(r => r.type === post.reaction_type)
+    : null;
+  const likeLabel = reactionInfo ? reactionInfo.label : post.is_liked ? "Curtido" : "Curtir";
+  const likeColor = reactionInfo ? reactionInfo.color : post.is_liked ? GOLD : MUTED;
+
+  const openPicker = () => {
+    if (pickerTimeout.current) clearTimeout(pickerTimeout.current);
+    setShowPicker(true);
+  };
+  const closePicker = () => {
+    pickerTimeout.current = setTimeout(() => setShowPicker(false), 150);
+  };
+
+  const authorName = post.author?.full_name ?? "Usuário";
+  const authorAvatar = post.author?.avatar_url;
+  const authorHeadline = (post.author as any)?.headline ?? (post.author as any)?.position ?? "";
+
   return (
-    <div
-      onClick={() => setLocation(`/app/posts/${post.id}`)}
-      style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "16px 18px", marginBottom: 12, cursor: "pointer", transition: "box-shadow .15s" }}
-      onMouseEnter={e => (e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)")}
-      onMouseLeave={e => (e.currentTarget.style.boxShadow = "none")}
-    >
-      {content && <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.65, whiteSpace: "pre-wrap", wordBreak: "break-word", marginBottom: images.length ? 10 : 0 }}>{displayContent}</div>}
-      {images.length > 0 && (
-        <div style={{ display: "flex", gap: 6, marginTop: content ? 10 : 0, flexWrap: images.length > 2 ? "wrap" : "nowrap" }}>
-          {images.slice(0, 4).map((img, i) =>
-            images.length === 1 ? (
-              <img key={i} src={img} alt="" style={{ width: "100%", maxHeight: 400, objectFit: "contain", borderRadius: 10, backgroundColor: "#f2f3f5", display: "block" }} />
-            ) : (
-              <img key={i} src={img} alt="" style={{ flex: 1, minWidth: 0, height: 180, objectFit: "cover", borderRadius: 10 }} />
-            )
+    <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, marginBottom: 12, overflow: "hidden" }}>
+      {/* Author header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px 10px" }}>
+        <div
+          onClick={() => setLocation(`/app/usuario/${post.author?.id}`)}
+          style={{ cursor: "pointer", flexShrink: 0 }}
+        >
+          <Avatar src={authorAvatar} name={authorName} size={40} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => setLocation(`/app/usuario/${post.author?.id}`)}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{authorName}</div>
+          {authorHeadline && <div style={{ fontSize: 12, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{authorHeadline}</div>}
+        </div>
+        <div style={{ fontSize: 12, color: MUTED, flexShrink: 0 }}>{timeAgo(post.created_at)}</div>
+      </div>
+
+      {/* Content */}
+      <div onClick={() => setLocation(`/app/posts/${post.id}`)} style={{ cursor: "pointer", padding: "0 16px" }}>
+        {content && (
+          <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.65, whiteSpace: "pre-wrap", wordBreak: "break-word", marginBottom: images.length ? 10 : 14 }}>
+            {displayContent}
+          </div>
+        )}
+        {images.length > 0 && (
+          <div style={{ display: "flex", gap: 4, marginBottom: 0, flexWrap: images.length > 2 ? "wrap" : "nowrap", borderRadius: 10, overflow: "hidden" }}>
+            {images.slice(0, 4).map((img, i) =>
+              images.length === 1 ? (
+                <img key={i} src={img} alt="" style={{ width: "100%", maxHeight: 420, objectFit: "contain", backgroundColor: "#f2f3f5", display: "block" }} />
+              ) : (
+                <img key={i} src={img} alt="" style={{ flex: 1, minWidth: 0, height: 190, objectFit: "cover" }} />
+              )
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Stats row */}
+      {(post.likes_count > 0 || post.comments_count > 0) && (
+        <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 16px 0", fontSize: 12, color: MUTED }}>
+          {post.likes_count > 0 && (
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ fontSize: 14 }}>{reactionInfo?.emoji ?? "👍"}</span> {post.likes_count}
+            </span>
+          )}
+          {post.comments_count > 0 && (
+            <span style={{ marginLeft: "auto" }}>{post.comments_count} {post.comments_count === 1 ? "comentário" : "comentários"}</span>
           )}
         </div>
       )}
-      <div style={{ display: "flex", gap: 18, marginTop: 12, fontSize: 13, color: MUTED, alignItems: "center" }}>
-        <span>👍 {post.likes_count}</span>
-        <span>💬 {post.comments_count}</span>
-        <span style={{ marginLeft: "auto" }}>{timeAgo(post.created_at)}</span>
+
+      {/* Divider */}
+      <div style={{ height: 1, backgroundColor: BORDER, margin: "8px 0 0" }} />
+
+      {/* Action bar */}
+      <div style={{ display: "flex", padding: "2px 0" }}>
+        {/* Curtir + reaction picker */}
+        <div style={{ flex: 1, position: "relative" }}>
+          {showPicker && (
+            <div
+              onMouseEnter={openPicker}
+              onMouseLeave={closePicker}
+              style={{
+                position: "absolute", bottom: "100%", left: 0,
+                backgroundColor: WHITE, border: `1px solid ${BORDER}`,
+                borderRadius: 40, padding: "6px 10px",
+                display: "flex", gap: 6, boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
+                zIndex: 10, marginBottom: 4,
+              }}
+            >
+              {REACTIONS.map(r => (
+                <button
+                  key={r.type}
+                  title={r.label}
+                  onClick={() => { onReact(post.id, r.type); setShowPicker(false); }}
+                  style={{
+                    background: "none", border: "none", cursor: "pointer",
+                    fontSize: 22, padding: "2px 4px", borderRadius: 8,
+                    transition: "transform .12s",
+                    lineHeight: 1,
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.3)")}
+                  onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}
+                >
+                  {r.emoji}
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={() => onLike(post.id)}
+            onMouseEnter={openPicker}
+            onMouseLeave={closePicker}
+            style={{
+              width: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+              gap: 6, padding: "10px 4px", background: "none", border: "none",
+              cursor: "pointer", fontSize: 13, fontWeight: 600,
+              color: likeColor, borderRadius: 8,
+            }}
+          >
+            {reactionInfo ? (
+              <span style={{ fontSize: 16, lineHeight: 1 }}>{reactionInfo.emoji}</span>
+            ) : (
+              <LikeIcon filled={!!(post.is_liked)} color={likeColor} />
+            )}
+            {likeLabel}
+          </button>
+        </div>
+
+        {/* Comentar */}
+        <button
+          onClick={() => setLocation(`/app/posts/${post.id}`)}
+          style={{
+            flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+            gap: 6, padding: "10px 4px", background: "none", border: "none",
+            cursor: "pointer", fontSize: 13, fontWeight: 600, color: MUTED, borderRadius: 8,
+          }}
+        >
+          <CommentIcon /> Comentar
+        </button>
+
+        {/* Compartilhar */}
+        <button
+          onClick={() => {
+            const url = `${window.location.origin}/p/${post.id}`;
+            navigator.clipboard?.writeText(url).catch(() => {});
+          }}
+          style={{
+            flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+            gap: 6, padding: "10px 4px", background: "none", border: "none",
+            cursor: "pointer", fontSize: 13, fontWeight: 600, color: MUTED, borderRadius: 8,
+          }}
+        >
+          <ShareIcon /> Compartilhar
+        </button>
+
+        {/* Salvar */}
+        <button
+          onClick={() => onBookmark(post.id)}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "10px 14px", background: "none", border: "none",
+            cursor: "pointer", borderRadius: 8,
+          }}
+        >
+          <BookmarkIcon filled={!!(post.is_bookmarked)} />
+        </button>
       </div>
     </div>
   );
@@ -232,7 +420,7 @@ export default function PerfilUsuarioPage() {
     Promise.all([
       fetchPublicUserProfile(targetId),
       fetchProfileStats(targetId),
-      fetchUserPosts(targetId),
+      fetchUserPosts(targetId, currentUserId || undefined),
       fetchPublicWineCellar(targetId),
       currentUserId ? checkWebConnectionStatus(targetId, currentUserId) : Promise.resolve("none" as const),
       currentUserId ? checkWebFollowStatus(targetId, currentUserId) : Promise.resolve(false),
@@ -274,6 +462,44 @@ export default function PerfilUsuarioPage() {
     if (convId) {
       setLocation(`/app/mensagens?conv=${convId}`);
     }
+  };
+
+  /* Post like / react / bookmark */
+  const handleLikePost = (postId: string) => {
+    if (!currentUserId) return;
+    setPosts(prev => prev.map(p => {
+      if (p.id !== postId) return p;
+      const wasLiked = p.is_liked ?? false;
+      const newLiked = !wasLiked;
+      toggleLikePost(postId, currentUserId, wasLiked);
+      return { ...p, is_liked: newLiked, likes_count: wasLiked ? Math.max(0, p.likes_count - 1) : p.likes_count + 1 };
+    }));
+  };
+
+  const handleReactPost = (postId: string, reaction: ReactionType) => {
+    if (!currentUserId) return;
+    setPosts(prev => prev.map(p => {
+      if (p.id !== postId) return p;
+      const sameReaction = p.reaction_type === reaction;
+      const wasLiked = p.is_liked ?? false;
+      changeReactionPost(postId, currentUserId, reaction);
+      return {
+        ...p,
+        reaction_type: sameReaction ? null : reaction,
+        is_liked: !sameReaction,
+        likes_count: sameReaction ? Math.max(0, p.likes_count - 1) : (wasLiked ? p.likes_count : p.likes_count + 1),
+      };
+    }));
+  };
+
+  const handleBookmarkPost = (postId: string) => {
+    if (!currentUserId) return;
+    setPosts(prev => prev.map(p => {
+      if (p.id !== postId) return p;
+      const wasBookmarked = p.is_bookmarked ?? false;
+      toggleBookmarkPost(postId, currentUserId, wasBookmarked);
+      return { ...p, is_bookmarked: !wasBookmarked };
+    }));
   };
 
   /* Mensagem button is available when following OR connected */
@@ -326,7 +552,7 @@ export default function PerfilUsuarioPage() {
         </button>
 
         {/* Profile card */}
-        <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, marginBottom: 14 }}>
+        <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, marginBottom: 14, position: "relative" }}>
 
           {/* Cover */}
           <div style={{ height: 120, background: `linear-gradient(135deg, ${NAVY} 0%, #1e3a5f 60%, #2a4a6b 100%)`, position: "relative", borderRadius: "16px 16px 0 0", overflow: "hidden" }}>
@@ -335,13 +561,18 @@ export default function PerfilUsuarioPage() {
             <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 3, backgroundColor: GOLD, opacity: 0.6 }} />
           </div>
 
+          {/* Avatar — absolutely positioned to straddle the cover/content boundary */}
+          <div style={{ position: "absolute", left: 24, top: 72, zIndex: 2, width: 104, height: 104, borderRadius: "50%", backgroundColor: WHITE, padding: 4, boxSizing: "border-box" }}>
+            <div style={{ width: "100%", height: "100%", borderRadius: "50%", overflow: "hidden", backgroundColor: WINE }}>
+              <Avatar src={userProfile.avatar_url} name={userProfile.full_name} size={96} />
+            </div>
+          </div>
+
           <div style={{ padding: "0 24px 24px" }}>
-            {/* Avatar + action buttons row */}
-            <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginTop: -44 }}>
-              <div style={{ border: `4px solid ${WHITE}`, borderRadius: "50%", flexShrink: 0 }}>
-                <Avatar src={userProfile.avatar_url} name={userProfile.full_name} size={88} />
-              </div>
-              <div style={{ display: "flex", gap: 8, paddingBottom: 6, flexWrap: "wrap" }}>
+            {/* Action buttons row — avatar-space on left, buttons on right */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", paddingTop: 12, paddingBottom: 8 }}>
+              <div style={{ width: 104, flexShrink: 0 }} />{/* spacer matching avatar width so buttons stay clear */}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {/* 1. Seguir */}
                 <button
                   onClick={handleFollow}
@@ -398,7 +629,7 @@ export default function PerfilUsuarioPage() {
             </div>
 
             {/* Name + plan */}
-            <div style={{ marginTop: 14 }}>
+            <div style={{ marginTop: 20 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <h1 style={{ fontSize: 22, fontWeight: 900, color: NAVY, margin: 0 }}>{userProfile.full_name}</h1>
                 <PlanBadge plan={userProfile.plan} />
@@ -477,7 +708,15 @@ export default function PerfilUsuarioPage() {
               <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>Este usuário ainda não publicou nada.</p>
             </div>
           ) : (
-            posts.map(post => <PostCard key={post.id} post={post} />)
+            posts.map(post => (
+              <PostCard
+                key={post.id}
+                post={post}
+                onLike={handleLikePost}
+                onReact={handleReactPost}
+                onBookmark={handleBookmarkPost}
+              />
+            ))
           )
         )}
 
