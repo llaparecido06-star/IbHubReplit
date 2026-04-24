@@ -225,6 +225,87 @@ export async function resetUserPassword(userId: string): Promise<{ success: bool
   }
 }
 
+// ─── Reports (Denúncias) ──────────────────────────────────────────────────────
+
+export interface AppReportPost {
+  id: string;
+  content: string | null;
+  user_id: string;
+}
+
+export interface AppReportUser {
+  id: string;
+  full_name: string | null;
+  avatar_url?: string | null;
+}
+
+export interface AppReport {
+  id: string;
+  post_id: string | null;
+  reported_user_id?: string | null;
+  reported_by: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+  reporter?: AppReportUser | null;
+  post?: AppReportPost | null;
+  reported_user?: AppReportUser | null;
+}
+
+export async function fetchPendingReports(): Promise<AppReport[]> {
+  try {
+    const { data, error } = await supabase
+      .from("reports")
+      .select("id, post_id, reported_user_id, reported_by, reason, status, created_at")
+      .eq("status", "pending")
+      .order("created_at", { ascending: false });
+
+    if (error || !data || data.length === 0) return [];
+
+    const rows = data as Array<{ id: string; post_id: string | null; reported_user_id: string | null; reported_by: string; reason: string; status: string; created_at: string }>;
+    const reporterIds = [...new Set(rows.map(r => r.reported_by).filter(Boolean))];
+    const reportedUserIds = [...new Set(rows.map(r => r.reported_user_id).filter(Boolean) as string[])];
+    const postIds = [...new Set(rows.map(r => r.post_id).filter(Boolean) as string[])];
+    const allProfileIds = [...new Set([...reporterIds, ...reportedUserIds])];
+
+    const [profilesRes, postsRes] = await Promise.all([
+      allProfileIds.length > 0
+        ? supabase.from("profiles").select("id, full_name, avatar_url").in("id", allProfileIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; full_name: string | null; avatar_url: string | null }> }),
+      postIds.length > 0
+        ? supabase.from("posts").select("id, content, user_id").in("id", postIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; content: string | null; user_id: string }> }),
+    ]);
+
+    const profileMap = new Map((profilesRes.data ?? []).map((p: { id: string; full_name: string | null; avatar_url: string | null }) => [p.id, p]));
+    const postMap = new Map((postsRes.data ?? []).map((p: { id: string; content: string | null; user_id: string }) => [p.id, p]));
+
+    return rows.map(r => ({
+      ...r,
+      reporter:      r.reported_by       ? (profileMap.get(r.reported_by)       ?? null) : null,
+      reported_user: r.reported_user_id  ? (profileMap.get(r.reported_user_id!) ?? null) : null,
+      post:          r.post_id           ? (postMap.get(r.post_id!)              ?? null) : null,
+    })) as AppReport[];
+  } catch (e) {
+    console.warn("fetchPendingReports:", e);
+    return [];
+  }
+}
+
+export async function updateReportStatus(reportId: string, status: "approved" | "rejected"): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from("reports")
+      .update({ status })
+      .eq("id", reportId)
+      .select("id");
+    if (error || !data || (data as unknown[]).length === 0) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ─── Content Moderation ───────────────────────────────────────────────────────
 
 export async function fetchRecentPosts(limit = 100, search?: string): Promise<ModerationPost[]> {
