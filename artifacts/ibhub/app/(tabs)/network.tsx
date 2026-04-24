@@ -759,6 +759,8 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
   const [searching, setSearching]       = useState(false);
   const [result, setResult]             = useState<WineRecord | null | "not_found" | "out_of_scope">(null);
   const [brandExtracted, setBrandExtracted] = useState<string | null>(null);
+  const [suggestions, setSuggestions]   = useState<string[]>([]);
+  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const exhausted = credits === 0;
   const creditColor = (credits ?? 3) >= 2 ? "#16a34a" : (credits ?? 3) === 1 ? "#d97706" : "#dc2626";
@@ -787,9 +789,29 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
 
   useEffect(() => { loadCredits(); }, [loadCredits]);
 
-  const handleSearch = async () => {
+  /* Fetch label autocomplete suggestions from DB as user types */
+  useEffect(() => {
     const q = query.trim();
+    if (q.length < 2) { setSuggestions([]); return; }
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    suggestTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `${process.env.EXPO_PUBLIC_API_URL}/wine-imports/suggestions?q=${encodeURIComponent(q)}`,
+          { headers: authHeader() },
+        );
+        if (!res.ok) return;
+        const json = await res.json() as { suggestions: string[] };
+        setSuggestions(json.suggestions ?? []);
+      } catch {}
+    }, 300);
+    return () => { if (suggestTimer.current) clearTimeout(suggestTimer.current); };
+  }, [query]);
+
+  const handleSearch = async (overrideQ?: string) => {
+    const q = (overrideQ ?? query).trim();
     if (!q || searching || exhausted) return;
+    setSuggestions([]);
     setSearching(true);
     setResult(null);
     setBrandExtracted(null);
@@ -942,21 +964,35 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
           </TouchableOpacity>
         </View>
 
-        {/* Suggestion chips — same style as period filter */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16, paddingHorizontal: 16 }}>
-          <View style={{ flexDirection: "row", gap: 8, paddingBottom: 4 }}>
-            {["Casillero del Diablo", "Penfolds Bin 389", "Santa Julia", "Catena Zapata", "Concha y Toro", "Domus Aurea", "Quinta do Crasto"].map(s => (
+        {/* Autocomplete suggestions from DB */}
+        {suggestions.length > 0 && !exhausted && !searching && (
+          <View style={{ backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: colors.border, overflow: "hidden", marginTop: 2 }}>
+            {suggestions.map((s, i) => (
               <TouchableOpacity
                 key={s}
-                style={[styles.periodBtn, { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border }]}
-                onPress={() => { if (!exhausted && !searching) { setQuery(s); } }}
-                disabled={exhausted || searching}
+                onPress={() => { setQuery(s); handleSearch(s); }}
+                activeOpacity={0.7}
+                style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: i < suggestions.length - 1 ? 1 : 0, borderBottomColor: colors.border }}
               >
-                <Text style={[styles.periodBtnText, { color: colors.mutedForeground }]}>{s}</Text>
+                <Text style={{ fontSize: 16 }}>🍷</Text>
+                <Text style={{ flex: 1, fontSize: 14, color: colors.navy, fontWeight: "500" }} numberOfLines={1}>{s}</Text>
+                <View style={{ backgroundColor: colors.gold + "22", borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 }}>
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: colors.gold }}>1 crédito</Text>
+                </View>
               </TouchableOpacity>
             ))}
           </View>
-        </ScrollView>
+        )}
+
+        {/* Info hint when idle */}
+        {!result && !searching && suggestions.length === 0 && (
+          <View style={{ backgroundColor: colors.gold + "10", borderWidth: 1, borderColor: colors.gold + "30", borderRadius: 12, padding: 14, gap: 4 }}>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>🍷 Como funciona</Text>
+            <Text style={{ fontSize: 13, color: colors.mutedForeground, lineHeight: 19 }}>
+              Digite o nome de um rótulo para ver sugestões da base de dados. Selecione para consultar o importador — cada consulta consome 1 crédito.
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* ── Loading state ── */}

@@ -129,6 +129,40 @@ async function extractBrandName(userQuery: string): Promise<string | null> {
   return result;
 }
 
+router.get("/wine-imports/suggestions", async (req: Request, res: Response) => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+
+  const q = (req.query.q as string | undefined)?.trim();
+  if (!q || q.length < 2) {
+    return res.json({ suggestions: [] });
+  }
+
+  const pattern = `%${q}%`;
+  const { data, error } = await supabaseAdmin
+    .from("wine_imports")
+    .select("marca_completa")
+    .ilike("marca_completa", pattern)
+    .order("marca_completa")
+    .limit(10);
+
+  if (error) {
+    return res.status(500).json({ suggestions: [] });
+  }
+
+  const seen = new Set<string>();
+  const suggestions: string[] = [];
+  for (const row of (data ?? []) as { marca_completa: string }[]) {
+    const name = row.marca_completa?.trim();
+    if (name && !seen.has(name)) {
+      seen.add(name);
+      suggestions.push(name);
+    }
+  }
+
+  return res.json({ suggestions });
+});
+
 router.get("/wine-imports/credits", async (req: Request, res: Response) => {
   const userId = await resolveUserId(req, res);
   if (!userId) return;

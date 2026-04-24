@@ -664,6 +664,11 @@ function IdealBISearch({ userId }: { userId: string }) {
   const [result, setResult] = useState<WineResult | null | "not_found" | "out_of_scope">(null);
   const [brandExtracted, setBrandExtracted] = useState<string | null>(null);
 
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const exhausted = credits === 0;
   const creditColor = (credits ?? 3) >= 2 ? "#16a34a" : (credits ?? 3) === 1 ? "#d97706" : "#dc2626";
   const creditBg    = (credits ?? 3) >= 2 ? "#dcfce7" : (credits ?? 3) === 1 ? "#fef3c7" : "#fef2f2";
@@ -689,9 +694,40 @@ function IdealBISearch({ userId }: { userId: string }) {
     })();
   }, [userId]);
 
-  const handleSearch = async () => {
+  /* Fetch autocomplete suggestions as user types */
+  useEffect(() => {
     const q = query.trim();
+    if (q.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    suggestTimer.current = setTimeout(async () => {
+      try {
+        const headers = await getAuthHeader();
+        const res = await fetch(`${apiBase}/wine-imports/suggestions?q=${encodeURIComponent(q)}`, { headers });
+        if (!res.ok) return;
+        const json = await res.json() as { suggestions: string[] };
+        const list = json.suggestions ?? [];
+        setSuggestions(list);
+        setShowSuggestions(list.length > 0);
+      } catch {}
+    }, 300);
+    return () => { if (suggestTimer.current) clearTimeout(suggestTimer.current); };
+  }, [query]);
+
+  /* Close dropdown on outside click */
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const handleSearch = async (overrideQ?: string) => {
+    const q = (overrideQ ?? query).trim();
     if (!q || searching || exhausted) return;
+    setShowSuggestions(false);
     setSearching(true);
     setResult(null);
     setBrandExtracted(null);
@@ -747,36 +783,65 @@ function IdealBISearch({ userId }: { userId: string }) {
         </div>
       </div>
 
-      {/* Search bar */}
-      <div style={{ display: "flex", gap: 8 }}>
-        <input
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && handleSearch()}
-          placeholder="Pesquise uma marca de vinho (ex: Concha y Toro)…"
-          disabled={exhausted}
-          style={{
-            flex: 1, padding: "12px 16px", border: `1px solid ${BORDER}`,
-            borderRadius: 12, fontSize: 14, fontFamily: "inherit", outline: "none",
-            backgroundColor: exhausted ? "#f9f9f9" : WHITE, color: NAVY,
-            boxSizing: "border-box" as const,
-          }}
-        />
-        <button
-          onClick={handleSearch}
-          disabled={!query.trim() || searching || exhausted}
-          style={{
-            padding: "12px 20px", borderRadius: 12, border: "none",
-            backgroundColor: (!query.trim() || searching || exhausted) ? `${GOLD}55` : GOLD,
-            color: WHITE, fontWeight: 700, fontSize: 14, cursor: (!query.trim() || searching || exhausted) ? "not-allowed" : "pointer",
-            display: "flex", alignItems: "center", gap: 6, fontFamily: "inherit", flexShrink: 0,
-          }}
-        >
-          {searching ? (
-            <div style={{ width: 16, height: 16, borderRadius: "50%", border: "2px solid #fff", borderTopColor: "transparent", animation: "spin 0.7s linear infinite" }} />
-          ) : "🔍"}
-          {searching ? "Buscando…" : "Buscar"}
-        </button>
+      {/* Search bar with label autocomplete */}
+      <div ref={containerRef} style={{ position: "relative" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", backgroundColor: WHITE, border: `1.5px solid ${showSuggestions ? GOLD : BORDER}`, borderRadius: 12, padding: "4px 4px 4px 14px", transition: "border-color 0.15s" }}>
+          <span style={{ fontSize: 16, flexShrink: 0 }}>🔍</span>
+          <input
+            value={query}
+            onChange={e => { setQuery(e.target.value); setResult(null); }}
+            onKeyDown={e => {
+              if (e.key === "Escape") setShowSuggestions(false);
+              if (e.key === "ArrowDown" && showSuggestions && suggestions.length > 0) {
+                const first = document.getElementById("suggest-0");
+                first?.focus();
+              }
+            }}
+            onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+            placeholder={exhausted ? "Limite de consultas esgotado" : "Digite o nome de um rótulo de vinho…"}
+            disabled={exhausted}
+            style={{
+              flex: 1, padding: "10px 0", border: "none", outline: "none",
+              fontSize: 14, fontFamily: "inherit",
+              backgroundColor: "transparent", color: NAVY,
+            }}
+          />
+          {searching && (
+            <div style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${GOLD}`, borderTopColor: "transparent", animation: "spin 0.7s linear infinite", flexShrink: 0, marginRight: 8 }} />
+          )}
+        </div>
+
+        {/* Dropdown suggestions */}
+        {showSuggestions && suggestions.length > 0 && !exhausted && (
+          <div style={{ position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 200, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 6px 20px rgba(0,0,0,0.10)", overflow: "hidden" }}>
+            {suggestions.map((s, i) => (
+              <button
+                key={s}
+                id={`suggest-${i}`}
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => { setQuery(s); setShowSuggestions(false); handleSearch(s); }}
+                onKeyDown={e => {
+                  if (e.key === "ArrowDown") { document.getElementById(`suggest-${i + 1}`)?.focus(); e.preventDefault(); }
+                  if (e.key === "ArrowUp")   { i === 0 ? (document.querySelector("input") as HTMLInputElement)?.focus() : document.getElementById(`suggest-${i - 1}`)?.focus(); e.preventDefault(); }
+                  if (e.key === "Enter")     { setQuery(s); setShowSuggestions(false); handleSearch(s); }
+                  if (e.key === "Escape")    { setShowSuggestions(false); }
+                }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 10, width: "100%",
+                  padding: "11px 16px", textAlign: "left", background: "none", border: "none",
+                  borderBottom: i < suggestions.length - 1 ? `1px solid ${BORDER}` : "none",
+                  cursor: "pointer", fontSize: 14, color: NAVY, fontFamily: "inherit",
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = `${GOLD}12`; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent"; }}
+              >
+                <span style={{ fontSize: 15, flexShrink: 0 }}>🍷</span>
+                <span style={{ flex: 1 }}>{s}</span>
+                <span style={{ fontSize: 11, color: MUTED, fontWeight: 600 }}>1 crédito</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Info hint */}
@@ -784,7 +849,7 @@ function IdealBISearch({ userId }: { userId: string }) {
         <div style={{ backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "14px 16px" }}>
           <div style={{ fontSize: 13, color: NAVY, fontWeight: 600, marginBottom: 4 }}>🍷 Como funciona</div>
           <div style={{ fontSize: 13, color: MUTED, lineHeight: 1.6 }}>
-            Digite o nome de uma marca de vinho para encontrar importadores e distribuidores brasileiros. A IA identifica a marca mesmo com variações de grafia.
+            Digite o nome de um rótulo para ver sugestões da base de dados. Selecione um rótulo para consultar o importador — cada consulta consome 1 crédito.
           </div>
         </div>
       )}
