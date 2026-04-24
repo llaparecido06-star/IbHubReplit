@@ -131,7 +131,7 @@ export default function FeedScreen() {
   const [companyPages, setCompanyPages]             = useState<API.CompanyPage[]>([]);
 
   // Create post state
-  const [postMode, setPostMode]                     = useState<"text" | "poll">("text");
+  const [postMode, setPostMode]                     = useState<"foto" | "video" | "poll">("foto");
   const [postContent, setPostContent]               = useState("");
   const [postImageUris, setPostImageUris]           = useState<string[]>([]);
   const [postVideoUri, setPostVideoUri]             = useState<string | null>(null);
@@ -489,13 +489,51 @@ export default function FeedScreen() {
     }
   };
 
+  const resetPostState = () => {
+    setPostContent(""); setPollQuestion(""); setPollOptions(["",""]); setPostImageUris([]); setPostVideoUri(null); setPostLocation(""); setShowLocationInput(false);
+  };
+
+  const handleOpenFotoMode = async () => {
+    setShowCreateMenu(false);
+    resetPostState();
+    if (Platform.OS !== "web") {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") { Alert.alert("Permissão necessária", "Precisamos de acesso à galeria para selecionar uma foto."); return; }
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsMultipleSelection: true, quality: 0.85, selectionLimit: 5 });
+    if (!result.canceled && result.assets.length > 0) {
+      setPostImageUris(result.assets.map(a => a.uri).slice(0, 5));
+      setPostMode("foto");
+      setShowCreatePost(true);
+    }
+  };
+
+  const handleOpenVideoMode = async () => {
+    setShowCreateMenu(false);
+    resetPostState();
+    if (Platform.OS !== "web") {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") { Alert.alert("Permissão necessária", "Precisamos de acesso à galeria para selecionar um vídeo."); return; }
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Videos, allowsEditing: true, quality: 1, videoMaxDuration: 120 });
+    if (!result.canceled && result.assets.length > 0) {
+      const asset = result.assets[0];
+      const durationSec = (asset.duration ?? 0) / 1000;
+      if (durationSec > 120) { Alert.alert("Vídeo muito longo", "O vídeo deve ter no máximo 2 minutos."); return; }
+      const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
+      if (asset.fileSize && asset.fileSize > MAX_VIDEO_BYTES) { Alert.alert("Arquivo muito grande", "O vídeo deve ter no máximo 500 MB."); return; }
+      setPostVideoUri(asset.uri);
+      setPostMode("video");
+      setShowCreatePost(true);
+    }
+  };
+
   const handlePublishPost = async () => {
     if (isPostingRef.current) return;
     const content = postMode === "poll" ? pollQuestion : postContent;
     if ((!content.trim() && postImageUris.length === 0 && !postVideoUri) || !user?.id) {
       setShowCreatePost(false);
-      setPostContent(""); setPollQuestion(""); setPollOptions(["",""]); setPostMode("text");
-      setPostImageUris([]); setPostVideoUri(null); setPostLocation(""); setShowLocationInput(false);
+      resetPostState();
       return;
     }
     isPostingRef.current = true;
@@ -569,8 +607,7 @@ export default function FeedScreen() {
       setPosts(prev => prev.filter(p => p.id !== tempPost.id));
       Alert.alert("Erro ao publicar", "Verifique sua conexão e tente novamente.");
     } finally {
-      setPostContent(""); setPollQuestion(""); setPollOptions(["",""]); setPostMode("text");
-      setPostImageUris([]); setPostVideoUri(null); setPostLocation(""); setShowLocationInput(false);
+      resetPostState();
       isPostingRef.current = false;
       setIsPublishing(false);
     }
@@ -1024,23 +1061,47 @@ export default function FeedScreen() {
       <Modal visible={showCreateMenu} transparent animationType="fade" onRequestClose={() => setShowCreateMenu(false)}>
         <Pressable style={styles.menuOverlay} onPress={() => setShowCreateMenu(false)}>
           <View style={[styles.createMenu, { backgroundColor: "#fff" }]}>
-            <TouchableOpacity style={styles.createMenuItem} onPress={() => { setShowCreateMenu(false); setPostMode("text"); setShowCreatePost(true); }}>
+            {/* Foto */}
+            <TouchableOpacity style={styles.createMenuItem} onPress={handleOpenFotoMode}>
               <View style={[styles.createMenuIcon, { backgroundColor: colors.background }]}>
-                <Feather name="file-text" size={20} color={colors.navy} />
+                <Feather name="image" size={20} color={colors.navy} />
               </View>
               <View>
-                <Text style={[styles.createMenuTitle, { color: colors.navy }]}>Publicação</Text>
-                <Text style={[styles.createMenuSub, { color: colors.mutedForeground }]}>Texto, foto ou vídeo</Text>
+                <Text style={[styles.createMenuTitle, { color: colors.navy }]}>Foto</Text>
+                <Text style={[styles.createMenuSub, { color: colors.mutedForeground }]}>Compartilhe imagens</Text>
               </View>
             </TouchableOpacity>
             <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+            {/* Vídeo */}
+            <TouchableOpacity style={styles.createMenuItem} onPress={handleOpenVideoMode}>
+              <View style={[styles.createMenuIcon, { backgroundColor: colors.background }]}>
+                <Feather name="video" size={20} color={colors.navy} />
+              </View>
+              <View>
+                <Text style={[styles.createMenuTitle, { color: colors.navy }]}>Vídeo</Text>
+                <Text style={[styles.createMenuSub, { color: colors.mutedForeground }]}>Compartilhe um vídeo</Text>
+              </View>
+            </TouchableOpacity>
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+            {/* Enquete */}
+            <TouchableOpacity style={styles.createMenuItem} onPress={() => { setShowCreateMenu(false); resetPostState(); setPostMode("poll"); setShowCreatePost(true); }}>
+              <View style={[styles.createMenuIcon, { backgroundColor: colors.background }]}>
+                <Feather name="bar-chart-2" size={20} color={colors.navy} />
+              </View>
+              <View>
+                <Text style={[styles.createMenuTitle, { color: colors.navy }]}>Enquete</Text>
+                <Text style={[styles.createMenuSub, { color: colors.mutedForeground }]}>Faça uma pergunta</Text>
+              </View>
+            </TouchableOpacity>
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+            {/* Avaliação do Vinho */}
             <TouchableOpacity style={styles.createMenuItem} onPress={() => { setShowCreateMenu(false); setShowWineReview(true); }}>
               <View style={[styles.createMenuIcon, { backgroundColor: colors.background }]}>
                 <Feather name="tag" size={20} color={colors.gold} />
               </View>
               <View>
-                <Text style={[styles.createMenuTitle, { color: colors.navy }]}>Avaliar Rótulo</Text>
-                <Text style={[styles.createMenuSub, { color: colors.mutedForeground }]}>Ficha técnica de vinho</Text>
+                <Text style={[styles.createMenuTitle, { color: colors.navy }]}>Avaliação do Vinho</Text>
+                <Text style={[styles.createMenuSub, { color: colors.mutedForeground }]}>Ficha técnica de rótulo</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -1057,10 +1118,10 @@ export default function FeedScreen() {
                 <Feather name="x" size={20} color={colors.mutedForeground} />
               </TouchableOpacity>
               <Text style={[styles.postModalTitle, { color: colors.navy }]}>
-                {postMode === "text" ? "Criar publicação" : "Criar enquete"}
+                {postMode === "poll" ? "Criar enquete" : postMode === "video" ? "Novo vídeo" : "Nova publicação"}
               </Text>
               <TouchableOpacity
-                style={[styles.publishBtn, { backgroundColor: isPublishing ? colors.gold + "88" : (postMode === "text" ? (postContent.trim() ? colors.gold : colors.gold + "55") : (pollQuestion.trim() ? colors.gold : colors.gold + "55")), flexDirection: "row", alignItems: "center", gap: 6 }]}
+                style={[styles.publishBtn, { backgroundColor: isPublishing ? colors.gold + "88" : (postMode === "poll" ? (pollQuestion.trim() ? colors.gold : colors.gold + "55") : colors.gold), flexDirection: "row", alignItems: "center", gap: 6 }]}
                 onPress={handlePublishPost}
                 disabled={isPublishing}
               >
@@ -1089,14 +1150,14 @@ export default function FeedScreen() {
                 </View>
               </View>
 
-              {postMode === "text" ? (
+              {postMode !== "poll" ? (
                 <>
                   <TextInput
                     style={[styles.postInput, { color: colors.foreground }]}
-                    placeholder="Comece uma publicação... Use # ou @ para marcar"
+                    placeholder={postMode === "video" ? "Adicione uma legenda ao vídeo…" : "Adicione uma legenda às fotos… Use # ou @"}
                     placeholderTextColor={colors.mutedForeground}
                     multiline maxLength={MAX_CHARS} value={postContent}
-                    onChangeText={setPostContent} autoFocus
+                    onChangeText={setPostContent}
                   />
                   <Text style={[styles.charCounter, { color: colors.mutedForeground }]}>
                     {MAX_CHARS - postContent.length} caracteres restantes
@@ -1218,22 +1279,20 @@ export default function FeedScreen() {
               </View>
             )}
 
-            {/* Toolbar */}
+            {/* Toolbar — mode is locked; only location toggle remains */}
             <View style={[styles.postToolbar, { borderTopColor: colors.border }]}>
-              <TouchableOpacity style={styles.toolbarBtn} onPress={handlePickImage} disabled={!!postVideoUri}>
-                <Feather name="image" size={18} color={postImageUris.length > 0 ? colors.gold : postVideoUri ? colors.mutedForeground : colors.foreground} />
-                <Text style={[styles.toolbarLabel, { color: postImageUris.length > 0 ? colors.gold : postVideoUri ? colors.mutedForeground : colors.foreground }]}>Foto</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.toolbarBtn} onPress={handlePickVideo} disabled={postImageUris.length > 0}>
-                <Feather name="video" size={18} color={postVideoUri ? colors.gold : postImageUris.length > 0 ? colors.mutedForeground : colors.foreground} />
-                <Text style={[styles.toolbarLabel, { color: postVideoUri ? colors.gold : postImageUris.length > 0 ? colors.mutedForeground : colors.foreground }]}>Vídeo</Text>
-              </TouchableOpacity>
-              {isFlagEnabled("enquetes") && (
-                <TouchableOpacity style={styles.toolbarBtn} onPress={() => setPostMode(postMode === "poll" ? "text" : "poll")}>
-                  <Feather name="bar-chart-2" size={18} color={postMode === "poll" ? colors.gold : colors.foreground} />
-                  <Text style={[styles.toolbarLabel, { color: postMode === "poll" ? colors.gold : colors.foreground }]}>Enquete</Text>
-                </TouchableOpacity>
-              )}
+              {/* Mode badge */}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.gold + "15", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 }}>
+                  <Feather
+                    name={postMode === "poll" ? "bar-chart-2" : postMode === "video" ? "video" : "image"}
+                    size={13} color={colors.gold}
+                  />
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: colors.gold }}>
+                    {postMode === "poll" ? "Enquete" : postMode === "video" ? "Vídeo" : "Foto"}
+                  </Text>
+                </View>
+              </View>
               <TouchableOpacity
                 style={styles.toolbarBtn}
                 onPress={() => setShowLocationInput(v => !v)}
