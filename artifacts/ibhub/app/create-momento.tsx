@@ -60,6 +60,7 @@ export default function CreateMomentoScreen() {
   const [step, setStep] = useState<Step>("pick");
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<MediaType>("image");
+  const [videoDurationMs, setVideoDurationMs] = useState<number | null>(null);
   const [overlayText, setOverlayText] = useState("");
   const [tagSearch, setTagSearch] = useState("");
   const [tagResults, setTagResults] = useState<TaggedProfile[]>([]);
@@ -89,6 +90,7 @@ export default function CreateMomentoScreen() {
         const isVideo = asset.type === "video";
         setMediaType(isVideo ? "video" : "image");
         setMediaUri(asset.uri);
+        setVideoDurationMs(isVideo ? (asset.duration ?? null) : null);
         setStep("edit");
       }
     },
@@ -140,6 +142,9 @@ export default function CreateMomentoScreen() {
 
   const removeTag = (id: string) => setTaggedUsers(prev => prev.filter(u => u.id !== id));
 
+  const isLongVideo = mediaType === "video" && videoDurationMs != null && videoDurationMs > 60000;
+  const videoParts = isLongVideo && videoDurationMs ? Math.ceil(videoDurationMs / 1000 / 60) : 1;
+
   const handlePublish = async () => {
     if (!user?.id) return;
     if (!mediaUri) {
@@ -149,20 +154,36 @@ export default function CreateMomentoScreen() {
     setPublishing(true);
     setStep("publishing");
 
-    const story = await API.createStory(user.id, {
-      text: overlayText.trim() || undefined,
-      imageUri: mediaType === "image" ? mediaUri : undefined,
-      videoUri: mediaType === "video" ? mediaUri : undefined,
-      taggedUsers: taggedUsers.map(u => u.id),
-      companyPageId: activeCompany?.id,
-    });
-
-    setPublishing(false);
-    if (story) {
-      router.back();
+    if (isLongVideo && videoDurationMs) {
+      const ok = await API.createVideoStoryParts(user.id, {
+        text: overlayText.trim() || undefined,
+        videoUri: mediaUri,
+        videoDurationMs,
+        taggedUsers: taggedUsers.map(u => u.id),
+        companyPageId: activeCompany?.id,
+      });
+      setPublishing(false);
+      if (ok) {
+        router.back();
+      } else {
+        Alert.alert("Erro", "Não foi possível publicar o Momento. Tente novamente.");
+        setStep("edit");
+      }
     } else {
-      Alert.alert("Erro", "Não foi possível publicar o Momento. Tente novamente.");
-      setStep("edit");
+      const story = await API.createStory(user.id, {
+        text: overlayText.trim() || undefined,
+        imageUri: mediaType === "image" ? mediaUri : undefined,
+        videoUri: mediaType === "video" ? mediaUri : undefined,
+        taggedUsers: taggedUsers.map(u => u.id),
+        companyPageId: activeCompany?.id,
+      });
+      setPublishing(false);
+      if (story) {
+        router.back();
+      } else {
+        Alert.alert("Erro", "Não foi possível publicar o Momento. Tente novamente.");
+        setStep("edit");
+      }
     }
   };
 
@@ -217,7 +238,9 @@ export default function CreateMomentoScreen() {
       <View style={[styles.container, styles.publishingView, { backgroundColor: colors.navy }]}>
         <ActivityIndicator size="large" color={colors.gold} />
         <Text style={[styles.publishingText, { color: colors.gold }]}>
-          {publishing ? "Enviando mídia..." : "Publicando Momento..."}
+          {publishing
+            ? isLongVideo ? `Enviando vídeo (${videoParts} partes)...` : "Enviando mídia..."
+            : "Publicando Momento..."}
         </Text>
       </View>
     );
@@ -246,7 +269,9 @@ export default function CreateMomentoScreen() {
           <View style={styles.mediaTypeBadge}>
             <Feather name={mediaType === "video" ? "film" : "image"} size={13} color={colors.gold} />
             <Text style={[styles.mediaTypeBadgeText, { color: colors.gold }]}>
-              {mediaType === "video" ? "Vídeo" : "Foto"}
+              {isLongVideo
+                ? `Vídeo longo • ${videoParts} partes`
+                : mediaType === "video" ? "Vídeo" : "Foto"}
             </Text>
           </View>
           <TouchableOpacity

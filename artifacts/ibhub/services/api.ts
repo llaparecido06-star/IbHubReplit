@@ -1522,6 +1522,33 @@ export async function uploadStoryImage(userId: string, uri: string): Promise<str
   }
 }
 
+export interface VideoPartInfo {
+  baseUrl: string;
+  startTime: number;
+  endTime: number;
+  partNumber: number;
+  totalParts: number;
+}
+
+export function parseVideoPartInfo(videoUrl: string): VideoPartInfo | null {
+  try {
+    const hashIdx = videoUrl.indexOf("#");
+    if (hashIdx === -1) return null;
+    const baseUrl = videoUrl.slice(0, hashIdx);
+    const frag = videoUrl.slice(hashIdx + 1);
+    const p = new URLSearchParams(frag);
+    const s = p.get("s"); const e = p.get("e"); const part = p.get("p"); const total = p.get("t");
+    if (!s || !e || !part || !total) return null;
+    return { baseUrl, startTime: Number(s), endTime: Number(e), partNumber: Number(part), totalParts: Number(total) };
+  } catch {
+    return null;
+  }
+}
+
+function buildVideoUrlWithPartInfo(baseUrl: string, startTime: number, endTime: number, partNumber: number, totalParts: number): string {
+  return `${baseUrl}#s=${startTime}&e=${endTime}&p=${partNumber}&t=${totalParts}`;
+}
+
 export async function uploadStoryVideo(userId: string, uri: string): Promise<string | null> {
   try {
     const ext = uri.split(".").pop()?.split("?")[0]?.toLowerCase() ?? "mp4";
@@ -1616,6 +1643,68 @@ export async function createStory(
   } catch (e) {
     console.error("createStory:", e);
     return null;
+  }
+}
+
+export async function createVideoStoryParts(
+  userId: string,
+  options: {
+    text?: string;
+    videoUri: string;
+    videoDurationMs: number;
+    taggedUsers?: string[];
+    companyPageId?: string | null;
+  }
+): Promise<boolean> {
+  try {
+    const videoUrl = await uploadStoryVideo(userId, options.videoUri);
+    if (!videoUrl) { console.error("createVideoStoryParts: upload failed"); return false; }
+
+    const totalDurationSec = Math.ceil(options.videoDurationMs / 1000);
+    const segmentSec = 60;
+    const totalParts = Math.ceil(totalDurationSec / segmentSec);
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const taggedIds: string[] = (options.taggedUsers ?? []).filter(id => id !== userId);
+
+    const inserts: any[] = [];
+    for (let i = 0; i < totalParts; i++) {
+      const startTime = i * segmentSec;
+      const endTime = Math.min((i + 1) * segmentSec, totalDurationSec);
+      const partUrl = buildVideoUrlWithPartInfo(videoUrl, startTime, endTime, i + 1, totalParts);
+      const payload: any = {
+        user_id: userId,
+        text: options.text ?? null,
+        image_url: null,
+        video_url: partUrl,
+        tagged_users: options.taggedUsers ?? [],
+        expires_at: expiresAt,
+      };
+      if (options.companyPageId) payload.company_page_id = options.companyPageId;
+      inserts.push(payload);
+    }
+
+    const { data, error } = await supabase.from("stories").insert(inserts).select("id, user_id");
+    if (error) { console.error("createVideoStoryParts:", error); return false; }
+
+    if (taggedIds.length > 0 && data && (data as any[]).length > 0) {
+      const firstId = (data as any[])[0].id;
+      const profileMap = await fetchCommentProfilesForIds([userId]);
+      const actorName = profileMap.get(userId)?.full_name ?? "Alguém";
+      const notifs = taggedIds.map(id => ({
+        user_id: id,
+        actor_id: userId,
+        type: "story_tag",
+        message: `${actorName} marcou você em um Momento`,
+        reference_id: firstId,
+      }));
+      await supabase.from("notifications").insert(notifs).then(({ error: ne }) => {
+        if (ne) console.warn("createVideoStoryParts: notification failed", ne);
+      });
+    }
+    return true;
+  } catch (e) {
+    console.error("createVideoStoryParts:", e);
+    return false;
   }
 }
 

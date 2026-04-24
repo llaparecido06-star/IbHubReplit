@@ -21,6 +21,7 @@ import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/context/AuthContext";
 import * as API from "@/services/api";
 import type { AppStory, StoryGroup } from "@/services/api";
+import { parseVideoPartInfo } from "@/services/api";
 
 const IMAGE_DURATION = 5000;
 const VIDEO_DURATION = 15000;
@@ -41,19 +42,52 @@ function formatTime(iso: string): string {
   return `${Math.floor(hrs / 24)}d`;
 }
 
-function VideoStoryPlayer({ videoUrl, isPlaying }: { videoUrl: string; isPlaying: boolean }) {
+function VideoStoryPlayer({
+  videoUrl,
+  isPlaying,
+  startTime,
+  endTime,
+  onEnd,
+}: {
+  videoUrl: string;
+  isPlaying: boolean;
+  startTime?: number;
+  endTime?: number;
+  onEnd?: () => void;
+}) {
   const player = useVideoPlayer({ uri: videoUrl }, (p) => {
     p.loop = false;
     p.muted = false;
   });
 
+  const didSeek = useRef(false);
+
+  useEffect(() => {
+    didSeek.current = false;
+  }, [videoUrl]);
+
   useEffect(() => {
     if (isPlaying) {
+      if (!didSeek.current && startTime && startTime > 0) {
+        didSeek.current = true;
+        player.seekBy(startTime);
+      }
       player.play();
     } else {
       player.pause();
     }
-  }, [isPlaying, player]);
+  }, [isPlaying, player, startTime]);
+
+  useEffect(() => {
+    if (!endTime || !isPlaying) return;
+    const interval = setInterval(() => {
+      if (player.currentTime >= endTime) {
+        clearInterval(interval);
+        onEnd?.();
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, [isPlaying, endTime, player, onEnd]);
 
   return (
     <VideoView
@@ -95,7 +129,10 @@ export default function StoryViewerScreen() {
 
   const isMyStory = currentStory?.user_id === user?.id;
   const isTagged = !isMyStory && (currentStory?.tagged_users ?? []).includes(user?.id ?? "");
-  const storyDuration = currentStory?.video_url ? VIDEO_DURATION : IMAGE_DURATION;
+  const videoPart = currentStory?.video_url ? parseVideoPartInfo(currentStory.video_url) : null;
+  const storyDuration = currentStory?.video_url
+    ? videoPart ? (videoPart.endTime - videoPart.startTime) * 1000 : VIDEO_DURATION
+    : IMAGE_DURATION;
 
   const goToNext = useCallback(() => {
     progressAnim.setValue(0);
@@ -216,7 +253,13 @@ export default function StoryViewerScreen() {
     >
       <View style={styles.frame}>
         {currentStory.video_url ? (
-          <VideoStoryPlayer videoUrl={currentStory.video_url} isPlaying={isPlaying} />
+          <VideoStoryPlayer
+            videoUrl={videoPart ? videoPart.baseUrl : currentStory.video_url}
+            isPlaying={isPlaying}
+            startTime={videoPart?.startTime}
+            endTime={videoPart?.endTime}
+            onEnd={goToNext}
+          />
         ) : currentStory.image_url ? (
           <Image
             source={{ uri: currentStory.image_url }}
@@ -263,7 +306,11 @@ export default function StoryViewerScreen() {
             {currentStory.video_url && (
               <View style={styles.mediaTypePill}>
                 <Feather name="film" size={11} color="#fff" />
-                <Text style={styles.mediaTypePillText}>Vídeo</Text>
+                <Text style={styles.mediaTypePillText}>
+                  {videoPart && videoPart.totalParts > 1
+                    ? `Parte ${videoPart.partNumber}/${videoPart.totalParts}`
+                    : "Vídeo"}
+                </Text>
               </View>
             )}
             <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
