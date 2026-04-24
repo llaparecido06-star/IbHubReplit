@@ -102,14 +102,14 @@ export default function CreateMomentoScreen() {
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.All,
         quality: 0.85,
-        videoMaxDuration: 30,
-        // allowsEditing is intentionally omitted — not supported for video on iOS
+        // No videoMaxDuration — allow unlimited recording; long videos are split into parts automatically
       });
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
         const isVideo = asset.type === "video";
         setMediaType(isVideo ? "video" : "image");
         setMediaUri(asset.uri);
+        setVideoDurationMs(isVideo ? (asset.duration ?? null) : null);
         setStep("edit");
       }
     },
