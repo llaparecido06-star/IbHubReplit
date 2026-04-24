@@ -1889,24 +1889,36 @@ export async function sendMessage(
   opts?: { reply_to_id?: string; message_type?: string; metadata?: Record<string, any>; companyPageId?: string | null },
 ): Promise<AppMessage | null> {
   try {
-    const payload: any = {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
+    const body: Record<string, any> = {
       conversation_id: conversationId,
       sender_id: senderId,
       content,
       message_type: opts?.message_type ?? "text",
     };
-    if (opts?.reply_to_id) payload.reply_to_id = opts.reply_to_id;
-    if (opts?.metadata) payload.metadata = opts.metadata;
-    if (opts?.companyPageId) payload.from_company_page_id = opts.companyPageId;
+    if (opts?.reply_to_id)   body.reply_to_id          = opts.reply_to_id;
+    if (opts?.metadata)      body.metadata             = opts.metadata;
+    if (opts?.companyPageId) body.from_company_page_id = opts.companyPageId;
 
-    const { data, error } = await supabase
-      .from("messages")
-      .insert(payload)
-      .select()
-      .single();
+    const res = await fetch(`${API_URL}/messages/send`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
 
-    if (error) { console.error("sendMessage:", error); return null; }
-    return data as AppMessage;
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      console.error("sendMessage server error:", res.status, errText);
+      return null;
+    }
+
+    const json = await res.json();
+    return json.data as AppMessage;
   } catch (e) {
     console.error("sendMessage:", e);
     return null;
@@ -2366,47 +2378,35 @@ export async function getOrCreateDirectConversation(
     });
     if (existing) return existing as string;
 
-    // Only an accepted connection unlocks the chat immediately (goes to Mensagens).
-    // Following only → recipient's accepted=false → goes to Solicitações tab.
-    // Company page owners always receive messages directly (no request flow).
-    const connCheck = await supabase
-      .from("connections")
-      .select("id", { count: "exact", head: true })
-      .or(
-        `and(requester_id.eq.${userId1},receiver_id.eq.${userId2}),and(requester_id.eq.${userId2},receiver_id.eq.${userId1})`,
-      )
-      .eq("status", "accepted");
+    // Create the conversation via the API server using supabaseAdmin.
+    // This ensures BOTH participant rows are inserted without RLS restrictions,
+    // fixing the bug where the client-side RLS prevented inserting the recipient's row.
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) { console.error("getOrCreateDirectConversation: no session token"); return null; }
 
-    // Auto-accept when: (a) caller explicitly requests it, (b) users are already connected,
-    // or (c) recipient owns a company page (companies always receive messages without request gate)
-    let recipientIsCompanyOwner = false;
-    if (!forceAccepted && (connCheck.count ?? 0) === 0) {
-      const { count: cpCount } = await supabase
-        .from("company_pages")
-        .select("id", { count: "exact", head: true })
-        .eq("owner_id", userId2);
-      recipientIsCompanyOwner = (cpCount ?? 0) > 0;
-    }
-    const recipientAccepted = forceAccepted || (connCheck.count ?? 0) > 0 || recipientIsCompanyOwner;
-
-    // Generate UUID client-side to avoid the RLS SELECT-after-INSERT issue
-    // (convos_select requires being a participant, but participants don't exist yet at INSERT time)
-    const convoId = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-      const r = (Math.random() * 16) | 0;
-      return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+    const res = await fetch(`${API_URL}/conversations/direct`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        user_id_1:      userId1,
+        user_id_2:      userId2,
+        company_page_id: companyPageId ?? null,
+        force_accepted:  forceAccepted,
+      }),
     });
 
-    const { error: convErr } = await supabase
-      .from("conversations")
-      .insert({ id: convoId, is_group: false, company_page_id: companyPageId ?? null });
-    if (convErr) { console.error("getOrCreateDirectConversation insert:", convErr); return null; }
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      console.error("getOrCreateDirectConversation server error:", res.status, errText);
+      return null;
+    }
 
-    await supabase.from("conversation_participants").insert([
-      { conversation_id: convoId, user_id: userId1, accepted: true },
-      { conversation_id: convoId, user_id: userId2, accepted: recipientAccepted },
-    ]);
-
-    return convoId;
+    const json = await res.json();
+    return (json.conversation_id as string) ?? null;
   } catch (e) {
     console.error("getOrCreateDirectConversation:", e);
     return null;
@@ -2491,30 +2491,35 @@ export async function sendMediaMessage(
   companyPageId?: string | null,
 ): Promise<AppMessage | null> {
   try {
-    const payload: any = {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
+    const body: Record<string, any> = {
       conversation_id: conversationId,
       sender_id: senderId,
       content: caption,
       message_type: messageType,
       media_url: mediaUrl,
     };
-    if (companyPageId) payload.from_company_page_id = companyPageId;
-    const { data, error } = await supabase
-      .from("messages")
-      .insert(payload)
-      .select()
-      .single();
-    if (error) {
-      console.error("[sendMediaMessage] Supabase error:", JSON.stringify({
-        message: error.message,
-        code: (error as any).code,
-        details: (error as any).details,
-        hint: (error as any).hint,
-        payload,
-      }));
+    if (companyPageId) body.from_company_page_id = companyPageId;
+
+    const res = await fetch(`${API_URL}/messages/send`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      console.error("[sendMediaMessage] server error:", res.status, errText);
       return null;
     }
-    return data as AppMessage;
+
+    const json = await res.json();
+    return json.data as AppMessage;
   } catch (e: any) {
     console.error("[sendMediaMessage] exception:", e?.message ?? e);
     return null;
