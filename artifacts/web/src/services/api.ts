@@ -457,13 +457,16 @@ export interface UserProfile {
   is_admin: boolean;
   created_at: string;
   certifications?: string[] | null;
+  areas_of_expertise?: string[] | null;
+  profile_type?: string | null;
+  location?: string | null;
 }
 
 export async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
   try {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, full_name, username, avatar_url, bio, headline, position, company, plan, is_admin, created_at, certifications")
+      .select("id, full_name, username, avatar_url, bio, headline, position, company, plan, is_admin, created_at, certifications, areas_of_expertise, profile_type, location")
       .eq("id", userId)
       .maybeSingle();
     if (error || !data) return null;
@@ -558,13 +561,72 @@ export async function sendWebConnectionRequest(targetId: string, currentUserId: 
       { requester_id: currentUserId, receiver_id: targetId, status: "pending" },
       { onConflict: "requester_id,receiver_id" },
     );
-    // Auto-follow the target when sending a connection request
     await supabase.from("follows").upsert(
       { follower_id: currentUserId, following_id: targetId },
       { onConflict: "follower_id,following_id" },
     );
   } catch (e) {
     console.warn("sendWebConnectionRequest:", e);
+  }
+}
+
+export async function checkWebConnectionStatus(
+  targetId: string,
+  currentUserId: string,
+): Promise<"none" | "pending" | "connected"> {
+  try {
+    const { data } = await supabase
+      .from("connections")
+      .select("id, status")
+      .or(
+        `and(requester_id.eq.${currentUserId},receiver_id.eq.${targetId}),and(requester_id.eq.${targetId},receiver_id.eq.${currentUserId})`
+      )
+      .maybeSingle();
+    if (!data) return "none";
+    if ((data as any).status === "accepted") return "connected";
+    return "pending";
+  } catch (e) {
+    console.warn("checkWebConnectionStatus:", e);
+    return "none";
+  }
+}
+
+export async function checkWebFollowStatus(
+  targetId: string,
+  currentUserId: string,
+): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from("follows")
+      .select("id")
+      .eq("follower_id", currentUserId)
+      .eq("following_id", targetId)
+      .maybeSingle();
+    return !!data;
+  } catch {
+    return false;
+  }
+}
+
+export async function toggleWebFollow(
+  targetId: string,
+  currentUserId: string,
+  isCurrentlyFollowing: boolean,
+): Promise<boolean> {
+  try {
+    if (isCurrentlyFollowing) {
+      await supabase.from("follows").delete()
+        .eq("follower_id", currentUserId)
+        .eq("following_id", targetId);
+    } else {
+      await supabase.from("follows").upsert(
+        { follower_id: currentUserId, following_id: targetId },
+        { onConflict: "follower_id,following_id" },
+      );
+    }
+    return true;
+  } catch {
+    return false;
   }
 }
 
