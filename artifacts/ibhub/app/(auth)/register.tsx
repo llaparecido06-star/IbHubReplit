@@ -144,6 +144,13 @@ export default function RegisterScreen() {
   const usernameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const emailTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Pre-fill invite code saved by a referral deep link (ibhub://cadastro?ref=CODE)
+  useEffect(() => {
+    AsyncStorage.getItem("pending_invite_code").then((code) => {
+      if (code && code.trim()) setInviteCode(code.trim().toUpperCase());
+    }).catch(() => {});
+  }, []);
+
   const checkUsername = useCallback(async (value: string) => {
     if (!value) { setUsernameState("idle"); return; }
     if (!USERNAME_RE.test(value)) { setUsernameState("invalid"); return; }

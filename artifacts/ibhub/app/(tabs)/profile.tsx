@@ -1095,7 +1095,7 @@ export default function ProfileScreen() {
               </View>
               <TouchableOpacity
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                onPress={() => Share.share({ message: `Junte-se à ibhub — Rede do Vinho com meu convite: ${referralCode}\nhttps://www.ibhub.com.br` })}
+                onPress={() => Share.share({ message: `Junte-se à ibhub — Rede do Vinho!\nCadastre-se com meu convite e entre para a maior rede do vinho:\nhttps://www.ibhub.com.br/cadastro?ref=${referralCode}` })}
               >
                 <Feather name="share-2" size={18} color={colors.gold} />
               </TouchableOpacity>

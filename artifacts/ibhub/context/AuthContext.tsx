@@ -205,6 +205,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {
         console.error("[handleDeepLink] PKCE exchange failed:", e);
       }
+      return;
+    }
+
+    // ── Referral deep link: ibhub://cadastro?ref=CODE or any URL with ?ref= ──
+    try {
+      const parsed = Linking.parse(url);
+      const ref = parsed.queryParams?.ref;
+      if (ref && typeof ref === "string" && ref.trim()) {
+        await AsyncStorage.setItem("pending_invite_code", ref.trim().toUpperCase());
+        console.log("[handleDeepLink] Referral code saved:", ref.trim().toUpperCase());
+      }
+    } catch (e) {
+      console.warn("[handleDeepLink] Could not parse referral from URL:", e);
     }
   }, []);
 
