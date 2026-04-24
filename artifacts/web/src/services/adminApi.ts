@@ -302,3 +302,89 @@ export async function sendBroadcastPush(params: BroadcastParams): Promise<{ succ
     return { success: false, message: "Erro de rede ao enviar push." };
   }
 }
+
+// ─── Activity Logs ────────────────────────────────────────────────────────────
+
+export type ActivityType = "Cadastro" | "Curtida" | "Conexão" | "Seguiu";
+
+export interface ActivityLog {
+  id: string;
+  type: ActivityType;
+  initial: string;
+  text: string;
+  iconColor: string;
+  created_at: string;
+}
+
+export interface ActivityCounts {
+  cadastros: number;
+  curtidas: number;
+  conexoes: number;
+  seguiu: number;
+}
+
+function getLogInitial(name: string | null | undefined): string {
+  if (!name) return "?";
+  return name.trim().charAt(0).toUpperCase();
+}
+
+function resolveProfileName(profile: unknown): string | null {
+  if (!profile) return null;
+  if (Array.isArray(profile)) return (profile as Array<{ full_name: string | null }>)[0]?.full_name ?? null;
+  return (profile as { full_name: string | null }).full_name;
+}
+
+export async function fetchActivityLogs(): Promise<ActivityLog[]> {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [regsRes, likesRes, followsRes, connRes] = await Promise.all([
+    supabase.from("profiles").select("id, full_name, created_at").gte("created_at", since).order("created_at", { ascending: false }).limit(50),
+    supabase.from("likes").select("id, created_at, profile:profiles!likes_user_id_fkey(full_name)").gte("created_at", since).order("created_at", { ascending: false }).limit(50),
+    supabase.from("follows").select("id, created_at, profile:profiles!follows_follower_id_fkey(full_name)").gte("created_at", since).order("created_at", { ascending: false }).limit(50),
+    supabase.from("connections").select("id, created_at, profile:profiles!connections_requester_id_fkey(full_name)").gte("created_at", since).order("created_at", { ascending: false }).limit(50),
+  ]);
+
+  const logs: ActivityLog[] = [];
+
+  for (const row of ((regsRes.data ?? []) as Array<{ id: string; full_name: string | null; created_at: string }>)) {
+    logs.push({ id: `reg-${row.id}`, type: "Cadastro", initial: getLogInitial(row.full_name), text: `${row.full_name ?? "Usuário"} se cadastrou na plataforma`, iconColor: "#059669", created_at: row.created_at });
+  }
+  for (const row of ((likesRes.data ?? []) as Array<{ id: string; created_at: string; profile: unknown }>)) {
+    const name = resolveProfileName(row.profile);
+    logs.push({ id: `like-${row.id}`, type: "Curtida", initial: getLogInitial(name), text: `${name ?? "Usuário"} curtiu um post`, iconColor: "#e11d48", created_at: row.created_at });
+  }
+  for (const row of ((followsRes.data ?? []) as Array<{ id: string; created_at: string; profile: unknown }>)) {
+    const name = resolveProfileName(row.profile);
+    logs.push({ id: `follow-${row.id}`, type: "Seguiu", initial: getLogInitial(name), text: `${name ?? "Usuário"} seguiu alguém`, iconColor: "#059669", created_at: row.created_at });
+  }
+  for (const row of ((connRes.data ?? []) as Array<{ id: string; created_at: string; profile: unknown }>)) {
+    const name = resolveProfileName(row.profile);
+    logs.push({ id: `conn-${row.id}`, type: "Conexão", initial: getLogInitial(name), text: `${name ?? "Usuário"} enviou pedido de conexão`, iconColor: "#7c3aed", created_at: row.created_at });
+  }
+
+  logs.sort((a, b) => b.created_at.localeCompare(a.created_at));
+  return logs;
+}
+
+export function computeActivityCounts(logs: ActivityLog[]): ActivityCounts {
+  let cadastros = 0, curtidas = 0, conexoes = 0, seguiu = 0;
+  for (const log of logs) {
+    if (log.type === "Cadastro") cadastros++;
+    else if (log.type === "Curtida") curtidas++;
+    else if (log.type === "Conexão") conexoes++;
+    else if (log.type === "Seguiu") seguiu++;
+  }
+  return { cadastros, curtidas, conexoes, seguiu };
+}
+
+export function relativeTime(isoString: string): string {
+  const diff = Date.now() - new Date(isoString).getTime();
+  const seconds = Math.floor(diff / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
+}

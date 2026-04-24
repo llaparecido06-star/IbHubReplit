@@ -34,9 +34,19 @@ import ReferralPage from "@/pages/app/ReferralPage";
 import GerenciarEmpresaPage from "@/pages/app/GerenciarEmpresaPage";
 import MeusEventosPage from "@/pages/app/MeusEventosPage";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
-import AdminUsuarios from "@/pages/admin/AdminUsuarios";
+import AdminLogs from "@/pages/admin/AdminLogs";
 import AdminModeracao from "@/pages/admin/AdminModeracao";
-import AdminNotificacoes from "@/pages/admin/AdminNotificacoes";
+import AdminMomentos from "@/pages/admin/AdminMomentos";
+import AdminEventos from "@/pages/admin/AdminEventos";
+import AdminMarketplace from "@/pages/admin/AdminMarketplace";
+import AdminSlidesMercado from "@/pages/admin/AdminSlidesMercado";
+import AdminPresentationSlides from "@/pages/admin/AdminPresentationSlides";
+import AdminCRM from "@/pages/admin/AdminCRM";
+import AdminFinanceiro from "@/pages/admin/AdminFinanceiro";
+import AdminPlanBuilder from "@/pages/admin/AdminPlanBuilder";
+import AdminComunicacao from "@/pages/admin/AdminComunicacao";
+import AdminAdmins from "@/pages/admin/AdminAdmins";
+import AdminConfiguracoes from "@/pages/admin/AdminConfiguracoes";
 import AssinarPage from "@/pages/AssinarPage";
 import AssinarSucessoPage from "@/pages/AssinarSucessoPage";
 import AssinarCanceladoPage from "@/pages/AssinarCanceladoPage";
@@ -277,16 +287,51 @@ function Router() {
         <PrivateRoute component={MinhaContaPage} />
       </Route>
 
-      {/* Admin routes */}
-      <Route path="/admin/usuarios">
-        <AdminRoute component={AdminUsuarios} />
+      {/* Admin routes — mirrors mobile AdminDrawer structure (14 screens) */}
+      {/* VISÃO GERAL */}
+      <Route path="/admin/logs">
+        <AdminRoute component={AdminLogs} />
+      </Route>
+      {/* GESTÃO DE CONTEÚDO */}
+      <Route path="/admin/momentos">
+        <AdminRoute component={AdminMomentos} />
+      </Route>
+      <Route path="/admin/eventos">
+        <AdminRoute component={AdminEventos} />
+      </Route>
+      <Route path="/admin/marketplace">
+        <AdminRoute component={AdminMarketplace} />
+      </Route>
+      <Route path="/admin/slides-mercado">
+        <AdminRoute component={AdminSlidesMercado} />
+      </Route>
+      <Route path="/admin/presentation-slides">
+        <AdminRoute component={AdminPresentationSlides} />
       </Route>
       <Route path="/admin/moderacao">
         <AdminRoute component={AdminModeracao} />
       </Route>
-      <Route path="/admin/notificacoes">
-        <AdminRoute component={AdminNotificacoes} />
+      {/* USUÁRIOS & RECEITA */}
+      <Route path="/admin/crm">
+        <AdminRoute component={AdminCRM} />
       </Route>
+      <Route path="/admin/financeiro">
+        <AdminRoute component={AdminFinanceiro} />
+      </Route>
+      <Route path="/admin/plan-builder">
+        <AdminRoute component={AdminPlanBuilder} />
+      </Route>
+      {/* SISTEMA */}
+      <Route path="/admin/comunicacao">
+        <AdminRoute component={AdminComunicacao} />
+      </Route>
+      <Route path="/admin/admins">
+        <AdminRoute component={AdminAdmins} />
+      </Route>
+      <Route path="/admin/configuracoes">
+        <AdminRoute component={AdminConfiguracoes} />
+      </Route>
+      {/* Dashboard */}
       <Route path="/admin">
         <AdminRoute component={AdminDashboard} />
       </Route>

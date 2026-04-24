@@ -1,21 +1,46 @@
-import React from "react";
+import React, { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 
 const GOLD = "#c9a84c";
 const NAVY = "#0d1b2a";
+const SIDEBAR_W = 228;
 
-interface AdminNavItem {
-  path: string;
-  label: string;
-  icon: string;
-}
-
-const ADMIN_NAV: AdminNavItem[] = [
-  { path: "/admin", label: "Dashboard", icon: "📊" },
-  { path: "/admin/usuarios", label: "Usuários", icon: "👥" },
-  { path: "/admin/moderacao", label: "Moderação", icon: "🛡️" },
-  { path: "/admin/notificacoes", label: "Notificações", icon: "📢" },
+const SECTIONS = [
+  {
+    title: "VISÃO GERAL",
+    items: [
+      { path: "/admin",                     label: "Dashboard",         icon: "⊞" },
+      { path: "/admin/logs",                label: "Logs de Atividade", icon: "◎" },
+    ],
+  },
+  {
+    title: "GESTÃO DE CONTEÚDO",
+    items: [
+      { path: "/admin/momentos",            label: "Momentos",          icon: "▶" },
+      { path: "/admin/eventos",             label: "Eventos",           icon: "📅" },
+      { path: "/admin/marketplace",         label: "Marketplace",       icon: "🛍" },
+      { path: "/admin/slides-mercado",      label: "Mercado",           icon: "📊" },
+      { path: "/admin/presentation-slides", label: "Slides de Apres.",  icon: "⧉" },
+      { path: "/admin/moderacao",           label: "Moderação",         icon: "🛡" },
+    ],
+  },
+  {
+    title: "USUÁRIOS & RECEITA",
+    items: [
+      { path: "/admin/crm",                 label: "CRM Usuários",      icon: "👥" },
+      { path: "/admin/financeiro",          label: "Financeiro",        icon: "💳" },
+      { path: "/admin/plan-builder",        label: "Plan Builder",      icon: "📦" },
+    ],
+  },
+  {
+    title: "SISTEMA",
+    items: [
+      { path: "/admin/comunicacao",         label: "Comunicação",       icon: "📢" },
+      { path: "/admin/admins",              label: "Admins",            icon: "🔐" },
+      { path: "/admin/configuracoes",       label: "Configurações",     icon: "⚙" },
+    ],
+  },
 ];
 
 function isActive(current: string, path: string): boolean {
@@ -35,84 +60,81 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     setLocation("/");
   };
 
-  return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f2f3f5", fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column" }}>
-      <nav style={{
-        backgroundColor: "#1a0a1e",
-        padding: "0 24px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        height: 60,
-        boxShadow: "0 2px 16px rgba(0,0,0,0.25)",
-        position: "sticky",
-        top: 0,
-        zIndex: 100,
-        flexShrink: 0,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 18, fontWeight: 900, color: GOLD }}>ibhub</span>
-            <span style={{ fontSize: 10, fontWeight: 800, backgroundColor: GOLD, color: "#fff", padding: "2px 6px", borderRadius: 4, letterSpacing: 1 }}>ADMIN</span>
+  const SidebarContent = () => (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div style={{ padding: "20px 16px 14px", borderBottom: "1px solid rgba(255,255,255,0.09)", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+          <span style={{ fontSize: 17, fontWeight: 900, color: GOLD }}>ibhub</span>
+          <span style={{ fontSize: 9, fontWeight: 800, backgroundColor: GOLD, color: "#fff", padding: "2px 7px", borderRadius: 4, letterSpacing: 1 }}>ADMIN</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 32, height: 32, borderRadius: "50%", backgroundColor: "#722f37", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
+            {initial}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-            {ADMIN_NAV.map((item) => (
-              <button
-                key={item.path}
-                onClick={() => setLocation(item.path)}
-                style={{
-                  background: isActive(location, item.path) ? "rgba(201,168,76,0.15)" : "none",
-                  border: "none",
-                  borderRadius: 8,
-                  padding: "8px 14px",
-                  color: isActive(location, item.path) ? GOLD : "rgba(255,255,255,0.65)",
-                  fontSize: 13,
-                  fontWeight: isActive(location, item.path) ? 700 : 500,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  transition: "all 0.15s",
-                }}
-              >
-                <span>{item.icon}</span>
-                {item.label}
-              </button>
-            ))}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayName}</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)" }}>Administrador</div>
           </div>
         </div>
+      </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button
-            onClick={() => setLocation("/app")}
-            style={{
-              background: "rgba(255,255,255,0.08)",
-              border: "1px solid rgba(255,255,255,0.15)",
-              borderRadius: 8,
-              padding: "6px 12px",
-              color: "rgba(255,255,255,0.7)",
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >← App</button>
-          <div style={{
-            width: 34, height: 34, borderRadius: "50%",
-            backgroundColor: "#722f37",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 14, fontWeight: 800, color: "#fff",
-          }}>{initial}</div>
-          <button
-            onClick={handleSignOut}
-            style={{
-              fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.5)",
-              background: "none", border: "none", cursor: "pointer",
-            }}
-          >Sair</button>
-        </div>
+      <nav style={{ flex: 1, overflowY: "auto", padding: "6px 0" }}>
+        {SECTIONS.map((section) => (
+          <div key={section.title} style={{ marginBottom: 2 }}>
+            <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.2, color: "rgba(255,255,255,0.28)", padding: "10px 16px 4px", textTransform: "uppercase" }}>
+              {section.title}
+            </div>
+            {section.items.map((item) => {
+              const active = isActive(location, item.path);
+              return (
+                <button
+                  key={item.path}
+                  onClick={() => setLocation(item.path)}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 9,
+                    padding: "8px 16px 8px 13px",
+                    background: active ? "rgba(201,168,76,0.13)" : "none",
+                    border: "none",
+                    borderLeft: active ? `3px solid ${GOLD}` : "3px solid transparent",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    color: active ? GOLD : "rgba(255,255,255,0.6)",
+                    fontSize: 13,
+                    fontWeight: active ? 700 : 400,
+                    transition: "all 0.12s",
+                  }}
+                >
+                  <span style={{ fontSize: 13, width: 18, textAlign: "center", flexShrink: 0 }}>{item.icon}</span>
+                  <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
-      <main style={{ flex: 1, overflow: "auto" }}>
+      <div style={{ padding: "12px 16px", borderTop: "1px solid rgba(255,255,255,0.09)", flexShrink: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+        <button
+          onClick={() => setLocation("/app")}
+          style={{ width: "100%", padding: "7px 12px", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 7, color: "rgba(255,255,255,0.55)", fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "left" }}
+        >← Voltar ao App</button>
+        <button
+          onClick={handleSignOut}
+          style={{ width: "100%", padding: "7px 12px", background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.35)", fontSize: 12, textAlign: "left" }}
+        >Sair</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ minHeight: "100vh", backgroundColor: "#f2f3f5", fontFamily: "'Inter', sans-serif", display: "flex" }}>
+      <div style={{ width: SIDEBAR_W, backgroundColor: NAVY, flexShrink: 0, position: "sticky", top: 0, height: "100vh" }}>
+        <SidebarContent />
+      </div>
+      <main style={{ flex: 1, minWidth: 0, overflowX: "hidden" }}>
         {children}
       </main>
     </div>
