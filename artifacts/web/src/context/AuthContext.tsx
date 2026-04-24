@@ -115,10 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let done = false;
 
-    // Hard 5s limit: if getSession() OR fetchProfile() stalls, force loading to false.
-    // The timer is NOT cleared when getSession() resolves — only when setLoading(false) is
-    // actually called (via finishLoading). This prevents the old bug where clearing the timer
-    // on getSession() success left fetchProfile() hangs unguarded.
+    // Hard 5s safety: unblock the app if INITIAL_SESSION never fires or fetchProfile hangs.
     const safetyTimer = setTimeout(() => {
       if (!done) { done = true; setLoading(false); }
     }, 5000);
@@ -128,82 +125,76 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     };
 
-    supabase.auth.getSession()
-      .then(({ data: { session } }) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setMustChangePassword(hasMustChangeFlag(session));
-        if (session?.user) {
-          fetchProfile(session.user.id).finally(finishLoading);
-        } else {
-          finishLoading();
-        }
-      })
-      .catch(() => {
-        // Refresh token invalid or network error — treat as signed out
-        setSession(null);
-        setUser(null);
-        setProfile(null);
-        setMustChangePassword(false);
-        finishLoading();
-      });
+    // DO NOT call supabase.auth.getSession() here.
+    // Registering onAuthStateChange immediately fires INITIAL_SESSION (gotrue-js fires it
+    // internally using its own getSession() call). Adding a second explicit getSession() call
+    // creates two concurrent lock acquisitions that race, causing:
+    //   "Lock was released because another request stole it"
+    // If that error hits the explicit call's .catch(), it sets session=null → PrivateRoute
+    // redirects to /login even though the user IS signed in. Use INITIAL_SESSION only.
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      // CRITICAL: This callback must be synchronous (NOT async).
-      // gotrue-js holds the navigator lock while notifying subscribers — if we await
-      // inside here, the lock is held for the duration of every DB query, causing all
-      // other auth calls (getSession, signIn, signUp) to queue up and eventually time
-      // out with "Lock was released because another request stole it".
+      // CRITICAL: synchronous callback — do NOT make this async.
+      // gotrue-js holds the navigator lock while calling subscribers. Any await inside
+      // here keeps the lock held for the entire DB call duration, starving all other
+      // auth operations and causing the "lock stolen" error cascade.
 
-      // Bust the getCachedSession() cache so subsequent API calls use the fresh token
       bustSessionCache();
-
-      // If Supabase fires SIGNED_OUT due to an invalid token refresh, clear loading
-      if (event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
-        if (!session) finishLoading();
-      }
 
       setSession(session);
       setUser(session?.user ?? null);
       setMustChangePassword(hasMustChangeFlag(session));
 
       if (session?.user) {
-        // Fire-and-forget: runs AFTER the lock is released, so no contention.
         const u = session.user;
-        fetchProfile(u.id)
-          .then(() => {
-            // Safety net: ensure a profile row exists for new social-auth users.
-            // Also fills in null full_name if a DB trigger created the row without metadata.
-            if (event !== "SIGNED_IN") return;
-            const meta = u.user_metadata ?? {};
-            const googleName = (meta.full_name ?? meta.name ?? u.email?.split("@")[0] ?? "") as string;
-            const googleAvatar = (meta.avatar_url ?? meta.picture ?? null) as string | null;
-            return supabase
-              .from("profiles")
-              .select("id, full_name, avatar_url")
-              .or(`id.eq.${u.id},user_id.eq.${u.id}`)
-              .limit(1)
-              .then(({ data: rows }) => {
-                const existing = (rows ?? [])[0] ?? null;
-                if (!existing) {
-                  return supabase.from("profiles").insert({
-                    id: u.id,
-                    user_id: u.id,
-                    full_name: googleName || null,
-                    avatar_url: googleAvatar,
-                    plan: "gratuito",
-                  }).then(() => fetchProfile(u.id));
-                } else if (!existing.full_name && googleName) {
-                  const update: Record<string, string | null> = { user_id: u.id, full_name: googleName };
-                  if (!existing.avatar_url && googleAvatar) update.avatar_url = googleAvatar;
-                  return supabase.from("profiles").update(update).eq("id", existing.id)
-                    .then(() => fetchProfile(u.id));
-                }
-              });
-          })
-          .catch(() => {});
+
+        // profilePromise runs AFTER the lock is released (fire-and-forget).
+        const profilePromise = fetchProfile(u.id);
+
+        // INITIAL_SESSION: finish loading after the first profile fetch completes.
+        if (event === "INITIAL_SESSION") {
+          profilePromise.finally(finishLoading);
+        }
+
+        // SIGNED_IN: safety net to ensure a profile row exists for social-auth users.
+        if (event === "SIGNED_IN") {
+          profilePromise
+            .then(() => {
+              const meta = u.user_metadata ?? {};
+              const googleName = (meta.full_name ?? meta.name ?? u.email?.split("@")[0] ?? "") as string;
+              const googleAvatar = (meta.avatar_url ?? meta.picture ?? null) as string | null;
+              return supabase
+                .from("profiles")
+                .select("id, full_name, avatar_url")
+                .or(`id.eq.${u.id},user_id.eq.${u.id}`)
+                .limit(1)
+                .then(({ data: rows }) => {
+                  const existing = (rows ?? [])[0] ?? null;
+                  if (!existing) {
+                    return supabase.from("profiles").insert({
+                      id: u.id,
+                      user_id: u.id,
+                      full_name: googleName || null,
+                      avatar_url: googleAvatar,
+                      plan: "gratuito",
+                    }).then(() => fetchProfile(u.id));
+                  } else if (!existing.full_name && googleName) {
+                    const update: Record<string, string | null> = { user_id: u.id, full_name: googleName };
+                    if (!existing.avatar_url && googleAvatar) update.avatar_url = googleAvatar;
+                    return supabase.from("profiles").update(update).eq("id", existing.id)
+                      .then(() => fetchProfile(u.id));
+                  }
+                });
+            })
+            .catch(() => {});
+        }
+
+        // SIGNED_OUT / TOKEN_REFRESHED with no session: unblock loading.
       } else {
         setProfile(null);
+        if (event === "INITIAL_SESSION" || event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
+          finishLoading();
+        }
       }
     });
 
