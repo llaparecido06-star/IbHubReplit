@@ -132,7 +132,10 @@ function ApresentacoesPanel({ isAdmin }: { isAdmin: boolean }) {
 
   const reload = () => {
     const fetch = isAdmin ? fetchAllMarketPresentations : fetchMarketPresentations;
-    fetch().then(data => { setPresentations(data); setLoading(false); });
+    fetch()
+      .then(data => { setPresentations(data); })
+      .catch(() => {})
+      .finally(() => { setLoading(false); });
   };
 
   useEffect(() => { reload(); }, [isAdmin]);
@@ -386,7 +389,10 @@ function MarketPostComments({ postId, userId }: { postId: string; userId: string
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchMarketComments(postId).then(c => { setComments(c); setLoading(false); });
+    fetchMarketComments(postId)
+      .then(c => { setComments(c); })
+      .catch(() => {})
+      .finally(() => { setLoading(false); });
   }, [postId]);
 
   const submit = async () => {

@@ -113,50 +113,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    let initialResolved = false;
+    let done = false;
 
-    // Safety net: if getSession() hangs or throws and loading never clears, force-resolve after 4s
+    // Hard 5s limit: if getSession() OR fetchProfile() stalls, force loading to false.
+    // The timer is NOT cleared when getSession() resolves — only when setLoading(false) is
+    // actually called (via finishLoading). This prevents the old bug where clearing the timer
+    // on getSession() success left fetchProfile() hangs unguarded.
     const safetyTimer = setTimeout(() => {
-      if (!initialResolved) {
-        initialResolved = true;
-        setLoading(false);
-      }
-    }, 4000);
+      if (!done) { done = true; setLoading(false); }
+    }, 5000);
 
-    const resolveInitial = () => {
-      if (!initialResolved) {
-        initialResolved = true;
-        clearTimeout(safetyTimer);
-      }
+    const finishLoading = () => {
+      if (!done) { done = true; clearTimeout(safetyTimer); }
+      setLoading(false);
     };
 
     supabase.auth.getSession()
       .then(({ data: { session } }) => {
-        resolveInitial();
         setSession(session);
         setUser(session?.user ?? null);
         setMustChangePassword(hasMustChangeFlag(session));
         if (session?.user) {
-          fetchProfile(session.user.id).finally(() => setLoading(false));
+          fetchProfile(session.user.id).finally(finishLoading);
         } else {
-          setLoading(false);
+          finishLoading();
         }
       })
       .catch(() => {
         // Refresh token invalid or network error — treat as signed out
-        resolveInitial();
         setSession(null);
         setUser(null);
         setProfile(null);
         setMustChangePassword(false);
-        setLoading(false);
+        finishLoading();
       });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       // If Supabase fires SIGNED_OUT due to an invalid token refresh, clear loading
       if (event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
-        resolveInitial();
-        if (!session) setLoading(false);
+        if (!session) finishLoading();
       }
 
       setSession(session);
