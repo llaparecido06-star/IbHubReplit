@@ -18,6 +18,10 @@ import {
   toggleLikePost,
   changeReactionPost,
   toggleBookmarkPost,
+  deletePost,
+  updatePost,
+  blockUser,
+  reportPost,
   UserProfile,
   Post,
   WineEntry,
@@ -195,14 +199,23 @@ const REACTIONS: { type: ReactionType; emoji: string; label: string; color: stri
 
 type PostCardProps = {
   post: Post;
+  currentUserId?: string | null;
   onLike: (postId: string) => void;
   onReact: (postId: string, reaction: ReactionType) => void;
   onBookmark: (postId: string) => void;
+  onDelete?: (postId: string) => void;
+  onEdit?: (postId: string, content: string) => void;
+  onReport?: (postId: string) => void;
+  onBlock?: (authorId: string, authorName: string) => void;
 };
 
-function PostCard({ post, onLike, onReact, onBookmark }: PostCardProps) {
+function PostCard({ post, currentUserId, onLike, onReact, onBookmark, onDelete, onEdit, onReport, onBlock }: PostCardProps) {
   const [, setLocation] = useLocation();
   const [showPicker, setShowPicker] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editContent, setEditContent] = useState(post.content ?? "");
+  const [editSaving, setEditSaving] = useState(false);
   const pickerTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const content = post.content ?? "";
@@ -227,8 +240,46 @@ function PostCard({ post, onLike, onReact, onBookmark }: PostCardProps) {
   const authorAvatar = post.author?.avatar_url;
   const authorHeadline = (post.author as any)?.headline ?? (post.author as any)?.position ?? "";
 
+  const isOwn = !!(currentUserId && post.author?.id === currentUserId);
+
   return (
-    <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, marginBottom: 12, overflow: "hidden" }}>
+    <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, marginBottom: 12, overflow: "visible", position: "relative" }}>
+      {/* Edit modal */}
+      {showEditModal && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+          onClick={() => setShowEditModal(false)}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ backgroundColor: WHITE, borderRadius: 16, width: "min(540px,100%)", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px 12px", borderBottom: `1px solid ${BORDER}` }}>
+              <span style={{ fontSize: 16, fontWeight: 800, color: NAVY }}>Editar publicação</span>
+              <button onClick={() => setShowEditModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, lineHeight: 1 }}>✕</button>
+            </div>
+            <textarea
+              value={editContent}
+              onChange={e => setEditContent(e.target.value)}
+              style={{ margin: 16, padding: 12, borderRadius: 10, border: `1.5px solid ${BORDER}`, fontSize: 14, color: NAVY, lineHeight: 1.6, resize: "vertical", minHeight: 120, fontFamily: "inherit", outline: "none" }}
+            />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: "0 16px 16px" }}>
+              <button onClick={() => setShowEditModal(false)}
+                style={{ padding: "9px 18px", borderRadius: 10, border: `1.5px solid ${BORDER}`, background: "transparent", fontSize: 13, fontWeight: 600, cursor: "pointer", color: MUTED }}>
+                Cancelar
+              </button>
+              <button
+                disabled={editSaving || !editContent.trim()}
+                onClick={async () => {
+                  setEditSaving(true);
+                  await onEdit?.(post.id, editContent.trim());
+                  setEditSaving(false);
+                  setShowEditModal(false);
+                }}
+                style={{ padding: "9px 18px", borderRadius: 10, border: "none", background: GOLD, fontSize: 13, fontWeight: 700, cursor: "pointer", color: WHITE, opacity: editSaving ? 0.7 : 1 }}>
+                {editSaving ? "Salvando…" : "Salvar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Author header */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px 10px" }}>
         <div
@@ -241,7 +292,64 @@ function PostCard({ post, onLike, onReact, onBookmark }: PostCardProps) {
           <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{authorName}</div>
           {authorHeadline && <div style={{ fontSize: 12, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{authorHeadline}</div>}
         </div>
-        <div style={{ fontSize: 12, color: MUTED, flexShrink: 0 }}>{timeAgo(post.created_at)}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <div style={{ fontSize: 12, color: MUTED }}>{timeAgo(post.created_at)}</div>
+          {/* ⋮ menu */}
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={() => setShowMenu(v => !v)}
+              style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, lineHeight: 1, padding: "2px 5px", borderRadius: 6 }}
+            >⋮</button>
+            {showMenu && (
+              <div
+                style={{ position: "absolute", top: "100%", right: 0, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 8px 28px rgba(0,0,0,0.14)", zIndex: 600, minWidth: 190, overflow: "hidden" }}
+                onMouseLeave={() => setShowMenu(false)}
+              >
+                {isOwn ? (
+                  <>
+                    <button
+                      onClick={() => { setShowMenu(false); setEditContent(post.content ?? ""); setShowEditModal(true); }}
+                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, color: NAVY, textAlign: "left" }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}12`; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+                    >
+                      <span>✏️</span> Editar publicação
+                    </button>
+                    <button
+                      onClick={() => { setShowMenu(false); if (window.confirm("Tem certeza que deseja apagar esta publicação?")) onDelete?.(post.id); }}
+                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#dc2626", textAlign: "left" }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#fef2f2"; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+                    >
+                      <span>🗑️</span> Apagar publicação
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => { setShowMenu(false); onReport?.(post.id); }}
+                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, color: NAVY, textAlign: "left" }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}12`; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+                    >
+                      <span>🚩</span> Denunciar
+                    </button>
+                    {post.author?.id && (
+                      <button
+                        onClick={() => { setShowMenu(false); onBlock?.(post.author!.id!, authorName); }}
+                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#dc2626", textAlign: "left" }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#fef2f2"; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+                      >
+                        <span>🚫</span> Bloquear {authorName.split(" ")[0]}
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Content */}
@@ -594,6 +702,32 @@ export default function PerfilUsuarioPage() {
     }));
   };
 
+  const handleDeletePost = async (postId: string) => {
+    if (!currentUserId) return;
+    const ok = await deletePost(postId, currentUserId);
+    if (ok) setPosts(prev => prev.filter(p => p.id !== postId));
+  };
+
+  const handleEditPost = async (postId: string, content: string) => {
+    if (!currentUserId) return;
+    const ok = await updatePost(postId, currentUserId, content);
+    if (ok) setPosts(prev => prev.map(p => p.id === postId ? { ...p, content } : p));
+  };
+
+  const handleReportPost = async (postId: string) => {
+    if (!currentUserId) return;
+    await reportPost(currentUserId, postId, "conteudo_inapropriado");
+    alert("Denúncia enviada. Obrigado por contribuir com a comunidade.");
+  };
+
+  const handleBlockUserPost = async (authorId: string, authorName: string) => {
+    if (!currentUserId) return;
+    if (!window.confirm(`Bloquear ${authorName}? Você não verá mais as publicações desta pessoa.`)) return;
+    await blockUser(currentUserId, authorId);
+    setPosts(prev => prev.filter(p => p.author?.id !== authorId));
+    setLocation("/app");
+  };
+
   /* Mensagem button is available when following OR connected */
   const canMessage = isFollowing || connectionStatus === "connected";
 
@@ -820,9 +954,14 @@ export default function PerfilUsuarioPage() {
               <PostCard
                 key={post.id}
                 post={post}
+                currentUserId={currentUserId}
                 onLike={handleLikePost}
                 onReact={handleReactPost}
                 onBookmark={handleBookmarkPost}
+                onDelete={handleDeletePost}
+                onEdit={handleEditPost}
+                onReport={handleReportPost}
+                onBlock={handleBlockUserPost}
               />
             ))
           )

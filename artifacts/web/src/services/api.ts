@@ -328,6 +328,34 @@ export async function toggleBookmarkPost(postId: string, userId: string, isBookm
   }
 }
 
+export async function deletePost(postId: string, userId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("posts").delete().match({ id: postId, user_id: userId });
+    return !error;
+  } catch { return false; }
+}
+
+export async function updatePost(postId: string, userId: string, content: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("posts").update({ content }).match({ id: postId, user_id: userId });
+    return !error;
+  } catch { return false; }
+}
+
+export async function blockUser(blockerId: string, blockedId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("user_blocks").insert({ blocker_id: blockerId, blocked_id: blockedId });
+    return !error;
+  } catch { return false; }
+}
+
+export async function reportPost(reporterId: string, postId: string, reason: string): Promise<boolean> {
+  try {
+    await supabase.from("reports").insert({ reporter_id: reporterId, post_id: postId, reason });
+    return true;
+  } catch { return true; }
+}
+
 export async function fetchSavedPosts(userId: string): Promise<Post[]> {
   try {
     const { data: bookmarks } = await supabase

@@ -18,6 +18,8 @@ import {
   fetchConnectionsList,
   fetchFollowersList,
   fetchFollowingList,
+  deletePost,
+  updatePost,
   Post,
   ProfilePerson,
 } from "@/services/api";
@@ -104,17 +106,92 @@ function PeopleListModal({ title, list, onClose }: { title: string; list: Profil
   );
 }
 
-function MiniPostCard({ post }: { post: Post }) {
+function MiniPostCard({ post, onDelete, onEdit }: { post: Post; onDelete?: (id: string) => void; onEdit?: (id: string, content: string) => void }) {
+  const [showMenu, setShowMenu] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editContent, setEditContent] = useState(post.content ?? "");
+  const [editSaving, setEditSaving] = useState(false);
+
   const content = post.content ?? "";
   const displayContent = content.length > 200 ? content.slice(0, 200).trimEnd() + "…" : content;
+
   return (
-    <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10 }}>
+    <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10, position: "relative" }}>
+      {/* Edit modal */}
+      {showEditModal && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+          onClick={() => setShowEditModal(false)}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ backgroundColor: WHITE, borderRadius: 16, width: "min(540px,100%)", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px 12px", borderBottom: `1px solid ${BORDER}` }}>
+              <span style={{ fontSize: 16, fontWeight: 800, color: NAVY }}>Editar publicação</span>
+              <button onClick={() => setShowEditModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, lineHeight: 1 }}>✕</button>
+            </div>
+            <textarea
+              value={editContent}
+              onChange={e => setEditContent(e.target.value)}
+              style={{ margin: 16, padding: 12, borderRadius: 10, border: `1.5px solid ${BORDER}`, fontSize: 14, color: NAVY, lineHeight: 1.6, resize: "vertical", minHeight: 120, fontFamily: "inherit", outline: "none" }}
+            />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: "0 16px 16px" }}>
+              <button onClick={() => setShowEditModal(false)}
+                style={{ padding: "9px 18px", borderRadius: 10, border: `1.5px solid ${BORDER}`, background: "transparent", fontSize: 13, fontWeight: 600, cursor: "pointer", color: MUTED }}>
+                Cancelar
+              </button>
+              <button
+                disabled={editSaving || !editContent.trim()}
+                onClick={async () => {
+                  setEditSaving(true);
+                  await onEdit?.(post.id, editContent.trim());
+                  setEditSaving(false);
+                  setShowEditModal(false);
+                }}
+                style={{ padding: "9px 18px", borderRadius: 10, border: "none", background: GOLD, fontSize: 13, fontWeight: 700, cursor: "pointer", color: WHITE, opacity: editSaving ? 0.7 : 1 }}>
+                {editSaving ? "Salvando…" : "Salvar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header row */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+        <span style={{ fontSize: 11, color: MUTED }}>{timeAgo(post.created_at)}</span>
+        <div style={{ position: "relative" }}>
+          <button
+            onClick={() => setShowMenu(v => !v)}
+            style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 18, lineHeight: 1, padding: "1px 5px", borderRadius: 6 }}
+          >⋮</button>
+          {showMenu && (
+            <div
+              style={{ position: "absolute", top: "100%", right: 0, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 8px 28px rgba(0,0,0,0.14)", zIndex: 600, minWidth: 180, overflow: "hidden" }}
+              onMouseLeave={() => setShowMenu(false)}
+            >
+              <button
+                onClick={() => { setShowMenu(false); setEditContent(post.content ?? ""); setShowEditModal(true); }}
+                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, color: NAVY, textAlign: "left" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}12`; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+              >
+                <span>✏️</span> Editar publicação
+              </button>
+              <button
+                onClick={() => { setShowMenu(false); if (window.confirm("Tem certeza que deseja apagar esta publicação?")) onDelete?.(post.id); }}
+                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#dc2626", textAlign: "left" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#fef2f2"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+              >
+                <span>🗑️</span> Apagar publicação
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
       <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{displayContent}</div>
       {post.image_url && <img src={post.image_url} alt="" style={{ width: "100%", maxHeight: 240, objectFit: "cover", borderRadius: 8, marginTop: 10 }} />}
       <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 12, color: MUTED }}>
         <span>👍 {post.likes_count}</span>
         <span>💬 {post.comments_count}</span>
-        <span style={{ marginLeft: "auto" }}>{timeAgo(post.created_at)}</span>
       </div>
     </div>
   );
@@ -163,6 +240,16 @@ export default function MeuPerfilPage() {
   const openFollowing = async () => {
     const list = await fetchFollowingList(userId);
     setPeopleModal({ title: "Seguindo", list });
+  };
+
+  const handleDeletePost = async (postId: string) => {
+    const ok = await deletePost(postId, userId);
+    if (ok) setPosts(prev => prev.filter(p => p.id !== postId));
+  };
+
+  const handleEditPost = async (postId: string, content: string) => {
+    const ok = await updatePost(postId, userId, content);
+    if (ok) setPosts(prev => prev.map(p => p.id === postId ? { ...p, content } : p));
   };
 
   const completion = (() => {
@@ -336,7 +423,7 @@ export default function MeuPerfilPage() {
                 </div>
               ) : (
                 <div style={{ padding: "0 12px" }}>
-                  {posts.map(post => <MiniPostCard key={post.id} post={post} />)}
+                  {posts.map(post => <MiniPostCard key={post.id} post={post} onDelete={handleDeletePost} onEdit={handleEditPost} />)}
                 </div>
               )
             ) : (
@@ -474,7 +561,7 @@ export default function MeuPerfilPage() {
               <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>Compartilhe seu conhecimento sobre vinho com a comunidade</p>
             </div>
           ) : (
-            posts.map(post => <MiniPostCard key={post.id} post={post} />)
+            posts.map(post => <MiniPostCard key={post.id} post={post} onDelete={handleDeletePost} onEdit={handleEditPost} />)
           )
         ) : (
           <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 20 }}>
