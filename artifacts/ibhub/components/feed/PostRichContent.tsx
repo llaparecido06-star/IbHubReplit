@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dimensions,
   Image,
@@ -248,30 +248,41 @@ function SmartImage({ url }: { url: string }) {
   );
 }
 
+const { width: SCREEN_WIDTH_RC } = Dimensions.get("window");
+
 function InlineVideoPlayer({ videoUrl }: { videoUrl: string }) {
+  const [aspectRatio, setAspectRatio] = useState<number>(16 / 9);
+
   const player = useVideoPlayer({ uri: videoUrl }, (p) => {
     p.loop = true;
-    p.muted = true;
   });
 
+  useEffect(() => {
+    const sub = player.addListener("sourceLoad", ({ availableVideoTracks }) => {
+      const track = (availableVideoTracks as any[])?.[0];
+      if (track?.size?.width && track?.size?.height) {
+        setAspectRatio(track.size.width / track.size.height);
+      }
+    });
+    return () => sub.remove();
+  }, [player]);
+
+  const isPortrait = aspectRatio < 1;
+  const videoW = SCREEN_WIDTH_RC - 32;
+  const containerHeight = isPortrait
+    ? Math.min(videoW / aspectRatio, 560)
+    : Math.min(videoW / aspectRatio, 320);
+
   return (
-    <TouchableOpacity
-      onPress={() => { if (player.playing) player.pause(); else player.play(); }}
-      style={{ width: "100%", aspectRatio: 16 / 9, borderRadius: 10, overflow: "hidden", backgroundColor: "#000", marginTop: 8 }}
-      activeOpacity={0.9}
-    >
+    <View style={{ width: "100%", height: containerHeight, borderRadius: 10, overflow: "hidden", backgroundColor: "#000", marginTop: 8 }}>
       <VideoView
         player={player}
         contentFit="contain"
         style={{ width: "100%", height: "100%" }}
         allowsFullscreen
+        nativeControls
       />
-      <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-        <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", paddingLeft: 3 }}>
-          <Feather name="play" size={24} color="#fff" />
-        </View>
-      </View>
-    </TouchableOpacity>
+    </View>
   );
 }
 

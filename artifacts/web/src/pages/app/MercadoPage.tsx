@@ -373,6 +373,32 @@ function ApresentacoesPanel({ isAdmin }: { isAdmin: boolean }) {
 /* ─── Ideal.BI Feed ──────────────────────────────────────────────────────── */
 
 
+function MarketFeedVideo({ src }: { src: string }) {
+  const [aspect, setAspect] = React.useState<number | null>(null);
+  const isPortrait = aspect !== null && aspect < 1;
+  return (
+    <div style={{ background: "#000", display: "flex", justifyContent: "center", alignItems: "center" }}>
+      <video
+        src={src}
+        controls
+        playsInline
+        onLoadedMetadata={(e) => {
+          const v = e.currentTarget;
+          if (v.videoWidth && v.videoHeight) setAspect(v.videoWidth / v.videoHeight);
+        }}
+        style={{
+          display: "block",
+          width: isPortrait ? "auto" : "100%",
+          height: isPortrait ? "min(560px, 80vh)" : "auto",
+          maxWidth: "100%",
+          maxHeight: isPortrait ? "min(560px, 80vh)" : 380,
+          objectFit: "contain",
+        }}
+      />
+    </div>
+  );
+}
+
 function MarketPostAvatar({ src, name, size = 36 }: { src?: string | null; name: string; size?: number }) {
   if (src) return <img src={src} alt={name} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
   return (
@@ -558,13 +584,7 @@ function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idea
       )}
 
       {/* Video */}
-      {post.video_url && (
-        <video
-          src={post.video_url}
-          controls
-          style={{ width: "100%", maxHeight: 400, backgroundColor: "#000", display: "block" }}
-        />
-      )}
+      {post.video_url && <MarketFeedVideo src={post.video_url} />}
 
       {/* Poll */}
       {post.poll_options && post.poll_options.length > 0 && (

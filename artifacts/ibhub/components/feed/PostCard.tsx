@@ -85,13 +85,14 @@ export interface Post {
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CONTENT_CUTOFF = 220;
 
+const MAX_PORTRAIT_HEIGHT = 560;
+const MAX_LANDSCAPE_HEIGHT = 320;
+
 function VideoPlayer({ videoUrl, isVisible }: { videoUrl: string; isVisible: boolean }) {
-  const [isLoading, setIsLoading] = useState(true);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState<number>(16 / 9);
 
   const player = useVideoPlayer({ uri: videoUrl }, (p) => {
     p.loop = true;
-    p.muted = true;
   });
 
   useEffect(() => {
@@ -103,46 +104,29 @@ function VideoPlayer({ videoUrl, isVisible }: { videoUrl: string; isVisible: boo
   }, [isVisible, player]);
 
   useEffect(() => {
-    const statusSub = player.addListener("statusChange", ({ status }) => {
-      setIsLoading(status === "loading");
+    const sub = player.addListener("sourceLoad", ({ availableVideoTracks }) => {
+      const track = (availableVideoTracks as any[])?.[0];
+      if (track?.size?.width && track?.size?.height) {
+        setAspectRatio(track.size.width / track.size.height);
+      }
     });
-    const playingSub = player.addListener("playingChange", ({ isPlaying: playing }) => {
-      setIsPlaying(playing);
-    });
-    return () => {
-      statusSub.remove();
-      playingSub.remove();
-    };
+    return () => sub.remove();
   }, [player]);
 
-  const togglePlay = () => {
-    if (player.playing) {
-      player.pause();
-    } else {
-      player.play();
-    }
-  };
+  const isPortrait = aspectRatio < 1;
+  const containerHeight = isPortrait
+    ? Math.min(IMG_WIDTH / aspectRatio, MAX_PORTRAIT_HEIGHT)
+    : Math.min(IMG_WIDTH / aspectRatio, MAX_LANDSCAPE_HEIGHT);
 
   return (
-    <View style={videoStyles.container}>
+    <View style={[videoStyles.container, { height: containerHeight }]}>
       <VideoView
         player={player}
         contentFit="contain"
         style={videoStyles.video}
         allowsFullscreen
+        nativeControls
       />
-      {isLoading && (
-        <View style={videoStyles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#fff" />
-        </View>
-      )}
-      <TouchableOpacity style={videoStyles.playOverlay} onPress={togglePlay} activeOpacity={0.85}>
-        {!isPlaying && (
-          <View style={videoStyles.playBtn}>
-            <Feather name="play" size={28} color="#fff" />
-          </View>
-        )}
-      </TouchableOpacity>
     </View>
   );
 }
@@ -151,7 +135,6 @@ const videoStyles = StyleSheet.create({
   container: {
     marginTop: 10,
     width: IMG_WIDTH,
-    aspectRatio: 16 / 9,
     borderRadius: 12,
     overflow: "hidden",
     backgroundColor: "#000",
