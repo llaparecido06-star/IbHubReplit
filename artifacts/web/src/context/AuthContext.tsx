@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
-import { supabase, bustSessionCache } from "@/lib/supabase";
+import { supabase, bustSessionCache, getCachedSession } from "@/lib/supabase";
 
 export interface ActiveCompany {
   id: string;
