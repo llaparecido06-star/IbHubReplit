@@ -558,6 +558,11 @@ export async function sendWebConnectionRequest(targetId: string, currentUserId: 
       { requester_id: currentUserId, receiver_id: targetId, status: "pending" },
       { onConflict: "requester_id,receiver_id" },
     );
+    // Auto-follow the target when sending a connection request
+    await supabase.from("follows").upsert(
+      { follower_id: currentUserId, following_id: targetId },
+      { onConflict: "follower_id,following_id" },
+    );
   } catch (e) {
     console.warn("sendWebConnectionRequest:", e);
   }
@@ -2249,8 +2254,23 @@ export async function markAllWebNotificationsRead(userId: string): Promise<void>
 
 export async function acceptWebConnectionRequest(connectionId: string): Promise<boolean> {
   try {
+    const { data: connRow, error: fetchErr } = await supabase
+      .from("connections")
+      .select("requester_id, receiver_id")
+      .eq("id", connectionId)
+      .single();
+    if (fetchErr || !connRow) return false;
+
     const { error } = await supabase.from("connections").update({ status: "accepted" }).eq("id", connectionId);
-    return !error;
+    if (error) return false;
+
+    // Auto-follow the requester when accepting a connection (receiver follows requester)
+    await supabase.from("follows").upsert(
+      { follower_id: (connRow as any).receiver_id, following_id: (connRow as any).requester_id },
+      { onConflict: "follower_id,following_id" },
+    );
+
+    return true;
   } catch { return false; }
 }
 

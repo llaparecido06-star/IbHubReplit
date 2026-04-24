@@ -931,6 +931,11 @@ export async function sendConnectionRequest(targetId: string, currentUserId: str
       { requester_id: currentUserId, receiver_id: targetId, status: "pending" },
       { onConflict: "requester_id,receiver_id" },
     );
+    // Auto-follow the target when sending a connection request
+    await supabase.from("follows").upsert(
+      { follower_id: currentUserId, following_id: targetId },
+      { onConflict: "follower_id,following_id" },
+    );
     await supabase.from("notifications").insert({
       user_id: targetId, actor_id: currentUserId, type: "connection",
       message: "enviou um pedido de conexão",
@@ -1027,9 +1032,16 @@ export async function respondToConnection(
       .eq("id", connectionId);
     if (error) return false;
 
-    // Unlock any existing direct conversations between these two users
     const userId1 = (connRow as any).requester_id as string;
     const userId2 = (connRow as any).receiver_id as string;
+
+    // Auto-follow the requester when accepting a connection (receiver follows requester)
+    await supabase.from("follows").upsert(
+      { follower_id: userId2, following_id: userId1 },
+      { onConflict: "follower_id,following_id" },
+    );
+
+    // Unlock any existing direct conversations between these two users
     try {
       // Find all conversation_ids where userId1 is a participant
       const { data: convos1 } = await supabase
