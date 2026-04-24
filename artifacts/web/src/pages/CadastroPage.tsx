@@ -319,7 +319,7 @@ export default function CadastroPage() {
                 <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
                   <input type="checkbox" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} style={{ marginTop: 2, accentColor: "#c9a84c" }} />
                   <span style={{ fontSize: 13, color: "#0d1b2a", lineHeight: 1.5 }}>
-                    Aceito os <a href="#" style={{ color: "#c9a84c", fontWeight: 700 }}>Termos de Uso</a> e a <a href="#" style={{ color: "#c9a84c", fontWeight: 700 }}>Política de Privacidade</a>
+                    Aceito os <a href="https://www.ibhub.com.br/termos" target="_blank" rel="noopener noreferrer" style={{ color: "#c9a84c", fontWeight: 700 }}>Termos de Uso</a> e a <a href="https://www.ibhub.com.br/privacidade" target="_blank" rel="noopener noreferrer" style={{ color: "#c9a84c", fontWeight: 700 }}>Política de Privacidade</a>
                   </span>
                 </label>
 

@@ -165,7 +165,7 @@ export default function WineCellarScreen() {
     const region = wine.region ? `\n📍 ${wine.region}${wine.country ? ", " + wine.country : ""}` : "";
     const vintage = wine.vintage ? ` (${wine.vintage})` : "";
     const message =
-      `🍷 ${wine.name}${vintage}${wine.producer ? "\n🏠 " + wine.producer : ""}${region}${score}\n\nVia ibhub — Rede do Vinho\nhttps://ibhub.com.br`;
+      `🍷 ${wine.name}${vintage}${wine.producer ? "\n🏠 " + wine.producer : ""}${region}${score}\n\nVia ibhub — Rede do Vinho\nhttps://www.ibhub.com.br`;
     try {
       await Share.share({ message });
     } catch (e) {

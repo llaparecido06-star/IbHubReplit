@@ -525,8 +525,8 @@ export default function LandingPage() {
           <span style={{ fontSize: 13, color: "#9a9a8e" }}>© 2026 ibhub. Todos os direitos reservados.</span>
         </div>
         <div style={{ display: "flex", gap: 24 }}>
-          <a href="#" style={{ fontSize: 13, color: "#7a8494", textDecoration: "none" }}>Termos</a>
-          <a href="#" style={{ fontSize: 13, color: "#7a8494", textDecoration: "none" }}>Privacidade</a>
+          <a href="https://www.ibhub.com.br/termos" target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: "#7a8494", textDecoration: "none" }}>Termos</a>
+          <a href="https://www.ibhub.com.br/privacidade" target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: "#7a8494", textDecoration: "none" }}>Privacidade</a>
         </div>
       </footer>
     </div>

@@ -488,8 +488,8 @@ export default function MinhaContaPage() {
       {
         title: "SUPORTE & LEGAL",
         rows: [
-          { kind: "route",   icon: FileText,      label: "Termos de Uso",           sub: "Termos e condições",          href: "https://ibhub.com.br/termos" },
-          { kind: "route",   icon: FileText,      label: "Política de Privacidade", sub: "Como usamos seus dados",      href: "https://ibhub.com.br/privacidade" },
+          { kind: "route",   icon: FileText,      label: "Termos de Uso",           sub: "Termos e condições",          href: "https://www.ibhub.com.br/termos" },
+          { kind: "route",   icon: FileText,      label: "Política de Privacidade", sub: "Como usamos seus dados",      href: "https://www.ibhub.com.br/privacidade" },
           { kind: "route",   icon: Mail,          label: "Fale Conosco",            sub: "Suporte e feedback",          href: "mailto:contato@ibhub.com.br" },
           { kind: "route",   icon: AlertCircle,   label: "Reportar Bug",            sub: "Nos ajude a melhorar",        href: "mailto:bugs@ibhub.com.br" },
         ],
