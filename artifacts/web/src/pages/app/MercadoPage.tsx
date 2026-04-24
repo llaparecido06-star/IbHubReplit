@@ -980,41 +980,10 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
     setPosts(prev => prev.map(p => p.id === id ? { ...p, user_liked: liked, likes_count: count } : p));
   };
 
-  if (!hasAccess) {
-    return (
-      <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 40, textAlign: "center" }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>📡</div>
-        <h3 style={{ fontSize: 20, fontWeight: 900, color: NAVY, marginBottom: 8 }}>Feed Exclusivo Ideal.BI</h3>
-        <p style={{ fontSize: 14, color: MUTED, lineHeight: 1.7, maxWidth: 420, margin: "0 auto 24px" }}>
-          Acesse análises exclusivas, informações privilegiadas de mercado e insights estratégicos do setor vitivinícola, publicados pela equipe Ideal.BI.
-          Disponível para assinantes.
-        </p>
-        <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 20 }}>
-          {[
-            { icon: "📊", label: "Análises de mercado" },
-            { icon: "🍷", label: "Tendências do setor" },
-            { icon: "🌍", label: "Dados de importação/exportação" },
-            { icon: "💡", label: "Insights estratégicos" },
-          ].map(f => (
-            <div key={f.label} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", backgroundColor: `${GOLD}12`, borderRadius: 20, fontSize: 13, color: NAVY, fontWeight: 600 }}>
-              {f.icon} {f.label}
-            </div>
-          ))}
-        </div>
-        <a
-          href="/assinar"
-          style={{ display: "inline-block", padding: "12px 32px", backgroundColor: GOLD, borderRadius: 10, fontSize: 15, fontWeight: 800, color: NAVY, textDecoration: "none" }}
-        >
-          Ver planos e assinar →
-        </a>
-      </div>
-    );
-  }
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-      {/* Sub-tabs: Feed | Busca IA */}
+      {/* Sub-tabs: Feed | Busca IA — always visible */}
       <div style={{ display: "flex", gap: 8, paddingBottom: 4 }}>
         {([
           { key: "feed",   label: "Feed",     icon: "📡" },
@@ -1040,11 +1009,39 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
         ))}
       </div>
 
-      {/* Busca IA view */}
+      {/* Busca IA — always accessible (uses credits, not plan) */}
       {subTab === "search" && <IdealBISearch userId={userId} />}
 
-      {/* Feed view */}
-      {subTab === "feed" && <>
+      {/* Feed — paywall if no plan access */}
+      {subTab === "feed" && (!hasAccess ? (
+        <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 40, textAlign: "center" }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>📡</div>
+          <h3 style={{ fontSize: 20, fontWeight: 900, color: NAVY, marginBottom: 8 }}>Feed Exclusivo Ideal.BI</h3>
+          <p style={{ fontSize: 14, color: MUTED, lineHeight: 1.7, maxWidth: 420, margin: "0 auto 24px" }}>
+            Acesse análises exclusivas, informações privilegiadas de mercado e insights estratégicos do setor vitivinícola, publicados pela equipe Ideal.BI.
+            Disponível para assinantes.
+          </p>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 20 }}>
+            {[
+              { icon: "📊", label: "Análises de mercado" },
+              { icon: "🍷", label: "Tendências do setor" },
+              { icon: "🌍", label: "Dados de importação/exportação" },
+              { icon: "💡", label: "Insights estratégicos" },
+            ].map(f => (
+              <div key={f.label} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", backgroundColor: `${GOLD}12`, borderRadius: 20, fontSize: 13, color: NAVY, fontWeight: 600 }}>
+                {f.icon} {f.label}
+              </div>
+            ))}
+          </div>
+          <a
+            href="/assinar"
+            style={{ display: "inline-block", padding: "12px 32px", backgroundColor: GOLD, borderRadius: 10, fontSize: 15, fontWeight: 800, color: NAVY, textDecoration: "none" }}
+          >
+            Ver planos e assinar →
+          </a>
+        </div>
+      ) : (
+      <>
 
       {/* Admin create post */}
       {isAdmin && (
@@ -1164,7 +1161,8 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
           />
         ))
       )}
-      </>}
+      </>
+      ))}
     </div>
   );
 }
