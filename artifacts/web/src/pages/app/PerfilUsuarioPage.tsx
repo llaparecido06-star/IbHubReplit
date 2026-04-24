@@ -12,6 +12,9 @@ import {
   toggleWebFollow,
   getOrCreateWebConversation,
   fetchPublicWineCellar,
+  fetchConnectionsList,
+  fetchFollowersList,
+  fetchFollowingList,
   toggleLikePost,
   changeReactionPost,
   toggleBookmarkPost,
@@ -19,6 +22,7 @@ import {
   Post,
   WineEntry,
   ReactionType,
+  ProfilePerson,
 } from "@/services/api";
 
 const GOLD   = "#c9a84c";
@@ -80,6 +84,81 @@ function Tag({ label, color = GOLD }: { label: string; color?: string }) {
     <span style={{ fontSize: 12, fontWeight: 600, color, backgroundColor: color + "18", border: `1px solid ${color}30`, padding: "3px 10px", borderRadius: 100 }}>
       {label}
     </span>
+  );
+}
+
+/* ── Network modal (Conexões / Seguidores / Seguindo) ── */
+type NetworkModalType = "conexoes" | "seguidores" | "seguindo";
+
+function NetworkModal({
+  type,
+  list,
+  loading,
+  onClose,
+  onNavigate,
+}: {
+  type: NetworkModalType;
+  list: ProfilePerson[];
+  loading: boolean;
+  onClose: () => void;
+  onNavigate: (id: string) => void;
+}) {
+  const titles: Record<NetworkModalType, string> = {
+    conexoes: "Conexões",
+    seguidores: "Seguidores",
+    seguindo: "Seguindo",
+  };
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+      onClick={onClose}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ backgroundColor: WHITE, borderRadius: 18, width: "min(480px, 100%)", maxHeight: "80vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}
+      >
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 20px 14px", borderBottom: `1px solid ${BORDER}` }}>
+          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: NAVY }}>{titles[type]}</h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, lineHeight: 1, padding: 4 }}>✕</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ overflowY: "auto", flex: 1, padding: "8px 0" }}>
+          {loading ? (
+            <div style={{ textAlign: "center", padding: 40, color: MUTED }}>
+              <div style={{ width: 28, height: 28, border: `3px solid ${GOLD}30`, borderTopColor: GOLD, borderRadius: "50%", animation: "spin .8s linear infinite", margin: "0 auto 10px" }} />
+              <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+              <div style={{ fontSize: 13 }}>Carregando...</div>
+            </div>
+          ) : list.length === 0 ? (
+            <div style={{ textAlign: "center", padding: 40, color: MUTED }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>🍷</div>
+              <div style={{ fontSize: 14 }}>Nenhum usuário ainda.</div>
+            </div>
+          ) : (
+            list.map(person => (
+              <div
+                key={person.id}
+                onClick={() => { onClose(); onNavigate(person.id); }}
+                style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 20px", cursor: "pointer", transition: "background .12s" }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = BG)}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}
+              >
+                <Avatar src={person.avatar_url} name={person.full_name} size={44} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{person.full_name}</div>
+                  {person.username && <div style={{ fontSize: 12, color: MUTED }}>@{person.username}</div>}
+                  {person.headline && <div style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{person.headline}</div>}
+                </div>
+                <svg width="14" height="14" fill="none" stroke={MUTED} strokeWidth="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -412,6 +491,19 @@ export default function PerfilUsuarioPage() {
 
   const [selectedWine, setSelectedWine] = useState<WineEntry | null>(null);
 
+  /* Network modal state */
+  const [networkModal, setNetworkModal] = useState<{ type: NetworkModalType; list: ProfilePerson[]; loading: boolean } | null>(null);
+
+  const openNetworkModal = async (type: NetworkModalType) => {
+    if (!targetId) return;
+    setNetworkModal({ type, list: [], loading: true });
+    let list: ProfilePerson[] = [];
+    if (type === "conexoes")   list = await fetchConnectionsList(targetId);
+    if (type === "seguidores") list = await fetchFollowersList(targetId);
+    if (type === "seguindo")   list = await fetchFollowingList(targetId);
+    setNetworkModal({ type, list, loading: false });
+  };
+
   useEffect(() => {
     if (!targetId) return;
     if (targetId === currentUserId) { setLocation("/app/perfil"); return; }
@@ -544,6 +636,17 @@ export default function PerfilUsuarioPage() {
 
   return (
     <AppShell>
+      {/* Network modal */}
+      {networkModal && (
+        <NetworkModal
+          type={networkModal.type}
+          list={networkModal.list}
+          loading={networkModal.loading}
+          onClose={() => setNetworkModal(null)}
+          onNavigate={(id) => setLocation(`/app/usuario/${id}`)}
+        />
+      )}
+
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
 
         {/* Back */}
@@ -608,23 +711,6 @@ export default function PerfilUsuarioPage() {
                   </div>
                 )}
 
-                {/* 3. Mensagem — only visible when following OR connected */}
-                {canMessage && (
-                  <button
-                    onClick={handleMessage}
-                    disabled={msgLoading}
-                    style={{
-                      padding: "9px 18px", borderRadius: 10, fontSize: 13, fontWeight: 700,
-                      cursor: msgLoading ? "default" : "pointer",
-                      border: connectionStatus === "connected" ? "none" : `1.5px solid ${GOLD}`,
-                      backgroundColor: connectionStatus === "connected" ? GOLD : "transparent",
-                      color: connectionStatus === "connected" ? WHITE : GOLD,
-                      opacity: msgLoading ? 0.7 : 1,
-                    }}
-                  >
-                    {msgLoading ? "…" : "Mensagem"}
-                  </button>
-                )}
               </div>
             </div>
 
@@ -661,22 +747,44 @@ export default function PerfilUsuarioPage() {
               </div>
             )}
 
-            {/* Stats */}
+            {/* Stats — clickable */}
             <div style={{ display: "flex", gap: 0, marginTop: 18, paddingTop: 16, borderTop: `1px solid ${BORDER}` }}>
               {[
-                { label: "Conexões",   value: stats.connections },
-                { label: "Seguidores", value: stats.followers },
-                { label: "Seguindo",   value: stats.following },
+                { label: "Conexões",   value: stats.connections, modal: "conexoes" as NetworkModalType },
+                { label: "Seguidores", value: stats.followers,   modal: "seguidores" as NetworkModalType },
+                { label: "Seguindo",   value: stats.following,   modal: "seguindo" as NetworkModalType },
               ].map((s, i, arr) => (
                 <React.Fragment key={s.label}>
-                  <div style={{ flex: 1, textAlign: "center" }}>
+                  <button
+                    onClick={() => openNetworkModal(s.modal)}
+                    style={{ flex: 1, textAlign: "center", background: "none", border: "none", cursor: "pointer", padding: "8px 0", borderRadius: 10, transition: "background .12s" }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = BG)}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}
+                  >
                     <div style={{ fontSize: 22, fontWeight: 900, color: GOLD }}>{fmtN(s.value)}</div>
                     <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{s.label}</div>
-                  </div>
+                  </button>
                   {i < arr.length - 1 && <div style={{ width: 1, backgroundColor: BORDER }} />}
                 </React.Fragment>
               ))}
             </div>
+
+            {/* Mensagem — below the stats row, full width, only when following or connected */}
+            {canMessage && (
+              <div style={{ marginTop: 14 }}>
+                <button
+                  onClick={handleMessage}
+                  disabled={msgLoading}
+                  style={{
+                    width: "100%", padding: "11px 0", borderRadius: 10, fontSize: 14, fontWeight: 700,
+                    cursor: msgLoading ? "default" : "pointer", border: "none",
+                    backgroundColor: GOLD, color: WHITE, opacity: msgLoading ? 0.7 : 1,
+                  }}
+                >
+                  {msgLoading ? "Abrindo conversa…" : "✉ Mensagem"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
