@@ -591,6 +591,49 @@ export async function checkWebConnectionStatus(
   }
 }
 
+export async function getOrCreateWebConversation(
+  currentUserId: string,
+  targetId: string,
+): Promise<string | null> {
+  try {
+    // Look for an existing 1:1 conversation shared by both users
+    const { data: myRows } = await supabase
+      .from("conversation_participants")
+      .select("conversation_id")
+      .eq("user_id", currentUserId);
+
+    if (myRows && myRows.length > 0) {
+      const myIds = (myRows as any[]).map(r => r.conversation_id);
+      const { data: shared } = await supabase
+        .from("conversation_participants")
+        .select("conversation_id, conversation:conversations(id, is_group)")
+        .eq("user_id", targetId)
+        .in("conversation_id", myIds);
+
+      const existing = (shared as any[])?.find(r => !(r.conversation as any)?.is_group);
+      if (existing) return existing.conversation_id as string;
+    }
+
+    // Create new 1:1 conversation
+    const { data: convo, error: convErr } = await supabase
+      .from("conversations")
+      .insert({ is_group: false })
+      .select("id")
+      .single();
+    if (convErr || !convo) return null;
+
+    await supabase.from("conversation_participants").insert([
+      { conversation_id: convo.id, user_id: currentUserId, accepted: true },
+      { conversation_id: convo.id, user_id: targetId,      accepted: false },
+    ]);
+
+    return convo.id as string;
+  } catch (e) {
+    console.warn("getOrCreateWebConversation:", e);
+    return null;
+  }
+}
+
 export async function checkWebFollowStatus(
   targetId: string,
   currentUserId: string,

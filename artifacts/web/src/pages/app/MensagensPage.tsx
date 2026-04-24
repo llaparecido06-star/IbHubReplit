@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useSearch } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import { GruposContent } from "./GruposPage";
@@ -126,6 +127,7 @@ export default function MensagensPage() {
   const { profile, user, activeCompany, loading: authLoading } = useAuth();
   const userId = profile?.id ?? user?.id ?? "";
   const isMobile = useIsMobile();
+  const searchStr = useSearch();
 
   const [chatTab, setChatTab]             = useState<ChatTab>("mensagens");
   const [conversations, setConversations] = useState<WebConversation[]>([]);
@@ -145,11 +147,24 @@ export default function MensagensPage() {
   const bottomRef  = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Parse ?conv=<id> from URL to auto-open a specific conversation
+  const convIdFromUrl = new URLSearchParams(searchStr).get("conv");
+
   useEffect(() => {
     if (authLoading) return;
     if (!userId) { setLoading(false); return; }
     fetchWebConversations(userId)
-      .then(data => { setConversations(data); setLoading(false); })
+      .then(data => {
+        setConversations(data);
+        setLoading(false);
+        if (convIdFromUrl) {
+          const target = data.find(c => c.id === convIdFromUrl);
+          if (target) {
+            setSelected(target);
+            fetchWebMessages(target.id).then(setMessages);
+          }
+        }
+      })
       .catch(() => setLoading(false));
   }, [userId, authLoading]);
 

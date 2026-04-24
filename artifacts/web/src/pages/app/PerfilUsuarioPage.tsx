@@ -10,6 +10,7 @@ import {
   checkWebConnectionStatus,
   checkWebFollowStatus,
   toggleWebFollow,
+  getOrCreateWebConversation,
   fetchPublicWineCellar,
   UserProfile,
   Post,
@@ -215,6 +216,7 @@ export default function PerfilUsuarioPage() {
   const [isFollowing, setIsFollowing] = useState(false);
   const [connectLoading, setConnectLoading] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  const [msgLoading, setMsgLoading] = useState(false);
 
   const [selectedWine, setSelectedWine] = useState<WineEntry | null>(null);
 
@@ -259,6 +261,19 @@ export default function PerfilUsuarioPage() {
     await toggleWebFollow(targetId!, currentUserId, !next);
     setFollowLoading(false);
   };
+
+  const handleMessage = async () => {
+    if (!currentUserId || msgLoading || !targetId) return;
+    setMsgLoading(true);
+    const convId = await getOrCreateWebConversation(currentUserId, targetId);
+    setMsgLoading(false);
+    if (convId) {
+      setLocation(`/app/mensagens?conv=${convId}`);
+    }
+  };
+
+  /* Mensagem button is available when following OR connected */
+  const canMessage = isFollowing || connectionStatus === "connected";
 
   if (loading) {
     return (
@@ -322,8 +337,8 @@ export default function PerfilUsuarioPage() {
               <div style={{ border: `4px solid ${WHITE}`, borderRadius: "50%", flexShrink: 0 }}>
                 <Avatar src={userProfile.avatar_url} name={userProfile.full_name} size={88} />
               </div>
-              <div style={{ display: "flex", gap: 8, paddingBottom: 6 }}>
-                {/* Follow button */}
+              <div style={{ display: "flex", gap: 8, paddingBottom: 6, flexWrap: "wrap" }}>
+                {/* 1. Seguir */}
                 <button
                   onClick={handleFollow}
                   disabled={followLoading}
@@ -337,7 +352,8 @@ export default function PerfilUsuarioPage() {
                 >
                   {isFollowing ? "Seguindo" : "Seguir"}
                 </button>
-                {/* Connect button */}
+
+                {/* 2. Conectar (hidden when already connected) */}
                 {connectionStatus !== "connected" && (
                   <button
                     onClick={handleConnect}
@@ -355,6 +371,24 @@ export default function PerfilUsuarioPage() {
                   <div style={{ padding: "9px 18px", borderRadius: 10, fontSize: 13, fontWeight: 700, backgroundColor: "#e8f5e9", color: "#16a34a" }}>
                     ✓ Conectado
                   </div>
+                )}
+
+                {/* 3. Mensagem — only visible when following OR connected */}
+                {canMessage && (
+                  <button
+                    onClick={handleMessage}
+                    disabled={msgLoading}
+                    style={{
+                      padding: "9px 18px", borderRadius: 10, fontSize: 13, fontWeight: 700,
+                      cursor: msgLoading ? "default" : "pointer",
+                      border: connectionStatus === "connected" ? "none" : `1.5px solid ${GOLD}`,
+                      backgroundColor: connectionStatus === "connected" ? GOLD : "transparent",
+                      color: connectionStatus === "connected" ? WHITE : GOLD,
+                      opacity: msgLoading ? 0.7 : 1,
+                    }}
+                  >
+                    {msgLoading ? "…" : "Mensagem"}
+                  </button>
                 )}
               </div>
             </div>
