@@ -13,6 +13,10 @@ import {
   uploadWebPostImage,
   uploadWebPostVideo,
   addWineEntry,
+  fetchWebNotifications,
+  markWebNotificationRead,
+  markAllWebNotificationsRead,
+  WebNotification,
 } from "@/services/api";
 
 const GOLD   = "#c9a84c";
@@ -598,6 +602,50 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
   const username    = profile?.username ? `@${profile.username}` : "";
   const userId      = profile?.id ?? user?.id ?? "";
 
+  const [notifItems, setNotifItems] = useState<WebNotification[]>([]);
+  const [notifOpen, setNotifOpen]   = useState(false);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
+  const unreadCount = notifItems.filter(n => !n.read).length;
+
+  const loadNotifs = useCallback(async () => {
+    if (!userId) return;
+    setNotifLoading(true);
+    const data = await fetchWebNotifications(userId);
+    setNotifItems(data);
+    setNotifLoading(false);
+  }, [userId]);
+
+  useEffect(() => { loadNotifs(); }, [loadNotifs]);
+
+  useEffect(() => {
+    if (!notifOpen) return;
+    const handle = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setNotifOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, [notifOpen]);
+
+  const handleMarkAllRead = async () => {
+    if (!userId) return;
+    setNotifItems(prev => prev.map(n => ({ ...n, read: true })));
+    await markAllWebNotificationsRead(userId);
+  };
+
+  const handleNotifRead = async (notif: WebNotification) => {
+    if (!notif.read) {
+      setNotifItems(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
+      await markWebNotificationRead(notif.id);
+    }
+    if (notif.post_id) setLocation("/app");
+    else if (notif.type === "connection" && notif.actor?.id) setLocation(`/app/usuario/${notif.actor.id}`);
+    else setLocation("/app/notificacoes");
+    setNotifOpen(false);
+  };
+
   useEffect(() => {
     if (!userId) return;
     fetchProfileStats(userId).then(setStats);
@@ -683,7 +731,149 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
           <button onClick={() => setLocation("/admin")} style={{ background: "none", border: `1px solid ${GOLD}55`, borderRadius: 7, padding: "5px 10px", fontSize: 12, fontWeight: 700, color: GOLD, cursor: "pointer" }}>⚙ Admin</button>
         )}
 
-        <button onClick={() => setLocation("/app/notificacoes")} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, display: "flex", alignItems: "center", padding: 4 }} title="Notificações">{I.bell}</button>
+        {/* ── Notification Bell ── */}
+        <div ref={notifRef} style={{ position: "relative" }}>
+          <button
+            onClick={() => { setNotifOpen(o => !o); if (!notifOpen) loadNotifs(); }}
+            style={{ background: "none", border: "none", cursor: "pointer", color: notifOpen ? GOLD : MUTED, display: "flex", alignItems: "center", padding: 4, position: "relative" }}
+            title="Notificações"
+          >
+            {I.bell}
+            {unreadCount > 0 && (
+              <span style={{
+                position: "absolute", top: -1, right: -1,
+                background: "#e74c3c", color: WHITE,
+                borderRadius: "50%", minWidth: 16, height: 16,
+                fontSize: 10, fontWeight: 800,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                border: `2px solid ${WHITE}`, lineHeight: 1,
+                padding: unreadCount > 9 ? "0 3px" : "0",
+              }}>
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {/* Dropdown panel */}
+          {notifOpen && (
+            <div style={{
+              position: "absolute", right: 0, top: "calc(100% + 10px)",
+              width: 360, maxWidth: "calc(100vw - 24px)",
+              backgroundColor: WHITE, border: `1px solid ${BORDER}`,
+              borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,0.14)",
+              zIndex: 400, overflow: "hidden",
+            }}>
+              {/* Panel header */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px 10px", borderBottom: `1px solid ${BORDER}` }}>
+                <span style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>
+                  Notificações
+                  {unreadCount > 0 && (
+                    <span style={{ marginLeft: 8, background: GOLD, color: WHITE, borderRadius: 10, fontSize: 11, fontWeight: 700, padding: "2px 7px" }}>
+                      {unreadCount}
+                    </span>
+                  )}
+                </span>
+                {unreadCount > 0 && (
+                  <button onClick={handleMarkAllRead} style={{ background: "none", border: "none", cursor: "pointer", color: GOLD, fontSize: 12, fontWeight: 700, fontFamily: "inherit" }}>
+                    Marcar lidas
+                  </button>
+                )}
+              </div>
+
+              {/* List */}
+              <div style={{ maxHeight: 380, overflowY: "auto" }}>
+                {notifLoading ? (
+                  <div style={{ textAlign: "center", padding: "32px 0", color: MUTED, fontSize: 13 }}>Carregando…</div>
+                ) : notifItems.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "40px 0" }}>
+                    <div style={{ fontSize: 36, marginBottom: 10 }}>🔔</div>
+                    <p style={{ fontSize: 13, color: MUTED, margin: 0 }}>Tudo em dia!</p>
+                  </div>
+                ) : notifItems.slice(0, 8).map(n => {
+                  const typeColors: Record<string, string> = {
+                    like: "#e74c3c", comment: "#3498db", comment_reply: "#8b5cf6",
+                    follow: "#2ecc71", connection: GOLD, mention: "#9b59b6",
+                  };
+                  const typeEmojis: Record<string, string> = {
+                    like: "❤️", comment: "💬", comment_reply: "↩️",
+                    follow: "➕", connection: "🤝", mention: "@",
+                  };
+                  const typeLabels: Record<string, string> = {
+                    like: "curtiu sua publicação",
+                    comment: "comentou na sua publicação",
+                    comment_reply: "respondeu seu comentário",
+                    follow: "começou a seguir você",
+                    connection: "enviou pedido de conexão",
+                    mention: "mencionou você",
+                  };
+                  const actorName = n.actor?.full_name ?? "Alguém";
+                  const emoji = typeEmojis[n.type] ?? "🔔";
+                  const label = n.message ?? typeLabels[n.type] ?? "nova notificação";
+                  const bgColor = typeColors[n.type] ?? GOLD;
+                  const timeDiff = () => {
+                    const mins = Math.floor((Date.now() - new Date(n.created_at).getTime()) / 60000);
+                    if (mins < 1) return "agora";
+                    if (mins < 60) return `${mins}m`;
+                    const hrs = Math.floor(mins / 60);
+                    if (hrs < 24) return `${hrs}h`;
+                    return `${Math.floor(hrs / 24)}d`;
+                  };
+                  return (
+                    <div
+                      key={n.id}
+                      onClick={() => handleNotifRead(n)}
+                      style={{
+                        display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 16px",
+                        background: n.read ? WHITE : `${GOLD}0d`,
+                        borderBottom: `1px solid ${BORDER}`,
+                        cursor: "pointer", transition: "background 0.12s",
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = "#f8f7f3")}
+                      onMouseLeave={e => (e.currentTarget.style.background = n.read ? WHITE : `${GOLD}0d`)}
+                    >
+                      {/* Avatar + emoji badge */}
+                      <div style={{ position: "relative", flexShrink: 0 }}>
+                        {n.actor?.avatar_url ? (
+                          <img src={n.actor.avatar_url} alt={actorName} style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} />
+                        ) : (
+                          <div style={{ width: 40, height: 40, borderRadius: "50%", background: NAVY, color: WHITE, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700 }}>
+                            {actorName.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <span style={{ position: "absolute", bottom: -2, right: -2, background: bgColor, borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, border: `2px solid ${WHITE}` }}>
+                          {emoji}
+                        </span>
+                      </div>
+
+                      {/* Text */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: 13, color: NAVY, lineHeight: 1.4 }}>
+                          <strong>{actorName}</strong> {label}
+                        </p>
+                        <p style={{ margin: "3px 0 0", fontSize: 11, color: MUTED }}>{timeDiff()}</p>
+                      </div>
+
+                      {/* Unread dot */}
+                      {!n.read && (
+                        <div style={{ width: 8, height: 8, borderRadius: "50%", background: GOLD, flexShrink: 0, marginTop: 4 }} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Footer link */}
+              <div style={{ borderTop: `1px solid ${BORDER}`, padding: "10px 16px", textAlign: "center" }}>
+                <button
+                  onClick={() => { setNotifOpen(false); setLocation("/app/notificacoes"); }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: GOLD, fontSize: 13, fontWeight: 700, fontFamily: "inherit" }}
+                >
+                  Ver todas as notificações →
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* ── Create post (mobile gold + button) ── */}
         {isMobile && (
