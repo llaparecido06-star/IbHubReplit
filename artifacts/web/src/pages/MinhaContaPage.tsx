@@ -1,6 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
+import {
+  Edit2, BarChart2, Shield, Bookmark, Bell, Lock, Slash, Star,
+  FileText, Mail, AlertCircle, ChevronRight, LogOut,
+} from "lucide-react";
 
 function useWindowWidth() {
   const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1280);
@@ -432,52 +436,92 @@ export default function MinhaContaPage() {
   }
 
   if (isMobile) {
-    const name    = profile?.full_name ?? "Usuário";
-    const initial = name.charAt(0).toUpperCase();
-    const planRaw = profile?.plan ?? profile?.subscription_tier ?? "gratuito";
-    const planColors: Record<string, string> = { exclusive: "#7B2FBE", executivo: "#7B2FBE", business: "#1a56db", premium: GOLD, profissional: GOLD };
-    const planColorVal = planColors[planRaw.toLowerCase()] ?? "#6b7280";
-    const planLabelMap: Record<string, string> = { exclusive: "Executivo", executivo: "Executivo", business: "Business", empresa: "Business", premium: "Premium", profissional: "Premium", free: "Gratuito", gratuito: "Gratuito" };
-    const planLabelVal = planLabelMap[planRaw.toLowerCase()] ?? "Gratuito";
+    const name      = profile?.full_name ?? "Usuário";
+    const initial   = name.charAt(0).toUpperCase();
+    const planRaw   = profile?.plan ?? profile?.subscription_tier ?? "";
+    const planMap2: Record<string, string> = {
+      exclusive: "Plano Exclusivo", business: "Plano Business",
+      premium: "Plano Premium", basico: "Plano Básico", gratuito: "Plano Gratuito",
+    };
+    const planLabel2 = planMap2[planRaw.toLowerCase()] ?? (planRaw ? planRaw : "Plano Gratuito");
 
     const sectionTitles: Record<Section, string> = {
-      perfil: "Editar Perfil",
-      assinatura: "Assinatura",
-      notificacoes: "Notificações",
-      privacidade: "Privacidade",
-      seguranca: "Segurança",
+      perfil: "Editar Perfil", assinatura: "Assinatura",
+      notificacoes: "Notificações", privacidade: "Privacidade", seguranca: "Segurança",
     };
 
-    const menuGroups: { title: string; rows: { icon: string; label: string; sub: string; section: Section }[] }[] = [
+    type IconComp = React.ComponentType<{ size?: number; color?: string }>;
+    type MobileRow =
+      | { kind: "section"; icon: IconComp; label: string; sub: string; section: Section }
+      | { kind: "route";   icon: IconComp; label: string; sub: string; href: string };
+
+    const mobileSections: { title: string; rows: MobileRow[] }[] = [
       {
         title: "CONTA",
         rows: [
-          { icon: "👤", label: "Editar Perfil", sub: "Nome, bio, foto e cargo", section: "perfil" },
-          { icon: "⭐", label: "Assinatura", sub: "Plano e cobrança", section: "assinatura" },
+          { kind: "section", icon: Edit2,     label: "Editar Perfil",     sub: "Alterar informações pessoais",   section: "perfil" },
+          { kind: "route",   icon: BarChart2, label: "Analytics",         sub: "Estatísticas do seu perfil",     href: "/app/analytics" },
+          { kind: "route",   icon: Shield,    label: "Certificações",     sub: "Certificações",                  href: "/app/certificacoes" },
+        ],
+      },
+      {
+        title: "CONTEÚDO",
+        rows: [
+          { kind: "route",   icon: Bookmark,  label: "Publicações Salvas", sub: "Suas publicações favoritas",   href: "/app/salvos" },
         ],
       },
       {
         title: "PREFERÊNCIAS",
         rows: [
-          { icon: "🔔", label: "Notificações", sub: "Preferências de aviso", section: "notificacoes" },
-          { icon: "🔒", label: "Privacidade", sub: "Visibilidade do perfil", section: "privacidade" },
-          { icon: "🛡️", label: "Segurança", sub: "Senha e e-mail", section: "seguranca" },
+          { kind: "section", icon: Bell,      label: "Notificações",          sub: "Gerenciar notificações",              section: "notificacoes" },
+          { kind: "section", icon: Lock,      label: "Privacidade",           sub: "Visibilidade do perfil",              section: "privacidade" },
+          { kind: "section", icon: Shield,    label: "Segurança",             sub: "Senha e e-mail",                      section: "seguranca" },
+          { kind: "route",   icon: Slash,     label: "Usuários Bloqueados",   sub: "Gerenciar bloqueios",                 href: "/app/bloqueados" },
+        ],
+      },
+      {
+        title: "ASSINATURA",
+        rows: [
+          { kind: "section", icon: Star,      label: "Assinatura",            sub: "Gerencie seu plano",                  section: "assinatura" },
+        ],
+      },
+      {
+        title: "SUPORTE & LEGAL",
+        rows: [
+          { kind: "route",   icon: FileText,      label: "Termos de Uso",           sub: "Termos e condições",          href: "https://ibhub.com.br/termos" },
+          { kind: "route",   icon: FileText,      label: "Política de Privacidade", sub: "Como usamos seus dados",      href: "https://ibhub.com.br/privacidade" },
+          { kind: "route",   icon: Mail,          label: "Fale Conosco",            sub: "Suporte e feedback",          href: "mailto:contato@ibhub.com.br" },
+          { kind: "route",   icon: AlertCircle,   label: "Reportar Bug",            sub: "Nos ajude a melhorar",        href: "mailto:bugs@ibhub.com.br" },
         ],
       },
     ];
 
+    function handleMobileRow(row: MobileRow) {
+      if (row.kind === "section") {
+        setMobileView(row.section);
+        setActiveSection(row.section);
+      } else {
+        if (row.href.startsWith("http") || row.href.startsWith("mailto")) {
+          window.open(row.href, "_blank");
+        } else {
+          setLocation(row.href);
+        }
+      }
+    }
+
     if (mobileView !== "menu") {
       return (
         <AppShell>
-          <div style={{ backgroundColor: "#f5f5f0", minHeight: "100vh", paddingBottom: 80 }}>
-            <div style={{ position: "sticky", top: 56, zIndex: 20, backgroundColor: "#fff", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", padding: "14px 16px", gap: 12 }}>
+          <div style={{ backgroundColor: "#f2f3f5", minHeight: "100vh", paddingBottom: 80 }}>
+            <div style={{ position: "sticky", top: 56, zIndex: 20, backgroundColor: WHITE, borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px" }}>
               <button
                 onClick={() => setMobileView("menu")}
-                style={{ background: "none", border: "none", cursor: "pointer", padding: "4px 8px 4px 0", fontSize: 20, color: NAVY, display: "flex", alignItems: "center" }}
+                style={{ background: "none", border: "none", cursor: "pointer", color: NAVY, display: "flex", alignItems: "center", padding: 0 }}
               >
-                ‹
+                <ChevronRight size={22} color={NAVY} style={{ transform: "rotate(180deg)" }} />
               </button>
-              <span style={{ fontSize: 18, fontWeight: 800, color: NAVY }}>{sectionTitles[mobileView]}</span>
+              <span style={{ fontSize: 18, fontWeight: 800, color: NAVY }}>{sectionTitles[mobileView as Section]}</span>
+              <div style={{ width: 22 }} />
             </div>
             <div style={{ padding: "16px" }}>
               {renderSection()}
@@ -490,66 +534,97 @@ export default function MinhaContaPage() {
     return (
       <AppShell>
         <div style={{ backgroundColor: "#f2f3f5", minHeight: "100vh", paddingBottom: 80 }}>
-          {/* Sticky header */}
-          <div style={{ position: "sticky", top: 56, zIndex: 20, backgroundColor: "#fff", borderBottom: `1px solid ${BORDER}`, padding: "16px 16px 14px" }}>
-            <span style={{ fontSize: 20, fontWeight: 900, color: NAVY }}>Configurações</span>
+
+          {/* Header */}
+          <div style={{ backgroundColor: WHITE, borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px" }}>
+            <div style={{ width: 22 }} />
+            <span style={{ fontSize: 20, fontWeight: 700, color: NAVY }}>Configurações</span>
+            <div style={{ width: 22 }} />
           </div>
 
-          {/* User card */}
-          <div style={{ backgroundColor: "#fff", margin: "12px 16px 0", borderRadius: 14, padding: "16px", display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ width: 52, height: 52, borderRadius: 26, overflow: "hidden", backgroundColor: "#722f37", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 900, color: WHITE, flexShrink: 0 }}>
-              {profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              ) : initial}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: WHITE, backgroundColor: planColorVal, padding: "2px 8px", borderRadius: 100, display: "inline-block", marginTop: 4 }}>
-                {planLabelVal}
-              </span>
-            </div>
-          </div>
+          <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* Menu sections */}
-          {menuGroups.map(group => (
-            <div key={group.title} style={{ marginTop: 20 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: 0.8, textTransform: "uppercase", padding: "0 16px 6px" }}>
-                {group.title}
+            {/* User card */}
+            <div style={{ backgroundColor: WHITE, borderRadius: 12, border: `1px solid ${BORDER}`, padding: 16, display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ width: 48, height: 48, borderRadius: 24, overflow: "hidden", backgroundColor: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 800, color: GOLD, flexShrink: 0 }}>
+                {profile?.avatar_url
+                  ? <img src={profile.avatar_url} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  : initial}
               </div>
-              <div style={{ backgroundColor: "#fff" }}>
-                {group.rows.map((row, i) => (
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
+                <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>{planLabel2}</div>
+              </div>
+            </div>
+
+            {/* Sections */}
+            {mobileSections.map(group => (
+              <div key={group.title}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: MUTED, letterSpacing: 0.8, textTransform: "uppercase" as const, padding: "0 2px 8px" }}>
+                  {group.title}
+                </div>
+                <div style={{ backgroundColor: WHITE, borderRadius: 12, border: `1px solid ${BORDER}`, overflow: "hidden" }}>
+                  {group.rows.map((row, i) => {
+                    const IconEl = row.icon;
+                    return (
+                      <button
+                        key={row.label}
+                        onClick={() => handleMobileRow(row)}
+                        style={{
+                          width: "100%", display: "flex", alignItems: "center", gap: 12,
+                          padding: 14, background: "none", border: "none", cursor: "pointer",
+                          borderBottom: i < group.rows.length - 1 ? `1px solid ${BORDER}` : "none",
+                          textAlign: "left",
+                        }}
+                      >
+                        <div style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: "#f2f3f5", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <IconEl size={16} color={MUTED} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 15, fontWeight: 600, color: NAVY }}>{row.label}</div>
+                          <div style={{ fontSize: 12, color: MUTED, marginTop: 1 }}>{row.sub}</div>
+                        </div>
+                        <ChevronRight size={18} color={MUTED} />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+
+            {/* Admin panel */}
+            {profile?.is_admin && (
+              <div>
+                <div style={{ backgroundColor: WHITE, borderRadius: 12, border: `1px solid ${BORDER}`, overflow: "hidden" }}>
                   <button
-                    key={row.label}
-                    onClick={() => { setMobileView(row.section); setActiveSection(row.section); }}
-                    style={{
-                      width: "100%", display: "flex", alignItems: "center", padding: "14px 16px", gap: 14,
-                      background: "none", border: "none",
-                      borderBottom: i < group.rows.length - 1 ? `1px solid ${BORDER}` : "none",
-                      cursor: "pointer",
-                    }}
+                    onClick={() => setLocation("/admin")}
+                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: 14, background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
                   >
-                    <div style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: "#f2f3f5", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 19, flexShrink: 0 }}>
-                      {row.icon}
+                    <div style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <Shield size={16} color={GOLD} />
                     </div>
-                    <div style={{ flex: 1, textAlign: "left" }}>
-                      <div style={{ fontSize: 15, fontWeight: 600, color: NAVY }}>{row.label}</div>
-                      <div style={{ fontSize: 12, color: MUTED, marginTop: 1 }}>{row.sub}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: NAVY }}>Painel Administrativo</div>
+                      <div style={{ fontSize: 12, color: MUTED, marginTop: 1 }}>Gerenciar plataforma</div>
                     </div>
-                    <span style={{ color: MUTED, fontSize: 20, lineHeight: 1 }}>›</span>
+                    <ChevronRight size={18} color={MUTED} />
                   </button>
-                ))}
+                </div>
               </div>
-            </div>
-          ))}
+            )}
 
-          {/* Sign out */}
-          <div style={{ margin: "24px 16px 0" }}>
+            {/* Sign out */}
             <button
               onClick={async () => { await signOut(); setLocation("/"); }}
-              style={{ width: "100%", backgroundColor: "#fff", color: "#dc2626", border: "none", borderRadius: 14, padding: "16px", fontSize: 15, fontWeight: 700, cursor: "pointer", textAlign: "center" }}
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "16px 0", borderRadius: 12, border: "1.5px solid #dc2626", background: "none", cursor: "pointer", width: "100%" }}
             >
-              Sair da conta
+              <LogOut size={16} color="#dc2626" />
+              <span style={{ fontSize: 15, fontWeight: 700, color: "#dc2626" }}>Sair da conta</span>
             </button>
+
+            {/* Footer */}
+            <div style={{ textAlign: "center", fontSize: 12, color: MUTED, paddingBottom: 8 }}>ibhub v1.0 · © 2026</div>
+
           </div>
         </div>
       </AppShell>
