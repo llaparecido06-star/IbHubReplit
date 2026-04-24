@@ -1,7 +1,9 @@
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useVideoPlayer, VideoView } from "expo-video";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Animated,
   Dimensions,
   GestureResponderEvent,
@@ -20,9 +22,9 @@ import { supabase } from "@/context/AuthContext";
 import * as API from "@/services/api";
 import type { AppStory, StoryGroup } from "@/services/api";
 
-const STORY_DURATION = 5000;
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const STORY_HEIGHT = Math.round(SCREEN_WIDTH * (16 / 9));
+const IMAGE_DURATION = 5000;
+const VIDEO_DURATION = 15000;
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 interface TaggedProfile {
   id: string;
@@ -37,6 +39,30 @@ function formatTime(iso: string): string {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h`;
   return `${Math.floor(hrs / 24)}d`;
+}
+
+function VideoStoryPlayer({ videoUrl, isPlaying }: { videoUrl: string; isPlaying: boolean }) {
+  const player = useVideoPlayer({ uri: videoUrl }, (p) => {
+    p.loop = false;
+    p.muted = false;
+  });
+
+  useEffect(() => {
+    if (isPlaying) {
+      player.play();
+    } else {
+      player.pause();
+    }
+  }, [isPlaying, player]);
+
+  return (
+    <VideoView
+      player={player}
+      style={StyleSheet.absoluteFill}
+      contentFit="cover"
+      nativeControls={false}
+    />
+  );
 }
 
 export default function StoryViewerScreen() {
@@ -57,6 +83,8 @@ export default function StoryViewerScreen() {
   const [groupIndex, setGroupIndex] = useState(Number(params.groupIndex ?? 0));
   const [storyIndex, setStoryIndex] = useState(0);
   const [taggedProfiles, setTaggedProfiles] = useState<TaggedProfile[]>([]);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [reposting, setReposting] = useState(false);
 
   const progressAnim = useRef(new Animated.Value(0)).current;
   const progressAnimation = useRef<Animated.CompositeAnimation | null>(null);
@@ -64,6 +92,10 @@ export default function StoryViewerScreen() {
 
   const currentGroup = groups[groupIndex];
   const currentStory: AppStory | undefined = currentGroup?.stories[storyIndex];
+
+  const isMyStory = currentStory?.user_id === user?.id;
+  const isTagged = !isMyStory && (currentStory?.tagged_users ?? []).includes(user?.id ?? "");
+  const storyDuration = currentStory?.video_url ? VIDEO_DURATION : IMAGE_DURATION;
 
   const goToNext = useCallback(() => {
     progressAnim.setValue(0);
@@ -92,12 +124,12 @@ export default function StoryViewerScreen() {
     }
   }, [storyIndex, groupIndex, groups, progressAnim]);
 
-  const startProgress = useCallback(() => {
+  const startProgress = useCallback((duration: number) => {
     progressAnimation.current?.stop();
     progressAnim.setValue(0);
     progressAnimation.current = Animated.timing(progressAnim, {
       toValue: 1,
-      duration: STORY_DURATION,
+      duration,
       useNativeDriver: false,
     });
     progressAnimation.current.start(({ finished }) => {
@@ -109,6 +141,8 @@ export default function StoryViewerScreen() {
     if (!currentStory) return;
     if (user?.id) API.markStoryViewed(currentStory.id, user.id);
     setTaggedProfiles([]);
+    setIsPlaying(true);
+    isPaused.current = false;
     const taggedIds = currentStory.tagged_users ?? [];
     if (taggedIds.length > 0) {
       supabase
@@ -119,7 +153,7 @@ export default function StoryViewerScreen() {
           if (data) setTaggedProfiles(data as TaggedProfile[]);
         });
     }
-    startProgress();
+    startProgress(currentStory.video_url ? VIDEO_DURATION : IMAGE_DURATION);
     return () => { progressAnimation.current?.stop(); };
   }, [currentStory?.id]);
 
@@ -128,6 +162,7 @@ export default function StoryViewerScreen() {
   const onTouchStart = (e: GestureResponderEvent) => {
     handleTouchStart.current = { x: e.nativeEvent.pageX, t: Date.now() };
     isPaused.current = true;
+    setIsPlaying(false);
     progressAnimation.current?.stop();
   };
 
@@ -136,12 +171,31 @@ export default function StoryViewerScreen() {
     const dx = e.nativeEvent.pageX - handleTouchStart.current.x;
     const dt = Date.now() - handleTouchStart.current.t;
     isPaused.current = false;
+    setIsPlaying(true);
     if (Math.abs(dx) > 60 && dt < 400) {
       if (dx < 0) goToNext(); else goToPrev();
     } else if (dt < 250 && Math.abs(dx) < 10) {
       if (e.nativeEvent.pageX < SCREEN_WIDTH / 3) goToPrev(); else goToNext();
     } else {
-      startProgress();
+      startProgress(storyDuration);
+    }
+  };
+
+  const handleRepost = async () => {
+    if (!user?.id || !currentStory) return;
+    setReposting(true);
+    progressAnimation.current?.stop();
+    setIsPlaying(false);
+    const result = await API.repostStory(user.id, currentStory);
+    setReposting(false);
+    if (result) {
+      Alert.alert("Repostado!", "O Momento foi adicionado aos seus Momentos.", [
+        { text: "OK", onPress: () => router.back() },
+      ]);
+    } else {
+      Alert.alert("Erro", "Não foi possível repostar. Tente novamente.");
+      setIsPlaying(true);
+      startProgress(storyDuration);
     }
   };
 
@@ -161,15 +215,17 @@ export default function StoryViewerScreen() {
       onResponderRelease={onTouchEnd}
     >
       <View style={styles.frame}>
-        {currentStory.image_url ? (
+        {currentStory.video_url ? (
+          <VideoStoryPlayer videoUrl={currentStory.video_url} isPlaying={isPlaying} />
+        ) : currentStory.image_url ? (
           <Image
             source={{ uri: currentStory.image_url }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
           />
         ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" }]}>
-            <MaterialCommunityIcons name="glass-wine" size={48} color={colors.gold} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: "#0d1b2a", alignItems: "center", justifyContent: "center" }]}>
+            <MaterialCommunityIcons name="glass-wine" size={48} color="#c9a84c" />
           </View>
         )}
 
@@ -180,11 +236,11 @@ export default function StoryViewerScreen() {
             {currentGroup.stories.map((_, i) => (
               <View key={i} style={[styles.progressTrack, { flex: 1 }]}>
                 {i < storyIndex ? (
-                  <View style={[styles.progressAnimFill, { width: "100%" }]} />
+                  <View style={[styles.progressFill, { width: "100%" }]} />
                 ) : i === storyIndex ? (
                   <Animated.View
                     style={[
-                      styles.progressAnimFill,
+                      styles.progressFill,
                       {
                         width: progressAnim.interpolate({
                           inputRange: [0, 1],
@@ -204,6 +260,12 @@ export default function StoryViewerScreen() {
               <Text style={styles.authorName}>{currentGroup.author.full_name}</Text>
               <Text style={styles.storyTime}>{formatTime(currentStory.created_at)}</Text>
             </View>
+            {currentStory.video_url && (
+              <View style={styles.mediaTypePill}>
+                <Feather name="film" size={11} color="#fff" />
+                <Text style={styles.mediaTypePillText}>Vídeo</Text>
+              </View>
+            )}
             <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
               <Feather name="x" size={24} color="#fff" />
             </TouchableOpacity>
@@ -240,6 +302,17 @@ export default function StoryViewerScreen() {
               })}
             </ScrollView>
           )}
+
+          {isTagged && (
+            <TouchableOpacity
+              style={styles.repostBtn}
+              onPress={handleRepost}
+              disabled={reposting}
+            >
+              <Feather name="repeat" size={15} color="#fff" />
+              <Text style={styles.repostBtnText}>{reposting ? "Repostando..." : "Repostar este Momento"}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </View>
@@ -247,20 +320,24 @@ export default function StoryViewerScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen:           { flex: 1, backgroundColor: "#000", justifyContent: "center", alignItems: "center" },
-  frame:            { width: SCREEN_WIDTH, height: STORY_HEIGHT, overflow: "hidden" },
-  gradient:         { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.15)" },
-  topSection:       { paddingHorizontal: 12, gap: 10 },
-  progressBars:     { flexDirection: "row", gap: 3, height: 2 },
-  progressTrack:    { height: 2, backgroundColor: "rgba(255,255,255,0.3)", borderRadius: 1, overflow: "hidden" },
-  progressAnimFill: { height: 2, backgroundColor: "#fff", borderRadius: 1 },
-  authorRow:        { flexDirection: "row", alignItems: "center", gap: 10 },
-  authorName:       { color: "#fff", fontSize: 14, fontWeight: "700" },
-  storyTime:        { color: "rgba(255,255,255,0.7)", fontSize: 11 },
-  closeBtn:         { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
-  bottomSection:    { position: "absolute", bottom: 0, left: 0, right: 0, paddingHorizontal: 20, gap: 10 },
-  overlayText:      { color: "#fff", fontSize: 20, fontWeight: "700", textAlign: "center" },
-  taggedRow:        { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 },
-  tagChip:          { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 },
-  tagChipText:      { color: "#fff", fontSize: 13, fontWeight: "600" },
+  screen:            { flex: 1, backgroundColor: "#000" },
+  frame:             { width: SCREEN_WIDTH, height: SCREEN_HEIGHT, overflow: "hidden" },
+  gradient:          { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.18)" },
+  topSection:        { paddingHorizontal: 12, gap: 10 },
+  progressBars:      { flexDirection: "row", gap: 3, height: 2 },
+  progressTrack:     { height: 2, backgroundColor: "rgba(255,255,255,0.3)", borderRadius: 1, overflow: "hidden" },
+  progressFill:      { height: 2, backgroundColor: "#fff", borderRadius: 1 },
+  authorRow:         { flexDirection: "row", alignItems: "center", gap: 10 },
+  authorName:        { color: "#fff", fontSize: 14, fontWeight: "700" },
+  storyTime:         { color: "rgba(255,255,255,0.7)", fontSize: 11 },
+  closeBtn:          { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
+  mediaTypePill:     { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(0,0,0,0.45)", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
+  mediaTypePillText: { color: "#fff", fontSize: 10, fontWeight: "600" },
+  bottomSection:     { position: "absolute", bottom: 0, left: 0, right: 0, paddingHorizontal: 20, gap: 10 },
+  overlayText:       { color: "#fff", fontSize: 20, fontWeight: "700", textAlign: "center" },
+  taggedRow:         { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 },
+  tagChip:           { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 },
+  tagChipText:       { color: "#fff", fontSize: 13, fontWeight: "600" },
+  repostBtn:         { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "rgba(201,168,76,0.85)", borderRadius: 24, paddingVertical: 10, paddingHorizontal: 20 },
+  repostBtnText:     { color: "#fff", fontSize: 14, fontWeight: "700" },
 });

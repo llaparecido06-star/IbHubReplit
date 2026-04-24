@@ -85,6 +85,7 @@ export interface AppStory {
   id: string;
   user_id: string;
   image_url?: string | null;
+  video_url?: string | null;
   text?: string | null;
   tagged_users?: string[] | null;
   created_at: string;
@@ -1341,7 +1342,7 @@ export async function fetchActiveStories(): Promise<AppStory[]> {
   try {
     const { data, error } = await supabase
       .from("stories")
-      .select("id, user_id, company_page_id, image_url, text, tagged_users, created_at, expires_at")
+      .select("id, user_id, company_page_id, image_url, video_url, text, tagged_users, created_at, expires_at")
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: false });
 
@@ -1369,7 +1370,7 @@ export async function fetchActiveStoriesForUser(currentUserId: string): Promise<
   try {
     const { data: storiesRaw, error } = await supabase
       .from("stories")
-      .select("id, user_id, company_page_id, image_url, text, tagged_users, created_at, expires_at")
+      .select("id, user_id, company_page_id, image_url, video_url, text, tagged_users, created_at, expires_at")
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: true });
 
@@ -1493,16 +1494,46 @@ export async function uploadStoryImage(userId: string, uri: string): Promise<str
   }
 }
 
+export async function uploadStoryVideo(userId: string, uri: string): Promise<string | null> {
+  try {
+    const ext = uri.split(".").pop()?.split("?")[0]?.toLowerCase() ?? "mp4";
+    const fileName = `${userId}/video_${Date.now()}.${ext}`;
+    const response = await fetch(uri);
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    const mimeType = ext === "mov" ? "video/quicktime" : `video/${ext}`;
+    const { data, error } = await supabase.storage
+      .from("stories")
+      .upload(fileName, bytes, { contentType: mimeType, upsert: true });
+    if (error) { console.error("uploadStoryVideo:", error); return null; }
+    const { data: urlData } = supabase.storage.from("stories").getPublicUrl(data.path);
+    return urlData.publicUrl;
+  } catch (e) {
+    console.error("uploadStoryVideo:", e);
+    return null;
+  }
+}
+
 export async function createStory(
   userId: string,
-  options: { text?: string; imageUri?: string; taggedUsers?: string[]; companyPageId?: string | null }
+  options: { text?: string; imageUri?: string; videoUri?: string; taggedUsers?: string[]; companyPageId?: string | null }
 ): Promise<AppStory | null> {
   try {
     let imageUrl: string | null = null;
+    let videoUrl: string | null = null;
+
     if (options.imageUri) {
       imageUrl = await uploadStoryImage(userId, options.imageUri);
       if (!imageUrl) {
         console.error("createStory: image upload failed, aborting story creation");
+        return null;
+      }
+    }
+
+    if (options.videoUri) {
+      videoUrl = await uploadStoryVideo(userId, options.videoUri);
+      if (!videoUrl) {
+        console.error("createStory: video upload failed, aborting story creation");
         return null;
       }
     }
@@ -1512,6 +1543,7 @@ export async function createStory(
       user_id: userId,
       text: options.text ?? null,
       image_url: imageUrl,
+      video_url: videoUrl,
       tagged_users: options.taggedUsers ?? [],
       expires_at: expiresAt,
     };
@@ -1520,17 +1552,33 @@ export async function createStory(
     const { data, error } = await supabase
       .from("stories")
       .insert(insertPayload)
-      .select("id, user_id, company_page_id, image_url, text, tagged_users, created_at, expires_at")
+      .select("id, user_id, company_page_id, image_url, video_url, text, tagged_users, created_at, expires_at")
       .single();
 
     if (error) { console.error("createStory:", error); return null; }
 
+    const storyId = (data as any).id;
     const csUserId = (data as any).user_id;
     const csCompanyId = (data as any).company_page_id;
     const [csProfileMap, csCompanyMap] = await Promise.all([
       fetchCommentProfilesForIds([csUserId]),
       csCompanyId ? fetchCompanyPagesForIds([csCompanyId]) : Promise.resolve(new Map()),
     ]);
+
+    const taggedIds: string[] = (options.taggedUsers ?? []).filter(id => id !== userId);
+    if (taggedIds.length > 0) {
+      const actorName = csProfileMap.get(csUserId)?.full_name ?? "Alguém";
+      const notifs = taggedIds.map(id => ({
+        user_id: id,
+        actor_id: userId,
+        type: "story_tag",
+        message: `${actorName} marcou você em um Momento`,
+        reference_id: storyId,
+      }));
+      await supabase.from("notifications").insert(notifs).then(({ error: ne }) => {
+        if (ne) console.warn("createStory: notification insert failed", ne);
+      });
+    }
 
     return {
       ...(data as any),
@@ -1539,6 +1587,45 @@ export async function createStory(
     } as unknown as AppStory;
   } catch (e) {
     console.error("createStory:", e);
+    return null;
+  }
+}
+
+export async function repostStory(currentUserId: string, story: AppStory): Promise<AppStory | null> {
+  try {
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabase
+      .from("stories")
+      .insert({
+        user_id: currentUserId,
+        image_url: story.image_url ?? null,
+        video_url: story.video_url ?? null,
+        text: story.text ?? null,
+        tagged_users: [],
+        expires_at: expiresAt,
+      })
+      .select("id, user_id, company_page_id, image_url, video_url, text, tagged_users, created_at, expires_at")
+      .single();
+    if (error) { console.error("repostStory:", error); return null; }
+    const rUserId = (data as any).user_id;
+    const profileMap = await fetchCommentProfilesForIds([rUserId, story.user_id]);
+    if (story.user_id && story.user_id !== currentUserId) {
+      const actorName = profileMap.get(currentUserId)?.full_name ?? "Alguém";
+      await supabase.from("notifications").insert({
+        user_id: story.user_id,
+        actor_id: currentUserId,
+        type: "story_repost",
+        message: `${actorName} repostou seu Momento`,
+        reference_id: story.id,
+      });
+    }
+    return {
+      ...(data as any),
+      author: profileMap.get(rUserId) ?? null,
+      company_page: null,
+    } as unknown as AppStory;
+  } catch (e) {
+    console.error("repostStory:", e);
     return null;
   }
 }
@@ -4638,7 +4725,7 @@ export async function fetchAllStoriesAdmin(): Promise<AppStory[]> {
   try {
     const { data, error } = await supabase
       .from("stories")
-      .select("id, user_id, image_url, text, expires_at, created_at")
+      .select("id, user_id, image_url, video_url, text, expires_at, created_at")
       .order("created_at", { ascending: false });
     if (error) { console.error("fetchAllStoriesAdmin:", error); return []; }
     if (!data || data.length === 0) return [];
