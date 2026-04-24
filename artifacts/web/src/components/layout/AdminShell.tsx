@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 
 const GOLD = "#c9a84c";
 const NAVY = "#0d1b2a";
 const SIDEBAR_W = 228;
+const MOBILE_BP = 768;
 
 const SECTIONS = [
   {
@@ -48,9 +49,36 @@ function isActive(current: string, path: string): boolean {
   return current.startsWith(path);
 }
 
+function HamburgerIcon({ open }: { open: boolean }) {
+  return (
+    <div style={{ width: 22, height: 18, display: "flex", flexDirection: "column", justifyContent: "space-between", cursor: "pointer" }}>
+      <span style={{ display: "block", height: 2, backgroundColor: "#fff", borderRadius: 2, transition: "all 0.25s", transform: open ? "translateY(8px) rotate(45deg)" : "none" }} />
+      <span style={{ display: "block", height: 2, backgroundColor: "#fff", borderRadius: 2, transition: "all 0.25s", opacity: open ? 0 : 1 }} />
+      <span style={{ display: "block", height: 2, backgroundColor: "#fff", borderRadius: 2, transition: "all 0.25s", transform: open ? "translateY(-8px) rotate(-45deg)" : "none" }} />
+    </div>
+  );
+}
+
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const { profile, user, signOut } = useAuth();
   const [location, setLocation] = useLocation();
+  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < MOBILE_BP : false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    const check = () => {
+      const mobile = window.innerWidth < MOBILE_BP;
+      setIsMobile(mobile);
+      if (!mobile) setSidebarOpen(false);
+    };
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  const navigate = useCallback((path: string) => {
+    setLocation(path);
+    if (isMobile) setSidebarOpen(false);
+  }, [setLocation, isMobile]);
 
   const displayName = profile?.full_name ?? user?.email ?? "Admin";
   const initial = displayName[0]?.toUpperCase() ?? "A";
@@ -66,6 +94,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
           <span style={{ fontSize: 17, fontWeight: 900, color: GOLD }}>ibhub</span>
           <span style={{ fontSize: 9, fontWeight: 800, backgroundColor: GOLD, color: "#fff", padding: "2px 7px", borderRadius: 4, letterSpacing: 1 }}>ADMIN</span>
+          {isMobile && (
+            <button
+              onClick={() => setSidebarOpen(false)}
+              style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: 4, color: "rgba(255,255,255,0.5)", fontSize: 18, lineHeight: 1 }}
+            >✕</button>
+          )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 32, height: 32, borderRadius: "50%", backgroundColor: "#722f37", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
@@ -89,7 +123,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               return (
                 <button
                   key={item.path}
-                  onClick={() => setLocation(item.path)}
+                  onClick={() => navigate(item.path)}
                   style={{
                     width: "100%",
                     display: "flex",
@@ -118,7 +152,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
       <div style={{ padding: "12px 16px", borderTop: "1px solid rgba(255,255,255,0.09)", flexShrink: 0, display: "flex", flexDirection: "column", gap: 4 }}>
         <button
-          onClick={() => setLocation("/app")}
+          onClick={() => navigate("/app")}
           style={{ width: "100%", padding: "7px 12px", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 7, color: "rgba(255,255,255,0.55)", fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "left" }}
         >← Voltar ao App</button>
         <button
@@ -131,11 +165,72 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#f2f3f5", fontFamily: "'Inter', sans-serif", display: "flex" }}>
-      <div style={{ width: SIDEBAR_W, backgroundColor: NAVY, flexShrink: 0, position: "sticky", top: 0, height: "100vh" }}>
-        <SidebarContent />
-      </div>
-      <main style={{ flex: 1, minWidth: 0, overflowX: "hidden" }}>
-        {children}
+
+      {/* ── Desktop sidebar (always visible) ── */}
+      {!isMobile && (
+        <div style={{ width: SIDEBAR_W, backgroundColor: NAVY, flexShrink: 0, position: "sticky", top: 0, height: "100vh" }}>
+          <SidebarContent />
+        </div>
+      )}
+
+      {/* ── Mobile: backdrop overlay ── */}
+      {isMobile && sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.55)", zIndex: 200, transition: "opacity 0.25s" }}
+        />
+      )}
+
+      {/* ── Mobile: sliding drawer ── */}
+      {isMobile && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: SIDEBAR_W,
+          height: "100vh",
+          backgroundColor: NAVY,
+          zIndex: 201,
+          transform: sidebarOpen ? "translateX(0)" : `translateX(-${SIDEBAR_W}px)`,
+          transition: "transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)",
+          boxShadow: sidebarOpen ? "4px 0 24px rgba(0,0,0,0.35)" : "none",
+          overflowY: "auto",
+        }}>
+          <SidebarContent />
+        </div>
+      )}
+
+      {/* ── Main content ── */}
+      <main style={{ flex: 1, minWidth: 0, overflowX: "hidden", display: "flex", flexDirection: "column" }}>
+
+        {/* Mobile top bar with hamburger */}
+        {isMobile && (
+          <div style={{
+            position: "sticky",
+            top: 0,
+            zIndex: 100,
+            backgroundColor: NAVY,
+            padding: "14px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+          }}>
+            <button
+              onClick={() => setSidebarOpen((o) => !o)}
+              style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", alignItems: "center", justifyContent: "center" }}
+              aria-label={sidebarOpen ? "Fechar menu" : "Abrir menu"}
+            >
+              <HamburgerIcon open={sidebarOpen} />
+            </button>
+            <span style={{ fontSize: 16, fontWeight: 900, color: GOLD }}>ibhub</span>
+            <span style={{ fontSize: 9, fontWeight: 800, backgroundColor: GOLD, color: "#fff", padding: "2px 7px", borderRadius: 4, letterSpacing: 1 }}>ADMIN</span>
+          </div>
+        )}
+
+        <div style={{ flex: 1 }}>
+          {children}
+        </div>
       </main>
     </div>
   );
