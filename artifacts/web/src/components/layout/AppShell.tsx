@@ -372,8 +372,8 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
                   resize: "none", outline: "none", fontFamily: "inherit",
                 }}
               />
-              {/* Quick action bar — only on texto tab */}
-              {tab === "texto" && (
+              {/* Quick action bar — desktop only (tabs already visible on mobile) */}
+              {tab === "texto" && !isMobile && (
                 <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
                   <button onClick={() => setTab("foto")} style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 20, border: `1px solid ${BORDER}`, background: WHITE, color: MUTED, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
                     {I.image} Foto
