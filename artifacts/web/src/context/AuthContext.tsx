@@ -148,7 +148,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         finishLoading();
       });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // CRITICAL: This callback must be synchronous (NOT async).
+      // gotrue-js holds the navigator lock while notifying subscribers — if we await
+      // inside here, the lock is held for the duration of every DB query, causing all
+      // other auth calls (getSession, signIn, signUp) to queue up and eventually time
+      // out with "Lock was released because another request stole it".
+
       // Bust the getCachedSession() cache so subsequent API calls use the fresh token
       bustSessionCache();
 
@@ -160,42 +166,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       setMustChangePassword(hasMustChangeFlag(session));
-      if (session?.user) {
-        await fetchProfile(session.user.id);
 
-        // Safety net: ensure a profile row exists for new social-auth users.
-        // Also fills in null full_name if a DB trigger created the row without metadata.
-        if (event === "SIGNED_IN") {
-          try {
-            const u = session.user;
+      if (session?.user) {
+        // Fire-and-forget: runs AFTER the lock is released, so no contention.
+        const u = session.user;
+        fetchProfile(u.id)
+          .then(() => {
+            // Safety net: ensure a profile row exists for new social-auth users.
+            // Also fills in null full_name if a DB trigger created the row without metadata.
+            if (event !== "SIGNED_IN") return;
             const meta = u.user_metadata ?? {};
             const googleName = (meta.full_name ?? meta.name ?? u.email?.split("@")[0] ?? "") as string;
             const googleAvatar = (meta.avatar_url ?? meta.picture ?? null) as string | null;
-
-            const { data: rows } = await supabase
+            return supabase
               .from("profiles")
               .select("id, full_name, avatar_url")
               .or(`id.eq.${u.id},user_id.eq.${u.id}`)
-              .limit(1);
-            const existing = rows?.[0] ?? null;
-
-            if (!existing) {
-              await supabase.from("profiles").insert({
-                id: u.id,
-                user_id: u.id,
-                full_name: googleName || null,
-                avatar_url: googleAvatar,
-                plan: "gratuito",
+              .limit(1)
+              .then(({ data: rows }) => {
+                const existing = (rows ?? [])[0] ?? null;
+                if (!existing) {
+                  return supabase.from("profiles").insert({
+                    id: u.id,
+                    user_id: u.id,
+                    full_name: googleName || null,
+                    avatar_url: googleAvatar,
+                    plan: "gratuito",
+                  }).then(() => fetchProfile(u.id));
+                } else if (!existing.full_name && googleName) {
+                  const update: Record<string, string | null> = { user_id: u.id, full_name: googleName };
+                  if (!existing.avatar_url && googleAvatar) update.avatar_url = googleAvatar;
+                  return supabase.from("profiles").update(update).eq("id", existing.id)
+                    .then(() => fetchProfile(u.id));
+                }
               });
-            } else if (!existing.full_name && googleName) {
-              const update: Record<string, string | null> = { user_id: u.id, full_name: googleName };
-              if (!existing.avatar_url && googleAvatar) update.avatar_url = googleAvatar;
-              await supabase.from("profiles").update(update).eq("id", existing.id);
-            }
-
-            await fetchProfile(u.id);
-          } catch {}
-        }
+          })
+          .catch(() => {});
       } else {
         setProfile(null);
       }
