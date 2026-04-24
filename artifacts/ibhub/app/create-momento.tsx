@@ -98,14 +98,16 @@ export default function CreateMomentoScreen() {
   const openCamera = () => requestAndOpen(
     async () => {
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
         quality: 0.85,
-        aspect: [9, 16],
+        videoMaxDuration: 30,
+        // allowsEditing is intentionally omitted — not supported for video on iOS
       });
       if (!result.canceled && result.assets[0]) {
-        setMediaType("image");
-        setMediaUri(result.assets[0].uri);
+        const asset = result.assets[0];
+        const isVideo = asset.type === "video";
+        setMediaType(isVideo ? "video" : "image");
+        setMediaUri(asset.uri);
         setStep("edit");
       }
     },
@@ -197,6 +199,7 @@ export default function CreateMomentoScreen() {
             <TouchableOpacity style={[styles.pickBtn, { backgroundColor: colors.gold }]} onPress={openCamera}>
               <Feather name="camera" size={26} color={colors.navy} />
               <Text style={[styles.pickBtnLabel, { color: colors.navy }]}>Câmera</Text>
+              <Text style={[styles.pickBtnSub, { color: colors.navy + "99" }]}>foto ou vídeo • 30s</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.pickBtn, { backgroundColor: colors.navyLight }]} onPress={openGallery}>
               <Feather name="image" size={26} color="#fff" />
