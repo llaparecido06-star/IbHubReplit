@@ -4920,17 +4920,37 @@ export interface ReferralRankEntry {
 
 /**
  * Returns top inviters sorted by number of people they invited.
- * Uses `invited_by_id` column on profiles.
+ * Uses `invited_by_id` column on profiles (added in migration v17/v42).
+ *
+ * NOTE: If the column does not yet exist in the database, apply
+ * artifacts/api-server/migrations_v42_referral_columns.sql in the Supabase SQL editor.
  */
 export async function fetchReferralLeaderboard(limit = 50): Promise<ReferralRankEntry[]> {
   try {
-    // Fetch all profiles that were invited by someone
+    // Cap the scan to a reasonable row count to avoid mobile network timeouts.
+    // We fetch limit * 40 invited rows which is more than enough to rank the top inviters.
+    const scanLimit = Math.max(limit * 40, 2000);
+
     const { data, error } = await supabase
       .from("profiles")
       .select("invited_by_id")
-      .not("invited_by_id", "is", null);
+      .not("invited_by_id", "is", null)
+      .limit(scanLimit);
 
-    if (error) { console.error("fetchReferralLeaderboard:", error); return []; }
+    if (error) {
+      // Distinguish column-missing / network errors so we don't spam Expo DevTools
+      const isKnownTransient =
+        !error.code ||
+        error.code === "" ||
+        error.message?.toLowerCase().includes("network") ||
+        error.message?.toLowerCase().includes("42703"); // column does not exist
+      if (isKnownTransient) {
+        console.warn("fetchReferralLeaderboard: coluna invited_by_id indisponível ou erro de rede. Execute a migration v42 no painel Supabase.");
+      } else {
+        console.error("fetchReferralLeaderboard:", error);
+      }
+      return [];
+    }
 
     // Count invites per inviter
     const counts: Record<string, number> = {};
@@ -4951,10 +4971,13 @@ export async function fetchReferralLeaderboard(limit = 50): Promise<ReferralRank
       .select("id, full_name, username, avatar_url, headline")
       .in("id", topIds);
 
-    if (pErr) { console.error("fetchReferralLeaderboard profiles:", pErr); return []; }
+    if (pErr) {
+      console.warn("fetchReferralLeaderboard (profiles):", pErr);
+      return [];
+    }
 
     return (profiles ?? [])
-      .map((p, _) => ({
+      .map((p) => ({
         id: p.id,
         full_name: p.full_name ?? "Usuário",
         username: p.username ?? null,
@@ -4966,7 +4989,7 @@ export async function fetchReferralLeaderboard(limit = 50): Promise<ReferralRank
       .sort((a, b) => b.invite_count - a.invite_count)
       .map((entry, i) => ({ ...entry, rank: i + 1 }));
   } catch (e) {
-    console.error("fetchReferralLeaderboard:", e);
+    console.warn("fetchReferralLeaderboard:", e);
     return [];
   }
 }
@@ -4988,7 +5011,7 @@ export async function fetchMyReferralStats(userId: string): Promise<{ count: num
     }
     return { count: me.invite_count, rank: me.rank };
   } catch (e) {
-    console.error("fetchMyReferralStats:", e);
+    console.warn("fetchMyReferralStats:", e);
     return { count: 0, rank: 0 };
   }
 }
