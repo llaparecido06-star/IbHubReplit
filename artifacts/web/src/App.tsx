@@ -144,6 +144,30 @@ function AdminNotFound() {
   );
 }
 
+// Admin sub-routes — uses direct location comparison to avoid wouter Switch quirks
+const ADMIN_SUB_ROUTES: Record<string, React.ComponentType> = {
+  "/admin/logs":                  AdminLogs,
+  "/admin/momentos":              AdminMomentos,
+  "/admin/eventos":               AdminEventos,
+  "/admin/marketplace":           AdminMarketplace,
+  "/admin/slides-mercado":        AdminSlidesMercado,
+  "/admin/presentation-slides":   AdminPresentationSlides,
+  "/admin/moderacao":             AdminModeracao,
+  "/admin/crm":                   AdminCRM,
+  "/admin/financeiro":            AdminFinanceiro,
+  "/admin/plan-builder":          AdminPlanBuilder,
+  "/admin/comunicacao":           AdminComunicacao,
+  "/admin/admins":                AdminAdmins,
+  "/admin/configuracoes":         AdminConfiguracoes,
+};
+
+function AdminSubRouter() {
+  const [location] = useLocation();
+  const path = location.split("?")[0];
+  const Component = ADMIN_SUB_ROUTES[path] ?? AdminNotFound;
+  return <AdminRoute component={Component} />;
+}
+
 function MaintenanceGuard({ children }: { children: React.ReactNode }) {
   const { isEnabled, isLoading } = useFeatureFlags();
   const { profile, loading, session } = useAuth();
@@ -287,57 +311,12 @@ function Router() {
         <PrivateRoute component={MinhaContaPage} />
       </Route>
 
-      {/* Admin routes — mirrors mobile AdminDrawer structure (14 screens) */}
-      {/* VISÃO GERAL */}
-      <Route path="/admin/logs">
-        <AdminRoute component={AdminLogs} />
-      </Route>
-      {/* GESTÃO DE CONTEÚDO */}
-      <Route path="/admin/momentos">
-        <AdminRoute component={AdminMomentos} />
-      </Route>
-      <Route path="/admin/eventos">
-        <AdminRoute component={AdminEventos} />
-      </Route>
-      <Route path="/admin/marketplace">
-        <AdminRoute component={AdminMarketplace} />
-      </Route>
-      <Route path="/admin/slides-mercado">
-        <AdminRoute component={AdminSlidesMercado} />
-      </Route>
-      <Route path="/admin/presentation-slides">
-        <AdminRoute component={AdminPresentationSlides} />
-      </Route>
-      <Route path="/admin/moderacao">
-        <AdminRoute component={AdminModeracao} />
-      </Route>
-      {/* USUÁRIOS & RECEITA */}
-      <Route path="/admin/crm">
-        <AdminRoute component={AdminCRM} />
-      </Route>
-      <Route path="/admin/financeiro">
-        <AdminRoute component={AdminFinanceiro} />
-      </Route>
-      <Route path="/admin/plan-builder">
-        <AdminRoute component={AdminPlanBuilder} />
-      </Route>
-      {/* SISTEMA */}
-      <Route path="/admin/comunicacao">
-        <AdminRoute component={AdminComunicacao} />
-      </Route>
-      <Route path="/admin/admins">
-        <AdminRoute component={AdminAdmins} />
-      </Route>
-      <Route path="/admin/configuracoes">
-        <AdminRoute component={AdminConfiguracoes} />
-      </Route>
-      {/* Dashboard */}
+      {/* Admin routes — AdminSubRouter uses direct location matching for reliability */}
       <Route path="/admin">
         <AdminRoute component={AdminDashboard} />
       </Route>
-      {/* Catch-all for unknown /admin/* paths: enforce admin guard, show 404 inside admin shell */}
       <Route path="/admin/:rest*">
-        <AdminRoute component={AdminNotFound} />
+        <AdminSubRouter />
       </Route>
 
       <Route component={NotFound} />
