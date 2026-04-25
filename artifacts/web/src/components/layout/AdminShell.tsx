@@ -5,7 +5,6 @@ import { useAuth } from "@/context/AuthContext";
 const GOLD = "#c9a84c";
 const NAVY = "#0d1b2a";
 const SIDEBAR_W = 228;
-const MOBILE_BP = 768;
 
 const SECTIONS = [
   {
@@ -49,6 +48,14 @@ function isActive(current: string, path: string): boolean {
   return current.startsWith(path);
 }
 
+function isMobileDevice(): boolean {
+  if (typeof window === "undefined") return false;
+  // Use matchMedia for touch/pointer detection — more reliable than width alone
+  const coarse = window.matchMedia("(pointer: coarse)").matches;
+  const narrow = window.innerWidth < 1024;
+  return coarse || narrow;
+}
+
 function HamburgerIcon({ open }: { open: boolean }) {
   return (
     <div style={{ width: 22, height: 18, display: "flex", flexDirection: "column", justifyContent: "space-between", cursor: "pointer" }}>
@@ -62,19 +69,25 @@ function HamburgerIcon({ open }: { open: boolean }) {
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const { profile, user, signOut } = useAuth();
   const [location, setLocation] = useLocation();
-  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < MOBILE_BP : false);
+  const [isMobile, setIsMobile] = useState(isMobileDevice);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
+    const mq = window.matchMedia("(pointer: coarse)");
     const check = () => {
-      const mobile = window.innerWidth < MOBILE_BP;
+      const mobile = mq.matches || window.innerWidth < 1024;
       setIsMobile(mobile);
       if (!mobile) setSidebarOpen(false);
     };
     window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
+    mq.addEventListener("change", check);
+    return () => {
+      window.removeEventListener("resize", check);
+      mq.removeEventListener("change", check);
+    };
   }, []);
 
+  // Close drawer when navigating to a new page on mobile
   const navigate = useCallback((path: string) => {
     setLocation(path);
     if (isMobile) setSidebarOpen(false);
@@ -88,7 +101,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     setLocation("/");
   };
 
-  const SidebarContent = () => (
+  const sidebarContent = (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "20px 16px 14px", borderBottom: "1px solid rgba(255,255,255,0.09)", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
@@ -98,6 +111,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <button
               onClick={() => setSidebarOpen(false)}
               style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: 4, color: "rgba(255,255,255,0.5)", fontSize: 18, lineHeight: 1 }}
+              aria-label="Fechar menu"
             >✕</button>
           )}
         </div>
@@ -166,18 +180,23 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#f2f3f5", fontFamily: "'Inter', sans-serif", display: "flex" }}>
 
-      {/* ── Desktop sidebar (always visible) ── */}
+      {/* ── Desktop sidebar — always visible, sticky ── */}
       {!isMobile && (
-        <div style={{ width: SIDEBAR_W, backgroundColor: NAVY, flexShrink: 0, position: "sticky", top: 0, height: "100vh" }}>
-          <SidebarContent />
+        <div style={{ width: SIDEBAR_W, backgroundColor: NAVY, flexShrink: 0, position: "sticky", top: 0, height: "100vh", overflowY: "auto" }}>
+          {sidebarContent}
         </div>
       )}
 
-      {/* ── Mobile: backdrop overlay ── */}
+      {/* ── Mobile: dark backdrop ── */}
       {isMobile && sidebarOpen && (
         <div
           onClick={() => setSidebarOpen(false)}
-          style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.55)", zIndex: 200, transition: "opacity 0.25s" }}
+          style={{
+            position: "fixed", inset: 0,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            zIndex: 200,
+            transition: "opacity 0.25s",
+          }}
         />
       )}
 
@@ -185,8 +204,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       {isMobile && (
         <div style={{
           position: "fixed",
-          top: 0,
-          left: 0,
+          top: 0, left: 0,
           width: SIDEBAR_W,
           height: "100vh",
           backgroundColor: NAVY,
@@ -196,7 +214,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           boxShadow: sidebarOpen ? "4px 0 24px rgba(0,0,0,0.35)" : "none",
           overflowY: "auto",
         }}>
-          <SidebarContent />
+          {sidebarContent}
         </div>
       )}
 
