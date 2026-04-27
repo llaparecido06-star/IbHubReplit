@@ -461,12 +461,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /**
    * Build the redirect URI for OAuth.
-   * - Expo Go (dev): Linking.createURL returns exp://[host]/--/auth/callback
-   *   The exp:// scheme IS registered in Expo Go, so Chrome Custom Tab closes properly.
-   * - Production / dev build: returns ibhub://auth/callback
-   * Both must be allowlisted in the Supabase Redirect URLs config.
+   *
+   * Android problem: Chrome Custom Tab cannot intercept custom-scheme URLs
+   * (exp://, ibhub://) — they fire Android intents that RESTART the app as a
+   * cold start ("Fecha e Abre"). Using an https:// URL as the redirect fixes
+   * this: Chrome Custom Tab intercepts https:// redirects before navigating,
+   * so openAuthSessionAsync gets a "success" result directly — no restart.
+   *
+   * Strategy:
+   *  - Android: use the web app's /auth/callback (https) when available.
+   *    EXPO_PUBLIC_DOMAIN is set in the Expo workflow to $REPLIT_DEV_DOMAIN
+   *    (dev). EXPO_PUBLIC_WEB_URL can be set for production.
+   *  - iOS / fallback: Linking.createURL("auth/callback") → ibhub:// or exp://
    */
-  const getRedirectUri = () => Linking.createURL("auth/callback");
+  const getRedirectUri = (): string => {
+    if (Platform.OS === "android") {
+      const webUrl  = process.env.EXPO_PUBLIC_WEB_URL;
+      const domain  = process.env.EXPO_PUBLIC_DOMAIN;
+      const base    = webUrl ?? (domain ? `https://${domain}` : null);
+      if (base) return `${base}/auth/callback`;
+    }
+    return Linking.createURL("auth/callback");
+  };
 
   /**
    * Parse the OAuth redirect URL returned by openAuthSessionAsync.
@@ -529,18 +545,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log(`[OAuth] Opening browser for ${provider}...`);
 
       if (Platform.OS === "android") {
-        // ── Android fix ───────────────────────────────────────────────────────
-        // Chrome Custom Tab cannot intercept exp:// deep links — they are always
-        // delivered as Linking events (handleDeepLink). openAuthSessionAsync would
-        // hang indefinitely waiting for a "success" that never comes.
-        // Solution: race openAuthSessionAsync against the app returning to the
-        // foreground (AppState "active"). Whichever resolves first wins.
-        // - Happy path: user logs in → OS brings Expo Go to foreground → race wins
-        //   → spinner clears → handleDeepLink exchanges the PKCE code → SIGNED_IN
-        // - User cancels tab: Chrome Custom Tab closes → openAuthSessionAsync wins
-        //   with "dismiss" → spinner clears, no navigation
-        // maybeCompleteAuthSession() (called in the AppState listener above) closes
-        // the Chrome Custom Tab so openAuthSessionAsync also returns cleanly.
+        // ── Android ──────────────────────────────────────────────────────────
+        // Two strategies depending on the redirect URI scheme:
+        //
+        // A) https:// redirect (preferred): Chrome Custom Tab intercepts the
+        //    redirect before navigating → openAuthSessionAsync returns "success"
+        //    with the full URL → we extract the code and exchange it here.
+        //    No deep link, no app restart ("Fecha e Abre"), smooth UX.
+        //
+        // B) exp:// / ibhub:// redirect (fallback when EXPO_PUBLIC_DOMAIN is
+        //    not set): Chrome Custom Tab cannot intercept these; they fire an
+        //    Android intent that cold-starts the app. Race openAuthSessionAsync
+        //    against the AppState "active" event to clear the spinner, and let
+        //    handleDeepLink finish the PKCE exchange.
+
+        if (redirectTo.startsWith("https://")) {
+          // Strategy A: HTTPS redirect — same flow as iOS
+          console.log("[OAuth] Android: using https redirect, openAuthSessionAsync will intercept.");
+          const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+          console.log(`[OAuth] Android result type:`, result.type);
+
+          if (result.type === "cancel" || result.type === "dismiss") {
+            return { error: null };
+          }
+
+          if (result.type === "success" && result.url) {
+            const safeUrl = result.url.replace(/access_token=[^&]+/, "access_token=REDACTED").replace(/refresh_token=[^&]+/, "refresh_token=REDACTED");
+            console.log(`[OAuth] Android redirect URL:`, safeUrl);
+            const parsed = parseOAuthRedirect(result.url);
+            console.log(`[OAuth] Android parsed type:`, parsed?.type ?? "null");
+
+            if (parsed?.type === "tokens") {
+              const { error: err } = await supabase.auth.setSession({
+                access_token: parsed.accessToken,
+                refresh_token: parsed.refreshToken,
+              });
+              if (err) return { error: err.message };
+            } else if (parsed?.type === "code") {
+              const { error: err } = await supabase.auth.exchangeCodeForSession(parsed.code);
+              if (err) return { error: err.message };
+            }
+          }
+          return { error: null };
+        }
+
+        // Strategy B: custom-scheme redirect (exp:// or ibhub://) — race approach
         let appStateSub: ReturnType<typeof AppState.addEventListener> | null = null;
         const waitForForeground = new Promise<void>((resolve) => {
           appStateSub = AppState.addEventListener("change", (next) => {
@@ -552,7 +601,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           waitForForeground,
         ]);
         appStateSub?.remove();
-        console.log(`[OAuth] Android: browser race resolved, auth continues via handleDeepLink.`);
+        console.log(`[OAuth] Android: deep-link race resolved, auth continues via handleDeepLink.`);
         return { error: null };
       }
 
