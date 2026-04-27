@@ -1328,12 +1328,17 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
                         {opt.text} · {optVoters.length}
                       </Text>
                       {optVoters.map(v => (
-                        <View key={v.id} style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                        <TouchableOpacity
+                          key={v.id}
+                          onPress={() => { v.id === currentUserId ? router.push("/(tabs)/profile" as any) : router.push(`/profile/${v.id}` as any); }}
+                          activeOpacity={0.7}
+                          style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10, paddingVertical: 4 }}
+                        >
                           <Avatar uri={v.avatar_url} name={v.full_name ?? v.username ?? "?"} size={34} />
                           <Text style={{ fontSize: 14, color: colors.foreground, fontWeight: "500" }}>
                             {v.full_name ?? v.username ?? "Usuário"}
                           </Text>
-                        </View>
+                        </TouchableOpacity>
                       ))}
                     </View>
                   );

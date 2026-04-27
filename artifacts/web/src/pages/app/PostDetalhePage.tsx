@@ -59,9 +59,14 @@ function Avatar({ url, name, size = 40 }: { url?: string | null; name?: string |
 
 
 function CommentItem({ comment, depth = 0, onReply, currentUserId }: { comment: AppComment; depth?: number; onReply: (id: string, name: string) => void; currentUserId?: string }) {
+  const [, setLocation] = useLocation();
   const [liked, setLiked] = useState(!!comment.is_liked);
   const [likesCount, setLikesCount] = useState(comment.likes_count ?? 0);
   const [toggling, setToggling] = useState(false);
+  const goToAuthor = () => {
+    if (!comment.author?.id) return;
+    comment.author.id === currentUserId ? setLocation("/app/perfil") : setLocation(`/app/usuario/${comment.author.id}`);
+  };
 
   const handleLike = async () => {
     if (!currentUserId || toggling) return;
@@ -76,9 +81,11 @@ function CommentItem({ comment, depth = 0, onReply, currentUserId }: { comment: 
   return (
     <div style={{ marginLeft: depth * 24, marginBottom: 10 }}>
       <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-        <Avatar url={comment.author?.avatar_url} name={comment.author?.full_name} size={34} />
+        <div onClick={goToAuthor} style={{ cursor: comment.author?.id ? "pointer" : "default", flexShrink: 0 }}>
+          <Avatar url={comment.author?.avatar_url} name={comment.author?.full_name} size={34} />
+        </div>
         <div style={{ flex: 1, backgroundColor: depth === 0 ? BG : "#fff", borderRadius: 10, padding: "10px 14px", border: `1px solid ${BORDER}` }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: NAVY, marginBottom: 4 }}>
+          <div onClick={goToAuthor} style={{ fontWeight: 700, fontSize: 13, color: NAVY, marginBottom: 4, cursor: comment.author?.id ? "pointer" : "default", display: "inline-block" }}>
             {comment.author?.full_name ?? "Usuário"}
           </div>
           <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.5 }}>{comment.content}</div>

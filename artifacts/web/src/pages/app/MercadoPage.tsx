@@ -449,9 +449,14 @@ function ReactionPicker({ onSelect }: { onSelect: (r: MarketReactionType) => voi
 }
 
 function MarketCommentItem({ comment, userId }: { comment: MarketComment; userId: string }) {
+  const [, setLocation] = useLocation();
   const [liked, setLiked] = useState((comment as any).is_liked ?? false);
   const [likesCount, setLikesCount] = useState((comment as any).likes_count ?? 0);
   const [toggling, setToggling] = useState(false);
+  const goToCommentAuthor = () => {
+    if (!comment.author?.id) return;
+    comment.author.id === userId ? setLocation("/app/perfil") : setLocation(`/app/usuario/${comment.author.id}`);
+  };
 
   const handleCommentLike = async () => {
     if (toggling || !userId) return;
@@ -464,10 +469,12 @@ function MarketCommentItem({ comment, userId }: { comment: MarketComment; userId
 
   return (
     <div style={{ display: "flex", gap: 8 }}>
-      <MarketPostAvatar src={comment.author?.avatar_url} name={comment.author?.full_name ?? "U"} size={28} />
+      <div onClick={goToCommentAuthor} style={{ cursor: comment.author?.id ? "pointer" : "default", flexShrink: 0 }}>
+        <MarketPostAvatar src={comment.author?.avatar_url} name={comment.author?.full_name ?? "U"} size={28} />
+      </div>
       <div style={{ flex: 1, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "8px 12px" }}>
         <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "2px 6px", marginBottom: 3 }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{comment.author?.full_name ?? "Usuário"}</span>
+          <span onClick={goToCommentAuthor} style={{ fontSize: 12, fontWeight: 700, color: NAVY, cursor: comment.author?.id ? "pointer" : "default" }}>{comment.author?.full_name ?? "Usuário"}</span>
           {comment.author?.position && <span style={{ fontSize: 11, color: MUTED }}>· {comment.author.position}</span>}
           {comment.author?.company && <span style={{ fontSize: 11, color: MUTED }}>· {comment.author.company}</span>}
         </div>

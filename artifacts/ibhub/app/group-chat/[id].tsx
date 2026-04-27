@@ -610,20 +610,29 @@ export default function GroupChatScreen() {
       <View style={[styles.msgGroup, isMe ? styles.msgGroupMe : styles.msgGroupOther]}>
         <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
           {!isMe && (
-            <View style={styles.senderWrap}>
+            <TouchableOpacity
+              onPress={() => { isCompanyMsg && fromCompanyId ? router.push(`/empresa/${fromCompanyId}` as any) : router.push(`/profile/${item.sender_id}` as any); }}
+              activeOpacity={0.7}
+              style={styles.senderWrap}
+            >
               <Avatar name={displayName} uri={displayAvatar} size={28} />
-            </View>
+            </TouchableOpacity>
           )}
           <View style={{ maxWidth: "80%", opacity: isTemp ? 0.6 : 1 }}>
             {!isMe && (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <Text style={[styles.senderName, { color: colors.gold }]}>{displayName}</Text>
-                {isCompanyMsg && (
-                  <View style={{ backgroundColor: colors.gold + "22", borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
-                    <Text style={{ fontSize: 9, color: colors.gold, fontWeight: "700" }}>EMPRESA</Text>
-                  </View>
-                )}
-              </View>
+              <TouchableOpacity
+                onPress={() => { isCompanyMsg && fromCompanyId ? router.push(`/empresa/${fromCompanyId}` as any) : router.push(`/profile/${item.sender_id}` as any); }}
+                activeOpacity={0.7}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Text style={[styles.senderName, { color: colors.gold }]}>{displayName}</Text>
+                  {isCompanyMsg && (
+                    <View style={{ backgroundColor: colors.gold + "22", borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
+                      <Text style={{ fontSize: 9, color: colors.gold, fontWeight: "700" }}>EMPRESA</Text>
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
             )}
             {isMe && isCompanyMsg && (
               <Text style={{ fontSize: 9, color: "#fff8", textAlign: "right", marginBottom: 2 }}>

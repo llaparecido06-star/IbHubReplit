@@ -316,10 +316,10 @@ export default function MensagensPage() {
             (isMedia && attach && isImageUrl(attach.url));
           return (
             <div key={msg.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", gap: 8 }}>
-              {!isMe && <Avatar src={msg.sender?.avatar_url} name={msg.sender?.full_name ?? "?"} size={30} />}
+              {!isMe && <div onClick={() => msg.sender_id && setLocation(`/app/usuario/${msg.sender_id}`)} style={{ cursor: "pointer", flexShrink: 0, alignSelf: "flex-end" }}><Avatar src={msg.sender?.avatar_url} name={msg.sender?.full_name ?? "?"} size={30} /></div>}
               <div style={{ maxWidth: "76%" }}>
                 {!isMe && (
-                  <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>{msg.sender?.full_name}</div>
+                  <div onClick={() => msg.sender_id && setLocation(`/app/usuario/${msg.sender_id}`)} style={{ fontSize: 11, color: MUTED, marginBottom: 2, cursor: "pointer" }}>{msg.sender?.full_name}</div>
                 )}
                 <div style={{
                   backgroundColor: isMe ? GOLD : WHITE,
