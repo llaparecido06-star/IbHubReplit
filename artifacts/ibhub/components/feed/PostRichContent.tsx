@@ -2,6 +2,9 @@ import React, { useState, useEffect } from "react";
 import {
   Dimensions,
   Image,
+  Modal,
+  Pressable,
+  ScrollView,
   Text,
   TouchableOpacity,
   View,
@@ -9,7 +12,9 @@ import {
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useRouter } from "expo-router";
 import { AntDesign, Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
+import { Avatar } from "@/components/ui/Avatar";
 import { useColors } from "@/hooks/useColors";
+import { fetchPollVoters } from "@/services/api";
 import type { Post } from "./PostCard";
 
 /* ─── Wine Tasting Card ─────────────────────────────────────────────────── */
@@ -297,6 +302,9 @@ export function PostRichContent({ post, onVote }: Props) {
   const postType = detectPostType(post.content ?? "");
   const wineEan = postType === "wine" ? extractEan(post.content ?? "") : null;
   const imageUrls = getImageUrls(post);
+  const [showPollVoters, setShowPollVoters] = useState(false);
+  const [pollVoters, setPollVoters] = useState<{ id: string; full_name: string | null; avatar_url: string | null; username: string | null; optionIndex: number }[]>([]);
+  const [loadingPollVoters, setLoadingPollVoters] = useState(false);
 
   return (
     <>
@@ -467,13 +475,33 @@ export function PostRichContent({ post, onVote }: Props) {
               const label = diffH < 24 ? `${diffH}h` : `${Math.floor(diffH / 24)}d`;
               return <Text style={{ fontSize: 12, color: colors.mutedForeground, marginLeft: 4 }}>· Encerra em {label}</Text>;
             })()}
+            <View style={{ flex: 1 }} />
+            {post.poll.total_votes > 0 && (
+              (post.poll.user_voted_indices?.length ?? (post.poll.user_voted_index != null ? 1 : 0)) > 0
+              || post.poll.closed
+              || !!(post.poll.expires_at && new Date(post.poll.expires_at) < new Date())
+            ) && (
+              <TouchableOpacity
+                onPress={async () => {
+                  setShowPollVoters(true);
+                  if (pollVoters.length === 0 && !loadingPollVoters) {
+                    setLoadingPollVoters(true);
+                    const v = await fetchPollVoters(post.id);
+                    setPollVoters(v);
+                    setLoadingPollVoters(false);
+                  }
+                }}
+                style={{ marginRight: 8 }}
+              >
+                <Text style={{ fontSize: 11, color: colors.primary }}>Ver votos</Text>
+              </TouchableOpacity>
+            )}
             {(post.poll.closed || (post.poll.expires_at && new Date(post.poll.expires_at) < new Date())) && (
               <View
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
                   gap: 3,
-                  marginLeft: 8,
                 }}
               >
                 <Feather name="lock" size={10} color={colors.mutedForeground} />
@@ -485,6 +513,47 @@ export function PostRichContent({ post, onVote }: Props) {
           </View>
         </View>
       )}
+
+      {/* ── Poll Voters Modal ── */}
+      <Modal visible={showPollVoters} transparent animationType="fade" onRequestClose={() => setShowPollVoters(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" }} onPress={() => setShowPollVoters(false)}>
+          <Pressable style={{ backgroundColor: colors.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "70%", paddingBottom: 24 }} onPress={() => {}}>
+            <View style={{ alignItems: "center", paddingVertical: 12 }}>
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border }} />
+            </View>
+            <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground, paddingHorizontal: 20, marginBottom: 4 }}>
+              Votos · {post.poll?.total_votes ?? 0} {(post.poll?.total_votes ?? 0) === 1 ? "voto" : "votos"}
+            </Text>
+            <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8 }}>
+              {loadingPollVoters ? (
+                <Text style={{ color: colors.mutedForeground, fontSize: 14 }}>Carregando…</Text>
+              ) : pollVoters.length === 0 ? (
+                <Text style={{ color: colors.mutedForeground, fontSize: 14 }}>Nenhum voto ainda.</Text>
+              ) : (
+                post.poll?.options.map((opt, optIdx) => {
+                  const optVoters = pollVoters.filter(v => v.optionIndex === optIdx);
+                  if (optVoters.length === 0) return null;
+                  return (
+                    <View key={optIdx} style={{ marginBottom: 16 }}>
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: colors.mutedForeground, marginBottom: 8 }}>
+                        {opt.text} · {optVoters.length}
+                      </Text>
+                      {optVoters.map(v => (
+                        <View key={v.id} style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                          <Avatar uri={v.avatar_url} name={v.full_name ?? v.username ?? "?"} size={34} />
+                          <Text style={{ fontSize: 14, color: colors.foreground, fontWeight: "500" }}>
+                            {v.full_name ?? v.username ?? "Usuário"}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </>
   );
 }

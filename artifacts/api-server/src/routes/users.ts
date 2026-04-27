@@ -296,4 +296,107 @@ router.get("/search/posts", async (req: Request, res: Response) => {
   res.json({ posts: posts ?? [] });
 });
 
+/**
+ * POST /posts/:postId/poll/vote
+ * Casts or retracts a vote on a post's inline poll.
+ * Uses the admin client to bypass RLS — the poll JSONB must be updatable
+ * by any authenticated user, not just the post owner.
+ * Body: { optionIndex: number }
+ */
+router.post("/posts/:postId/poll/vote", async (req: Request, res: Response): Promise<void> => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    res.status(401).json({ error: "Missing authorization" });
+    return;
+  }
+  const token = authHeader.slice(7);
+  const { data: userData, error: userError } = await supabaseAnon.auth.getUser(token);
+  if (userError || !userData?.user) {
+    res.status(401).json({ error: "Invalid or expired token" });
+    return;
+  }
+  const userId = userData.user.id;
+  const { postId } = req.params;
+  const { optionIndex } = req.body as { optionIndex: number };
+
+  if (typeof optionIndex !== "number" || !Number.isInteger(optionIndex) || optionIndex < 0) {
+    res.status(400).json({ error: "optionIndex must be a non-negative integer" });
+    return;
+  }
+
+  const { data: row, error: fetchError } = await supabaseAdmin
+    .from("posts")
+    .select("poll")
+    .eq("id", postId)
+    .single();
+
+  if (fetchError || !row?.poll) {
+    res.status(404).json({ error: "Post or poll not found" });
+    return;
+  }
+
+  const poll = row.poll as {
+    options: { text: string; votes: number }[];
+    total_votes: number;
+    closed: boolean;
+    expires_at?: string | null;
+    allow_multiple?: boolean;
+    user_votes?: Record<string, number | number[]>;
+  };
+
+  if (poll.closed) { res.status(400).json({ error: "Poll is closed" }); return; }
+  if (poll.expires_at && new Date(poll.expires_at) < new Date()) { res.status(400).json({ error: "Poll has expired" }); return; }
+  if (optionIndex >= poll.options.length) { res.status(400).json({ error: "Invalid option index" }); return; }
+
+  const prevVote = poll.user_votes?.[userId];
+  const prevIndices: number[] = prevVote == null ? [] : Array.isArray(prevVote) ? prevVote : [prevVote];
+  const alreadyVotedThis = prevIndices.includes(optionIndex);
+  const newOptions = poll.options.map((o) => ({ ...o }));
+  let newTotal = poll.total_votes;
+  let newIndices: number[];
+
+  if (poll.allow_multiple) {
+    if (alreadyVotedThis) {
+      newOptions[optionIndex].votes = Math.max(0, newOptions[optionIndex].votes - 1);
+      newTotal = Math.max(0, newTotal - 1);
+      newIndices = prevIndices.filter((i) => i !== optionIndex);
+    } else {
+      newOptions[optionIndex].votes += 1;
+      newTotal += 1;
+      newIndices = [...prevIndices, optionIndex];
+    }
+  } else {
+    if (alreadyVotedThis) {
+      newOptions[optionIndex].votes = Math.max(0, newOptions[optionIndex].votes - 1);
+      newTotal = Math.max(0, newTotal - 1);
+      newIndices = [];
+    } else if (prevIndices.length > 0) {
+      const old = prevIndices[0];
+      newOptions[old].votes = Math.max(0, newOptions[old].votes - 1);
+      newOptions[optionIndex].votes += 1;
+      newIndices = [optionIndex];
+    } else {
+      newOptions[optionIndex].votes += 1;
+      newTotal += 1;
+      newIndices = [optionIndex];
+    }
+  }
+
+  const storedValue: number | number[] =
+    newIndices.length === 0 ? [] : newIndices.length === 1 ? newIndices[0] : newIndices;
+  const userVotes: Record<string, number | number[]> = { ...(poll.user_votes ?? {}), [userId]: storedValue };
+  if (newIndices.length === 0) delete userVotes[userId];
+
+  const updatedPoll = { ...poll, options: newOptions, total_votes: newTotal, user_votes: userVotes };
+
+  const { error: updateError } = await supabaseAdmin
+    .from("posts")
+    .update({ poll: updatedPoll })
+    .eq("id", postId);
+
+  if (updateError) { res.status(500).json({ error: updateError.message }); return; }
+
+  res.json({ poll: updatedPoll, indices: newIndices });
+});
+
 export default router;

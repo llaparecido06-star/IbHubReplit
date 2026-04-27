@@ -1003,6 +1003,7 @@ export default function FeedScreen() {
                     total_votes: result.total_votes,
                     user_voted_indices: result.indices,
                     user_voted_index: result.indices[0] ?? null,
+                    user_votes: result.user_votes,
                   },
                 };
               }));

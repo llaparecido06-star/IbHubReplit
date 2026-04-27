@@ -1756,67 +1756,53 @@ export async function repostStory(currentUserId: string, story: AppStory): Promi
 
 // ─── POLL VOTING ─────────────────────────────────────────────────────────────
 
-export async function voteOnPoll(postId: string, userId: string, optionIndex: number): Promise<{ indices: number[]; options: { text: string; votes: number }[]; total_votes: number } | null> {
+export async function voteOnPoll(
+  postId: string,
+  _userId: string,
+  optionIndex: number,
+): Promise<{ indices: number[]; options: { text: string; votes: number }[]; total_votes: number; user_votes: Record<string, number | number[]> } | null> {
   try {
-    const { data: post } = await supabase.from("posts").select("poll").eq("id", postId).single();
-    if (!post?.poll) return null;
-
-    const poll = post.poll as {
-      options: { text: string; votes: number }[];
-      total_votes: number;
-      closed: boolean;
-      expires_at?: string;
-      allow_multiple?: boolean;
-      user_votes?: Record<string, number | number[]>;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return null;
+    const res = await fetch(`${API_URL}/posts/${postId}/poll/vote`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ optionIndex }),
+    });
+    if (!res.ok) return null;
+    const { poll: updatedPoll, indices } = await res.json() as {
+      poll: { options: { text: string; votes: number }[]; total_votes: number; user_votes: Record<string, number | number[]> };
+      indices: number[];
     };
-    if (poll.closed) return null;
-    if (poll.expires_at && new Date(poll.expires_at) < new Date()) return null;
-
-    const prevIndices = normalizePollIndices(poll.user_votes, userId);
-    const alreadyVotedThis = prevIndices.includes(optionIndex);
-    const newOptions = poll.options.map((o: any) => ({ ...o }));
-    let newTotal = poll.total_votes;
-    let newIndices: number[];
-
-    if (poll.allow_multiple) {
-      if (alreadyVotedThis) {
-        newOptions[optionIndex].votes = Math.max(0, newOptions[optionIndex].votes - 1);
-        newTotal = Math.max(0, newTotal - 1);
-        newIndices = prevIndices.filter(i => i !== optionIndex);
-      } else {
-        newOptions[optionIndex].votes += 1;
-        newTotal += 1;
-        newIndices = [...prevIndices, optionIndex];
-      }
-    } else {
-      if (alreadyVotedThis) {
-        newOptions[optionIndex].votes = Math.max(0, newOptions[optionIndex].votes - 1);
-        newTotal = Math.max(0, newTotal - 1);
-        newIndices = [];
-      } else if (prevIndices.length > 0) {
-        const old = prevIndices[0];
-        newOptions[old].votes = Math.max(0, newOptions[old].votes - 1);
-        newOptions[optionIndex].votes += 1;
-        newIndices = [optionIndex];
-      } else {
-        newOptions[optionIndex].votes += 1;
-        newTotal += 1;
-        newIndices = [optionIndex];
-      }
-    }
-
-    const storedValue = newIndices.length === 1 ? newIndices[0] : newIndices;
-    const userVotes = { ...(poll.user_votes ?? {}), [userId]: storedValue } as Record<string, number | number[]>;
-    if (newIndices.length === 0) delete userVotes[userId];
-
-    await supabase.from("posts").update({
-      poll: { ...poll, options: newOptions, total_votes: newTotal, user_votes: userVotes },
-    }).eq("id", postId);
-
-    return { indices: newIndices, options: newOptions, total_votes: newTotal };
+    return { indices, options: updatedPoll.options, total_votes: updatedPoll.total_votes, user_votes: updatedPoll.user_votes };
   } catch (e) {
     console.warn("voteOnPoll:", e);
     return null;
+  }
+}
+
+export async function fetchPollVoters(postId: string): Promise<{
+  id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  username: string | null;
+  optionIndex: number;
+}[]> {
+  try {
+    const { data: post } = await supabase.from("posts").select("poll").eq("id", postId).single();
+    if (!post?.poll?.user_votes) return [];
+    const userVotesMap = post.poll.user_votes as Record<string, number | number[]>;
+    const userIds = Object.keys(userVotesMap);
+    if (!userIds.length) return [];
+    const { data: profiles } = await supabase.from("profiles").select("id, full_name, avatar_url, username").in("id", userIds);
+    if (!profiles) return [];
+    return profiles.map((p: any) => {
+      const vote = userVotesMap[p.id];
+      const idx = Array.isArray(vote) ? (vote[0] ?? 0) : (vote as number);
+      return { id: p.id, full_name: p.full_name, avatar_url: p.avatar_url, username: p.username, optionIndex: idx };
+    });
+  } catch {
+    return [];
   }
 }
 

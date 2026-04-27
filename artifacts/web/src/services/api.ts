@@ -208,57 +208,20 @@ export async function createWebPost(params: {
   }
 }
 
-export async function voteOnFeedPoll(postId: string, userId: string, optionIndex: number): Promise<Poll | null> {
+export async function voteOnFeedPoll(postId: string, _userId: string, optionIndex: number): Promise<Poll | null> {
   try {
-    const { data: row } = await supabase.from("posts").select("poll").eq("id", postId).single();
-    if (!row?.poll) return null;
-    const poll = row.poll as Poll;
-    if (poll.closed) return null;
-    if (poll.expires_at && new Date(poll.expires_at) < new Date()) {
-      const indices = normalizePollIndices(poll.user_votes, userId);
-      return { ...poll, closed: true, user_voted_indices: indices, user_voted_index: indices[0] ?? null };
-    }
-
-    const prevIndices = normalizePollIndices(poll.user_votes, userId);
-    const alreadyVotedThis = prevIndices.includes(optionIndex);
-    const newOptions = poll.options.map(o => ({ ...o }));
-    let newTotal = poll.total_votes;
-    let newIndices: number[];
-
-    if (poll.allow_multiple) {
-      if (alreadyVotedThis) {
-        newOptions[optionIndex].votes = Math.max(0, newOptions[optionIndex].votes - 1);
-        newTotal = Math.max(0, newTotal - 1);
-        newIndices = prevIndices.filter(i => i !== optionIndex);
-      } else {
-        newOptions[optionIndex].votes += 1;
-        newTotal += 1;
-        newIndices = [...prevIndices, optionIndex];
-      }
-    } else {
-      if (alreadyVotedThis) {
-        newOptions[optionIndex].votes = Math.max(0, newOptions[optionIndex].votes - 1);
-        newTotal = Math.max(0, newTotal - 1);
-        newIndices = [];
-      } else if (prevIndices.length > 0) {
-        const old = prevIndices[0];
-        newOptions[old].votes = Math.max(0, newOptions[old].votes - 1);
-        newOptions[optionIndex].votes += 1;
-        newIndices = [optionIndex];
-      } else {
-        newOptions[optionIndex].votes += 1;
-        newTotal += 1;
-        newIndices = [optionIndex];
-      }
-    }
-
-    const storedValue = newIndices.length === 1 ? newIndices[0] : newIndices;
-    const userVotes = { ...(poll.user_votes ?? {}), [userId]: storedValue } as Record<string, number | number[]>;
-    if (newIndices.length === 0) delete userVotes[userId];
-
-    const updated: Poll = { ...poll, options: newOptions, total_votes: newTotal, user_votes: userVotes };
-    await supabase.from("posts").update({ poll: updated }).eq("id", postId);
-    return { ...updated, user_voted_indices: newIndices, user_voted_index: newIndices[0] ?? null };
+    const session = await getCachedSession();
+    if (!session?.access_token) return null;
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
+      ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
+    const res = await fetch(`${apiBase}/posts/${postId}/poll/vote`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ optionIndex }),
+    });
+    if (!res.ok) return null;
+    const { poll: updatedPoll, indices } = await res.json() as { poll: Poll; indices: number[] };
+    return { ...updatedPoll, user_voted_indices: indices, user_voted_index: indices[0] ?? null };
   } catch (e) {
     console.warn("voteOnFeedPoll:", e);
     return null;
