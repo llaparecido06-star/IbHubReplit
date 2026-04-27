@@ -350,7 +350,7 @@ function MiniPostCard({ post, onDelete, onEdit, onPollUpdate }: {
           <span>{post.likes_count} curtida{post.likes_count !== 1 ? "s" : ""}</span>
         </button>
         <button
-          onClick={() => setLocation(`/app/post/${post.id}`)}
+          onClick={() => setLocation(`/app/posts/${post.id}`)}
           style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", padding: "6px 10px", borderRadius: 8, color: MUTED, fontSize: 13, fontWeight: 600, fontFamily: "inherit" }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#f0f0f0"; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
