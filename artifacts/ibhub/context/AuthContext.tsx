@@ -189,21 +189,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // ── PKCE flow: one-time code in query string (?code=...) ──────────────────
-    // Supabase projects with PKCE enabled send ibhub://reset-password?code=xxx.
-    // We must NOT intercept the OAuth callback (ibhub://auth/callback?code=xxx)
-    // because openAuthSessionAsync handles that separately.
-    if (url.includes("reset-password")) {
+    // Supabase projects with PKCE enabled send:
+    //   - ibhub://reset-password?code=xxx  (password recovery)
+    //   - ibhub://auth/callback?code=xxx   (OAuth sign-in — Android/iOS sometimes
+    //     delivers this as a Linking event instead of returning it to
+    //     openAuthSessionAsync, so we must handle it here too)
+    const qs = url.split("?")[1] ?? "";
+    const urlParams = Object.fromEntries(new URLSearchParams(qs));
+
+    if (url.includes("reset-password") && urlParams.code) {
       try {
-        const qs = url.split("?")[1] ?? "";
-        const params = Object.fromEntries(new URLSearchParams(qs));
-        if (params.code) {
-          const { error } = await supabase.auth.exchangeCodeForSession(params.code);
-          // PASSWORD_RECOVERY event fired by onAuthStateChange will set isRecovering=true.
-          // Set it here too as a safety net in case the event arrives after this resolves.
-          if (!error) setIsRecovering(true);
+        const { error } = await supabase.auth.exchangeCodeForSession(urlParams.code);
+        // PASSWORD_RECOVERY event fired by onAuthStateChange will set isRecovering=true.
+        // Set it here too as a safety net in case the event arrives after this resolves.
+        if (!error) setIsRecovering(true);
+        else console.error("[handleDeepLink] reset-password PKCE exchange error:", error.message);
+      } catch (e) {
+        console.error("[handleDeepLink] reset-password PKCE exchange failed:", e);
+      }
+      return;
+    }
+
+    if ((url.includes("auth/callback") || url.includes("--/auth/callback")) && urlParams.code) {
+      // OAuth callback delivered as a deep link (common on Android when Chrome Custom Tab
+      // re-launches the app instead of returning through openAuthSessionAsync).
+      // If openAuthSessionAsync ALSO captured the URL, this is a duplicate exchange —
+      // the second call will fail silently with "code already used" which is harmless.
+      try {
+        console.log("[handleDeepLink] OAuth auth/callback received. Exchanging code...");
+        const { error } = await supabase.auth.exchangeCodeForSession(urlParams.code);
+        if (error) {
+          // "code already used" is expected when openAuthSessionAsync already exchanged it
+          if (!error.message.includes("already") && !error.message.includes("expired")) {
+            console.error("[handleDeepLink] OAuth code exchange error:", error.message);
+          }
+        } else {
+          console.log("[handleDeepLink] OAuth code exchanged. SIGNED_IN will fire.");
         }
       } catch (e) {
-        console.error("[handleDeepLink] PKCE exchange failed:", e);
+        console.error("[handleDeepLink] OAuth callback exchange failed:", e);
       }
       return;
     }
