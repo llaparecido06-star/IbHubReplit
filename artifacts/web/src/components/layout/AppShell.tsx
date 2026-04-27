@@ -1126,33 +1126,72 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
           </div>
 
           {/* Nav + Criar publicação */}
-          <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "4px 0", marginBottom: 10 }}>
-            {currentNavItems.map((item) => {
-              const active = isActive(location, item.path);
-              return (
-                <button key={item.path} onClick={() => setLocation(item.path)} style={{
-                  display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "7px 14px",
-                  background: active ? `${GOLD}12` : "none", border: "none", cursor: "pointer",
-                  color: active ? GOLD : NAVY, fontSize: 13, fontWeight: active ? 700 : 500,
-                  borderLeft: active ? `3px solid ${GOLD}` : "3px solid transparent",
-                  textAlign: "left", transition: "all 0.12s",
-                }}>
-                  <span style={{ opacity: active ? 1 : 0.55, flexShrink: 0 }}>{item.icon}</span>
-                  {item.label}
-                  {active && <div style={{ marginLeft: "auto", width: 6, height: 6, borderRadius: "50%", backgroundColor: GOLD }} />}
-                </button>
-              );
-            })}
-            <div style={{ padding: "7px 10px 6px" }}>
-              <button onClick={() => setShowCreateModal(true)} style={{
-                width: "100%", padding: "9px 0", backgroundColor: GOLD, color: NAVY,
-                fontWeight: 800, fontSize: 13, border: "none", borderRadius: 9, cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              }}>
-                <span style={{ fontSize: 15 }}>+</span> {activeCompany ? "Publicar como Empresa" : "Criar publicação"}
-              </button>
-            </div>
-          </div>
+          {(() => {
+            const navBg: Record<string, string> = {
+              "/app":               "#c9a84c20",
+              "/app/mercado":       "#26a69a20",
+              "/app/oportunidades": "#4a90d920",
+              "/app/mensagens":     "#7c4dff20",
+              "/app/grupos":        "#00bcd420",
+              "/app/adega":         "#72293720",
+              "/app/notificacoes":  "#e67e2220",
+            };
+            return (
+              <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden", marginBottom: 10 }}>
+                <div style={{ padding: "10px 14px 2px" }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: GOLD, letterSpacing: 0.8, textTransform: "uppercase" }}>
+                    {activeCompany ? "Empresa" : "Navegar"}
+                  </span>
+                </div>
+                <div style={{ padding: "2px 0 4px" }}>
+                  {currentNavItems.map((item) => {
+                    const active = isActive(location, item.path);
+                    const iconBg = navBg[item.path] ?? "#c9a84c20";
+                    return (
+                      <button key={item.path} onClick={() => setLocation(item.path)} style={{
+                        display: "flex", alignItems: "center", gap: 10,
+                        width: "100%", padding: "6px 14px",
+                        background: active ? `${GOLD}10` : "none",
+                        border: "none", cursor: "pointer", textAlign: "left",
+                        transition: "background 0.12s",
+                      }}
+                        onMouseEnter={e => { if (!active) e.currentTarget.style.background = BG; }}
+                        onMouseLeave={e => { if (!active) e.currentTarget.style.background = "none"; }}
+                      >
+                        <div style={{
+                          width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          backgroundColor: active ? `${GOLD}25` : iconBg,
+                          color: active ? GOLD : NAVY,
+                          transition: "background 0.12s",
+                        }}>
+                          {item.icon}
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: active ? 700 : 500, color: active ? GOLD : NAVY, flex: 1, lineHeight: 1.2 }}>
+                          {item.label}
+                        </span>
+                        {active && <div style={{ width: 5, height: 5, borderRadius: "50%", backgroundColor: GOLD, flexShrink: 0 }} />}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ padding: "4px 10px 10px" }}>
+                  <button onClick={() => setShowCreateModal(true)} style={{
+                    width: "100%", padding: "10px 0", backgroundColor: GOLD, color: NAVY,
+                    fontWeight: 800, fontSize: 13, border: "none", borderRadius: 9, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                    transition: "opacity 0.15s",
+                  }}
+                    onMouseEnter={e => (e.currentTarget.style.opacity = "0.88")}
+                    onMouseLeave={e => (e.currentTarget.style.opacity = "1")}
+                  >
+                    <span style={{ fontSize: 16, fontWeight: 900 }}>+</span>
+                    {activeCompany ? "Publicar como Empresa" : "Criar publicação"}
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Bottom links - only in personal mode */}
           {!activeCompany && (
