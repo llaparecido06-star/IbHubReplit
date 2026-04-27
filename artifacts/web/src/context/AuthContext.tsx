@@ -43,6 +43,7 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   mustChangePassword: boolean;
+  needsProfileCompletion: boolean;
   activeCompany: ActiveCompany | null;
   setActiveCompany: (company: ActiveCompany | null) => void;
   suspensionMsg: string | null;
@@ -316,10 +317,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error?.message ?? null };
   };
 
+  // True when the user is authenticated but hasn't chosen a username yet
+  // (happens for new social-auth users who haven't completed onboarding)
+  const needsProfileCompletion = !!session && !loading && !isProfileComplete(profile);
+
   return (
     <AuthContext.Provider value={{
       session, user, profile, loading,
       mustChangePassword,
+      needsProfileCompletion,
       activeCompany, setActiveCompany,
       suspensionMsg, clearSuspensionMsg,
       signIn, signUp, signInWithGoogle, signOut,

@@ -56,6 +56,7 @@ import TermosUsoPage from "@/pages/TermosUsoPage";
 import NotFound from "@/pages/not-found";
 import PublicProfilePage from "@/pages/PublicProfilePage";
 import PublicPostPage from "@/pages/PublicPostPage";
+import SocialCompletePage from "@/pages/SocialCompletePage";
 import { AdminShell } from "@/components/layout/AdminShell";
 import { FeatureFlagsProvider, useFeatureFlags } from "@/context/FeatureFlagsContext";
 import MaintenancePage from "@/pages/MaintenancePage";
@@ -78,7 +79,7 @@ function LoadingScreen() {
 }
 
 function PrivateRoute({ component: Component }: { component: React.ComponentType }) {
-  const { session, loading, mustChangePassword } = useAuth();
+  const { session, loading, mustChangePassword, needsProfileCompletion } = useAuth();
   const [location, setLocation] = useLocation();
 
   useEffect(() => {
@@ -87,12 +88,15 @@ function PrivateRoute({ component: Component }: { component: React.ComponentType
       setLocation("/login");
     } else if (mustChangePassword && location !== "/redefinir-senha") {
       setLocation("/redefinir-senha");
+    } else if (needsProfileCompletion && location !== "/completar-perfil") {
+      setLocation("/completar-perfil");
     }
-  }, [loading, session, mustChangePassword, location, setLocation]);
+  }, [loading, session, mustChangePassword, needsProfileCompletion, location, setLocation]);
 
   if (loading) return <LoadingScreen />;
   if (!session) return null;
   if (mustChangePassword) return null;
+  if (needsProfileCompletion) return null;
 
   return <Component />;
 }
@@ -217,6 +221,7 @@ function Router() {
       </Route>
       <Route path="/redefinir-senha" component={RedefinirSenhaPage} />
       <Route path="/auth/callback" component={AuthCallbackPage} />
+      <Route path="/completar-perfil" component={SocialCompletePage} />
 
       {/* App routes */}
       <Route path="/app/eventos/:id">

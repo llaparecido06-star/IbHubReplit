@@ -2,10 +2,9 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -27,7 +26,7 @@ const AREAS = [
 export default function SocialCompleteScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user, refreshProfile, clearProfileCompletion, patchProfile } = useAuth();
+  const { user, refreshProfile, clearProfileCompletion } = useAuth();
 
   const [fullName,   setFullName]   = useState("");
   const [username,   setUsername]   = useState("");
@@ -36,20 +35,27 @@ export default function SocialCompleteScreen() {
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState<string | null>(null);
 
-  // Pre-fill from OAuth user metadata
+  // Derived from user metadata — never editable
+  const oauthEmail  = user?.email ?? null;
+  const oauthAvatar = (() => {
+    const meta = (user?.user_metadata ?? {}) as Record<string, unknown>;
+    return (meta.avatar_url ?? meta.picture ?? null) as string | null;
+  })();
+
+  // Pre-fill editable fields from OAuth metadata
   useEffect(() => {
     if (!user) return;
-    const meta = user.user_metadata as any;
-    if (meta?.full_name)  setFullName(meta.full_name);
-    else if (meta?.name)  setFullName(meta.name);
-    // Generate a username suggestion from the name
-    const nameSuggestion = (meta?.full_name ?? meta?.name ?? "")
+    const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+    const name = ((meta.full_name ?? meta.name ?? "") as string).trim();
+    if (name) setFullName(name);
+
+    const suggestion = name
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-z0-9]/g, "")
       .slice(0, 20);
-    if (nameSuggestion) setUsername(nameSuggestion);
+    if (suggestion) setUsername(suggestion);
   }, [user]);
 
   const toggleArea = (a: string) => {
@@ -65,7 +71,6 @@ export default function SocialCompleteScreen() {
     setLoading(true);
     setError(null);
 
-    // Check username availability
     const { data: taken } = await supabase
       .from("profiles")
       .select("id")
@@ -74,7 +79,6 @@ export default function SocialCompleteScreen() {
       .maybeSingle();
     if (taken) { setError("Esse nome de usuário já está em uso"); setLoading(false); return; }
 
-    // Upsert profile
     const { error: upsertErr } = await supabase.from("profiles").upsert({
       id: user.id,
       user_id: user.id,
@@ -93,12 +97,8 @@ export default function SocialCompleteScreen() {
       return;
     }
 
-    // Ensure referral code exists
     await ensureReferralCode(user.id);
 
-    // Only set avatar from OAuth if user doesn't already have one
-    const meta = user.user_metadata as any;
-    const oauthAvatar = meta?.avatar_url ?? meta?.picture ?? null;
     if (oauthAvatar) {
       const { data: existing } = await supabase
         .from("profiles")
@@ -113,9 +113,8 @@ export default function SocialCompleteScreen() {
     await refreshProfile();
     clearProfileCompletion();
     setLoading(false);
-    // Navigate explicitly — _layout.tsx also redirects, but this is an extra guarantee
     router.replace("/(tabs)" as any);
-  }, [user, fullName, username, position, areas, refreshProfile, clearProfileCompletion, router]);
+  }, [user, fullName, username, position, areas, oauthAvatar, refreshProfile, clearProfileCompletion, router]);
 
   return (
     <View style={styles.root}>
@@ -126,7 +125,15 @@ export default function SocialCompleteScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {/* Avatar + header */}
           <View style={styles.header}>
+            {oauthAvatar ? (
+              <Image source={{ uri: oauthAvatar }} style={styles.avatar} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Feather name="user" size={32} color="#8fa3b8" />
+              </View>
+            )}
             <Text style={styles.title}>Finalize seu cadastro</Text>
             <Text style={styles.subtitle}>Só mais algumas informações para completar seu perfil profissional.</Text>
           </View>
@@ -136,6 +143,19 @@ export default function SocialCompleteScreen() {
               <View style={styles.errorBox}>
                 <Feather name="alert-circle" size={14} color="#c0392b" style={{ marginRight: 6 }} />
                 <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
+
+            {/* Email — read-only, from Google */}
+            {oauthEmail && (
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>E-mail</Text>
+                <View style={[styles.fieldWrap, styles.fieldWrapReadOnly]}>
+                  <Feather name="mail" size={16} color="#8fa3b8" style={styles.fieldIcon} />
+                  <Text style={styles.fieldReadOnly}>{oauthEmail}</Text>
+                  <Feather name="lock" size={13} color="#b0bec9" />
+                </View>
+                <Text style={styles.fieldHint}>Importado da sua conta Google — não é possível alterar aqui.</Text>
               </View>
             )}
 
@@ -232,9 +252,15 @@ const styles = StyleSheet.create({
   topBand:  { position: "absolute", top: 0, left: 0, right: 0, height: 4, backgroundColor: "#c9a84c" },
   scroll:   { paddingHorizontal: 24, flexGrow: 1 },
 
-  header:   { marginBottom: 24 },
-  title:    { fontSize: 24, fontWeight: "800", color: "#0d1b2a", marginBottom: 6 },
-  subtitle: { fontSize: 14, color: "#5a7a99", lineHeight: 20 },
+  header:   { alignItems: "center", marginBottom: 24, gap: 12 },
+  avatar:   { width: 80, height: 80, borderRadius: 40, borderWidth: 3, borderColor: "#c9a84c" },
+  avatarPlaceholder: {
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: "#e8edf3", alignItems: "center", justifyContent: "center",
+    borderWidth: 3, borderColor: "#dde4ed",
+  },
+  title:    { fontSize: 22, fontWeight: "800", color: "#0d1b2a", textAlign: "center" },
+  subtitle: { fontSize: 14, color: "#5a7a99", lineHeight: 20, textAlign: "center" },
 
   card: {
     backgroundColor: "#fff",
@@ -267,8 +293,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     height: 46,
   },
-  fieldIcon:  { marginRight: 8 },
-  fieldInput: { flex: 1, fontSize: 15, color: "#0d1b2a" },
+  fieldWrapReadOnly: {
+    backgroundColor: "#f0f3f7",
+    borderColor: "#e0e6ef",
+  },
+  fieldIcon:      { marginRight: 8 },
+  fieldInput:     { flex: 1, fontSize: 15, color: "#0d1b2a" },
+  fieldReadOnly:  { flex: 1, fontSize: 15, color: "#5a7a99" },
 
   areasWrap:      { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
   areaChip:       { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: "#dde4ed", backgroundColor: "#f8f9fb" },
