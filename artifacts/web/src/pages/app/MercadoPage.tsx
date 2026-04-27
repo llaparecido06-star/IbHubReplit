@@ -9,10 +9,10 @@ import {
   fetchMarketPresentations, fetchAllMarketPresentations,
   upsertMarketPresentation, deleteMarketPresentation, triggerPresentationAccess,
   fetchPresentationSlides, PresentationSlide, MarketPresentation,
-  MarketPost, MarketComment, MarketPollOption,
-  fetchMarketPosts, createMarketPost, toggleMarketPostLike,
+  MarketPost, MarketComment, MarketPollOption, MarketReactionType,
+  fetchMarketPosts, createMarketPost, toggleMarketPostLike, changeMarketReaction,
   fetchMarketComments, addMarketComment, uploadMarketPostImage,
-  uploadMarketPostVideo, voteOnMarketPoll,
+  uploadMarketPostVideo, voteOnMarketPoll, toggleMarketCommentLike,
 } from "@/services/api";
 import { formatRelativeDate as timeAgo } from "@/utils/dateUtils";
 
@@ -408,6 +408,87 @@ function MarketPostAvatar({ src, name, size = 36 }: { src?: string | null; name:
   );
 }
 
+const REACTIONS: { type: MarketReactionType; emoji: string; label: string }[] = [
+  { type: "saude",    emoji: "🥂", label: "Saúde!" },
+  { type: "bravo",    emoji: "👏", label: "Bravo!" },
+  { type: "destaque", emoji: "🌟", label: "Destaque" },
+  { type: "incrivel", emoji: "🍷", label: "Incrível" },
+];
+
+function reactionEmoji(r?: MarketReactionType | null): string {
+  return REACTIONS.find(x => x.type === r)?.emoji ?? "🤍";
+}
+
+function ReactionPicker({ onSelect }: { onSelect: (r: MarketReactionType) => void }) {
+  return (
+    <div style={{
+      position: "absolute", bottom: "calc(100% + 8px)", left: 0,
+      backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 30,
+      boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+      display: "flex", gap: 4, padding: "6px 10px", zIndex: 99,
+    }}>
+      {REACTIONS.map(r => (
+        <button
+          key={r.type}
+          onClick={() => onSelect(r.type)}
+          title={r.label}
+          style={{
+            background: "none", border: "none", cursor: "pointer",
+            fontSize: 22, padding: "4px 6px", borderRadius: 20,
+            transition: "transform 0.12s",
+            lineHeight: 1,
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.35)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
+        >
+          {r.emoji}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function MarketCommentItem({ comment, userId }: { comment: MarketComment; userId: string }) {
+  const [liked, setLiked] = useState((comment as any).is_liked ?? false);
+  const [likesCount, setLikesCount] = useState((comment as any).likes_count ?? 0);
+  const [toggling, setToggling] = useState(false);
+
+  const handleCommentLike = async () => {
+    if (toggling || !userId) return;
+    setToggling(true);
+    const newLiked = await toggleMarketCommentLike(comment.id, userId, liked);
+    setLiked(newLiked);
+    setLikesCount((c: number) => c + (newLiked ? 1 : -1));
+    setToggling(false);
+  };
+
+  return (
+    <div style={{ display: "flex", gap: 8 }}>
+      <MarketPostAvatar src={comment.author?.avatar_url} name={comment.author?.full_name ?? "U"} size={28} />
+      <div style={{ flex: 1, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "8px 12px" }}>
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "2px 6px", marginBottom: 3 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{comment.author?.full_name ?? "Usuário"}</span>
+          {comment.author?.position && <span style={{ fontSize: 11, color: MUTED }}>· {comment.author.position}</span>}
+          {comment.author?.company && <span style={{ fontSize: 11, color: MUTED }}>· {comment.author.company}</span>}
+        </div>
+        <span style={{ fontSize: 13, color: "#333", lineHeight: 1.5 }}>{comment.content}</span>
+        <div style={{ marginTop: 6, display: "flex", alignItems: "center" }}>
+          <button
+            onClick={handleCommentLike}
+            style={{
+              background: "none", border: "none", cursor: userId ? "pointer" : "default",
+              display: "flex", alignItems: "center", gap: 4, padding: "2px 6px",
+              fontSize: 12, color: liked ? GOLD : MUTED, fontWeight: liked ? 700 : 400, fontFamily: "inherit",
+            }}
+          >
+            {liked ? "❤️" : "🤍"} {likesCount > 0 ? likesCount : ""}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MarketPostComments({ postId, userId }: { postId: string; userId: string }) {
   const [comments, setComments] = useState<MarketComment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -415,11 +496,11 @@ function MarketPostComments({ postId, userId }: { postId: string; userId: string
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchMarketComments(postId)
+    fetchMarketComments(postId, userId || undefined)
       .then(c => { setComments(c); })
       .catch(() => {})
       .finally(() => { setLoading(false); });
-  }, [postId]);
+  }, [postId, userId]);
 
   const submit = async () => {
     if (!text.trim() || submitting) return;
@@ -439,21 +520,7 @@ function MarketPostComments({ postId, userId }: { postId: string; userId: string
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
           {comments.map(c => (
-            <div key={c.id} style={{ display: "flex", gap: 8 }}>
-              <MarketPostAvatar src={c.author?.avatar_url} name={c.author?.full_name ?? "U"} size={28} />
-              <div style={{ flex: 1, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "8px 12px" }}>
-                <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "2px 6px", marginBottom: 3 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{c.author?.full_name ?? "Usuário"}</span>
-                  {c.author?.position && (
-                    <span style={{ fontSize: 11, color: MUTED }}>· {c.author.position}</span>
-                  )}
-                  {c.author?.company && (
-                    <span style={{ fontSize: 11, color: MUTED }}>· {c.author.company}</span>
-                  )}
-                </div>
-                <span style={{ fontSize: 13, color: "#333", lineHeight: 1.5 }}>{c.content}</span>
-              </div>
-            </div>
+            <MarketCommentItem key={c.id} comment={c} userId={userId} />
           ))}
         </div>
       )}
@@ -559,14 +626,47 @@ interface IdealBICompany { id: string; name: string; avatar_url: string | null; 
 function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idealbiCompany }: { post: MarketPost; userId: string; isAdmin: boolean; onLikeToggle: (id: string, liked: boolean, count: number) => void; idealbiCompany?: IdealBICompany | null }) {
   const [post, setPost] = useState<MarketPost>(initialPost);
   const [showComments, setShowComments] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
   const [, setLocation] = useLocation();
+  const reactionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setPost(initialPost); }, [initialPost]);
 
-  const handleLike = async () => {
-    const newLiked = await toggleMarketPostLike(post.id, userId, post.user_liked);
-    const delta = newLiked ? 1 : -1;
-    onLikeToggle(post.id, newLiked, post.likes_count + delta);
+  const handleReaction = async (reaction: MarketReactionType) => {
+    setShowPicker(false);
+    const wasLiked = post.user_liked;
+    const sameReaction = wasLiked && post.user_reaction === reaction;
+    if (sameReaction) {
+      // Unlike
+      const newLiked = await toggleMarketPostLike(post.id, userId, true);
+      onLikeToggle(post.id, newLiked, post.likes_count - 1);
+      setPost(p => ({ ...p, user_liked: false, user_reaction: null, likes_count: p.likes_count - 1 }));
+    } else if (!wasLiked) {
+      // First reaction — insert + set type
+      await toggleMarketPostLike(post.id, userId, false, reaction);
+      await changeMarketReaction(post.id, userId, reaction);
+      onLikeToggle(post.id, true, post.likes_count + 1);
+      setPost(p => ({ ...p, user_liked: true, user_reaction: reaction, likes_count: p.likes_count + 1 }));
+    } else {
+      // Change reaction type
+      await changeMarketReaction(post.id, userId, reaction);
+      setPost(p => ({ ...p, user_reaction: reaction }));
+    }
+  };
+
+  const handleLikeBtn = async () => {
+    // If already liked, clicking the button removes the reaction
+    if (post.user_liked) {
+      const newLiked = await toggleMarketPostLike(post.id, userId, true);
+      onLikeToggle(post.id, newLiked, post.likes_count - 1);
+      setPost(p => ({ ...p, user_liked: false, user_reaction: null, likes_count: p.likes_count - 1 }));
+    } else {
+      // Default reaction
+      await toggleMarketPostLike(post.id, userId, false, "saude");
+      await changeMarketReaction(post.id, userId, "saude");
+      onLikeToggle(post.id, true, post.likes_count + 1);
+      setPost(p => ({ ...p, user_liked: true, user_reaction: "saude", likes_count: p.likes_count + 1 }));
+    }
   };
 
   const handlePollVote = (id: string, opts: MarketPollOption[], votes: string[]) => {
@@ -620,19 +720,28 @@ function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idea
 
       {/* Actions */}
       <div style={{ display: "flex", gap: 4, padding: "10px 12px", borderTop: `1px solid ${BORDER}` }}>
-        <button
-          onClick={handleLike}
-          style={{
-            display: "flex", alignItems: "center", gap: 6, padding: "7px 14px",
-            borderRadius: 20, border: `1px solid ${post.user_liked ? GOLD : BORDER}`,
-            backgroundColor: post.user_liked ? `${GOLD}18` : "transparent",
-            color: post.user_liked ? GOLD : MUTED,
-            fontSize: 13, fontWeight: post.user_liked ? 700 : 500, cursor: "pointer",
-            fontFamily: "inherit", transition: "all 0.15s",
-          }}
+        {/* Reaction button with hover picker */}
+        <div
+          ref={reactionRef}
+          style={{ position: "relative" }}
+          onMouseEnter={() => setShowPicker(true)}
+          onMouseLeave={() => setShowPicker(false)}
         >
-          {post.user_liked ? "🥂" : "🤍"} {post.likes_count > 0 ? post.likes_count : ""} Curtir
-        </button>
+          {showPicker && <ReactionPicker onSelect={handleReaction} />}
+          <button
+            onClick={handleLikeBtn}
+            style={{
+              display: "flex", alignItems: "center", gap: 6, padding: "7px 14px",
+              borderRadius: 20, border: `1px solid ${post.user_liked ? GOLD : BORDER}`,
+              backgroundColor: post.user_liked ? `${GOLD}18` : "transparent",
+              color: post.user_liked ? GOLD : MUTED,
+              fontSize: 13, fontWeight: post.user_liked ? 700 : 500, cursor: "pointer",
+              fontFamily: "inherit", transition: "all 0.15s",
+            }}
+          >
+            {reactionEmoji(post.user_reaction)} {post.likes_count > 0 ? post.likes_count : ""} Reagir
+          </button>
+        </div>
 
         <button
           onClick={() => setShowComments(v => !v)}

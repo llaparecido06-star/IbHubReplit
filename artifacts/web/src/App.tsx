@@ -17,6 +17,8 @@ import MercadoPage from "@/pages/app/MercadoPage";
 import MensagensPage from "@/pages/app/MensagensPage";
 import GruposPage from "@/pages/app/GruposPage";
 import GrupoChatPage from "@/pages/app/GrupoChatPage";
+import GrupoConfiguracoesPage from "@/pages/app/GrupoConfiguracoesPage";
+import MarketItemPage from "@/pages/app/MarketItemPage";
 import ItensSalvosPage from "@/pages/app/ItensSalvosPage";
 import MeuPerfilPage from "@/pages/app/MeuPerfilPage";
 import PerfilUsuarioPage from "@/pages/app/PerfilUsuarioPage";
@@ -252,11 +254,17 @@ function Router() {
       <Route path="/app/mensagens">
         <PrivateRoute component={MensagensPage} />
       </Route>
+      <Route path="/app/grupos/:id/configuracoes">
+        <PrivateRoute component={GrupoConfiguracoesPage} />
+      </Route>
       <Route path="/app/grupos/:id">
         <PrivateRoute component={GrupoChatPage} />
       </Route>
       <Route path="/app/grupos">
         <PrivateRoute component={GruposPage} />
+      </Route>
+      <Route path="/app/mercado/:id">
+        <PrivateRoute component={MarketItemPage} />
       </Route>
       <Route path="/app/notificacoes">
         <PrivateRoute component={NotificacoesPage} />

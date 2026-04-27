@@ -2069,6 +2069,8 @@ export interface MarketPollOption {
   votes_count: number;
 }
 
+export type MarketReactionType = "saude" | "bravo" | "destaque" | "incrivel";
+
 export interface MarketPost {
   id: string;
   content: string;
@@ -2082,6 +2084,7 @@ export interface MarketPost {
   comments_count: number;
   poll_allow_multiple?: boolean;
   user_liked: boolean;
+  user_reaction?: MarketReactionType | null;
   user_poll_votes?: string[] | null;
   author?: {
     id: string;
@@ -2097,6 +2100,8 @@ export interface MarketComment {
   author_id: string;
   content: string;
   created_at: string;
+  likes_count: number;
+  is_liked: boolean;
   author?: {
     id: string;
     full_name?: string | null;
@@ -2125,7 +2130,7 @@ export async function fetchMarketPosts(userId?: string): Promise<MarketPost[]> {
 
     const [likesRes, votesRes, companyRes] = await Promise.all([
       userId
-        ? supabase.from("market_post_likes").select("post_id").eq("user_id", userId)
+        ? supabase.from("market_post_likes").select("post_id, reaction_type").eq("user_id", userId)
         : Promise.resolve({ data: [] }),
       userId
         ? supabase.from("market_post_poll_votes").select("post_id, option_id").eq("user_id", userId)
@@ -2135,7 +2140,9 @@ export async function fetchMarketPosts(userId?: string): Promise<MarketPost[]> {
         : supabase.from("company_pages").select("id, name, avatar_url").ilike("name", "Ideal.BI").maybeSingle(),
     ]);
 
-    const likedSet = new Set(((likesRes as any).data ?? []).map((l: any) => l.post_id as string));
+    const likedData: { post_id: string; reaction_type?: string | null }[] = (likesRes as any).data ?? [];
+    const likedSet = new Set(likedData.map(l => l.post_id));
+    const reactionMap = new Map(likedData.map(l => [l.post_id, (l.reaction_type ?? null) as MarketReactionType | null]));
     const pollVoteMap = new Map<string, string[]>();
     for (const v of ((votesRes as any).data ?? [])) {
       const arr = pollVoteMap.get(v.post_id as string) ?? [];
@@ -2164,7 +2171,7 @@ export async function fetchMarketPosts(userId?: string): Promise<MarketPost[]> {
         ? { id: company.id, full_name: company.name, avatar_url: company.avatar_url, headline: "Inteligência de Mercado do Vinho" }
         : universalAuthor;
       const votes = pollVoteMap.get(p.id);
-      return { ...p, user_liked: likedSet.has(p.id), user_poll_votes: votes?.length ? votes : null, poll_allow_multiple: (p as any).poll_allow_multiple ?? false, author };
+      return { ...p, user_liked: likedSet.has(p.id), user_reaction: reactionMap.get(p.id) ?? null, user_poll_votes: votes?.length ? votes : null, poll_allow_multiple: (p as any).poll_allow_multiple ?? false, author };
     });
   } catch {
     return [];
@@ -2238,14 +2245,14 @@ export async function voteOnMarketPoll(
   }
 }
 
-export async function toggleMarketPostLike(postId: string, userId: string, currentlyLiked: boolean): Promise<boolean> {
+export async function toggleMarketPostLike(postId: string, userId: string, currentlyLiked: boolean, reaction: MarketReactionType = "saude"): Promise<boolean> {
   try {
     if (currentlyLiked) {
       await supabase.from("market_post_likes").delete().eq("post_id", postId).eq("user_id", userId);
       const { data: cur } = await supabase.from("market_posts").select("likes_count").eq("id", postId).single();
       await supabase.from("market_posts").update({ likes_count: Math.max(0, (cur?.likes_count ?? 1) - 1) }).eq("id", postId);
     } else {
-      await supabase.from("market_post_likes").insert({ post_id: postId, user_id: userId });
+      await supabase.from("market_post_likes").upsert({ post_id: postId, user_id: userId, reaction_type: reaction }, { onConflict: "post_id,user_id" });
       const { data: cur } = await supabase.from("market_posts").select("likes_count").eq("id", postId).single();
       await supabase.from("market_posts").update({ likes_count: (cur?.likes_count ?? 0) + 1 }).eq("id", postId);
     }
@@ -2255,26 +2262,63 @@ export async function toggleMarketPostLike(postId: string, userId: string, curre
   }
 }
 
-export async function fetchMarketComments(postId: string): Promise<MarketComment[]> {
+export async function changeMarketReaction(postId: string, userId: string, reaction: MarketReactionType): Promise<boolean> {
+  try {
+    await supabase.from("market_post_likes").upsert(
+      { post_id: postId, user_id: userId, reaction_type: reaction },
+      { onConflict: "post_id,user_id" },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function toggleMarketCommentLike(commentId: string, userId: string, currentlyLiked: boolean): Promise<boolean> {
+  try {
+    if (currentlyLiked) {
+      await supabase.from("market_comment_likes").delete().eq("comment_id", commentId).eq("user_id", userId);
+      await supabase.rpc("decrement_market_comment_likes", { p_comment_id: commentId });
+    } else {
+      await supabase.from("market_comment_likes").insert({ comment_id: commentId, user_id: userId });
+      await supabase.rpc("increment_market_comment_likes", { p_comment_id: commentId });
+    }
+    return !currentlyLiked;
+  } catch {
+    return currentlyLiked;
+  }
+}
+
+export async function fetchMarketComments(postId: string, userId?: string): Promise<MarketComment[]> {
   try {
     const { data, error } = await supabase
       .from("market_post_comments")
-      .select("id, post_id, author_id, content, created_at")
+      .select("id, post_id, author_id, content, created_at, likes_count")
       .eq("post_id", postId)
       .order("created_at", { ascending: true });
     if (error || !data) return [];
 
     const authorIds = [...new Set(data.map((c: any) => c.author_id))];
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, user_id, full_name, avatar_url, headline")
-      .in("user_id", authorIds);
-    const profileMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p]));
+    const commentIds = data.map((c: any) => c.id);
+
+    const [profilesRes, likesRes] = await Promise.all([
+      authorIds.length > 0
+        ? supabase.from("profiles").select("id, user_id, full_name, avatar_url, headline").in("user_id", authorIds)
+        : Promise.resolve({ data: [] }),
+      userId && commentIds.length > 0
+        ? supabase.from("market_comment_likes").select("comment_id").eq("user_id", userId).in("comment_id", commentIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const profileMap = new Map((profilesRes.data ?? []).map((p: any) => [p.user_id, p]));
+    const likedSet = new Set(((likesRes as any).data ?? []).map((l: any) => l.comment_id as string));
 
     return data.map((c: any) => {
       const profile = profileMap.get(c.author_id);
       return {
         ...c,
+        likes_count: c.likes_count ?? 0,
+        is_liked: likedSet.has(c.id),
         author: profile ? {
           id: profile.id,
           full_name: profile.full_name,
@@ -2557,6 +2601,23 @@ export async function fetchPostComments(postId: string, currentUserId?: string):
   } catch (e) {
     console.warn("fetchPostComments:", e);
     return [];
+  }
+}
+
+export async function toggleCommentLike(commentId: string, userId: string, currentlyLiked: boolean): Promise<boolean> {
+  try {
+    if (currentlyLiked) {
+      await supabase.from("comment_likes").delete().eq("comment_id", commentId).eq("user_id", userId);
+      const { data: cur } = await supabase.from("comments").select("likes_count").eq("id", commentId).single();
+      await supabase.from("comments").update({ likes_count: Math.max(0, (cur?.likes_count ?? 1) - 1) }).eq("id", commentId);
+    } else {
+      await supabase.from("comment_likes").insert({ comment_id: commentId, user_id: userId });
+      const { data: cur } = await supabase.from("comments").select("likes_count").eq("id", commentId).single();
+      await supabase.from("comments").update({ likes_count: (cur?.likes_count ?? 0) + 1 }).eq("id", commentId);
+    }
+    return !currentlyLiked;
+  } catch {
+    return currentlyLiked;
   }
 }
 

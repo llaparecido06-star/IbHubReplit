@@ -6,7 +6,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { supabase } from "@/lib/supabase";
 import {
   fetchPostById, fetchPostComments, addPostComment, toggleLikePost, toggleBookmarkPost,
-  changeReactionPost, Post, AppComment, ReactionType,
+  changeReactionPost, toggleCommentLike, Post, AppComment, ReactionType,
 } from "@/services/api";
 import { formatRelativeDate as relativeDate } from "@/utils/dateUtils";
 
@@ -58,7 +58,21 @@ function Avatar({ url, name, size = 40 }: { url?: string | null; name?: string |
 }
 
 
-function CommentItem({ comment, depth = 0, onReply }: { comment: AppComment; depth?: number; onReply: (id: string, name: string) => void }) {
+function CommentItem({ comment, depth = 0, onReply, currentUserId }: { comment: AppComment; depth?: number; onReply: (id: string, name: string) => void; currentUserId?: string }) {
+  const [liked, setLiked] = useState(!!comment.is_liked);
+  const [likesCount, setLikesCount] = useState(comment.likes_count ?? 0);
+  const [toggling, setToggling] = useState(false);
+
+  const handleLike = async () => {
+    if (!currentUserId || toggling) return;
+    setToggling(true);
+    const newLiked = !liked;
+    setLiked(newLiked);
+    setLikesCount(c => newLiked ? c + 1 : Math.max(0, c - 1));
+    await toggleCommentLike(comment.id, currentUserId, liked);
+    setToggling(false);
+  };
+
   return (
     <div style={{ marginLeft: depth * 24, marginBottom: 10 }}>
       <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
@@ -69,21 +83,25 @@ function CommentItem({ comment, depth = 0, onReply }: { comment: AppComment; dep
           </div>
           <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.5 }}>{comment.content}</div>
           <div style={{ display: "flex", gap: 16, marginTop: 8, alignItems: "center" }}>
-            <span style={{ fontSize: 11, color: MUTED }}>
-              {relativeDate(comment.created_at)}
-            </span>
+            <span style={{ fontSize: 11, color: MUTED }}>{relativeDate(comment.created_at)}</span>
             <button
               onClick={() => onReply(comment.id, comment.author?.full_name ?? "Usuário")}
               style={{ fontSize: 11, color: GOLD, fontWeight: 700, background: "none", border: "none", cursor: "pointer", padding: 0 }}
             >
               Responder
             </button>
-            <span style={{ fontSize: 11, color: MUTED }}>❤️ {comment.likes_count ?? 0}</span>
+            <button
+              onClick={handleLike}
+              disabled={!currentUserId}
+              style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: liked ? "#e53e3e" : MUTED, fontWeight: liked ? 700 : 500, background: "none", border: "none", cursor: currentUserId ? "pointer" : "default", padding: 0, transition: "color 0.15s" }}
+            >
+              {liked ? "❤️" : "🤍"} {likesCount > 0 ? likesCount : ""}
+            </button>
           </div>
         </div>
       </div>
       {(comment.replies ?? []).map(r => (
-        <CommentItem key={r.id} comment={r} depth={depth + 1} onReply={onReply} />
+        <CommentItem key={r.id} comment={r} depth={depth + 1} onReply={onReply} currentUserId={currentUserId} />
       ))}
     </div>
   );
@@ -425,7 +443,7 @@ export default function PostDetalhePage() {
           {comments.length === 0 ? (
             <p style={{ color: MUTED, textAlign: "center", padding: "20px 0", fontSize: 14 }}>Seja o primeiro a comentar!</p>
           ) : (
-            comments.map(c => <CommentItem key={c.id} comment={c} onReply={handleReply} />)
+            comments.map(c => <CommentItem key={c.id} comment={c} onReply={handleReply} currentUserId={profile?.id} />)
           )}
         </div>
       </div>

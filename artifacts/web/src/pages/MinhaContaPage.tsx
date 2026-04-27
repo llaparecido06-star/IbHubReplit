@@ -46,7 +46,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }
   inactive:  { label: "Gratuito",            color: "#6b7280", bg: "#f3f4f6" },
 };
 
-type Section = "perfil" | "assinatura" | "seguranca" | "notificacoes" | "privacidade";
+type Section = "perfil" | "assinatura" | "seguranca" | "notificacoes" | "privacidade" | "suporte";
 
 const SECTIONS: { key: Section; label: string; emoji: string }[] = [
   { key: "perfil",         label: "Perfil",          emoji: "👤" },
@@ -54,6 +54,7 @@ const SECTIONS: { key: Section; label: string; emoji: string }[] = [
   { key: "notificacoes",   label: "Notificações",     emoji: "🔔" },
   { key: "privacidade",    label: "Privacidade",      emoji: "🔒" },
   { key: "seguranca",      label: "Segurança",        emoji: "🛡️" },
+  { key: "suporte",        label: "Suporte",          emoji: "💬" },
 ];
 
 function Card({ children }: { children: React.ReactNode }) {
@@ -117,6 +118,17 @@ export default function MinhaContaPage() {
   const [saving,    setSaving]    = useState(false);
   const [saved,     setSaved]     = useState(false);
 
+  // Notifications — initialised from profile once loaded
+  const [notifFeed,    setNotifFeed]    = useState((profile as any)?.notif_feed    ?? true);
+  const [notifMsgs,    setNotifMsgs]    = useState((profile as any)?.notif_msgs    ?? true);
+  const [notifOport,   setNotifOport]   = useState((profile as any)?.notif_oport   ?? true);
+  const [notifEmail,   setNotifEmail]   = useState((profile as any)?.notif_email   ?? false);
+
+  // Privacy
+  const [pubPerfil,    setPubPerfil]    = useState((profile as any)?.is_public        ?? true);
+  const [showConex,    setShowConex]    = useState((profile as any)?.show_connections  ?? true);
+  const [allowMsg,     setAllowMsg]     = useState((profile as any)?.allow_messages    ?? true);
+
   useEffect(() => {
     if (profile) {
       setFullName((profile as any).full_name ?? "");
@@ -124,19 +136,20 @@ export default function MinhaContaPage() {
       setHeadline((profile as any).headline ?? "");
       setPosition((profile as any).position ?? "");
       setCompany((profile as any).company ?? "");
+      setNotifFeed((profile as any).notif_feed ?? true);
+      setNotifMsgs((profile as any).notif_msgs ?? true);
+      setNotifOport((profile as any).notif_oport ?? true);
+      setNotifEmail((profile as any).notif_email ?? false);
+      setPubPerfil((profile as any).is_public ?? true);
+      setShowConex((profile as any).show_connections ?? true);
+      setAllowMsg((profile as any).allow_messages ?? true);
     }
   }, [profile]);
 
-  // Notifications
-  const [notifFeed,    setNotifFeed]    = useState(true);
-  const [notifMsgs,    setNotifMsgs]    = useState(true);
-  const [notifOport,   setNotifOport]   = useState(true);
-  const [notifEmail,   setNotifEmail]   = useState(false);
-
-  // Privacy
-  const [pubPerfil,    setPubPerfil]    = useState(true);
-  const [showConex,    setShowConex]    = useState(true);
-  const [allowMsg,     setAllowMsg]     = useState(true);
+  async function savePref(field: string, value: boolean) {
+    if (!profile?.id) return;
+    await supabase.from("profiles").update({ [field]: value }).or(`id.eq.${profile.id},user_id.eq.${profile.id}`);
+  }
 
   const { paidPlans, getPlanLabel } = usePlans();
   const plan          = profile?.plan ?? "gratuito";
@@ -376,21 +389,21 @@ export default function MinhaContaPage() {
       case "notificacoes": return (
         <Card>
           <SectionTitle title="Notificações" />
-          <Toggle label="Novas publicações no feed"   desc="Avisar quando conexões postarem"          value={notifFeed}   onChange={setNotifFeed} />
-          <Toggle label="Mensagens diretas"           desc="Notificar quando receber mensagens"        value={notifMsgs}   onChange={setNotifMsgs} />
-          <Toggle label="Novas oportunidades"         desc="Vagas e eventos do setor"                  value={notifOport}  onChange={setNotifOport} />
-          <Toggle label="Notificações por e-mail"     desc="Receber resumo semanal por e-mail"          value={notifEmail}  onChange={setNotifEmail} />
-          <p style={{ fontSize: 12, color: MUTED, marginTop: 0 }}>As preferências de notificação são salvas localmente. Integração com push notifications em breve.</p>
+          <Toggle label="Novas publicações no feed"   desc="Avisar quando conexões postarem"          value={notifFeed}   onChange={v => { setNotifFeed(v); savePref("notif_feed", v); }} />
+          <Toggle label="Mensagens diretas"           desc="Notificar quando receber mensagens"        value={notifMsgs}   onChange={v => { setNotifMsgs(v); savePref("notif_msgs", v); }} />
+          <Toggle label="Novas oportunidades"         desc="Vagas e eventos do setor"                  value={notifOport}  onChange={v => { setNotifOport(v); savePref("notif_oport", v); }} />
+          <Toggle label="Notificações por e-mail"     desc="Receber resumo semanal por e-mail"          value={notifEmail}  onChange={v => { setNotifEmail(v); savePref("notif_email", v); }} />
+          <p style={{ fontSize: 12, color: MUTED, marginTop: 0 }}>Preferências salvas automaticamente.</p>
         </Card>
       );
 
       case "privacidade": return (
         <Card>
           <SectionTitle title="Privacidade" />
-          <Toggle label="Perfil público"              desc="Qualquer pessoa pode ver seu perfil"         value={pubPerfil}  onChange={setPubPerfil} />
-          <Toggle label="Mostrar conexões"            desc="Suas conexões ficam visíveis no perfil"      value={showConex}  onChange={setShowConex} />
-          <Toggle label="Permitir mensagens"          desc="Qualquer membro pode te enviar mensagem"     value={allowMsg}   onChange={setAllowMsg} />
-          <p style={{ fontSize: 12, color: MUTED, marginTop: 0 }}>As configurações de privacidade serão aplicadas em breve. Estamos implementando controles avançados.</p>
+          <Toggle label="Perfil público"              desc="Qualquer pessoa pode ver seu perfil"         value={pubPerfil}  onChange={v => { setPubPerfil(v); savePref("is_public", v); }} />
+          <Toggle label="Mostrar conexões"            desc="Suas conexões ficam visíveis no perfil"      value={showConex}  onChange={v => { setShowConex(v); savePref("show_connections", v); }} />
+          <Toggle label="Permitir mensagens"          desc="Qualquer membro pode te enviar mensagem"     value={allowMsg}   onChange={v => { setAllowMsg(v); savePref("allow_messages", v); }} />
+          <p style={{ fontSize: 12, color: MUTED, marginTop: 0 }}>Configurações salvas automaticamente.</p>
         </Card>
       );
 
@@ -428,6 +441,37 @@ export default function MinhaContaPage() {
               Sair da conta
             </button>
           </div>
+        </Card>
+      );
+
+      case "suporte": return (
+        <Card>
+          <SectionTitle title="Suporte & Contato" />
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {[
+              { icon: "💬", label: "Fale Conosco", desc: "Suporte e feedback", href: "mailto:contato@ibhub.com.br" },
+              { icon: "🐛", label: "Reportar Bug", desc: "Nos ajude a melhorar a plataforma", href: "mailto:bugs@ibhub.com.br" },
+              { icon: "📜", label: "Termos de Uso", desc: "Termos e condições", href: "https://www.ibhub.com.br/termos" },
+              { icon: "🔐", label: "Política de Privacidade", desc: "Como usamos seus dados", href: "https://www.ibhub.com.br/privacidade" },
+            ].map(item => (
+              <a
+                key={item.label}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", borderRadius: 10, border: `1px solid ${BORDER}`, textDecoration: "none", color: NAVY, backgroundColor: BG, transition: "background 0.12s" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = `${GOLD}12`; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = BG; }}
+              >
+                <span style={{ fontSize: 22 }}>{item.icon}</span>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{item.label}</div>
+                  <div style={{ fontSize: 12, color: MUTED }}>{item.desc}</div>
+                </div>
+              </a>
+            ))}
+          </div>
+          <div style={{ marginTop: 20, textAlign: "center", fontSize: 12, color: MUTED }}>ibhub v1.0 · © 2026 Ibhub Tecnologia</div>
         </Card>
       );
 

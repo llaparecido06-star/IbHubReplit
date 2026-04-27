@@ -1,17 +1,21 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useSearch } from "wouter";
+import { useSearch, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import { GruposContent } from "./GruposPage";
+import { supabase } from "@/lib/supabase";
 
 import {
   fetchWebConversations,
   fetchWebMessages,
   sendWebMessage,
   uploadChatAttachment,
+  getOrCreateWebConversation,
   WebConversation,
   WebMessage,
 } from "@/services/api";
+
+interface UserSearchResult { id: string; full_name: string; headline?: string | null; avatar_url?: string | null; }
 
 type ChatTab = "mensagens" | "grupos";
 
@@ -128,6 +132,7 @@ export default function MensagensPage() {
   const userId = profile?.id ?? user?.id ?? "";
   const isMobile = useIsMobile();
   const searchStr = useSearch();
+  const [, setLocation] = useLocation();
 
   const [chatTab, setChatTab]             = useState<ChatTab>("mensagens");
   const [conversations, setConversations] = useState<WebConversation[]>([]);
@@ -138,6 +143,47 @@ export default function MensagensPage() {
   const [sending, setSending]             = useState(false);
   const [search, setSearch]               = useState("");
   const [showNewConvo, setShowNewConvo]   = useState(false);
+
+  // Nova conversa - user search
+  const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [userSearchResults, setUserSearchResults] = useState<UserSearchResult[]>([]);
+  const [userSearchLoading, setUserSearchLoading] = useState(false);
+  const userSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const searchUsers = async (q: string) => {
+    if (q.trim().length < 2) { setUserSearchResults([]); return; }
+    setUserSearchLoading(true);
+    try {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, full_name, headline, avatar_url")
+        .ilike("full_name", `%${q.trim()}%`)
+        .neq("id", userId)
+        .limit(10);
+      setUserSearchResults((data as UserSearchResult[]) ?? []);
+    } catch { setUserSearchResults([]); }
+    finally { setUserSearchLoading(false); }
+  };
+
+  const handleUserSearchChange = (q: string) => {
+    setUserSearchQuery(q);
+    if (userSearchTimer.current) clearTimeout(userSearchTimer.current);
+    userSearchTimer.current = setTimeout(() => searchUsers(q), 300);
+  };
+
+  const startConversation = async (targetUser: UserSearchResult) => {
+    if (!userId) return;
+    const convId = await getOrCreateWebConversation(userId, targetUser.id);
+    if (!convId) return;
+    setShowNewConvo(false);
+    setUserSearchQuery("");
+    setUserSearchResults([]);
+    const freshConvos = await fetchWebConversations(userId);
+    setConversations(freshConvos);
+    const target = freshConvos.find(c => c.id === convId);
+    if (target) { loadMessages(target); }
+    else { setLocation(`/app/mensagens?conv=${convId}`); }
+  };
 
   // Attachment state
   const [attachFile, setAttachFile]       = useState<File | null>(null);
@@ -428,14 +474,45 @@ export default function MensagensPage() {
           {/* Nova conversa panel */}
           {showNewConvo && (
             <div style={{ backgroundColor: WHITE, borderBottom: `1px solid ${BORDER}`, padding: "14px 16px" }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: NAVY, marginBottom: 4 }}>Nova conversa</div>
-              <div style={{ fontSize: 12, color: MUTED, marginBottom: 10 }}>Conecte-se com alguém da sua rede para iniciar uma conversa</div>
-              <button
-                onClick={() => { setShowNewConvo(false); }}
-                style={{ padding: "9px 18px", backgroundColor: GOLD, color: NAVY, border: "none", borderRadius: 20, fontSize: 13, fontWeight: 700, cursor: "pointer" }}
-              >
-                Ver rede de conexões →
-              </button>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>Nova conversa</div>
+                <button onClick={() => { setShowNewConvo(false); setUserSearchQuery(""); setUserSearchResults([]); }} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", padding: 4 }}>
+                  <XIcon size={16} color={MUTED} />
+                </button>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, backgroundColor: "#f2f3f5", borderRadius: 20, padding: "9px 14px", marginBottom: 8 }}>
+                <span style={{ fontSize: 14, color: MUTED, lineHeight: 1 }}>🔍</span>
+                <input
+                  value={userSearchQuery}
+                  onChange={e => handleUserSearchChange(e.target.value)}
+                  placeholder="Buscar por nome..."
+                  autoFocus
+                  style={{ flex: 1, border: "none", background: "none", outline: "none", fontSize: 14, fontFamily: "inherit", color: NAVY }}
+                />
+              </div>
+              {userSearchLoading && <div style={{ fontSize: 12, color: MUTED, padding: "4px 0" }}>Buscando…</div>}
+              {userSearchResults.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 240, overflowY: "auto" }}>
+                  {userSearchResults.map(u => (
+                    <button
+                      key={u.id}
+                      onClick={() => startConversation(u)}
+                      style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: "none", background: "none", borderRadius: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit", transition: "background 0.12s" }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = BG; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent"; }}
+                    >
+                      <Avatar src={u.avatar_url} name={u.full_name} size={38} />
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{u.full_name}</div>
+                        {u.headline && <div style={{ fontSize: 11, color: MUTED }}>{u.headline}</div>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {userSearchQuery.length >= 2 && !userSearchLoading && userSearchResults.length === 0 && (
+                <div style={{ fontSize: 12, color: MUTED, padding: "4px 0" }}>Nenhum usuário encontrado.</div>
+              )}
             </div>
           )}
 
@@ -572,13 +649,56 @@ export default function MensagensPage() {
 
           {/* ── Sidebar ── */}
           <div style={{ width: 280, flexShrink: 0, borderRight: `1px solid ${BORDER}`, display: "flex", flexDirection: "column" }}>
-            <div style={{ padding: "12px 12px 8px" }}>
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Buscar conversas..."
-                style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${BORDER}`, borderRadius: 20, padding: "8px 14px", fontSize: 13, outline: "none", backgroundColor: BG, fontFamily: "inherit" }}
-              />
+            <div style={{ padding: "12px 12px 8px", display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", gap: 6 }}>
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Buscar conversas..."
+                  style={{ flex: 1, minWidth: 0, border: `1px solid ${BORDER}`, borderRadius: 20, padding: "8px 14px", fontSize: 13, outline: "none", backgroundColor: BG, fontFamily: "inherit" }}
+                />
+                <button
+                  onClick={() => setShowNewConvo(v => !v)}
+                  title="Nova conversa"
+                  style={{ width: 36, height: 36, flexShrink: 0, borderRadius: 18, backgroundColor: showNewConvo ? `${GOLD}20` : GOLD, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}
+                >✏️</button>
+              </div>
+              {/* Desktop nova conversa search */}
+              {showNewConvo && (
+                <div style={{ backgroundColor: BG, borderRadius: 10, padding: "10px 10px 8px", border: `1px solid ${BORDER}` }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Nova conversa</div>
+                  <input
+                    value={userSearchQuery}
+                    onChange={e => handleUserSearchChange(e.target.value)}
+                    placeholder="Buscar por nome..."
+                    autoFocus
+                    style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${BORDER}`, borderRadius: 16, padding: "7px 12px", fontSize: 13, outline: "none", backgroundColor: WHITE, fontFamily: "inherit" }}
+                  />
+                  {userSearchLoading && <div style={{ fontSize: 11, color: MUTED, padding: "4px 2px" }}>Buscando…</div>}
+                  {userSearchResults.length > 0 && (
+                    <div style={{ marginTop: 6, maxHeight: 180, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
+                      {userSearchResults.map(u => (
+                        <button
+                          key={u.id}
+                          onClick={() => startConversation(u)}
+                          style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", border: "none", background: "none", borderRadius: 8, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = WHITE; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent"; }}
+                        >
+                          <Avatar src={u.avatar_url} name={u.full_name} size={30} />
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.full_name}</div>
+                            {u.headline && <div style={{ fontSize: 11, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.headline}</div>}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {userSearchQuery.length >= 2 && !userSearchLoading && userSearchResults.length === 0 && (
+                    <div style={{ fontSize: 11, color: MUTED, padding: "4px 2px" }}>Nenhum usuário encontrado.</div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div style={{ flex: 1, overflowY: "auto" }}>
