@@ -1,6 +1,7 @@
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import { useVideoPlayer, VideoView } from "expo-video";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -88,24 +89,54 @@ const CONTENT_CUTOFF = 220;
 const MAX_PORTRAIT_HEIGHT = 560;
 const MAX_LANDSCAPE_HEIGHT = 320;
 
+const GOLD = "#c9a84c";
+
+function fmtTime(s: number) {
+  if (!isFinite(s) || s < 0) return "0:00";
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
 function VideoPlayer({ videoUrl, isVisible }: { videoUrl: string; isVisible: boolean }) {
   const [aspectRatio, setAspectRatio] = useState<number>(16 / 9);
+  const [playing, setPlaying]     = useState(false);
+  const [muted, setMuted]         = useState(true);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration]   = useState(0);
+  const [barWidth, setBarWidth]   = useState(0);
+  const controlsAnim  = useRef(new Animated.Value(1)).current;
+  const controlsShown = useRef(true);
+  const hideTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoViewRef  = useRef<VideoView>(null);
 
   const player = useVideoPlayer({ uri: videoUrl }, (p) => {
-    p.loop = true;
+    p.loop  = true;
+    p.muted = true;
   });
 
+  // Auto-play / pause when scroll visibility changes
   useEffect(() => {
-    if (isVisible) {
-      player.play();
-    } else {
-      player.pause();
-    }
+    if (isVisible) { player.play(); } else { player.pause(); }
   }, [isVisible, player]);
 
+  // Sync playing state
   useEffect(() => {
-    const sub = player.addListener("sourceLoad", ({ availableVideoTracks }) => {
-      const track = (availableVideoTracks as any[])?.[0];
+    const sub = player.addListener("playingChange", (e) => setPlaying(e.isPlaying));
+    return () => sub.remove();
+  }, [player]);
+
+  // Sync muted state
+  useEffect(() => {
+    const sub = player.addListener("mutedChange", (e) => setMuted(e.muted));
+    return () => sub.remove();
+  }, [player]);
+
+  // Aspect ratio from source
+  useEffect(() => {
+    const sub = player.addListener("sourceLoad", (e: any) => {
+      if (e.duration) setDuration(e.duration);
+      const track = (e.availableVideoTracks as any[])?.[0];
       if (track?.size?.width && track?.size?.height) {
         setAspectRatio(track.size.width / track.size.height);
       }
@@ -113,20 +144,124 @@ function VideoPlayer({ videoUrl, isVisible }: { videoUrl: string; isVisible: boo
     return () => sub.remove();
   }, [player]);
 
+  // Poll currentTime for progress bar
+  useEffect(() => {
+    const id = setInterval(() => {
+      setCurrentTime(player.currentTime);
+      if (!duration && player.duration > 0) setDuration(player.duration);
+    }, 250);
+    return () => clearInterval(id);
+  }, [player, duration]);
+
+  const scheduleHide = useCallback(() => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => {
+      Animated.timing(controlsAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start();
+      controlsShown.current = false;
+    }, 3000);
+  }, [controlsAnim]);
+
+  const showAndSchedule = useCallback(() => {
+    controlsShown.current = true;
+    Animated.timing(controlsAnim, { toValue: 1, duration: 150, useNativeDriver: true }).start();
+    scheduleHide();
+  }, [controlsAnim, scheduleHide]);
+
+  useEffect(() => {
+    scheduleHide();
+    return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
+  }, [scheduleHide]);
+
+  const togglePlay = useCallback(() => {
+    if (player.playing) { player.pause(); } else { player.play(); }
+    showAndSchedule();
+  }, [player, showAndSchedule]);
+
+  const toggleMute = useCallback(() => {
+    player.muted = !player.muted;
+    showAndSchedule();
+  }, [player, showAndSchedule]);
+
+  const handleSeek = useCallback((event: { nativeEvent: { locationX: number } }) => {
+    if (!barWidth || !duration) return;
+    const ratio = Math.max(0, Math.min(1, event.nativeEvent.locationX / barWidth));
+    player.seekBy(ratio * duration - player.currentTime);
+    showAndSchedule();
+  }, [barWidth, duration, player, showAndSchedule]);
+
+  const handlePress = useCallback(() => {
+    if (!controlsShown.current) { showAndSchedule(); } else { togglePlay(); }
+  }, [showAndSchedule, togglePlay]);
+
   const isPortrait = aspectRatio < 1;
   const containerHeight = isPortrait
     ? Math.min(IMG_WIDTH / aspectRatio, MAX_PORTRAIT_HEIGHT)
     : Math.min(IMG_WIDTH / aspectRatio, MAX_LANDSCAPE_HEIGHT);
+  const fillWidth = duration > 0 ? (currentTime / duration) * barWidth : 0;
 
   return (
     <View style={[videoStyles.container, { height: containerHeight }]}>
       <VideoView
+        ref={videoViewRef}
         player={player}
         contentFit="contain"
         style={videoStyles.video}
         allowsFullscreen
-        nativeControls
       />
+
+      {/* Touch overlay */}
+      <TouchableOpacity
+        style={StyleSheet.absoluteFillObject}
+        activeOpacity={1}
+        onPress={handlePress}
+      >
+        <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: controlsAnim }]}>
+          {/* Center play button (only when paused) */}
+          {!playing && (
+            <View style={videoStyles.centerOverlay}>
+              <View style={videoStyles.playBtn}>
+                <Feather name="play" size={26} color="#fff" />
+              </View>
+            </View>
+          )}
+
+          {/* Bottom gradient + controls */}
+          <LinearGradient
+            colors={["transparent", "rgba(0,0,0,0.7)"]}
+            style={videoStyles.controlsBar}
+            pointerEvents="box-none"
+          >
+            {/* Seek bar */}
+            <TouchableOpacity
+              activeOpacity={1}
+              style={videoStyles.progressHit}
+              onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
+              onPress={handleSeek}
+            >
+              <View style={videoStyles.progressTrack}>
+                <View style={[videoStyles.progressFill, { width: fillWidth }]} />
+              </View>
+            </TouchableOpacity>
+
+            {/* Buttons row */}
+            <View style={videoStyles.buttonsRow}>
+              <TouchableOpacity onPress={togglePlay} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}>
+                <Feather name={playing ? "pause" : "play"} size={16} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={toggleMute} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}>
+                <Feather name={muted ? "volume-x" : "volume-2"} size={16} color="#fff" />
+              </TouchableOpacity>
+              <Text style={videoStyles.timeText}>{fmtTime(currentTime)} / {fmtTime(duration)}</Text>
+              <TouchableOpacity
+                onPress={() => { videoViewRef.current?.enterFullscreen(); showAndSchedule(); }}
+                hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+              >
+                <Feather name="maximize" size={16} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+        </Animated.View>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -143,16 +278,8 @@ const videoStyles = StyleSheet.create({
     width: "100%",
     height: "100%",
   },
-  loadingOverlay: {
-    position: "absolute",
-    inset: 0,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.4)",
-  },
-  playOverlay: {
-    position: "absolute",
-    inset: 0,
+  centerOverlay: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -164,6 +291,41 @@ const videoStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingLeft: 4,
+  },
+  controlsBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingTop: 24,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+  },
+  progressHit: {
+    paddingVertical: 8,
+    marginBottom: 2,
+  },
+  progressTrack: {
+    height: 3,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.35)",
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: GOLD,
+    borderRadius: 3,
+  },
+  buttonsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  timeText: {
+    color: "#fff",
+    fontSize: 11,
+    flex: 1,
+    fontVariant: ["tabular-nums"],
   },
 });
 
