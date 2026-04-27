@@ -48,7 +48,7 @@ router.get("/market/posts", async (req: Request, res: Response): Promise<void> =
 
   let query = supabaseAdmin
     .from("market_posts")
-    .select("id, author_id, company_page_id, content, image_url, video_url, poll_options, likes_count, comments_count, created_at")
+    .select("id, author_id, company_page_id, content, image_url, video_url, poll_options, poll_allow_multiple, likes_count, comments_count, created_at")
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -80,11 +80,12 @@ router.post("/market/posts", async (req: Request, res: Response): Promise<void> 
   const allowed = await requireAdmin(req, res, userId);
   if (!allowed) return;
 
-  const { content, image_url, video_url, poll_options } = req.body as {
+  const { content, image_url, video_url, poll_options, poll_allow_multiple } = req.body as {
     content?: string;
     image_url?: string | null;
     video_url?: string | null;
     poll_options?: unknown;
+    poll_allow_multiple?: boolean;
   };
 
   if (!content?.trim()) {
@@ -104,10 +105,11 @@ router.post("/market/posts", async (req: Request, res: Response): Promise<void> 
       image_url: image_url ?? null,
       video_url: video_url ?? null,
       poll_options: poll_options ?? null,
+      poll_allow_multiple: poll_allow_multiple ?? false,
       likes_count: 0,
       comments_count: 0,
     })
-    .select("id, content, image_url, video_url, poll_options, created_at, author_id, company_page_id, likes_count, comments_count")
+    .select("id, content, image_url, video_url, poll_options, poll_allow_multiple, created_at, author_id, company_page_id, likes_count, comments_count")
     .single();
 
   if (error) {

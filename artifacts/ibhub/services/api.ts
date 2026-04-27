@@ -5720,12 +5720,13 @@ export interface MarketPost {
   image_url?: string | null;
   video_url?: string | null;
   poll_options?: MarketPollOption[] | null;
+  poll_allow_multiple?: boolean;
   created_at: string;
   author_id: string;
   likes_count: number;
   comments_count: number;
   user_liked: boolean;
-  user_poll_vote?: string | null;
+  user_poll_votes?: string[] | null;
   author?: {
     id: string;
     full_name?: string | null;
@@ -5788,8 +5789,13 @@ export async function fetchMarketPosts(userId?: string, offset = 0, limit = 15):
         : supabase.from("company_pages").select("id, name, avatar_url").ilike("name", "Ideal.BI").maybeSingle(),
     ]);
 
-    const likedSet    = new Set(((likesRes as any).data ?? []).map((l: any) => l.post_id as string));
-    const pollVoteMap = new Map(((votesRes as any).data ?? []).map((v: any) => [v.post_id as string, v.option_id as string]));
+    const likedSet = new Set(((likesRes as any).data ?? []).map((l: any) => l.post_id as string));
+    const pollVoteMap = new Map<string, string[]>();
+    for (const v of ((votesRes as any).data ?? [])) {
+      const arr = pollVoteMap.get(v.post_id as string) ?? [];
+      arr.push(v.option_id as string);
+      pollVoteMap.set(v.post_id as string, arr);
+    }
 
     // Build company map (by id) — or use the single ilike result as fallback
     const companyMap = new Map<string, { id: string; name: string; avatar_url: string | null }>();
@@ -5813,7 +5819,8 @@ export async function fetchMarketPosts(userId?: string, offset = 0, limit = 15):
       const author = company
         ? { id: company.id, full_name: company.name, avatar_url: company.avatar_url, headline: "Inteligência de Mercado do Vinho" }
         : universalAuthor;
-      return { ...p, user_liked: likedSet.has(p.id), user_poll_vote: pollVoteMap.get(p.id) ?? null, author };
+      const votes = pollVoteMap.get(p.id);
+      return { ...p, user_liked: likedSet.has(p.id), user_poll_votes: votes?.length ? votes : null, poll_allow_multiple: p.poll_allow_multiple ?? false, author };
     });
   } catch { return []; }
 }
@@ -5824,6 +5831,7 @@ export async function createMarketPost(
   imageUrl?: string | null,
   videoUrl?: string | null,
   pollOptions?: MarketPollOption[] | null,
+  pollAllowMultiple?: boolean,
 ): Promise<MarketPost | null> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
@@ -5836,6 +5844,7 @@ export async function createMarketPost(
         image_url: imageUrl ?? null,
         video_url: videoUrl ?? null,
         poll_options: pollOptions && pollOptions.length > 0 ? pollOptions : null,
+        poll_allow_multiple: pollAllowMultiple ?? false,
       }),
     });
     if (!res.ok) return null;
@@ -5855,11 +5864,15 @@ export async function createMarketPost(
       }
     } catch { /* keep author undefined — card gracefully falls back */ }
 
-    return { ...newPost, user_liked: false, user_poll_vote: null, author };
+    return { ...newPost, user_liked: false, user_poll_votes: null, poll_allow_multiple: pollAllowMultiple ?? false, author };
   } catch { return null; }
 }
 
-export async function voteOnMarketPoll(postId: string, _userId: string, optionId: string): Promise<MarketPollOption[] | null> {
+export async function voteOnMarketPoll(
+  postId: string,
+  _userId: string,
+  optionId: string,
+): Promise<{ poll_options: MarketPollOption[]; user_poll_votes: string[] } | null> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) return null;
@@ -5869,8 +5882,8 @@ export async function voteOnMarketPoll(postId: string, _userId: string, optionId
       body: JSON.stringify({ optionId }),
     });
     if (!res.ok) return null;
-    const { poll_options } = await res.json() as { poll_options: MarketPollOption[]; user_poll_vote: string };
-    return poll_options;
+    const json = await res.json() as { poll_options: MarketPollOption[]; user_poll_votes: string[] };
+    return { poll_options: json.poll_options, user_poll_votes: json.user_poll_votes ?? [] };
   } catch { return null; }
 }
 
@@ -5887,14 +5900,15 @@ export async function fetchMarketPollVoters(postId: string): Promise<{
       .select("user_id, option_id")
       .eq("post_id", postId);
     if (!votes?.length) return [];
-    const userIds = votes.map((v: any) => v.user_id as string);
+    const userIds = [...new Set(votes.map((v: any) => v.user_id as string))];
     const { data: profiles } = await supabase.from("profiles").select("id, full_name, avatar_url, username").in("id", userIds);
     if (!profiles) return [];
-    const voteMap = new Map(votes.map((v: any) => [v.user_id as string, v.option_id as string]));
-    return profiles.map((p: any) => ({
-      id: p.id, full_name: p.full_name, avatar_url: p.avatar_url, username: p.username,
-      optionId: voteMap.get(p.id) ?? "",
-    }));
+    const profileMap = new Map((profiles as any[]).map((p: any) => [p.id as string, p]));
+    return (votes as any[]).flatMap((v: any) => {
+      const p = profileMap.get(v.user_id as string);
+      if (!p) return [];
+      return [{ id: p.id, full_name: p.full_name, avatar_url: p.avatar_url, username: p.username, optionId: v.option_id as string }];
+    });
   } catch { return []; }
 }
 

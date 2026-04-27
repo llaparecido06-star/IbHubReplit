@@ -401,10 +401,15 @@ router.post("/posts/:postId/poll/vote", async (req: Request, res: Response): Pro
 
 /**
  * POST /market-posts/:postId/poll/vote
- * Casts a vote on an Ideal.BI market post poll.
- * Uses the admin client to bypass RLS — market_posts can only be updated
- * by the post owner (admin), but any authenticated user must be able to vote.
+ * Casts, changes, or removes a vote on an Ideal.BI market post poll.
+ * Uses the admin client to bypass RLS.
  * Body: { optionId: string }
+ * Behaviour:
+ *   - allow_multiple=false: clicking the already-voted option → unvote; clicking a
+ *     different option → swap vote (remove old, add new).
+ *   - allow_multiple=true: clicking an already-selected option → deselect it;
+ *     clicking a new option → add it.
+ * Response: { poll_options, user_poll_votes: string[] }
  */
 router.post("/market-posts/:postId/poll/vote", async (req: Request, res: Response): Promise<void> => {
   const authHeader = req.headers.authorization;
@@ -429,7 +434,7 @@ router.post("/market-posts/:postId/poll/vote", async (req: Request, res: Respons
 
   const { data: row, error: fetchError } = await supabaseAdmin
     .from("market_posts")
-    .select("poll_options")
+    .select("poll_options, poll_allow_multiple")
     .eq("id", postId)
     .single();
 
@@ -439,29 +444,77 @@ router.post("/market-posts/:postId/poll/vote", async (req: Request, res: Respons
   }
 
   const opts = row.poll_options as { id: string; text: string; votes_count: number }[];
+  const allowMultiple: boolean = (row as any).poll_allow_multiple ?? false;
+
   if (!opts.find((o) => o.id === optionId)) {
     res.status(400).json({ error: "Invalid optionId" });
     return;
   }
 
-  const { data: existing } = await supabaseAdmin
+  const { data: existingRows } = await supabaseAdmin
     .from("market_post_poll_votes")
     .select("option_id")
     .eq("post_id", postId)
-    .eq("user_id", userId)
-    .maybeSingle();
+    .eq("user_id", userId);
 
-  let updated: typeof opts;
+  const existingVotes: string[] = (existingRows ?? []).map((r: any) => r.option_id as string);
+  const alreadyVotedThis = existingVotes.includes(optionId);
 
-  if (existing) {
-    updated = opts.map((o) =>
-      o.id === existing.option_id ? { ...o, votes_count: Math.max(0, o.votes_count - 1) } :
-      o.id === optionId          ? { ...o, votes_count: o.votes_count + 1 } : o
-    );
-    await supabaseAdmin.from("market_post_poll_votes").update({ option_id: optionId }).eq("post_id", postId).eq("user_id", userId);
+  let updated = [...opts];
+
+  if (allowMultiple) {
+    if (alreadyVotedThis) {
+      // Deselect this option
+      updated = updated.map((o) =>
+        o.id === optionId ? { ...o, votes_count: Math.max(0, o.votes_count - 1) } : o
+      );
+      await supabaseAdmin
+        .from("market_post_poll_votes")
+        .delete()
+        .eq("post_id", postId)
+        .eq("user_id", userId)
+        .eq("option_id", optionId);
+    } else {
+      // Add this option to the selection
+      updated = updated.map((o) =>
+        o.id === optionId ? { ...o, votes_count: o.votes_count + 1 } : o
+      );
+      await supabaseAdmin
+        .from("market_post_poll_votes")
+        .insert({ post_id: postId, user_id: userId, option_id: optionId });
+    }
   } else {
-    updated = opts.map((o) => o.id === optionId ? { ...o, votes_count: o.votes_count + 1 } : o);
-    await supabaseAdmin.from("market_post_poll_votes").insert({ post_id: postId, user_id: userId, option_id: optionId });
+    if (alreadyVotedThis) {
+      // Unvote: remove the existing vote
+      updated = updated.map((o) =>
+        o.id === optionId ? { ...o, votes_count: Math.max(0, o.votes_count - 1) } : o
+      );
+      await supabaseAdmin
+        .from("market_post_poll_votes")
+        .delete()
+        .eq("post_id", postId)
+        .eq("user_id", userId)
+        .eq("option_id", optionId);
+    } else {
+      // Change vote: remove old vote(s), add new
+      for (const oldId of existingVotes) {
+        updated = updated.map((o) =>
+          o.id === oldId ? { ...o, votes_count: Math.max(0, o.votes_count - 1) } : o
+        );
+        await supabaseAdmin
+          .from("market_post_poll_votes")
+          .delete()
+          .eq("post_id", postId)
+          .eq("user_id", userId)
+          .eq("option_id", oldId);
+      }
+      updated = updated.map((o) =>
+        o.id === optionId ? { ...o, votes_count: o.votes_count + 1 } : o
+      );
+      await supabaseAdmin
+        .from("market_post_poll_votes")
+        .insert({ post_id: postId, user_id: userId, option_id: optionId });
+    }
   }
 
   const { error: updateError } = await supabaseAdmin
@@ -471,7 +524,16 @@ router.post("/market-posts/:postId/poll/vote", async (req: Request, res: Respons
 
   if (updateError) { res.status(500).json({ error: updateError.message }); return; }
 
-  res.json({ poll_options: updated, user_poll_vote: optionId });
+  // Recalculate the user's current votes after the operation
+  const { data: newVoteRows } = await supabaseAdmin
+    .from("market_post_poll_votes")
+    .select("option_id")
+    .eq("post_id", postId)
+    .eq("user_id", userId);
+
+  const userPollVotes: string[] = (newVoteRows ?? []).map((r: any) => r.option_id as string);
+
+  res.json({ poll_options: updated, user_poll_votes: userPollVotes });
 });
 
 export default router;

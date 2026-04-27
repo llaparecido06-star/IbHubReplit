@@ -2080,8 +2080,9 @@ export interface MarketPost {
   author_id: string;
   likes_count: number;
   comments_count: number;
+  poll_allow_multiple?: boolean;
   user_liked: boolean;
-  user_poll_vote?: string | null;
+  user_poll_votes?: string[] | null;
   author?: {
     id: string;
     full_name?: string | null;
@@ -2134,8 +2135,13 @@ export async function fetchMarketPosts(userId?: string): Promise<MarketPost[]> {
         : supabase.from("company_pages").select("id, name, avatar_url").ilike("name", "Ideal.BI").maybeSingle(),
     ]);
 
-    const likedSet    = new Set(((likesRes as any).data ?? []).map((l: any) => l.post_id as string));
-    const pollVoteMap = new Map(((votesRes as any).data ?? []).map((v: any) => [v.post_id as string, v.option_id as string]));
+    const likedSet = new Set(((likesRes as any).data ?? []).map((l: any) => l.post_id as string));
+    const pollVoteMap = new Map<string, string[]>();
+    for (const v of ((votesRes as any).data ?? [])) {
+      const arr = pollVoteMap.get(v.post_id as string) ?? [];
+      arr.push(v.option_id as string);
+      pollVoteMap.set(v.post_id as string, arr);
+    }
 
     const companyMap = new Map<string, { id: string; name: string; avatar_url: string | null }>();
     const companyData = (companyRes as any).data;
@@ -2157,7 +2163,8 @@ export async function fetchMarketPosts(userId?: string): Promise<MarketPost[]> {
       const author = company
         ? { id: company.id, full_name: company.name, avatar_url: company.avatar_url, headline: "Inteligência de Mercado do Vinho" }
         : universalAuthor;
-      return { ...p, user_liked: likedSet.has(p.id), user_poll_vote: pollVoteMap.get(p.id) ?? null, author };
+      const votes = pollVoteMap.get(p.id);
+      return { ...p, user_liked: likedSet.has(p.id), user_poll_votes: votes?.length ? votes : null, poll_allow_multiple: (p as any).poll_allow_multiple ?? false, author };
     });
   } catch {
     return [];
@@ -2202,39 +2209,30 @@ export async function createMarketPost(
       }
     } catch { /* keep author undefined */ }
 
-    return { ...newPost, user_liked: false, user_poll_vote: null, author };
+    return { ...newPost, user_liked: false, user_poll_votes: null, poll_allow_multiple: false, author };
   } catch {
     return null;
   }
 }
 
-export async function voteOnMarketPoll(postId: string, userId: string, optionId: string): Promise<MarketPollOption[] | null> {
+export async function voteOnMarketPoll(
+  postId: string,
+  _userId: string,
+  optionId: string,
+): Promise<{ poll_options: MarketPollOption[]; user_poll_votes: string[] } | null> {
   try {
-    const { data: existing } = await supabase
-      .from("market_post_poll_votes")
-      .select("option_id")
-      .eq("post_id", postId)
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    const { data: post } = await supabase.from("market_posts").select("poll_options").eq("id", postId).single();
-    if (!post) return null;
-    const opts: MarketPollOption[] = post.poll_options ?? [];
-
-    if (existing) {
-      const updated = opts.map((o: MarketPollOption) =>
-        o.id === existing.option_id ? { ...o, votes_count: Math.max(0, o.votes_count - 1) } :
-        o.id === optionId ? { ...o, votes_count: o.votes_count + 1 } : o
-      );
-      await supabase.from("market_post_poll_votes").update({ option_id: optionId }).eq("post_id", postId).eq("user_id", userId);
-      await supabase.from("market_posts").update({ poll_options: updated }).eq("id", postId);
-      return updated;
-    } else {
-      const updated = opts.map((o: MarketPollOption) => o.id === optionId ? { ...o, votes_count: o.votes_count + 1 } : o);
-      await supabase.from("market_post_poll_votes").insert({ post_id: postId, user_id: userId, option_id: optionId });
-      await supabase.from("market_posts").update({ poll_options: updated }).eq("id", postId);
-      return updated;
-    }
+    const session = await getCachedSession();
+    if (!session?.access_token) return null;
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
+      ?? (window.location.origin.replace(/:\d+$/, "") + "/api");
+    const res = await fetch(`${apiBase}/market-posts/${postId}/poll/vote`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ optionId }),
+    });
+    if (!res.ok) return null;
+    const json = await res.json() as { poll_options: MarketPollOption[]; user_poll_votes: string[] };
+    return { poll_options: json.poll_options, user_poll_votes: json.user_poll_votes ?? [] };
   } catch {
     return null;
   }

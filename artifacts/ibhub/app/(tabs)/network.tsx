@@ -1408,25 +1408,29 @@ function LikersModal({
 
 function MarketPollMobile({ post: initialPost, userId, colors, onPollVote }: {
   post: API.MarketPost; userId: string; colors: any;
-  onPollVote: (opts: API.MarketPollOption[], voteId: string) => void;
+  onPollVote: (opts: API.MarketPollOption[], votes: string[]) => void;
 }) {
   const [post, setPost]             = useState(initialPost);
   const [voting, setVoting]         = useState(false);
   const [showVoters, setShowVoters] = useState(false);
   const [voters, setVoters]         = useState<{ id: string; full_name: string | null; avatar_url: string | null; username: string | null; optionId: string }[]>([]);
   const [loadingVoters, setLoadingVoters] = useState(false);
-  const opts  = post.poll_options ?? [];
-  const total = opts.reduce((s, o) => s + o.votes_count, 0);
+  const opts         = post.poll_options ?? [];
+  const total        = opts.reduce((s, o) => s + o.votes_count, 0);
+  const allowMultiple = post.poll_allow_multiple ?? false;
+  const currentVotes  = post.user_poll_votes ?? [];
+  const hasVoted      = currentVotes.length > 0;
 
   useEffect(() => { setPost(initialPost); }, [initialPost]);
 
   const handleVote = async (optId: string) => {
-    if (voting || post.user_poll_vote === optId) return;
+    if (voting) return;
     setVoting(true);
-    const updated = await API.voteOnMarketPoll(post.id, userId, optId);
-    if (updated) {
-      onPollVote(updated, optId);
-      setPost(p => ({ ...p, poll_options: updated, user_poll_vote: optId }));
+    const result = await API.voteOnMarketPoll(post.id, userId, optId);
+    if (result) {
+      const { poll_options: updatedOpts, user_poll_votes: updatedVotes } = result;
+      onPollVote(updatedOpts, updatedVotes);
+      setPost(p => ({ ...p, poll_options: updatedOpts, user_poll_votes: updatedVotes.length ? updatedVotes : null }));
     }
     setVoting(false);
   };
@@ -1444,9 +1448,12 @@ function MarketPollMobile({ post: initialPost, userId, colors, onPollVote }: {
   return (
     <>
       <View style={{ paddingHorizontal: 14, paddingBottom: 12, gap: 8 }}>
+        {allowMultiple ? (
+          <Text style={{ fontSize: 11, color: colors.mutedForeground, marginBottom: 2 }}>Múltipla escolha — toque para selecionar/desselecionar</Text>
+        ) : null}
         {opts.map(opt => {
-          const pct = total > 0 ? Math.round((opt.votes_count / total) * 100) : 0;
-          const voted = post.user_poll_vote === opt.id;
+          const pct   = total > 0 ? Math.round((opt.votes_count / total) * 100) : 0;
+          const voted = currentVotes.includes(opt.id);
           return (
             <TouchableOpacity
               key={opt.id}
@@ -1457,16 +1464,20 @@ function MarketPollMobile({ post: initialPost, userId, colors, onPollVote }: {
               <View style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${pct}%`, backgroundColor: voted ? colors.gold + "28" : "#f0f0ec" }} />
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 12, paddingVertical: 9 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
-                  {voted ? (
-                    <AntDesign name={"checkcircle" as any} size={18} color={colors.gold} />
+                  {allowMultiple ? (
+                    voted
+                      ? <AntDesign name={"checksquare" as any} size={18} color={colors.gold} />
+                      : <AntDesign name={"checksquareo" as any} size={18} color={colors.mutedForeground} />
                   ) : (
-                    <AntDesign name={"circleo" as any} size={18} color={colors.mutedForeground} />
+                    voted
+                      ? <AntDesign name={"checkcircle" as any} size={18} color={colors.gold} />
+                      : <AntDesign name={"circleo" as any} size={18} color={colors.mutedForeground} />
                   )}
                   <Text style={{ fontSize: 13, fontWeight: voted ? "700" : "400", color: voted ? colors.navy : colors.foreground, flex: 1 }}>
                     {opt.text}
                   </Text>
                 </View>
-                {post.user_poll_vote ? (
+                {hasVoted ? (
                   <Text style={{ fontSize: 12, fontWeight: "700", color: voted ? colors.gold : colors.mutedForeground }}>{pct}%</Text>
                 ) : null}
               </View>
@@ -1475,7 +1486,7 @@ function MarketPollMobile({ post: initialPost, userId, colors, onPollVote }: {
         })}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{total} voto{total !== 1 ? "s" : ""}</Text>
-          {total > 0 && post.user_poll_vote && (
+          {total > 0 && hasVoted && (
             <TouchableOpacity onPress={handleShowVoters}>
               <Text style={{ fontSize: 11, color: colors.navy, fontWeight: "600" }}>Ver votos</Text>
             </TouchableOpacity>
@@ -1511,8 +1522,8 @@ function MarketPollMobile({ post: initialPost, userId, colors, onPollVote }: {
                       <Text style={{ fontSize: 13, fontWeight: "600", color: colors.mutedForeground, marginBottom: 8 }}>
                         {opt.text} · {optVoters.length}
                       </Text>
-                      {optVoters.map(v => (
-                        <View key={v.id} style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                      {optVoters.map((v, vi) => (
+                        <View key={`${v.id}-${vi}`} style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 }}>
                           <IdealBIAvatar src={v.avatar_url} name={v.full_name ?? v.username ?? "?"} size={34} />
                           <Text style={{ fontSize: 14, color: colors.navy, fontWeight: "500" }}>
                             {v.full_name ?? v.username ?? "Usuário"}
@@ -1554,8 +1565,8 @@ function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors 
     setLiking(false);
   };
 
-  const handlePollVote = (opts: API.MarketPollOption[], voteId: string) => {
-    setPost(p => ({ ...p, poll_options: opts, user_poll_vote: voteId }));
+  const handlePollVote = (opts: API.MarketPollOption[], votes: string[]) => {
+    setPost(p => ({ ...p, poll_options: opts, user_poll_votes: votes.length ? votes : null }));
   };
 
   const hasMedia = !!(post.image_url || post.video_url);
@@ -1669,6 +1680,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
   const [mediaType, setMediaType] = useState<"image" | "video" | null>(null);
   const [pollMode, setPollMode] = useState(false);
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
+  const [pollAllowMultiple, setPollAllowMultiple] = useState(false);
   const [posting, setPosting] = useState(false);
 
   const hasAccess = permHasFeature("mercado:idealbi") || isAdmin;
@@ -1703,7 +1715,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
 
   const resetForm = () => {
     setNewContent(""); setMediaUri(null); setMediaType(null);
-    setPollMode(false); setPollOptions(["", ""]);
+    setPollMode(false); setPollOptions(["", ""]); setPollAllowMultiple(false);
   };
 
   const handlePost = async () => {
@@ -1744,7 +1756,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
       }
     }
 
-    const post = await API.createMarketPost(userId, t, imageUrl, videoUrl, finalPollOptions);
+    const post = await API.createMarketPost(userId, t, imageUrl, videoUrl, finalPollOptions, pollAllowMultiple);
     if (post) { setPosts(prev => [post, ...prev]); resetForm(); }
     setPosting(false);
   };
@@ -1824,6 +1836,15 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
               <Text style={{ fontSize: 12, color: colors.gold, fontWeight: "600" }}>+ Adicionar opção</Text>
             </TouchableOpacity>
           ) : null}
+          <TouchableOpacity
+            onPress={() => setPollAllowMultiple(v => !v)}
+            style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}
+          >
+            <AntDesign name={pollAllowMultiple ? ("checksquare" as any) : ("checksquareo" as any)} size={18} color={pollAllowMultiple ? colors.gold : colors.mutedForeground} />
+            <Text style={{ fontSize: 12, color: pollAllowMultiple ? colors.gold : colors.mutedForeground, fontWeight: pollAllowMultiple ? "700" : "400" }}>
+              Permitir múltipla escolha
+            </Text>
+          </TouchableOpacity>
         </View>
       ) : null}
 

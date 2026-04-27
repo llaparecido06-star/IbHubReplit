@@ -477,24 +477,30 @@ function MarketPostComments({ postId, userId }: { postId: string; userId: string
   );
 }
 
-function PollDisplay({ post, userId, onPollVote }: { post: MarketPost; userId: string; onPollVote: (id: string, opts: MarketPollOption[], voteId: string) => void }) {
-  const opts = post.poll_options ?? [];
-  const total = opts.reduce((s, o) => s + o.votes_count, 0);
+function PollDisplay({ post, userId, onPollVote }: { post: MarketPost; userId: string; onPollVote: (id: string, opts: MarketPollOption[], votes: string[]) => void }) {
+  const opts         = post.poll_options ?? [];
+  const total        = opts.reduce((s, o) => s + o.votes_count, 0);
+  const allowMultiple = post.poll_allow_multiple ?? false;
+  const currentVotes  = post.user_poll_votes ?? [];
+  const hasVoted      = currentVotes.length > 0;
   const [voting, setVoting] = useState(false);
 
   const handleVote = async (optId: string) => {
-    if (voting || post.user_poll_vote === optId) return;
+    if (voting) return;
     setVoting(true);
-    const updated = await voteOnMarketPoll(post.id, userId, optId);
-    if (updated) onPollVote(post.id, updated, optId);
+    const result = await voteOnMarketPoll(post.id, userId, optId);
+    if (result) onPollVote(post.id, result.poll_options, result.user_poll_votes);
     setVoting(false);
   };
 
   return (
     <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+      {allowMultiple && (
+        <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>Múltipla escolha — clique para selecionar/desselecionar</div>
+      )}
       {opts.map(opt => {
-        const pct = total > 0 ? Math.round((opt.votes_count / total) * 100) : 0;
-        const voted = post.user_poll_vote === opt.id;
+        const pct   = total > 0 ? Math.round((opt.votes_count / total) * 100) : 0;
+        const voted = currentVotes.includes(opt.id);
         return (
           <button
             key={opt.id}
@@ -512,19 +518,30 @@ function PollDisplay({ post, userId, onPollVote }: { post: MarketPost; userId: s
               backgroundColor: voted ? `${GOLD}28` : "#f0f0ec", borderRadius: 10, transition: "width 0.4s",
             }} />
             <span style={{ position: "relative", fontSize: 13, fontWeight: voted ? 700 : 500, color: voted ? NAVY : "#444", display: "flex", alignItems: "center", gap: 9 }}>
-              {/* Radio indicator */}
-              <span style={{
-                flexShrink: 0, width: 17, height: 17, borderRadius: "50%",
-                border: `2px solid ${voted ? GOLD : "#b0b8c4"}`,
-                backgroundColor: voted ? GOLD : "transparent",
-                display: "inline-flex", alignItems: "center", justifyContent: "center",
-                transition: "all 0.18s",
-              }}>
-                {voted && <span style={{ color: "#fff", fontSize: 9, fontWeight: 900, lineHeight: 1 }}>✓</span>}
-              </span>
+              {allowMultiple ? (
+                <span style={{
+                  flexShrink: 0, width: 17, height: 17, borderRadius: 3,
+                  border: `2px solid ${voted ? GOLD : "#b0b8c4"}`,
+                  backgroundColor: voted ? GOLD : "transparent",
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  transition: "all 0.18s",
+                }}>
+                  {voted && <span style={{ color: "#fff", fontSize: 9, fontWeight: 900, lineHeight: 1 }}>✓</span>}
+                </span>
+              ) : (
+                <span style={{
+                  flexShrink: 0, width: 17, height: 17, borderRadius: "50%",
+                  border: `2px solid ${voted ? GOLD : "#b0b8c4"}`,
+                  backgroundColor: voted ? GOLD : "transparent",
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  transition: "all 0.18s",
+                }}>
+                  {voted && <span style={{ color: "#fff", fontSize: 9, fontWeight: 900, lineHeight: 1 }}>✓</span>}
+                </span>
+              )}
               {opt.text}
             </span>
-            {post.user_poll_vote && (
+            {hasVoted && (
               <span style={{ position: "relative", float: "right", fontSize: 12, fontWeight: 700, color: voted ? GOLD : MUTED }}>
                 {pct}%
               </span>
@@ -552,8 +569,8 @@ function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idea
     onLikeToggle(post.id, newLiked, post.likes_count + delta);
   };
 
-  const handlePollVote = (id: string, opts: MarketPollOption[], voteId: string) => {
-    setPost(p => ({ ...p, poll_options: opts, user_poll_vote: voteId }));
+  const handlePollVote = (id: string, opts: MarketPollOption[], votes: string[]) => {
+    setPost(p => ({ ...p, poll_options: opts, user_poll_votes: votes.length ? votes : null }));
   };
 
   return (
