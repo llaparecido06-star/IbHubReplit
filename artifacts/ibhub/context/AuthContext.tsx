@@ -3,7 +3,7 @@ import { createClient, Session, User } from "@supabase/supabase-js";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { AppState, type AppStateStatus } from "react-native";
+import { AppState, Platform, type AppStateStatus } from "react-native";
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -527,6 +527,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!data?.url) return { error: `Não foi possível iniciar o login com ${provider}.` };
 
       console.log(`[OAuth] Opening browser for ${provider}...`);
+
+      if (Platform.OS === "android") {
+        // ── Android fix ───────────────────────────────────────────────────────
+        // Chrome Custom Tab cannot intercept exp:// deep links — they are always
+        // delivered as Linking events (handleDeepLink). openAuthSessionAsync would
+        // hang indefinitely waiting for a "success" that never comes.
+        // Solution: race openAuthSessionAsync against the app returning to the
+        // foreground (AppState "active"). Whichever resolves first wins.
+        // - Happy path: user logs in → OS brings Expo Go to foreground → race wins
+        //   → spinner clears → handleDeepLink exchanges the PKCE code → SIGNED_IN
+        // - User cancels tab: Chrome Custom Tab closes → openAuthSessionAsync wins
+        //   with "dismiss" → spinner clears, no navigation
+        // maybeCompleteAuthSession() (called in the AppState listener above) closes
+        // the Chrome Custom Tab so openAuthSessionAsync also returns cleanly.
+        let appStateSub: ReturnType<typeof AppState.addEventListener> | null = null;
+        const waitForForeground = new Promise<void>((resolve) => {
+          appStateSub = AppState.addEventListener("change", (next) => {
+            if (next === "active") resolve();
+          });
+        });
+        await Promise.race([
+          WebBrowser.openAuthSessionAsync(data.url, redirectTo).then(() => {}),
+          waitForForeground,
+        ]);
+        appStateSub?.remove();
+        console.log(`[OAuth] Android: browser race resolved, auth continues via handleDeepLink.`);
+        return { error: null };
+      }
+
+      // ── iOS (and fallback) ────────────────────────────────────────────────
+      // ASWebAuthenticationSession on iOS CAN intercept the redirect URL before
+      // the system navigates to it, so openAuthSessionAsync returns "success".
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
       console.log(`[OAuth] Browser result type:`, result.type);
 
@@ -544,7 +576,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log(`[OAuth] Parsed type:`, parsed?.type ?? "null");
 
         if (parsed?.type === "tokens") {
-          // Implicit flow — set session directly from tokens
           const { error: err } = await supabase.auth.setSession({
             access_token: parsed.accessToken,
             refresh_token: parsed.refreshToken,
@@ -554,9 +585,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             return { error: err.message };
           }
           console.log("[OAuth] Session set via implicit tokens.");
-
         } else if (parsed?.type === "code") {
-          // PKCE flow — exchange code for session (code verifier stored in AsyncStorage)
           console.log("[OAuth] Exchanging PKCE code for session...");
           const { error: err } = await supabase.auth.exchangeCodeForSession(parsed.code);
           if (err) {
@@ -568,7 +597,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.warn("[OAuth] Could not parse tokens or code from redirect URL:", safeUrl);
           return { error: "Não foi possível completar o login. Verifique as configurações de redirecionamento." };
         }
-        // onAuthStateChange(SIGNED_IN) will fire and set the session
       }
       return { error: null };
     } catch (e: any) {
