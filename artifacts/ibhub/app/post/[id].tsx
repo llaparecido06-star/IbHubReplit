@@ -132,6 +132,7 @@ function PostDetailVideo({ uri }: { uri: string }) {
         player={player}
         contentFit="contain"
         style={{ width: "100%", height: "100%" }}
+        nativeControls={false}
         allowsFullscreen
       />
 

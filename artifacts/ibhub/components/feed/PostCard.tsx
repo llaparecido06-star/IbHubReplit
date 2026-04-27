@@ -206,6 +206,7 @@ function VideoPlayer({ videoUrl, isVisible }: { videoUrl: string; isVisible: boo
         player={player}
         contentFit="contain"
         style={videoStyles.video}
+        nativeControls={false}
         allowsFullscreen
       />
 
