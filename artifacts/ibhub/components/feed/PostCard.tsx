@@ -495,7 +495,7 @@ function ReactionIcon({ iconName, iconColor, size }: { iconName: string; iconCol
   return <MaterialCommunityIcons name={iconName as any} size={size} color={iconColor} />;
 }
 
-function ReactionPicker({
+export function ReactionPicker({
   visible,
   onSelect,
   onClose,

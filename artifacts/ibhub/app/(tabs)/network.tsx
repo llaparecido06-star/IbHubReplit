@@ -34,7 +34,7 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { usePermissions } from "@/context/PermissionsContext";
 import { PaywallScreen } from "@/components/ui/PaywallScreen";
-import { AdaptiveImage } from "@/components/feed/PostCard";
+import { AdaptiveImage, ReactionPicker, REACTIONS, type ReactionType } from "@/components/feed/PostCard";
 import * as API from "@/services/api";
 import { compressPostImage } from "@/utils/compressImage";
 import { usePaginatedQuery } from "@/hooks/usePaginatedQuery";
@@ -1149,6 +1149,23 @@ function MarketCommentItem({
   const authorComp  = comment.author?.company;
   const subtitle    = [authorPos, authorComp].filter(Boolean).join(" · ");
   const timeStr     = new Date(comment.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  const [liked,      setLiked]      = useState(comment.is_liked ?? false);
+  const [likeCount,  setLikeCount]  = useState(comment.likes_count ?? 0);
+  const [liking,     setLiking]     = useState(false);
+
+  const handleLikeComment = async () => {
+    if (liking) return;
+    setLiking(true);
+    const prev = liked;
+    setLiked(!prev);
+    setLikeCount(c => prev ? Math.max(0, c - 1) : c + 1);
+    const result = await API.toggleMarketCommentLike(comment.id, userId, prev);
+    if (result) {
+      setLiked(result.is_liked);
+      setLikeCount(result.likes_count);
+    }
+    setLiking(false);
+  };
 
   return (
     <View style={{ marginLeft: isReply ? 36 : 0, marginBottom: 10 }}>
@@ -1182,6 +1199,16 @@ function MarketCommentItem({
             <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{timeStr}</Text>
             <TouchableOpacity onPress={() => onReply(comment)}>
               <Text style={{ fontSize: 11, fontWeight: "700", color: colors.gold }}>Responder</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleLikeComment}
+              disabled={liking}
+              style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
+            >
+              <Feather name="heart" size={12} color={liked ? "#dc2626" : colors.mutedForeground} />
+              {likeCount > 0 && (
+                <Text style={{ fontSize: 11, color: liked ? "#dc2626" : colors.mutedForeground }}>{likeCount}</Text>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -1223,7 +1250,7 @@ function MarketCommentsList({ postId, userId, colors, onCommentsCountChange }: {
   const inputRef = useRef<any>(null);
 
   useEffect(() => {
-    API.fetchMarketComments(postId).then(c => { setComments(c); setLoading(false); });
+    API.fetchMarketComments(postId, userId).then(c => { setComments(c); setLoading(false); });
   }, [postId]);
 
   const handleReply = (comment: API.MarketComment) => {
@@ -1371,7 +1398,7 @@ function LikersModal({
         <View style={{ backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: "60%" }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
             <Text style={{ fontWeight: "700", fontSize: 16, color: colors.navy }}>
-              Curtido por {likers.length > 0 ? `(${likers.length})` : ""}
+              Reações {likers.length > 0 ? `(${likers.length})` : ""}
             </Text>
             <TouchableOpacity onPress={onClose}>
               <Feather name="x" size={20} color={colors.mutedForeground} />
@@ -1381,7 +1408,7 @@ function LikersModal({
             <ActivityIndicator color={colors.gold} style={{ marginVertical: 24 }} />
           ) : likers.length === 0 ? (
             <Text style={{ color: colors.mutedForeground, textAlign: "center", marginVertical: 24 }}>
-              Nenhuma curtida ainda.
+              Nenhuma reação ainda.
             </Text>
           ) : (
             <ScrollView showsVerticalScrollIndicator={false}>
@@ -1394,7 +1421,9 @@ function LikersModal({
                       <Text style={{ fontWeight: "700", fontSize: 14, color: colors.navy }}>{l.full_name ?? "Usuário"}</Text>
                       {subtitle ? <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{subtitle}</Text> : null}
                     </View>
-                    <Feather name="heart" size={14} color="#dc2626" />
+                    <Text style={{ fontSize: 18 }}>
+                      {REACTIONS.find(r => r.type === l.reaction_type)?.emoji ?? "🍷"}
+                    </Text>
                   </View>
                 );
               })}
@@ -1544,25 +1573,36 @@ function MarketPollMobile({ post: initialPost, userId, colors, onPollVote }: {
 
 function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors }: {
   post: API.MarketPost; userId: string;
-  onLikeToggle: (id: string, liked: boolean, count: number) => void;
+  onLikeToggle: (id: string, liked: boolean, reactionType: string | null, count: number) => void;
   colors: ReturnType<typeof useColors>;
 }) {
-  const [post,          setPost]          = useState<API.MarketPost>(initialPost);
-  const [showComments,  setShowComments]  = useState(false);
-  const [showLikers,    setShowLikers]    = useState(false);
-  const [liking,        setLiking]        = useState(false);
+  const [post,           setPost]           = useState<API.MarketPost>(initialPost);
+  const [showComments,   setShowComments]   = useState(false);
+  const [showLikers,     setShowLikers]     = useState(false);
+  const [liking,         setLiking]         = useState(false);
+  const [showReactions,  setShowReactions]  = useState(false);
   const dateStr = new Date(post.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
 
   useEffect(() => { setPost(initialPost); }, [initialPost]);
 
-  const handleLike = async () => {
+  const handleReact = async (reactionType: ReactionType) => {
     if (liking) return;
     setLiking(true);
-    const newCount = post.user_liked ? Math.max(0, post.likes_count - 1) : post.likes_count + 1;
-    setPost(p => ({ ...p, user_liked: !p.user_liked, likes_count: newCount }));
-    const newLiked = await API.toggleMarketPostLike(post.id, userId, post.user_liked);
-    onLikeToggle(post.id, newLiked, newCount);
+    const currentReaction = post.reaction_type ?? null;
+    if (currentReaction === reactionType) {
+      setPost(p => ({ ...p, user_liked: false, reaction_type: null, likes_count: Math.max(0, p.likes_count - 1) }));
+    } else {
+      setPost(p => ({ ...p, user_liked: true, reaction_type: reactionType, likes_count: currentReaction ? p.likes_count : p.likes_count + 1 }));
+    }
+    const result = await API.toggleMarketPostReaction(post.id, userId, reactionType, currentReaction, post.likes_count);
+    setPost(p => ({ ...p, user_liked: result.user_liked, reaction_type: result.reaction_type, likes_count: result.likes_count }));
+    onLikeToggle(post.id, result.user_liked, result.reaction_type, result.likes_count);
     setLiking(false);
+  };
+
+  const handleLikeTap = () => {
+    const defaultReaction: ReactionType = (post.reaction_type as ReactionType) ?? "saude";
+    handleReact(defaultReaction);
   };
 
   const handlePollVote = (opts: API.MarketPollOption[], votes: string[]) => {
@@ -1606,32 +1646,56 @@ function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors 
         <MarketPollMobile post={post} userId={userId} colors={colors} onPollVote={handlePollVote} />
       ) : null}
 
-      {/* Stats bar (likes preview) */}
+      {/* Stats bar (reaction emoji summary) */}
       {post.likes_count > 0 && (
         <TouchableOpacity
           onPress={() => setShowLikers(true)}
           style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingTop: 8 }}
         >
-          <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: "#dc2626", alignItems: "center", justifyContent: "center" }}>
-            <Feather name="heart" size={9} color="#fff" />
+          <View style={{ flexDirection: "row", gap: -4 }}>
+            {REACTIONS.slice(0, 3).map(r => (
+              <View key={r.type} style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ fontSize: 9 }}>{r.emoji}</Text>
+              </View>
+            ))}
           </View>
           <Text style={{ fontSize: 12, color: colors.mutedForeground }}>
-            {post.likes_count} {post.likes_count === 1 ? "pessoa curtiu" : "pessoas curtiram"} · ver quem curtiu
+            {post.likes_count} {post.likes_count === 1 ? "pessoa reagiu" : "pessoas reagiram"} · ver quem reagiu
           </Text>
         </TouchableOpacity>
       )}
+
+      {/* Reaction picker modal */}
+      <ReactionPicker
+        visible={showReactions}
+        onSelect={r => { setShowReactions(false); handleReact(r); }}
+        onClose={() => setShowReactions(false)}
+      />
 
       {/* Action bar */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: 1, borderTopColor: colors.border, marginTop: 8, gap: 4 }}>
         <TouchableOpacity
           style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 7, borderRadius: 10, backgroundColor: post.user_liked ? "#fef2f2" : colors.secondary }}
-          onPress={handleLike}
+          onPress={handleLikeTap}
+          onLongPress={() => setShowReactions(true)}
+          delayLongPress={400}
           disabled={liking}
         >
-          <Feather name="heart" size={16} color={post.user_liked ? "#dc2626" : colors.mutedForeground} />
-          <Text style={{ fontSize: 13, fontWeight: "600", color: post.user_liked ? "#dc2626" : colors.mutedForeground }}>
-            {post.user_liked ? "Curtido" : "Curtir"}
-          </Text>
+          {post.user_liked && post.reaction_type
+            ? (() => {
+                const r = REACTIONS.find(x => x.type === post.reaction_type);
+                return r ? (
+                  <>
+                    <Text style={{ fontSize: 15 }}>{r.emoji}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#dc2626" }}>{r.label}</Text>
+                  </>
+                ) : <Feather name="heart" size={16} color="#dc2626" />;
+              })()
+            : <Feather name="heart" size={16} color={post.user_liked ? "#dc2626" : colors.mutedForeground} />
+          }
+          {!post.user_liked && (
+            <Text style={{ fontSize: 13, fontWeight: "600", color: colors.mutedForeground }}>Reagir</Text>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -1696,8 +1760,8 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
 
   useEffect(() => { refresh(); }, [hasAccess]);
 
-  const handleLikeToggle = (id: string, liked: boolean, count: number) => {
-    setPosts(prev => prev.map(p => p.id === id ? { ...p, user_liked: liked, likes_count: count } : p));
+  const handleLikeToggle = (id: string, liked: boolean, reactionType: string | null, count: number) => {
+    setPosts(prev => prev.map(p => p.id === id ? { ...p, user_liked: liked, reaction_type: reactionType, likes_count: count } : p));
   };
 
   const pickMedia = async (type: "image" | "video") => {
