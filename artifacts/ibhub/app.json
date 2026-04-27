@@ -21,8 +21,6 @@
         "NSMicrophoneUsageDescription": "O ibhub usa o microfone para gravar mensagens de voz.",
         "NSPhotoLibraryUsageDescription": "O ibhub acessa sua galeria para compartilhar fotos e vídeos.",
         "NSPhotoLibraryAddUsageDescription": "O ibhub salva mídia recebida na sua galeria.",
-        "NSContactsUsageDescription": "O ibhub pode sugerir conexões com base em seus contatos.",
-        "NSUserTrackingUsageDescription": "Suas informações são usadas para personalizar sua experiência na rede profissional do vinho.",
         "NSLocationWhenInUseUsageDescription": "O ibhub usa sua localização para preencher automaticamente o campo de localização ao criar uma publicação."
       }
     },
@@ -52,7 +50,7 @@
       [
         "expo-router",
         {
-          "origin": "https://replit.com/"
+          "origin": "https://ibhub.com.br/"
         }
       ],
       "expo-font",

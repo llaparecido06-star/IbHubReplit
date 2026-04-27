@@ -51,6 +51,8 @@ import AssinarPage from "@/pages/AssinarPage";
 import AssinarSucessoPage from "@/pages/AssinarSucessoPage";
 import AssinarCanceladoPage from "@/pages/AssinarCanceladoPage";
 import MinhaContaPage from "@/pages/MinhaContaPage";
+import PoliticaPrivacidadePage from "@/pages/PoliticaPrivacidadePage";
+import TermosUsoPage from "@/pages/TermosUsoPage";
 import NotFound from "@/pages/not-found";
 import PublicProfilePage from "@/pages/PublicProfilePage";
 import PublicPostPage from "@/pages/PublicPostPage";
@@ -300,6 +302,8 @@ function Router() {
       {/* Public pages — no auth required */}
       <Route path="/u/:id" component={PublicProfilePage} />
       <Route path="/p/:id" component={PublicPostPage} />
+      <Route path="/politica-de-privacidade" component={PoliticaPrivacidadePage} />
+      <Route path="/termos-de-uso" component={TermosUsoPage} />
 
       {/* Subscription & account */}
       <Route path="/assinar/sucesso" component={AssinarSucessoPage} />
