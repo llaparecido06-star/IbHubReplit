@@ -3261,3 +3261,25 @@ export async function fetchPostLikes(postId: string): Promise<LikeUser[]> {
     return [];
   }
 }
+
+export async function deleteMarketPost(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("market_posts").delete().eq("id", id);
+    if (error) { console.error("deleteMarketPost:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("deleteMarketPost:", e);
+    return false;
+  }
+}
+
+export async function updateMarketPost(id: string, content: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("market_posts").update({ content }).eq("id", id);
+    if (error) { console.error("updateMarketPost:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("updateMarketPost:", e);
+    return false;
+  }
+}

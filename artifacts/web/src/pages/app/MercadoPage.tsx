@@ -13,6 +13,7 @@ import {
   fetchMarketPosts, createMarketPost, toggleMarketPostLike, changeMarketReaction,
   fetchMarketComments, addMarketComment, uploadMarketPostImage,
   uploadMarketPostVideo, voteOnMarketPoll, toggleMarketCommentLike,
+  deleteMarketPost, updateMarketPost,
 } from "@/services/api";
 import { formatRelativeDate as timeAgo } from "@/utils/dateUtils";
 
@@ -630,14 +631,51 @@ function PollDisplay({ post, userId, onPollVote }: { post: MarketPost; userId: s
 
 interface IdealBICompany { id: string; name: string; avatar_url: string | null; }
 
-function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idealbiCompany }: { post: MarketPost; userId: string; isAdmin: boolean; onLikeToggle: (id: string, liked: boolean, count: number) => void; idealbiCompany?: IdealBICompany | null }) {
+function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idealbiCompany, onDelete, onUpdated }: { post: MarketPost; userId: string; isAdmin: boolean; onLikeToggle: (id: string, liked: boolean, count: number) => void; idealbiCompany?: IdealBICompany | null; onDelete?: (id: string) => void; onUpdated?: (id: string, content: string) => void }) {
   const [post, setPost] = useState<MarketPost>(initialPost);
   const [showComments, setShowComments] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editContent, setEditContent] = useState(initialPost.content);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [, setLocation] = useLocation();
   const reactionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setPost(initialPost); }, [initialPost]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuOpen]);
+
+  const handleDelete = async () => {
+    setMenuOpen(false);
+    if (!window.confirm("Excluir esta publicação? Esta ação não pode ser desfeita.")) return;
+    setDeleting(true);
+    const ok = await deleteMarketPost(post.id);
+    setDeleting(false);
+    if (ok) onDelete?.(post.id);
+  };
+
+  const handleSaveEdit = async () => {
+    const trimmed = editContent.trim();
+    if (!trimmed || saving) return;
+    setSaving(true);
+    const ok = await updateMarketPost(post.id, trimmed);
+    setSaving(false);
+    if (ok) {
+      setPost(p => ({ ...p, content: trimmed }));
+      onUpdated?.(post.id, trimmed);
+      setEditMode(false);
+    }
+  };
 
   const handleReaction = async (reaction: MarketReactionType) => {
     setShowPicker(false);
@@ -680,6 +718,8 @@ function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idea
     setPost(p => ({ ...p, poll_options: opts, user_poll_votes: votes.length ? votes : null }));
   };
 
+  if (deleting) return null;
+
   return (
     <div className="mercado-post-card" style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden" }}>
       {/* Author header */}
@@ -705,11 +745,95 @@ function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idea
           )}
           <div style={{ fontSize: 11, color: "#aaa" }}>{timeAgo(post.created_at)}</div>
         </div>
+
+        {/* Admin 3-dot menu */}
+        {isAdmin && (
+          <div ref={menuRef} style={{ position: "relative", flexShrink: 0 }}>
+            <button
+              onClick={() => setMenuOpen(v => !v)}
+              title="Opções"
+              style={{
+                background: menuOpen ? `${GOLD}15` : "none", border: "none", cursor: "pointer",
+                width: 32, height: 32, borderRadius: 8, display: "flex", alignItems: "center",
+                justifyContent: "center", color: MUTED, fontSize: 18, lineHeight: 1, transition: "background 0.12s",
+              }}
+              onMouseEnter={e => { if (!menuOpen) e.currentTarget.style.background = BG; }}
+              onMouseLeave={e => { if (!menuOpen) e.currentTarget.style.background = "none"; }}
+            >
+              ···
+            </button>
+            {menuOpen && (
+              <div style={{
+                position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 50,
+                backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 10,
+                boxShadow: "0 8px 24px rgba(0,0,0,0.12)", minWidth: 160, overflow: "hidden",
+              }}>
+                <button
+                  onClick={() => { setMenuOpen(false); setEditContent(post.content); setEditMode(true); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10, width: "100%",
+                    padding: "10px 14px", background: "none", border: "none", cursor: "pointer",
+                    fontSize: 13, color: NAVY, textAlign: "left", fontFamily: "inherit",
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = BG)}
+                  onMouseLeave={e => (e.currentTarget.style.background = "none")}
+                >
+                  <span style={{ fontSize: 15 }}>✏️</span> Editar publicação
+                </button>
+                <div style={{ height: 1, backgroundColor: BORDER, margin: "0 10px" }} />
+                <button
+                  onClick={handleDelete}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10, width: "100%",
+                    padding: "10px 14px", background: "none", border: "none", cursor: "pointer",
+                    fontSize: 13, color: "#e53e3e", textAlign: "left", fontFamily: "inherit",
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#fff5f5")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "none")}
+                >
+                  <span style={{ fontSize: 15 }}>🗑️</span> Excluir publicação
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Content */}
+      {/* Content — display or inline-edit */}
       <div style={{ padding: "0 16px 14px" }}>
-        <p style={{ fontSize: 14, color: "#222", lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap" }}>{post.content}</p>
+        {editMode ? (
+          <div>
+            <textarea
+              value={editContent}
+              onChange={e => setEditContent(e.target.value)}
+              rows={6}
+              autoFocus
+              style={{
+                width: "100%", boxSizing: "border-box", padding: "10px 12px",
+                border: `1px solid ${GOLD}80`, borderRadius: 10, fontSize: 14,
+                fontFamily: "inherit", lineHeight: 1.6, resize: "vertical", outline: "none",
+                backgroundColor: `${GOLD}06`,
+              }}
+            />
+            <div style={{ display: "flex", gap: 8, marginTop: 8, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setEditMode(false)}
+                style={{ padding: "7px 16px", border: `1px solid ${BORDER}`, borderRadius: 8, background: WHITE, fontSize: 13, color: MUTED, cursor: "pointer", fontFamily: "inherit" }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={!editContent.trim() || saving}
+                style={{ padding: "7px 20px", border: "none", borderRadius: 8, backgroundColor: GOLD, fontSize: 13, fontWeight: 700, color: NAVY, cursor: editContent.trim() && !saving ? "pointer" : "not-allowed", opacity: editContent.trim() ? 1 : 0.5, fontFamily: "inherit" }}
+              >
+                {saving ? "Salvando…" : "Salvar"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p style={{ fontSize: 14, color: "#222", lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap" }}>{post.content}</p>
+        )}
       </div>
 
       {/* Image */}
@@ -1192,6 +1316,14 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
     setPosts(prev => prev.map(p => p.id === id ? { ...p, user_liked: liked, likes_count: count } : p));
   };
 
+  const handleDelete = (id: string) => {
+    setPosts(prev => prev.filter(p => p.id !== id));
+  };
+
+  const handleUpdated = (id: string, content: string) => {
+    setPosts(prev => prev.map(p => p.id === id ? { ...p, content } : p));
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
@@ -1369,6 +1501,8 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
             userId={userId}
             isAdmin={isAdmin}
             onLikeToggle={handleLikeToggle}
+            onDelete={handleDelete}
+            onUpdated={handleUpdated}
             idealbiCompany={idealbiCompany}
           />
         ))
