@@ -1112,6 +1112,14 @@ export interface UserListItem {
   avatar_url: string | null;
 }
 
+export async function fetchFollowersList(userId: string): Promise<UserListItem[]> {
+  return fetchUserListForModal(userId, "followers", 100);
+}
+
+export async function fetchFollowingList(userId: string): Promise<UserListItem[]> {
+  return fetchUserListForModal(userId, "following", 100);
+}
+
 export async function fetchUserListForModal(
   userId: string,
   type: "followers" | "following" | "connections",

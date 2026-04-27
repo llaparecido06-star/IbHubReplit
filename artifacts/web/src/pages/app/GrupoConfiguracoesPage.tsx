@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import { supabase } from "@/lib/supabase";
+import { approveGroupMemberWeb, rejectGroupMemberWeb } from "@/services/api";
 
 const GOLD   = "#c9a84c";
 const NAVY   = "#0d1b2a";
@@ -11,10 +12,22 @@ const BG     = "#f5f5f0";
 const BORDER = "#e8e8e3";
 const MUTED  = "#7a8494";
 
+const CATEGORIES = ["Vinificação", "Exportação", "Enoturismo", "Varejo", "Negócios", "Educação", "Sommelier", "Outros"];
+
+type ConfigTab = "membros" | "pendentes" | "convidar" | "link";
+
 interface Member {
   user_id: string;
-  role: "owner" | "member" | "moderator";
+  role: "owner" | "member" | "moderator" | "pending";
   profile?: { id: string; full_name: string | null; avatar_url: string | null; headline: string | null };
+}
+
+interface SearchUser {
+  id: string;
+  full_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+  headline: string | null;
 }
 
 function Avatar({ src, name, size = 40 }: { src?: string | null; name: string; size?: number }) {
@@ -28,70 +41,77 @@ function Avatar({ src, name, size = 40 }: { src?: string | null; name: string; s
 }
 
 export default function GrupoConfiguracoesPage() {
-  const [, params] = useRoute("/app/grupos/:id/configuracoes");
+  const [, params]      = useRoute("/app/grupos/:id/configuracoes");
   const [, setLocation] = useLocation();
-  const { profile } = useAuth();
+  const { profile }     = useAuth();
   const groupId = params?.id;
-  const userId = profile?.id;
+  const userId  = profile?.id;
 
-  const [name, setName]       = useState("");
-  const [desc, setDesc]       = useState("");
-  const [access, setAccess]   = useState<"aberto" | "fechado" | "restrito">("aberto");
-  const [category, setCategory] = useState("");
-  const [members, setMembers] = useState<Member[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving]   = useState(false);
-  const [saved, setSaved]     = useState(false);
-  const [isOwner, setIsOwner] = useState(false);
+  const [activeTab, setActiveTab] = useState<ConfigTab>("membros");
+  const [name, setName]           = useState("");
+  const [desc, setDesc]           = useState("");
+  const [access, setAccess]       = useState<"aberto" | "fechado" | "restrito">("aberto");
+  const [category, setCategory]   = useState("");
+  const [members, setMembers]     = useState<Member[]>([]);
+  const [pending, setPending]     = useState<Member[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [saving, setSaving]       = useState(false);
+  const [saved, setSaved]         = useState(false);
+  const [isOwner, setIsOwner]     = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [inviteQuery, setInviteQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
+  const [invitingId, setInvitingId] = useState<string | null>(null);
+  const [inviteLink, setInviteLink] = useState("");
+  const [linkCopied, setLinkCopied] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  const loadGroup = useCallback(async () => {
     if (!groupId) return;
-    (async () => {
-      setLoading(true);
-      const [{ data: grp }, { data: mems }] = await Promise.all([
-        supabase.from("groups").select("*").eq("id", groupId).single(),
-        supabase.from("group_members").select("user_id, role").eq("group_id", groupId),
-      ]);
-      if (!grp) { setLocation("/app/mensagens"); return; }
+    setLoading(true);
+    const [{ data: grp }, { data: mems }] = await Promise.all([
+      supabase.from("groups").select("*").eq("id", groupId).single(),
+      supabase.from("group_members").select("user_id, role").eq("group_id", groupId),
+    ]);
+    if (!grp) { setLocation("/app/mensagens"); return; }
 
-      setName(grp.name ?? "");
-      setDesc(grp.description ?? "");
-      setAccess(grp.access ?? "aberto");
-      setCategory(grp.category ?? "");
-      setAvatarUrl(grp.avatar_url ?? null);
+    setName(grp.name ?? "");
+    setDesc(grp.description ?? "");
+    setAccess(grp.access ?? "aberto");
+    setCategory(grp.category ?? "");
+    setAvatarUrl(grp.avatar_url ?? null);
+    setInviteLink(`${window.location.origin}/app/grupos/${groupId}`);
 
-      const myRole = (mems ?? []).find((m: any) => m.user_id === userId)?.role;
-      if (myRole !== "owner") { setLocation(`/app/grupos/${groupId}`); return; }
-      setIsOwner(true);
+    const myRole = (mems ?? []).find((m: any) => m.user_id === userId)?.role;
+    if (myRole !== "owner") { setLocation(`/app/grupos/${groupId}`); return; }
+    setIsOwner(true);
 
-      const memberIds = (mems ?? []).map((m: any) => m.user_id);
-      if (memberIds.length > 0) {
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("id, user_id, full_name, avatar_url, headline")
-          .in("user_id", memberIds);
-        const profileMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p]));
-        const enriched: Member[] = (mems ?? []).map((m: any) => ({
-          user_id: m.user_id,
-          role: m.role,
-          profile: profileMap.get(m.user_id) ?? undefined,
-        }));
-        setMembers(enriched);
-      }
-      setLoading(false);
-    })();
+    const activeMems = (mems ?? []).filter((m: any) => m.role !== "pending");
+    const pendingMems = (mems ?? []).filter((m: any) => m.role === "pending");
+    const allIds = (mems ?? []).map((m: any) => m.user_id);
+
+    if (allIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, user_id, full_name, avatar_url, headline")
+        .in("user_id", allIds);
+      const profileMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p]));
+      setMembers(activeMems.map((m: any) => ({ user_id: m.user_id, role: m.role, profile: profileMap.get(m.user_id) })));
+      setPending(pendingMems.map((m: any) => ({ user_id: m.user_id, role: "pending" as const, profile: profileMap.get(m.user_id) })));
+    }
+    setLoading(false);
   }, [groupId, userId]);
+
+  useEffect(() => { loadGroup(); }, [loadGroup]);
 
   async function handleSave() {
     if (!groupId || saving) return;
     setSaving(true);
     await supabase.from("groups").update({ name, description: desc, access, category }).eq("id", groupId);
-    setSaving(false);
-    setSaved(true);
+    setSaving(false); setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
 
@@ -102,6 +122,26 @@ export default function GrupoConfiguracoesPage() {
     await supabase.from("group_members").delete().eq("group_id", groupId).eq("user_id", targetUserId);
     setMembers(prev => prev.filter(m => m.user_id !== targetUserId));
     setRemovingId(null);
+  }
+
+  async function handleApprove(targetUserId: string) {
+    if (!groupId || approvingId) return;
+    setApprovingId(targetUserId);
+    const ok = await approveGroupMemberWeb(groupId, targetUserId);
+    if (ok) {
+      const approved = pending.find(m => m.user_id === targetUserId);
+      setPending(prev => prev.filter(m => m.user_id !== targetUserId));
+      if (approved) setMembers(prev => [...prev, { ...approved, role: "member" }]);
+    }
+    setApprovingId(null);
+  }
+
+  async function handleReject(targetUserId: string) {
+    if (!groupId || approvingId) return;
+    setApprovingId(targetUserId);
+    const ok = await rejectGroupMemberWeb(groupId, targetUserId);
+    if (ok) setPending(prev => prev.filter(m => m.user_id !== targetUserId));
+    setApprovingId(null);
   }
 
   async function handleAvatarUpload(file: File) {
@@ -128,161 +168,286 @@ export default function GrupoConfiguracoesPage() {
     setLocation("/app/mensagens");
   }
 
-  if (loading) {
-    return (
-      <AppShell>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300, color: MUTED }}>Carregando...</div>
-      </AppShell>
-    );
+  async function searchUsers(q: string) {
+    if (!q.trim()) { setSearchResults([]); return; }
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, full_name, username, avatar_url, headline")
+      .ilike("full_name", `%${q}%`)
+      .limit(8);
+    const memberIds = new Set([...members.map(m => m.user_id), ...pending.map(m => m.user_id)]);
+    setSearchResults(((data ?? []) as any[]).filter((p: any) => !memberIds.has(p.id)));
   }
 
+  async function handleInvite(person: SearchUser) {
+    if (!groupId || invitingId) return;
+    setInvitingId(person.id);
+    const { error } = await supabase
+      .from("group_members")
+      .insert({ group_id: groupId, user_id: person.id, role: "member" });
+    if (!error) {
+      setMembers(prev => [...prev, { user_id: person.id, role: "member", profile: { id: person.id, full_name: person.full_name, avatar_url: person.avatar_url, headline: person.headline } }]);
+      setSearchResults(prev => prev.filter(p => p.id !== person.id));
+    }
+    setInvitingId(null);
+  }
+
+  function handleCopyLink() {
+    navigator.clipboard.writeText(inviteLink);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  }
+
+  if (loading) {
+    return <AppShell><div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300, color: MUTED }}>Carregando...</div></AppShell>;
+  }
   if (!isOwner) return null;
 
-  const CATEGORIES = ["Vinificação", "Exportação", "Enoturismo", "Varejo", "Negócios", "Educação", "Sommelier", "Outros"];
+  const TABS: { key: ConfigTab; label: string; badge?: number }[] = [
+    { key: "membros",  label: "Membros",   badge: members.length },
+    { key: "pendentes",label: "Pendentes", badge: pending.length },
+    { key: "convidar", label: "Convidar" },
+    { key: "link",     label: "Link" },
+  ];
 
   return (
     <AppShell>
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "16px 0 80px" }}>
+        {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-          <button
-            onClick={() => setLocation("/app/mensagens")}
-            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, color: NAVY, padding: 0, lineHeight: 1 }}
-          >
-            ←
-          </button>
+          <button onClick={() => setLocation(`/app/grupos/${groupId}`)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, color: NAVY, padding: 0 }}>←</button>
           <h1 style={{ fontSize: 20, fontWeight: 900, color: NAVY, margin: 0 }}>Configurações do Grupo</h1>
         </div>
 
-        {/* Avatar */}
-        <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Imagem do grupo</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <Avatar src={avatarUrl} name={name} size={64} />
-            <div>
-              <button
-                onClick={() => fileRef.current?.click()}
-                disabled={avatarUploading}
-                style={{ padding: "9px 18px", backgroundColor: `${GOLD}18`, color: NAVY, border: `1px solid ${GOLD}`, borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
-              >
-                {avatarUploading ? "Enviando..." : "Alterar foto"}
-              </button>
-              <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarUpload(f); e.target.value = ""; }} />
-            </div>
-          </div>
-        </div>
-
-        {/* Info */}
-        <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16, display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Informações</div>
-
-          <div>
-            <label style={{ fontSize: 13, fontWeight: 600, color: NAVY, display: "block", marginBottom: 6 }}>Nome do grupo</label>
-            <input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              style={{ width: "100%", padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
-            />
-          </div>
-
-          <div>
-            <label style={{ fontSize: 13, fontWeight: 600, color: NAVY, display: "block", marginBottom: 6 }}>Descrição</label>
-            <textarea
-              value={desc}
-              onChange={e => setDesc(e.target.value)}
-              rows={3}
-              style={{ width: "100%", padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, fontFamily: "inherit", outline: "none", resize: "vertical", boxSizing: "border-box" }}
-            />
-          </div>
-
-          <div>
-            <label style={{ fontSize: 13, fontWeight: 600, color: NAVY, display: "block", marginBottom: 6 }}>Categoria</label>
-            <select
-              value={category}
-              onChange={e => setCategory(e.target.value)}
-              style={{ width: "100%", padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, fontFamily: "inherit", outline: "none", backgroundColor: WHITE }}
+        {/* Tab bar */}
+        <div style={{ display: "flex", gap: 0, marginBottom: 20, backgroundColor: "#fff", borderRadius: 12, border: `1px solid ${BORDER}`, overflow: "hidden" }}>
+          {TABS.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              style={{
+                flex: 1, padding: "12px 8px", border: "none", cursor: "pointer", fontWeight: activeTab === t.key ? 800 : 500,
+                backgroundColor: activeTab === t.key ? `${GOLD}15` : "transparent",
+                color: activeTab === t.key ? GOLD : MUTED,
+                borderBottom: activeTab === t.key ? `2px solid ${GOLD}` : "2px solid transparent",
+                fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+              }}
             >
-              <option value="">Selecione...</option>
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
+              {t.label}
+              {t.badge !== undefined && t.badge > 0 && (
+                <span style={{ backgroundColor: t.key === "pendentes" ? "#dc2626" : GOLD, color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 800 }}>
+                  {t.badge}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
 
-          <div>
-            <label style={{ fontSize: 13, fontWeight: 600, color: NAVY, display: "block", marginBottom: 6 }}>Tipo de acesso</label>
-            <div style={{ display: "flex", gap: 8 }}>
-              {(["aberto", "fechado", "restrito"] as const).map(a => (
+        {/* ── Membros tab ── */}
+        {activeTab === "membros" && (
+          <>
+            {/* Avatar */}
+            <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Imagem do grupo</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <Avatar src={avatarUrl} name={name} size={64} />
                 <button
-                  key={a}
-                  onClick={() => setAccess(a)}
-                  style={{
-                    flex: 1, padding: "9px 0", borderRadius: 10, border: `1.5px solid ${access === a ? GOLD : BORDER}`,
-                    backgroundColor: access === a ? `${GOLD}15` : WHITE,
-                    color: access === a ? GOLD : MUTED,
-                    fontWeight: access === a ? 700 : 500, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
-                    textTransform: "capitalize",
-                  }}
+                  onClick={() => fileRef.current?.click()}
+                  disabled={avatarUploading}
+                  style={{ padding: "9px 18px", backgroundColor: `${GOLD}18`, color: NAVY, border: `1px solid ${GOLD}`, borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
                 >
-                  {a}
+                  {avatarUploading ? "Enviando..." : "Alterar foto"}
                 </button>
-              ))}
+                <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarUpload(f); e.target.value = ""; }} />
+              </div>
             </div>
-            <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>
-              {access === "aberto" ? "Qualquer membro pode entrar" : access === "fechado" ? "Precisa de aprovação do owner" : "Apenas convidados"}
-            </div>
-          </div>
 
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            style={{ padding: "12px 0", backgroundColor: GOLD, color: NAVY, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}
-          >
-            {saved ? "✓ Salvo!" : saving ? "Salvando..." : "Salvar alterações"}
-          </button>
-        </div>
-
-        {/* Members */}
-        <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Membros ({members.length})</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {members.map(m => {
-              const isMe = m.user_id === userId;
-              return (
-                <div key={m.user_id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <Avatar src={m.profile?.avatar_url} name={m.profile?.full_name ?? "?"} size={40} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: NAVY }}>{m.profile?.full_name ?? "Usuário"}</div>
-                    {m.profile?.headline && <div style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.profile.headline}</div>}
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6, backgroundColor: m.role === "owner" ? `${GOLD}20` : BG, color: m.role === "owner" ? GOLD : MUTED }}>
-                      {m.role === "owner" ? "Owner" : m.role === "moderator" ? "Mod" : "Membro"}
-                    </span>
-                    {!isMe && m.role !== "owner" && (
-                      <button
-                        onClick={() => handleRemoveMember(m.user_id)}
-                        disabled={removingId === m.user_id}
-                        style={{ padding: "4px 10px", backgroundColor: "#fee2e2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-                      >
-                        Remover
-                      </button>
-                    )}
-                  </div>
+            {/* Info */}
+            <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16, display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: NAVY }}>Informações</div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 600, color: NAVY, display: "block", marginBottom: 6 }}>Nome do grupo</label>
+                <input value={name} onChange={e => setName(e.target.value)}
+                  style={{ width: "100%", padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 600, color: NAVY, display: "block", marginBottom: 6 }}>Descrição</label>
+                <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={3}
+                  style={{ width: "100%", padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 600, color: NAVY, display: "block", marginBottom: 6 }}>Categoria</label>
+                <select value={category} onChange={e => setCategory(e.target.value)}
+                  style={{ width: "100%", padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none", backgroundColor: WHITE }}>
+                  <option value="">Selecione...</option>
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 600, color: NAVY, display: "block", marginBottom: 6 }}>Tipo de acesso</label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {(["aberto", "fechado", "restrito"] as const).map(a => (
+                    <button key={a} onClick={() => setAccess(a)} style={{
+                      flex: 1, padding: "9px 0", borderRadius: 10, border: `1.5px solid ${access === a ? GOLD : BORDER}`,
+                      backgroundColor: access === a ? `${GOLD}15` : WHITE, color: access === a ? GOLD : MUTED,
+                      fontWeight: access === a ? 700 : 500, fontSize: 13, cursor: "pointer", textTransform: "capitalize",
+                    }}>{a}</button>
+                  ))}
                 </div>
-              );
-            })}
-          </div>
-        </div>
+                <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>
+                  {access === "aberto" ? "Qualquer membro pode entrar" : access === "fechado" ? "Precisa de aprovação do owner" : "Apenas convidados"}
+                </div>
+              </div>
+              <button onClick={handleSave} disabled={saving}
+                style={{ padding: "12px 0", backgroundColor: GOLD, color: NAVY, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
+                {saved ? "✓ Salvo!" : saving ? "Salvando..." : "Salvar alterações"}
+              </button>
+            </div>
 
-        {/* Danger zone */}
-        <div style={{ backgroundColor: WHITE, border: "1px solid #fecaca", borderRadius: 16, padding: 20 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#dc2626", marginBottom: 8 }}>Zona de perigo</div>
-          <p style={{ fontSize: 13, color: MUTED, margin: "0 0 14px", lineHeight: 1.6 }}>Ao excluir o grupo, todos os membros e mensagens serão removidos permanentemente.</p>
-          <button
-            onClick={handleDeleteGroup}
-            style={{ padding: "10px 20px", backgroundColor: "#dc2626", color: WHITE, border: "none", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer" }}
-          >
-            Excluir grupo
-          </button>
-        </div>
+            {/* Members list */}
+            <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Membros ({members.length})</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {members.map(m => {
+                  const isMe = m.user_id === userId;
+                  return (
+                    <div key={m.user_id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <Avatar src={m.profile?.avatar_url} name={m.profile?.full_name ?? "?"} size={40} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: NAVY }}>{m.profile?.full_name ?? "Usuário"}</div>
+                        {m.profile?.headline && <div style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.profile.headline}</div>}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6, backgroundColor: m.role === "owner" ? `${GOLD}20` : BG, color: m.role === "owner" ? GOLD : MUTED }}>
+                          {m.role === "owner" ? "Owner" : m.role === "moderator" ? "Mod" : "Membro"}
+                        </span>
+                        {!isMe && m.role !== "owner" && (
+                          <button onClick={() => handleRemoveMember(m.user_id)} disabled={removingId === m.user_id}
+                            style={{ padding: "4px 10px", backgroundColor: "#fee2e2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                            Remover
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Danger */}
+            <div style={{ backgroundColor: WHITE, border: "1px solid #fecaca", borderRadius: 16, padding: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#dc2626", marginBottom: 8 }}>Zona de perigo</div>
+              <p style={{ fontSize: 13, color: MUTED, margin: "0 0 14px", lineHeight: 1.6 }}>Ao excluir o grupo, todos os membros e mensagens serão removidos permanentemente.</p>
+              <button onClick={handleDeleteGroup}
+                style={{ padding: "10px 20px", backgroundColor: "#dc2626", color: WHITE, border: "none", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+                Excluir grupo
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ── Pendentes tab ── */}
+        {activeTab === "pendentes" && (
+          <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>
+              Solicitações Pendentes ({pending.length})
+            </div>
+            {pending.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "32px 0", color: MUTED }}>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>✅</div>
+                <div style={{ fontWeight: 600 }}>Nenhuma solicitação pendente</div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {pending.map(m => (
+                  <div key={m.user_id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: `1px solid ${BORDER}` }}>
+                    <Avatar src={m.profile?.avatar_url} name={m.profile?.full_name ?? "?"} size={44} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: NAVY }}>{m.profile?.full_name ?? "Usuário"}</div>
+                      {m.profile?.headline && <div style={{ fontSize: 12, color: MUTED }}>{m.profile.headline}</div>}
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        onClick={() => handleApprove(m.user_id)}
+                        disabled={approvingId === m.user_id}
+                        style={{ padding: "7px 14px", backgroundColor: "#dcfce7", color: "#16a34a", border: "1px solid #86efac", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                      >
+                        Aceitar
+                      </button>
+                      <button
+                        onClick={() => handleReject(m.user_id)}
+                        disabled={approvingId === m.user_id}
+                        style={{ padding: "7px 14px", backgroundColor: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                      >
+                        Recusar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Convidar tab ── */}
+        {activeTab === "convidar" && (
+          <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Convidar Membros</div>
+            <input
+              value={inviteQuery}
+              onChange={e => { setInviteQuery(e.target.value); searchUsers(e.target.value); }}
+              placeholder="Buscar por nome..."
+              style={{ width: "100%", padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box", marginBottom: 14 }}
+            />
+            {searchResults.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {searchResults.map(person => (
+                  <div key={person.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: `1px solid ${BORDER}` }}>
+                    <Avatar src={person.avatar_url} name={person.full_name ?? "?"} size={40} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: NAVY }}>{person.full_name ?? "Usuário"}</div>
+                      {person.username && <div style={{ fontSize: 12, color: MUTED }}>@{person.username}</div>}
+                    </div>
+                    <button
+                      onClick={() => handleInvite(person)}
+                      disabled={invitingId === person.id}
+                      style={{ padding: "7px 14px", backgroundColor: GOLD, color: WHITE, border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                    >
+                      {invitingId === person.id ? "Adicionando..." : "Adicionar"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {inviteQuery && searchResults.length === 0 && (
+              <div style={{ textAlign: "center", padding: "24px 0", color: MUTED, fontSize: 14 }}>
+                Nenhum usuário encontrado ou já é membro
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Link tab ── */}
+        {activeTab === "link" && (
+          <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Link de Convite</div>
+            <p style={{ fontSize: 13, color: MUTED, marginBottom: 16 }}>Compartilhe este link para convidar pessoas para o grupo.</p>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <input
+                value={inviteLink}
+                readOnly
+                style={{ flex: 1, padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 13, outline: "none", backgroundColor: BG, color: NAVY }}
+              />
+              <button
+                onClick={handleCopyLink}
+                style={{ padding: "10px 18px", backgroundColor: linkCopied ? "#16a34a" : GOLD, color: WHITE, border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                {linkCopied ? "✓ Copiado!" : "Copiar"}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </AppShell>
   );

@@ -5,6 +5,7 @@ import {
   Alert,
   Modal,
   Platform,
+  Pressable,
   ScrollView,
   Share,
   StyleSheet,
@@ -20,6 +21,8 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import * as API from "@/services/api";
+
+const PRODUCT_CATEGORIES = ["Vinho Tinto", "Vinho Branco", "Vinho Rosé", "Espumante", "Licoroso", "Destilado", "Acessório", "Outro"];
 
 type WineStatus = "adega" | "consumido" | "presenteado" | "wishlist";
 type FilterKey  = "todos" | WineStatus;
@@ -38,6 +41,137 @@ const STATUS_OPTIONS: { key: WineStatus; label: string }[] = [
   { key: "wishlist",    label: "Wishlist" },
 ];
 
+function PortfolioManagerTab({ companyId }: { companyId: string }) {
+  const colors = useColors();
+  const [products, setProducts] = useState<API.CompanyProduct[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [pName, setPName]       = useState("");
+  const [pDesc, setPDesc]       = useState("");
+  const [pCat, setPCat]         = useState(PRODUCT_CATEGORIES[0]);
+  const [pPrice, setPPrice]     = useState("");
+  const [saving, setSaving]     = useState(false);
+
+  useEffect(() => {
+    API.fetchCompanyProducts(companyId).then(setProducts).finally(() => setLoading(false));
+  }, [companyId]);
+
+  const resetForm = () => { setEditingId(null); setPName(""); setPDesc(""); setPCat(PRODUCT_CATEGORIES[0]); setPPrice(""); };
+
+  const handleEdit = (p: API.CompanyProduct) => {
+    setEditingId(p.id); setPName(p.name); setPDesc(p.description ?? ""); setPCat(p.category); setPPrice(p.price ?? "");
+    setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    if (!pName.trim()) { Alert.alert("Atenção", "Informe o nome do produto."); return; }
+    setSaving(true);
+    if (editingId) {
+      const updated = await API.updateCompanyProduct(editingId, { name: pName.trim(), description: pDesc.trim() || null, category: pCat, price: pPrice.trim() || null });
+      if (updated) setProducts(prev => prev.map(p => p.id === editingId ? updated : p));
+    } else {
+      const created = await API.createCompanyProduct({ company_id: companyId, name: pName.trim(), description: pDesc.trim() || null, category: pCat, price: pPrice.trim() || null });
+      if (created) setProducts(prev => [created, ...prev]);
+    }
+    setSaving(false); resetForm(); setShowForm(false);
+  };
+
+  const handleDelete = (id: string, name: string) => {
+    Alert.alert("Remover produto", `Remover "${name}" do portfólio?`, [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Remover", style: "destructive", onPress: async () => {
+        await API.deleteCompanyProduct(id);
+        setProducts(prev => prev.filter(p => p.id !== id));
+      }},
+    ]);
+  };
+
+  if (loading) return <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator size="large" color={colors.gold} /></View>;
+
+  return (
+    <View style={{ flex: 1 }}>
+      <Modal visible={showForm} animationType="slide" presentationStyle="formSheet" onRequestClose={() => { setShowForm(false); resetForm(); }}>
+        <View style={[{ flex: 1, backgroundColor: colors.background }]}>
+          <View style={[{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: "#fff" }]}>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: colors.navy }}>{editingId ? "Editar Produto" : "Novo Produto"}</Text>
+            <TouchableOpacity onPress={() => { setShowForm(false); resetForm(); }}>
+              <Feather name="x" size={22} color={colors.navy} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }} showsVerticalScrollIndicator={false}>
+            <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Nome *</Text>
+            <TextInput value={pName} onChangeText={setPName} placeholder="Nome do produto" placeholderTextColor={colors.mutedForeground}
+              style={[styles.fInput, { borderColor: colors.border, color: colors.foreground }]} />
+
+            <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Descrição</Text>
+            <TextInput value={pDesc} onChangeText={setPDesc} placeholder="Descrição" placeholderTextColor={colors.mutedForeground} multiline numberOfLines={3}
+              style={[styles.fInput, styles.fTextarea, { borderColor: colors.border, color: colors.foreground }]} />
+
+            <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Categoria</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.statusChips]}>
+              {PRODUCT_CATEGORIES.map(cat => (
+                <TouchableOpacity key={cat} onPress={() => setPCat(cat)}
+                  style={[styles.statusChip, { borderColor: pCat === cat ? colors.gold : colors.border, backgroundColor: pCat === cat ? colors.gold + "18" : "transparent" }]}>
+                  <Text style={[styles.statusChipText, { color: pCat === cat ? colors.gold : colors.foreground }]}>{cat}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Preço sugerido (ex: R$ 89,90)</Text>
+            <TextInput value={pPrice} onChangeText={setPPrice} placeholder="R$ 0,00" placeholderTextColor={colors.mutedForeground} keyboardType="decimal-pad"
+              style={[styles.fInput, { borderColor: colors.border, color: colors.foreground }]} />
+
+            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: pName.trim() && !saving ? colors.gold : "#ccc" }]} onPress={handleSave} disabled={!pName.trim() || saving}>
+              {saving ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="check" size={18} color="#fff" />}
+              <Text style={styles.saveBtnText}>{saving ? "Salvando..." : editingId ? "Salvar Alterações" : "Adicionar Produto"}</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      <TouchableOpacity style={[styles.addBtn, { backgroundColor: colors.gold, alignSelf: "flex-end", margin: 16 }]} onPress={() => { resetForm(); setShowForm(true); }}>
+        <Feather name="plus" size={15} color="#fff" />
+        <Text style={styles.addBtnText}>Adicionar</Text>
+      </TouchableOpacity>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32, gap: 10 }}>
+        {products.length === 0 ? (
+          <View style={styles.empty}>
+            <Feather name="package" size={36} color={colors.border} />
+            <Text style={[styles.emptyTitle, { color: colors.mutedForeground }]}>Nenhum produto no portfólio</Text>
+            <TouchableOpacity style={[styles.emptyBtn, { backgroundColor: colors.gold }]} onPress={() => { resetForm(); setShowForm(true); }}>
+              <Feather name="plus" size={16} color="#fff" />
+              <Text style={styles.emptyBtnText}>Adicionar Produto</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          products.map(product => (
+            <View key={product.id} style={[styles.wineCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+              <View style={styles.wineCardTop}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.wineName, { color: colors.navy }]}>{product.name}</Text>
+                  <Text style={[styles.wineSub, { color: colors.mutedForeground }]}>{product.category}</Text>
+                  {product.description ? <Text style={[styles.wineSub, { color: colors.mutedForeground, marginTop: 4 }]} numberOfLines={2}>{product.description}</Text> : null}
+                  {product.price ? <Text style={{ fontSize: 14, fontWeight: "700", color: colors.gold, marginTop: 4 }}>{product.price}</Text> : null}
+                </View>
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <TouchableOpacity onPress={() => handleEdit(product)}>
+                    <Feather name="edit-2" size={18} color={colors.navy} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleDelete(product.id, product.name)}>
+                    <Feather name="trash-2" size={18} color="#dc2626" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          ))
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
 function StarRating({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const colors = useColors();
   return (
@@ -55,7 +189,11 @@ export default function WineCellarScreen() {
   const colors  = useColors();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, profile, activeCompany } = useAuth();
+  const isCompany = !!activeCompany || profile?.profile_type === "empresa";
+  const companyId = activeCompany?.id ?? null;
+
+  const [screenTab, setScreenTab] = useState<"adega" | "portfolio">("adega");
 
   const [wines, setWines]           = useState<API.WineEntry[]>([]);
   const [loadingData, setLoadingData] = useState(true);
@@ -317,28 +455,56 @@ export default function WineCellarScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
           <View>
-            <Text style={[styles.headerTitle, { color: colors.navy }]}>Adega</Text>
-            <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>Gerencie sua adega pessoal</Text>
+            <Text style={[styles.headerTitle, { color: colors.navy }]}>{screenTab === "portfolio" ? "Portfólio" : "Adega"}</Text>
+            <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
+              {screenTab === "portfolio" ? "Produtos da empresa" : "Gerencie sua adega pessoal"}
+            </Text>
           </View>
         </TouchableOpacity>
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          <TouchableOpacity
-            style={[styles.addBtn, { backgroundColor: colors.navy + "14", borderWidth: 1, borderColor: colors.navy + "20" }]}
-            onPress={() => router.push("/wine-ranking" as any)}
-          >
-            <Feather name="bar-chart-2" size={15} color={colors.navy} />
-            <Text style={[styles.addBtnText, { color: colors.navy }]}>Ranking</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.addBtn, { backgroundColor: colors.gold }]}
-            onPress={() => setShowForm(true)}
-          >
-            <Feather name="plus" size={15} color="#fff" />
-            <Text style={styles.addBtnText}>Adicionar</Text>
-          </TouchableOpacity>
-        </View>
+        {screenTab === "adega" && (
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <TouchableOpacity style={[styles.addBtn, { backgroundColor: colors.navy + "14", borderWidth: 1, borderColor: colors.navy + "20" }]} onPress={() => router.push("/wine-ranking" as any)}>
+              <Feather name="bar-chart-2" size={15} color={colors.navy} />
+              <Text style={[styles.addBtnText, { color: colors.navy }]}>Ranking</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.addBtn, { backgroundColor: colors.gold }]} onPress={() => setShowForm(true)}>
+              <Feather name="plus" size={15} color="#fff" />
+              <Text style={styles.addBtnText}>Adicionar</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
+      {/* Screen tabs (only for company accounts) */}
+      {isCompany && (
+        <View style={{ flexDirection: "row", backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border }}>
+          {([{ key: "adega", label: "🍷 Adega" }, { key: "portfolio", label: "📦 Portfólio" }] as const).map(t => (
+            <Pressable key={t.key} onPress={() => setScreenTab(t.key)}
+              style={{ flex: 1, alignItems: "center", paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: screenTab === t.key ? colors.gold : "transparent" }}>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: screenTab === t.key ? colors.gold : colors.mutedForeground }}>{t.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {/* Portfolio tab */}
+      {screenTab === "portfolio" && (
+        <View style={{ flex: 1 }}>
+          {companyId ? (
+            <PortfolioManagerTab companyId={companyId} />
+          ) : (
+            <View style={styles.empty}>
+              <Feather name="briefcase" size={36} color={colors.border} />
+              <Text style={[styles.emptyTitle, { color: colors.mutedForeground, textAlign: "center" }]}>
+                Selecione uma empresa no seu perfil para gerenciar o portfólio.
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {screenTab === "adega" && (
+      <>
       <ScrollView contentContainerStyle={{ paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
         {/* KPI cards */}
         <View style={styles.kpiRow}>
@@ -581,6 +747,8 @@ export default function WineCellarScreen() {
           </ScrollView>
         </View>
       </Modal>
+      </>
+      )}
     </View>
   );
 }

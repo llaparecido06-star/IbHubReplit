@@ -26,13 +26,17 @@ export default function PrivacySecurityScreen() {
   const insets = useSafeAreaInsets();
   const { profile, refreshProfile } = useAuth();
 
-  const [publicProfile, setPublicProfile] = useState<boolean>(true);
-  const [savingVisibility, setSavingVisibility] = useState(false);
+  const [publicProfile, setPublicProfile]         = useState<boolean>(true);
+  const [allowMessages, setAllowMessages]         = useState<boolean>(true);
+  const [showConnections, setShowConnections]     = useState<boolean>(true);
+  const [savingVisibility, setSavingVisibility]   = useState(false);
+  const [savingMessages, setSavingMessages]       = useState(false);
+  const [savingConnections, setSavingConnections] = useState(false);
 
   const [pwModalVisible, setPwModalVisible] = useState(false);
-  const [newPassword, setNewPassword] = useState("");
+  const [newPassword, setNewPassword]       = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [savingPw, setSavingPw] = useState(false);
+  const [savingPw, setSavingPw]             = useState(false);
 
   const [deletingAccount, setDeletingAccount] = useState(false);
 
@@ -40,28 +44,36 @@ export default function PrivacySecurityScreen() {
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
   useEffect(() => {
-    if (profile?.is_public !== null && profile?.is_public !== undefined) {
-      setPublicProfile(profile.is_public);
+    if (profile) {
+      setPublicProfile(profile.is_public !== false);
+      setAllowMessages((profile as any).allow_messages !== false);
+      setShowConnections((profile as any).show_connections !== false);
     }
-  }, [profile?.is_public]);
+  }, [profile?.id]);
 
-  const handleVisibilityToggle = async (value: boolean) => {
+  const saveToggle = async (
+    field: "is_public" | "allow_messages" | "show_connections",
+    value: boolean,
+    optimistic: (v: boolean) => void,
+    setSaving: (b: boolean) => void,
+    prevValue: boolean,
+  ) => {
     if (!profile?.id) return;
-    setPublicProfile(value);
-    setSavingVisibility(true);
+    optimistic(value);
+    setSaving(true);
     try {
-      const ok = await updateProfile(profile.id, { is_public: value });
+      const ok = await updateProfile(profile.id, { [field]: value } as any);
       if (!ok) {
-        setPublicProfile(!value);
+        optimistic(prevValue);
         Alert.alert("Erro", "Não foi possível salvar a configuração. Tente novamente.");
       } else {
         await refreshProfile();
       }
     } catch {
-      setPublicProfile(!value);
+      optimistic(prevValue);
       Alert.alert("Erro de Conexão", "Verifique sua conexão e tente novamente.");
     } finally {
-      setSavingVisibility(false);
+      setSaving(false);
     }
   };
 
@@ -152,6 +164,8 @@ export default function PrivacySecurityScreen() {
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, rowGap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
+
+        {/* Visibilidade */}
         <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
           <View style={styles.sectionHead}>
             <Feather name="eye" size={15} color={colors.gold} />
@@ -169,7 +183,7 @@ export default function PrivacySecurityScreen() {
             </View>
             <Switch
               value={publicProfile}
-              onValueChange={handleVisibilityToggle}
+              onValueChange={(v) => saveToggle("is_public", v, setPublicProfile, setSavingVisibility, publicProfile)}
               trackColor={{ false: colors.border, true: colors.navy }}
               thumbColor="#fff"
               disabled={savingVisibility}
@@ -177,25 +191,51 @@ export default function PrivacySecurityScreen() {
           </View>
         </View>
 
-        <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
-          <View style={styles.sectionHead}>
-            <Feather name="shield" size={15} color={colors.gold} />
-            <Text style={[styles.sectionHeadText, { color: colors.navy }]}>Segurança</Text>
-          </View>
-          <TouchableOpacity
-            style={[styles.arrowRow, { borderTopColor: colors.border }]}
-            onPress={() => setPwModalVisible(true)}
-          >
-            <Text style={[styles.rowLabel, { color: colors.navy }]}>Alterar senha</Text>
-            <Feather name="arrow-right" size={18} color={colors.mutedForeground} />
-          </TouchableOpacity>
-        </View>
-
+        {/* Controle Social */}
         <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
           <View style={styles.sectionHead}>
             <Feather name="users" size={15} color={colors.gold} />
             <Text style={[styles.sectionHeadText, { color: colors.navy }]}>Controle Social</Text>
           </View>
+
+          <View style={[styles.row, { borderTopColor: colors.border }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, { color: colors.navy }]}>Permitir mensagens</Text>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
+                Não-conexões podem te enviar mensagens diretas
+              </Text>
+              {savingMessages && (
+                <Text style={[styles.rowSub, { color: colors.gold }]}>Salvando...</Text>
+              )}
+            </View>
+            <Switch
+              value={allowMessages}
+              onValueChange={(v) => saveToggle("allow_messages", v, setAllowMessages, setSavingMessages, allowMessages)}
+              trackColor={{ false: colors.border, true: colors.navy }}
+              thumbColor="#fff"
+              disabled={savingMessages}
+            />
+          </View>
+
+          <View style={[styles.row, { borderTopColor: colors.border }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, { color: colors.navy }]}>Mostrar conexões</Text>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
+                Sua rede de conexões é visível no seu perfil
+              </Text>
+              {savingConnections && (
+                <Text style={[styles.rowSub, { color: colors.gold }]}>Salvando...</Text>
+              )}
+            </View>
+            <Switch
+              value={showConnections}
+              onValueChange={(v) => saveToggle("show_connections", v, setShowConnections, setSavingConnections, showConnections)}
+              trackColor={{ false: colors.border, true: colors.navy }}
+              thumbColor="#fff"
+              disabled={savingConnections}
+            />
+          </View>
+
           <TouchableOpacity
             style={[styles.arrowRow, { borderTopColor: colors.border }]}
             onPress={() => router.push("/blocked-users" as any)}
@@ -227,6 +267,22 @@ export default function PrivacySecurityScreen() {
           </View>
         </View>
 
+        {/* Segurança */}
+        <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
+          <View style={styles.sectionHead}>
+            <Feather name="shield" size={15} color={colors.gold} />
+            <Text style={[styles.sectionHeadText, { color: colors.navy }]}>Segurança</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.arrowRow, { borderTopColor: colors.border }]}
+            onPress={() => setPwModalVisible(true)}
+          >
+            <Text style={[styles.rowLabel, { color: colors.navy }]}>Alterar senha</Text>
+            <Feather name="arrow-right" size={18} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Zona de perigo */}
         <View style={[styles.dangerCard, { backgroundColor: "#fff5f5", borderColor: "#fecaca" }]}>
           <View style={styles.dangerHead}>
             <Feather name="trash-2" size={15} color="#dc2626" />

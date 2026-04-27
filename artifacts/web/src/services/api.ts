@@ -479,6 +479,117 @@ export async function fetchFollowingList(userId: string): Promise<ProfilePerson[
   }
 }
 
+// ─── Connections (pending/accept/reject) ─────────────────────────────────────
+
+export interface ConnectionProfile {
+  id: string;
+  connectionId: string;
+  full_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+  position: string | null;
+  company: string | null;
+}
+
+export async function fetchPendingConnectionsReceived(userId: string): Promise<ConnectionProfile[]> {
+  try {
+    const { data } = await supabase
+      .from("connections")
+      .select("id, requester_id")
+      .eq("receiver_id", userId)
+      .eq("status", "pending");
+    if (!data || !data.length) return [];
+    const ids = data.map((c: any) => c.requester_id);
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, full_name, username, avatar_url, position, company")
+      .in("id", ids);
+    const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+    return data.map((c: any) => {
+      const p = profileMap.get(c.requester_id) ?? {};
+      return { id: c.requester_id, connectionId: c.id, full_name: p.full_name ?? null, username: p.username ?? null, avatar_url: p.avatar_url ?? null, position: p.position ?? null, company: p.company ?? null };
+    });
+  } catch (e) { console.warn("fetchPendingConnectionsReceived:", e); return []; }
+}
+
+export async function fetchPendingConnectionsSent(userId: string): Promise<ConnectionProfile[]> {
+  try {
+    const { data } = await supabase
+      .from("connections")
+      .select("id, receiver_id")
+      .eq("requester_id", userId)
+      .eq("status", "pending");
+    if (!data || !data.length) return [];
+    const ids = data.map((c: any) => c.receiver_id);
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, full_name, username, avatar_url, position, company")
+      .in("id", ids);
+    const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+    return data.map((c: any) => {
+      const p = profileMap.get(c.receiver_id) ?? {};
+      return { id: c.receiver_id, connectionId: c.id, full_name: p.full_name ?? null, username: p.username ?? null, avatar_url: p.avatar_url ?? null, position: p.position ?? null, company: p.company ?? null };
+    });
+  } catch (e) { console.warn("fetchPendingConnectionsSent:", e); return []; }
+}
+
+export async function respondToConnectionWeb(connectionId: string, status: "accepted" | "rejected"): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("connections")
+      .update({ status })
+      .eq("id", connectionId);
+    return !error;
+  } catch { return false; }
+}
+
+export async function fetchConnectedUsersWeb(userId: string): Promise<ConnectionProfile[]> {
+  try {
+    const [sent, received] = await Promise.all([
+      supabase.from("connections").select("id, receiver_id").eq("requester_id", userId).eq("status", "accepted"),
+      supabase.from("connections").select("id, requester_id").eq("receiver_id", userId).eq("status", "accepted"),
+    ]);
+    const pairs: { connId: string; otherId: string }[] = [
+      ...((sent.data ?? []) as any[]).map((r) => ({ connId: r.id, otherId: r.receiver_id })),
+      ...((received.data ?? []) as any[]).map((r) => ({ connId: r.id, otherId: r.requester_id })),
+    ];
+    if (!pairs.length) return [];
+    const ids = pairs.map((p) => p.otherId);
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, full_name, username, avatar_url, position, company")
+      .in("id", ids);
+    const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+    return pairs.map(({ connId, otherId }) => {
+      const p = profileMap.get(otherId) ?? {};
+      return { id: otherId, connectionId: connId, full_name: p.full_name ?? null, username: p.username ?? null, avatar_url: p.avatar_url ?? null, position: p.position ?? null, company: p.company ?? null };
+    });
+  } catch (e) { console.warn("fetchConnectedUsersWeb:", e); return []; }
+}
+
+export async function approveGroupMemberWeb(groupId: string, memberId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("group_members")
+      .update({ role: "member" })
+      .eq("group_id", groupId)
+      .eq("user_id", memberId)
+      .eq("role", "pending");
+    return !error;
+  } catch { return false; }
+}
+
+export async function rejectGroupMemberWeb(groupId: string, memberId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("group_members")
+      .delete()
+      .eq("group_id", groupId)
+      .eq("user_id", memberId);
+    return !error;
+  } catch { return false; }
+}
+
 // ─── User Profile ────────────────────────────────────────────────────────────
 
 export interface UserProfile {
@@ -2922,6 +3033,12 @@ export async function deleteEvent(eventId: string, userId: string): Promise<bool
 
 // ─── User Analytics ─────────────────────────────────────────────────────────
 
+export interface DailyEngagement {
+  date: string;
+  likes: number;
+  comments: number;
+}
+
 export interface UserAnalytics {
   totalLikes: number;
   totalComments: number;
@@ -2929,24 +3046,51 @@ export interface UserAnalytics {
   totalPosts: number;
   followersCount: number;
   topPosts: Array<{ id: string; content: string; likes_count: number; comments_count: number; shares_count: number }>;
+  dailyEngagement: DailyEngagement[];
+}
+
+function buildDailyEngagementWeb(
+  likesDates: string[],
+  commentsDates: string[],
+  days: number,
+): DailyEngagement[] {
+  const result: DailyEngagement[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    result.push({
+      date: key,
+      likes: likesDates.filter((s) => s.startsWith(key)).length,
+      comments: commentsDates.filter((s) => s.startsWith(key)).length,
+    });
+  }
+  return result;
 }
 
 export async function fetchUserAnalytics(userId: string): Promise<UserAnalytics> {
   try {
-    const [postsRes, profileRes] = await Promise.all([
-      supabase.from("posts").select("id, content, likes_count, comments_count, shares_count").eq("user_id", userId),
+    const [postsRes, profileRes, likesRes, commentsRes] = await Promise.all([
+      supabase.from("posts").select("id, content, likes_count, comments_count, shares_count, created_at").eq("user_id", userId),
       supabase.from("profiles").select("followers_count").eq("id", userId).single(),
+      supabase.from("post_likes").select("created_at").eq("user_id", userId).gte("created_at", new Date(Date.now() - 14 * 86400000).toISOString()),
+      supabase.from("comments").select("created_at").eq("user_id", userId).gte("created_at", new Date(Date.now() - 14 * 86400000).toISOString()),
     ]);
     const posts: any[] = postsRes.data ?? [];
     const followersCount: number = (profileRes.data as any)?.followers_count ?? 0;
     const totalLikes = posts.reduce((s, p) => s + (p.likes_count ?? 0), 0);
     const totalComments = posts.reduce((s, p) => s + (p.comments_count ?? 0), 0);
     const totalShares = posts.reduce((s, p) => s + (p.shares_count ?? 0), 0);
-    const topPosts = [...posts].sort((a, b) => (b.likes_count ?? 0) - (a.likes_count ?? 0)).slice(0, 5);
-    return { totalLikes, totalComments, totalShares, totalPosts: posts.length, followersCount, topPosts };
+    const topPosts = [...posts]
+      .sort((a, b) => ((b.likes_count ?? 0) + (b.comments_count ?? 0)) - ((a.likes_count ?? 0) + (a.comments_count ?? 0)))
+      .slice(0, 5);
+    const likesDates = (likesRes.data ?? []).map((r: any) => r.created_at as string);
+    const commentsDates = (commentsRes.data ?? []).map((r: any) => r.created_at as string);
+    const dailyEngagement = buildDailyEngagementWeb(likesDates, commentsDates, 14);
+    return { totalLikes, totalComments, totalShares, totalPosts: posts.length, followersCount, topPosts, dailyEngagement };
   } catch (e) {
     console.warn("fetchUserAnalytics:", e);
-    return { totalLikes: 0, totalComments: 0, totalShares: 0, totalPosts: 0, followersCount: 0, topPosts: [] };
+    return { totalLikes: 0, totalComments: 0, totalShares: 0, totalPosts: 0, followersCount: 0, topPosts: [], dailyEngagement: [] };
   }
 }
 

@@ -4,13 +4,13 @@ import { useAuth } from "@/context/AuthContext";
 import { usePermissions } from "@/context/PermissionsContext";
 import { PaywallPage } from "@/components/PaywallPage";
 import { AppShell } from "@/components/layout/AppShell";
-import { fetchUserAnalytics, UserAnalytics } from "@/services/api";
+import { fetchUserAnalytics, UserAnalytics, DailyEngagement } from "@/services/api";
 
-const GOLD = "#c9a84c";
-const NAVY = "#0d1b2a";
-const BG = "#f5f5f0";
+const GOLD   = "#c9a84c";
+const NAVY   = "#0d1b2a";
+const BG     = "#f5f5f0";
 const BORDER = "#e8e8e3";
-const MUTED = "#7a8494";
+const MUTED  = "#7a8494";
 
 function StatCard({ label, value, icon, color }: { label: string; value: number; icon: string; color?: string }) {
   return (
@@ -24,6 +24,57 @@ function StatCard({ label, value, icon, color }: { label: string; value: number;
         <div style={{ fontSize: 13, color: MUTED, fontWeight: 500 }}>{label}</div>
       </div>
     </div>
+  );
+}
+
+function EngagementChart({ data }: { data: DailyEngagement[] }) {
+  if (!data.length) return null;
+  const W = 560, H = 130, PAD = { top: 10, right: 10, bottom: 28, left: 32 };
+  const chartW = W - PAD.left - PAD.right;
+  const chartH = H - PAD.top - PAD.bottom;
+  const maxVal = Math.max(...data.map(d => d.likes + d.comments), 1);
+  const step = chartW / (data.length - 1 || 1);
+
+  const toY = (v: number) => PAD.top + chartH - (v / maxVal) * chartH;
+  const toX = (i: number) => PAD.left + i * step;
+
+  const likesPts = data.map((d, i) => `${toX(i)},${toY(d.likes)}`).join(" ");
+  const commentsPts = data.map((d, i) => `${toX(i)},${toY(d.comments)}`).join(" ");
+
+  const labels = data
+    .map((d, i) => ({ i, label: d.date.slice(5) }))
+    .filter((_, i) => i === 0 || i === Math.floor(data.length / 2) || i === data.length - 1);
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: "visible" }}>
+      {/* Grid lines */}
+      {[0, 0.5, 1].map(f => {
+        const y = PAD.top + chartH - f * chartH;
+        return (
+          <g key={f}>
+            <line x1={PAD.left} y1={y} x2={W - PAD.right} y2={y} stroke={BORDER} strokeWidth={1} />
+            <text x={PAD.left - 4} y={y + 4} fontSize={9} fill={MUTED} textAnchor="end">
+              {Math.round(f * maxVal)}
+            </text>
+          </g>
+        );
+      })}
+      {/* Likes line */}
+      <polyline points={likesPts} fill="none" stroke="#e74c3c" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      {/* Comments line */}
+      <polyline points={commentsPts} fill="none" stroke="#3498db" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      {/* Dots */}
+      {data.map((d, i) => (
+        <g key={i}>
+          <circle cx={toX(i)} cy={toY(d.likes)} r={3} fill="#e74c3c" />
+          <circle cx={toX(i)} cy={toY(d.comments)} r={3} fill="#3498db" />
+        </g>
+      ))}
+      {/* X labels */}
+      {labels.map(({ i, label }) => (
+        <text key={i} x={toX(i)} y={H - 4} fontSize={9} fill={MUTED} textAnchor="middle">{label}</text>
+      ))}
+    </svg>
   );
 }
 
@@ -83,6 +134,7 @@ export default function AnalyticsPage() {
           </div>
         ) : (
           <>
+            {/* Stat cards */}
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 24 }}>
               <StatCard label="Publicações" value={analytics.totalPosts} icon="📝" color={NAVY} />
               <StatCard label="Seguidores" value={analytics.followersCount} icon="👥" color={NAVY} />
@@ -90,8 +142,9 @@ export default function AnalyticsPage() {
               <StatCard label="Comentários totais" value={analytics.totalComments} icon="💬" color="#3498db" />
             </div>
 
-            <div style={{ display: "flex", gap: 14, marginBottom: 24 }}>
-              <div style={{ flex: 1, backgroundColor: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, padding: 20 }}>
+            {/* Summary row */}
+            <div style={{ display: "flex", gap: 14, marginBottom: 24, flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: 160, backgroundColor: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, padding: 20 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Taxa de engajamento</h3>
                 <div style={{ fontSize: 36, fontWeight: 800, color: GOLD, marginBottom: 4 }}>
                   {analytics.totalPosts > 0
@@ -100,15 +153,36 @@ export default function AnalyticsPage() {
                 </div>
                 <div style={{ fontSize: 13, color: MUTED }}>média de interações por publicação</div>
               </div>
-              <div style={{ flex: 1, backgroundColor: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, padding: 20 }}>
+              <div style={{ flex: 1, minWidth: 160, backgroundColor: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, padding: 20 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Compartilhamentos</h3>
                 <div style={{ fontSize: 36, fontWeight: 800, color: NAVY, marginBottom: 4 }}>{analytics.totalShares}</div>
                 <div style={{ fontSize: 13, color: MUTED }}>total de compartilhamentos</div>
               </div>
             </div>
 
-            <div style={{ backgroundColor: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, padding: 20 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 16 }}>🏆 Top Publicações</h3>
+            {/* Engagement chart */}
+            {analytics.dailyEngagement.length > 0 && (
+              <div style={{ backgroundColor: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, padding: 20, marginBottom: 24 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, color: NAVY }}>📈 Engajamento (14 dias)</h3>
+                  <div style={{ display: "flex", gap: 16, fontSize: 12, color: MUTED }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ width: 12, height: 3, backgroundColor: "#e74c3c", display: "inline-block", borderRadius: 2 }} />
+                      Curtidas
+                    </span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ width: 12, height: 3, backgroundColor: "#3498db", display: "inline-block", borderRadius: 2 }} />
+                      Comentários
+                    </span>
+                  </div>
+                </div>
+                <EngagementChart data={analytics.dailyEngagement} />
+              </div>
+            )}
+
+            {/* Top posts */}
+            <div style={{ backgroundColor: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, padding: 20, marginBottom: 24 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 16 }}>🏆 Top Publicações (por engajamento)</h3>
               {analytics.topPosts.length === 0 ? (
                 <p style={{ color: MUTED, textAlign: "center", padding: "16px 0" }}>Nenhuma publicação ainda.</p>
               ) : (
@@ -141,7 +215,7 @@ export default function AnalyticsPage() {
               )}
             </div>
 
-            <div style={{ marginTop: 20, padding: 16, backgroundColor: "#fff8e7", borderRadius: 12, border: "1px solid #f0d080" }}>
+            <div style={{ padding: 16, backgroundColor: "#fff8e7", borderRadius: 12, border: "1px solid #f0d080" }}>
               <p style={{ fontSize: 13, color: "#7a5c00", margin: 0 }}>
                 <strong>💡 Dica:</strong> Publique conteúdo sobre vinhos, eventos e novidades do mercado para aumentar seu engajamento. Utilize hashtags relevantes e marque pessoas para expandir seu alcance.
               </p>
