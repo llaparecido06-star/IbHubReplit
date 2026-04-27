@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { Image } from "expo-image";
+import { useEventListener } from "expo";
 import { useVideoPlayer, VideoView } from "expo-video";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
@@ -168,15 +169,29 @@ const FALLBACK: Record<Period, API.MarketOverview> = {
 
 // ─── Inline video players (hooks must live at component level) ────────────────
 
+const IDEAL_CARD_W = Dimensions.get("window").width - 32;
+
 function NetworkPostVideo({ uri }: { uri: string }) {
+  // Default to 16:9 (YouTube landscape); updates to actual ratio when video loads
+  const [height, setHeight] = useState(Math.round(IDEAL_CARD_W * (9 / 16)));
   const player = useVideoPlayer(uri, (p) => { p.loop = false; });
+
+  useEventListener(player, "videoTrackChange", ({ videoTrack }) => {
+    const size = videoTrack?.size;
+    if (size && size.width > 0 && size.height > 0) {
+      // Clamp: min landscape 9/16 (wide), max portrait 16/9 (tall)
+      const ratio = Math.max(9 / 16, Math.min(16 / 9, size.height / size.width));
+      setHeight(Math.round(IDEAL_CARD_W * ratio));
+    }
+  });
+
   return (
     <VideoView
       player={player}
       nativeControls
       contentFit="contain"
       allowsFullscreen
-      style={{ width: "100%", aspectRatio: 16 / 9, backgroundColor: "#000" } as any}
+      style={{ width: IDEAL_CARD_W, height, backgroundColor: "#000" }}
     />
   );
 }
@@ -1637,7 +1652,7 @@ function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors 
       </Text>
 
       {post.image_url ? (
-        <AdaptiveImage uri={post.image_url} width={Dimensions.get("window").width} style={{ borderRadius: 0 }} />
+        <AdaptiveImage uri={post.image_url} width={IDEAL_CARD_W} style={{ borderRadius: 0 }} />
       ) : null}
       {post.video_url ? (
         <NetworkPostVideo uri={post.video_url} />
