@@ -444,6 +444,7 @@ export function AdaptiveImage({
       source={{ uri }}
       style={[{ width, height, borderRadius: 12, backgroundColor: "#0d1b2a08" }, style]}
       contentFit="contain"
+      cachePolicy="memory-disk"
       onLoad={(e) => {
         const { width: w, height: h } = e.source;
         if (w > 0 && h > 0) {
@@ -451,7 +452,7 @@ export function AdaptiveImage({
         }
       }}
       placeholder={{ color: "#e8edf2" }}
-      transition={{ duration: 250 }}
+      transition={{ duration: 150 }}
       priority={priority}
     />
   );
@@ -491,6 +492,7 @@ function ImageCarousel({ imageUrls }: { imageUrls: string[] }) {
             source={{ uri }}
             style={{ width: IMG_WIDTH, height: carouselHeight, borderRadius: 12, backgroundColor: "#0d1b2a08" }}
             contentFit="contain"
+            cachePolicy="memory-disk"
             onLoad={(e) => {
               if (i === 0) {
                 const { width: w, height: h } = e.source;
@@ -500,7 +502,7 @@ function ImageCarousel({ imageUrls }: { imageUrls: string[] }) {
               }
             }}
             placeholder={{ color: "#e8edf2" }}
-            transition={{ duration: 250 }}
+            transition={{ duration: 150 }}
             priority={i === 0 ? "high" : "normal"}
           />
         ))}

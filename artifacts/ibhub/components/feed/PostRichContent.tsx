@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import {
   Dimensions,
-  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -9,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useRouter } from "expo-router";
 import { AntDesign, Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
@@ -238,17 +238,23 @@ function getImageUrls(post: Post): string[] {
   return urls;
 }
 
+const SCREEN_WIDTH_SMART = Dimensions.get("window").width;
+
 function SmartImage({ url }: { url: string }) {
   const [portrait, setPortrait] = useState<boolean | null>(null);
-  const imgHeight = portrait ? Math.round(SCREEN_WIDTH * (5 / 4)) : 220;
+  const imgHeight = portrait === null ? 220 : portrait ? Math.round(SCREEN_WIDTH_SMART * (5 / 4)) : 220;
   return (
     <Image
       source={{ uri: url }}
       style={{ width: "100%", height: imgHeight, borderRadius: 10 }}
-      resizeMode="cover"
-      onLoad={(e: any) => {
-        const src = e?.nativeEvent?.source ?? e?.source;
-        if (src?.width && src?.height) setPortrait(src.height > src.width);
+      contentFit="cover"
+      cachePolicy="memory-disk"
+      priority="high"
+      transition={{ duration: 150 }}
+      placeholder={{ color: "#e8edf2" }}
+      onLoad={(e) => {
+        const { width: w, height: h } = e.source;
+        if (w > 0 && h > 0) setPortrait(h > w);
       }}
     />
   );
