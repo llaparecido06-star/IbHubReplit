@@ -130,6 +130,20 @@ function ApresentacoesPanel({ isAdmin }: { isAdmin: boolean }) {
   const [viewingPresentation, setViewingPresentation] = useState<MarketPresentation | null>(null);
   const [viewSlides, setViewSlides] = useState<PresentationSlide[]>([]);
   const [viewLoading, setViewLoading] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  const unlockedSlides = viewSlides.filter(s => !s.locked);
+
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setLightboxIndex(null); }
+      if (e.key === "ArrowRight") { setLightboxIndex(i => i !== null ? Math.min(i + 1, unlockedSlides.length - 1) : null); }
+      if (e.key === "ArrowLeft")  { setLightboxIndex(i => i !== null ? Math.max(i - 1, 0) : null); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [lightboxIndex, unlockedSlides.length]);
 
   const reload = () => {
     const fetch = isAdmin ? fetchAllMarketPresentations : fetchMarketPresentations;
@@ -341,30 +355,157 @@ function ApresentacoesPanel({ isAdmin }: { isAdmin: boolean }) {
                 </div>
               ) : (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 14 }}>
-                  {viewSlides.map((slide) => (
-                    <div key={slide.slide_id} style={{ borderRadius: 12, overflow: "hidden", border: `1px solid ${BORDER}`, position: "relative" }}>
-                      {slide.locked ? (
-                        <div style={{ width: "100%", aspectRatio: "16/9", backgroundColor: "#f3f4f6", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                          <span style={{ fontSize: 28 }}>🔒</span>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: MUTED }}>Slide {slide.sequence_order}</span>
-                          <span style={{ fontSize: 10, color: "#b0b8c4" }}>Desbloqueado em breve</span>
-                        </div>
-                      ) : slide.url ? (
-                        <a href={slide.url} target="_blank" rel="noopener noreferrer" style={{ display: "block", textDecoration: "none" }}>
-                          <img src={slide.url} alt={`Slide ${slide.sequence_order}`} style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", display: "block" }} />
-                          <div style={{ padding: "6px 10px", fontSize: 11, fontWeight: 600, color: NAVY, backgroundColor: WHITE }}>Slide {slide.sequence_order} ↗</div>
-                        </a>
-                      ) : (
-                        <div style={{ width: "100%", aspectRatio: "16/9", backgroundColor: `${GOLD}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: MUTED }}>
-                          Slide {slide.sequence_order}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                  {viewSlides.map((slide) => {
+                    const unlockedIdx = unlockedSlides.findIndex(s => s.slide_id === slide.slide_id);
+                    return (
+                      <div key={slide.slide_id} style={{ borderRadius: 12, overflow: "hidden", border: `1px solid ${BORDER}`, position: "relative", cursor: slide.locked || !slide.url ? "default" : "pointer" }}
+                        onClick={() => { if (!slide.locked && slide.url && unlockedIdx >= 0) setLightboxIndex(unlockedIdx); }}
+                      >
+                        {slide.locked ? (
+                          <div style={{ width: "100%", aspectRatio: "16/9", backgroundColor: "#f3f4f6", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                            <span style={{ fontSize: 28 }}>🔒</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: MUTED }}>Slide {slide.sequence_order}</span>
+                            <span style={{ fontSize: 10, color: "#b0b8c4" }}>Desbloqueado em breve</span>
+                          </div>
+                        ) : slide.url ? (
+                          <div style={{ position: "relative" }}>
+                            <img src={slide.url} alt={`Slide ${slide.sequence_order}`} style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", display: "block", transition: "filter 0.15s" }}
+                              onMouseEnter={e => (e.currentTarget.style.filter = "brightness(0.88)")}
+                              onMouseLeave={e => (e.currentTarget.style.filter = "none")}
+                            />
+                            <div style={{ padding: "6px 10px", fontSize: 11, fontWeight: 600, color: NAVY, backgroundColor: WHITE, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                              <span>Slide {slide.sequence_order}</span>
+                              <span style={{ color: GOLD, fontSize: 13 }}>⛶</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ width: "100%", aspectRatio: "16/9", backgroundColor: `${GOLD}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: MUTED }}>
+                            Slide {slide.sequence_order}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Lightbox fullscreen viewer ── */}
+      {lightboxIndex !== null && unlockedSlides[lightboxIndex] && (
+        <div
+          onClick={() => setLightboxIndex(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 3000,
+            backgroundColor: "rgba(0,0,0,0.95)",
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          {/* Top bar */}
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: "absolute", top: 0, left: 0, right: 0,
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "14px 20px", zIndex: 1,
+              background: "linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 100%)",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: WHITE }}>{viewingPresentation?.title}</div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", marginTop: 2 }}>
+                Slide {unlockedSlides[lightboxIndex].sequence_order} · {lightboxIndex + 1} de {unlockedSlides.length}
+              </div>
+            </div>
+            <button
+              onClick={() => setLightboxIndex(null)}
+              style={{
+                background: "rgba(255,255,255,0.12)", border: "none", color: WHITE,
+                width: 36, height: 36, borderRadius: "50%", cursor: "pointer",
+                fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.22)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.12)")}
+            >×</button>
+          </div>
+
+          {/* Main image */}
+          <img
+            src={unlockedSlides[lightboxIndex].url!}
+            alt={`Slide ${unlockedSlides[lightboxIndex].sequence_order}`}
+            onClick={e => e.stopPropagation()}
+            style={{
+              maxWidth: "92vw", maxHeight: "82vh",
+              objectFit: "contain", borderRadius: 8,
+              boxShadow: "0 8px 60px rgba(0,0,0,0.5)",
+              userSelect: "none",
+            }}
+          />
+
+          {/* Prev button */}
+          {lightboxIndex > 0 && (
+            <button
+              onClick={e => { e.stopPropagation(); setLightboxIndex(i => (i ?? 1) - 1); }}
+              style={{
+                position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)",
+                background: "rgba(255,255,255,0.12)", border: "none", color: WHITE,
+                width: 44, height: 44, borderRadius: "50%", cursor: "pointer",
+                fontSize: 20, display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.25)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.12)")}
+            >‹</button>
+          )}
+
+          {/* Next button */}
+          {lightboxIndex < unlockedSlides.length - 1 && (
+            <button
+              onClick={e => { e.stopPropagation(); setLightboxIndex(i => (i ?? 0) + 1); }}
+              style={{
+                position: "absolute", right: 16, top: "50%", transform: "translateY(-50%)",
+                background: "rgba(255,255,255,0.12)", border: "none", color: WHITE,
+                width: 44, height: 44, borderRadius: "50%", cursor: "pointer",
+                fontSize: 20, display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.25)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.12)")}
+            >›</button>
+          )}
+
+          {/* Bottom thumbnails strip */}
+          {unlockedSlides.length > 1 && (
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                position: "absolute", bottom: 0, left: 0, right: 0,
+                display: "flex", gap: 8, padding: "12px 20px", overflowX: "auto",
+                scrollbarWidth: "none", justifyContent: "center",
+                background: "linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 100%)",
+              }}
+            >
+              {unlockedSlides.map((s, idx) => (
+                <div
+                  key={s.slide_id}
+                  onClick={() => setLightboxIndex(idx)}
+                  style={{
+                    flexShrink: 0, width: 72, height: 45, borderRadius: 6, overflow: "hidden",
+                    cursor: "pointer", border: idx === lightboxIndex ? `2px solid ${GOLD}` : "2px solid transparent",
+                    opacity: idx === lightboxIndex ? 1 : 0.55,
+                    transition: "opacity 0.15s, border 0.15s",
+                  }}
+                  onMouseEnter={e => { if (idx !== lightboxIndex) (e.currentTarget as HTMLDivElement).style.opacity = "0.85"; }}
+                  onMouseLeave={e => { if (idx !== lightboxIndex) (e.currentTarget as HTMLDivElement).style.opacity = "0.55"; }}
+                >
+                  <img src={s.url!} alt={`Slide ${s.sequence_order}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
