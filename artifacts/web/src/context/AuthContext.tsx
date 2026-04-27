@@ -42,6 +42,7 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  profileChecked: boolean;
   mustChangePassword: boolean;
   needsProfileCompletion: boolean;
   activeCompany: ActiveCompany | null;
@@ -333,6 +334,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={{
       session, user, profile, loading,
+      profileChecked,
       mustChangePassword,
       needsProfileCompletion,
       activeCompany, setActiveCompany,

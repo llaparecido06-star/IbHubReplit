@@ -10,7 +10,7 @@ const AREAS = [
 ];
 
 export default function SocialCompletePage() {
-  const { user, refreshProfile, needsProfileCompletion } = useAuth();
+  const { user, loading: authLoading, profileChecked, needsProfileCompletion, refreshProfile } = useAuth();
   const [, setLocation] = useLocation();
 
   const [fullName,  setFullName]  = useState("");
@@ -26,11 +26,13 @@ export default function SocialCompletePage() {
     return (meta.avatar_url ?? meta.picture ?? null) as string | null;
   })();
 
+  // Only redirect away once the auth state is fully resolved (loading done + profile checked).
+  // This prevents premature redirects during the initial loading window.
   useEffect(() => {
-    if (!needsProfileCompletion) {
+    if (!authLoading && profileChecked && !needsProfileCompletion) {
       setLocation("/app");
     }
-  }, [needsProfileCompletion, setLocation]);
+  }, [authLoading, profileChecked, needsProfileCompletion, setLocation]);
 
   useEffect(() => {
     if (!user) return;

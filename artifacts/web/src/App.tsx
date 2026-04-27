@@ -79,7 +79,7 @@ function LoadingScreen() {
 }
 
 function PrivateRoute({ component: Component }: { component: React.ComponentType }) {
-  const { session, loading, mustChangePassword, needsProfileCompletion } = useAuth();
+  const { session, loading, profileChecked, mustChangePassword, needsProfileCompletion } = useAuth();
   const [location, setLocation] = useLocation();
 
   useEffect(() => {
@@ -91,9 +91,12 @@ function PrivateRoute({ component: Component }: { component: React.ComponentType
     } else if (needsProfileCompletion && location !== "/completar-perfil") {
       setLocation("/completar-perfil");
     }
-  }, [loading, session, mustChangePassword, needsProfileCompletion, location, setLocation]);
+  }, [loading, session, profileChecked, mustChangePassword, needsProfileCompletion, location, setLocation]);
 
-  if (loading) return <LoadingScreen />;
+  // Show loading while: global loading OR session exists but profile hasn't been checked yet.
+  // The second condition prevents a flash of app content for new OAuth users between SIGNED_IN
+  // and the first fetchProfile resolution (window where needsProfileCompletion is falsely false).
+  if (loading || (!!session && !profileChecked)) return <LoadingScreen />;
   if (!session) return null;
   if (mustChangePassword) return null;
   if (needsProfileCompletion) return null;
