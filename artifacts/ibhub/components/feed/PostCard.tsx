@@ -175,7 +175,12 @@ function VideoPlayer({ videoUrl, isVisible }: { videoUrl: string; isVisible: boo
   }, [scheduleHide]);
 
   const togglePlay = useCallback(() => {
-    if (player.playing) { player.pause(); } else { player.play(); }
+    if (player.playing) {
+      player.pause();
+    } else {
+      player.muted = false;
+      player.play();
+    }
     showAndSchedule();
   }, [player, showAndSchedule]);
 
