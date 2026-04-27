@@ -979,7 +979,17 @@ function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idea
 
       {/* Image */}
       {post.image_url && (
-        <img src={post.image_url} alt="conteúdo" style={{ width: "100%", maxHeight: 400, objectFit: "cover" }} />
+        <img
+          src={post.image_url}
+          alt="conteúdo"
+          style={{
+            display: "block",
+            width: "100%",
+            maxHeight: "min(560px, 80vh)",
+            objectFit: "contain",
+            backgroundColor: "#0d1b2a08",
+          }}
+        />
       )}
 
       {/* Video */}
