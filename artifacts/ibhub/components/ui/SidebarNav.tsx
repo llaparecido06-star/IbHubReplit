@@ -43,7 +43,7 @@ export function SidebarNav() {
   const name = activeCompany?.name ?? profile?.full_name ?? "Usuário";
   const avatarUri = activeCompany?.avatar_url ?? profile?.avatar_url ?? null;
   const username = profile?.username ?? "";
-  const isCompany = !!activeCompany;
+  const isCompany = !!activeCompany || profile?.profile_type === "empresa";
 
   const primaryItems: NavItem[] = [
     { route: "/(tabs)",               icon: "home",           label: "Início",         matchPaths: ["/", ""] },
@@ -57,7 +57,7 @@ export function SidebarNav() {
     { route: "/conexoes",       icon: "users",      label: "Conexões",     matchPaths: ["/conexoes"] },
     { route: "/search",         icon: "search",     label: "Buscar",       matchPaths: ["/search"] },
     { route: "/groups",         icon: "layers",     label: "Grupos",       matchPaths: ["/groups", "/new-group"] },
-    { route: "/wine-cellar",    icon: "archive",    label: "Adega",        matchPaths: ["/wine-cellar"] },
+    { route: "/wine-cellar",    icon: isCompany ? "briefcase" : "archive", label: isCompany ? "Portfólio" : "Adega", matchPaths: ["/wine-cellar"] },
     { route: "/certifications", icon: "award",      label: "Certificações",matchPaths: ["/certifications"] },
     { route: "/analytics",      icon: "trending-up",label: "Analytics",    matchPaths: ["/analytics"] },
   ];
