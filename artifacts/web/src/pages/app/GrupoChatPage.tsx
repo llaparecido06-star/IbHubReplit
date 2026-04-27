@@ -152,6 +152,13 @@ export default function GrupoChatPage() {
                 <span style={{ fontSize: 12, color: MUTED }}>{memberCount} {memberCount === 1 ? "membro" : "membros"}</span>
               </div>
             </div>
+            <button
+              onClick={() => setLocation(`/app/grupos/${groupId}/configuracoes`)}
+              title="Configurações do grupo"
+              style={{ background: "none", border: "none", cursor: "pointer", padding: 6, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: MUTED, fontSize: 20, lineHeight: 1 }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = NAVY; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = MUTED; }}
+            >⚙️</button>
           </div>
 
           {/* Messages */}

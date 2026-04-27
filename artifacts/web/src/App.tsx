@@ -263,7 +263,7 @@ function Router() {
       <Route path="/app/grupos">
         <PrivateRoute component={GruposPage} />
       </Route>
-      <Route path="/app/mercado/:id">
+      <Route path="/app/marketplace/:id">
         <PrivateRoute component={MarketItemPage} />
       </Route>
       <Route path="/app/notificacoes">
