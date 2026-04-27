@@ -265,6 +265,15 @@ function VideoPlayer({ videoUrl, isVisible }: { videoUrl: string; isVisible: boo
           </LinearGradient>
         </Animated.View>
       </TouchableOpacity>
+
+      {/* Persistent mute indicator — always visible */}
+      <TouchableOpacity
+        onPress={toggleMute}
+        style={videoStyles.muteBadge}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        <Feather name={muted ? "volume-x" : "volume-2"} size={14} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -329,6 +338,17 @@ const videoStyles = StyleSheet.create({
     fontSize: 11,
     flex: 1,
     fontVariant: ["tabular-nums"],
+  },
+  muteBadge: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
 
