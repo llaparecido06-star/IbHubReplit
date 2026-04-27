@@ -8,69 +8,93 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     let cancelled = false;
+    let unsubscribe: (() => void) | null = null;
 
-    // Hard timeout: if auth doesn't resolve in 12s, show an error.
     const timeout = setTimeout(() => {
       if (!cancelled) setError("Autenticação demorou demais. Tente novamente.");
     }, 12000);
 
-    async function handleCallback() {
-      try {
-        const hash   = window.location.hash;
-        const search = window.location.search;
-        const searchParams = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
-        const hashParams   = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : "");
+    const searchParams = new URLSearchParams(
+      window.location.search.startsWith("?") ? window.location.search.slice(1) : window.location.search
+    );
+    const hashParams = new URLSearchParams(
+      window.location.hash.startsWith("#") ? window.location.hash.slice(1) : ""
+    );
 
-        const code     = searchParams.get("code");
-        const flowType = searchParams.get("type");
+    const code     = searchParams.get("code");
+    const flowType = searchParams.get("type");
 
-        // ── PKCE flow ─────────────────────────────────────────────────────────
-        // Supabase sends a one-time ?code=xxx for both OAuth sign-in and password
-        // recovery. We pass ?type=recovery in the redirectTo so we can tell them apart.
-        if (code) {
-          const { error: err } = await supabase.auth.exchangeCodeForSession(code);
-          if (!cancelled) {
-            if (err) { setError(err.message); return; }
-            setLocation(flowType === "recovery" ? "/redefinir-senha" : "/app");
-          }
-          return;
+    // ── PKCE flow ─────────────────────────────────────────────────────────
+    // Supabase JS v2 (detectSessionInUrl: true + flowType: "pkce") automatically
+    // detects and exchanges the ?code= on client initialization.
+    // Calling exchangeCodeForSession() manually here would fail with
+    // "invalid request: code already used". We just subscribe to onAuthStateChange
+    // and wait for SIGNED_IN, which fires after the internal exchange completes.
+    if (code) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+        if (cancelled) { subscription.unsubscribe(); return; }
+
+        if (event === "SIGNED_IN" && s) {
+          subscription.unsubscribe();
+          clearTimeout(timeout);
+          setLocation(flowType === "recovery" ? "/redefinir-senha" : "/app");
         }
 
-        // ── Implicit / magic-link flow ─────────────────────────────────────────
-        // Token fragment: #access_token=...&type=recovery (older Supabase projects
-        // or when PKCE is disabled). type is in the hash, not the query string.
+        // Edge case: INITIAL_SESSION already has a session (e.g. concurrent tab completed the flow)
+        if (event === "INITIAL_SESSION" && s) {
+          subscription.unsubscribe();
+          clearTimeout(timeout);
+          setLocation(flowType === "recovery" ? "/redefinir-senha" : "/app");
+        }
+      });
+      unsubscribe = () => subscription.unsubscribe();
+      return;
+    }
+
+    // ── Implicit / magic-link flow ─────────────────────────────────────────
+    // Token fragment: #access_token=...&type=recovery (older Supabase projects
+    // or when PKCE is disabled). type is in the hash, not the query string.
+    async function handleImplicit() {
+      try {
         const hashType = hashParams.get("type") ?? searchParams.get("type");
+
         if (hashType === "recovery") {
           const accessToken  = hashParams.get("access_token");
           const refreshToken = hashParams.get("refresh_token");
           if (accessToken && refreshToken) {
             await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
           }
-          if (!cancelled) setLocation("/redefinir-senha");
+          if (!cancelled) { clearTimeout(timeout); setLocation("/redefinir-senha"); }
           return;
         }
 
-        // Implicit OAuth (fragment tokens) or session already established
+        // Fragment tokens or session already established (implicit OAuth)
         const { data: { session } } = await supabase.auth.getSession();
         if (!cancelled) {
-          if (session) { setLocation("/app"); return; }
+          if (session) { clearTimeout(timeout); setLocation("/app"); return; }
 
-          // Last resort: wait for onAuthStateChange
           const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
             if (cancelled) { subscription.unsubscribe(); return; }
             if (event === "SIGNED_IN" && s) {
               subscription.unsubscribe();
+              clearTimeout(timeout);
               setLocation("/app");
             }
           });
+          unsubscribe = () => subscription.unsubscribe();
         }
       } catch (e: unknown) {
         if (!cancelled) setError((e as Error).message ?? "Erro ao autenticar.");
       }
     }
 
-    void handleCallback();
-    return () => { cancelled = true; clearTimeout(timeout); };
+    void handleImplicit();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+      unsubscribe?.();
+    };
   }, [setLocation]);
 
   if (error) {
