@@ -3,6 +3,7 @@ import { createClient, Session, User } from "@supabase/supabase-js";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { AppState, type AppStateStatus } from "react-native";
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -246,8 +247,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Complete any pending auth sessions (handles OAuth redirects on app resume)
+    // ── Close Chrome Custom Tab when app returns to foreground (Android fix) ──
+    // openAuthSessionAsync on Android uses Chrome Custom Tab. When the OAuth provider
+    // redirects to the app's deep-link scheme, the OS brings Expo Go to the foreground
+    // but Chrome Custom Tab may stay open, causing openAuthSessionAsync to hang forever.
+    // Calling maybeCompleteAuthSession() on every "active" AppState event signals the
+    // Custom Tab to close itself, which unblocks openAuthSessionAsync (returns "dismiss").
+    // The deep-link URL is then handled by handleDeepLink via Linking.addEventListener.
     WebBrowser.maybeCompleteAuthSession();
+    const handleAppStateChange = (nextState: AppStateStatus) => {
+      if (nextState === "active") {
+        WebBrowser.maybeCompleteAuthSession();
+      }
+    };
+    const appStateSub = AppState.addEventListener("change", handleAppStateChange);
 
     // 1. Resolve deep links BEFORE finalising loading state.
     //    If the app was cold-started by a password-recovery link (PKCE: ?code=xxx),
@@ -364,6 +377,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const linkSub = Linking.addEventListener("url", ({ url }) => handleDeepLink(url));
 
     return () => {
+      appStateSub.remove();
       subscription.unsubscribe();
       linkSub.remove();
     };
