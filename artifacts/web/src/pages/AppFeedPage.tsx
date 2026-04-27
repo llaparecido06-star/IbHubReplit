@@ -29,6 +29,7 @@ import {
 } from "@/services/api";
 import { formatRelativeDate } from "@/utils/dateUtils";
 import { LikesModal } from "@/components/feed/LikesModal";
+import VideoPlayer from "@/components/feed/VideoPlayer";
 
 const GOLD   = "#c9a84c";
 const NAVY   = "#0d1b2a";
@@ -347,33 +348,6 @@ function PollDisplay({ poll, postId, currentUserId, onVote }: {
   );
 }
 
-/* ─── FeedVideo ──────────────────────────── */
-function FeedVideo({ src }: { src: string }) {
-  const [aspect, setAspect] = useState<number | null>(null);
-  const isPortrait = aspect !== null && aspect < 1;
-
-  return (
-    <div style={{ background: "#000", display: "flex", justifyContent: "center", alignItems: "center" }}>
-      <video
-        src={src}
-        controls
-        playsInline
-        onLoadedMetadata={(e) => {
-          const v = e.currentTarget;
-          if (v.videoWidth && v.videoHeight) setAspect(v.videoWidth / v.videoHeight);
-        }}
-        style={{
-          display: "block",
-          width: isPortrait ? "auto" : "100%",
-          height: isPortrait ? "min(560px, 80vh)" : "auto",
-          maxWidth: "100%",
-          maxHeight: isPortrait ? "min(560px, 80vh)" : 380,
-          objectFit: "contain",
-        }}
-      />
-    </div>
-  );
-}
 
 /* ─── PostCard ───────────────────────────── */
 function PostCard({
@@ -638,7 +612,7 @@ function PostCard({
       )}
 
       {/* Video */}
-      {post.video_url && <FeedVideo src={post.video_url} />}
+      {post.video_url && <VideoPlayer src={post.video_url} maxHeightLandscape={380} />}
 
       {/* Poll */}
       {post.poll && post.poll.options && post.poll.options.length > 0 && (

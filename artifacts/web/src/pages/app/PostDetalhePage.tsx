@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRoute, useLocation } from "wouter";
+import VideoPlayer from "@/components/feed/VideoPlayer";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import { supabase } from "@/lib/supabase";
@@ -56,31 +57,6 @@ function Avatar({ url, name, size = 40 }: { url?: string | null; name?: string |
   );
 }
 
-function PostDetailVideo({ src }: { src: string }) {
-  const [aspect, setAspect] = useState<number | null>(null);
-  const isPortrait = aspect !== null && aspect < 1;
-  return (
-    <div style={{ background: "#000", display: "flex", justifyContent: "center", borderRadius: 10, overflow: "hidden", marginBottom: 12 }}>
-      <video
-        src={src}
-        controls
-        playsInline
-        onLoadedMetadata={(e) => {
-          const v = e.currentTarget;
-          if (v.videoWidth && v.videoHeight) setAspect(v.videoWidth / v.videoHeight);
-        }}
-        style={{
-          display: "block",
-          width: isPortrait ? "auto" : "100%",
-          height: isPortrait ? "min(560px, 80vh)" : "auto",
-          maxWidth: "100%",
-          maxHeight: isPortrait ? "min(560px, 80vh)" : 420,
-          objectFit: "contain",
-        }}
-      />
-    </div>
-  );
-}
 
 function CommentItem({ comment, depth = 0, onReply }: { comment: AppComment; depth?: number; onReply: (id: string, name: string) => void }) {
   return (
@@ -315,9 +291,15 @@ export default function PostDetalhePage() {
                 </div>
               )
             )}
-            {post.video_url && <PostDetailVideo src={post.video_url} />}
+          </div>
 
-            {/* Action bar — identical style to feed */}
+          {/* Video — full card width, outside padding */}
+          {post.video_url && (
+            <VideoPlayer src={post.video_url} maxHeightLandscape={460} />
+          )}
+
+          {/* Action bar — identical style to feed */}
+          <div style={{ padding: "0 20px" }}>
             <div style={{ display: "flex", borderTop: `1px solid ${BORDER}`, paddingTop: 4, marginTop: 4, position: "relative" }}>
               {/* Curtir */}
               <div style={{ flex: 1, position: "relative" }}>

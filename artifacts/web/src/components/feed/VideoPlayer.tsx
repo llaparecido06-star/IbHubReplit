@@ -1,0 +1,297 @@
+import React, { useEffect, useRef, useState } from "react";
+
+const GOLD = "#c9a84c";
+
+function fmt(s: number) {
+  if (!isFinite(s)) return "0:00";
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
+interface VideoPlayerProps {
+  src: string;
+  maxHeightPortrait?: string | number;
+  maxHeightLandscape?: string | number;
+}
+
+export default function VideoPlayer({
+  src,
+  maxHeightPortrait  = "min(560px, 80vh)",
+  maxHeightLandscape = 420,
+}: VideoPlayerProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const progressRef = useRef<HTMLDivElement>(null);
+
+  const [playing, setPlaying]     = useState(false);
+  const [muted, setMuted]         = useState(false);
+  const [current, setCurrent]     = useState(0);
+  const [duration, setDuration]   = useState(0);
+  const [aspect, setAspect]       = useState<number | null>(null);
+  const [showControls, setShowControls] = useState(true);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [seeking, setSeeking]     = useState(false);
+
+  const isPortrait = aspect !== null && aspect < 1;
+
+  const scheduleHide = () => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setShowControls(false), 3000);
+  };
+
+  const showAndSchedule = () => {
+    setShowControls(true);
+    scheduleHide();
+  };
+
+  useEffect(() => {
+    scheduleHide();
+    return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
+  }, []);
+
+  const togglePlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) { v.play(); } else { v.pause(); }
+    showAndSchedule();
+  };
+
+  const toggleMute = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = !v.muted;
+    setMuted(v.muted);
+    showAndSchedule();
+  };
+
+  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    const v = videoRef.current;
+    const bar = progressRef.current;
+    if (!v || !bar || !duration) return;
+    const rect = bar.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    v.currentTime = ratio * duration;
+    setCurrent(v.currentTime);
+    showAndSchedule();
+  };
+
+  const handleProgressPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    setSeeking(true);
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handleProgressPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!seeking) return;
+    const v = videoRef.current;
+    const bar = progressRef.current;
+    if (!v || !bar || !duration) return;
+    const rect = bar.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    v.currentTime = ratio * duration;
+    setCurrent(v.currentTime);
+  };
+
+  const handleProgressPointerUp = () => {
+    setSeeking(false);
+    showAndSchedule();
+  };
+
+  const toggleFullscreen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const v = videoRef.current;
+    if (!v) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      v.requestFullscreen?.();
+    }
+    showAndSchedule();
+  };
+
+  const pct = duration > 0 ? (current / duration) * 100 : 0;
+
+  const wrapperStyle: React.CSSProperties = {
+    position: "relative",
+    background: "#000",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    cursor: "pointer",
+    userSelect: "none",
+  };
+
+  const videoStyle: React.CSSProperties = {
+    display: "block",
+    width: isPortrait ? "auto" : "100%",
+    height: isPortrait ? maxHeightPortrait as string : "auto",
+    maxWidth: "100%",
+    maxHeight: isPortrait ? maxHeightPortrait as string : maxHeightLandscape,
+    objectFit: "contain",
+  };
+
+  return (
+    <div
+      style={wrapperStyle}
+      onClick={togglePlay}
+      onMouseMove={showAndSchedule}
+      onTouchStart={showAndSchedule}
+    >
+      <video
+        ref={videoRef}
+        src={src}
+        playsInline
+        preload="metadata"
+        style={videoStyle}
+        onLoadedMetadata={(e) => {
+          const v = e.currentTarget;
+          setDuration(v.duration);
+          if (v.videoWidth && v.videoHeight) setAspect(v.videoWidth / v.videoHeight);
+        }}
+        onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => { setPlaying(false); setShowControls(true); }}
+      />
+
+      {/* Center play/pause overlay — only shown when paused or controls visible */}
+      {(!playing || showControls) && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            pointerEvents: "none",
+          }}
+        >
+          {!playing && (
+            <div style={{
+              width: 56, height: 56, borderRadius: "50%",
+              backgroundColor: "rgba(0,0,0,0.55)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              backdropFilter: "blur(2px)",
+            }}>
+              <svg width="24" height="24" fill="#fff" viewBox="0 0 24 24">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Bottom controls bar */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 0, left: 0, right: 0,
+          background: "linear-gradient(transparent, rgba(0,0,0,0.72))",
+          padding: "18px 12px 8px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+          opacity: showControls ? 1 : 0,
+          transition: "opacity 0.25s",
+          pointerEvents: showControls ? "auto" : "none",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Progress bar */}
+        <div
+          ref={progressRef}
+          style={{
+            height: 4, borderRadius: 4,
+            background: "rgba(255,255,255,0.3)",
+            cursor: "pointer",
+            position: "relative",
+          }}
+          onClick={handleProgressClick}
+          onPointerDown={handleProgressPointerDown}
+          onPointerMove={handleProgressPointerMove}
+          onPointerUp={handleProgressPointerUp}
+        >
+          <div style={{
+            position: "absolute", left: 0, top: 0, bottom: 0,
+            width: `${pct}%`,
+            background: GOLD,
+            borderRadius: 4,
+            transition: seeking ? "none" : "width 0.1s",
+          }} />
+          <div style={{
+            position: "absolute",
+            top: "50%", left: `${pct}%`,
+            transform: "translate(-50%, -50%)",
+            width: 12, height: 12, borderRadius: "50%",
+            background: GOLD,
+            boxShadow: "0 0 4px rgba(0,0,0,0.5)",
+          }} />
+        </div>
+
+        {/* Buttons row */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* Play/pause */}
+          <button
+            onClick={togglePlay}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "#fff", padding: "2px 4px", display: "flex", lineHeight: 1 }}
+            title={playing ? "Pausar" : "Reproduzir"}
+          >
+            {playing ? (
+              <svg width="18" height="18" fill="#fff" viewBox="0 0 24 24">
+                <rect x="6" y="4" width="4" height="16" rx="1"/>
+                <rect x="14" y="4" width="4" height="16" rx="1"/>
+              </svg>
+            ) : (
+              <svg width="18" height="18" fill="#fff" viewBox="0 0 24 24">
+                <polygon points="5 3 19 12 5 21 5 3"/>
+              </svg>
+            )}
+          </button>
+
+          {/* Mute/unmute */}
+          <button
+            onClick={toggleMute}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "#fff", padding: "2px 4px", display: "flex", lineHeight: 1 }}
+            title={muted ? "Ativar som" : "Silenciar"}
+          >
+            {muted ? (
+              <svg width="18" height="18" fill="none" stroke="#fff" strokeWidth="2" viewBox="0 0 24 24">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <line x1="23" y1="9" x2="17" y2="15"/>
+                <line x1="17" y1="9" x2="23" y2="15"/>
+              </svg>
+            ) : (
+              <svg width="18" height="18" fill="none" stroke="#fff" strokeWidth="2" viewBox="0 0 24 24">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+              </svg>
+            )}
+          </button>
+
+          {/* Time */}
+          <span style={{ color: "#fff", fontSize: 12, fontVariantNumeric: "tabular-nums", flex: 1 }}>
+            {fmt(current)} / {fmt(duration)}
+          </span>
+
+          {/* Fullscreen */}
+          <button
+            onClick={toggleFullscreen}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "#fff", padding: "2px 4px", display: "flex", lineHeight: 1 }}
+            title="Tela cheia"
+          >
+            <svg width="18" height="18" fill="none" stroke="#fff" strokeWidth="2" viewBox="0 0 24 24">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3"/>
+              <path d="M21 8V5a2 2 0 0 0-2-2h-3"/>
+              <path d="M3 16v3a2 2 0 0 0 2 2h3"/>
+              <path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
