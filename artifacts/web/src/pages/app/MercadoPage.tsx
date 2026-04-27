@@ -975,9 +975,13 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
   }, [userId, hasAccess]);
 
   useEffect(() => {
+    if (!hasAccess) return;
     const uid = Math.random().toString(36).slice(2, 8);
     const ch = supabase
       .channel(`market_feed_realtime_${uid}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "market_posts" }, () => {
+        fetchMarketPosts(userId).then(p => { setPosts(p); }).catch(() => {});
+      })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "market_posts" }, (payload) => {
         const updated = payload.new as any;
         setPosts(prev => prev.map(p =>
@@ -988,7 +992,7 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, []);
+  }, [hasAccess, userId]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

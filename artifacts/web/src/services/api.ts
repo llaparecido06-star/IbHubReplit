@@ -2723,6 +2723,7 @@ export interface WebStory {
   id: string;
   user_id: string;
   image_url?: string | null;
+  video_url?: string | null;
   text?: string | null;
   created_at: string;
   expires_at: string;
@@ -2742,7 +2743,7 @@ export async function fetchWebStories(currentUserId: string): Promise<WebStoryGr
     const now = new Date().toISOString();
     const { data, error } = await supabase
       .from("stories")
-      .select("id, user_id, image_url, text, created_at, expires_at")
+      .select("id, user_id, image_url, video_url, text, created_at, expires_at")
       .gte("expires_at", now)
       .order("created_at", { ascending: false });
     if (error || !data || data.length === 0) return [];

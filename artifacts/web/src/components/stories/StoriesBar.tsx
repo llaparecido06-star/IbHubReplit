@@ -25,6 +25,7 @@ function StoryViewer({
   const [progress, setProgress] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const DURATION = 5000;
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const group = groups[groupIdx];
   const story = group?.stories[storyIdx];
@@ -66,7 +67,7 @@ function StoryViewer({
 
   if (!group || !story) return null;
 
-  const bgColor = story.image_url ? "transparent" : NAVY;
+  const bgColor = (story.image_url || story.video_url) ? "transparent" : NAVY;
 
   return (
     <div
@@ -107,14 +108,24 @@ function StoryViewer({
 
         {/* Story content */}
         <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: bgColor }}>
-          {story.image_url ? (
+          {story.video_url ? (
+            <video
+              ref={videoRef}
+              key={story.video_url}
+              src={story.video_url}
+              autoPlay
+              playsInline
+              onEnded={advance}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : story.image_url ? (
             <img src={story.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           ) : (
             <div style={{ padding: 40, textAlign: "center" }}>
               <div style={{ fontSize: 22, color: "#fff", lineHeight: 1.6, fontWeight: 600 }}>{story.text}</div>
             </div>
           )}
-          {story.image_url && story.text && (
+          {(story.image_url || story.video_url) && story.text && (
             <div style={{ position: "absolute", bottom: 60, left: 20, right: 20, backgroundColor: "rgba(0,0,0,0.65)", borderRadius: 12, padding: "12px 16px" }}>
               <p style={{ color: "#fff", fontSize: 15, margin: 0, lineHeight: 1.5 }}>{story.text}</p>
             </div>
