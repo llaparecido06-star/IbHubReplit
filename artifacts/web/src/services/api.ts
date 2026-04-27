@@ -2412,16 +2412,25 @@ export async function fetchMarketComments(postId: string, userId?: string): Prom
     const authorIds = [...new Set(data.map((c: any) => c.author_id))];
     const commentIds = data.map((c: any) => c.id);
 
-    const [profilesRes, likesRes] = await Promise.all([
+    const [profilesByUserId, profilesById, likesRes] = await Promise.all([
       authorIds.length > 0
         ? supabase.from("profiles").select("id, user_id, full_name, avatar_url, headline").in("user_id", authorIds)
+        : Promise.resolve({ data: [] }),
+      authorIds.length > 0
+        ? supabase.from("profiles").select("id, user_id, full_name, avatar_url, headline").in("id", authorIds)
         : Promise.resolve({ data: [] }),
       userId && commentIds.length > 0
         ? supabase.from("market_comment_likes").select("comment_id").eq("user_id", userId).in("comment_id", commentIds)
         : Promise.resolve({ data: [] }),
     ]);
 
-    const profileMap = new Map((profilesRes.data ?? []).map((p: any) => [p.user_id, p]));
+    // Build map keyed by user_id first, then overlay by profiles.id as fallback
+    // (some older comments stored profiles.id in author_id instead of auth user_id)
+    const profileMap = new Map<string, any>();
+    for (const p of ((profilesByUserId as any).data ?? [])) profileMap.set(p.user_id, p);
+    for (const p of ((profilesById as any).data ?? [])) {
+      if (!profileMap.has(p.id)) profileMap.set(p.id, p);
+    }
     const likedSet = new Set(((likesRes as any).data ?? []).map((l: any) => l.comment_id as string));
 
     return data.map((c: any) => {

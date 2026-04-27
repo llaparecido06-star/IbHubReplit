@@ -1972,6 +1972,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
           keyExtractor={p => p.id}
           contentContainerStyle={{ paddingTop: 12, paddingBottom: bottomPad, flexGrow: 1 }}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           ListHeaderComponent={AdminHeader}
           ListEmptyComponent={loading ? (
             <ActivityIndicator size="large" color={colors.gold} style={{ marginTop: 60 }} />
