@@ -615,7 +615,7 @@ export default function PostDetailScreen() {
                     return (
                       <AdaptiveImage
                         uri={imageUrls[0]}
-                        width={SCREEN_W}
+                        width={SCREEN_W - 32}
                         priority="high"
                         style={{ borderRadius: 12, marginTop: 8 }}
                       />
