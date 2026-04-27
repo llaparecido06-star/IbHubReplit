@@ -43,7 +43,8 @@ router.get("/profile/:id", async (req: Request, res: Response) => {
   } catch (_) {}
 
   const deepLink = `ibhub://profile/${id}`;
-  const appStoreUrl = "https://apps.apple.com/app/ibhub/id000000000";
+  const appleAppId = process.env.APPLE_APP_STORE_ID ?? "id000000000";
+  const appStoreUrl = `https://apps.apple.com/app/ibhub/${appleAppId}`;
   const playStoreUrl = "https://play.google.com/store/apps/details?id=com.ibhub.app";
 
   const avatarHtml = avatarUrl

@@ -104,7 +104,7 @@ export default function GrupoChatPage() {
             sender_id: raw.sender_id,
             content: raw.content,
             created_at: raw.created_at,
-            sender: profile ? { id: (profile as any).id, full_name: (profile as any).full_name, avatar_url: (profile as any).avatar_url } : null,
+            sender: profile ? { id: (profile as any).id, full_name: (profile as any).full_name, avatar_url: (profile as any).avatar_url } : undefined,
           };
           setMessages(prev => [...prev, msg]);
           scrollBottom();

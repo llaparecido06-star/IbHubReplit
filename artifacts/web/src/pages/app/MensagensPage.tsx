@@ -497,7 +497,7 @@ export default function MensagensPage() {
                       )}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span style={{ fontSize: 13, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, fontWeight: convo.unread_count > 0 ? 600 : 400, color: convo.unread_count > 0 ? NAVY : MUTED }}>
+                      <span style={{ fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, fontWeight: convo.unread_count > 0 ? 600 : 400, color: convo.unread_count > 0 ? NAVY : MUTED }}>
                         {convo.last_message ?? "Iniciar conversa"}
                       </span>
                       {convo.unread_count > 0 && (

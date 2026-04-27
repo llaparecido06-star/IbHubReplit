@@ -129,7 +129,7 @@ export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
       return {
         ...post,
         is_liked: likedMap.has(raw.id),
-        reaction_type: likedMap.get(raw.id) ?? null,
+        reaction_type: (likedMap.get(raw.id) as ReactionType | undefined) ?? null,
         is_bookmarked: bookmarkedIds.has(raw.id),
       };
     });
@@ -244,7 +244,7 @@ export async function fetchCompanyFeedPosts(companyPageId: string, currentUserId
     return data.map((raw: any) => ({
       ..._normalisePost(raw, profileMap),
       is_liked: likedMap.has(raw.id),
-      reaction_type: likedMap.get(raw.id) ?? null,
+      reaction_type: (likedMap.get(raw.id) as ReactionType | undefined) ?? null,
     }));
   } catch (e) {
     console.warn("fetchCompanyFeedPosts:", e);
@@ -529,7 +529,7 @@ export async function fetchUserPosts(userId: string, currentUserId?: string): Pr
     return data.map((raw: any) => ({
       ..._normalisePost(raw, profileMap),
       is_liked: likedMap.has(raw.id),
-      reaction_type: likedMap.get(raw.id) ?? null,
+      reaction_type: (likedMap.get(raw.id) as ReactionType | undefined) ?? null,
       is_bookmarked: bookmarkedIds.has(raw.id),
     }));
   } catch (e) {
@@ -1538,7 +1538,7 @@ export async function createOpportunity(params: {
     const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
       ?? `${window.location.origin}/api`;
     const session = await getCachedSession();
-    const token = session?.data?.session?.access_token;
+    const token = session?.access_token;
     const res = await fetch(`${apiBase}/community/opportunities`, {
       method: "POST",
       headers: {
@@ -2007,7 +2007,7 @@ export async function createGroup(params: {
     const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
       ?? `${window.location.origin}/api`;
     const session = await getCachedSession();
-    const token = session?.data?.session?.access_token;
+    const token = session?.access_token;
     const res = await fetch(`${apiBase}/community/groups`, {
       method: "POST",
       headers: {
@@ -2065,6 +2065,7 @@ export interface MarketPost {
   content: string;
   image_url?: string | null;
   video_url?: string | null;
+  company_page_id?: string | null;
   poll_options?: MarketPollOption[] | null;
   created_at: string;
   author_id: string;
@@ -2100,7 +2101,7 @@ export async function fetchMarketPosts(userId?: string): Promise<MarketPost[]> {
     const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
       ?? `${window.location.origin}/api`;
     const session = await getCachedSession();
-    const token = session?.data?.session?.access_token;
+    const token = session?.access_token;
     const res = await fetch(`${apiBase}/market/posts?limit=30`, {
       headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     });

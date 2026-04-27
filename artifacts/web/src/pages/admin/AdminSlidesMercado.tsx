@@ -284,7 +284,7 @@ export default function AdminSlidesMercado() {
                   { key: "tendencia", label: "Tendências", items: tendencias, fields: ["titulo", "variacao_pct"] },
                   { key: "regiao", label: "Regiões", items: regioes, fields: ["nome", "volume_litros", "pct_total"] },
                   { key: "variedade", label: "Variedades", items: variedades, fields: ["nome", "volume_litros", "variacao_pct"] },
-                ] as Array<{ key: typeof itemType; label: string; items: Array<Record<string, unknown>>; fields: string[] }>).map((section) => (
+                ] as unknown as Array<{ key: typeof itemType; label: string; items: Array<Record<string, unknown>>; fields: string[] }>).map((section) => (
                   <div key={section.key} style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 14, padding: 20 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                       <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{section.label}</div>

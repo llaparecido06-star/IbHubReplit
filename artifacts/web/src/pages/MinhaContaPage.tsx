@@ -438,7 +438,7 @@ export default function MinhaContaPage() {
   if (isMobile) {
     const name      = profile?.full_name ?? "Usuário";
     const initial   = name.charAt(0).toUpperCase();
-    const planRaw   = profile?.plan ?? profile?.subscription_tier ?? "";
+    const planRaw   = profile?.plan ?? "";
     const planMap2: Record<string, string> = {
       exclusive: "Plano Exclusivo", business: "Plano Business",
       premium: "Plano Premium", basico: "Plano Básico", gratuito: "Plano Gratuito",

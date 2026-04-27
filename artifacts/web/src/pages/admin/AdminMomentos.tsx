@@ -44,7 +44,7 @@ export default function AdminMomentos() {
         supabase.from("story_views").select("id", { count: "exact", head: true }),
         supabase.from("story_likes").select("id", { count: "exact", head: true }),
       ]);
-      const raw = (storiesRes.data ?? []) as Array<{ id: string; user_id: string; image_url: string | null; expires_at: string | null; created_at: string; profile: { full_name: string | null; username: string | null } | null }>;
+      const raw = (storiesRes.data ?? []) as unknown as Array<{ id: string; user_id: string; image_url: string | null; expires_at: string | null; created_at: string; profile: { full_name: string | null; username: string | null }[] | { full_name: string | null; username: string | null } | null }>;
       setStories(raw.map((s) => ({
         id: s.id,
         user_id: s.user_id,

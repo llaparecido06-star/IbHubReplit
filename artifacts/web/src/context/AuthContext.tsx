@@ -183,6 +183,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     if (!existing.avatar_url && googleAvatar) update.avatar_url = googleAvatar;
                     return supabase.from("profiles").update(update).eq("id", existing.id)
                       .then(() => fetchProfile(u.id));
+                  } else {
+                    return fetchProfile(u.id);
                   }
                 });
             })
