@@ -1030,6 +1030,10 @@ export default function AppFeedPage() {
   const firstName = profile?.full_name?.split(" ")[0] ?? "Usuário";
   const companyId = activeCompany?.id ?? null;
 
+  // Stable string keys so array identity changes don't trigger spurious reloads
+  const areasKey   = JSON.stringify(Array.isArray(profile?.areas_of_expertise) ? profile.areas_of_expertise : []);
+  const companyKey = profile?.company ?? null;
+
   const load = useCallback(async () => {
     if (!userId) {
       setLoading(false);
@@ -1041,8 +1045,8 @@ export default function AppFeedPage() {
         const postsData = await fetchCompanyFeedPosts(companyId, userId);
         setPosts(postsData);
       } else {
-        const userAreas: string[] = Array.isArray(profile?.areas_of_expertise) ? profile.areas_of_expertise : [];
-        const userCompany: string | null = profile?.company ?? null;
+        const userAreas: string[] = JSON.parse(areasKey) as string[];
+        const userCompany: string | null = companyKey;
         const [postsData, suggsData] = await Promise.all([
           fetchFeedPosts(userId),
           fetchWebSuggestedConnections(userId, userAreas, userCompany, 5),
@@ -1053,7 +1057,8 @@ export default function AppFeedPage() {
     } finally {
       setLoading(false);
     }
-  }, [userId, companyId, profile?.areas_of_expertise, profile?.company]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, companyId, areasKey, companyKey]);
 
   useEffect(() => {
     if (!authLoading) load();
@@ -1224,12 +1229,12 @@ export default function AppFeedPage() {
           {!activeCompany && isFlagEnabled("stories") && <StoriesBar userId={userId} />}
           <PostTrigger profile={profile} activeCompany={activeCompany} />
 
-          {loading ? (
+          {loading && posts.length === 0 ? (
             <div style={{ textAlign: "center", padding: 48, color: MUTED }}>
               <div style={{ fontSize: 24, marginBottom: 8 }}>🍷</div>
               Carregando feed…
             </div>
-          ) : posts.length === 0 ? (
+          ) : posts.length === 0 && !loading ? (
             activeCompany ? (
               <div style={{ textAlign: "center", padding: 48, color: MUTED, backgroundColor: WHITE, borderRadius: 14, border: `1px solid ${BORDER}` }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>🏢</div>
