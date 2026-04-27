@@ -75,6 +75,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [mustChangePassword, setMustChangePassword] = useState(false);
+  // True once the first profile fetch for the current session has resolved.
+  // Prevents false-positive needsProfileCompletion while the fetch is in flight.
+  const [profileChecked, setProfileChecked] = useState(false);
   const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null);
   const [suspensionMsg, setSuspensionMsg] = useState<string | null>(null);
   const clearSuspensionMsg = useCallback(() => setSuspensionMsg(null), []);
@@ -99,6 +102,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile({ ...d, headline, areas_of_expertise } as Profile);
       }
     } catch {}
+    // Always mark the check as done, even if the profile doesn't exist (new user)
+    setProfileChecked(true);
   }, []);
 
   const refreshProfile = useCallback(async () => {
@@ -195,6 +200,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // SIGNED_OUT / TOKEN_REFRESHED with no session: unblock loading.
       } else {
         setProfile(null);
+        setProfileChecked(false);
         if (event === "INITIAL_SESSION" || event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
           finishLoading();
         }
@@ -319,7 +325,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // True when the user is authenticated but hasn't chosen a username yet
   // (happens for new social-auth users who haven't completed onboarding)
-  const needsProfileCompletion = !!session && !loading && !isProfileComplete(profile);
+  // Only true once the profile fetch has resolved AND the profile is still incomplete.
+  // This prevents false redirects to /completar-perfil while the fetch is in flight
+  // (e.g. right after Google OAuth callback when session is set but profile hasn't loaded yet).
+  const needsProfileCompletion = !!session && !loading && profileChecked && !isProfileComplete(profile);
 
   return (
     <AuthContext.Provider value={{
