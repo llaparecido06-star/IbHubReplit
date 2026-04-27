@@ -169,6 +169,13 @@ export async function fetchShadowbannedIds(excludeUserId?: string): Promise<stri
 }
 const COMMENT_AUTHOR_SELECT = "id, full_name, avatar_url, position, company";
 
+function normalizePollIndices(userVotes: Record<string, number | number[]> | undefined, userId: string): number[] {
+  const v = userVotes?.[userId];
+  if (v == null) return [];
+  if (Array.isArray(v)) return v;
+  return [v];
+}
+
 // Base post select WITHOUT the broken profiles FK join (posts.user_id → auth.users, not profiles)
 const POST_SELECT_BASE = `id, user_id, company_page_id, content, image_url, image_urls, video_url,
   likes_count, comments_count, shares_count, view_count, location, hashtags, poll, created_at`;
@@ -239,9 +246,9 @@ export async function fetchFeedPosts(
 
     return (await attachAuthorsToPosts(rawPosts, profileMap, companyMap)).map((post: any) => {
       let poll = post.poll ?? null;
-      if (poll && poll.user_votes) {
-        const idx = poll.user_votes[currentUserId];
-        poll = { ...poll, user_voted_index: idx != null ? Number(idx) : null };
+      if (poll) {
+        const indices = normalizePollIndices(poll.user_votes, currentUserId);
+        poll = { ...poll, user_voted_indices: indices, user_voted_index: indices[0] ?? null };
       }
       return { ...post, poll, is_liked: likedMap.has(post.id), reaction_type: likedMap.get(post.id) ?? null, is_bookmarked: bookmarkedIds.has(post.id) };
     });
@@ -308,7 +315,7 @@ export async function createPost(params: {
   image_urls?: string[] | null;
   video_url?: string | null;
   location?: string | null;
-  poll?: { options: { text: string; votes: number }[]; total_votes: number; closed: boolean };
+  poll?: { options: { text: string; votes: number }[]; total_votes: number; closed: boolean; expires_at?: string; allow_multiple?: boolean };
   hashtags?: string[];
   company_page_id?: string | null;
 }): Promise<Post | null> {
@@ -498,9 +505,9 @@ export async function fetchNewPostsSince(since: string, currentUserId: string, a
 
     return (await attachAuthorsToPosts(rawPosts, profileMap, companyMap)).map((post: any) => {
       let poll = post.poll ?? null;
-      if (poll && poll.user_votes) {
-        const idx = poll.user_votes[currentUserId];
-        poll = { ...poll, user_voted_index: idx != null ? Number(idx) : null };
+      if (poll) {
+        const indices = normalizePollIndices(poll.user_votes, currentUserId);
+        poll = { ...poll, user_voted_indices: indices, user_voted_index: indices[0] ?? null };
       }
       return { ...post, poll, is_liked: likedMap.has(post.id), reaction_type: likedMap.get(post.id) ?? null, is_bookmarked: bookmarkedIds.has(post.id) };
     });
@@ -1749,31 +1756,67 @@ export async function repostStory(currentUserId: string, story: AppStory): Promi
 
 // ─── POLL VOTING ─────────────────────────────────────────────────────────────
 
-export async function voteOnPoll(postId: string, userId: string, optionIndex: number): Promise<void> {
+export async function voteOnPoll(postId: string, userId: string, optionIndex: number): Promise<{ indices: number[]; options: { text: string; votes: number }[]; total_votes: number } | null> {
   try {
     const { data: post } = await supabase.from("posts").select("poll").eq("id", postId).single();
-    if (!post?.poll) return;
+    if (!post?.poll) return null;
 
-    const poll = post.poll as { options: { text: string; votes: number }[]; total_votes: number; closed: boolean; expires_at?: string; user_votes?: Record<string, number> };
-    if (poll.closed) return;
-    if (poll.expires_at && new Date(poll.expires_at) < new Date()) return; // expired
-    if (poll.user_votes?.[userId] != null) return; // already voted
+    const poll = post.poll as {
+      options: { text: string; votes: number }[];
+      total_votes: number;
+      closed: boolean;
+      expires_at?: string;
+      allow_multiple?: boolean;
+      user_votes?: Record<string, number | number[]>;
+    };
+    if (poll.closed) return null;
+    if (poll.expires_at && new Date(poll.expires_at) < new Date()) return null;
 
-    const newOptions = poll.options.map((opt: any, i: number) =>
-      i === optionIndex ? { ...opt, votes: opt.votes + 1 } : opt
-    );
-    const userVotes = { ...(poll.user_votes ?? {}), [userId]: optionIndex };
+    const prevIndices = normalizePollIndices(poll.user_votes, userId);
+    const alreadyVotedThis = prevIndices.includes(optionIndex);
+    const newOptions = poll.options.map((o: any) => ({ ...o }));
+    let newTotal = poll.total_votes;
+    let newIndices: number[];
+
+    if (poll.allow_multiple) {
+      if (alreadyVotedThis) {
+        newOptions[optionIndex].votes = Math.max(0, newOptions[optionIndex].votes - 1);
+        newTotal = Math.max(0, newTotal - 1);
+        newIndices = prevIndices.filter(i => i !== optionIndex);
+      } else {
+        newOptions[optionIndex].votes += 1;
+        newTotal += 1;
+        newIndices = [...prevIndices, optionIndex];
+      }
+    } else {
+      if (alreadyVotedThis) {
+        newOptions[optionIndex].votes = Math.max(0, newOptions[optionIndex].votes - 1);
+        newTotal = Math.max(0, newTotal - 1);
+        newIndices = [];
+      } else if (prevIndices.length > 0) {
+        const old = prevIndices[0];
+        newOptions[old].votes = Math.max(0, newOptions[old].votes - 1);
+        newOptions[optionIndex].votes += 1;
+        newIndices = [optionIndex];
+      } else {
+        newOptions[optionIndex].votes += 1;
+        newTotal += 1;
+        newIndices = [optionIndex];
+      }
+    }
+
+    const storedValue = newIndices.length === 1 ? newIndices[0] : newIndices;
+    const userVotes = { ...(poll.user_votes ?? {}), [userId]: storedValue } as Record<string, number | number[]>;
+    if (newIndices.length === 0) delete userVotes[userId];
 
     await supabase.from("posts").update({
-      poll: {
-        ...poll,
-        options: newOptions,
-        total_votes: poll.total_votes + 1,
-        user_votes: userVotes,
-      },
+      poll: { ...poll, options: newOptions, total_votes: newTotal, user_votes: userVotes },
     }).eq("id", postId);
+
+    return { indices: newIndices, options: newOptions, total_votes: newTotal };
   } catch (e) {
     console.warn("voteOnPoll:", e);
+    return null;
   }
 }
 

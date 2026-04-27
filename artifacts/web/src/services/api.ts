@@ -14,8 +14,17 @@ export interface Poll {
   total_votes: number;
   closed: boolean;
   expires_at?: string | null;
-  user_votes?: Record<string, number>;
+  allow_multiple?: boolean;
+  user_votes?: Record<string, number | number[]>;
   user_voted_index?: number | null;
+  user_voted_indices?: number[];
+}
+
+function normalizePollIndices(userVotes: Record<string, number | number[]> | undefined, userId: string): number[] {
+  const v = userVotes?.[userId];
+  if (v == null) return [];
+  if (Array.isArray(v)) return v;
+  return [v];
 }
 
 export interface Post {
@@ -123,8 +132,8 @@ export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
     return rawPosts.map((raw: any) => {
       const post = _normalisePost(raw, profileMap) as Post;
       if (post.poll) {
-        const votedIndex = post.poll.user_votes?.[currentUserId] ?? null;
-        post.poll = { ...post.poll, user_voted_index: votedIndex != null ? Number(votedIndex) : null };
+        const indices = normalizePollIndices(post.poll.user_votes, currentUserId);
+        post.poll = { ...post.poll, user_voted_indices: indices, user_voted_index: indices[0] ?? null };
       }
       return {
         ...post,
@@ -205,14 +214,51 @@ export async function voteOnFeedPoll(postId: string, userId: string, optionIndex
     if (!row?.poll) return null;
     const poll = row.poll as Poll;
     if (poll.closed) return null;
-    if (poll.expires_at && new Date(poll.expires_at) < new Date()) return { ...poll, closed: true, user_voted_index: poll.user_votes?.[userId] ?? null };
-    if (poll.user_votes?.[userId] != null) return { ...poll, user_voted_index: poll.user_votes[userId] };
+    if (poll.expires_at && new Date(poll.expires_at) < new Date()) {
+      const indices = normalizePollIndices(poll.user_votes, userId);
+      return { ...poll, closed: true, user_voted_indices: indices, user_voted_index: indices[0] ?? null };
+    }
 
-    const newOptions = poll.options.map((o, i) => i === optionIndex ? { ...o, votes: o.votes + 1 } : o);
-    const userVotes = { ...(poll.user_votes ?? {}), [userId]: optionIndex };
-    const updated: Poll = { ...poll, options: newOptions, total_votes: poll.total_votes + 1, user_votes: userVotes };
+    const prevIndices = normalizePollIndices(poll.user_votes, userId);
+    const alreadyVotedThis = prevIndices.includes(optionIndex);
+    const newOptions = poll.options.map(o => ({ ...o }));
+    let newTotal = poll.total_votes;
+    let newIndices: number[];
+
+    if (poll.allow_multiple) {
+      if (alreadyVotedThis) {
+        newOptions[optionIndex].votes = Math.max(0, newOptions[optionIndex].votes - 1);
+        newTotal = Math.max(0, newTotal - 1);
+        newIndices = prevIndices.filter(i => i !== optionIndex);
+      } else {
+        newOptions[optionIndex].votes += 1;
+        newTotal += 1;
+        newIndices = [...prevIndices, optionIndex];
+      }
+    } else {
+      if (alreadyVotedThis) {
+        newOptions[optionIndex].votes = Math.max(0, newOptions[optionIndex].votes - 1);
+        newTotal = Math.max(0, newTotal - 1);
+        newIndices = [];
+      } else if (prevIndices.length > 0) {
+        const old = prevIndices[0];
+        newOptions[old].votes = Math.max(0, newOptions[old].votes - 1);
+        newOptions[optionIndex].votes += 1;
+        newIndices = [optionIndex];
+      } else {
+        newOptions[optionIndex].votes += 1;
+        newTotal += 1;
+        newIndices = [optionIndex];
+      }
+    }
+
+    const storedValue = newIndices.length === 1 ? newIndices[0] : newIndices;
+    const userVotes = { ...(poll.user_votes ?? {}), [userId]: storedValue } as Record<string, number | number[]>;
+    if (newIndices.length === 0) delete userVotes[userId];
+
+    const updated: Poll = { ...poll, options: newOptions, total_votes: newTotal, user_votes: userVotes };
     await supabase.from("posts").update({ poll: updated }).eq("id", postId);
-    return { ...updated, user_voted_index: optionIndex };
+    return { ...updated, user_voted_indices: newIndices, user_voted_index: newIndices[0] ?? null };
   } catch (e) {
     console.warn("voteOnFeedPoll:", e);
     return null;

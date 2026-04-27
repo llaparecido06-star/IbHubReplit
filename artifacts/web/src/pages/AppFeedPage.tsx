@@ -215,7 +215,8 @@ function PollDisplay({ poll, postId, currentUserId, onVote }: {
   const [voters, setVoters] = useState<{ id: string; full_name: string | null; avatar_url: string | null; username: string | null; optionIndex: number }[]>([]);
   const [loadingVoters, setLoadingVoters] = useState(false);
 
-  const hasVoted = poll.user_voted_index != null;
+  const votedIndices = poll.user_voted_indices ?? (poll.user_voted_index != null ? [poll.user_voted_index] : []);
+  const hasVoted = votedIndices.length > 0;
   const isExpired = poll.expires_at ? new Date(poll.expires_at) < new Date() : false;
   const isClosed = poll.closed || isExpired;
   const total = poll.total_votes;
@@ -232,7 +233,7 @@ function PollDisplay({ poll, postId, currentUserId, onVote }: {
   };
 
   const handleVote = async (i: number) => {
-    if (voting || hasVoted || isClosed) return;
+    if (voting || isClosed) return;
     setVoting(true);
     const updated = await voteOnFeedPoll(postId, currentUserId, i);
     if (updated) onVote(postId, updated);
@@ -256,7 +257,7 @@ function PollDisplay({ poll, postId, currentUserId, onVote }: {
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {poll.options.map((opt, i) => {
           const pct = total > 0 ? Math.round((opt.votes / total) * 100) : 0;
-          const isMyVote = poll.user_voted_index === i;
+          const isMyVote = votedIndices.includes(i);
           const showBar = hasVoted || isClosed;
           return (
             <div key={i}
@@ -264,7 +265,7 @@ function PollDisplay({ poll, postId, currentUserId, onVote }: {
               style={{
                 position: "relative", borderRadius: 10, overflow: "hidden",
                 border: `2px solid ${isMyVote ? GOLD : BORDER}`,
-                cursor: (!hasVoted && !isClosed && !voting) ? "pointer" : "default",
+                cursor: (!isClosed && !voting) ? "pointer" : "default",
                 background: WHITE,
               }}
             >

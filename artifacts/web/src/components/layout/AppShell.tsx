@@ -157,6 +157,7 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
   const POLL_DURATIONS = ["1 dia", "3 dias", "7 dias", "2 semanas"];
   const [pollDuration, setPollDuration] = useState("3 dias");
   const [pollDurationOpen, setPollDurationOpen] = useState(false);
+  const [pollAllowMultiple, setPollAllowMultiple] = useState(false);
 
   // Avaliação de Vinho
   const [wineName, setWineName]       = useState("");
@@ -261,7 +262,7 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
       const daysMap: Record<string, number> = { "1 dia": 1, "3 dias": 3, "7 dias": 7, "2 semanas": 14 };
       const days = daysMap[pollDuration] ?? 3;
       const expiresAt = new Date(Date.now() + days * 24 * 3600 * 1000).toISOString();
-      poll = { options: opts.map(t => ({ text: t, votes: 0 })), total_votes: 0, closed: false, expires_at: expiresAt };
+      poll = { options: opts.map(t => ({ text: t, votes: 0 })), total_votes: 0, closed: false, expires_at: expiresAt, allow_multiple: pollAllowMultiple };
     }
     await createWebPost({
       user_id: userId,
@@ -530,6 +531,23 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
                       ))}
                     </div>
                   )}
+                </div>
+              </div>
+              {/* Allow multiple toggle */}
+              <div
+                onClick={() => setPollAllowMultiple(v => !v)}
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 4, padding: "10px 12px", borderRadius: 10, border: `1px solid ${BORDER}`, cursor: "pointer", userSelect: "none" }}
+              >
+                <span style={{ fontSize: 13, color: NAVY }}>Permitir várias respostas</span>
+                <div style={{
+                  width: 44, height: 24, borderRadius: 12, transition: "background 0.2s",
+                  background: pollAllowMultiple ? GOLD : "#d1d5db", position: "relative", flexShrink: 0,
+                }}>
+                  <div style={{
+                    position: "absolute", top: 2, left: pollAllowMultiple ? 22 : 2,
+                    width: 20, height: 20, borderRadius: "50%", background: "white",
+                    transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+                  }} />
                 </div>
               </div>
             </div>

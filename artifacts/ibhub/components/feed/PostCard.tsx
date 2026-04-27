@@ -64,8 +64,10 @@ export interface Post {
     total_votes: number;
     closed: boolean;
     expires_at?: string | null;
-    user_votes?: Record<string, number>;
+    allow_multiple?: boolean;
+    user_votes?: Record<string, number | number[]>;
     user_voted_index?: number | null;
+    user_voted_indices?: number[];
   };
   author?: {
     id: string;
@@ -707,7 +709,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
   };
 
   const handleVote = (optionIndex: number) => {
-    if (post.poll?.closed || post.poll?.user_voted_index != null) return;
+    if (post.poll?.closed) return;
     if (pollIsExpired(post.poll?.expires_at)) return;
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onVote?.(post.id, optionIndex);
@@ -850,14 +852,15 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
           {post.poll.options.map((opt, i) => {
             const total    = post.poll!.total_votes;
             const pct      = total > 0 ? Math.round((opt.votes / total) * 100) : 0;
-            const hasVoted = post.poll!.user_voted_index != null;
-            const isMyVote = post.poll!.user_voted_index === i;
+            const votedIndices = post.poll!.user_voted_indices ?? (post.poll!.user_voted_index != null ? [post.poll!.user_voted_index] : []);
+            const hasVoted = votedIndices.length > 0;
+            const isMyVote = votedIndices.includes(i);
             const isWinner = hasVoted && opt.votes === Math.max(...post.poll!.options.map(o => o.votes)) && opt.votes > 0;
 
             return (
               <TouchableOpacity
                 key={i}
-                activeOpacity={hasVoted || post.poll!.closed ? 1 : 0.75}
+                activeOpacity={post.poll!.closed ? 1 : 0.75}
                 onPress={() => handleVote(i)}
                 style={[
                   styles.pollOption,
@@ -913,7 +916,9 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
             <MaterialCommunityIcons name="poll" size={13} color={colors.mutedForeground} />
             <Text style={[styles.pollFooterText, { color: colors.mutedForeground }]}>
               {post.poll.total_votes} {post.poll.total_votes === 1 ? "voto" : "votos"}
-              {post.poll.user_voted_index == null && !post.poll.closed && !pollIsExpired(post.poll.expires_at) ? "  ·  Toque para votar" : ""}
+              {(post.poll.user_voted_indices?.length ?? (post.poll.user_voted_index != null ? 1 : 0)) === 0 && !post.poll.closed && !pollIsExpired(post.poll.expires_at)
+                ? (post.poll.allow_multiple ? "  ·  Selecione as opções" : "  ·  Toque para votar")
+                : ""}
             </Text>
             {post.poll.expires_at && !post.poll.closed && (
               <Text style={[styles.pollFooterText, { color: colors.mutedForeground, marginLeft: 4 }]}>

@@ -345,8 +345,9 @@ export function PostRichContent({ post, onVote }: Props) {
           {post.poll.options.map((opt, i) => {
             const total = post.poll!.total_votes;
             const pct = total > 0 ? Math.round((opt.votes / total) * 100) : 0;
-            const hasVoted = post.poll!.user_voted_index != null;
-            const isMyVote = post.poll!.user_voted_index === i;
+            const votedIndices = post.poll!.user_voted_indices ?? (post.poll!.user_voted_index != null ? [post.poll!.user_voted_index] : []);
+            const hasVoted = votedIndices.length > 0;
+            const isMyVote = votedIndices.includes(i);
             const isWinner =
               hasVoted &&
               opt.votes === Math.max(...post.poll!.options.map((o) => o.votes)) &&
@@ -355,10 +356,10 @@ export function PostRichContent({ post, onVote }: Props) {
             return (
               <TouchableOpacity
                 key={i}
-                activeOpacity={hasVoted || post.poll!.closed ? 1 : 0.75}
+                activeOpacity={post.poll!.closed ? 1 : 0.75}
                 onPress={() => {
                   const isExpired = post.poll!.expires_at ? new Date(post.poll!.expires_at) < new Date() : false;
-                  if (!hasVoted && !post.poll!.closed && !isExpired) onVote?.(post.id, i);
+                  if (!post.poll!.closed && !isExpired) onVote?.(post.id, i);
                 }}
                 style={{
                   borderRadius: 8,
@@ -449,8 +450,8 @@ export function PostRichContent({ post, onVote }: Props) {
             <Text style={{ fontSize: 12, color: colors.mutedForeground }}>
               {post.poll.total_votes}{" "}
               {post.poll.total_votes === 1 ? "voto" : "votos"}
-              {post.poll.user_voted_index == null && !post.poll.closed && !(post.poll.expires_at && new Date(post.poll.expires_at) < new Date())
-                ? "  ·  Toque para votar"
+              {(post.poll.user_voted_indices?.length ?? (post.poll.user_voted_index != null ? 1 : 0)) === 0 && !post.poll.closed && !(post.poll.expires_at && new Date(post.poll.expires_at) < new Date())
+                ? (post.poll.allow_multiple ? "  ·  Selecione as opções" : "  ·  Toque para votar")
                 : ""}
             </Text>
             {post.poll.expires_at && !post.poll.closed && (() => {

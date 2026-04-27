@@ -18,6 +18,7 @@ import {
   ScrollView,
   Share,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -141,6 +142,7 @@ export default function FeedScreen() {
   const [pollOptions, setPollOptions]               = useState(["", ""]);
   const [pollDuration, setPollDuration]             = useState(POLL_DURATIONS[0]);
   const [durationOpen, setDurationOpen]             = useState(false);
+  const [pollAllowMultiple, setPollAllowMultiple]   = useState(false);
 
   // Wine review state
   const [wineName, setWineName]                     = useState("");
@@ -543,7 +545,7 @@ export default function FeedScreen() {
     const pollDays = daysMap[pollDuration] ?? 3;
     const pollExpiresAt = new Date(Date.now() + pollDays * 24 * 3600 * 1000).toISOString();
     const pollData = (postMode === "poll" && pollOptions.filter(o => o.trim()).length >= 2)
-      ? { options: pollOptions.filter(o => o.trim()).map(t => ({ text: t, votes: 0 })), total_votes: 0, closed: false, expires_at: pollExpiresAt }
+      ? { options: pollOptions.filter(o => o.trim()).map(t => ({ text: t, votes: 0 })), total_votes: 0, closed: false, expires_at: pollExpiresAt, allow_multiple: pollAllowMultiple }
       : undefined;
 
     const tempPost: Post = {
@@ -987,19 +989,23 @@ export default function FeedScreen() {
               if (post) setLikesModalPost({ id, count: post.likes_count });
             }}
             onComment={(id) => router.push(`/post/${id}` as any)}
-            onVote={(id, optionIndex) => {
+            onVote={async (id, optionIndex) => {
               if (!user?.id) return;
+              const result = await API.voteOnPoll(id, user.id, optionIndex);
+              if (!result) return;
               setPosts(prev => prev.map(p => {
-                if (p.id !== id || !p.poll || p.poll.closed || p.poll.user_voted_index != null) return p;
-                const newOptions = p.poll.options.map((o, i) =>
-                  i === optionIndex ? { ...o, votes: o.votes + 1 } : o
-                );
+                if (p.id !== id || !p.poll) return p;
                 return {
                   ...p,
-                  poll: { ...p.poll, options: newOptions, total_votes: p.poll.total_votes + 1, user_voted_index: optionIndex },
+                  poll: {
+                    ...p.poll,
+                    options: result.options,
+                    total_votes: result.total_votes,
+                    user_voted_indices: result.indices,
+                    user_voted_index: result.indices[0] ?? null,
+                  },
                 };
               }));
-              API.voteOnPoll(id, user.id, optionIndex);
             }}
             onHide={(postId) => {
               setPosts(prev => prev.filter(p => p.id !== postId));
@@ -1205,6 +1211,16 @@ export default function FeedScreen() {
                         ))}
                       </View>
                     )}
+                  </View>
+                  {/* Allow multiple toggle */}
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10, paddingHorizontal: 2, marginTop: 4 }}>
+                    <Text style={{ fontSize: 14, color: colors.foreground }}>Permitir várias respostas</Text>
+                    <Switch
+                      value={pollAllowMultiple}
+                      onValueChange={setPollAllowMultiple}
+                      trackColor={{ false: colors.border, true: colors.gold }}
+                      thumbColor="#fff"
+                    />
                   </View>
                 </>
               )}
