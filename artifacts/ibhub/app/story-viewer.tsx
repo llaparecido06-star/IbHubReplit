@@ -48,12 +48,14 @@ function VideoStoryPlayer({
   startTime,
   endTime,
   onEnd,
+  onDurationKnown,
 }: {
   videoUrl: string;
   isPlaying: boolean;
   startTime?: number;
   endTime?: number;
   onEnd?: () => void;
+  onDurationKnown?: (durationMs: number) => void;
 }) {
   const player = useVideoPlayer({ uri: videoUrl }, (p) => {
     p.loop = false;
@@ -61,9 +63,11 @@ function VideoStoryPlayer({
   });
 
   const didSeek = useRef(false);
+  const didReportDuration = useRef(false);
 
   useEffect(() => {
     didSeek.current = false;
+    didReportDuration.current = false;
   }, [videoUrl]);
 
   useEffect(() => {
@@ -78,14 +82,35 @@ function VideoStoryPlayer({
     }
   }, [isPlaying, player, startTime]);
 
+  // Report actual video duration once loaded (used when no part-info metadata is present)
   useEffect(() => {
-    if (!endTime || !isPlaying) return;
+    if (!onDurationKnown || didReportDuration.current) return;
     const interval = setInterval(() => {
-      if (player.currentTime >= endTime) {
+      const dur = player.duration;
+      if (dur && dur > 0 && !didReportDuration.current) {
+        didReportDuration.current = true;
         clearInterval(interval);
-        onEnd?.();
+        const effectiveDurationMs = endTime
+          ? (endTime - (startTime ?? 0)) * 1000
+          : dur * 1000;
+        onDurationKnown(effectiveDurationMs);
       }
-    }, 500);
+    }, 150);
+    return () => clearInterval(interval);
+  }, [videoUrl, player, onDurationKnown, startTime, endTime]);
+
+  // Advance story when segment ends (via endTime) or video ends naturally (no endTime)
+  useEffect(() => {
+    if (!isPlaying) return;
+    const interval = setInterval(() => {
+      const cur = player.currentTime;
+      const dur = player.duration;
+      if (endTime !== undefined) {
+        if (cur >= endTime) { clearInterval(interval); onEnd?.(); }
+      } else if (dur && dur > 0 && cur >= dur - 0.3) {
+        clearInterval(interval); onEnd?.();
+      }
+    }, 300);
     return () => clearInterval(interval);
   }, [isPlaying, endTime, player, onEnd]);
 
@@ -190,9 +215,25 @@ export default function StoryViewerScreen() {
           if (data) setTaggedProfiles(data as TaggedProfile[]);
         });
     }
-    startProgress(currentStory.video_url ? VIDEO_DURATION : IMAGE_DURATION);
+    startProgress(storyDuration);
     return () => { progressAnimation.current?.stop(); };
   }, [currentStory?.id]);
+
+  // When actual video duration is known (videos without part metadata), restart progress accurately
+  const handleVideoDuration = useCallback((durationMs: number) => {
+    if (!isPaused.current) {
+      progressAnimation.current?.stop();
+      progressAnim.setValue(0);
+      progressAnimation.current = Animated.timing(progressAnim, {
+        toValue: 1,
+        duration: durationMs,
+        useNativeDriver: false,
+      });
+      progressAnimation.current.start(({ finished }) => {
+        if (finished && !isPaused.current) goToNext();
+      });
+    }
+  }, [progressAnim, goToNext]);
 
   const handleTouchStart = useRef<{ x: number; t: number } | null>(null);
 
@@ -259,6 +300,7 @@ export default function StoryViewerScreen() {
             startTime={videoPart?.startTime}
             endTime={videoPart?.endTime}
             onEnd={goToNext}
+            onDurationKnown={!videoPart ? handleVideoDuration : undefined}
           />
         ) : currentStory.image_url ? (
           <Image
