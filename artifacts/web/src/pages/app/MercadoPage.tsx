@@ -511,8 +511,18 @@ function PollDisplay({ post, userId, onPollVote }: { post: MarketPost; userId: s
               position: "absolute", top: 0, left: 0, height: "100%", width: `${pct}%`,
               backgroundColor: voted ? `${GOLD}28` : "#f0f0ec", borderRadius: 10, transition: "width 0.4s",
             }} />
-            <span style={{ position: "relative", fontSize: 13, fontWeight: voted ? 700 : 500, color: voted ? NAVY : "#444" }}>
-              {voted ? "✓ " : ""}{opt.text}
+            <span style={{ position: "relative", fontSize: 13, fontWeight: voted ? 700 : 500, color: voted ? NAVY : "#444", display: "flex", alignItems: "center", gap: 9 }}>
+              {/* Radio indicator */}
+              <span style={{
+                flexShrink: 0, width: 17, height: 17, borderRadius: "50%",
+                border: `2px solid ${voted ? GOLD : "#b0b8c4"}`,
+                backgroundColor: voted ? GOLD : "transparent",
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                transition: "all 0.18s",
+              }}>
+                {voted && <span style={{ color: "#fff", fontSize: 9, fontWeight: 900, lineHeight: 1 }}>✓</span>}
+              </span>
+              {opt.text}
             </span>
             {post.user_poll_vote && (
               <span style={{ position: "relative", float: "right", fontSize: 12, fontWeight: 700, color: voted ? GOLD : MUTED }}>

@@ -888,11 +888,20 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
                 )}
                 <View style={styles.pollRow}>
                   <View style={styles.pollLeft}>
+                    {/* Radio / checkbox indicator — always visible */}
                     {isMyVote ? (
-                      <AntDesign name={"checkcircle" as any} size={15} color={colors.gold} style={{ marginRight: 7 }} />
-                    ) : hasVoted && isWinner ? (
-                      <AntDesign name="trophy" size={15} color={colors.navy} style={{ marginRight: 7 }} />
-                    ) : null}
+                      post.poll!.allow_multiple ? (
+                        <AntDesign name={"checksquare" as any} size={18} color={colors.gold} style={{ marginRight: 8 }} />
+                      ) : (
+                        <AntDesign name={"checkcircle" as any} size={18} color={colors.gold} style={{ marginRight: 8 }} />
+                      )
+                    ) : (
+                      post.poll!.allow_multiple ? (
+                        <AntDesign name={"checksquareo" as any} size={18} color={colors.mutedForeground} style={{ marginRight: 8 }} />
+                      ) : (
+                        <AntDesign name={"circleo" as any} size={18} color={colors.mutedForeground} style={{ marginRight: 8 }} />
+                      )
+                    )}
                     <Text
                       style={[
                         styles.pollOptionText,

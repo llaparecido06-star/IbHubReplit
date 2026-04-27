@@ -19,7 +19,7 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
+import { AntDesign, Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import {
   Defs,
   LinearGradient,
@@ -1442,9 +1442,17 @@ function MarketPollMobile({ post: initialPost, userId, colors, onPollVote }: {
           >
             <View style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${pct}%`, backgroundColor: voted ? colors.gold + "28" : "#f0f0ec" }} />
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 12, paddingVertical: 9 }}>
-              <Text style={{ fontSize: 13, fontWeight: voted ? "700" : "400", color: voted ? colors.navy : colors.foreground }}>
-                {voted ? "✓ " : ""}{opt.text}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+                {/* Radio indicator */}
+                {voted ? (
+                  <AntDesign name={"checkcircle" as any} size={18} color={colors.gold} />
+                ) : (
+                  <AntDesign name={"circleo" as any} size={18} color={colors.mutedForeground} />
+                )}
+                <Text style={{ fontSize: 13, fontWeight: voted ? "700" : "400", color: voted ? colors.navy : colors.foreground, flex: 1 }}>
+                  {opt.text}
+                </Text>
+              </View>
               {post.user_poll_vote ? (
                 <Text style={{ fontSize: 12, fontWeight: "700", color: voted ? colors.gold : colors.mutedForeground }}>{pct}%</Text>
               ) : null}

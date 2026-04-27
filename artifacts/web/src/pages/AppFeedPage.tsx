@@ -277,12 +277,25 @@ function PollDisplay({ poll, postId, currentUserId, onVote }: {
                 }} />
               )}
               <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px" }}>
-                <span style={{ fontSize: 14, color: NAVY, fontWeight: isMyVote ? 700 : 400, display: "flex", alignItems: "center", gap: 6 }}>
-                  {isMyVote && <span style={{ fontSize: 12 }}>✓</span>}
+                <span style={{ fontSize: 14, color: NAVY, fontWeight: isMyVote ? 700 : 400, display: "flex", alignItems: "center", gap: 10 }}>
+                  {/* Radio / checkbox indicator */}
+                  <span style={{
+                    flexShrink: 0,
+                    width: 18, height: 18,
+                    borderRadius: poll.allow_multiple ? 4 : "50%",
+                    border: `2px solid ${isMyVote ? GOLD : "#b0b8c4"}`,
+                    backgroundColor: isMyVote ? GOLD : "transparent",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transition: "all 0.18s",
+                  }}>
+                    {isMyVote && (
+                      <span style={{ color: "#fff", fontSize: 10, fontWeight: 900, lineHeight: 1 }}>✓</span>
+                    )}
+                  </span>
                   {opt.text}
                 </span>
                 {showBar && (
-                  <span style={{ fontSize: 13, fontWeight: 700, color: isMyVote ? GOLD : MUTED }}>{pct}%</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: isMyVote ? GOLD : MUTED, marginLeft: 8 }}>{pct}%</span>
                 )}
               </div>
             </div>

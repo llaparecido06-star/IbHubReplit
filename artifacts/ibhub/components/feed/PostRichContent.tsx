@@ -398,15 +398,20 @@ export function PostRichContent({ post, onVote }: Props) {
                     gap: 6,
                   }}
                 >
+                  {/* Radio / checkbox indicator — always visible */}
                   {isMyVote ? (
-                    <AntDesign
-                      name={"checkcircle" as any}
-                      size={14}
-                      color={colors.gold}
-                    />
-                  ) : hasVoted && isWinner ? (
-                    <AntDesign name="trophy" size={14} color={colors.navy} />
-                  ) : null}
+                    post.poll!.allow_multiple ? (
+                      <AntDesign name={"checksquare" as any} size={18} color={colors.gold} />
+                    ) : (
+                      <AntDesign name={"checkcircle" as any} size={18} color={colors.gold} />
+                    )
+                  ) : (
+                    post.poll!.allow_multiple ? (
+                      <AntDesign name={"checksquareo" as any} size={18} color={colors.mutedForeground} />
+                    ) : (
+                      <AntDesign name={"circleo" as any} size={18} color={colors.mutedForeground} />
+                    )
+                  )}
                   <Text
                     style={{
                       flex: 1,
