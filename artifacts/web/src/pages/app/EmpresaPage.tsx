@@ -282,7 +282,7 @@ export default function EmpresaPage() {
         {/* Tabs */}
         <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "0 4px", marginBottom: 16, display: "flex" }}>
           {(["publicacoes", "portfolio", "sobre"] as const).map(t => {
-            const labels = { publicacoes: "Publicações", portfolio: "Portfólio", sobre: "Sobre" };
+            const labels = { publicacoes: "Publicações", portfolio: "Portifólio", sobre: "Sobre" };
             const active = tab === t;
             return (
               <button key={t} onClick={() => setTab(t)} style={{
@@ -311,13 +311,13 @@ export default function EmpresaPage() {
           )
         )}
 
-        {/* Tab: Portfólio */}
+        {/* Tab: Portifólio */}
         {tab === "portfolio" && (
           portfolio.length === 0 ? (
             <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "56px 24px", textAlign: "center" }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>🍷</div>
-              <h3 style={{ fontSize: 16, fontWeight: 800, color: NAVY, margin: "0 0 8px" }}>Portfólio ainda vazio</h3>
-              <p style={{ fontSize: 14, color: MUTED }}>Esta empresa ainda não adicionou produtos ao portfólio.</p>
+              <h3 style={{ fontSize: 16, fontWeight: 800, color: NAVY, margin: "0 0 8px" }}>Portifólio ainda vazio</h3>
+              <p style={{ fontSize: 14, color: MUTED }}>Esta empresa ainda não adicionou produtos ao portifólio.</p>
             </div>
           ) : (
             portfolio.map(item => <WineCard key={item.id} wine={item} onClick={() => setSelectedItem(item)} />)

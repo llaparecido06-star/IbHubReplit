@@ -40,7 +40,7 @@ const INTRO_TEMPLATES = [
   "Oi! Vi seu perfil e fiquei impressionado com sua trajetória. Gostaria de conversar sobre possíveis parcerias.",
   "Olá! Sou sommelier certificado e estou sempre em busca de novos produtores para recomendar. Podemos trocar experiências?",
   "Boa tarde! Participei de um evento que você organizou e adorei. Podemos conversar sobre colaborações futuras?",
-  "Olá! Trabalho com distribuição de vinhos artesanais e acho que seu produto pode ter espaço no meu portfólio.",
+  "Olá! Trabalho com distribuição de vinhos artesanais e acho que seu produto pode ter espaço no meu portifólio.",
 ];
 
 function formatTime(dateStr: string): string {

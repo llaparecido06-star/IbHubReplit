@@ -119,7 +119,7 @@ export default function PublicProfileScreen() {
 
   const isCompany    = (userProfile as any).profile_type === "empresa";
   const isOwnProfile = currentUser?.id === resolvedId;
-  const tab2Label    = isCompany ? "Portfólio" : "Adega";
+  const tab2Label    = isCompany ? "Portifólio" : "Adega";
 
   const REPORT_REASONS = ["Spam", "Conteúdo ofensivo", "Informação falsa", "Assédio", "Perfil falso", "Outro"];
 
@@ -439,7 +439,7 @@ export default function PublicProfileScreen() {
       {tab === "adega" && isCompany && (
         <View style={styles.empty}>
           <Feather name="briefcase" size={40} color={colors.mutedForeground} />
-          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Portfólio ainda vazio</Text>
+          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Portifólio ainda vazio</Text>
         </View>
       )}
 

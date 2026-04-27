@@ -78,7 +78,7 @@ function PortfolioManagerTab({ companyId }: { companyId: string }) {
   };
 
   const handleDelete = (id: string, name: string) => {
-    Alert.alert("Remover produto", `Remover "${name}" do portfólio?`, [
+    Alert.alert("Remover produto", `Remover "${name}" do portifólio?`, [
       { text: "Cancelar", style: "cancel" },
       { text: "Remover", style: "destructive", onPress: async () => {
         await API.deleteCompanyProduct(id);
@@ -139,7 +139,7 @@ function PortfolioManagerTab({ companyId }: { companyId: string }) {
         {products.length === 0 ? (
           <View style={styles.empty}>
             <Feather name="package" size={36} color={colors.border} />
-            <Text style={[styles.emptyTitle, { color: colors.mutedForeground }]}>Nenhum produto no portfólio</Text>
+            <Text style={[styles.emptyTitle, { color: colors.mutedForeground }]}>Nenhum produto no portifólio</Text>
             <TouchableOpacity style={[styles.emptyBtn, { backgroundColor: colors.gold }]} onPress={() => { resetForm(); setShowForm(true); }}>
               <Feather name="plus" size={16} color="#fff" />
               <Text style={styles.emptyBtnText}>Adicionar Produto</Text>
@@ -455,7 +455,7 @@ export default function WineCellarScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
           <View>
-            <Text style={[styles.headerTitle, { color: colors.navy }]}>{screenTab === "portfolio" ? "Portfólio" : "Adega"}</Text>
+            <Text style={[styles.headerTitle, { color: colors.navy }]}>{screenTab === "portfolio" ? "Portifólio" : "Adega"}</Text>
             <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
               {screenTab === "portfolio" ? "Produtos da empresa" : "Gerencie sua adega pessoal"}
             </Text>
@@ -478,7 +478,7 @@ export default function WineCellarScreen() {
       {/* Screen tabs (only for company accounts) */}
       {isCompany && (
         <View style={{ flexDirection: "row", backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border }}>
-          {([{ key: "adega", label: "🍷 Adega" }, { key: "portfolio", label: "📦 Portfólio" }] as const).map(t => (
+          {([{ key: "adega", label: "🍷 Adega" }, { key: "portfolio", label: "📦 Portifólio" }] as const).map(t => (
             <Pressable key={t.key} onPress={() => setScreenTab(t.key)}
               style={{ flex: 1, alignItems: "center", paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: screenTab === t.key ? colors.gold : "transparent" }}>
               <Text style={{ fontSize: 14, fontWeight: "700", color: screenTab === t.key ? colors.gold : colors.mutedForeground }}>{t.label}</Text>
@@ -496,7 +496,7 @@ export default function WineCellarScreen() {
             <View style={styles.empty}>
               <Feather name="briefcase" size={36} color={colors.border} />
               <Text style={[styles.emptyTitle, { color: colors.mutedForeground, textAlign: "center" }]}>
-                Selecione uma empresa no seu perfil para gerenciar o portfólio.
+                Selecione uma empresa no seu perfil para gerenciar o portifólio.
               </Text>
             </View>
           )}

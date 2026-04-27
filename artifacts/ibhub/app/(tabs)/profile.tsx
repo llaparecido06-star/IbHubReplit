@@ -436,7 +436,7 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
           </View>
         )}
 
-        {/* ── Portfólio ── */}
+        {/* ── Portifólio ── */}
         {activeTab === "portfolio" && (
           <View style={{ padding: 16, rowGap: 14 }}>
             {isManager ? (

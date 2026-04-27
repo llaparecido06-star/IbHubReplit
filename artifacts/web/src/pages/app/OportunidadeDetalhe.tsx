@@ -322,7 +322,7 @@ export default function OportunidadeDetalhe() {
 
               <div style={{ marginBottom: 14 }}>
                 <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>
-                  Ou link do LinkedIn / Portfólio <span style={{ color: "#aaa", fontWeight: 400 }}>(alternativa)</span>
+                  Ou link do LinkedIn / Portifólio <span style={{ color: "#aaa", fontWeight: 400 }}>(alternativa)</span>
                 </label>
                 <input
                   value={cvUrl}

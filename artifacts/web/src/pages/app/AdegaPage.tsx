@@ -195,7 +195,7 @@ function PortfolioManager({ company, userId }: { company: ActiveCompany; userId:
   };
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Remover "${name}" do portfólio?`)) return;
+    if (!confirm(`Remover "${name}" do portifólio?`)) return;
     await deleteCompanyProduct(id);
     load();
   };
@@ -222,7 +222,7 @@ function PortfolioManager({ company, userId }: { company: ActiveCompany; userId:
         }
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, letterSpacing: 0.5, textTransform: "uppercase" }}>Modo Empresa</div>
-          <h1 style={{ fontSize: 20, fontWeight: 900, color: NAVY, margin: "2px 0 0" }}>Portfólio de {company.name}</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 900, color: NAVY, margin: "2px 0 0" }}>Portifólio de {company.name}</h1>
           <p style={{ fontSize: 13, color: "#8a93a2", margin: 0 }}>Gerencie seus vinhos, produtos, acessórios e serviços</p>
         </div>
         <button onClick={openAdd} style={{ backgroundColor: GOLD, color: "#fff", fontWeight: 800, fontSize: 13, border: "none", borderRadius: 10, padding: "10px 18px", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
@@ -233,14 +233,14 @@ function PortfolioManager({ company, userId }: { company: ActiveCompany; userId:
       {/* DB error */}
       {dbError && (
         <div style={{ marginBottom: 16, backgroundColor: "#fff7ed", border: "1px solid #fdba74", borderRadius: 12, padding: "14px 18px", fontSize: 13, color: "#9a3412" }}>
-          <strong>⚠️ Tabela não encontrada.</strong> Execute a migração <code>company_products</code> no Supabase SQL Editor para ativar o portfólio de empresa.
+          <strong>⚠️ Tabela não encontrada.</strong> Execute a migração <code>company_products</code> no Supabase SQL Editor para ativar o portifólio de empresa.
         </div>
       )}
 
       {/* Search */}
       <div style={{ position: "relative", marginBottom: 12 }}>
         <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }}>🔍</span>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar no portfólio..." style={{ ...pstyle, paddingLeft: 38 }} />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar no portifólio..." style={{ ...pstyle, paddingLeft: 38 }} />
       </div>
 
       {/* Category filter */}
@@ -263,11 +263,11 @@ function PortfolioManager({ company, userId }: { company: ActiveCompany; userId:
 
       {/* Product grid */}
       {loading ? (
-        <div style={{ textAlign: "center", padding: 60, color: "#8a93a2" }}>⏳ Carregando portfólio...</div>
+        <div style={{ textAlign: "center", padding: 60, color: "#8a93a2" }}>⏳ Carregando portifólio...</div>
       ) : filtered.length === 0 ? (
         <div style={{ textAlign: "center", padding: 60, backgroundColor: "#fff", borderRadius: 14, border: "1px solid #e8eaed" }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>📦</div>
-          <h3 style={{ color: NAVY, margin: "0 0 8px" }}>Portfólio vazio</h3>
+          <h3 style={{ color: NAVY, margin: "0 0 8px" }}>Portifólio vazio</h3>
           <p style={{ color: "#8a93a2", fontSize: 14, margin: "0 0 16px" }}>Adicione seus vinhos, produtos, acessórios e serviços</p>
           <button onClick={openAdd} style={{ padding: "10px 24px", backgroundColor: GOLD, color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
             + Adicionar primeiro item
@@ -316,7 +316,7 @@ function PortfolioManager({ company, userId }: { company: ActiveCompany; userId:
         <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={closeModal}>
           <div style={{ backgroundColor: "#fff", borderRadius: "22px 22px 0 0", width: "100%", maxWidth: 560, maxHeight: "92vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
             <div style={{ padding: "22px 24px", borderBottom: "1px solid #e8eaed", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, backgroundColor: "#fff", zIndex: 1 }}>
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: NAVY }}>{editingId ? "Editar item" : "Adicionar ao Portfólio"}</h2>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: NAVY }}>{editingId ? "Editar item" : "Adicionar ao Portifólio"}</h2>
               <button onClick={closeModal} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#aaa" }}>✕</button>
             </div>
             <div style={{ padding: "22px 24px 40px", display: "flex", flexDirection: "column", gap: 14 }}>
@@ -366,7 +366,7 @@ function PortfolioManager({ company, userId }: { company: ActiveCompany; userId:
                 padding: "14px 0", backgroundColor: !form.name.trim() || saving ? "#ccc" : GOLD, color: "#fff",
                 border: "none", borderRadius: 12, fontSize: 15, fontWeight: 800, cursor: !form.name.trim() || saving ? "not-allowed" : "pointer", marginTop: 4,
               }}>
-                {saving ? "Salvando..." : editingId ? "✓ Atualizar item" : "✓ Salvar no portfólio"}
+                {saving ? "Salvando..." : editingId ? "✓ Atualizar item" : "✓ Salvar no portifólio"}
               </button>
             </div>
           </div>

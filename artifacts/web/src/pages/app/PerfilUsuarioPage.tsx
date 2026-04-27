@@ -759,8 +759,8 @@ export default function PerfilUsuarioPage() {
 
   const headline = userProfile.headline ?? [userProfile.position, userProfile.company].filter(Boolean).join(" · ");
   const isCompany = userProfile.profile_type === "empresa";
-  const tab2 = isCompany ? "portfólio" : "adega";
-  const tab2Label = isCompany ? "Portfólio" : "Adega";
+  const tab2 = isCompany ? "portifólio" : "adega";
+  const tab2Label = isCompany ? "Portifólio" : "Adega";
 
   /* Connect button state */
   const connectBtnLabel = connectionStatus === "connected" ? "✓ Conectado" : connectionStatus === "pending" ? "Solicitado" : "Conectar";
@@ -972,10 +972,10 @@ export default function PerfilUsuarioPage() {
             <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "56px 24px", textAlign: "center" }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>🍷</div>
               <h3 style={{ fontSize: 16, fontWeight: 800, color: NAVY, margin: "0 0 8px" }}>
-                {isCompany ? "Portfólio ainda vazio" : "Adega ainda vazia"}
+                {isCompany ? "Portifólio ainda vazio" : "Adega ainda vazia"}
               </h3>
               <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>
-                {isCompany ? "Esta empresa ainda não compartilhou seu portfólio." : "Este usuário ainda não compartilhou nada na adega."}
+                {isCompany ? "Esta empresa ainda não compartilhou seu portifólio." : "Este usuário ainda não compartilhou nada na adega."}
               </p>
             </div>
           ) : (
