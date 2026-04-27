@@ -430,9 +430,9 @@ function PostCard({ post, currentUserId, onLike, onReact, onBookmark, onDelete, 
             onMouseLeave={closePicker}
             style={{
               width: "100%", display: "flex", alignItems: "center", justifyContent: "center",
-              gap: 6, padding: "10px 4px", background: "none", border: "none",
+              gap: 6, padding: "10px 8px", background: "none", border: "none",
               cursor: "pointer", fontSize: 13, fontWeight: 600,
-              color: likeColor, borderRadius: 8,
+              color: likeColor, borderRadius: 8, transition: "background 0.15s",
             }}
           >
             {reactionInfo ? (
@@ -449,9 +449,11 @@ function PostCard({ post, currentUserId, onLike, onReact, onBookmark, onDelete, 
           onClick={() => setLocation(`/app/posts/${post.id}`)}
           style={{
             flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-            gap: 6, padding: "10px 4px", background: "none", border: "none",
-            cursor: "pointer", fontSize: 13, fontWeight: 600, color: MUTED, borderRadius: 8,
+            gap: 6, padding: "10px 8px", background: "none", border: "none",
+            cursor: "pointer", fontSize: 13, fontWeight: 600, color: MUTED, borderRadius: 8, transition: "background 0.15s",
           }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
         >
           <CommentIcon /> Comentar
         </button>
@@ -464,9 +466,11 @@ function PostCard({ post, currentUserId, onLike, onReact, onBookmark, onDelete, 
           }}
           style={{
             flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-            gap: 6, padding: "10px 4px", background: "none", border: "none",
-            cursor: "pointer", fontSize: 13, fontWeight: 600, color: MUTED, borderRadius: 8,
+            gap: 6, padding: "10px 8px", background: "none", border: "none",
+            cursor: "pointer", fontSize: 13, fontWeight: 600, color: MUTED, borderRadius: 8, transition: "background 0.15s",
           }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
         >
           <ShareIcon /> Compartilhar
         </button>
@@ -477,8 +481,10 @@ function PostCard({ post, currentUserId, onLike, onReact, onBookmark, onDelete, 
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             padding: "10px 14px", background: "none", border: "none",
-            cursor: "pointer", borderRadius: 8,
+            cursor: "pointer", borderRadius: 8, transition: "background 0.15s",
           }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
         >
           <BookmarkIcon filled={!!(post.is_bookmarked)} />
         </button>

@@ -36,6 +36,27 @@ const BORDER = "#e8e8e3";
 const MUTED  = "#7a8494";
 const BG     = "#f5f5f0";
 
+const LikeIcon = ({ filled, color }: { filled: boolean; color?: string }) => {
+  const c = color ?? (filled ? GOLD : MUTED);
+  return (
+    <svg width="18" height="18" fill={filled ? c : "none"} stroke={c} strokeWidth="2" viewBox="0 0 24 24">
+      <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/>
+      <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+    </svg>
+  );
+};
+const CommentIcon = () => (
+  <svg width="18" height="18" fill="none" stroke={MUTED} strokeWidth="2" viewBox="0 0 24 24">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+);
+const ShareIcon = () => (
+  <svg width="18" height="18" fill="none" stroke={MUTED} strokeWidth="2" viewBox="0 0 24 24">
+    <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+  </svg>
+);
+
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);
@@ -338,25 +359,34 @@ function MiniPostCard({ post, onDelete, onEdit, onPollUpdate }: {
         </div>
       )}
 
-      {/* Footer — curtidas e comentários */}
-      <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "8px 16px 14px", borderTop: `1px solid ${BORDER}`, marginTop: 4 }}>
+      {/* Footer — action bar */}
+      <div style={{ display: "flex", borderTop: `1px solid ${BORDER}`, marginTop: 4 }}>
         <button
           onClick={() => post.likes_count > 0 && setLikesModalOpen(true)}
-          style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: post.likes_count > 0 ? "pointer" : "default", padding: "6px 10px", borderRadius: 8, color: MUTED, fontSize: 13, fontWeight: 600, fontFamily: "inherit" }}
-          onMouseEnter={e => { if (post.likes_count > 0) (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}12`; }}
+          style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "none", border: "none", cursor: post.likes_count > 0 ? "pointer" : "default", padding: "10px 8px", borderRadius: 8, color: MUTED, fontSize: 13, fontWeight: 600, fontFamily: "inherit", transition: "background 0.15s" }}
+          onMouseEnter={e => { if (post.likes_count > 0) (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
         >
-          <span style={{ fontSize: 16 }}>👍</span>
-          <span>{post.likes_count} curtida{post.likes_count !== 1 ? "s" : ""}</span>
+          <LikeIcon filled={false} />
+          <span>{post.likes_count > 0 ? `${post.likes_count} Curtida${post.likes_count !== 1 ? "s" : ""}` : "Curtidas"}</span>
         </button>
         <button
           onClick={() => setLocation(`/app/posts/${post.id}`)}
-          style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", padding: "6px 10px", borderRadius: 8, color: MUTED, fontSize: 13, fontWeight: 600, fontFamily: "inherit" }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#f0f0f0"; }}
+          style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "none", border: "none", cursor: "pointer", padding: "10px 8px", borderRadius: 8, color: MUTED, fontSize: 13, fontWeight: 600, fontFamily: "inherit", transition: "background 0.15s" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
         >
-          <span style={{ fontSize: 16 }}>💬</span>
-          <span>{post.comments_count} comentário{post.comments_count !== 1 ? "s" : ""}</span>
+          <CommentIcon />
+          <span>{post.comments_count > 0 ? `${post.comments_count} Comentário${post.comments_count !== 1 ? "s" : ""}` : "Comentar"}</span>
+        </button>
+        <button
+          onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}/p/${post.id}`).catch(() => {}); }}
+          style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "none", border: "none", cursor: "pointer", padding: "10px 8px", borderRadius: 8, color: MUTED, fontSize: 13, fontWeight: 600, fontFamily: "inherit", transition: "background 0.15s" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+        >
+          <ShareIcon />
+          <span>Compartilhar</span>
         </button>
       </div>
     </div>

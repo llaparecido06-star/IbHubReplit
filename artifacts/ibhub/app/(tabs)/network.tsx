@@ -1688,37 +1688,41 @@ function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors 
       />
 
       {/* Action bar */}
-      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: 1, borderTopColor: colors.border, marginTop: 8, gap: 4 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, marginTop: 8 }}>
         <TouchableOpacity
-          style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 7, borderRadius: 10, backgroundColor: post.user_liked ? "#fef2f2" : colors.secondary }}
+          style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 8 }}
           onPress={handleLikeTap}
           onLongPress={() => setShowReactions(true)}
           delayLongPress={400}
           disabled={liking}
+          activeOpacity={0.7}
         >
           {post.user_liked && post.reaction_type
             ? (() => {
                 const r = REACTIONS.find(x => x.type === post.reaction_type);
                 return r ? (
                   <>
-                    <Text style={{ fontSize: 15 }}>{r.emoji}</Text>
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#dc2626" }}>{r.label}</Text>
+                    <Text style={{ fontSize: 20 }}>{r.emoji}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#dc2626" }}>{r.label}</Text>
                   </>
-                ) : <Feather name="heart" size={16} color="#dc2626" />;
+                ) : <AntDesign name="heart" size={22} color="#dc2626" />;
               })()
-            : <Feather name="heart" size={16} color={post.user_liked ? "#dc2626" : colors.mutedForeground} />
+            : (
+              <>
+                <AntDesign name="heart" size={22} color={post.user_liked ? "#dc2626" : colors.mutedForeground} />
+                <Text style={{ fontSize: 13, fontWeight: "500", color: colors.mutedForeground }}>Reagir</Text>
+              </>
+            )
           }
-          {!post.user_liked && (
-            <Text style={{ fontSize: 13, fontWeight: "600", color: colors.mutedForeground }}>Reagir</Text>
-          )}
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 7, borderRadius: 10, backgroundColor: showComments ? colors.navy + "10" : colors.secondary }}
+          style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 8 }}
           onPress={() => setShowComments(v => !v)}
+          activeOpacity={0.7}
         >
-          <Feather name="message-square" size={16} color={showComments ? colors.navy : colors.mutedForeground} />
-          <Text style={{ fontSize: 13, fontWeight: "600", color: showComments ? colors.navy : colors.mutedForeground }}>
+          <MaterialCommunityIcons name="comment-outline" size={22} color={showComments ? colors.navy : colors.mutedForeground} />
+          <Text style={{ fontSize: 13, fontWeight: "500", color: showComments ? colors.navy : colors.mutedForeground }}>
             {totalComments > 0 ? `${totalComments} ${totalComments === 1 ? "comentário" : "comentários"}` : "Comentar"}
           </Text>
         </TouchableOpacity>

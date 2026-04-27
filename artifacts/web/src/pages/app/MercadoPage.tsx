@@ -560,6 +560,26 @@ const REACTIONS: { type: MarketReactionType; emoji: string; label: string }[] = 
 function reactionEmoji(r?: MarketReactionType | null): string {
   return REACTIONS.find(x => x.type === r)?.emoji ?? "🤍";
 }
+function reactionLabel(r?: MarketReactionType | null): string {
+  return REACTIONS.find(x => x.type === r)?.label ?? "Reagir";
+}
+function reactionColor(_r?: MarketReactionType | null): string {
+  return GOLD;
+}
+const LikeIcon = ({ filled, color }: { filled: boolean; color?: string }) => {
+  const c = color ?? (filled ? GOLD : MUTED);
+  return (
+    <svg width="18" height="18" fill={filled ? c : "none"} stroke={c} strokeWidth="2" viewBox="0 0 24 24">
+      <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/>
+      <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+    </svg>
+  );
+};
+const CommentIcon = ({ color }: { color?: string }) => (
+  <svg width="18" height="18" fill="none" stroke={color ?? MUTED} strokeWidth="2" viewBox="0 0 24 24">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+);
 
 function ReactionPicker({ onSelect }: { onSelect: (r: MarketReactionType) => void }) {
   return (
@@ -1001,11 +1021,11 @@ function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idea
       )}
 
       {/* Actions */}
-      <div style={{ display: "flex", gap: 4, padding: "10px 12px", borderTop: `1px solid ${BORDER}` }}>
+      <div style={{ display: "flex", borderTop: `1px solid ${BORDER}`, overflow: "visible", position: "relative" }}>
         {/* Reaction button with hover picker */}
         <div
           ref={reactionRef}
-          style={{ position: "relative" }}
+          style={{ flex: 1, position: "relative" }}
           onMouseEnter={() => setShowPicker(true)}
           onMouseLeave={() => setShowPicker(false)}
         >
@@ -1013,30 +1033,41 @@ function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idea
           <button
             onClick={handleLikeBtn}
             style={{
-              display: "flex", alignItems: "center", gap: 6, padding: "7px 14px",
-              borderRadius: 20, border: `1px solid ${post.user_liked ? GOLD : BORDER}`,
-              backgroundColor: post.user_liked ? `${GOLD}18` : "transparent",
-              color: post.user_liked ? GOLD : MUTED,
-              fontSize: 13, fontWeight: post.user_liked ? 700 : 500, cursor: "pointer",
-              fontFamily: "inherit", transition: "all 0.15s",
+              width: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+              gap: 6, padding: "10px 8px",
+              borderRadius: 8, border: "none",
+              backgroundColor: "transparent",
+              color: post.user_liked ? reactionColor(post.user_reaction) : MUTED,
+              fontSize: 13, fontWeight: 600, cursor: "pointer",
+              fontFamily: "inherit", transition: "background 0.15s",
             }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
           >
-            {reactionEmoji(post.user_reaction)} {post.likes_count > 0 ? post.likes_count : ""} Reagir
+            {post.user_liked
+              ? <span style={{ fontSize: 15, lineHeight: 1 }}>{reactionEmoji(post.user_reaction)}</span>
+              : <LikeIcon filled={false} color={MUTED} />
+            }
+            <span>{post.user_liked ? reactionLabel(post.user_reaction) : (post.likes_count > 0 ? `${post.likes_count} Reagiu` : "Reagir")}</span>
           </button>
         </div>
 
         <button
           onClick={() => setShowComments(v => !v)}
           style={{
-            display: "flex", alignItems: "center", gap: 6, padding: "7px 14px",
-            borderRadius: 20, border: `1px solid ${showComments ? GOLD + "60" : BORDER}`,
-            backgroundColor: showComments ? `${GOLD}10` : "transparent",
+            flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+            gap: 6, padding: "10px 8px",
+            borderRadius: 8, border: "none",
+            backgroundColor: "transparent",
             color: showComments ? GOLD : MUTED,
-            fontSize: 13, fontWeight: 500, cursor: "pointer",
-            fontFamily: "inherit", transition: "all 0.15s",
+            fontSize: 13, fontWeight: 600, cursor: "pointer",
+            fontFamily: "inherit", transition: "background 0.15s",
           }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
         >
-          💬 {post.comments_count > 0 ? post.comments_count : ""} Comentar
+          <CommentIcon color={showComments ? GOLD : MUTED} />
+          <span>{post.comments_count > 0 ? `${post.comments_count} Comentário${post.comments_count !== 1 ? "s" : ""}` : "Comentar"}</span>
         </button>
       </div>
 
