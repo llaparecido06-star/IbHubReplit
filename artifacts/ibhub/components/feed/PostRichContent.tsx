@@ -14,6 +14,7 @@ import { useRouter } from "expo-router";
 import { AntDesign, Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/context/AuthContext";
 import { fetchPollVoters } from "@/services/api";
 import type { Post } from "./PostCard";
 
@@ -299,6 +300,7 @@ interface Props {
 export function PostRichContent({ post, onVote }: Props) {
   const colors = useColors();
   const router = useRouter();
+  const { user } = useAuth();
   const postType = detectPostType(post.content ?? "");
   const wineEan = postType === "wine" ? extractEan(post.content ?? "") : null;
   const imageUrls = getImageUrls(post);
@@ -539,12 +541,17 @@ export function PostRichContent({ post, onVote }: Props) {
                         {opt.text} · {optVoters.length}
                       </Text>
                       {optVoters.map(v => (
-                        <View key={v.id} style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                        <TouchableOpacity
+                          key={v.id}
+                          onPress={() => { setShowPollVoters(false); v.id === user?.id ? router.push("/(tabs)/profile" as any) : router.push(`/profile/${v.id}` as any); }}
+                          activeOpacity={0.7}
+                          style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10, paddingVertical: 4 }}
+                        >
                           <Avatar uri={v.avatar_url} name={v.full_name ?? v.username ?? "?"} size={34} />
                           <Text style={{ fontSize: 14, color: colors.foreground, fontWeight: "500" }}>
                             {v.full_name ?? v.username ?? "Usuário"}
                           </Text>
-                        </View>
+                        </TouchableOpacity>
                       ))}
                     </View>
                   );

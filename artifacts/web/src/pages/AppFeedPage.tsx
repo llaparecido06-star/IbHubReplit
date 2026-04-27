@@ -210,6 +210,7 @@ function PollDisplay({ poll, postId, currentUserId, onVote }: {
   currentUserId: string;
   onVote: (postId: string, updatedPoll: Poll) => void;
 }) {
+  const [, setLocation] = useLocation();
   const [voting, setVoting] = useState(false);
   const [showVoters, setShowVoters] = useState(false);
   const [voters, setVoters] = useState<{ id: string; full_name: string | null; avatar_url: string | null; username: string | null; optionIndex: number }[]>([]);
@@ -341,12 +342,18 @@ function PollDisplay({ poll, postId, currentUserId, onVote }: {
                   {loadingVoters ? (
                     <div style={{ fontSize: 12, color: MUTED }}>Carregando...</div>
                   ) : optVoters.map(v => (
-                    <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                    <div
+                      key={v.id}
+                      onClick={() => { setShowVoters(false); setLocation(v.id === currentUserId ? "/app/perfil" : `/app/usuario/${v.id}`); }}
+                      style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, cursor: "pointer", borderRadius: 8, padding: "4px 6px", margin: "0 -6px 6px", transition: "background 0.15s" }}
+                      onMouseEnter={e => (e.currentTarget.style.background = "#f5f5f5")}
+                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                    >
                       {v.avatar_url
                         ? <img src={v.avatar_url} alt="" style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
                         : <div style={{ width: 32, height: 32, borderRadius: "50%", background: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: WHITE, flexShrink: 0 }}>{(v.full_name?.[0] ?? "?").toUpperCase()}</div>
                       }
-                      <span style={{ fontSize: 13, color: NAVY }}>{v.full_name ?? v.username ?? "Usuário"}</span>
+                      <span style={{ fontSize: 13, color: NAVY, fontWeight: 500 }}>{v.full_name ?? v.username ?? "Usuário"}</span>
                     </div>
                   ))}
                 </div>
