@@ -5859,37 +5859,43 @@ export async function createMarketPost(
   } catch { return null; }
 }
 
-export async function voteOnMarketPoll(postId: string, userId: string, optionId: string): Promise<MarketPollOption[] | null> {
+export async function voteOnMarketPoll(postId: string, _userId: string, optionId: string): Promise<MarketPollOption[] | null> {
   try {
-    const { data: existing } = await supabase
-      .from("market_post_poll_votes")
-      .select("option_id")
-      .eq("post_id", postId)
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (existing) {
-      // decrement old option
-      const { data: post } = await supabase.from("market_posts").select("poll_options").eq("id", postId).single();
-      if (!post) return null;
-      const opts: MarketPollOption[] = post.poll_options ?? [];
-      const updated = opts.map((o: MarketPollOption) =>
-        o.id === existing.option_id ? { ...o, votes_count: Math.max(0, o.votes_count - 1) } :
-        o.id === optionId ? { ...o, votes_count: o.votes_count + 1 } : o
-      );
-      await supabase.from("market_post_poll_votes").update({ option_id: optionId }).eq("post_id", postId).eq("user_id", userId);
-      await supabase.from("market_posts").update({ poll_options: updated }).eq("id", postId);
-      return updated;
-    } else {
-      const { data: post } = await supabase.from("market_posts").select("poll_options").eq("id", postId).single();
-      if (!post) return null;
-      const opts: MarketPollOption[] = post.poll_options ?? [];
-      const updated = opts.map((o: MarketPollOption) => o.id === optionId ? { ...o, votes_count: o.votes_count + 1 } : o);
-      await supabase.from("market_post_poll_votes").insert({ post_id: postId, user_id: userId, option_id: optionId });
-      await supabase.from("market_posts").update({ poll_options: updated }).eq("id", postId);
-      return updated;
-    }
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return null;
+    const res = await fetch(`${API_URL}/market-posts/${postId}/poll/vote`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ optionId }),
+    });
+    if (!res.ok) return null;
+    const { poll_options } = await res.json() as { poll_options: MarketPollOption[]; user_poll_vote: string };
+    return poll_options;
   } catch { return null; }
+}
+
+export async function fetchMarketPollVoters(postId: string): Promise<{
+  id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  username: string | null;
+  optionId: string;
+}[]> {
+  try {
+    const { data: votes } = await supabase
+      .from("market_post_poll_votes")
+      .select("user_id, option_id")
+      .eq("post_id", postId);
+    if (!votes?.length) return [];
+    const userIds = votes.map((v: any) => v.user_id as string);
+    const { data: profiles } = await supabase.from("profiles").select("id, full_name, avatar_url, username").in("id", userIds);
+    if (!profiles) return [];
+    const voteMap = new Map(votes.map((v: any) => [v.user_id as string, v.option_id as string]));
+    return profiles.map((p: any) => ({
+      id: p.id, full_name: p.full_name, avatar_url: p.avatar_url, username: p.username,
+      optionId: voteMap.get(p.id) ?? "",
+    }));
+  } catch { return []; }
 }
 
 export async function uploadMarketPostMediaBase64(

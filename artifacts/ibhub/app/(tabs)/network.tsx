@@ -1410,9 +1410,12 @@ function MarketPollMobile({ post: initialPost, userId, colors, onPollVote }: {
   post: API.MarketPost; userId: string; colors: any;
   onPollVote: (opts: API.MarketPollOption[], voteId: string) => void;
 }) {
-  const [post, setPost] = useState(initialPost);
-  const [voting, setVoting] = useState(false);
-  const opts = post.poll_options ?? [];
+  const [post, setPost]             = useState(initialPost);
+  const [voting, setVoting]         = useState(false);
+  const [showVoters, setShowVoters] = useState(false);
+  const [voters, setVoters]         = useState<{ id: string; full_name: string | null; avatar_url: string | null; username: string | null; optionId: string }[]>([]);
+  const [loadingVoters, setLoadingVoters] = useState(false);
+  const opts  = post.poll_options ?? [];
   const total = opts.reduce((s, o) => s + o.votes_count, 0);
 
   useEffect(() => { setPost(initialPost); }, [initialPost]);
@@ -1428,40 +1431,103 @@ function MarketPollMobile({ post: initialPost, userId, colors, onPollVote }: {
     setVoting(false);
   };
 
+  const handleShowVoters = async () => {
+    setShowVoters(true);
+    if (voters.length === 0 && !loadingVoters) {
+      setLoadingVoters(true);
+      const v = await API.fetchMarketPollVoters(post.id);
+      setVoters(v);
+      setLoadingVoters(false);
+    }
+  };
+
   return (
-    <View style={{ paddingHorizontal: 14, paddingBottom: 12, gap: 8 }}>
-      {opts.map(opt => {
-        const pct = total > 0 ? Math.round((opt.votes_count / total) * 100) : 0;
-        const voted = post.user_poll_vote === opt.id;
-        return (
-          <TouchableOpacity
-            key={opt.id}
-            onPress={() => handleVote(opt.id)}
-            disabled={voting}
-            style={{ borderRadius: 10, borderWidth: 1.5, borderColor: voted ? colors.gold : colors.border, overflow: "hidden" }}
-          >
-            <View style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${pct}%`, backgroundColor: voted ? colors.gold + "28" : "#f0f0ec" }} />
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 12, paddingVertical: 9 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
-                {/* Radio indicator */}
-                {voted ? (
-                  <AntDesign name={"checkcircle" as any} size={18} color={colors.gold} />
-                ) : (
-                  <AntDesign name={"circleo" as any} size={18} color={colors.mutedForeground} />
-                )}
-                <Text style={{ fontSize: 13, fontWeight: voted ? "700" : "400", color: voted ? colors.navy : colors.foreground, flex: 1 }}>
-                  {opt.text}
-                </Text>
+    <>
+      <View style={{ paddingHorizontal: 14, paddingBottom: 12, gap: 8 }}>
+        {opts.map(opt => {
+          const pct = total > 0 ? Math.round((opt.votes_count / total) * 100) : 0;
+          const voted = post.user_poll_vote === opt.id;
+          return (
+            <TouchableOpacity
+              key={opt.id}
+              onPress={() => handleVote(opt.id)}
+              disabled={voting}
+              style={{ borderRadius: 10, borderWidth: 1.5, borderColor: voted ? colors.gold : colors.border, overflow: "hidden" }}
+            >
+              <View style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${pct}%`, backgroundColor: voted ? colors.gold + "28" : "#f0f0ec" }} />
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 12, paddingVertical: 9 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+                  {voted ? (
+                    <AntDesign name={"checkcircle" as any} size={18} color={colors.gold} />
+                  ) : (
+                    <AntDesign name={"circleo" as any} size={18} color={colors.mutedForeground} />
+                  )}
+                  <Text style={{ fontSize: 13, fontWeight: voted ? "700" : "400", color: voted ? colors.navy : colors.foreground, flex: 1 }}>
+                    {opt.text}
+                  </Text>
+                </View>
+                {post.user_poll_vote ? (
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: voted ? colors.gold : colors.mutedForeground }}>{pct}%</Text>
+                ) : null}
               </View>
-              {post.user_poll_vote ? (
-                <Text style={{ fontSize: 12, fontWeight: "700", color: voted ? colors.gold : colors.mutedForeground }}>{pct}%</Text>
-              ) : null}
+            </TouchableOpacity>
+          );
+        })}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{total} voto{total !== 1 ? "s" : ""}</Text>
+          {total > 0 && post.user_poll_vote && (
+            <TouchableOpacity onPress={handleShowVoters}>
+              <Text style={{ fontSize: 11, color: colors.navy, fontWeight: "600" }}>Ver votos</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {/* ── Voter list modal ── */}
+      <Modal visible={showVoters} transparent animationType="fade" onRequestClose={() => setShowVoters(false)}>
+        <TouchableOpacity
+          activeOpacity={1}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" }}
+          onPress={() => setShowVoters(false)}
+        >
+          <TouchableOpacity activeOpacity={1} style={{ backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "70%", paddingBottom: 24 }}>
+            <View style={{ alignItems: "center", paddingVertical: 12 }}>
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border }} />
             </View>
+            <Text style={{ fontSize: 16, fontWeight: "700", color: colors.navy, paddingHorizontal: 20, marginBottom: 4 }}>
+              Votos · {total} {total === 1 ? "voto" : "votos"}
+            </Text>
+            <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8 }}>
+              {loadingVoters ? (
+                <Text style={{ color: colors.mutedForeground, fontSize: 14 }}>Carregando…</Text>
+              ) : voters.length === 0 ? (
+                <Text style={{ color: colors.mutedForeground, fontSize: 14 }}>Nenhum voto ainda.</Text>
+              ) : (
+                opts.map(opt => {
+                  const optVoters = voters.filter(v => v.optionId === opt.id);
+                  if (optVoters.length === 0) return null;
+                  return (
+                    <View key={opt.id} style={{ marginBottom: 16 }}>
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: colors.mutedForeground, marginBottom: 8 }}>
+                        {opt.text} · {optVoters.length}
+                      </Text>
+                      {optVoters.map(v => (
+                        <View key={v.id} style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                          <IdealBIAvatar src={v.avatar_url} name={v.full_name ?? v.username ?? "?"} size={34} />
+                          <Text style={{ fontSize: 14, color: colors.navy, fontWeight: "500" }}>
+                            {v.full_name ?? v.username ?? "Usuário"}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
           </TouchableOpacity>
-        );
-      })}
-      <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{total} voto{total !== 1 ? "s" : ""}</Text>
-    </View>
+        </TouchableOpacity>
+      </Modal>
+    </>
   );
 }
 

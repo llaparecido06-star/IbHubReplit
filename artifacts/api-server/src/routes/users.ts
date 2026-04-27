@@ -399,4 +399,79 @@ router.post("/posts/:postId/poll/vote", async (req: Request, res: Response): Pro
   res.json({ poll: updatedPoll, indices: newIndices });
 });
 
+/**
+ * POST /market-posts/:postId/poll/vote
+ * Casts a vote on an Ideal.BI market post poll.
+ * Uses the admin client to bypass RLS — market_posts can only be updated
+ * by the post owner (admin), but any authenticated user must be able to vote.
+ * Body: { optionId: string }
+ */
+router.post("/market-posts/:postId/poll/vote", async (req: Request, res: Response): Promise<void> => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    res.status(401).json({ error: "Missing authorization" });
+    return;
+  }
+  const token = authHeader.slice(7);
+  const { data: userData, error: userError } = await supabaseAnon.auth.getUser(token);
+  if (userError || !userData?.user) {
+    res.status(401).json({ error: "Invalid or expired token" });
+    return;
+  }
+  const userId = userData.user.id;
+  const { postId } = req.params;
+  const { optionId } = req.body as { optionId: string };
+
+  if (!optionId || typeof optionId !== "string") {
+    res.status(400).json({ error: "optionId is required" });
+    return;
+  }
+
+  const { data: row, error: fetchError } = await supabaseAdmin
+    .from("market_posts")
+    .select("poll_options")
+    .eq("id", postId)
+    .single();
+
+  if (fetchError || !row?.poll_options) {
+    res.status(404).json({ error: "Post or poll not found" });
+    return;
+  }
+
+  const opts = row.poll_options as { id: string; text: string; votes_count: number }[];
+  if (!opts.find((o) => o.id === optionId)) {
+    res.status(400).json({ error: "Invalid optionId" });
+    return;
+  }
+
+  const { data: existing } = await supabaseAdmin
+    .from("market_post_poll_votes")
+    .select("option_id")
+    .eq("post_id", postId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  let updated: typeof opts;
+
+  if (existing) {
+    updated = opts.map((o) =>
+      o.id === existing.option_id ? { ...o, votes_count: Math.max(0, o.votes_count - 1) } :
+      o.id === optionId          ? { ...o, votes_count: o.votes_count + 1 } : o
+    );
+    await supabaseAdmin.from("market_post_poll_votes").update({ option_id: optionId }).eq("post_id", postId).eq("user_id", userId);
+  } else {
+    updated = opts.map((o) => o.id === optionId ? { ...o, votes_count: o.votes_count + 1 } : o);
+    await supabaseAdmin.from("market_post_poll_votes").insert({ post_id: postId, user_id: userId, option_id: optionId });
+  }
+
+  const { error: updateError } = await supabaseAdmin
+    .from("market_posts")
+    .update({ poll_options: updated })
+    .eq("id", postId);
+
+  if (updateError) { res.status(500).json({ error: updateError.message }); return; }
+
+  res.json({ poll_options: updated, user_poll_vote: optionId });
+});
+
 export default router;
