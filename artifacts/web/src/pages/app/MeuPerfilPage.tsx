@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
+import { LikesModal } from "@/components/feed/LikesModal";
+import VideoPlayer from "@/components/feed/VideoPlayer";
 
 function useWindowWidth() {
   const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1280);
@@ -20,7 +22,10 @@ import {
   fetchFollowingList,
   deletePost,
   updatePost,
+  voteOnFeedPoll,
+  fetchPollVoters,
   Post,
+  Poll,
   ProfilePerson,
 } from "@/services/api";
 
@@ -106,17 +111,135 @@ function PeopleListModal({ title, list, onClose }: { title: string; list: Profil
   );
 }
 
-function MiniPostCard({ post, onDelete, onEdit }: { post: Post; onDelete?: (id: string) => void; onEdit?: (id: string, content: string) => void }) {
+/* ── Enquete somente-leitura (mostra resultados ao autor) ── */
+function ReadOnlyPoll({ poll, postId, userId, onUpdate }: { poll: Poll; postId: string; userId: string; onUpdate: (p: Poll) => void }) {
+  const [voting, setVoting] = useState(false);
+  const [showVoters, setShowVoters] = useState(false);
+  const [voters, setVoters] = useState<{ id: string; full_name: string | null; avatar_url: string | null; username: string | null; optionIndex: number }[]>([]);
+  const [loadingVoters, setLoadingVoters] = useState(false);
+
+  const votedIndices = poll.user_voted_indices ?? (poll.user_voted_index != null ? [poll.user_voted_index] : []);
+  const hasVoted = votedIndices.length > 0;
+  const isExpired = poll.expires_at ? new Date(poll.expires_at) < new Date() : false;
+  const isClosed = poll.closed || isExpired;
+  const total = poll.total_votes ?? 0;
+
+  const handleVote = async (i: number) => {
+    if (voting || isClosed) return;
+    setVoting(true);
+    const updated = await voteOnFeedPoll(postId, userId, i);
+    if (updated) onUpdate(updated);
+    setVoting(false);
+  };
+
+  const handleShowVoters = async () => {
+    setShowVoters(true);
+    if (voters.length === 0 && poll.user_votes && Object.keys(poll.user_votes).length > 0) {
+      setLoadingVoters(true);
+      const ids = Object.keys(poll.user_votes);
+      const profiles = await fetchPollVoters(ids);
+      setVoters(profiles.map(p => ({ ...p, optionIndex: (poll.user_votes as any)[p.id] })));
+      setLoadingVoters(false);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {poll.options.map((opt, i) => {
+          const pct = total > 0 ? Math.round((opt.votes / total) * 100) : 0;
+          const isMyVote = votedIndices.includes(i);
+          const showBar = hasVoted || isClosed;
+          return (
+            <div key={i} onClick={() => handleVote(i)}
+              style={{ position: "relative", borderRadius: 10, overflow: "hidden", border: `2px solid ${isMyVote ? GOLD : BORDER}`, cursor: (!isClosed && !voting) ? "pointer" : "default", background: WHITE }}
+            >
+              {showBar && (
+                <div style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: `${pct}%`, background: isMyVote ? `${GOLD}25` : "#f0f0f0", transition: "width 0.4s ease", borderRadius: 8 }} />
+              )}
+              <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px" }}>
+                <span style={{ fontSize: 14, color: NAVY, fontWeight: isMyVote ? 700 : 400, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: poll.allow_multiple ? 4 : "50%", border: `2px solid ${isMyVote ? GOLD : "#b0b8c4"}`, backgroundColor: isMyVote ? GOLD : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {isMyVote && <span style={{ color: WHITE, fontSize: 10, fontWeight: 900 }}>✓</span>}
+                  </span>
+                  {opt.text}
+                </span>
+                {showBar && <span style={{ fontSize: 13, fontWeight: 700, color: isMyVote ? GOLD : MUTED, marginLeft: 8 }}>{pct}%</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, fontSize: 12, color: MUTED }}>
+        <span>{total} voto{total !== 1 ? "s" : ""}</span>
+        {isClosed && <span style={{ color: "#dc2626", fontWeight: 700 }}>· Encerrada</span>}
+        {total > 0 && (
+          <button onClick={handleShowVoters} style={{ background: "none", border: "none", color: GOLD, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0, marginLeft: "auto" }}>
+            Ver quem votou
+          </button>
+        )}
+      </div>
+
+      {showVoters && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowVoters(false)}>
+          <div style={{ background: WHITE, borderRadius: 16, width: "90%", maxWidth: 420, maxHeight: "80vh", overflowY: "auto", padding: 20 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: NAVY }}>Votos ({total})</h3>
+              <button onClick={() => setShowVoters(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: MUTED }}>×</button>
+            </div>
+            {loadingVoters ? (
+              <div style={{ textAlign: "center", color: MUTED, padding: 20 }}>Carregando…</div>
+            ) : voters.length === 0 ? (
+              <div style={{ textAlign: "center", color: MUTED, padding: 20 }}>Nenhum eleitor carregado.</div>
+            ) : (
+              poll.options.map((opt, i) => {
+                const optVoters = voters.filter(v => v.optionIndex === i);
+                if (optVoters.length === 0) return null;
+                return (
+                  <div key={i} style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 6 }}>{opt.text} — {opt.votes} voto{opt.votes !== 1 ? "s" : ""}</div>
+                    {optVoters.map(v => (
+                      <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                        {v.avatar_url ? <img src={v.avatar_url} alt="" style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover" }} /> : <div style={{ width: 32, height: 32, borderRadius: "50%", backgroundColor: "#722f37", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: WHITE }}>{(v.full_name?.[0] ?? "U").toUpperCase()}</div>}
+                        <span style={{ fontSize: 13, fontWeight: 600, color: NAVY }}>{v.full_name ?? "Usuário"}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Card do feed privado ── */
+function MiniPostCard({ post, onDelete, onEdit, onPollUpdate }: {
+  post: Post;
+  onDelete?: (id: string) => void;
+  onEdit?: (id: string, content: string) => void;
+  onPollUpdate?: (id: string, poll: Poll) => void;
+}) {
+  const [, setLocation] = useLocation();
+  const { profile } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editContent, setEditContent] = useState(post.content ?? "");
   const [editSaving, setEditSaving] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [likesModalOpen, setLikesModalOpen] = useState(false);
 
   const content = post.content ?? "";
-  const displayContent = content.length > 200 ? content.slice(0, 200).trimEnd() + "…" : content;
+  const TRUNCATE = 300;
+  const needsTruncation = content.length > TRUNCATE;
+  const displayContent = (needsTruncation && !expanded) ? content.slice(0, TRUNCATE).trimEnd() + "…" : content;
+
+  const images = post.image_urls && post.image_urls.length > 0 ? post.image_urls : (post.image_url ? [post.image_url] : []);
 
   return (
-    <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10, position: "relative" }}>
+    <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, marginBottom: 12, overflow: "hidden" }}>
       {/* Edit modal */}
       {showEditModal && (
         <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
@@ -127,24 +250,11 @@ function MiniPostCard({ post, onDelete, onEdit }: { post: Post; onDelete?: (id: 
               <span style={{ fontSize: 16, fontWeight: 800, color: NAVY }}>Editar publicação</span>
               <button onClick={() => setShowEditModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, lineHeight: 1 }}>✕</button>
             </div>
-            <textarea
-              value={editContent}
-              onChange={e => setEditContent(e.target.value)}
-              style={{ margin: 16, padding: 12, borderRadius: 10, border: `1.5px solid ${BORDER}`, fontSize: 14, color: NAVY, lineHeight: 1.6, resize: "vertical", minHeight: 120, fontFamily: "inherit", outline: "none" }}
-            />
+            <textarea value={editContent} onChange={e => setEditContent(e.target.value)}
+              style={{ margin: 16, padding: 12, borderRadius: 10, border: `1.5px solid ${BORDER}`, fontSize: 14, color: NAVY, lineHeight: 1.6, resize: "vertical", minHeight: 120, fontFamily: "inherit", outline: "none" }} />
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: "0 16px 16px" }}>
-              <button onClick={() => setShowEditModal(false)}
-                style={{ padding: "9px 18px", borderRadius: 10, border: `1.5px solid ${BORDER}`, background: "transparent", fontSize: 13, fontWeight: 600, cursor: "pointer", color: MUTED }}>
-                Cancelar
-              </button>
-              <button
-                disabled={editSaving || !editContent.trim()}
-                onClick={async () => {
-                  setEditSaving(true);
-                  await onEdit?.(post.id, editContent.trim());
-                  setEditSaving(false);
-                  setShowEditModal(false);
-                }}
+              <button onClick={() => setShowEditModal(false)} style={{ padding: "9px 18px", borderRadius: 10, border: `1.5px solid ${BORDER}`, background: "transparent", fontSize: 13, fontWeight: 600, cursor: "pointer", color: MUTED }}>Cancelar</button>
+              <button disabled={editSaving || !editContent.trim()} onClick={async () => { setEditSaving(true); await onEdit?.(post.id, editContent.trim()); setEditSaving(false); setShowEditModal(false); }}
                 style={{ padding: "9px 18px", borderRadius: 10, border: "none", background: GOLD, fontSize: 13, fontWeight: 700, cursor: "pointer", color: WHITE, opacity: editSaving ? 0.7 : 1 }}>
                 {editSaving ? "Salvando…" : "Salvar"}
               </button>
@@ -153,33 +263,27 @@ function MiniPostCard({ post, onDelete, onEdit }: { post: Post; onDelete?: (id: 
         </div>
       )}
 
-      {/* Header row */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-        <span style={{ fontSize: 11, color: MUTED }}>{timeAgo(post.created_at)}</span>
+      {/* LikesModal */}
+      <LikesModal postId={post.id} likesCount={post.likes_count} visible={likesModalOpen} onClose={() => setLikesModalOpen(false)} />
+
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px 8px" }}>
+        <span style={{ fontSize: 12, color: MUTED }}>{timeAgo(post.created_at)}</span>
         <div style={{ position: "relative" }}>
-          <button
-            onClick={() => setShowMenu(v => !v)}
-            style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 18, lineHeight: 1, padding: "1px 5px", borderRadius: 6 }}
-          >⋮</button>
+          <button onClick={() => setShowMenu(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, lineHeight: 1, padding: "2px 6px", borderRadius: 6 }}>⋮</button>
           {showMenu && (
-            <div
-              style={{ position: "absolute", top: "100%", right: 0, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 8px 28px rgba(0,0,0,0.14)", zIndex: 600, minWidth: 180, overflow: "hidden" }}
-              onMouseLeave={() => setShowMenu(false)}
-            >
-              <button
-                onClick={() => { setShowMenu(false); setEditContent(post.content ?? ""); setShowEditModal(true); }}
+            <div style={{ position: "absolute", top: "100%", right: 0, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 8px 28px rgba(0,0,0,0.14)", zIndex: 600, minWidth: 190, overflow: "hidden" }}
+              onMouseLeave={() => setShowMenu(false)}>
+              <button onClick={() => { setShowMenu(false); setEditContent(post.content ?? ""); setShowEditModal(true); }}
                 style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, color: NAVY, textAlign: "left" }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}12`; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
-              >
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}>
                 <span>✏️</span> Editar publicação
               </button>
-              <button
-                onClick={() => { setShowMenu(false); if (window.confirm("Tem certeza que deseja apagar esta publicação?")) onDelete?.(post.id); }}
+              <button onClick={() => { setShowMenu(false); if (window.confirm("Tem certeza que deseja apagar esta publicação?")) onDelete?.(post.id); }}
                 style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#dc2626", textAlign: "left" }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#fef2f2"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
-              >
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}>
                 <span>🗑️</span> Apagar publicação
               </button>
             </div>
@@ -187,11 +291,73 @@ function MiniPostCard({ post, onDelete, onEdit }: { post: Post; onDelete?: (id: 
         </div>
       </div>
 
-      <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{displayContent}</div>
-      {post.image_url && <img src={post.image_url} alt="" style={{ width: "100%", maxHeight: 240, objectFit: "cover", borderRadius: 8, marginTop: 10 }} />}
-      <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 12, color: MUTED }}>
-        <span>👍 {post.likes_count}</span>
-        <span>💬 {post.comments_count}</span>
+      {/* Text content */}
+      {content.trim().length > 0 && (
+        <div style={{ padding: "0 16px 10px" }}>
+          <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.65, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{displayContent}</div>
+          {needsTruncation && (
+            <button onClick={() => setExpanded(v => !v)} style={{ background: "none", border: "none", color: GOLD, fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "4px 0 0", fontFamily: "inherit" }}>
+              {expanded ? "Ver menos" : "Ver mais"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Images */}
+      {images.length > 0 && (
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: images.length === 1 ? "1fr" : images.length === 2 ? "1fr 1fr" : images.length >= 3 ? "1fr 1fr" : "1fr",
+          gap: 2,
+          marginBottom: 2,
+        }}>
+          {images.slice(0, 4).map((url, i) => (
+            <div key={i} style={{ position: "relative" }}>
+              <img src={url} alt="" style={{ width: "100%", height: images.length === 1 ? "auto" : 180, maxHeight: images.length === 1 ? 480 : undefined, objectFit: "cover", display: "block" }} />
+              {i === 3 && images.length > 4 && (
+                <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: WHITE }}>
+                  +{images.length - 4}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Video */}
+      {post.video_url && (
+        <div style={{ marginBottom: 2 }}>
+          <VideoPlayer src={post.video_url} maxHeightLandscape={340} />
+        </div>
+      )}
+
+      {/* Poll */}
+      {post.poll && post.poll.options && post.poll.options.length > 0 && (
+        <div style={{ padding: "0 16px 10px" }}>
+          <ReadOnlyPoll poll={post.poll} postId={post.id} userId={profile?.id ?? ""} onUpdate={(p) => onPollUpdate?.(post.id, p)} />
+        </div>
+      )}
+
+      {/* Footer — curtidas e comentários */}
+      <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "8px 16px 14px", borderTop: `1px solid ${BORDER}`, marginTop: 4 }}>
+        <button
+          onClick={() => post.likes_count > 0 && setLikesModalOpen(true)}
+          style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: post.likes_count > 0 ? "pointer" : "default", padding: "6px 10px", borderRadius: 8, color: MUTED, fontSize: 13, fontWeight: 600, fontFamily: "inherit" }}
+          onMouseEnter={e => { if (post.likes_count > 0) (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}12`; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+        >
+          <span style={{ fontSize: 16 }}>👍</span>
+          <span>{post.likes_count} curtida{post.likes_count !== 1 ? "s" : ""}</span>
+        </button>
+        <button
+          onClick={() => setLocation(`/app/post/${post.id}`)}
+          style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", padding: "6px 10px", borderRadius: 8, color: MUTED, fontSize: 13, fontWeight: 600, fontFamily: "inherit" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#f0f0f0"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+        >
+          <span style={{ fontSize: 16 }}>💬</span>
+          <span>{post.comments_count} comentário{post.comments_count !== 1 ? "s" : ""}</span>
+        </button>
       </div>
     </div>
   );
@@ -250,6 +416,10 @@ export default function MeuPerfilPage() {
   const handleEditPost = async (postId: string, content: string) => {
     const ok = await updatePost(postId, userId, content);
     if (ok) setPosts(prev => prev.map(p => p.id === postId ? { ...p, content } : p));
+  };
+
+  const handlePollUpdate = (postId: string, poll: Poll) => {
+    setPosts(prev => prev.map(p => p.id === postId ? { ...p, poll } : p));
   };
 
   const completion = (() => {
@@ -423,7 +593,7 @@ export default function MeuPerfilPage() {
                 </div>
               ) : (
                 <div style={{ padding: "0 12px" }}>
-                  {posts.map(post => <MiniPostCard key={post.id} post={post} onDelete={handleDeletePost} onEdit={handleEditPost} />)}
+                  {posts.map(post => <MiniPostCard key={post.id} post={post} onDelete={handleDeletePost} onEdit={handleEditPost} onPollUpdate={handlePollUpdate} />)}
                 </div>
               )
             ) : (
@@ -561,7 +731,7 @@ export default function MeuPerfilPage() {
               <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>Compartilhe seu conhecimento sobre vinho com a comunidade</p>
             </div>
           ) : (
-            posts.map(post => <MiniPostCard key={post.id} post={post} onDelete={handleDeletePost} onEdit={handleEditPost} />)
+            posts.map(post => <MiniPostCard key={post.id} post={post} onDelete={handleDeletePost} onEdit={handleEditPost} onPollUpdate={handlePollUpdate} />)
           )
         ) : (
           <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 20 }}>
