@@ -283,6 +283,10 @@ function VideoPlayer({ videoUrl, isVisible }: { videoUrl: string; isVisible: boo
   );
 }
 
+const IMG_WIDTH = SCREEN_WIDTH - 28;
+const IMG_MAX_HEIGHT = Math.round(IMG_WIDTH * 1.78);
+const IMG_DEFAULT_HEIGHT = Math.round(IMG_WIDTH * 0.5625);
+
 const videoStyles = StyleSheet.create({
   container: {
     marginTop: 10,
@@ -421,10 +425,6 @@ function PlanBadge({ plan, colors }: { plan?: string; colors: any }) {
   );
 }
 
-const IMG_WIDTH = SCREEN_WIDTH - 28;
-const IMG_MAX_HEIGHT = Math.round(IMG_WIDTH * 1.78); // allow up to ~9:16 portrait
-const IMG_DEFAULT_HEIGHT = Math.round(IMG_WIDTH * 0.5625); // 16:9 landscape default
-
 /** Renders a single image at its natural aspect ratio (no cropping). */
 export function AdaptiveImage({
   uri,
@@ -451,7 +451,6 @@ export function AdaptiveImage({
           setHeight(Math.round(Math.min(width * (h / w), maxH)));
         }
       }}
-      placeholder={{ color: "#e8edf2" }}
       transition={{ duration: 150 }}
       priority={priority}
     />
@@ -501,7 +500,6 @@ function ImageCarousel({ imageUrls }: { imageUrls: string[] }) {
                 }
               }
             }}
-            placeholder={{ color: "#e8edf2" }}
             transition={{ duration: 150 }}
             priority={i === 0 ? "high" : "normal"}
           />

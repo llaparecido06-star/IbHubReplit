@@ -69,7 +69,7 @@ function PortfolioManagerTab({ companyId }: { companyId: string }) {
     setSaving(true);
     if (editingId) {
       const updated = await API.updateCompanyProduct(editingId, { name: pName.trim(), description: pDesc.trim() || null, category: pCat, price: pPrice.trim() || null });
-      if (updated) setProducts(prev => prev.map(p => p.id === editingId ? updated : p));
+      if (updated) setProducts(prev => prev.map(p => p.id === editingId ? { ...p, name: pName.trim(), description: pDesc.trim() || null, category: pCat, price: pPrice.trim() || null } : p));
     } else {
       const created = await API.createCompanyProduct({ company_id: companyId, name: pName.trim(), description: pDesc.trim() || null, category: pCat, price: pPrice.trim() || null });
       if (created) setProducts(prev => [created, ...prev]);

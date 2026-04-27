@@ -248,7 +248,7 @@ function PollDisplay({ poll, postId, currentUserId, onVote }: {
       setLoadingVoters(true);
       const ids = Object.keys(poll.user_votes);
       const profiles = await fetchPollVoters(ids);
-      setVoters(profiles.map(p => ({ ...p, optionIndex: poll.user_votes![p.id] })));
+      setVoters(profiles.map(p => ({ ...p, optionIndex: poll.user_votes![p.id] as number })));
       setLoadingVoters(false);
     }
   };

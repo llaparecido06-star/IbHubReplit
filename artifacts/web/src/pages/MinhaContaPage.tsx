@@ -491,7 +491,7 @@ export default function MinhaContaPage() {
 
     const sectionTitles: Record<Section, string> = {
       perfil: "Editar Perfil", assinatura: "Assinatura",
-      notificacoes: "Notificações", privacidade: "Privacidade", seguranca: "Segurança",
+      notificacoes: "Notificações", privacidade: "Privacidade", seguranca: "Segurança", suporte: "Suporte & Contato",
     };
 
     type IconComp = React.ComponentType<{ size?: number; color?: string }>;

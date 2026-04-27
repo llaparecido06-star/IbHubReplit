@@ -2691,7 +2691,7 @@ export async function uploadChatMedia(
       // On native (iOS/Android), copy ph:// and content:// URIs to file:// first
       let localUri = uri;
       if (localUri.startsWith("ph://") || localUri.startsWith("content://")) {
-        const tmpPath = `${FileSystem.cacheDirectory}tmp_upload_${Date.now()}.${ext}`;
+        const tmpPath = `${(FileSystem as any).cacheDirectory}tmp_upload_${Date.now()}.${ext}`;
         await FileSystem.copyAsync({ from: localUri, to: tmpPath });
         localUri = tmpPath;
       }

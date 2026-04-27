@@ -956,11 +956,11 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
             placeholderTextColor={colors.mutedForeground}
             style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: 13 }}
             editable={!exhausted && !searching}
-            onSubmitEditing={handleSearch}
+            onSubmitEditing={() => handleSearch()}
             returnKeyType="search"
           />
           <TouchableOpacity
-            onPress={handleSearch}
+            onPress={() => handleSearch()}
             disabled={!query.trim() || searching || exhausted}
             style={{
               flexDirection: "row", alignItems: "center", gap: 5,

@@ -2468,7 +2468,7 @@ export async function addMarketComment(postId: string, authorId: string, content
       .select("id, user_id, full_name, avatar_url")
       .eq("user_id", authorId)
       .maybeSingle();
-    return { ...data, author: authorProfile ?? undefined };
+    return { ...data, author: authorProfile ?? undefined, likes_count: 0, is_liked: false };
   } catch {
     return null;
   }

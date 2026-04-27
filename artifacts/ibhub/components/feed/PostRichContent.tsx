@@ -251,7 +251,6 @@ function SmartImage({ url }: { url: string }) {
       cachePolicy="memory-disk"
       priority="high"
       transition={{ duration: 150 }}
-      placeholder={{ color: "#e8edf2" }}
       onLoad={(e) => {
         const { width: w, height: h } = e.source;
         if (w > 0 && h > 0) setPortrait(h > w);

@@ -550,7 +550,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Note: in Expo Go this causes a cold-start ("Fecha e Abre") because
         // exp:// triggers a new Expo Go activity. This is an Expo Go limitation;
         // a production build with ibhub:// and correct Android launchMode is seamless.
-        let appStateSub: ReturnType<typeof AppState.addEventListener> | null = null;
+        let appStateSub: { remove: () => void } | null = null;
         const waitForForeground = new Promise<void>((resolve) => {
           appStateSub = AppState.addEventListener("change", (next) => {
             if (next === "active") resolve();
@@ -560,7 +560,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           WebBrowser.openAuthSessionAsync(data.url, redirectTo).then(() => {}),
           waitForForeground,
         ]);
-        appStateSub?.remove();
+        (appStateSub as any)?.remove();
         console.log(`[OAuth] Android: browser race resolved, auth continues via handleDeepLink.`);
         return { error: null };
       }
