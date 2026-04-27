@@ -105,7 +105,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "20px 16px 14px", borderBottom: "1px solid rgba(255,255,255,0.09)", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-          <span style={{ fontSize: 17, fontWeight: 900, color: GOLD }}>ibhub</span>
+          <img src="/logo-ibhub-branco.png" alt="ibhub" style={{ height: 28, width: "auto", objectFit: "contain" }} />
           <span style={{ fontSize: 9, fontWeight: 800, backgroundColor: GOLD, color: "#fff", padding: "2px 7px", borderRadius: 4, letterSpacing: 1 }}>ADMIN</span>
           {isMobile && (
             <button
@@ -241,7 +241,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             >
               <HamburgerIcon open={sidebarOpen} />
             </button>
-            <span style={{ fontSize: 16, fontWeight: 900, color: GOLD }}>ibhub</span>
+            <img src="/logo-ibhub-branco.png" alt="ibhub" style={{ height: 24, width: "auto", objectFit: "contain" }} />
             <span style={{ fontSize: 9, fontWeight: 800, backgroundColor: GOLD, color: "#fff", padding: "2px 7px", borderRadius: 4, letterSpacing: 1 }}>ADMIN</span>
           </div>
         )}
