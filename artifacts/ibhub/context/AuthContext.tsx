@@ -1,7 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient, Session, User } from "@supabase/supabase-js";
 import * as AppleAuthentication from "expo-apple-authentication";
-import * as Crypto from "expo-crypto";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
@@ -625,10 +624,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const rawNonce = Math.random().toString(36).substring(2)
           + Math.random().toString(36).substring(2);
-        const hashedNonce = await Crypto.digestStringAsync(
-          Crypto.CryptoDigestAlgorithm.SHA256,
-          rawNonce,
-        );
+        const msgBuffer = new TextEncoder().encode(rawNonce);
+        const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+        const hashedNonce = Array.from(new Uint8Array(hashBuffer))
+          .map(b => b.toString(16).padStart(2, "0"))
+          .join("");
 
         const credential = await AppleAuthentication.signInAsync({
           requestedScopes: [
