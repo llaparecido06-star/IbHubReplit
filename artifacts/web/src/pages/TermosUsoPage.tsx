@@ -34,7 +34,7 @@ const SECTIONS = [
   },
   {
     title: "8. Contato",
-    body: "Em caso de dúvidas sobre estes Termos de Uso, entre em contato conosco pelo e-mail: suporte@ibhub.com.br. Nossa equipe retornará em até 5 dias úteis.",
+    body: "Em caso de dúvidas sobre estes Termos de Uso, entre em contato conosco pelo e-mail: atendimento@idealbi.com.br. Nossa equipe retornará em até 5 dias úteis.",
   },
 ];
 
@@ -48,8 +48,8 @@ export default function TermosUsoPage() {
         display: "flex", alignItems: "center", gap: 16,
         position: "sticky", top: 0, zIndex: 10,
       }}>
-        <Link href="/" style={{ color: gold, fontWeight: 900, fontSize: 18, textDecoration: "none", letterSpacing: "-0.3px" }}>
-          ibhub
+        <Link href="/">
+          <img src="/logo-ibhub-branco.png" alt="ibhub" style={{ height: 32, display: "block" }} />
         </Link>
         <Link href="/" style={{
           fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none",
