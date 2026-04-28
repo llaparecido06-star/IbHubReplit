@@ -14,7 +14,7 @@ router.get("/profile/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
 
   const webBaseUrl = process.env.EXPO_PUBLIC_DOMAIN
-    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}/web`
+    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
     : null;
 
   if (webBaseUrl) {

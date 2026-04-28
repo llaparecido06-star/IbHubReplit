@@ -21,6 +21,8 @@ import { getEntitlementStatus } from "@/utils/entitlement";
 import { usePlans, formatPlanPrice, formatOriginalPrice, calcDiscount } from "@/hooks/usePlans";
 
 function getWebBaseUrl(): string {
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  if (domain) return `https://${domain}`;
   const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? "";
   return apiUrl.replace(/\/api\/?$/, "");
 }
@@ -71,7 +73,7 @@ export default function SubscriptionScreen() {
       Alert.alert("Sem conexão", "Não foi possível determinar o endereço do site. Tente novamente.");
       return;
     }
-    const url = planId ? `${webBase}/web/assinar?plano=${planId}` : `${webBase}/web/assinar`;
+    const url = planId ? `${webBase}/assinar?plano=${planId}` : `${webBase}/assinar`;
     setOpeningBrowser(true);
     try {
       const canOpen = await Linking.canOpenURL(url);

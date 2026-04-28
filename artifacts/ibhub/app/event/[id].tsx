@@ -119,7 +119,7 @@ export default function EventScreen() {
 
   const handleShare = async () => {
     if (!event) return;
-    const domain = process.env.EXPO_PUBLIC_DOMAIN ?? "ibhub.app";
+    const domain = process.env.EXPO_PUBLIC_DOMAIN ?? "ibhub.com.br";
     const shareUrl = `https://${domain}/event/${event.id}`;
     const locationStr = event.location_type === "online" ? "Online" : (event.location ?? "");
     try {
