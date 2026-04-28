@@ -96,6 +96,7 @@ export default function ManageBusinessPageScreen() {
     { id: string; full_name: string; username: string; avatar_url: string | null; headline: string | null }[]
   >([]);
   const [addingMember, setAddingMember]   = useState(false);
+  const [transferring, setTransferring]   = useState(false);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
@@ -284,6 +285,36 @@ export default function ManageBusinessPageScreen() {
         },
       },
     ]);
+  };
+
+  // ── Transfer ownership ─────────────────────────────────────────────────────
+  const handleTransferOwnership = (toUserId: string, toName: string) => {
+    if (!pageId || !currentUser?.id) return;
+    Alert.alert(
+      "Transferir Propriedade",
+      `Deseja transferir a propriedade da página para ${toName}?\n\nVocê continuará na equipe como Editor.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Transferir",
+          style: "destructive",
+          onPress: async () => {
+            setTransferring(true);
+            const { ok, error } = await API.transferCompanyOwnership(pageId, toUserId, currentUser.id);
+            setTransferring(false);
+            if (ok) {
+              Alert.alert(
+                "Propriedade transferida",
+                `${toName} agora é o proprietário da página. Você foi convertido em Editor.`,
+                [{ text: "OK", onPress: () => router.back() }],
+              );
+            } else {
+              Alert.alert("Erro", error ?? "Não foi possível transferir a propriedade.");
+            }
+          },
+        },
+      ],
+    );
   };
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -663,6 +694,13 @@ export default function ManageBusinessPageScreen() {
                         {admin.role.charAt(0).toUpperCase() + admin.role.slice(1)}
                       </Text>
                     </View>
+                    <TouchableOpacity
+                      style={[styles.removeBtn, { marginRight: 4 }]}
+                      onPress={() => handleTransferOwnership(admin.user_id, p?.full_name ?? "membro")}
+                      disabled={transferring}
+                    >
+                      <Feather name="award" size={16} color={colors.gold} />
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.removeBtn}
                       onPress={() => handleRemoveMember(admin.user_id, p?.full_name ?? "membro")}

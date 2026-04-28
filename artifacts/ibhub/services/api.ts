@@ -2922,6 +2922,26 @@ export async function updateCompanyPage(
   }
 }
 
+export async function transferCompanyOwnership(
+  pageId: string,
+  newOwnerId: string,
+  currentOwnerId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { data, error } = await supabase.rpc("transfer_company_ownership", {
+      p_page_id:   pageId,
+      p_new_owner: newOwnerId,
+      p_old_owner: currentOwnerId,
+    });
+    if (error) return { ok: false, error: error.message };
+    const result = data as { ok: boolean; error?: string };
+    return result;
+  } catch (e: any) {
+    console.error("transferCompanyOwnership:", e);
+    return { ok: false, error: e?.message ?? "Erro desconhecido" };
+  }
+}
+
 export async function deleteCompanyPage(id: string): Promise<boolean> {
   try {
     const { error } = await supabase.from("company_pages").delete().eq("id", id);
