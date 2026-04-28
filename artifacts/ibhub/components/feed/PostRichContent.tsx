@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
+  Animated,
   Dimensions,
   Modal,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TouchableOpacity,
   View,
@@ -260,42 +262,90 @@ function SmartImage({ url }: { url: string }) {
 }
 
 const { width: SCREEN_WIDTH_RC } = Dimensions.get("window");
+const REEL_W = SCREEN_WIDTH_RC;
+const REEL_H = Math.round(REEL_W * (16 / 9));
 
 function InlineVideoPlayer({ videoUrl }: { videoUrl: string }) {
-  const [aspectRatio, setAspectRatio] = useState<number>(16 / 9);
+  const [playing, setPlaying] = useState(false);
+  const [muted, setMuted]     = useState(false);
+  const controlsAnim  = useRef(new Animated.Value(1)).current;
+  const hideTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const controlsVisible = useRef(true);
 
-  const player = useVideoPlayer({ uri: videoUrl }, (p) => {
-    p.loop = true;
-  });
+  const player = useVideoPlayer({ uri: videoUrl }, (p) => { p.loop = true; });
 
   useEffect(() => {
-    const sub = player.addListener("sourceLoad", ({ availableVideoTracks }) => {
-      const track = (availableVideoTracks as any[])?.[0];
-      if (track?.size?.width && track?.size?.height) {
-        setAspectRatio(track.size.width / track.size.height);
-      }
-    });
-    return () => sub.remove();
+    const s1 = player.addListener("playingChange", (e) => setPlaying(e.isPlaying));
+    const s2 = player.addListener("mutedChange",   (e) => setMuted(e.muted));
+    return () => { s1.remove(); s2.remove(); };
   }, [player]);
 
-  const isPortrait = aspectRatio < 1;
-  const videoW = SCREEN_WIDTH_RC - 32;
-  const containerHeight = isPortrait
-    ? Math.min(videoW / aspectRatio, 560)
-    : Math.min(videoW / aspectRatio, 320);
+  const scheduleHide = useCallback(() => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => {
+      Animated.timing(controlsAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start();
+      controlsVisible.current = false;
+    }, 2500);
+  }, [controlsAnim]);
+
+  const showControls = useCallback(() => {
+    controlsVisible.current = true;
+    Animated.timing(controlsAnim, { toValue: 1, duration: 150, useNativeDriver: true }).start();
+    scheduleHide();
+  }, [controlsAnim, scheduleHide]);
+
+  const togglePlay = useCallback(() => {
+    if (player.playing) player.pause(); else player.play();
+    showControls();
+  }, [player, showControls]);
+
+  const toggleMute = useCallback(() => {
+    player.muted = !player.muted;
+    showControls();
+  }, [player, showControls]);
+
+  const handlePress = useCallback(() => {
+    if (!controlsVisible.current) showControls();
+    else togglePlay();
+  }, [showControls, togglePlay]);
 
   return (
-    <View style={{ width: "100%", height: containerHeight, borderRadius: 10, overflow: "hidden", backgroundColor: "#000", marginTop: 8 }}>
+    <TouchableOpacity
+      activeOpacity={1}
+      onPress={handlePress}
+      style={{ width: REEL_W, height: REEL_H, marginHorizontal: -14, marginTop: 8, backgroundColor: "#000", overflow: "hidden" }}
+    >
       <VideoView
         player={player}
-        contentFit="contain"
+        contentFit="cover"
         style={{ width: "100%", height: "100%" }}
-        allowsFullscreen
-        nativeControls
+        nativeControls={false}
       />
-    </View>
+
+      <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: controlsAnim }]}>
+        {/* Play / pause overlay */}
+        {!playing && (
+          <View style={reelStyles.playOverlay}>
+            <View style={reelStyles.playBtn}>
+              <Feather name="play" size={28} color="#fff" style={{ marginLeft: 4 }} />
+            </View>
+          </View>
+        )}
+
+        {/* Mute button bottom-right */}
+        <TouchableOpacity style={reelStyles.muteBtn} onPress={toggleMute}>
+          <Feather name={muted ? "volume-x" : "volume-2"} size={18} color="#fff" />
+        </TouchableOpacity>
+      </Animated.View>
+    </TouchableOpacity>
   );
 }
+
+const reelStyles = StyleSheet.create({
+  playOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.25)" },
+  playBtn: { width: 64, height: 64, borderRadius: 32, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", alignItems: "center", borderWidth: 2, borderColor: "rgba(255,255,255,0.7)" },
+  muteBtn: { position: "absolute", bottom: 14, right: 14, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 20, padding: 7 },
+});
 
 interface Props {
   post: Post;

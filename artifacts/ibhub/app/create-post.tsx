@@ -621,7 +621,7 @@ const styles = StyleSheet.create({
   thumbImg: { width: 100, height: 100 },
   removeThumb: { position: "absolute", top: 4, right: 4, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 12, padding: 3 },
   addMoreBtn: { width: 100, height: 100, borderRadius: 10, borderWidth: 1.5, borderStyle: "dashed", alignItems: "center", justifyContent: "center" },
-  videoPreviewWrap: { marginTop: 12, marginBottom: 4, width: "100%", height: 180, overflow: "hidden", position: "relative", backgroundColor: "#000" },
+  videoPreviewWrap: { marginTop: 12, marginBottom: 4, width: "100%", aspectRatio: 9 / 16, overflow: "hidden", position: "relative", backgroundColor: "#000" },
   videoPreview: { width: "100%", height: "100%" },
   videoIconOverlay: { position: "absolute", bottom: 8, left: 8, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 10, padding: 4 },
   hashtagSection: { marginTop: 20, gap: 10 },

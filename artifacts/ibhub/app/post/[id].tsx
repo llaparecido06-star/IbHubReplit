@@ -34,7 +34,7 @@ import { formatRelativeDate } from "@/utils/dateUtils";
 const { width: SCREEN_W } = Dimensions.get("window");
 
 const GOLD = "#c9a84c";
-const MAX_VIDEO_H = 480;
+
 
 function fmtTime(s: number) {
   if (!isFinite(s) || s < 0) return "0:00";
@@ -49,7 +49,7 @@ function PostDetailVideo({ uri }: { uri: string }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration]   = useState(0);
   const [barWidth, setBarWidth]   = useState(0);
-  const [videoH, setVideoH]       = useState(SCREEN_W * (9 / 16));
+  const videoH = Math.round(SCREEN_W * (16 / 9));
   const controlsAnim  = useRef(new Animated.Value(1)).current;
   const controlsShown = useRef(true);
   const hideTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -70,11 +70,6 @@ function PostDetailVideo({ uri }: { uri: string }) {
   useEffect(() => {
     const sub = player.addListener("sourceLoad", (e: any) => {
       if (e.duration) setDuration(e.duration);
-      const track = (e.availableVideoTracks as any[])?.[0];
-      if (track?.size?.width && track?.size?.height) {
-        const ar = track.size.width / track.size.height;
-        setVideoH(Math.min(SCREEN_W / ar, MAX_VIDEO_H));
-      }
     });
     return () => sub.remove();
   }, [player]);
@@ -130,7 +125,7 @@ function PostDetailVideo({ uri }: { uri: string }) {
       <VideoView
         ref={videoViewRef}
         player={player}
-        contentFit="contain"
+        contentFit="cover"
         style={{ width: "100%", height: "100%" }}
         nativeControls={false}
         allowsFullscreen
