@@ -582,20 +582,34 @@ export default function PostDetailScreen() {
             {post && (
               <>
                 {/* Author */}
-                <TouchableOpacity
-                  style={styles.authorRow}
-                  onPress={() => post.author?.id && router.push(`/profile/${post.author.id}` as any)}
-                >
-                  <Avatar uri={post.author?.avatar_url} name={post.author?.full_name ?? "?"} size={42} />
-                  <View>
-                    <Text style={[styles.authorName, { color: colors.foreground }]}>{post.author?.full_name}</Text>
-                    {!!post.author?.headline && (
-                      <Text style={[styles.authorHeadline, { color: colors.mutedForeground }]} numberOfLines={1}>
-                        {post.author.headline}
-                      </Text>
-                    )}
-                  </View>
-                </TouchableOpacity>
+                {(() => {
+                  const cp = post.company_page ?? null;
+                  const displayAvatar = cp ? cp.avatar_url : post.author?.avatar_url;
+                  const displayName   = cp ? cp.name : (post.author?.full_name ?? "Usuário");
+                  const handlePress   = cp
+                    ? () => router.push(`/empresa/${cp.id}` as any)
+                    : () => post.author?.id && router.push(`/profile/${post.author.id}` as any);
+                  return (
+                    <TouchableOpacity style={styles.authorRow} onPress={handlePress}>
+                      <Avatar uri={displayAvatar} name={displayName} size={42} />
+                      <View>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Text style={[styles.authorName, { color: colors.foreground }]}>{displayName}</Text>
+                          {cp && (
+                            <View style={{ backgroundColor: colors.gold + "22", borderWidth: 1, borderColor: colors.gold + "55", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                              <Text style={{ fontSize: 11, fontWeight: "700", color: colors.gold }}>Empresa</Text>
+                            </View>
+                          )}
+                        </View>
+                        {!cp && !!post.author?.headline && (
+                          <Text style={[styles.authorHeadline, { color: colors.mutedForeground }]} numberOfLines={1}>
+                            {post.author.headline}
+                          </Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })()}
 
                 {/* Content */}
                 {post.content && canParseWine(post.content) ? (
