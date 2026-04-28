@@ -292,6 +292,16 @@ export default function FeedScreen() {
     setConnectingId(null);
   }, [user?.id, connectingId, suggestions]);
 
+  const handleFollowSuggestion = useCallback(async (targetId: string) => {
+    if (!user?.id) return;
+    const suggestion = suggestions.find(s => s.id === targetId);
+    const isFollowing = suggestion?.is_following ?? false;
+    setSuggestions(prev => prev.map(s =>
+      s.id === targetId ? { ...s, is_following: !isFollowing } : s
+    ));
+    await API.toggleFollow(targetId, user.id, isFollowing);
+  }, [user?.id, suggestions]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     feedOffsetRef.current = 0;
@@ -847,7 +857,7 @@ export default function FeedScreen() {
                     </View>
                   ) : null}
 
-                  {/* Connect button */}
+                  {/* Connect / Follow button */}
                   {isConnected ? (
                     <View style={[styles.suggestBtnFilled, { backgroundColor: colors.navy + "14" }]}>
                       <Feather name="check" size={12} color={colors.navy} />
@@ -858,6 +868,17 @@ export default function FeedScreen() {
                       <Feather name="clock" size={12} color={colors.mutedForeground} />
                       <Text style={[styles.suggestBtnFilledText, { color: colors.mutedForeground }]}>Enviado</Text>
                     </View>
+                  ) : (activeCompany || s.is_company) ? (
+                    <TouchableOpacity
+                      style={[styles.suggestBtnFilled, s.is_following ? { backgroundColor: colors.navy + "18", borderWidth: 1, borderColor: colors.border } : { backgroundColor: colors.gold }]}
+                      onPress={() => handleFollowSuggestion(s.id)}
+                      disabled={isLoading}
+                    >
+                      <Feather name={s.is_following ? "check" : "plus"} size={12} color={s.is_following ? colors.navy : "#fff"} />
+                      <Text style={[styles.suggestBtnFilledText, { color: s.is_following ? colors.navy : "#fff" }]}>
+                        {s.is_following ? "Seguindo" : "Seguir"}
+                      </Text>
+                    </TouchableOpacity>
                   ) : (
                     <TouchableOpacity
                       style={[styles.suggestBtnFilled, { backgroundColor: colors.navy }, isLoading && { opacity: 0.6 }]}

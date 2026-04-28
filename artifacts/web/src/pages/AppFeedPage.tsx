@@ -768,7 +768,12 @@ function PostCard({
 }
 
 /* ─── WelcomeCard (empty feed) ───────────── */
-function WelcomeCard({ suggestions, onConnect }: { suggestions: SuggestedProfile[]; onConnect: (id: string) => void }) {
+function WelcomeCard({ suggestions, onConnect, onFollow, viewingAsCompany }: {
+  suggestions: SuggestedProfile[];
+  onConnect: (id: string) => void;
+  onFollow?: (id: string) => void;
+  viewingAsCompany?: boolean;
+}) {
   return (
     <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "32px 24px", textAlign: "center", marginBottom: 14 }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>🍷</div>
@@ -776,7 +781,7 @@ function WelcomeCard({ suggestions, onConnect }: { suggestions: SuggestedProfile
       <p style={{ fontSize: 14, color: MUTED, marginBottom: 24 }}>Siga vinícolas e profissionais para personalizar seu feed</p>
       <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
         {suggestions.slice(0, 3).map((s) => (
-          <SuggestionCard key={s.id} profile={s} onConnect={onConnect} compact />
+          <SuggestionCard key={s.id} profile={s} onConnect={onConnect} onFollow={onFollow} viewingAsCompany={viewingAsCompany} compact />
         ))}
       </div>
     </div>
@@ -787,18 +792,29 @@ function WelcomeCard({ suggestions, onConnect }: { suggestions: SuggestedProfile
 function SuggestionCard({
   profile,
   onConnect,
+  onFollow,
+  viewingAsCompany = false,
   compact = false,
 }: {
   profile: SuggestedProfile;
   onConnect: (id: string) => void;
+  onFollow?: (id: string) => void;
+  viewingAsCompany?: boolean;
   compact?: boolean;
 }) {
   const [status, setStatus] = useState(profile.connection_status);
+  const [following, setFollowing] = useState(profile.is_following);
+  const useFollowMode = viewingAsCompany || profile.is_company;
 
   const handleConnect = () => {
     if (status !== "none") return;
     setStatus("pending");
     onConnect(profile.id);
+  };
+
+  const handleFollow = () => {
+    setFollowing(prev => !prev);
+    onFollow?.(profile.id);
   };
 
   return (
@@ -828,19 +844,34 @@ function SuggestionCard({
           </span>
         ) : null}
       </div>
-      <button
-        onClick={handleConnect}
-        disabled={status !== "none"}
-        style={{
-          width: "100%", padding: "7px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700,
-          cursor: status === "none" ? "pointer" : "default",
-          backgroundColor: status === "none" ? `${GOLD}15` : "#f5f5f0",
-          color: status === "none" ? GOLD : MUTED,
-          border: `1px solid ${status === "none" ? GOLD + "50" : BORDER}`,
-        }}
-      >
-        {status === "pending" ? "⏱ Pendente" : status === "connected" ? "✓ Conectado" : "Conectar"}
-      </button>
+      {useFollowMode ? (
+        <button
+          onClick={handleFollow}
+          style={{
+            width: "100%", padding: "7px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700,
+            cursor: "pointer",
+            backgroundColor: following ? "transparent" : `${GOLD}15`,
+            color: following ? MUTED : GOLD,
+            border: `1px solid ${following ? BORDER : GOLD + "50"}`,
+          }}
+        >
+          {following ? "Seguindo" : "Seguir"}
+        </button>
+      ) : (
+        <button
+          onClick={handleConnect}
+          disabled={status !== "none"}
+          style={{
+            width: "100%", padding: "7px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700,
+            cursor: status === "none" ? "pointer" : "default",
+            backgroundColor: status === "none" ? `${GOLD}15` : "#f5f5f0",
+            color: status === "none" ? GOLD : MUTED,
+            border: `1px solid ${status === "none" ? GOLD + "50" : BORDER}`,
+          }}
+        >
+          {status === "pending" ? "Pendente" : status === "connected" ? "Conectado" : "Conectar"}
+        </button>
+      )}
     </div>
   );
 }
@@ -891,7 +922,12 @@ function PostTrigger({
 }
 
 /* ─── SuggestionsPanel ───────────────────── */
-function SuggestionsPanel({ suggestions, onConnect }: { suggestions: SuggestedProfile[]; onConnect: (id: string) => void }) {
+function SuggestionsPanel({ suggestions, onConnect, onFollow, viewingAsCompany }: {
+  suggestions: SuggestedProfile[];
+  onConnect: (id: string) => void;
+  onFollow?: (id: string) => void;
+  viewingAsCompany?: boolean;
+}) {
   if (!suggestions.length) return null;
   return (
     <div style={{
@@ -921,7 +957,7 @@ function SuggestionsPanel({ suggestions, onConnect }: { suggestions: SuggestedPr
                 </span>
               ) : null}
             </div>
-            <ConnectBtn profile={s} onConnect={onConnect} />
+            <ConnectBtn profile={s} onConnect={onConnect} onFollow={onFollow} viewingAsCompany={viewingAsCompany} />
           </div>
         ))}
       </div>
@@ -929,13 +965,45 @@ function SuggestionsPanel({ suggestions, onConnect }: { suggestions: SuggestedPr
   );
 }
 
-function ConnectBtn({ profile, onConnect }: { profile: SuggestedProfile; onConnect: (id: string) => void }) {
+function ConnectBtn({ profile, onConnect, onFollow, viewingAsCompany }: {
+  profile: SuggestedProfile;
+  onConnect: (id: string) => void;
+  onFollow?: (id: string) => void;
+  viewingAsCompany?: boolean;
+}) {
   const [status, setStatus] = useState(profile.connection_status);
+  const [following, setFollowing] = useState(profile.is_following);
+  const useFollowMode = viewingAsCompany || profile.is_company;
+
   const handleClick = () => {
     if (status !== "none") return;
     setStatus("pending");
     onConnect(profile.id);
   };
+
+  const handleFollow = () => {
+    setFollowing(prev => !prev);
+    onFollow?.(profile.id);
+  };
+
+  if (useFollowMode) {
+    return (
+      <button
+        onClick={handleFollow}
+        style={{
+          flexShrink: 0,
+          fontSize: 12, fontWeight: 700, padding: "5px 12px", borderRadius: 8,
+          cursor: "pointer",
+          backgroundColor: following ? "transparent" : `${GOLD}15`,
+          color: following ? MUTED : GOLD,
+          border: `1px solid ${following ? BORDER : GOLD + "50"}`,
+        }}
+      >
+        {following ? "Seguindo" : "Seguir"}
+      </button>
+    );
+  }
+
   return (
     <button
       onClick={handleClick}
@@ -1151,6 +1219,14 @@ export default function AppFeedPage() {
     await sendWebConnectionRequest(targetId, userId);
   }, [userId]);
 
+  const handleFollowSuggestion = useCallback(async (targetId: string) => {
+    if (!userId) return;
+    await supabase.from("follows").upsert(
+      { follower_id: userId, following_id: targetId },
+      { onConflict: "follower_id, following_id" },
+    );
+  }, [userId]);
+
   const handleDeletePost = useCallback(async (postId: string) => {
     if (!userId) return;
     const ok = await deletePost(postId, userId);
@@ -1237,7 +1313,7 @@ export default function AppFeedPage() {
                 <div style={{ fontSize: 13 }}>Publique o primeiro post como <strong>{activeCompany.name}</strong>!</div>
               </div>
             ) : (
-              <WelcomeCard suggestions={suggestions} onConnect={handleConnect} />
+              <WelcomeCard suggestions={suggestions} onConnect={handleConnect} onFollow={handleFollowSuggestion} viewingAsCompany={!!activeCompany} />
             )
           ) : (
             posts.map(post => (
@@ -1261,7 +1337,7 @@ export default function AppFeedPage() {
         {/* ── Right panel ─── (only in personal mode) */}
         {!activeCompany && (
           <div style={{ width: 260, flexShrink: 0, display: "none" }} className="feed-right-panel">
-            {suggestions.length > 0 && <SuggestionsPanel suggestions={suggestions.slice(0, 4)} onConnect={handleConnect} />}
+            {suggestions.length > 0 && <SuggestionsPanel suggestions={suggestions.slice(0, 4)} onConnect={handleConnect} onFollow={handleFollowSuggestion} viewingAsCompany={!!activeCompany} />}
             <WineRankingTeaser wines={wineRankings} />
             <TrendingTopics />
           </div>

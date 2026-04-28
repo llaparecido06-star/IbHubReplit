@@ -585,7 +585,7 @@ function WineModal({ wine, onClose }: { wine: WineEntry; onClose: () => void }) 
 ════════════════════════════════════════════════ */
 export default function PerfilUsuarioPage() {
   const { id: targetId } = useParams<{ id: string }>();
-  const { profile: currentProfile, user } = useAuth();
+  const { profile: currentProfile, user, activeCompany } = useAuth();
   const [, setLocation] = useLocation();
   const currentUserId = currentProfile?.id ?? user?.id ?? "";
 
@@ -831,8 +831,8 @@ export default function PerfilUsuarioPage() {
                   {isFollowing ? "Seguindo" : "Seguir"}
                 </button>
 
-                {/* 2. Conectar (hidden when already connected) */}
-                {connectionStatus !== "connected" && (
+                {/* 2. Conectar (hidden when already connected, or viewer/profile is a company) */}
+                {!activeCompany && !isCompany && connectionStatus !== "connected" && (
                   <button
                     onClick={handleConnect}
                     disabled={connectBtnDisabled}

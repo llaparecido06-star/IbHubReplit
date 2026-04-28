@@ -314,7 +314,7 @@ export default function PublicProfileScreen() {
               </>
             ) : (
               <>
-                {connectionStatus !== "connected" && (
+                {!activeCompany && connectionStatus !== "connected" && (
                   <TouchableOpacity
                     style={[styles.pill, { backgroundColor: connectDisabled ? "transparent" : colors.gold, borderColor: connectDisabled ? colors.border : colors.gold, flex: 1, opacity: connectDisabled ? 0.75 : 1 }]}
                     onPress={handleConnect} disabled={connectDisabled} activeOpacity={0.82}

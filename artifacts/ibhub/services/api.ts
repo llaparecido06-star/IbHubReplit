@@ -746,6 +746,7 @@ export interface SuggestedProfile {
   match_score: number;
   company_match: boolean;
   is_following: boolean;
+  is_company: boolean;
 }
 
 export async function fetchSuggestedConnections(
@@ -774,7 +775,7 @@ export async function fetchSuggestedConnections(
     const [profilesRes, followsRes] = await Promise.all([
       supabase
         .from("profiles")
-        .select("id, user_id, full_name, username, avatar_url, position, company, plan, areas")
+        .select("id, user_id, full_name, username, avatar_url, position, company, plan, areas, profile_type")
         .limit(80),
       supabase
         .from("follows")
@@ -810,6 +811,7 @@ export async function fetchSuggestedConnections(
           match_score,
           company_match,
           is_following: followingIds.has(p.id),
+          is_company: p.profile_type === "empresa",
         } as SuggestedProfile;
       })
       .sort((a, b) => {

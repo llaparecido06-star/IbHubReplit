@@ -68,6 +68,8 @@ export interface SuggestedProfile {
   connection_status: "none" | "pending" | "connected";
   match_score: number;
   company_match: boolean;
+  is_company: boolean;
+  is_following: boolean;
 }
 
 const POST_SELECT = `id, user_id, company_page_id, content, image_url, image_urls, video_url,
@@ -680,7 +682,7 @@ export async function fetchWebSuggestedConnections(
 
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, full_name, username, avatar_url, position, company, plan, areas")
+      .select("id, full_name, username, avatar_url, position, company, plan, areas, profile_type")
       .limit(80);
 
     if (!profiles) return [];
@@ -704,6 +706,8 @@ export async function fetchWebSuggestedConnections(
           connection_status: statusMap.get(p.id) ?? "none",
           match_score,
           company_match,
+          is_company: p.profile_type === "empresa",
+          is_following: false,
         } as SuggestedProfile;
       })
       .sort((a, b) => {

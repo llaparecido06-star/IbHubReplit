@@ -835,6 +835,21 @@ export default function ProfileScreen() {
     setConnectingId(null);
   };
 
+  const handleFollowSuggestion = async (targetId: string) => {
+    if (!user?.id) return;
+    const suggestion = suggestions.find((s) => s.id === targetId);
+    const currently = suggestion?.is_following ?? followingSet.has(targetId);
+    setSuggestions((prev) =>
+      prev.map((s) => s.id === targetId ? { ...s, is_following: !currently } : s)
+    );
+    if (currently) {
+      setFollowingSet((prev) => { const next = new Set(prev); next.delete(targetId); return next; });
+    } else {
+      setFollowingSet((prev) => { const next = new Set(prev); next.add(targetId); return next; });
+    }
+    await toggleFollow(targetId, user.id, currently);
+  };
+
   const handleLikePost = async (post: Post) => {
     if (!user?.id) return;
     const wasLiked = post.is_liked ?? false;
@@ -1219,6 +1234,16 @@ export default function ProfileScreen() {
                       <Feather name="clock" size={12} color={colors.mutedForeground} />
                       <Text style={[styles.suggestBtnFilledText, { color: colors.mutedForeground }]}>Enviado</Text>
                     </View>
+                  ) : (isCompany || s.is_company) ? (
+                    <TouchableOpacity
+                      style={[styles.suggestBtnFilled, (s.is_following || followingSet.has(s.id)) ? { backgroundColor: colors.navy + "18", borderWidth: 1, borderColor: colors.border } : { backgroundColor: colors.gold }]}
+                      onPress={() => handleFollowSuggestion(s.id)}
+                    >
+                      <Feather name={(s.is_following || followingSet.has(s.id)) ? "check" : "plus"} size={12} color={(s.is_following || followingSet.has(s.id)) ? colors.navy : "#fff"} />
+                      <Text style={[styles.suggestBtnFilledText, { color: (s.is_following || followingSet.has(s.id)) ? colors.navy : "#fff" }]}>
+                        {(s.is_following || followingSet.has(s.id)) ? "Seguindo" : "Seguir"}
+                      </Text>
+                    </TouchableOpacity>
                   ) : (
                     <TouchableOpacity
                       style={[styles.suggestBtnFilled, { backgroundColor: colors.navy }, isLoading && { opacity: 0.6 }]}
