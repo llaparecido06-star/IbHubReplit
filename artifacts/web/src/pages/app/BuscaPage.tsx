@@ -22,14 +22,15 @@ const PLAN_LABELS: Record<string, { label: string; color: string }> = {
 type Filter = "todos" | "pessoas" | "publicacoes" | "empresas" | "vagas" | "eventos" | "grupos";
 
 interface PersonResult   { id: string; full_name: string | null; username: string | null; avatar_url: string | null; headline: string | null; plan: string | null; }
-interface PostResult     { id: string; content: string; created_at: string; likes_count: number; comments_count: number; author?: { id: string; full_name: string | null; avatar_url: string | null } | null; }
+interface CompanyResult  { id: string; name: string; avatar_url: string | null; industry: string | null; }
+interface PostResult     { id: string; content: string; created_at: string; likes_count: number; comments_count: number; user_id?: string | null; company_page_id?: string | null; author?: { id: string; full_name: string | null; avatar_url: string | null; isCompany?: boolean } | null; }
 interface VagaResult     { id: string; title: string; description: string | null; company: string | null; location: string | null; contract_type: string | null; created_at: string; }
 interface EventResult    { id: string; title: string; description: string | null; start_date: string; location: string | null; entry_type: string; }
 interface GroupResult    { id: string; name: string; description: string | null; members_count: number; category: string | null; }
 
 interface SearchResults {
   pessoas: PersonResult[]; publicacoes: PostResult[];
-  empresas: PersonResult[]; vagas: VagaResult[];
+  empresas: CompanyResult[]; vagas: VagaResult[];
   eventos: EventResult[]; grupos: GroupResult[];
 }
 const EMPTY: SearchResults = { pessoas: [], publicacoes: [], empresas: [], vagas: [], eventos: [], grupos: [] };
@@ -112,13 +113,38 @@ function PersonCard({ p, isEmpresa = false, currentUserId }: { p: PersonResult; 
   );
 }
 
-function PostCard({ p }: { p: PostResult }) {
+function EmpresaCard({ c }: { c: CompanyResult }) {
   const [, setLocation] = useLocation();
   return (
-    <Row onClick={() => setLocation(`/app/posts/${p.id}`)}>
-      {p.author && <Avatar src={p.author.avatar_url} name={p.author.full_name ?? "?"} size={40} />}
+    <Row onClick={() => setLocation(`/app/empresa/${c.id}`)}>
+      <Avatar src={c.avatar_url} name={c.name ?? "?"} size={44} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        {p.author && <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{p.author.full_name}</div>}
+        <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
+        {c.industry && <div style={{ fontSize: 12, color: MUTED, marginTop: 1 }}>{c.industry}</div>}
+      </div>
+      <button
+        onClick={e => { e.stopPropagation(); setLocation(`/app/empresa/${c.id}`); }}
+        style={{ padding: "6px 14px", background: "#f0f4ff", color: NAVY, border: "none", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0, fontFamily: "inherit" }}
+      >
+        Ver página
+      </button>
+    </Row>
+  );
+}
+
+function PostCard({ p }: { p: PostResult }) {
+  const [, setLocation] = useLocation();
+  const authorName = p.author?.full_name ?? "?";
+  return (
+    <Row onClick={() => setLocation(`/app/posts/${p.id}`)}>
+      {p.author && <Avatar src={p.author.avatar_url} name={authorName} size={40} />}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {p.author && (
+          <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{authorName}</span>
+            {p.author.isCompany && <span style={{ fontSize: 10, color: MUTED, background: BG, borderRadius: 4, padding: "1px 5px" }}>Empresa</span>}
+          </div>
+        )}
         <div style={{ fontSize: 13, color: "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.content}</div>
         <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>❤️ {p.likes_count} · 💬 {p.comments_count} · {timeAgo(p.created_at)}</div>
       </div>
@@ -214,10 +240,27 @@ export default function BuscaPage() {
         if (!res.ok) return { data: [] };
         const { posts } = await res.json() as { posts: any[] };
         if (!posts?.length) return { data: [] };
-        const userIds = [...new Set(posts.map((p: any) => p.user_id as string).filter(Boolean))];
-        const { data: profiles } = await supabase.from("profiles").select("id, full_name, avatar_url").in("id", userIds);
+
+        const userIds = [...new Set(posts.filter((p: any) => !p.company_page_id).map((p: any) => p.user_id as string).filter(Boolean))];
+        const companyIds = [...new Set(posts.filter((p: any) => p.company_page_id).map((p: any) => p.company_page_id as string).filter(Boolean))];
+
+        const [{ data: profiles }, { data: companies }] = await Promise.all([
+          userIds.length ? supabase.from("profiles").select("id, full_name, avatar_url").in("id", userIds) : Promise.resolve({ data: [] }),
+          companyIds.length ? supabase.from("company_pages").select("id, name, avatar_url").in("id", companyIds) : Promise.resolve({ data: [] }),
+        ]);
+
         const pMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
-        return { data: posts.map((p: any) => ({ ...p, author: p.user_id ? (pMap.get(p.user_id) ?? null) : null })) };
+        const cMap = new Map((companies ?? []).map((c: any) => [c.id, c]));
+
+        return {
+          data: posts.map((p: any) => {
+            if (p.company_page_id && cMap.has(p.company_page_id)) {
+              const c = cMap.get(p.company_page_id);
+              return { ...p, author: { id: c.id, full_name: c.name, avatar_url: c.avatar_url, isCompany: true } };
+            }
+            return { ...p, author: p.user_id ? (pMap.get(p.user_id) ?? null) : null };
+          }),
+        };
       } catch { return { data: [] }; }
     };
 
@@ -230,7 +273,7 @@ export default function BuscaPage() {
         (isAll || f === "publicacoes") ? searchPostsViaApi() : Promise.resolve({ data: [] }),
 
         (isAll || f === "empresas")
-          ? supabase.from("profiles").select("id, full_name, username, avatar_url, headline, plan").or(`full_name.ilike.%${trimmed}%,username.ilike.%${trimmed}%`).eq("profile_type", "empresa").limit(lim(20))
+          ? supabase.from("company_pages").select("id, name, avatar_url, industry").ilike("name", `%${trimmed}%`).limit(lim(20))
           : Promise.resolve({ data: [] }),
 
         (isAll || f === "vagas")
@@ -249,7 +292,7 @@ export default function BuscaPage() {
       setResults({
         pessoas:     (resP.data   ?? []) as PersonResult[],
         publicacoes: (resPub.data ?? []) as PostResult[],
-        empresas:    (resE.data   ?? []) as PersonResult[],
+        empresas:    (resE.data   ?? []) as CompanyResult[],
         vagas:       (resV.data   ?? []) as VagaResult[],
         eventos:     (resEv.data  ?? []) as EventResult[],
         grupos:      (resG.data   ?? []) as GroupResult[],
@@ -376,7 +419,7 @@ export default function BuscaPage() {
               {results.empresas.length > 0 && (filter === "todos" || filter === "empresas") && (
                 <>
                   <SectionHeader label="Empresas" count={results.empresas.length} />
-                  {results.empresas.map(p => <PersonCard key={p.id} p={p} isEmpresa currentUserId={myId} />)}
+                  {results.empresas.map(c => <EmpresaCard key={c.id} c={c} />)}
                 </>
               )}
               {/* Publicações */}
