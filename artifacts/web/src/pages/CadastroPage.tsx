@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { supabase, getCachedSession } from "@/lib/supabase";
@@ -75,6 +75,10 @@ export default function CadastroPage() {
   const [company, setCompany] = useState("");
   const [role, setRole] = useState("");
 
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
   const [selectedPlan, setSelectedPlan] = useState("gratuito");
   const { paidPlans, freePlan, loading: plansLoading } = usePlans();
   const [loading, setLoading] = useState(false);
@@ -83,6 +87,18 @@ export default function CadastroPage() {
 
   const usernameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const emailTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => { if (avatarPreview) URL.revokeObjectURL(avatarPreview); };
+  }, [avatarPreview]);
+
+  const onAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+    setAvatarFile(file);
+    setAvatarPreview(URL.createObjectURL(file));
+  };
 
   const checkUsername = useCallback(async (value: string) => {
     if (!value) { setUsernameState("idle"); return; }
@@ -171,6 +187,22 @@ export default function CadastroPage() {
       const currentUser = session?.user ?? null;
       if (currentUser) {
         setLoadingMsg("Finalizando perfil...");
+
+        let avatarUrl: string | null = null;
+        if (avatarFile) {
+          setLoadingMsg("Enviando foto de perfil...");
+          const ext = avatarFile.name.split(".").pop()?.toLowerCase() ?? "jpg";
+          const path = `${currentUser.id}/avatar_${Date.now()}.${ext}`;
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from("avatars")
+            .upload(path, avatarFile, { contentType: avatarFile.type, upsert: true });
+          if (!uploadError && uploadData) {
+            const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(uploadData.path);
+            avatarUrl = urlData.publicUrl;
+          }
+          setLoadingMsg("Finalizando perfil...");
+        }
+
         await supabase.from("profiles").upsert({
           id: currentUser.id,
           username: username.toLowerCase().trim(),
@@ -178,6 +210,7 @@ export default function CadastroPage() {
           company: company.trim() || null,
           position: role.trim() || null,
           plan: "gratuito", // always start free; paid plans activate after Stripe payment
+          ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
         }, { onConflict: "id" });
 
         if (inviteCode.trim()) {
@@ -382,7 +415,56 @@ export default function CadastroPage() {
           ) : step === 2 ? (
             <div style={{ backgroundColor: "#ffffff", borderRadius: 16, padding: 28, boxShadow: "0 4px 24px rgba(13,27,42,0.08)" }}>
               <h2 style={{ fontSize: 20, fontWeight: 800, color: "#0d1b2a", marginBottom: 4 }}>Sua atuação no vinho</h2>
-              <p style={{ fontSize: 14, color: "#8a93a2", marginBottom: 24 }}>Etapa 2 de 3 — Selecione suas áreas</p>
+              <p style={{ fontSize: 14, color: "#8a93a2", marginBottom: 24 }}>Etapa 2 de 3 — Foto e áreas de atuação</p>
+
+              {/* Avatar picker */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 28 }}>
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  style={{
+                    position: "relative", width: 96, height: 96, borderRadius: "50%",
+                    border: "3px dashed #c9a84c", background: "none", cursor: "pointer",
+                    overflow: "hidden", padding: 0,
+                  }}
+                >
+                  {avatarPreview ? (
+                    <img src={avatarPreview} alt="Foto de perfil" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    <div style={{
+                      width: "100%", height: "100%", display: "flex", flexDirection: "column",
+                      alignItems: "center", justifyContent: "center", gap: 4,
+                      backgroundColor: "#f4f5f7",
+                    }}>
+                      <span style={{ fontSize: 28 }}>📷</span>
+                      <span style={{ fontSize: 11, color: "#8a93a2", fontWeight: 600 }}>Adicionar foto</span>
+                    </div>
+                  )}
+                  {avatarPreview && (
+                    <div style={{
+                      position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.35)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      opacity: 0,
+                      transition: "opacity 0.2s",
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+                    onMouseLeave={e => (e.currentTarget.style.opacity = "0")}
+                    >
+                      <span style={{ fontSize: 20 }}>✏️</span>
+                    </div>
+                  )}
+                </button>
+                <span style={{ fontSize: 12, color: "#8a93a2", marginTop: 8 }}>
+                  {avatarPreview ? "Clique para trocar a foto" : "Foto de perfil (opcional)"}
+                </span>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  style={{ display: "none" }}
+                  onChange={onAvatarChange}
+                />
+              </div>
 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 24 }}>
                 {AREAS.map((area) => (
