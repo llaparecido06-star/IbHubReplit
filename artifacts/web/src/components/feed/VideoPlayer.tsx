@@ -132,7 +132,7 @@ export default function VideoPlayer({ src }: VideoPlayerProps) {
           inset: 0,
           width: "100%",
           height: "100%",
-          objectFit: "cover",
+          objectFit: "contain",
         }}
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
         onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
