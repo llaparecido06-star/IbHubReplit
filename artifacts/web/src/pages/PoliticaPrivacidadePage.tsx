@@ -26,11 +26,11 @@ const SECTIONS = [
   },
   {
     title: "6. Seus Direitos (LGPD)",
-    body: "De acordo com a LGPD, você tem os seguintes direitos: acesso aos seus dados pessoais; correção de dados incompletos, inexatos ou desatualizados; anonimização, bloqueio ou eliminação de dados desnecessários; portabilidade dos dados; eliminação dos dados tratados com seu consentimento; informação sobre com quem compartilhamos seus dados; revogação do consentimento. Para exercer esses direitos, entre em contato pelo e-mail privacidade@ibhub.com.br.",
+    body: "De acordo com a LGPD, você tem os seguintes direitos: acesso aos seus dados pessoais; correção de dados incompletos, inexatos ou desatualizados; anonimização, bloqueio ou eliminação de dados desnecessários; portabilidade dos dados; eliminação dos dados tratados com seu consentimento; informação sobre com quem compartilhamos seus dados; revogação do consentimento. Para exercer esses direitos, entre em contato pelo e-mail atendimento@idealbi.com.br.",
   },
   {
     title: "7. Contato",
-    body: "Para dúvidas, solicitações ou reclamações relacionadas à proteção de dados e privacidade, entre em contato com nosso Encarregado de Dados (DPO) pelo e-mail: privacidade@ibhub.com.br. Respondemos em até 15 dias úteis.",
+    body: "Para dúvidas, solicitações ou reclamações relacionadas à proteção de dados e privacidade, entre em contato com nosso Encarregado de Dados (DPO) pelo e-mail: atendimento@idealbi.com.br. Respondemos em até 15 dias úteis.",
   },
 ];
 
@@ -44,8 +44,8 @@ export default function PoliticaPrivacidadePage() {
         display: "flex", alignItems: "center", gap: 16,
         position: "sticky", top: 0, zIndex: 10,
       }}>
-        <Link href="/" style={{ color: gold, fontWeight: 900, fontSize: 18, textDecoration: "none", letterSpacing: "-0.3px" }}>
-          ibhub
+        <Link href="/">
+          <img src="/logo-ibhub-branco.png" alt="ibhub" style={{ height: 32, display: "block" }} />
         </Link>
         <Link href="/" style={{
           fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none",
