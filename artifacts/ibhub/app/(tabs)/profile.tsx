@@ -66,7 +66,7 @@ import { UserListModal, UserListType } from "@/components/profile/UserListModal"
 
 const API_URL  = process.env.EXPO_PUBLIC_API_URL ?? "";
 const WEB_BASE = process.env.EXPO_PUBLIC_DOMAIN
-  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}/web`
+  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
   : API_URL.replace(/\/api$/, "");
 
 type StatModal = UserListType | null;

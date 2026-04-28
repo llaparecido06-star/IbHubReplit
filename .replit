@@ -33,3 +33,4 @@ channel = "stable-25_05"
 [userenv.shared]
 EXPO_PUBLIC_API_URL = "https://d8bcdebb-60bd-4856-affe-92aeed4161f0-00-20sscjpqlyy34.janeway.replit.dev/api"
 WEB_BASE_URL = "https://d8bcdebb-60bd-4856-affe-92aeed4161f0-00-20sscjpqlyy34.janeway.replit.dev/web"
+EXPO_PUBLIC_DOMAIN = "ibhub.com.br"

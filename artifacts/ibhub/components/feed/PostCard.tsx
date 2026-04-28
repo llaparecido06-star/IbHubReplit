@@ -671,7 +671,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
   };
 
   const WEB_BASE = process.env.EXPO_PUBLIC_DOMAIN
-    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}/web`
+    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
     : (process.env.EXPO_PUBLIC_API_URL ?? "").replace(/\/api$/, "");
 
   const handleShare = async () => {
