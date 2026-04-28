@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAudioRecorder, requestRecordingPermissionsAsync, setAudioModeAsync, RecordingPresets } from "expo-audio";
+import { VideoView, useVideoPlayer } from "expo-video";
 import * as DocumentPicker from "expo-document-picker";
 import * as Haptics from "expo-haptics";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -95,6 +96,7 @@ export default function ChatScreen() {
   const [participant,            setParticipant]            = useState<{ id: string; full_name: string; avatar_url: string | null } | null>(null);
   const [companyInfo,            setCompanyInfo]            = useState<{ id: string; name: string; avatar_url: string | null } | null>(null);
   const [isConversationAccepted, setIsConversationAccepted] = useState(true);
+  const [selectedMedia,          setSelectedMedia]          = useState<{ url: string; type: "image" | "video" } | null>(null);
 
   // Audio recording
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -534,10 +536,12 @@ export default function ChatScreen() {
       await audioRecorder.stop();
       await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
 
-      // Give the native layer a tick to write the file before reading the URI
-      await new Promise(resolve => setTimeout(resolve, 150));
-
-      const uri = audioRecorder.uri;
+      // Poll for URI — Android's native layer may need time to finalize the file
+      let uri: string | null = null;
+      for (let i = 0; i < 10 && !uri; i++) {
+        await new Promise(resolve => setTimeout(resolve, 150));
+        uri = audioRecorder.uri;
+      }
       console.log("[Audio] Recording stopped. URI:", uri ?? "null");
 
       if (!uri) {
@@ -788,6 +792,11 @@ export default function ChatScreen() {
                   : { backgroundColor: "#fff", borderColor: colors.border, borderWidth: 1 },
                 isTemp && { opacity: 0.65 },
               ]}
+              onPress={() => {
+                if ((type === "image" || type === "video") && item.media_url) {
+                  setSelectedMedia({ url: item.media_url, type });
+                }
+              }}
               onLongPress={() => {
                 if (!isTemp) {
                   if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -923,6 +932,14 @@ export default function ChatScreen() {
     );
   };
 
+  const fileNameFromUrl = (url: string | null | undefined): string => {
+    if (!url) return "";
+    try {
+      const path = new URL(url).pathname;
+      return decodeURIComponent(path.split("/").pop() ?? "") || "";
+    } catch { return ""; }
+  };
+
   const renderFileBubble = (item: AppMessage, isMe: boolean) => (
     <TouchableOpacity
       style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 4 }}
@@ -933,7 +950,7 @@ export default function ChatScreen() {
       </View>
       <View style={{ flex: 1 }}>
         <Text style={[{ fontSize: 13, fontWeight: "600" }, { color: isMe ? "#fff" : colors.navy }]} numberOfLines={1}>
-          {item.content || "Arquivo"}
+          {item.content || fileNameFromUrl(item.media_url) || "Arquivo"}
         </Text>
         <Text style={[{ fontSize: 11 }, { color: isMe ? "#ffffff88" : colors.mutedForeground }]}>{formatTime(item.created_at)}</Text>
       </View>
@@ -1404,7 +1421,54 @@ export default function ChatScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      {/* ── Fullscreen image viewer ───────────────────────────────────────────── */}
+      {selectedMedia?.type === "image" && (
+        <Modal visible animationType="fade" statusBarTranslucent onRequestClose={() => setSelectedMedia(null)}>
+          <Pressable
+            style={{ flex: 1, backgroundColor: "#000", justifyContent: "center", alignItems: "center" }}
+            onPress={() => setSelectedMedia(null)}
+          >
+            <TouchableOpacity
+              style={{ position: "absolute", top: topPad + 16, right: 16, zIndex: 10, padding: 10, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 20 }}
+              onPress={() => setSelectedMedia(null)}
+            >
+              <Feather name="x" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Image
+              source={{ uri: selectedMedia.url }}
+              style={{ width: "100%", height: "85%" }}
+              resizeMode="contain"
+            />
+          </Pressable>
+        </Modal>
+      )}
+
+      {/* ── Fullscreen video player ───────────────────────────────────────────── */}
+      {selectedMedia?.type === "video" && (
+        <VideoPlayerModal url={selectedMedia.url} onClose={() => setSelectedMedia(null)} />
+      )}
     </KeyboardAvoidingView>
+  );
+}
+
+// ─── Video player modal (needs its own hook context) ─────────────────────────
+
+function VideoPlayerModal({ url, onClose }: { url: string; onClose: () => void }) {
+  const { top } = useSafeAreaInsets();
+  const player  = useVideoPlayer(url, (p) => { p.play(); });
+  return (
+    <Modal visible animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "#000" }}>
+        <TouchableOpacity
+          style={{ position: "absolute", top: top + 16, right: 16, zIndex: 10, padding: 10, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 20 }}
+          onPress={onClose}
+        >
+          <Feather name="x" size={24} color="#fff" />
+        </TouchableOpacity>
+        <VideoView player={player} style={{ flex: 1 }} contentFit="contain" />
+      </View>
+    </Modal>
   );
 }
 
