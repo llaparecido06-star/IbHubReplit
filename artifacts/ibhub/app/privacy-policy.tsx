@@ -15,7 +15,7 @@ import { useColors } from "@/hooks/useColors";
 const SECTIONS = [
   {
     title: "1. Dados que Coletamos",
-    body: "Coletamos informações que você nos fornece diretamente ao criar sua conta ou usar nossos serviços: nome completo, endereço de e-mail, telefone, foto de perfil, área de atuação profissional e conteúdo que você publica. Também coletamos automaticamente dados de uso, como endereço IP, tipo de dispositivo, sistema operacional e páginas visitadas dentro do aplicativo.",
+    body: "Coletamos informações que você nos fornece diretamente ao criar sua conta ou usar nossos serviços: nome completo, endereço de e-mail, telefone, foto de perfil, área de atuação profissional e conteúdo que você publica. Caso você opte por criar sua conta utilizando serviços de terceiros (como Google ou Apple), receberemos as informações básicas do seu perfil público permitidas por essas plataformas, como nome e e-mail. Também coletamos automaticamente dados de uso, como endereço IP, tipo de dispositivo, sistema operacional e páginas visitadas dentro do aplicativo.",
   },
   {
     title: "2. Como Usamos seus Dados",
@@ -67,7 +67,7 @@ export default function PrivacyPolicyScreen() {
       >
         <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
           <Text style={[styles.lastUpdated, { color: colors.mutedForeground }]}>
-            Última atualização: 1 de janeiro de 2026
+            Última atualização: 28 de abril de 2026
           </Text>
           <Text style={[styles.intro, { color: colors.navy }]}>
             Esta Política de Privacidade descreve como o ibhub coleta, usa e protege suas informações pessoais ao utilizar nosso aplicativo, em conformidade com a Lei Geral de Proteção de Dados (LGPD — Lei 13.709/2018).
