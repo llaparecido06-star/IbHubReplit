@@ -320,7 +320,7 @@ export default function PostDetalhePage() {
 
           {/* Video — full card width, outside padding */}
           {post.video_url && (
-            <VideoPlayer src={post.video_url} maxHeightLandscape={460} />
+            <VideoPlayer src={post.video_url} />
           )}
 
           {/* Action bar — identical style to feed */}

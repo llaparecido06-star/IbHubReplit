@@ -348,7 +348,7 @@ function MiniPostCard({ post, onDelete, onEdit, onPollUpdate }: {
       {/* Video */}
       {post.video_url && (
         <div style={{ marginBottom: 2 }}>
-          <VideoPlayer src={post.video_url} maxHeightLandscape={340} />
+          <VideoPlayer src={post.video_url} />
         </div>
       )}
 

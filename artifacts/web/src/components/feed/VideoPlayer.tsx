@@ -11,15 +11,9 @@ function fmt(s: number) {
 
 interface VideoPlayerProps {
   src: string;
-  maxHeightPortrait?: string | number;
-  maxHeightLandscape?: string | number;
 }
 
-export default function VideoPlayer({
-  src,
-  maxHeightPortrait  = "min(560px, 80vh)",
-  maxHeightLandscape = 420,
-}: VideoPlayerProps) {
+export default function VideoPlayer({ src }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
 
@@ -27,12 +21,9 @@ export default function VideoPlayer({
   const [muted, setMuted]         = useState(false);
   const [current, setCurrent]     = useState(0);
   const [duration, setDuration]   = useState(0);
-  const [aspect, setAspect]       = useState<number | null>(null);
   const [showControls, setShowControls] = useState(true);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [seeking, setSeeking]     = useState(false);
-
-  const isPortrait = aspect !== null && aspect < 1;
 
   const scheduleHide = () => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
@@ -114,28 +105,17 @@ export default function VideoPlayer({
 
   const pct = duration > 0 ? (current / duration) * 100 : 0;
 
-  const wrapperStyle: React.CSSProperties = {
-    position: "relative",
-    background: "#000",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    cursor: "pointer",
-    userSelect: "none",
-  };
-
-  const videoStyle: React.CSSProperties = {
-    display: "block",
-    width: isPortrait ? "auto" : "100%",
-    height: isPortrait ? maxHeightPortrait as string : "auto",
-    maxWidth: "100%",
-    maxHeight: isPortrait ? maxHeightPortrait as string : maxHeightLandscape,
-    objectFit: "contain",
-  };
-
   return (
     <div
-      style={wrapperStyle}
+      style={{
+        position: "relative",
+        width: "100%",
+        aspectRatio: "9 / 16",
+        background: "#000",
+        overflow: "hidden",
+        cursor: "pointer",
+        userSelect: "none",
+      }}
       onClick={togglePlay}
       onMouseMove={showAndSchedule}
       onTouchStart={showAndSchedule}
@@ -145,12 +125,15 @@ export default function VideoPlayer({
         src={src}
         playsInline
         preload="metadata"
-        style={videoStyle}
-        onLoadedMetadata={(e) => {
-          const v = e.currentTarget;
-          setDuration(v.duration);
-          if (v.videoWidth && v.videoHeight) setAspect(v.videoWidth / v.videoHeight);
+        loop
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
         }}
+        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
         onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}

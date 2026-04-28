@@ -633,7 +633,7 @@ function PostCard({
       )}
 
       {/* Video */}
-      {post.video_url && <VideoPlayer src={post.video_url} maxHeightLandscape={380} />}
+      {post.video_url && <VideoPlayer src={post.video_url} />}
 
       {/* Poll */}
       {post.poll && post.poll.options && post.poll.options.length > 0 && (
