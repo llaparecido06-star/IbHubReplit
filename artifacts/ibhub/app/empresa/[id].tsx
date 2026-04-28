@@ -1,9 +1,11 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -91,6 +93,7 @@ export default function EmpresaScreen() {
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [messagingLoading, setMessagingLoading] = useState(false);
+  const [profileFollowers, setProfileFollowers] = useState<number | null>(null);
 
   const [activeTab, setActiveTab] = useState<CompanyTab>("publicacoes");
 
@@ -142,15 +145,19 @@ export default function EmpresaScreen() {
     const page = await fetchCompanyPageById(id);
     setCompanyPage(page);
 
-    if (user?.id && page) {
-      const [following, roleInfo] = await Promise.all([
-        checkIsFollowingCompany(id, user.id),
-        checkUserCompanyRole(id, user.id),
-      ]);
-      setIsFollowing(following);
-      setIsManager(roleInfo.isOwner || roleInfo.role !== null);
-      setUserRole(roleInfo.role);
-    }
+    const [followersRes, ..._] = await Promise.all([
+      supabase.from("company_follows").select("id", { count: "exact", head: true }).eq("company_id", id),
+      user?.id && page
+        ? Promise.all([
+            checkIsFollowingCompany(id, user.id).then(f => setIsFollowing(f)),
+            checkUserCompanyRole(id, user.id).then(r => {
+              setIsManager(r.isOwner || r.role !== null);
+              setUserRole(r.role);
+            }),
+          ])
+        : Promise.resolve(null),
+    ]);
+    setProfileFollowers(followersRes.count ?? 0);
     setCompanyLoading(false);
   }, [id, user?.id]);
 
@@ -374,7 +381,10 @@ export default function EmpresaScreen() {
     if (!user?.id || !id) return;
     setFollowLoading(true);
     const ok = await toggleCompanyFollow(id, user.id, isFollowing);
-    if (ok) { setIsFollowing(!isFollowing); }
+    if (ok) {
+      setIsFollowing(!isFollowing);
+      setProfileFollowers(prev => prev === null ? null : isFollowing ? prev - 1 : prev + 1);
+    }
     setFollowLoading(false);
   };
 
@@ -448,109 +458,150 @@ export default function EmpresaScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
-          <Feather name="arrow-left" size={22} color={colors.navy} />
-          {companyLogo ? (
-            <Image source={{ uri: companyLogo }} style={styles.headerLogo} />
-          ) : (
-            <View style={[styles.headerLogoFallback, { backgroundColor: colors.navy }]}>
-              <Text style={[styles.headerLogoText, { color: colors.gold }]}>{nameInitial}</Text>
-            </View>
-          )}
-          <Text style={[styles.headerTitle, { color: colors.navy }]} numberOfLines={1}>{companyName}</Text>
+      {/* Navigation bar */}
+      <View style={[styles.navBar, { paddingTop: topPad + 10, backgroundColor: colors.navy }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.navBackBtn}>
+          <Feather name="arrow-left" size={22} color="#fff" />
         </TouchableOpacity>
+        <Text style={styles.navTitle} numberOfLines={1}>{companyName}</Text>
         {isManager ? (
-          <TouchableOpacity
-            style={[styles.fabButton, { backgroundColor: colors.gold }]}
-            onPress={() => setShowFab(true)}
-          >
-            <Feather name="plus" size={18} color="#fff" />
+          <TouchableOpacity style={styles.navActionBtn} onPress={() => setShowFab(true)}>
+            <Feather name="plus" size={20} color="#fff" />
           </TouchableOpacity>
-        ) : user?.id ? (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <TouchableOpacity
-              style={[styles.headerIconBtn, { borderColor: messagingLoading ? colors.border : colors.gold }]}
-              onPress={handleMessage}
-              disabled={messagingLoading}
-            >
-              <Feather name="message-circle" size={16} color={messagingLoading ? colors.mutedForeground : colors.gold} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.followBtn, { backgroundColor: isFollowing ? colors.border : colors.gold }]}
-              onPress={handleToggleFollow}
-              disabled={followLoading}
-            >
-              <Feather name={isFollowing ? "user-check" : "user-plus"} size={14} color={isFollowing ? colors.navy : "#fff"} />
-              <Text style={[styles.followBtnText, { color: isFollowing ? colors.navy : "#fff" }]}>
-                {followLoading ? "..." : isFollowing ? "Seguindo" : "Seguir"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
+        ) : (
+          <View style={{ width: 36 }} />
+        )}
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
-        {/* Company card */}
-        <View style={[styles.companyCard, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
-          {companyLogo ? (
-            <Image source={{ uri: companyLogo }} style={styles.companyLogo} />
-          ) : (
-            <View style={[styles.companyLogoFallback, { backgroundColor: colors.navy }]}>
-              <Text style={[styles.companyLogoText, { color: colors.gold }]}>{nameInitial}</Text>
-            </View>
-          )}
-          <Text style={[styles.companyName, { color: colors.navy }]}>{companyName}</Text>
-          {companyIndustry ? (
-            <View style={[styles.catBadge, { backgroundColor: colors.gold + "18" }]}>
-              <Text style={[styles.catBadgeText, { color: colors.gold }]}>{companyIndustry}</Text>
-            </View>
-          ) : null}
-          {companyBio ? (
-            <Text style={[styles.companyBioText, { color: colors.foreground }]}>{companyBio}</Text>
-          ) : null}
+        {/* ── Profile header ── */}
+        <View style={{ backgroundColor: "#fff" }}>
+          {/* Cover gradient */}
+          <LinearGradient
+            colors={[colors.navy, "#1b3d5e"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.coverGradient}
+          />
 
-          {isManager ? (
-            <View style={styles.modeRow}>
-              <View style={[styles.modeBadge, { backgroundColor: colors.navy + "12" }]}>
-                <Feather name={userRole === "owner" ? "shield" : "user-check"} size={12} color={colors.navy} />
-                <Text style={[styles.modeBadgeText, { color: colors.navy }]}>
-                  {userRole === "owner" ? "Proprietário" : userRole === "editor" ? "Editor" : userRole === "moderador" ? "Moderador" : "Admin"}
-                </Text>
+          {/* Logo overlapping cover */}
+          <View style={styles.profileLogoRow}>
+            <View style={[styles.profileLogoWrap, { borderColor: "#fff", shadowColor: "#000" }]}>
+              {companyLogo ? (
+                <Image source={{ uri: companyLogo }} style={styles.profileLogo} />
+              ) : (
+                <View style={[styles.profileLogoFallback, { backgroundColor: colors.navy }]}>
+                  <Text style={[styles.profileLogoInitial, { color: colors.gold }]}>{nameInitial}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Info block */}
+          <View style={styles.profileInfo}>
+            <Text style={[styles.profileName, { color: colors.navy }]}>{companyName}</Text>
+
+            {companyIndustry ? (
+              <Text style={[styles.profileIndustry, { color: colors.gold }]}>{companyIndustry}</Text>
+            ) : null}
+
+            {/* Meta row: location + website */}
+            {(companyPage?.location || companyPage?.website) ? (
+              <View style={styles.profileMeta}>
+                {companyPage?.location ? (
+                  <View style={styles.profileMetaItem}>
+                    <Feather name="map-pin" size={12} color={colors.mutedForeground} />
+                    <Text style={[styles.profileMetaText, { color: colors.mutedForeground }]}>{companyPage.location}</Text>
+                  </View>
+                ) : null}
+                {companyPage?.website ? (
+                  <TouchableOpacity
+                    style={styles.profileMetaItem}
+                    onPress={() => Linking.openURL(
+                      companyPage.website!.startsWith("http") ? companyPage.website! : `https://${companyPage.website}`
+                    )}
+                  >
+                    <Feather name="link" size={12} color={colors.gold} />
+                    <Text style={[styles.profileMetaText, { color: colors.gold }]} numberOfLines={1}>
+                      {companyPage.website.replace(/^https?:\/\//, "")}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
-              <TouchableOpacity
-                style={[styles.manageBtn, { backgroundColor: colors.gold }]}
-                onPress={() => router.push(`/manage-business-page?id=${id}` as any)}
-              >
-                <Feather name="settings" size={13} color="#fff" />
-                <Text style={styles.manageBtnText}>Gerenciar</Text>
-              </TouchableOpacity>
-            </View>
-          ) : !user?.id ? null : (
-            <View style={styles.companyActionRow}>
-              <TouchableOpacity
-                style={[styles.followBtnLarge, { backgroundColor: isFollowing ? colors.border : colors.gold, flex: 1 }]}
-                onPress={handleToggleFollow}
-                disabled={followLoading}
-              >
-                <Feather name={isFollowing ? "user-check" : "user-plus"} size={15} color={isFollowing ? colors.navy : "#fff"} />
-                <Text style={[styles.followBtnLargeText, { color: isFollowing ? colors.navy : "#fff" }]}>
-                  {followLoading ? "..." : isFollowing ? "Seguindo" : "Seguir"}
+            ) : null}
+
+            {companyBio ? (
+              <Text style={[styles.profileBio, { color: colors.foreground }]}>{companyBio}</Text>
+            ) : null}
+
+            {/* Stats */}
+            <View style={[styles.profileStats, { borderTopColor: colors.border }]}>
+              <View style={styles.profileStat}>
+                <Text style={[styles.profileStatNum, { color: colors.navy }]}>
+                  {profileFollowers === null ? "—" : String(profileFollowers)}
                 </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.messageBtnLarge, { borderColor: messagingLoading ? colors.border : colors.gold, flex: 1 }]}
-                onPress={handleMessage}
-                disabled={messagingLoading}
-              >
-                <Feather name="message-circle" size={15} color={messagingLoading ? colors.mutedForeground : colors.gold} />
-                <Text style={[styles.messageBtnLargeText, { color: messagingLoading ? colors.mutedForeground : colors.gold }]}>
-                  {messagingLoading ? "..." : "Mensagem"}
-                </Text>
-              </TouchableOpacity>
+                <Text style={[styles.profileStatLabel, { color: colors.mutedForeground }]}>Seguidores</Text>
+              </View>
+              {postsLoaded && posts.length > 0 ? (
+                <>
+                  <View style={[styles.profileStatDivider, { backgroundColor: colors.border }]} />
+                  <View style={styles.profileStat}>
+                    <Text style={[styles.profileStatNum, { color: colors.navy }]}>{posts.length}</Text>
+                    <Text style={[styles.profileStatLabel, { color: colors.mutedForeground }]}>Publicações</Text>
+                  </View>
+                </>
+              ) : null}
             </View>
-          )}
+
+            {/* CTA buttons */}
+            {isManager ? (
+              <View style={styles.profileCtas}>
+                <View style={[styles.roleBadge, { backgroundColor: colors.navy + "0f", borderColor: colors.navy + "25" }]}>
+                  <Feather name={userRole === "owner" ? "shield" : "user-check"} size={13} color={colors.navy} />
+                  <Text style={[styles.roleBadgeText, { color: colors.navy }]}>
+                    {userRole === "owner" ? "Proprietário" : userRole === "editor" ? "Editor" : userRole === "moderador" ? "Moderador" : "Admin"}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.ctaBtn, styles.ctaBtnPrimary, { backgroundColor: colors.gold }]}
+                  onPress={() => router.push(`/manage-business-page?id=${id}` as any)}
+                >
+                  <Feather name="settings" size={14} color="#fff" />
+                  <Text style={styles.ctaBtnPrimaryText}>Gerenciar</Text>
+                </TouchableOpacity>
+              </View>
+            ) : user?.id ? (
+              <View style={styles.profileCtas}>
+                <TouchableOpacity
+                  style={[styles.ctaBtn, styles.ctaBtnPrimary, {
+                    flex: 1,
+                    backgroundColor: isFollowing ? colors.border : colors.gold,
+                  }]}
+                  onPress={handleToggleFollow}
+                  disabled={followLoading}
+                >
+                  <Feather
+                    name={isFollowing ? "user-check" : "user-plus"}
+                    size={14}
+                    color={isFollowing ? colors.navy : "#fff"}
+                  />
+                  <Text style={[styles.ctaBtnPrimaryText, { color: isFollowing ? colors.navy : "#fff" }]}>
+                    {followLoading ? "..." : isFollowing ? "Seguindo" : "Seguir"}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.ctaBtn, styles.ctaBtnOutline, { flex: 1, borderColor: messagingLoading ? colors.border : colors.gold }]}
+                  onPress={handleMessage}
+                  disabled={messagingLoading}
+                >
+                  <Feather name="message-circle" size={14} color={messagingLoading ? colors.mutedForeground : colors.gold} />
+                  <Text style={[styles.ctaBtnOutlineText, { color: messagingLoading ? colors.mutedForeground : colors.gold }]}>
+                    {messagingLoading ? "..." : "Mensagem"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+          </View>
         </View>
 
         {/* Tabs */}
@@ -927,34 +978,38 @@ export default function EmpresaScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
-  backRow: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1 },
-  headerTitle: { fontSize: 18, fontWeight: "700", flex: 1 },
-  headerLogo: { width: 28, height: 28, borderRadius: 6 },
-  headerLogoFallback: { width: 28, height: 28, borderRadius: 6, alignItems: "center", justifyContent: "center" },
-  headerLogoText: { fontSize: 13, fontWeight: "800" },
-  fabButton: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  followBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
-  followBtnText: { fontSize: 13, fontWeight: "700" },
-  headerIconBtn: { width: 34, height: 34, borderRadius: 17, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
-  companyCard: { padding: 20, alignItems: "center", gap: 10, borderBottomWidth: 1, backgroundColor: "#fff" },
-  companyLogo: { width: 80, height: 80, borderRadius: 12 },
-  companyLogoFallback: { width: 80, height: 80, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  companyLogoText: { fontSize: 32, fontWeight: "800" },
-  companyName: { fontSize: 22, fontWeight: "800" },
-  companyBioText: { fontSize: 14, lineHeight: 20, textAlign: "center" },
-  catBadge: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
-  catBadgeText: { fontSize: 13, fontWeight: "600" },
-  modeRow: { flexDirection: "row", alignItems: "center", gap: 10, width: "100%" },
-  modeBadge: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, borderRadius: 20 },
-  modeBadgeText: { fontSize: 12, fontWeight: "600" },
-  manageBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20 },
-  manageBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
-  followBtnLarge: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
-  followBtnLargeText: { fontSize: 14, fontWeight: "700" },
-  companyActionRow: { flexDirection: "row", gap: 10, width: "100%", marginTop: 4 },
-  messageBtnLarge: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1.5 },
-  messageBtnLargeText: { fontSize: 14, fontWeight: "700" },
+  // ── Nav bar ──────────────────────────────────────────────────────────────
+  navBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingBottom: 12, gap: 8 },
+  navBackBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
+  navTitle: { flex: 1, color: "#fff", fontSize: 17, fontWeight: "700" },
+  navActionBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
+  // ── Profile header ────────────────────────────────────────────────────────
+  coverGradient: { height: 120 },
+  profileLogoRow: { paddingHorizontal: 20, marginTop: -42 },
+  profileLogoWrap: { width: 84, height: 84, borderRadius: 16, borderWidth: 3, overflow: "hidden", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 },
+  profileLogo: { width: "100%", height: "100%", resizeMode: "cover" },
+  profileLogoFallback: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
+  profileLogoInitial: { fontSize: 34, fontWeight: "800" },
+  profileInfo: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20, gap: 6 },
+  profileName: { fontSize: 22, fontWeight: "800", letterSpacing: -0.3 },
+  profileIndustry: { fontSize: 14, fontWeight: "600" },
+  profileMeta: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 2 },
+  profileMetaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
+  profileMetaText: { fontSize: 13 },
+  profileBio: { fontSize: 14, lineHeight: 21, marginTop: 2 },
+  profileStats: { flexDirection: "row", alignItems: "center", gap: 14, paddingTop: 14, marginTop: 8, borderTopWidth: 1 },
+  profileStat: { alignItems: "center", gap: 1 },
+  profileStatNum: { fontSize: 18, fontWeight: "800" },
+  profileStatLabel: { fontSize: 12 },
+  profileStatDivider: { width: 1, height: 28, opacity: 0.4 },
+  profileCtas: { flexDirection: "row", gap: 10, marginTop: 10 },
+  roleBadge: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
+  roleBadgeText: { fontSize: 13, fontWeight: "600" },
+  ctaBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingVertical: 11, paddingHorizontal: 16, borderRadius: 12 },
+  ctaBtnPrimary: {},
+  ctaBtnPrimaryText: { fontSize: 14, fontWeight: "700", color: "#fff" },
+  ctaBtnOutline: { borderWidth: 1.5 },
+  ctaBtnOutlineText: { fontSize: 14, fontWeight: "700" },
   tabBar: { flexDirection: "row", borderBottomWidth: 1, backgroundColor: "#fff" },
   tabItem: { flex: 1, alignItems: "center", paddingVertical: 14 },
   tabLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 0.5 },

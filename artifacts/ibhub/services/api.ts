@@ -4776,7 +4776,7 @@ export async function fetchCompanyPosts(companyId: string, currentUserId?: strin
     const { data, error } = await supabase
       .from("posts")
       .select(POST_SELECT_BASE)
-      .or(`user_id.eq.${pageData.owner_id},company_page_id.eq.${companyId}`)
+      .eq("company_page_id", companyId)
       .order("created_at", { ascending: false })
       .limit(50);
 
