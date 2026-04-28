@@ -290,20 +290,47 @@ export async function uploadPostVideo(videoUri: string, userId: string): Promise
   try {
     const ext = videoUri.split(".").pop()?.split("?")[0]?.toLowerCase() ?? "mp4";
     const mime = ext === "mov" ? "video/quicktime" : "video/mp4";
-    const filename = `${userId}/${Date.now()}.${ext}`;
 
-    const response = await fetch(videoUri);
-    const arrayBuffer = await response.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) return null;
 
-    const { data, error } = await supabase.storage
-      .from("post-videos")
-      .upload(filename, bytes, { contentType: mime, upsert: false });
+    // On native: copy ph:// or content:// URIs to a local file:// path first
+    let localUri = videoUri;
+    if (Platform.OS !== "web" && (localUri.startsWith("ph://") || localUri.startsWith("content://"))) {
+      const tmpPath = `${(FileSystem as any).cacheDirectory}tmp_video_${Date.now()}.${ext}`;
+      await FileSystem.copyAsync({ from: localUri, to: tmpPath });
+      localUri = tmpPath;
+    }
 
-    if (error) { console.error("uploadPostVideo storage error:", error); return null; }
+    // Use FormData with the file URI — React Native's native HTTP layer streams
+    // the file without ever loading it into the JS heap, preventing OOM on Android.
+    const formData = new FormData();
+    formData.append("userId", userId);
+    formData.append("mimeType", mime);
+    if (Platform.OS === "web") {
+      const blobRes = await fetch(localUri);
+      const blob = await blobRes.blob();
+      formData.append("file", blob, `video.${ext}`);
+    } else {
+      formData.append("file", { uri: localUri, name: `video.${ext}`, type: mime } as any);
+    }
 
-    const { data: urlData } = supabase.storage.from("post-videos").getPublicUrl(data.path);
-    return urlData.publicUrl ?? null;
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? "";
+    const res = await fetch(`${apiUrl}/uploads/post-video`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.error("uploadPostVideo error:", res.status, body);
+      return null;
+    }
+
+    const json = await res.json() as { url?: string };
+    return json.url ?? null;
   } catch (e) {
     console.error("uploadPostVideo:", e);
     return null;

@@ -167,6 +167,65 @@ router.post(
 );
 
 /**
+ * POST /api/uploads/post-video  (multipart/form-data)
+ * FormData fields: file (binary), userId (string), mimeType (string)
+ * Returns: { url: string }
+ * Used by mobile clients — React Native streams the file natively via FormData,
+ * avoiding loading the full video into the JS heap (prevents OOM on Android).
+ */
+const postVideoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 200 * 1024 * 1024 }, // 200 MB
+});
+
+router.post(
+  "/uploads/post-video",
+  postVideoUpload.single("file"),
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith("Bearer ")) {
+        res.status(401).json({ error: "Missing authorization header" });
+        return;
+      }
+
+      const file = (req as any).file as Express.Multer.File | undefined;
+      if (!file) {
+        res.status(400).json({ error: "No file uploaded" });
+        return;
+      }
+
+      const { userId, mimeType } = req.body as { userId?: string; mimeType?: string };
+      if (!userId) {
+        res.status(400).json({ error: "userId is required" });
+        return;
+      }
+
+      const safeMime = mimeType || file.mimetype || "video/mp4";
+      const ext = (safeMime.split("/")[1] ?? "mp4")
+        .replace("quicktime", "mov");
+      const fileName = `${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+
+      const { error } = await supabaseAdmin.storage
+        .from("post-videos")
+        .upload(fileName, file.buffer, { contentType: safeMime, upsert: false });
+
+      if (error) {
+        console.error("uploads/post-video error:", error);
+        res.status(500).json({ error: error.message });
+        return;
+      }
+
+      const { data } = supabaseAdmin.storage.from("post-videos").getPublicUrl(fileName);
+      res.json({ url: data.publicUrl });
+    } catch (err) {
+      console.error("uploads/post-video:", err);
+      res.status(500).json({ error: "Upload failed" });
+    }
+  }
+);
+
+/**
  * POST /api/uploads/portfolio
  * Body: { fileBase64: string, fileName: string, mimeType: string, userId: string }
  * Returns: { url: string }
