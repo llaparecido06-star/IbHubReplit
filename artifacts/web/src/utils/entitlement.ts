@@ -41,10 +41,14 @@ export function hasPlanAccess(profile: ProfileLike | null): boolean {
 }
 
 const TIER_ORDER: Record<string, number> = {
-  basico:    0,
-  premium:   1,
-  exclusive: 2,
-  business:  3,
+  gratuito:      0,
+  profissional:  1,
+  empresas:      2,
+  premium:       3,
+  // legacy aliases kept for backward compatibility
+  basico:        0,
+  exclusive:     2,
+  business:      3,
 };
 
 export function hasMinimumPlan(profile: ProfileLike | null, requiredPlan: string): boolean {

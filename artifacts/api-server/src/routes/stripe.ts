@@ -235,7 +235,7 @@ router.post("/stripe/create-checkout-session", async (req: Request, res: Respons
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: "subscription",
-      line_items: [{ price: PRICE_IDS[plan], quantity: 1 }],
+      line_items: [{ price: priceId, quantity: 1 }],
       success_url: resolvedSuccess,
       cancel_url:  resolvedCancel,
       metadata: { supabase_user_id: userId, plan },
@@ -371,7 +371,7 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
         const userId = await resolveUserId(sub.metadata?.supabase_user_id, custId);
         if (userId) {
           await supabaseAdmin.from("profiles").update({
-            plan:                       "basico",
+            plan:                       "gratuito",
             stripe_subscription_status: "canceled",
             stripe_current_period_end:  new Date((sub as any).current_period_end * 1000).toISOString(),
           }).eq("id", userId);
