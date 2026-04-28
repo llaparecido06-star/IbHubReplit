@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -22,15 +22,18 @@ import type { AppNotification } from "@/services/api";
 import { formatRelativeDate } from "@/utils/dateUtils";
 
 const TYPE_META: Record<string, { icon: any; color: string; label: string }> = {
-  like:          { icon: "heart",          color: "#e74c3c", label: "curtiu sua publicação" },
-  comment:       { icon: "message-circle", color: "#3498db", label: "comentou na sua publicação" },
-  comment_reply: { icon: "corner-down-right", color: "#8b5cf6", label: "respondeu seu comentário" },
-  comment_like:  { icon: "heart",          color: "#e74c3c", label: "curtiu seu comentário" },
-  follow:        { icon: "user-plus",      color: "#2ecc71", label: "começou a seguir você" },
-  connection:    { icon: "users",          color: "#c9a84c", label: "enviou pedido de conexão" },
-  mention:       { icon: "at-sign",        color: "#9b59b6", label: "mencionou você" },
-  group_request: { icon: "user-check",     color: "#7c3aed", label: "solicitou entrar no seu grupo" },
+  like:             { icon: "heart",            color: "#e74c3c", label: "curtiu sua publicação" },
+  comment:          { icon: "message-circle",   color: "#3498db", label: "comentou na sua publicação" },
+  comment_reply:    { icon: "corner-down-right", color: "#8b5cf6", label: "respondeu seu comentário" },
+  comment_like:     { icon: "heart",            color: "#e74c3c", label: "curtiu seu comentário" },
+  follow:           { icon: "user-plus",        color: "#2ecc71", label: "começou a seguir você" },
+  company_follow:   { icon: "user-plus",        color: "#2ecc71", label: "começou a seguir sua empresa" },
+  connection:       { icon: "users",            color: "#c9a84c", label: "enviou pedido de conexão" },
+  mention:          { icon: "at-sign",          color: "#9b59b6", label: "mencionou você" },
+  group_request:    { icon: "user-check",       color: "#7c3aed", label: "solicitou entrar no seu grupo" },
 };
+
+type UserCompany = { id: string; name: string; avatar_url: string | null };
 
 function NotifRow({
   notif,
@@ -46,7 +49,7 @@ function NotifRow({
   onReject?: () => void;
 }) {
   const meta = TYPE_META[notif.type] ?? { icon: "bell", color: colors.gold, label: "nova notificação" };
-  const isConnectionPending = notif.type === "connection" && notif.connection_status === "pending" && notif.connection_id;
+  const isConnectionPending  = notif.type === "connection" && notif.connection_status === "pending"  && notif.connection_id;
   const isConnectionAccepted = notif.type === "connection" && notif.connection_status === "accepted";
   const isConnectionRejected = notif.type === "connection" && notif.connection_status === "rejected";
 
@@ -122,65 +125,149 @@ function NotifRow({
   );
 }
 
-export default function NotificationsScreen() {
-  const colors = useColors();
-  const router = useRouter();
-  const { user } = useAuth();
-  const insets = useSafeAreaInsets();
+function EmptyState({ colors, isCompany }: { colors: any; isCompany?: boolean }) {
+  return (
+    <View style={styles.empty}>
+      <View style={[styles.emptyIconCircle, { backgroundColor: colors.gold + "18" }]}>
+        <Feather name="bell" size={36} color={colors.gold} />
+      </View>
+      <Text style={[styles.emptyTitle, { color: colors.navy }]}>Tudo tranquilo por aqui</Text>
+      <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
+        {isCompany
+          ? "Curtidas, comentários e novos seguidores da empresa aparecerão aqui"
+          : "Suas notificações de curtidas, comentários e conexões aparecerão aqui"}
+      </Text>
+    </View>
+  );
+}
 
-  const [notifs, setNotifs] = useState<AppNotification[]>([]);
-  const [loading, setLoading] = useState(true);
+type Tab = "personal" | string; // "personal" or a company ID
+
+export default function NotificationsScreen() {
+  const colors  = useColors();
+  const router  = useRouter();
+  const { user } = useAuth();
+  const insets  = useSafeAreaInsets();
+
+  const [tab, setTab]                 = useState<Tab>("personal");
+  const [userCompanies, setUserCompanies] = useState<UserCompany[]>([]);
+
+  const [personalNotifs, setPersonalNotifs] = useState<AppNotification[]>([]);
+  const [companyNotifs,  setCompanyNotifs]  = useState<Record<string, AppNotification[]>>({});
+
+  const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const topPad = Platform.OS === "web" ? 0 : insets.top;
+  const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
 
+  const activeNotifs: AppNotification[] =
+    tab === "personal"
+      ? personalNotifs
+      : (companyNotifs[tab] ?? []);
+
+  const unreadCount = activeNotifs.filter(n => !n.read).length;
+
+  // ── load ──────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     if (!user?.id) { setLoading(false); return; }
-    const data = await API.fetchNotifications(user.id);
-    setNotifs(data);
+
+    const [personal, companies] = await Promise.all([
+      API.fetchNotifications(user.id),
+      supabase
+        .from("company_pages")
+        .select("id, name, avatar_url")
+        .eq("owner_id", user.id),
+    ]);
+
+    setPersonalNotifs(personal);
+
+    const companyList: UserCompany[] = (companies.data ?? []).map((c: any) => ({
+      id:         c.id,
+      name:       c.name,
+      avatar_url: c.avatar_url ?? null,
+    }));
+    setUserCompanies(companyList);
+
+    if (companyList.length > 0) {
+      const results = await Promise.all(
+        companyList.map(c => API.fetchCompanyNotifications(c.id))
+      );
+      const map: Record<string, AppNotification[]> = {};
+      companyList.forEach((c, i) => { map[c.id] = results[i]; });
+      setCompanyNotifs(map);
+    }
+
     setLoading(false);
   }, [user?.id]);
 
   useEffect(() => { load(); }, [load]);
-
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  // ── realtime personal ────────────────────────────────────────────────────
   useEffect(() => {
     if (!user?.id) return;
     const uid = Math.random().toString(36).slice(2, 8);
-    const channel = supabase
-      .channel(`notifs_${user.id}_${uid}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${user.id}`,
-        },
-        async () => {
-          const fresh = await API.fetchNotifications(user.id);
-          setNotifs(fresh);
-        },
-      )
+    const ch = supabase
+      .channel(`notifs_personal_${user.id}_${uid}`)
+      .on("postgres_changes", {
+        event: "INSERT", schema: "public", table: "notifications",
+        filter: `user_id=eq.${user.id}`,
+      }, async () => {
+        const fresh = await API.fetchNotifications(user.id);
+        setPersonalNotifs(fresh);
+        // Also refresh company notifs in case one slipped through
+        if (userCompanies.length > 0) {
+          const results = await Promise.all(
+            userCompanies.map(c => API.fetchCompanyNotifications(c.id))
+          );
+          const map: Record<string, AppNotification[]> = {};
+          userCompanies.forEach((c, i) => { map[c.id] = results[i]; });
+          setCompanyNotifs(map);
+        }
+      })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [user?.id]);
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id, userCompanies]);
 
+  // ── actions ───────────────────────────────────────────────────────────────
   const onRefresh = async () => {
     setRefreshing(true);
     await load();
     setRefreshing(false);
   };
 
+  const handleMarkAllRead = async () => {
+    if (!user?.id) return;
+    if (tab === "personal") {
+      setPersonalNotifs(prev => prev.map(n => ({ ...n, read: true })));
+      await API.markAllNotificationsRead(user.id);
+    } else {
+      setCompanyNotifs(prev => ({
+        ...prev,
+        [tab]: (prev[tab] ?? []).map(n => ({ ...n, read: true })),
+      }));
+      await API.markAllCompanyNotificationsRead(tab);
+    }
+  };
+
   const handleNotifPress = async (notif: AppNotification) => {
     if (!notif.read) {
-      setNotifs(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
+      if (tab === "personal") {
+        setPersonalNotifs(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
+      } else {
+        setCompanyNotifs(prev => ({
+          ...prev,
+          [tab]: (prev[tab] ?? []).map(n => n.id === notif.id ? { ...n, read: true } : n),
+        }));
+      }
       await API.markNotificationRead(notif.id);
     }
+
     if (notif.type === "group_request" && notif.metadata?.group_id) {
       router.push(`/group-settings/${notif.metadata.group_id}` as any);
+    } else if (notif.type === "company_follow" && (notif as any).target_company_id) {
+      router.push(`/empresa/${(notif as any).target_company_id}` as any);
     } else if (notif.post_id) {
       router.push(`/post/${notif.post_id}` as any);
     } else if (notif.actor?.id) {
@@ -191,12 +278,12 @@ export default function NotificationsScreen() {
   const handleAcceptConnection = async (notif: AppNotification) => {
     if (!notif.connection_id) return;
     const prevRead = notif.read;
-    setNotifs(prev => prev.map(n =>
+    setPersonalNotifs(prev => prev.map(n =>
       n.id === notif.id ? { ...n, connection_status: "accepted", read: true } : n
     ));
     const ok = await API.respondToConnection(notif.connection_id, "accepted");
     if (!ok) {
-      setNotifs(prev => prev.map(n =>
+      setPersonalNotifs(prev => prev.map(n =>
         n.id === notif.id ? { ...n, connection_status: "pending", read: prevRead } : n
       ));
     } else {
@@ -207,12 +294,12 @@ export default function NotificationsScreen() {
   const handleRejectConnection = async (notif: AppNotification) => {
     if (!notif.connection_id) return;
     const prevRead = notif.read;
-    setNotifs(prev => prev.map(n =>
+    setPersonalNotifs(prev => prev.map(n =>
       n.id === notif.id ? { ...n, connection_status: "rejected", read: true } : n
     ));
     const ok = await API.respondToConnection(notif.connection_id, "rejected");
     if (!ok) {
-      setNotifs(prev => prev.map(n =>
+      setPersonalNotifs(prev => prev.map(n =>
         n.id === notif.id ? { ...n, connection_status: "pending", read: prevRead } : n
       ));
     } else {
@@ -220,13 +307,8 @@ export default function NotificationsScreen() {
     }
   };
 
-  const handleMarkAllRead = async () => {
-    if (!user?.id) return;
-    setNotifs(prev => prev.map(n => ({ ...n, read: true })));
-    await API.markAllNotificationsRead(user.id);
-  };
-
-  const unreadCount = notifs.filter(n => !n.read).length;
+  const personalUnread = personalNotifs.filter(n => !n.read).length;
+  const companyUnreadFor = (id: string) => (companyNotifs[id] ?? []).filter(n => !n.read).length;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -238,12 +320,37 @@ export default function NotificationsScreen() {
         <Text style={[styles.headerTitle, { color: colors.navy }]}>Notificações</Text>
         {unreadCount > 0 ? (
           <TouchableOpacity onPress={handleMarkAllRead} style={styles.markAllWrap}>
-            <Text style={[styles.markAllBtn, { color: colors.gold }]}>Marcar todas como lidas</Text>
+            <Text style={[styles.markAllBtn, { color: colors.gold }]}>Marcar todas lidas</Text>
           </TouchableOpacity>
         ) : (
           <View style={{ width: 90 }} />
         )}
       </View>
+
+      {/* Tabs — only shown when user has at least one company */}
+      {userCompanies.length > 0 && (
+        <View style={[styles.tabs, { borderBottomColor: colors.border, backgroundColor: "#fff" }]}>
+          {/* Personal tab */}
+          <TabButton
+            label="Pessoal"
+            active={tab === "personal"}
+            badge={personalUnread}
+            colors={colors}
+            onPress={() => setTab("personal")}
+          />
+          {/* One tab per company */}
+          {userCompanies.map(c => (
+            <TabButton
+              key={c.id}
+              label={c.name}
+              active={tab === c.id}
+              badge={companyUnreadFor(c.id)}
+              colors={colors}
+              onPress={() => setTab(c.id)}
+            />
+          ))}
+        </View>
+      )}
 
       {/* Unread summary bar */}
       {unreadCount > 0 && (
@@ -263,7 +370,7 @@ export default function NotificationsScreen() {
         </View>
       ) : (
         <FlatList
-          data={notifs}
+          data={activeNotifs}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <NotifRow
@@ -275,54 +382,90 @@ export default function NotificationsScreen() {
             />
           )}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />}
-          contentContainerStyle={notifs.length === 0 ? styles.emptyContainer : { paddingBottom: bottomPad }}
+          contentContainerStyle={activeNotifs.length === 0 ? styles.emptyContainer : { paddingBottom: bottomPad }}
           showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <View style={[styles.emptyIconCircle, { backgroundColor: colors.gold + "18" }]}>
-                <Feather name="bell" size={36} color={colors.gold} />
-              </View>
-              <Text style={[styles.emptyTitle, { color: colors.navy }]}>Tudo tranquilo por aqui</Text>
-              <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-                Suas notificações de curtidas, comentários e conexões aparecerão aqui
-              </Text>
-            </View>
-          }
+          ListEmptyComponent={<EmptyState colors={colors} isCompany={tab !== "personal"} />}
         />
       )}
     </View>
   );
 }
 
+function TabButton({
+  label,
+  active,
+  badge,
+  colors,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  badge: number;
+  colors: any;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity style={styles.tabBtn} onPress={onPress} activeOpacity={0.7}>
+      <View style={styles.tabLabelWrap}>
+        <Text
+          style={[
+            styles.tabLabel,
+            { color: active ? colors.gold : colors.mutedForeground },
+          ]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+        {badge > 0 && (
+          <View style={[styles.tabBadge, { backgroundColor: colors.gold }]}>
+            <Text style={styles.tabBadgeText}>{badge}</Text>
+          </View>
+        )}
+      </View>
+      {active && <View style={[styles.tabUnderline, { backgroundColor: colors.gold }]} />}
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
-  container:         { flex: 1 },
-  header:            { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, gap: 10 },
-  backBtn:           { padding: 4 },
-  headerTitle:       { flex: 1, fontSize: 20, fontWeight: "800" },
-  markAllWrap:       { alignItems: "flex-end", flexShrink: 0 },
-  markAllBtn:        { fontSize: 12, fontWeight: "700" },
-  unreadBar:         { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, gap: 8 },
-  unreadBadge:       { minWidth: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
-  unreadBadgeText:   { color: "#fff", fontSize: 11, fontWeight: "800" },
-  unreadBarText:     { fontSize: 13, fontWeight: "600" },
-  center:            { flex: 1, alignItems: "center", justifyContent: "center" },
-  row:               { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, gap: 12 },
-  avatarWrap:        { position: "relative" },
-  typeIcon:          { position: "absolute", bottom: -2, right: -2, width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#fff" },
-  rowBody:           { flex: 1, gap: 3 },
-  rowText:           { fontSize: 14, lineHeight: 20 },
-  rowTime:           { fontSize: 12 },
-  unreadDot:         { width: 9, height: 9, borderRadius: 5, marginTop: 5 },
-  emptyContainer:    { flex: 1 },
-  empty:             { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80, paddingHorizontal: 40, gap: 14 },
-  emptyIconCircle:   { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
-  emptyTitle:        { fontSize: 18, fontWeight: "800", textAlign: "center" },
-  emptySub:          { fontSize: 14, textAlign: "center", lineHeight: 20 },
-  connectionActions: { flexDirection: "row", gap: 8, marginTop: 8 },
-  acceptBtn:         { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20 },
-  acceptText:        { color: "#fff", fontSize: 13, fontWeight: "700" },
-  rejectBtn:         { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
-  rejectText:        { fontSize: 13 },
-  connectionFeedback:{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 6 },
-  feedbackText:      { fontSize: 13, fontWeight: "600" },
+  container:          { flex: 1 },
+  header:             { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, gap: 10 },
+  backBtn:            { padding: 4 },
+  headerTitle:        { flex: 1, fontSize: 20, fontWeight: "800" },
+  markAllWrap:        { alignItems: "flex-end", flexShrink: 0 },
+  markAllBtn:         { fontSize: 12, fontWeight: "700" },
+
+  tabs:               { flexDirection: "row", borderBottomWidth: 1 },
+  tabBtn:             { flex: 1, alignItems: "center", paddingVertical: 10, paddingHorizontal: 6, maxWidth: 160 },
+  tabLabelWrap:       { flexDirection: "row", alignItems: "center", gap: 5 },
+  tabLabel:           { fontSize: 13, fontWeight: "700" },
+  tabBadge:           { minWidth: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
+  tabBadgeText:       { color: "#fff", fontSize: 10, fontWeight: "800" },
+  tabUnderline:       { position: "absolute", bottom: 0, left: 8, right: 8, height: 2, borderRadius: 1 },
+
+  unreadBar:          { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, gap: 8 },
+  unreadBadge:        { minWidth: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
+  unreadBadgeText:    { color: "#fff", fontSize: 11, fontWeight: "800" },
+  unreadBarText:      { fontSize: 13, fontWeight: "600" },
+
+  center:             { flex: 1, alignItems: "center", justifyContent: "center" },
+  row:                { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, gap: 12 },
+  avatarWrap:         { position: "relative" },
+  typeIcon:           { position: "absolute", bottom: -2, right: -2, width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#fff" },
+  rowBody:            { flex: 1, gap: 3 },
+  rowText:            { fontSize: 14, lineHeight: 20 },
+  rowTime:            { fontSize: 12 },
+  unreadDot:          { width: 9, height: 9, borderRadius: 5, marginTop: 5 },
+  emptyContainer:     { flex: 1 },
+  empty:              { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80, paddingHorizontal: 40, gap: 14 },
+  emptyIconCircle:    { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
+  emptyTitle:         { fontSize: 18, fontWeight: "800", textAlign: "center" },
+  emptySub:           { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  connectionActions:  { flexDirection: "row", gap: 8, marginTop: 8 },
+  acceptBtn:          { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20 },
+  acceptText:         { color: "#fff", fontSize: 13, fontWeight: "700" },
+  rejectBtn:          { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
+  rejectText:         { fontSize: 13 },
+  connectionFeedback: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 6 },
+  feedbackText:       { fontSize: 13, fontWeight: "600" },
 });

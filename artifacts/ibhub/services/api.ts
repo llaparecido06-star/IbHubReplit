@@ -1238,8 +1238,9 @@ export async function fetchNotifications(userId: string): Promise<AppNotificatio
   try {
     const { data, error } = await supabase
       .from("notifications")
-      .select("id, user_id, actor_id, actor_company_id, type, post_id, comment_id, message, read, created_at, metadata")
+      .select("id, user_id, actor_id, actor_company_id, type, post_id, comment_id, message, read, created_at, metadata, target_company_id")
       .eq("user_id", userId)
+      .is("target_company_id", null)
       .order("created_at", { ascending: false })
       .limit(50);
 
@@ -1311,7 +1312,61 @@ export async function markNotificationRead(notifId: string): Promise<void> {
 }
 
 export async function markAllNotificationsRead(userId: string): Promise<void> {
-  await supabase.from("notifications").update({ read: true }).eq("user_id", userId).eq("read", false);
+  await supabase
+    .from("notifications")
+    .update({ read: true })
+    .eq("user_id", userId)
+    .is("target_company_id", null)
+    .eq("read", false);
+}
+
+export async function fetchCompanyNotifications(companyId: string): Promise<AppNotification[]> {
+  try {
+    const { data, error } = await supabase
+      .from("notifications")
+      .select("id, user_id, actor_id, actor_company_id, type, post_id, comment_id, message, read, created_at, metadata, target_company_id")
+      .eq("target_company_id", companyId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (error) {
+      console.error("fetchCompanyNotifications DB error:", JSON.stringify(error));
+      return [];
+    }
+    if (!data) return [];
+
+    const actorIds = [...new Set((data as any[]).map(n => n.actor_id).filter(Boolean))];
+    const actorCompanyIds = [...new Set((data as any[]).map(n => n.actor_company_id).filter(Boolean))];
+
+    const [profileMap, companiesRes] = await Promise.all([
+      fetchCommentProfilesForIds(actorIds),
+      actorCompanyIds.length > 0
+        ? supabase.from("company_pages").select("id, name, avatar_url").in("id", actorCompanyIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const companyMap = new Map<string, { id: string; name: string; avatar_url?: string | null }>();
+    ((companiesRes as any).data ?? []).forEach((cp: any) => {
+      companyMap.set(cp.id, { id: cp.id, name: cp.name, avatar_url: cp.avatar_url ?? null });
+    });
+
+    return (data as any[]).map(n => ({
+      ...n,
+      actor: profileMap.get(n.actor_id) ?? null,
+      actor_company: n.actor_company_id ? (companyMap.get(n.actor_company_id) ?? null) : null,
+    })) as unknown as AppNotification[];
+  } catch (e) {
+    console.warn("fetchCompanyNotifications:", e);
+    return [];
+  }
+}
+
+export async function markAllCompanyNotificationsRead(companyId: string): Promise<void> {
+  await supabase
+    .from("notifications")
+    .update({ read: true })
+    .eq("target_company_id", companyId)
+    .eq("read", false);
 }
 
 export async function getUnreadNotifCount(userId: string): Promise<number> {
