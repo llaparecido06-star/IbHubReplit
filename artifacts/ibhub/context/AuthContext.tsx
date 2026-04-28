@@ -1,5 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient, Session, User } from "@supabase/supabase-js";
+import * as AppleAuthentication from "expo-apple-authentication";
+import * as Crypto from "expo-crypto";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
@@ -616,7 +618,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signInWithGoogle = () => signInWithOAuthProvider("google");
-  const signInWithApple  = () => signInWithOAuthProvider("apple");
+
+  const signInWithApple = async (): Promise<{ error: string | null }> => {
+    // iOS: native Sign In with Apple → Supabase signInWithIdToken (no browser needed)
+    if (Platform.OS === "ios") {
+      try {
+        const rawNonce = Math.random().toString(36).substring(2)
+          + Math.random().toString(36).substring(2);
+        const hashedNonce = await Crypto.digestStringAsync(
+          Crypto.CryptoDigestAlgorithm.SHA256,
+          rawNonce,
+        );
+
+        const credential = await AppleAuthentication.signInAsync({
+          requestedScopes: [
+            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+            AppleAuthentication.AppleAuthenticationScope.EMAIL,
+          ],
+          nonce: hashedNonce,
+        });
+
+        if (!credential.identityToken) {
+          return { error: "Apple não retornou um token de identificação." };
+        }
+
+        const { error } = await supabase.auth.signInWithIdToken({
+          provider: "apple",
+          token: credential.identityToken,
+          nonce: rawNonce,
+        });
+
+        if (error) {
+          console.error("[Apple] signInWithIdToken error:", error.message);
+          return { error: error.message };
+        }
+        return { error: null };
+      } catch (e: any) {
+        if (e.code === "ERR_REQUEST_CANCELED") return { error: null }; // user cancelled
+        console.error("[Apple] native sign-in error:", e);
+        return { error: e?.message ?? "Erro ao fazer login com Apple." };
+      }
+    }
+
+    // Android / Web: fallback to web OAuth flow
+    return signInWithOAuthProvider("apple");
+  };
 
   const signOut = async () => {
     setActiveCompany(null);
