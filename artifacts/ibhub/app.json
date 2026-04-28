@@ -17,6 +17,9 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.ibhub.app",
       "usesAppleSignIn": true,
+      "entitlements": {
+        "aps-environment": "production"
+      },
       "infoPlist": {
         "NSCameraUsageDescription": "O ibhub usa a câmera para enviar fotos e vídeos nas conversas.",
         "NSMicrophoneUsageDescription": "O ibhub usa o microfone para gravar mensagens de voz.",
@@ -71,7 +74,16 @@
       ],
       "expo-video",
       "expo-audio",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#0d1b2a",
+          "sounds": []
+        }
+      ],
+      "./plugins/with-privacy-manifest"
     ],
     "experiments": {
       "typedRoutes": true,
