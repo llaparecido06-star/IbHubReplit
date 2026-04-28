@@ -3296,3 +3296,96 @@ export async function updateMarketPost(id: string, content: string): Promise<boo
     return false;
   }
 }
+
+// ─── MENTIONS ────────────────────────────────────────────────────────────────
+
+export interface MentionSuggestion {
+  id: string;
+  type: "user" | "company";
+  display_name: string;
+  username: string;
+  avatar_url: string | null;
+}
+
+export async function searchUsersForMention(q: string): Promise<MentionSuggestion[]> {
+  if (!q || q.length < 1) return [];
+  try {
+    const [{ data: people }, { data: companies }] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("id, full_name, username, avatar_url")
+        .or(`username.ilike.%${q}%,full_name.ilike.%${q}%`)
+        .not("username", "is", null)
+        .limit(8),
+      supabase
+        .from("company_pages")
+        .select("id, name, avatar_url, slug")
+        .ilike("name", `%${q}%`)
+        .limit(5),
+    ]);
+    const results: MentionSuggestion[] = [];
+    for (const p of (people ?? [])) {
+      if (!p.username) continue;
+      results.push({ id: p.id, type: "user", display_name: (p as any).full_name ?? p.username, username: p.username, avatar_url: (p as any).avatar_url });
+    }
+    for (const c of (companies ?? [])) {
+      const slug = (c as any).slug ?? (c as any).name.toLowerCase().replace(/\s+/g, "_");
+      results.push({ id: c.id, type: "company", display_name: (c as any).name, username: slug, avatar_url: (c as any).avatar_url });
+    }
+    return results;
+  } catch { return []; }
+}
+
+export async function sendMentionNotifications(
+  text: string,
+  actorId: string,
+  actorName: string,
+  postId?: string,
+  commentId?: string,
+): Promise<void> {
+  try {
+    const handles = [...new Set((text.match(/@([\w.]+)/g) ?? []).map(m => m.slice(1).toLowerCase()))];
+    if (!handles.length) return;
+
+    const [{ data: people }, { data: companies }] = await Promise.all([
+      supabase.from("profiles").select("id, username").in("username", handles),
+      supabase.from("company_pages").select("id, slug").in("slug", handles),
+    ]);
+
+    const mentionedUserIds: string[] = [];
+    const notifs: Array<Record<string, unknown>> = [];
+    const where = commentId ? "comentário" : "publicação";
+
+    for (const p of (people ?? [])) {
+      if ((p as any).id === actorId) continue;
+      mentionedUserIds.push((p as any).id);
+      notifs.push({ user_id: (p as any).id, actor_id: actorId, type: "mention", message: `mencionou você em um ${where}`, post_id: postId ?? null });
+    }
+    for (const c of (companies ?? [])) {
+      const { data: admins } = await supabase
+        .from("company_page_admins")
+        .select("user_id")
+        .eq("company_page_id", (c as any).id);
+      for (const a of (admins ?? [])) {
+        if ((a as any).user_id === actorId) continue;
+        mentionedUserIds.push((a as any).user_id);
+        notifs.push({ user_id: (a as any).user_id, actor_id: actorId, type: "mention", message: `mencionou ${(c as any).name || "sua empresa"} em um ${where}`, post_id: postId ?? null });
+      }
+    }
+
+    if (!notifs.length) return;
+    await supabase.from("notifications").insert(notifs);
+
+    if (mentionedUserIds.length) {
+      const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
+      const session = await getCachedSession();
+      if (session?.access_token && apiBase) {
+        fetch(`${apiBase}/push/mention`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ mentionedUserIds, actorName, postId, commentId, contextText: text.slice(0, 100) }),
+        }).catch(() => {});
+      }
+    }
+  } catch { /* best-effort */ }
+}

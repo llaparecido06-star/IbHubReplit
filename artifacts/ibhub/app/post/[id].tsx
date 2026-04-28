@@ -26,6 +26,8 @@ import { useAuth, supabase } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
 import type { AppComment } from "@/services/api";
+import { sendMentionNotifications } from "@/services/api";
+import { MentionInput } from "@/components/ui/MentionInput";
 import { friendlyErrorMessage } from "@/hooks/useAsyncAction";
 import { Post, AdaptiveImage } from "@/components/feed/PostCard";
 import { LikesModal } from "@/components/feed/LikesModal";
@@ -360,6 +362,11 @@ export default function PostDetailScreen() {
           ));
         } else {
           setComments(prev => prev.map(c => c.id === tempId ? savedWithReplies : c));
+        }
+        // Fire mention notifications (best-effort, non-blocking)
+        if (text.includes("@") && user?.id) {
+          const actorName = activeCompany?.name ?? profile?.full_name ?? "Usuário";
+          sendMentionNotifications(text, user.id, actorName, id, saved.id);
         }
       } else {
         // API returned null — remove optimistic comment
@@ -713,8 +720,7 @@ export default function PostDetailScreen() {
           size={34}
         />
         <View style={[styles.inputWrap, { backgroundColor: colors.secondary, borderRadius: 24 }]}>
-          <TextInput
-            ref={inputRef}
+          <MentionInput
             style={[styles.input, { color: colors.foreground }]}
             placeholder={replyTo ? `Responder a ${replyTo.name}...` : "Adicionar comentário..."}
             placeholderTextColor={colors.mutedForeground}
@@ -723,6 +729,7 @@ export default function PostDetailScreen() {
             multiline
             returnKeyType="send"
             onSubmitEditing={sendComment}
+            suggestionsPlacement="above"
           />
         </View>
         <TouchableOpacity

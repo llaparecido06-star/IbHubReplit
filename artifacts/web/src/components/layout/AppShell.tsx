@@ -18,7 +18,9 @@ import {
   markAllWebNotificationsRead,
   WebNotification,
   Poll,
+  sendMentionNotifications,
 } from "@/services/api";
+import { MentionTextArea } from "@/components/MentionTextArea";
 
 const GOLD   = "#c9a84c";
 const NAVY   = "#0d1b2a";
@@ -269,14 +271,19 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
       const expiresAt = new Date(Date.now() + days * 24 * 3600 * 1000).toISOString();
       poll = { options: opts.map(t => ({ text: t, votes: 0 })), total_votes: 0, closed: false, expires_at: expiresAt, allow_multiple: pollAllowMultiple };
     }
-    await createWebPost({
+    const finalContent = buildContent();
+    const newPost = await createWebPost({
       user_id: userId,
-      content: buildContent(),
+      content: finalContent,
       image_url: image_url ?? null,
       video_url: video_url ?? null,
       company_page_id: companyPageId ?? null,
       poll,
     });
+    if (finalContent.includes("@") && userId) {
+      const actorName = companyPageId ? (companyName ?? "Empresa") : (profile.full_name ?? "Usuário");
+      sendMentionNotifications(finalContent, userId, actorName, (newPost as any)?.id);
+    }
     if (tab === "vinho" && wineName.trim()) {
       addWineEntry({
         user_id: userId,
@@ -386,10 +393,10 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
           {/* Always show text area for texto/foto/video/enquete */}
           {tab !== "vinho" && (
             <>
-              <textarea
+              <MentionTextArea
                 autoFocus={tab === "texto"}
                 value={content}
-                onChange={e => setContent(e.target.value)}
+                onChange={setContent}
                 placeholder={
                   tab === "texto"   ? "O que está acontecendo no mundo do vinho?" :
                   tab === "foto"    ? "Descreva a foto..." :
@@ -397,12 +404,7 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
                   "Pergunta da enquete..."
                 }
                 rows={isMobile ? 5 : 4}
-                style={{
-                  width: "100%", boxSizing: "border-box",
-                  border: `1px solid ${BORDER}`, borderRadius: 10, padding: "12px 14px",
-                  fontSize: isMobile ? 16 : 14, color: NAVY, lineHeight: 1.65,
-                  resize: "none", outline: "none", fontFamily: "inherit",
-                }}
+                style={{ fontSize: isMobile ? 16 : 14 }}
               />
               {/* Quick action bar — desktop only (tabs already visible on mobile) */}
               {tab === "texto" && !isMobile && (

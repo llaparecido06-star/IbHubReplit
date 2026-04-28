@@ -7,7 +7,9 @@ import { supabase } from "@/lib/supabase";
 import {
   fetchPostById, fetchPostComments, addPostComment, toggleLikePost, toggleBookmarkPost,
   changeReactionPost, toggleCommentLike, Post, AppComment, ReactionType,
+  sendMentionNotifications,
 } from "@/services/api";
+import { MentionTextArea } from "@/components/MentionTextArea";
 import { formatRelativeDate as relativeDate } from "@/utils/dateUtils";
 
 const GOLD = "#c9a84c";
@@ -129,7 +131,6 @@ export default function PostDetalhePage() {
   const [submitting, setSubmitting] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [showShare, setShowShare] = useState(false);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
   const pickerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shareRef = useRef<HTMLDivElement>(null);
 
@@ -210,15 +211,19 @@ export default function PostDetalhePage() {
         : [...prev, c]
       );
       setPost(prev => prev ? { ...prev, comments_count: prev.comments_count + 1 } : prev);
+      const saved_text = commentText.trim();
       setCommentText("");
       setReplyTo(null);
+      if (saved_text.includes("@") && profile?.id) {
+        const actorName = profile.full_name ?? "Usuário";
+        sendMentionNotifications(saved_text, profile.id, actorName, post.id, c.id);
+      }
     }
     setSubmitting(false);
   };
 
   const handleReply = (id: string, name: string) => {
     setReplyTo({ id, name });
-    inputRef.current?.focus();
   };
 
   useEffect(() => {
@@ -251,8 +256,7 @@ export default function PostDetalhePage() {
   };
 
   const handleFocusComment = () => {
-    inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    inputRef.current?.focus();
+    document.querySelector<HTMLTextAreaElement>(".mention-textarea")?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
   if (loading) {
@@ -425,13 +429,12 @@ export default function PostDetalhePage() {
               <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                 <Avatar url={profile.avatar_url} name={profile.full_name} size={36} />
                 <div style={{ flex: 1 }}>
-                  <textarea
-                    ref={inputRef}
+                  <MentionTextArea
                     value={commentText}
-                    onChange={e => setCommentText(e.target.value)}
+                    onChange={setCommentText}
                     placeholder="Adicione um comentário..."
                     rows={2}
-                    style={{ width: "100%", borderRadius: 8, border: `1.5px solid ${BORDER}`, padding: "10px 12px", fontSize: 14, resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }}
+                    style={{ borderRadius: 8, border: `1.5px solid ${BORDER}`, padding: "10px 12px", fontSize: 14, resize: "vertical" as const, fontFamily: "inherit" }}
                   />
                   <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
                     <button

@@ -270,4 +270,76 @@ router.post("/push/social", async (req: Request, res: Response): Promise<void> =
   res.json({ sent: messages.length });
 });
 
+// ─── POST /push/mention ───────────────────────────────────────────────────────
+/**
+ * Sends push notifications to all users/companies mentioned via @ in a post or comment.
+ * Body: { mentionedUserIds: string[], actorName: string, postId?: string, commentId?: string, contextText?: string }
+ */
+router.post("/push/mention", async (req: Request, res: Response): Promise<void> => {
+  const actorId = await resolveUserId(req, res);
+  if (!actorId) return;
+
+  if (!checkRateLimit(actorId)) {
+    res.status(429).json({ error: "Muitas solicitações — tente novamente em breve." });
+    return;
+  }
+
+  const { mentionedUserIds, actorName, postId, commentId, contextText } = req.body as {
+    mentionedUserIds?: string[];
+    actorName?: string;
+    postId?: string;
+    commentId?: string;
+    contextText?: string;
+  };
+
+  if (!mentionedUserIds?.length || !actorName) {
+    res.status(400).json({ error: "mentionedUserIds e actorName são obrigatórios" });
+    return;
+  }
+
+  // Exclude actor from recipients
+  const recipientIds = mentionedUserIds.filter(id => id !== actorId);
+  if (!recipientIds.length) {
+    res.json({ sent: 0, skipped: "actor is the only mentionee" });
+    return;
+  }
+
+  const { data: tokenRows, error: tokensErr } = await supabaseAdmin
+    .from("push_tokens")
+    .select("token")
+    .in("user_id", recipientIds);
+
+  if (tokensErr) {
+    logger.error({ err: tokensErr }, "DB error fetching push tokens for mention");
+    res.status(500).json({ error: "Erro ao buscar tokens." });
+    return;
+  }
+
+  const validTokens = (tokenRows ?? [])
+    .map((r: { token: string }) => r.token)
+    .filter((t: string) => typeof t === "string" && t.startsWith("ExponentPushToken["));
+
+  if (validTokens.length === 0) {
+    res.json({ sent: 0, skipped: "no valid tokens for mentioned users" });
+    return;
+  }
+
+  const where = commentId ? "comentário" : "publicação";
+  const body = contextText
+    ? (contextText.length > 80 ? contextText.slice(0, 80) + "…" : contextText)
+    : `Toque para ver o ${where}.`;
+
+  const messages: ExpoPushMessage[] = validTokens.map((token) => ({
+    to: token,
+    title: `@ ${actorName} mencionou você em um ${where}`,
+    body,
+    data: { postId, commentId, type: "mention" },
+    sound: "default" as const,
+  }));
+
+  await sendExpoPushNotifications(messages);
+  logger.info({ count: messages.length, actorId, postId, commentId }, "Mention push dispatched");
+  res.json({ sent: messages.length });
+});
+
 export default router;

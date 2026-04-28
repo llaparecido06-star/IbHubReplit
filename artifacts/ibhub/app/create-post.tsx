@@ -22,7 +22,8 @@ import { Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { createPost, uploadPostImage, uploadPostVideo, addWineEntry, canPublishAsCompany } from "@/services/api";
+import { createPost, uploadPostImage, uploadPostVideo, addWineEntry, canPublishAsCompany, sendMentionNotifications } from "@/services/api";
+import { MentionInput } from "@/components/ui/MentionInput";
 
 const HASHTAG_SUGGESTIONS = [
   "vinho", "sommelier", "enologia", "degustação",
@@ -213,7 +214,7 @@ export default function CreatePostScreen() {
       const hashtags = mode === "degustacao"
         ? ["degustação", "vinho", ...(selectedHashtags)]
         : selectedHashtags;
-      await createPost({
+      const newPost = await createPost({
         user_id: user.id,
         content: finalContent,
         image_url: uploadedUrls[0] ?? null,
@@ -223,6 +224,12 @@ export default function CreatePostScreen() {
         hashtags: hashtags.length > 0 ? hashtags : undefined,
         company_page_id: effectiveCompanyId,
       });
+
+      // Fire mention notifications (best-effort, non-blocking)
+      if (newPost?.id && finalContent.includes("@")) {
+        const actorName = activeCompany?.name ?? profile?.full_name ?? "Usuário";
+        sendMentionNotifications(finalContent, user.id, actorName, newPost.id);
+      }
 
       // Se a degustação tem EAN + pontuação, insere na adega como pública
       // para alimentar o ranking comunitário automaticamente.
@@ -346,7 +353,7 @@ export default function CreatePostScreen() {
         {/* ── Normal post ── */}
         {mode === "normal" && (
           <>
-            <TextInput
+            <MentionInput
               style={[styles.textInput, { color: colors.foreground }]}
               placeholder="Compartilhe algo sobre vinho, eventos, oportunidades..."
               placeholderTextColor={colors.mutedForeground}
@@ -355,6 +362,7 @@ export default function CreatePostScreen() {
               onChangeText={setContent}
               maxLength={maxChars}
               autoFocus
+              suggestionsPlacement="above"
             />
 
             {showLocationInput && (
