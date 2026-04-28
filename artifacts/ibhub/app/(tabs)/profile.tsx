@@ -363,7 +363,7 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
               <View style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, borderRadius: 20, backgroundColor: userRole === "visualizador" ? colors.border + "60" : colors.navy + "12" }}>
                 <Feather name={userRole === "owner" ? "shield" : userRole === "visualizador" ? "eye" : "user-check"} size={12} color={userRole === "visualizador" ? colors.mutedForeground : colors.navy} />
                 <Text style={{ fontSize: 12, fontWeight: "600", color: userRole === "visualizador" ? colors.mutedForeground : colors.navy }}>
-                  {userRole === "owner" ? "Proprietário" : userRole === "editor" ? "Editor" : userRole === "moderador" ? "Moderador" : userRole === "visualizador" ? "Visualizador (somente leitura)" : "Admin"}
+                  {userRole === "owner" ? "Proprietário" : userRole === "editor" ? "Editor" : userRole === "moderador" ? "Moderador" : userRole === "visualizador" ? "Visualizador" : "Admin"}
                 </Text>
               </View>
               {isManager && (

@@ -51,8 +51,8 @@ export default function GroupChatScreen() {
   const { user, activeCompany } = useAuth();
   const insets  = useSafeAreaInsets();
 
-  // Visualizador can only read — do not send messages as company
-  const effectiveCompanyId = activeCompany && API.canPublishAsCompany(activeCompany.role) ? activeCompany.id : null;
+  // All roles (including visualizador) can chat as company
+  const effectiveCompanyId = activeCompany?.id ?? null;
 
   const [groupInfo, setGroupInfo]       = useState<GroupInfo>({ name: "Grupo", member_count: 0, avatar_url: null, owner_id: "" });
   const [messages, setMessages]         = useState<AppMessage[]>([]);

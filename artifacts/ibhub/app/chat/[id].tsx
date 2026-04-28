@@ -278,8 +278,8 @@ export default function ChatScreen() {
     if (!text || !user?.id || !id || sending) return;
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // Visualizador can only read — send as personal identity
-    const effectiveCompany = activeCompany && API.canPublishAsCompany(activeCompany.role) ? activeCompany : null;
+    // All roles (including visualizador) can chat as company
+    const effectiveCompany = activeCompany ?? null;
 
     const currentReplyTo = replyTo;
     setInput("");
@@ -329,7 +329,7 @@ export default function ChatScreen() {
 
     setSending(false);
 
-    const senderName = effectiveCompany?.name ?? (user as any)?.full_name ?? "Alguém";
+    const senderName = activeCompany?.name ?? (user as any)?.full_name ?? "Alguém";
     const pushBody =
       opts?.message_type === "post_share" ? "📎 Compartilhou uma publicação" :
       opts?.message_type === "wine_card"  ? "🍷 Enviou uma ficha de vinho" : text;
@@ -571,8 +571,7 @@ export default function ChatScreen() {
         message_type: "audio",
         media_url: url,
       };
-      const effectiveAudioCompany = activeCompany && API.canPublishAsCompany(activeCompany.role) ? activeCompany : null;
-      if (effectiveAudioCompany?.id) audioPayload.from_company_page_id = effectiveAudioCompany.id;
+      if (activeCompany?.id) audioPayload.from_company_page_id = activeCompany.id;
 
       const { data: saved, error: msgError } = await supabase
         .from("messages")

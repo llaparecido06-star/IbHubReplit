@@ -58,7 +58,7 @@ const ROLE_DESCRIPTIONS: Record<RoleKey, { icon: string; desc: string }> = {
   },
   visualizador: {
     icon: "eye",
-    desc: "Acesso somente leitura: visualiza a página, analytics e conteúdo. Não pode publicar nem editar nada.",
+    desc: "Pode responder mensagens no chat e grupos como empresa. Não pode publicar posts, criar eventos/vagas/marketplace nem editar informações da página.",
   },
 };
 
