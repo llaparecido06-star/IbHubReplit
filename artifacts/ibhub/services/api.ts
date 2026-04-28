@@ -788,7 +788,7 @@ export async function fetchSuggestedConnections(
         const totalA = a.match_score + (a.company_match ? 2 : 0);
         const totalB = b.match_score + (b.company_match ? 2 : 0);
         if (totalB !== totalA) return totalB - totalA;
-        const planOrder: Record<string, number> = { exclusive: 3, business: 2, premium: 1, basico: 0, gratuito: 0 };
+        const planOrder: Record<string, number> = { executivo: 3, exclusive: 3, business: 3, empresa: 2, empresas: 2, profissional: 1, basico: 1, premium: 1, gratuito: 0 };
         return (planOrder[b.plan] ?? 0) - (planOrder[a.plan] ?? 0);
       });
 

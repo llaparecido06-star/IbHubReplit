@@ -27,10 +27,16 @@ const supabaseAdmin = createClient(
 );
 
 const CREDITS_FALLBACK: Record<string, number> = {
-  free:      0,
-  premium:   3,
-  business:  10,
-  exclusive: 25,
+  gratuito:     0,
+  free:         0,
+  profissional: 3,
+  basico:       3,
+  premium:      3,
+  empresa:      10,
+  empresas:     10,
+  business:     10,
+  executivo:    25,
+  exclusive:    25,
 };
 
 function currentPeriodStart(): string {

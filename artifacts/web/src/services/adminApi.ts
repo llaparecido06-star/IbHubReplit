@@ -61,7 +61,7 @@ export interface ModerationPost {
 export interface BroadcastParams {
   title: string;
   body: string;
-  segment: "all" | "gratuito" | "basico" | "profissional" | "empresarial" | "premium";
+  segment: "all" | "gratuito" | "profissional" | "basico" | "empresa" | "executivo";
   deepLink?: string;
 }
 
@@ -83,7 +83,7 @@ export async function fetchAdminStats(): Promise<AdminStats> {
     supabase.from("profiles").select("id", { count: "exact", head: true }),
     supabase.from("posts").select("id", { count: "exact", head: true }),
     supabase.from("stories").select("id", { count: "exact", head: true }).gt("expires_at", now),
-    supabase.from("profiles").select("id", { count: "exact", head: true }).neq("plan", "basico"),
+    supabase.from("profiles").select("id", { count: "exact", head: true }).neq("plan", "gratuito"),
   ]);
 
   return {

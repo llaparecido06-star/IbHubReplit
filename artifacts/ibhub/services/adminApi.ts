@@ -102,7 +102,7 @@ export async function fetchAdminStats(): Promise<AdminStats> {
     supabase
       .from("profiles")
       .select("id", { count: "exact", head: true })
-      .neq("plan", "basico"),
+      .neq("plan", "gratuito"),
   ]);
 
   return {

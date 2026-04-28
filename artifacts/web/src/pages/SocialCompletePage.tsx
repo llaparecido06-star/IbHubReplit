@@ -79,7 +79,7 @@ export default function SocialCompletePage() {
       position: position.trim() || null,
       areas_of_expertise: areas,
       areas,
-      plan: "basico",
+      plan: "gratuito",
       created_at: new Date().toISOString(),
     }, { onConflict: "id" });
 
