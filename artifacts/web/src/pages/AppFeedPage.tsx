@@ -1024,6 +1024,7 @@ function ConnectBtn({ profile, onConnect, onFollow, viewingAsCompany }: {
 
 /* ─── WineRankingTeaser ──────────────────── */
 function WineRankingTeaser({ wines }: { wines: WineCommunityRating[] }) {
+  const [, setLocation] = useLocation();
   const top = (wines ?? []).slice(0, 3);
   const medalColors = [GOLD, "#9ca3af", "#c97c42"];
   const stars = (avg: number) => {
@@ -1055,7 +1056,10 @@ function WineRankingTeaser({ wines }: { wines: WineCommunityRating[] }) {
         </div>
       ))}
       <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 10, textAlign: "center" }}>
-        <button style={{ background: "none", border: "none", color: GOLD, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+        <button
+          onClick={() => setLocation("/app/ranking-vinho")}
+          style={{ background: "none", border: "none", color: GOLD, fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+        >
           Ver ranking completo →
         </button>
       </div>
@@ -1065,13 +1069,20 @@ function WineRankingTeaser({ wines }: { wines: WineCommunityRating[] }) {
 
 /* ─── Trending Topics ────────────────────── */
 function TrendingTopics() {
+  const [, setLocation] = useLocation();
   const topics = ["#SustentabilidadeVinícola", "#Chardonnay2024", "#EnoturismoBrasil", "#TerroirSerrano", "#VinosNaturaes"];
   return (
     <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16, marginBottom: 12 }}>
       <h3 style={{ fontSize: 14, fontWeight: 800, color: NAVY, margin: "0 0 12px" }}>📈 Em Alta</h3>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {topics.map(t => (
-          <button key={t} style={{ background: "none", border: "none", textAlign: "left", color: "#1a56db", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0 }}>{t}</button>
+          <button
+            key={t}
+            onClick={() => setLocation(`/app/busca?q=${encodeURIComponent(t)}`)}
+            style={{ background: "none", border: "none", textAlign: "left", color: "#1a56db", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0 }}
+          >
+            {t}
+          </button>
         ))}
       </div>
     </div>

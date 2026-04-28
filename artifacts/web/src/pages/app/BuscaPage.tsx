@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import { supabase, getCachedSession } from "@/lib/supabase";
@@ -171,13 +171,16 @@ function GroupCard({ g }: { g: GroupResult }) {
 export default function BuscaPage() {
   const { user, loading: authLoading } = useAuth();
   const myId = user?.id ?? "";
-  const [query,   setQuery]   = useState("");
+  const searchString = useSearch();
+  const initialQuery = new URLSearchParams(searchString).get("q") ?? "";
+  const [query,   setQuery]   = useState(initialQuery);
   const [filter,  setFilter]  = useState<Filter>("todos");
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [results, setResults] = useState<SearchResults>(EMPTY);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didAutoSearch = useRef(false);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
@@ -255,6 +258,13 @@ export default function BuscaPage() {
 
     setLoading(false);
   }, [myId]);
+
+  useEffect(() => {
+    if (initialQuery && !didAutoSearch.current && myId) {
+      didAutoSearch.current = true;
+      runSearch(initialQuery, "todos");
+    }
+  }, [initialQuery, myId, runSearch]);
 
   const handleChange = (q: string) => {
     setQuery(q);
