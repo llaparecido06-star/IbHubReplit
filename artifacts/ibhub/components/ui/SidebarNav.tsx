@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -116,18 +117,19 @@ export function SidebarNav() {
       {/* Logo */}
       <TouchableOpacity style={styles.logoWrap} onPress={() => handleNav("/(tabs)")}>
         {isCollapsed ? (
-          <View style={[styles.logoIcon, { backgroundColor: colors.navy }]}>
-            <Text style={[styles.logoIconText, { color: colors.gold }]}>ib</Text>
-          </View>
+          <Image
+            source={require("@/assets/images/logo_dark.png")}
+            style={{ height: 28, width: 40 }}
+            resizeMode="contain"
+          />
         ) : (
-          <View style={styles.logoRow}>
-            <View style={[styles.logoIcon, { backgroundColor: colors.navy }]}>
-              <Text style={[styles.logoIconText, { color: colors.gold }]}>ib</Text>
-            </View>
-            <View>
-              <Text style={[styles.logoTitle, { color: colors.navy }]}>ibhub</Text>
-              <Text style={[styles.logoSub, { color: colors.gold }]}>Rede do Vinho</Text>
-            </View>
+          <View style={{ gap: 2 }}>
+            <Image
+              source={require("@/assets/images/logo_dark.png")}
+              style={{ height: 28, width: 120 }}
+              resizeMode="contain"
+            />
+            <Text style={[styles.logoSub, { color: colors.gold }]}>Rede do Vinho</Text>
           </View>
         )}
       </TouchableOpacity>

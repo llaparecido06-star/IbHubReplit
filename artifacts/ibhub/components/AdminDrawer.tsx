@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import {
   Alert,
   Animated,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -112,7 +113,11 @@ export default function AdminDrawer({ visible, onClose, activeRoute }: Props) {
         {/* Header */}
         <View style={styles.dHeader}>
           <View style={styles.logoRow}>
-            <Text style={styles.logoText}>ibhub</Text>
+            <Image
+              source={require("@/assets/images/logo_light.png")}
+              style={{ height: 26, width: 100 }}
+              resizeMode="contain"
+            />
             <View style={styles.adminBadge}>
               <Text style={styles.adminBadgeText}>ADMIN</Text>
             </View>

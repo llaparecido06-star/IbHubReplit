@@ -5,6 +5,7 @@ import {
   Alert,
   AppState,
   AppStateStatus,
+  Image,
   Linking,
   Platform,
   ScrollView,
@@ -139,7 +140,12 @@ export default function SubscriptionScreen() {
         <View style={[styles.hero, { backgroundColor: colors.navy, borderRadius: 16, padding: 20 }]}>
           <View style={[styles.heroBadge, { backgroundColor: "rgba(201,168,76,0.15)" }]}>
             <Feather name="award" size={16} color={colors.gold} />
-            <Text style={[styles.heroBadgeText, { color: colors.gold }]}>ibhub Pro</Text>
+            <Image
+              source={require("@/assets/images/logo_light.png")}
+              style={{ height: 16, width: 62 }}
+              resizeMode="contain"
+            />
+            <Text style={[styles.heroBadgeText, { color: colors.gold }]}>Pro</Text>
           </View>
           <Text style={styles.heroTitle}>Desbloqueie todo o potencial da rede do vinho</Text>
           <Text style={styles.heroSub}>Pagamentos seguros via Stripe · Cancele quando quiser</Text>

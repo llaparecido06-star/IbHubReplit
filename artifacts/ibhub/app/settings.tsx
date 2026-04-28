@@ -250,7 +250,15 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         {/* Footer */}
-        <Text style={[styles.footer, { color: colors.mutedForeground }]}>ibhub v1.0 · © 2026</Text>
+        <View style={{ alignItems: "center", gap: 4 }}>
+          <Image
+            source={require("@/assets/images/logo_dark.png")}
+            style={{ height: 20, width: 76 }}
+            resizeMode="contain"
+            accessibilityLabel="ibhub"
+          />
+          <Text style={[styles.footer, { color: colors.mutedForeground }]}>v1.0 · © 2026</Text>
+        </View>
       </ScrollView>
     </View>
   );
