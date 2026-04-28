@@ -9,15 +9,8 @@ import { supabase } from "@/lib/supabase";
 
 const GOLD = "#c9a84c";
 const NAVY = "#0d1b2a";
-const SEGMENTS = ["Todos os usuários", "Gratuito", "Básico", "Profissional", "Empresarial", "Premium"];
-const SEGMENT_MAP: Record<string, string> = {
-  "Todos os usuários": "all",
-  "Gratuito": "gratuito",
-  "Básico": "basico",
-  "Profissional": "profissional",
-  "Empresarial": "empresarial",
-  "Premium": "premium",
-};
+
+interface PlanOption { id: string; name: string; }
 
 interface ReferralEntry {
   id: string;
@@ -35,7 +28,7 @@ function formatDate(iso: string) {
 export default function AdminComunicacao() {
   const [titulo, setTitulo] = useState("");
   const [mensagem, setMensagem] = useState("");
-  const [segmento, setSegmento] = useState(SEGMENTS[0]);
+  const [segmento, setSegmento] = useState("all");
   const [deepLink, setDeepLink] = useState("");
   const [sending, setSending] = useState(false);
   const [sendMsg, setSendMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -45,6 +38,13 @@ export default function AdminComunicacao() {
 
   const [tracking, setTracking] = useState<ReferralEntry[]>([]);
   const [loadingTracking, setLoadingTracking] = useState(true);
+
+  const [planOptions, setPlanOptions] = useState<PlanOption[]>([]);
+
+  const segments = [
+    { id: "all", label: "Todos os usuários" },
+    ...planOptions.map((p) => ({ id: p.id, label: p.name })),
+  ];
 
   const canSend = titulo.trim().length > 0 && mensagem.trim().length > 0;
 
@@ -97,17 +97,18 @@ export default function AdminComunicacao() {
   useEffect(() => {
     void fetchLogs();
     void fetchTracking();
+    supabase.from("plans").select("id, name").eq("is_active", true).order("sort_order", { ascending: true })
+      .then(({ data }) => { if (data) setPlanOptions(data as PlanOption[]); });
   }, []);
 
   const handleSend = async () => {
     if (!canSend) return;
     setSending(true);
     setSendMsg(null);
-    const segKey = SEGMENT_MAP[segmento] ?? "all";
     const result = await sendBroadcastPush({
       title: titulo,
       body: mensagem,
-      segment: segKey as "all",
+      segment: segmento as "all",
       deepLink: deepLink.trim() || undefined,
     });
     setSending(false);
@@ -158,7 +159,7 @@ export default function AdminComunicacao() {
                 onChange={(e) => setSegmento(e.target.value)}
                 style={{ width: "100%", padding: "10px 12px", border: "1px solid #e8eaed", borderRadius: 8, fontSize: 14, outline: "none", cursor: "pointer" }}
               >
-                {SEGMENTS.map((s) => <option key={s} value={s}>{s}</option>)}
+                {segments.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
               </select>
             </div>
 

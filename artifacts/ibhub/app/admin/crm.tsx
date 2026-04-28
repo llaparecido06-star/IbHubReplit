@@ -24,9 +24,11 @@ import {
   type AdminUser,
 } from "@/services/admin-api";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/context/AuthContext";
 
 const AVATAR_COLORS = ["#0d1b2a", "#1e3a5f", "#7c3aed", "#e11d48", "#059669", "#374151", "#1e3a5f"];
-const PLANS = ["gratuito", "basico", "profissional", "empresarial", "premium"] as const;
+
+interface PlanOption { id: string; name: string; }
 
 function getInitial(name: string | null, email: string | null): string {
   const str = name ?? email ?? "?";
@@ -53,12 +55,18 @@ export default function AdminCRMScreen() {
   const [error, setError]                 = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
-  const [planEdit, setPlanEdit]     = useState<string>("basico");
+  const [planEdit, setPlanEdit]     = useState<string>("gratuito");
   const [isCourtesy, setIsCourtesy] = useState(false);
   const [savingPlan, setSavingPlan] = useState(false);
+  const [planOptions, setPlanOptions] = useState<PlanOption[]>([]);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
+
+  useEffect(() => {
+    supabase.from("plans").select("id, name").eq("is_active", true).order("sort_order", { ascending: true })
+      .then(({ data }) => { if (data) setPlanOptions(data as PlanOption[]); });
+  }, []);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -319,18 +327,18 @@ export default function AdminCRMScreen() {
                         <View style={[styles.planSection, { backgroundColor: colors.background, borderColor: colors.border }]}>
                           <Text style={[styles.sectionLabel, { color: colors.navy }]}>Alterar Plano</Text>
                           <View style={styles.planGrid}>
-                            {PLANS.map((p) => (
+                            {planOptions.map((p) => (
                               <TouchableOpacity
-                                key={p}
-                                onPress={() => setPlanEdit(p)}
+                                key={p.id}
+                                onPress={() => setPlanEdit(p.id)}
                                 style={[
                                   styles.planChip,
-                                  { borderColor: planEdit === p ? colors.gold : colors.border },
-                                  planEdit === p && { backgroundColor: colors.gold + "15" },
+                                  { borderColor: planEdit === p.id ? colors.gold : colors.border },
+                                  planEdit === p.id && { backgroundColor: colors.gold + "15" },
                                 ]}
                               >
-                                <Text style={[styles.planChipText, { color: planEdit === p ? colors.gold : colors.foreground }]}>
-                                  {p}
+                                <Text style={[styles.planChipText, { color: planEdit === p.id ? colors.gold : colors.foreground }]}>
+                                  {p.name}
                                 </Text>
                               </TouchableOpacity>
                             ))}

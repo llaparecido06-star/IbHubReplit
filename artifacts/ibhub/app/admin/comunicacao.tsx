@@ -18,7 +18,7 @@ import { supabase } from "@/context/AuthContext";
 import { useAuth } from "@/context/AuthContext";
 import { broadcastPushNotification } from "@/services/admin-api";
 
-const SEGMENTS = ["Todos os usuários", "Gratuito", "Básico", "Profissional", "Empresarial", "Premium"];
+interface PlanOption { id: string; name: string; }
 
 interface ReferralTrackingEntry {
   id: string;
@@ -52,8 +52,15 @@ export default function AdminComunicacaoScreen() {
   const [drawerOpen, setDrawerOpen]   = useState(false);
   const [titulo, setTitulo]           = useState("");
   const [mensagem, setMensagem]       = useState("");
-  const [segmento, setSegmento]       = useState(SEGMENTS[0]);
+  const [segmento, setSegmento]       = useState("all");
   const [segOpen, setSegOpen]         = useState(false);
+  const [planOptions, setPlanOptions] = useState<PlanOption[]>([]);
+
+  const segments = [
+    { id: "all", label: "Todos os usuários" },
+    ...planOptions.map((p) => ({ id: p.id, label: p.name })),
+  ];
+  const segmentoLabel = segments.find((s) => s.id === segmento)?.label ?? segmento;
   const [deepLink, setDeepLink]       = useState("");
   const [sending, setSending]         = useState(false);
 
@@ -144,6 +151,8 @@ export default function AdminComunicacaoScreen() {
   useEffect(() => {
     fetchLogs();
     fetchTracking();
+    supabase.from("plans").select("id, name").eq("is_active", true).order("sort_order", { ascending: true })
+      .then(({ data }) => { if (data) setPlanOptions(data as PlanOption[]); });
   }, []);
 
   const handleSend = async () => {
@@ -157,7 +166,7 @@ export default function AdminComunicacaoScreen() {
     // Insert log entry first
     const { data: logData, error } = await supabase
       .from("push_notification_logs")
-      .insert({ titulo: titSend, mensagem: msgSend, segmento, deep_link: dlSend, sent_by: userId })
+      .insert({ titulo: titSend, mensagem: msgSend, segmento: segmentoLabel, deep_link: dlSend, sent_by: userId })
       .select("id")
       .single();
 
@@ -243,19 +252,19 @@ export default function AdminComunicacaoScreen() {
                 onPress={() => setSegOpen(!segOpen)}
               >
                 <Text style={[styles.selectText, { color: colors.foreground }]} numberOfLines={1}>
-                  {segmento.length > 10 ? segmento.slice(0, 8) + "..." : segmento}
+                  {segmentoLabel.length > 10 ? segmentoLabel.slice(0, 8) + "..." : segmentoLabel}
                 </Text>
                 <Feather name="chevron-down" size={12} color={colors.mutedForeground} />
               </TouchableOpacity>
               {segOpen && (
                 <View style={[styles.dropdown, { backgroundColor: "#fff", borderColor: colors.border }]}>
-                  {SEGMENTS.map((s) => (
+                  {segments.map((s) => (
                     <TouchableOpacity
-                      key={s}
-                      style={[styles.dropItem, { borderBottomColor: colors.border }, s === segmento && { backgroundColor: colors.gold + "12" }]}
-                      onPress={() => { setSegmento(s); setSegOpen(false); }}
+                      key={s.id}
+                      style={[styles.dropItem, { borderBottomColor: colors.border }, s.id === segmento && { backgroundColor: colors.gold + "12" }]}
+                      onPress={() => { setSegmento(s.id); setSegOpen(false); }}
                     >
-                      <Text style={[styles.dropText, { color: s === segmento ? colors.gold : colors.foreground }]}>{s}</Text>
+                      <Text style={[styles.dropText, { color: s.id === segmento ? colors.gold : colors.foreground }]}>{s.label}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>

@@ -8,11 +8,13 @@ import {
   changeUserPlan,
   resetUserPassword,
 } from "@/services/adminApi";
+import { supabase } from "@/lib/supabase";
 
 const GOLD = "#c9a84c";
 const NAVY = "#0d1b2a";
-const PLANS = ["gratuito", "basico", "profissional", "empresarial", "premium"] as const;
 const AVATAR_COLORS = ["#0d1b2a", "#1e3a5f", "#7c3aed", "#e11d48", "#059669", "#374151"];
+
+interface PlanOption { id: string; name: string; }
 
 function getInitial(name: string | null, email: string | null): string {
   return ((name ?? email ?? "?").charAt(0)).toUpperCase();
@@ -28,11 +30,17 @@ export default function AdminCRM() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
-  const [planEdit, setPlanEdit] = useState("basico");
+  const [planEdit, setPlanEdit] = useState("gratuito");
   const [isCourtesy, setIsCourtesy] = useState(false);
   const [savingPlan, setSavingPlan] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [resetLinkMsg, setResetLinkMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [planOptions, setPlanOptions] = useState<PlanOption[]>([]);
+
+  useEffect(() => {
+    supabase.from("plans").select("id, name").eq("is_active", true).order("sort_order", { ascending: true })
+      .then(({ data }) => { if (data) setPlanOptions(data as PlanOption[]); });
+  }, []);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -219,7 +227,7 @@ export default function AdminCRM() {
                               onChange={(e) => setPlanEdit(e.target.value)}
                               style={{ flex: 1, padding: "9px 12px", border: "1px solid #e8eaed", borderRadius: 8, fontSize: 14, outline: "none", cursor: "pointer" }}
                             >
-                              {PLANS.map((p) => <option key={p} value={p}>{p}</option>)}
+                                {planOptions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                             </select>
                             <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: "#555", flexShrink: 0 }}>
                               <input

@@ -4,8 +4,6 @@ import { supabase } from "@/lib/supabase";
 
 const GOLD = "#c9a84c";
 const NAVY = "#0d1b2a";
-const PLAN_OPTIONS = ["Selecionar plano", "Gratuito", "Profissional", "Básico", "Empresa", "Executivo"];
-const PLAN_ID_MAP: Record<string, string> = { "Gratuito": "gratuito", "Profissional": "profissional", "Básico": "basico", "Empresa": "empresa", "Executivo": "executivo" };
 const DURATIONS = ["12 meses", "6 meses", "3 meses", "1 mês"];
 const DURATION_MONTHS: Record<string, number> = { "12 meses": 12, "6 meses": 6, "3 meses": 3, "1 mês": 1 };
 
@@ -35,7 +33,7 @@ export default function AdminFinanceiro() {
   const [planFilter, setPlanFilter] = useState("Todos");
   const [showModal, setShowModal] = useState(false);
   const [cortesiaEmail, setCortesiaEmail] = useState("");
-  const [cortesiaPlano, setCortesiaPlano] = useState(PLAN_OPTIONS[0]);
+  const [cortesiaPlano, setCortesiaPlano] = useState("");
   const [cortesiaValidade, setCortesiaValidade] = useState(DURATIONS[0]);
   const [cortesiaMotivo, setCortesiaMotivo] = useState("");
   const [saving, setSaving] = useState(false);
@@ -82,11 +80,11 @@ export default function AdminFinanceiro() {
 
   const handleCortesia = async () => {
     if (!cortesiaEmail.trim()) { setSaveMsg({ type: "error", text: "Informe o email do usuário." }); return; }
-    if (cortesiaPlano === PLAN_OPTIONS[0]) { setSaveMsg({ type: "error", text: "Selecione um plano." }); return; }
+    if (!cortesiaPlano) { setSaveMsg({ type: "error", text: "Selecione um plano." }); return; }
     setSaving(true);
     setSaveMsg(null);
     try {
-      const planId = PLAN_ID_MAP[cortesiaPlano];
+      const planId = cortesiaPlano;
       const months = DURATION_MONTHS[cortesiaValidade] ?? 1;
       const expiresAt = new Date();
       expiresAt.setMonth(expiresAt.getMonth() + months);
@@ -207,7 +205,8 @@ export default function AdminFinanceiro() {
             <div style={{ marginBottom: 14 }}>
               <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#555", marginBottom: 6 }}>Plano</label>
               <select value={cortesiaPlano} onChange={(e) => setCortesiaPlano(e.target.value)} style={{ width: "100%", padding: "10px 12px", border: "1px solid #e8eaed", borderRadius: 8, fontSize: 14, outline: "none" }}>
-                {PLAN_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+                <option value="">Selecionar plano</option>
+                {plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
             <div style={{ marginBottom: 20 }}>
