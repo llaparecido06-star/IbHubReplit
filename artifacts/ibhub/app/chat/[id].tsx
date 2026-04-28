@@ -278,6 +278,9 @@ export default function ChatScreen() {
     if (!text || !user?.id || !id || sending) return;
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
+    // Visualizador can only read — send as personal identity
+    const effectiveCompany = activeCompany && API.canPublishAsCompany(activeCompany.role) ? activeCompany : null;
+
     const currentReplyTo = replyTo;
     setInput("");
     setReplyTo(null);
@@ -290,9 +293,9 @@ export default function ChatScreen() {
       id: tempId,
       conversation_id: id,
       sender_id: user.id,
-      from_company_page_id: activeCompany?.id ?? null,
-      from_company_page: activeCompany
-        ? { id: activeCompany.id, name: activeCompany.name, avatar_url: activeCompany.avatar_url ?? null }
+      from_company_page_id: effectiveCompany?.id ?? null,
+      from_company_page: effectiveCompany
+        ? { id: effectiveCompany.id, name: effectiveCompany.name, avatar_url: effectiveCompany.avatar_url ?? null }
         : null,
       content: text,
       created_at: new Date().toISOString(),
@@ -308,7 +311,7 @@ export default function ChatScreen() {
       reply_to_id: opts?.reply_to_id ?? currentReplyTo?.id,
       message_type: opts?.message_type,
       metadata: opts?.metadata,
-      companyPageId: activeCompany?.id,
+      companyPageId: effectiveCompany?.id,
     });
 
     if (saved) {
@@ -326,7 +329,7 @@ export default function ChatScreen() {
 
     setSending(false);
 
-    const senderName = activeCompany?.name ?? (user as any)?.full_name ?? "Alguém";
+    const senderName = effectiveCompany?.name ?? (user as any)?.full_name ?? "Alguém";
     const pushBody =
       opts?.message_type === "post_share" ? "📎 Compartilhou uma publicação" :
       opts?.message_type === "wine_card"  ? "🍷 Enviou uma ficha de vinho" : text;
@@ -568,7 +571,8 @@ export default function ChatScreen() {
         message_type: "audio",
         media_url: url,
       };
-      if (activeCompany?.id) audioPayload.from_company_page_id = activeCompany.id;
+      const effectiveAudioCompany = activeCompany && API.canPublishAsCompany(activeCompany.role) ? activeCompany : null;
+      if (effectiveAudioCompany?.id) audioPayload.from_company_page_id = effectiveAudioCompany.id;
 
       const { data: saved, error: msgError } = await supabase
         .from("messages")

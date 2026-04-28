@@ -2781,6 +2781,17 @@ export interface CompanyPage {
   location: string | null;
   plan: string;
   created_at: string;
+  userRole?: "owner" | "editor" | "moderador" | "visualizador";
+}
+
+/** Checks if the given role can publish content (posts, chat, events, vagas, market) */
+export function canPublishAsCompany(role: string | null | undefined): boolean {
+  return role === "owner" || role === "editor" || role === "moderador";
+}
+
+/** Checks if the given role can edit page info and portfolio */
+export function canEditCompanyPage(role: string | null | undefined): boolean {
+  return role === "owner" || role === "editor";
 }
 
 const COMPANY_PAGE_SELECT = "id, owner_id, name, username, avatar_url, bio, website, industry, location, plan, created_at";
@@ -2795,13 +2806,16 @@ export async function fetchUserCompanyPages(userId: string): Promise<CompanyPage
       .order("created_at", { ascending: true });
     if (ownedErr) console.warn("fetchUserCompanyPages owned:", ownedErr.message ?? ownedErr);
 
-    // Pages where user is an admin/member
+    // Pages where user is an admin/member — include role
     const { data: memberships } = await supabase
       .from("company_page_admins")
-      .select("company_id")
+      .select("company_id, role")
       .eq("user_id", userId);
 
-    const adminIds = (memberships ?? []).map((m: any) => m.company_id);
+    const membershipMap = new Map<string, string>(
+      (memberships ?? []).map((m: any) => [m.company_id, m.role])
+    );
+    const adminIds = [...membershipMap.keys()];
     let adminPages: CompanyPage[] = [];
     if (adminIds.length > 0) {
       const { data: adminData } = await supabase
@@ -2809,11 +2823,14 @@ export async function fetchUserCompanyPages(userId: string): Promise<CompanyPage
         .select(COMPANY_PAGE_SELECT)
         .in("id", adminIds)
         .order("created_at", { ascending: true });
-      adminPages = (adminData ?? []) as CompanyPage[];
+      adminPages = ((adminData ?? []) as CompanyPage[]).map(p => ({
+        ...p,
+        userRole: (membershipMap.get(p.id) as CompanyPage["userRole"]) ?? "visualizador",
+      }));
     }
 
-    // Merge, deduplicate by id
-    const ownedPages = (owned ?? []) as CompanyPage[];
+    // Merge, deduplicate by id — owned pages get role "owner"
+    const ownedPages = ((owned ?? []) as CompanyPage[]).map(p => ({ ...p, userRole: "owner" as const }));
     const ownedIds = new Set(ownedPages.map(p => p.id));
     const merged = [...ownedPages, ...adminPages.filter(p => !ownedIds.has(p.id))];
     return merged;

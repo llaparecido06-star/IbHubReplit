@@ -22,7 +22,7 @@ import { Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { createPost, uploadPostImage, uploadPostVideo, addWineEntry } from "@/services/api";
+import { createPost, uploadPostImage, uploadPostVideo, addWineEntry, canPublishAsCompany } from "@/services/api";
 
 const HASHTAG_SUGGESTIONS = [
   "vinho", "sommelier", "enologia", "degustação",
@@ -56,7 +56,7 @@ function AutoPlayVideoPreview({ uri, style }: { uri: string; style?: object }) {
 export default function CreatePostScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { profile, user } = useAuth();
+  const { profile, user, activeCompany } = useAuth();
   const insets = useSafeAreaInsets();
   const { companyPageId, companyName } = useLocalSearchParams<{ companyPageId?: string; companyName?: string }>();
 
@@ -257,9 +257,10 @@ export default function CreatePostScreen() {
     }
   };
 
-  const canPost = mode === "normal"
+  const roleBlocksPosting = !!activeCompany && !canPublishAsCompany(activeCompany.role);
+  const canPost = !roleBlocksPosting && (mode === "normal"
     ? content.trim().length > 0 && !posting
-    : tastingWine.trim().length > 0 && tastingGrape.trim().length > 0 && tastingVintage.trim().length > 0 && tastingEan.trim().length > 0 && !posting;
+    : tastingWine.trim().length > 0 && tastingGrape.trim().length > 0 && tastingVintage.trim().length > 0 && tastingEan.trim().length > 0 && !posting);
 
   const charCount = content.length;
   const maxChars = 1000;
@@ -284,6 +285,16 @@ export default function CreatePostScreen() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Visualizador cannot publish as company */}
+      {roleBlocksPosting && (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 16, marginTop: 10, padding: 12, borderRadius: 10, backgroundColor: "#fef3c7", borderWidth: 1, borderColor: "#fcd34d" }}>
+          <Feather name="lock" size={14} color="#92400e" />
+          <Text style={{ flex: 1, fontSize: 13, color: "#92400e", lineHeight: 18 }}>
+            Seu papel de Visualizador não permite publicar conteúdo como essa empresa.
+          </Text>
+        </View>
+      )}
 
       {/* Mode selector */}
       <View style={[styles.modeRow, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>

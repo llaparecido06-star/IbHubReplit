@@ -67,6 +67,7 @@ interface ActiveCompany {
   name: string;
   avatar_url?: string | null;
   industry?: string | null;
+  role?: string | null;
 }
 
 interface AuthContextType {

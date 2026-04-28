@@ -151,7 +151,7 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
     setCompanyPage(page);
     if (user?.id && page) {
       const roleInfo = await checkUserCompanyRole(companyId, user.id);
-      setIsManager(roleInfo.isOwner || roleInfo.role !== null);
+      setIsManager(roleInfo.isOwner || (roleInfo.role !== null && roleInfo.role !== "visualizador"));
       setUserRole(roleInfo.role);
     }
     setCompanyLoading(false);
@@ -358,21 +358,23 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
           ) : null}
           {companyBio ? <Text style={{ fontSize: 14, lineHeight: 20, textAlign: "center", color: colors.foreground }}>{companyBio}</Text> : null}
 
-          {isManager ? (
+          {(isManager || userRole === "visualizador") ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10, width: "100%" }}>
-              <View style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, borderRadius: 20, backgroundColor: colors.navy + "12" }}>
-                <Feather name={userRole === "owner" ? "shield" : "user-check"} size={12} color={colors.navy} />
-                <Text style={{ fontSize: 12, fontWeight: "600", color: colors.navy }}>
-                  {userRole === "owner" ? "Proprietário" : userRole === "editor" ? "Editor" : userRole === "moderador" ? "Moderador" : "Admin"}
+              <View style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, borderRadius: 20, backgroundColor: userRole === "visualizador" ? colors.border + "60" : colors.navy + "12" }}>
+                <Feather name={userRole === "owner" ? "shield" : userRole === "visualizador" ? "eye" : "user-check"} size={12} color={userRole === "visualizador" ? colors.mutedForeground : colors.navy} />
+                <Text style={{ fontSize: 12, fontWeight: "600", color: userRole === "visualizador" ? colors.mutedForeground : colors.navy }}>
+                  {userRole === "owner" ? "Proprietário" : userRole === "editor" ? "Editor" : userRole === "moderador" ? "Moderador" : userRole === "visualizador" ? "Visualizador (somente leitura)" : "Admin"}
                 </Text>
               </View>
-              <TouchableOpacity
-                style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20, backgroundColor: colors.gold }}
-                onPress={() => router.push(`/manage-business-page?id=${companyId}` as any)}
-              >
-                <Feather name="settings" size={13} color="#fff" />
-                <Text style={{ color: "#fff", fontSize: 13, fontWeight: "700" }}>Gerenciar</Text>
-              </TouchableOpacity>
+              {isManager && (
+                <TouchableOpacity
+                  style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20, backgroundColor: colors.gold }}
+                  onPress={() => router.push(`/manage-business-page?id=${companyId}` as any)}
+                >
+                  <Feather name="settings" size={13} color="#fff" />
+                  <Text style={{ color: "#fff", fontSize: 13, fontWeight: "700" }}>Gerenciar</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : null}
         </View>

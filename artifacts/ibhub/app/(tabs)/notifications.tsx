@@ -23,6 +23,7 @@ import { useAuth } from "@/context/AuthContext";
 import {
   AppEvent,
   AppOpportunity,
+  canPublishAsCompany,
   fetchEvents,
   fetchOpportunities,
   toggleSaveOpportunity,
@@ -96,6 +97,8 @@ export default function OportunidadesScreen() {
 
   // Somente quem está com empresa ativa pode criar vagas, market e eventos
   const isEmpresa = !!activeCompany;
+  // Visualizador não pode publicar conteúdo
+  const canPublish = !activeCompany || canPublishAsCompany(activeCompany.role);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
@@ -150,6 +153,14 @@ export default function OportunidadesScreen() {
           { text: "Agora não", style: "cancel" },
           { text: "Criar página de empresa", onPress: () => router.push("/manage-business-page" as any) },
         ],
+      );
+      return;
+    }
+    if (!canPublish) {
+      Alert.alert(
+        "Sem permissão",
+        "Seu papel de Visualizador não permite publicar conteúdo nessa empresa. Fale com o proprietário para alterar seu acesso.",
+        [{ text: "OK" }],
       );
       return;
     }

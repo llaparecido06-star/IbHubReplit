@@ -40,15 +40,15 @@ const ROLES: { key: RoleKey; label: string }[] = [
 const ROLE_DESCRIPTIONS: Record<RoleKey, { icon: string; desc: string }> = {
   editor: {
     icon: "edit-3",
-    desc: "Pode editar as informações da página (nome, logo, descrição, setor) e publicar conteúdo como empresa.",
+    desc: "Pode editar informações da página (nome, logo, bio), alterar portfólio e publicar todo tipo de conteúdo: posts, stories, chat, eventos, vagas e marketplace.",
   },
   moderador: {
     icon: "shield",
-    desc: "Pode publicar e gerenciar conteúdo como empresa no feed. Não pode alterar as informações da página.",
+    desc: "Pode publicar posts, responder chat, criar eventos, anunciar vagas e no marketplace. Não pode editar informações da página nem alterar portfólio.",
   },
   visualizador: {
     icon: "eye",
-    desc: "Acesso somente leitura. Visualiza a página e os dados, mas não edita nem publica.",
+    desc: "Acesso somente leitura: visualiza a página, analytics e conteúdo. Não pode publicar nem editar nada.",
   },
 };
 

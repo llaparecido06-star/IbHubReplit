@@ -1540,7 +1540,7 @@ export default function FeedScreen() {
                 <TouchableOpacity
                   key={page.id}
                   style={[styles.accountRow, activeCompany?.id === page.id && { backgroundColor: colors.background }]}
-                  onPress={() => { setActiveCompany({ id: page.id, name: page.name, avatar_url: page.avatar_url, industry: page.industry }); setShowAccountMenu(false); }}
+                  onPress={() => { setActiveCompany({ id: page.id, name: page.name, avatar_url: page.avatar_url, industry: page.industry, role: page.userRole ?? "owner" }); setShowAccountMenu(false); }}
                 >
                   {page.avatar_url ? (
                     <Avatar uri={page.avatar_url} name={page.name} size={40} />
@@ -1551,7 +1551,11 @@ export default function FeedScreen() {
                   )}
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.accountName, { color: colors.navy }]}>{page.name}</Text>
-                    <Text style={[styles.accountSub, { color: colors.mutedForeground }]}>{page.industry ?? "Página empresarial"}</Text>
+                    <Text style={[styles.accountSub, { color: colors.mutedForeground }]}>
+                      {page.userRole && page.userRole !== "owner"
+                        ? page.userRole.charAt(0).toUpperCase() + page.userRole.slice(1)
+                        : page.industry ?? "Página empresarial"}
+                    </Text>
                   </View>
                 </TouchableOpacity>
               ))
