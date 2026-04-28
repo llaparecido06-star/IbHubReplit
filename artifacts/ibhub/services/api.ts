@@ -2200,13 +2200,20 @@ export async function fetchConversations(userId: string, activeCompanyId?: strin
   try {
     // Use SECURITY DEFINER RPC to get all my conversations + the other participant's user_id
     // (cp_select RLS only shows own row, so a plain JOIN would fail)
-    const [participantsRes, convosRes] = await Promise.all([
+    const [participantsRes, convosRes, ownedCompaniesRes] = await Promise.all([
       supabase.rpc("get_my_conversations_participants", { p_user_id: userId }),
       supabase
         .from("conversation_participants")
         .select(`conversation_id, accepted, last_read_at, conversation:conversations(id, is_group, name, created_at, company_page_id)`)
         .eq("user_id", userId),
+      // Fetch company pages owned by this user so we can filter them out of personal mode
+      supabase.from("company_pages").select("id").eq("owner_id", userId),
     ]);
+
+    // Set of company IDs this user owns (to exclude from personal mode)
+    const ownedCompanyIds = new Set<string>(
+      ((ownedCompaniesRes.data ?? []) as any[]).map((c: any) => c.id as string)
+    );
 
     if (convosRes.error || !convosRes.data) return [];
 
@@ -2268,6 +2275,10 @@ export async function fetchConversations(userId: string, activeCompanyId?: strin
           ? ((lastMsg as any).from_company_page_id ?? null)
           : null;
 
+      // Use the conversation's own company_page_id as fallback so company name/avatar
+      // always shows even when the most recent message was sent by the regular user side.
+      const displayCompanyId: string | null = otherSenderCompanyId ?? ((convo as any).company_page_id ?? null);
+
       results.push({
         id: convo.id,
         is_group: convo.is_group,
@@ -2276,7 +2287,7 @@ export async function fetchConversations(userId: string, activeCompanyId?: strin
         last_message_at: lastMsg?.created_at ?? convo.created_at,
         unread_count: unreadRes.count ?? 0,
         participant,
-        participant_company: otherSenderCompanyId ? { id: otherSenderCompanyId, name: "", avatar_url: null } : null,
+        participant_company: displayCompanyId ? { id: displayCompanyId, name: "", avatar_url: null } : null,
         accepted: pInfo?.my_accepted ?? (row.accepted ?? true),
         company_page_id: (convo as any).company_page_id ?? null,
       });
@@ -2303,13 +2314,21 @@ export async function fetchConversations(userId: string, activeCompanyId?: strin
     // ── Identity filter (personal vs company) ─────────────────────────────────
     // Conversations are tagged at creation with company_page_id (null = personal).
     // Group chats (is_group=true) always appear in both modes.
+    //
+    // COMPANY MODE  → only show conversations owned by the active company page.
+    // PERSONAL MODE → show personal conversations (company_page_id IS NULL) PLUS
+    //   any company conversations where this user is the non-owner participant
+    //   (e.g. a regular user who messaged a company page from their profile).
+    //   Conversations belonging to companies that the user OWNS are excluded so
+    //   they appear cleanly in company mode instead.
     const sorted = results.sort(
       (a, b) => new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime(),
     );
     if (activeCompanyId) {
       return sorted.filter(r => r.is_group || r.company_page_id === activeCompanyId);
     }
-    return sorted.filter(r => r.is_group || !r.company_page_id);
+    // Personal mode: exclude conversations that belong to a company this user owns
+    return sorted.filter(r => r.is_group || !r.company_page_id || !ownedCompanyIds.has(r.company_page_id));
   } catch (e) {
     console.error("fetchConversations:", e);
     return [];
