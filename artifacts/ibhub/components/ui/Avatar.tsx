@@ -32,6 +32,9 @@ export function Avatar({ uri, name, size = 40, style }: AvatarProps) {
           style,
         ]}
         contentFit="cover"
+        cachePolicy="memory-disk"
+        recyclingKey={uri}
+        transition={{ duration: 200 }}
       />
     );
   }

@@ -317,7 +317,7 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
       <View style={{ paddingTop: topPad + 14, paddingHorizontal: 16, paddingBottom: 14, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
           {companyLogo ? (
-            <Image source={{ uri: companyLogo }} style={{ width: 28, height: 28, borderRadius: 6 }} />
+            <Image source={{ uri: companyLogo }} style={{ width: 28, height: 28, borderRadius: 6 }} cachePolicy="memory-disk" recyclingKey={companyLogo} contentFit="cover" />
           ) : (
             <View style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" }}>
               <Text style={{ fontSize: 13, fontWeight: "800", color: colors.gold }}>{nameInitial}</Text>
@@ -344,7 +344,7 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
         {/* ── Company card ── */}
         <View style={{ padding: 20, alignItems: "center", gap: 10, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: "#fff" }}>
           {companyLogo ? (
-            <Image source={{ uri: companyLogo }} style={{ width: 80, height: 80, borderRadius: 12 }} />
+            <Image source={{ uri: companyLogo }} style={{ width: 80, height: 80, borderRadius: 12 }} cachePolicy="memory-disk" recyclingKey={companyLogo} contentFit="cover" transition={{ duration: 200 }} />
           ) : (
             <View style={{ width: 80, height: 80, borderRadius: 12, backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" }}>
               <Text style={{ fontSize: 32, fontWeight: "800", color: colors.gold }}>{nameInitial}</Text>

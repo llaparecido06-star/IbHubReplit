@@ -251,6 +251,7 @@ function SmartImage({ url }: { url: string }) {
       style={{ width: "100%", height: imgHeight, borderRadius: 10 }}
       contentFit="cover"
       cachePolicy="memory-disk"
+      recyclingKey={url}
       priority="high"
       transition={{ duration: 150 }}
       onLoad={(e) => {
