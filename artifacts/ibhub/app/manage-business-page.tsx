@@ -37,6 +37,21 @@ const ROLES: { key: RoleKey; label: string }[] = [
   { key: "visualizador", label: "Visualizador" },
 ];
 
+const ROLE_DESCRIPTIONS: Record<RoleKey, { icon: string; desc: string }> = {
+  editor: {
+    icon: "edit-3",
+    desc: "Pode editar as informações da página (nome, logo, descrição, setor) e publicar conteúdo como empresa.",
+  },
+  moderador: {
+    icon: "shield",
+    desc: "Pode publicar e gerenciar conteúdo como empresa no feed. Não pode alterar as informações da página.",
+  },
+  visualizador: {
+    icon: "eye",
+    desc: "Acesso somente leitura. Visualiza a página e os dados, mas não edita nem publica.",
+  },
+};
+
 export default function ManageBusinessPageScreen() {
   const colors  = useColors();
   const router  = useRouter();
@@ -285,7 +300,7 @@ export default function ManageBusinessPageScreen() {
 
   const isCreateMode = !pageId;
 
-  const canEdit = isOwner || userRole === "editor" || userRole === "moderador";
+  const canEdit = isOwner || userRole === "editor";
 
   const tabList: Array<{ key: Tab; label: string; icon: string }> = [
     { key: "preview", label: "Preview", icon: "eye" },
@@ -350,6 +365,20 @@ export default function ManageBusinessPageScreen() {
         {/* ── Preview ── */}
         {activeTab === "preview" && (
           <View style={{ padding: 16, gap: 16 }}>
+            {/* Role info banner for non-owners */}
+            {!isOwner && userRole && ROLE_DESCRIPTIONS[userRole as RoleKey] && (
+              <View style={[styles.roleInfoBanner, { backgroundColor: colors.gold + "12", borderColor: colors.gold + "40" }]}>
+                <Feather name={ROLE_DESCRIPTIONS[userRole as RoleKey].icon as any} size={16} color={colors.gold} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.roleInfoTitle, { color: colors.navy }]}>
+                    Seu papel: {userRole.charAt(0).toUpperCase() + userRole.slice(1)}
+                  </Text>
+                  <Text style={[styles.roleInfoDesc, { color: colors.mutedForeground }]}>
+                    {ROLE_DESCRIPTIONS[userRole as RoleKey].desc}
+                  </Text>
+                </View>
+              </View>
+            )}
             <View style={[styles.previewCard, { borderColor: colors.border }]}>
               {logoSource
                 ? <Image source={{ uri: logoSource }} style={styles.previewLogo} />
@@ -533,6 +562,13 @@ export default function ManageBusinessPageScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+              {/* Role description */}
+              <View style={[styles.roleDescCard, { backgroundColor: colors.gold + "12", borderColor: colors.gold + "40" }]}>
+                <Feather name={ROLE_DESCRIPTIONS[selectedRole].icon as any} size={14} color={colors.gold} />
+                <Text style={[styles.roleDescText, { color: colors.navy }]}>
+                  {ROLE_DESCRIPTIONS[selectedRole].desc}
+                </Text>
+              </View>
             </View>
 
             {/* Search bar */}
@@ -683,6 +719,11 @@ const styles = StyleSheet.create({
   roleChips: { flexDirection: "row", gap: 8 },
   roleChip: { borderWidth: 1, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
   roleChipText: { fontSize: 13, fontWeight: "500" },
+  roleDescCard: { flexDirection: "row", alignItems: "flex-start", gap: 8, padding: 12, borderRadius: 10, borderWidth: 1, marginTop: 4 },
+  roleDescText: { flex: 1, fontSize: 13, lineHeight: 18 },
+  roleInfoBanner: { flexDirection: "row", alignItems: "flex-start", gap: 10, padding: 14, borderRadius: 12, borderWidth: 1 },
+  roleInfoTitle: { fontSize: 13, fontWeight: "700", marginBottom: 2 },
+  roleInfoDesc: { fontSize: 13, lineHeight: 18 },
   memberSearchBar: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
   memberSearchInput: { flex: 1, fontSize: 14 },
   searchResultsList: { borderWidth: 1, borderRadius: 10, overflow: "hidden", marginTop: 4 },
