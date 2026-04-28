@@ -54,6 +54,7 @@ export interface AppNotification {
   id: string;
   user_id: string;
   actor_id?: string | null;
+  actor_company_id?: string | null;
   type: string;
   post_id?: string | null;
   comment_id?: string | null;
@@ -61,6 +62,7 @@ export interface AppNotification {
   read: boolean;
   created_at: string;
   actor?: { id: string; full_name: string; avatar_url?: string | null } | null;
+  actor_company?: { id: string; name: string; avatar_url?: string | null } | null;
   connection_id?: string | null;
   connection_status?: "pending" | "accepted" | "rejected" | null;
   metadata?: Record<string, any> | null;
@@ -1209,7 +1211,7 @@ export async function fetchNotifications(userId: string): Promise<AppNotificatio
   try {
     const { data, error } = await supabase
       .from("notifications")
-      .select("id, user_id, actor_id, type, post_id, comment_id, message, read, created_at, metadata")
+      .select("id, user_id, actor_id, actor_company_id, type, post_id, comment_id, message, read, created_at, metadata")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(50);
@@ -1221,13 +1223,14 @@ export async function fetchNotifications(userId: string): Promise<AppNotificatio
     if (!data) return [];
 
     const actorIds = [...new Set((data as any[]).map(n => n.actor_id).filter(Boolean))];
+    const actorCompanyIds = [...new Set((data as any[]).map(n => n.actor_company_id).filter(Boolean))];
 
     // For connection notifications, fetch the corresponding connection record
     const connectionActorIds = (data as any[])
       .filter(n => n.type === "connection" && n.actor_id)
       .map(n => n.actor_id);
 
-    const [profileMap, connectionsRes] = await Promise.all([
+    const [profileMap, connectionsRes, companiesRes] = await Promise.all([
       fetchCommentProfilesForIds(actorIds),
       connectionActorIds.length > 0
         ? supabase
@@ -1236,6 +1239,12 @@ export async function fetchNotifications(userId: string): Promise<AppNotificatio
             .eq("receiver_id", userId)
             .in("requester_id", connectionActorIds)
         : Promise.resolve({ data: [] }),
+      actorCompanyIds.length > 0
+        ? supabase
+            .from("company_pages")
+            .select("id, name, avatar_url")
+            .in("id", actorCompanyIds)
+        : Promise.resolve({ data: [] }),
     ]);
 
     const connectionMap = new Map<string, { id: string; status: string }>();
@@ -1243,10 +1252,16 @@ export async function fetchNotifications(userId: string): Promise<AppNotificatio
       connectionMap.set(c.requester_id, { id: c.id, status: c.status });
     });
 
+    const companyMap = new Map<string, { id: string; name: string; avatar_url?: string | null }>();
+    ((companiesRes as any).data ?? []).forEach((cp: any) => {
+      companyMap.set(cp.id, { id: cp.id, name: cp.name, avatar_url: cp.avatar_url ?? null });
+    });
+
     return (data as any[]).map(n => {
       const base = {
         ...n,
         actor: profileMap.get(n.actor_id) ?? null,
+        actor_company: n.actor_company_id ? (companyMap.get(n.actor_company_id) ?? null) : null,
       };
       if (n.type === "connection" && n.actor_id) {
         const conn = connectionMap.get(n.actor_id);

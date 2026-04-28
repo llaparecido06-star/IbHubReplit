@@ -61,8 +61,8 @@ function NotifRow({
     >
       <View style={styles.avatarWrap}>
         <Avatar
-          uri={notif.actor?.avatar_url}
-          name={notif.actor?.full_name ?? "Usuário"}
+          uri={notif.actor_company?.avatar_url ?? notif.actor?.avatar_url}
+          name={notif.actor_company?.name ?? notif.actor?.full_name ?? "Usuário"}
           size={46}
         />
         <View style={[styles.typeIcon, { backgroundColor: meta.color }]}>
@@ -73,7 +73,7 @@ function NotifRow({
       <View style={styles.rowBody}>
         <Text style={[styles.rowText, { color: colors.foreground }]} numberOfLines={2}>
           <Text style={{ fontWeight: "700" }}>
-            {notif.actor?.full_name ?? "Alguém"}
+            {notif.actor_company?.name ?? notif.actor?.full_name ?? "Alguém"}
           </Text>{" "}
           {notif.message ?? meta.label}
         </Text>
