@@ -576,21 +576,22 @@ export default function RegisterScreen() {
                 />
               </View>
 
-              <TouchableOpacity
-                style={styles.termsRow}
-                onPress={() => setTermsAccepted((v) => !v)}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.checkbox, termsAccepted && styles.checkboxActive]}>
-                  {termsAccepted && <Feather name="check" size={12} color="#0d1b2a" />}
-                </View>
-                <Text style={styles.termsText}>
+              <View style={styles.termsRow}>
+                <TouchableOpacity
+                  onPress={() => setTermsAccepted((v) => !v)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.checkbox, termsAccepted && styles.checkboxActive]}>
+                    {termsAccepted && <Feather name="check" size={12} color="#0d1b2a" />}
+                  </View>
+                </TouchableOpacity>
+                <Text style={styles.termsText} onPress={() => setTermsAccepted((v) => !v)}>
                   Li e concordo com os{" "}
-                  <Text style={styles.termsLink} onPress={(e) => { e.stopPropagation?.(); router.push("/terms-of-use"); }}>Termos de Uso</Text>
+                  <Text style={styles.termsLink} onPress={() => router.push("/terms-of-use")}>Termos de Uso</Text>
                   {" "}e a{" "}
-                  <Text style={styles.termsLink} onPress={(e) => { e.stopPropagation?.(); router.push("/privacy-policy"); }}>Política de Privacidade</Text>
+                  <Text style={styles.termsLink} onPress={() => router.push("/privacy-policy")}>Política de Privacidade</Text>
                 </Text>
-              </TouchableOpacity>
+              </View>
 
               <TouchableOpacity
                 style={styles.termsRow}
