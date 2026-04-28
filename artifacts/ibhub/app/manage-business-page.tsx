@@ -27,8 +27,18 @@ type Tab     = "preview" | "editar" | "equipe";
 type RoleKey = "editor" | "moderador" | "visualizador";
 
 const CATEGORIES: string[] = [
-  "Vinícola", "Importadora", "Distribuidora", "Restaurante",
-  "Enoteca", "Consultoria", "Enoturismo", "Outros",
+  // Produção
+  "Vinícola", "Adega / Cave",
+  // Comércio exterior & distribuição
+  "Importadora", "Exportadora", "Distribuidora", "Atacadista", "Representante Comercial",
+  // Varejo & ponto de venda
+  "Enoteca", "Loja Especializada", "Supermercado", "E-commerce",
+  // Hospitalidade & serviço
+  "Restaurante", "Hotelaria", "Bar / Bistrô",
+  // Experiências & comunicação
+  "Enoturismo", "Eventos", "Marketing / Agência", "Jornalismo / Imprensa", "Educação",
+  // Negócios & outros
+  "Consultoria", "Outros",
 ];
 
 const ROLES: { key: RoleKey; label: string }[] = [
