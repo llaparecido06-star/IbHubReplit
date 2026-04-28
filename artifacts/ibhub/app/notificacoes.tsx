@@ -238,7 +238,7 @@ export default function NotificationsScreen() {
         <Text style={[styles.headerTitle, { color: colors.navy }]}>Notificações</Text>
         {unreadCount > 0 ? (
           <TouchableOpacity onPress={handleMarkAllRead} style={styles.markAllWrap}>
-            <Text style={[styles.markAllBtn, { color: colors.gold }]}>Marcar todas</Text>
+            <Text style={[styles.markAllBtn, { color: colors.gold }]}>Marcar todas como lidas</Text>
           </TouchableOpacity>
         ) : (
           <View style={{ width: 90 }} />
@@ -299,8 +299,8 @@ const styles = StyleSheet.create({
   header:            { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, gap: 10 },
   backBtn:           { padding: 4 },
   headerTitle:       { flex: 1, fontSize: 20, fontWeight: "800" },
-  markAllWrap:       { width: 90, alignItems: "flex-end" },
-  markAllBtn:        { fontSize: 13, fontWeight: "700" },
+  markAllWrap:       { alignItems: "flex-end", flexShrink: 0 },
+  markAllBtn:        { fontSize: 12, fontWeight: "700" },
   unreadBar:         { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, gap: 8 },
   unreadBadge:       { minWidth: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
   unreadBadgeText:   { color: "#fff", fontSize: 11, fontWeight: "800" },
