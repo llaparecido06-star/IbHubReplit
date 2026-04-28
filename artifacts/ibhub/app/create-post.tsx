@@ -60,6 +60,12 @@ export default function CreatePostScreen() {
   const insets = useSafeAreaInsets();
   const { companyPageId, companyName } = useLocalSearchParams<{ companyPageId?: string; companyName?: string }>();
 
+  // Prefer activeCompany from auth context; fall back to route params for direct deep-links
+  const isCompanyPost      = !!(activeCompany || companyPageId);
+  const companyDisplayName = activeCompany?.name ?? companyName ?? "Empresa";
+  const companyAvatarUrl   = activeCompany?.avatar_url ?? null;
+  const effectiveCompanyId = activeCompany?.id ?? companyPageId ?? null;
+
   const [mode, setMode] = useState<PostMode>("normal");
 
   // Normal post state
@@ -215,7 +221,7 @@ export default function CreatePostScreen() {
         video_url: uploadedVideoUrl,
         location: location.trim() || null,
         hashtags: hashtags.length > 0 ? hashtags : undefined,
-        company_page_id: companyPageId ?? null,
+        company_page_id: effectiveCompanyId,
       });
 
       // Se a degustação tem EAN + pontuação, insere na adega como pública
@@ -321,13 +327,13 @@ export default function CreatePostScreen() {
       <ScrollView style={styles.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={styles.authorRow}>
           <Avatar
-            uri={companyPageId ? null : profile?.avatar_url}
-            name={companyPageId ? (companyName ?? "E") : profile?.full_name}
+            uri={isCompanyPost ? companyAvatarUrl : profile?.avatar_url}
+            name={isCompanyPost ? companyDisplayName : profile?.full_name}
             size={44}
           />
           <View style={styles.authorInfo}>
             <Text style={[styles.authorName, { color: colors.foreground }]}>
-              {companyPageId ? (companyName ?? "Empresa") : (profile?.full_name ?? "Você")}
+              {isCompanyPost ? companyDisplayName : (profile?.full_name ?? "Você")}
             </Text>
             <View style={[styles.audienceBtn, { backgroundColor: colors.secondary, borderRadius: 12 }]}>
               <Feather name="globe" size={11} color={colors.mutedForeground} />
