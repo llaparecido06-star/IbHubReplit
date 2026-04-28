@@ -189,7 +189,7 @@ export default function PublicProfileScreen() {
   const handleMessage = async () => {
     if (!currentUser?.id || !id || !canMessage || messagingLoading) return;
     setMessagingLoading(true);
-    const cid = await API.getOrCreateDirectConversation(currentUser.id, id, false, null);
+    const cid = await API.getOrCreateDirectConversation(currentUser.id, id, false, activeCompany?.id ?? null);
     setMessagingLoading(false);
     if (cid) router.push(`/chat/${cid}` as any);
   };

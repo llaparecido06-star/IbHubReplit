@@ -34,7 +34,7 @@ export default function ConexoesScreen() {
   const colors  = useColors();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, activeCompany } = useAuth();
 
   const [activeTab, setActiveTab] = useState<ConexoesTab>("pendentes");
   const [loading, setLoading]     = useState(true);
@@ -53,7 +53,7 @@ export default function ConexoesScreen() {
     if (!user?.id || openingDM) return;
     setOpeningDM(personId);
     try {
-      const cid = await getOrCreateDirectConversation(user.id, personId, true, null);
+      const cid = await getOrCreateDirectConversation(user.id, personId, true, activeCompany?.id ?? null);
       if (cid) router.push(`/chat/${cid}` as any);
     } finally { setOpeningDM(null); }
   };
