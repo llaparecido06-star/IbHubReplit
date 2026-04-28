@@ -51,6 +51,9 @@ export default function GroupChatScreen() {
   const { user, activeCompany } = useAuth();
   const insets  = useSafeAreaInsets();
 
+  // Visualizador can only read — do not send messages as company
+  const effectiveCompanyId = activeCompany && API.canPublishAsCompany(activeCompany.role) ? activeCompany.id : null;
+
   const [groupInfo, setGroupInfo]       = useState<GroupInfo>({ name: "Grupo", member_count: 0, avatar_url: null, owner_id: "" });
   const [messages, setMessages]         = useState<AppMessage[]>([]);
   const [profiles, setProfiles]         = useState<Map<string, SenderProfile>>(new Map());
@@ -272,7 +275,7 @@ export default function GroupChatScreen() {
     setSending(true);
     broadcastTyping(false);
     if (typingTimer.current) clearTimeout(typingTimer.current);
-    await API.sendMessage(id, user.id, text, { reply_to_id: replyTo?.id, companyPageId: activeCompany?.id ?? null });
+    await API.sendMessage(id, user.id, text, { reply_to_id: replyTo?.id, companyPageId: effectiveCompanyId });
     setReplyTo(null);
     setSending(false);
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
@@ -292,7 +295,7 @@ export default function GroupChatScreen() {
         const url = await API.uploadChatMedia(id, asset.uri, asset.mimeType ?? "audio/mpeg");
         setUploading(false);
         if (!url) { Alert.alert("Erro", "Não foi possível enviar o áudio."); return; }
-        const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", activeCompany?.id ?? null);
+        const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", effectiveCompanyId);
         if (saved) {
           seenMsgIds.current.add(saved.id);
           setMessages(prev => {
@@ -333,7 +336,7 @@ export default function GroupChatScreen() {
       const url = await API.uploadChatMedia(id, uri, "audio/m4a");
       setUploading(false);
       if (!url) { Alert.alert("Erro", "Não foi possível enviar o áudio."); return; }
-      const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", activeCompany?.id ?? null);
+      const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", effectiveCompanyId);
       if (saved) {
         seenMsgIds.current.add(saved.id);
         setMessages(prev => {
@@ -420,7 +423,7 @@ export default function GroupChatScreen() {
         Alert.alert("Erro", "Não foi possível enviar a mídia.");
         return;
       }
-      const saved = await API.sendMediaMessage(id, user.id, url, msgType, "", activeCompany?.id ?? null);
+      const saved = await API.sendMediaMessage(id, user.id, url, msgType, "", effectiveCompanyId);
       if (saved) {
         seenMsgIds.current.add(saved.id);
         setMessages(prev => {
@@ -455,7 +458,7 @@ export default function GroupChatScreen() {
       const url = await API.uploadChatMedia(id, asset.uri, asset.mimeType ?? "application/octet-stream", fileObj);
       setUploading(false);
       if (!url) { Alert.alert("Erro", "Não foi possível enviar o arquivo."); return; }
-      const saved = await API.sendMediaMessage(id, user.id, url, "file", asset.name ?? "arquivo", activeCompany?.id ?? null);
+      const saved = await API.sendMediaMessage(id, user.id, url, "file", asset.name ?? "arquivo", effectiveCompanyId);
       if (saved) {
         seenMsgIds.current.add(saved.id);
         setMessages(prev => {
