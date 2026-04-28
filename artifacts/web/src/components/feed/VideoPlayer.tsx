@@ -111,6 +111,7 @@ export default function VideoPlayer({ src }: VideoPlayerProps) {
         position: "relative",
         width: "100%",
         aspectRatio: "9 / 16",
+        maxHeight: 480,
         background: "#000",
         overflow: "hidden",
         cursor: "pointer",
