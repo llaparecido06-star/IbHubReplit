@@ -365,8 +365,10 @@ export default function GrupoConfiguracoesPage() {
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {pending.map(m => (
                   <div key={m.user_id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: `1px solid ${BORDER}` }}>
-                    <Avatar src={m.profile?.avatar_url} name={m.profile?.full_name ?? "?"} size={44} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <span onClick={() => setLocation(`/app/usuario/${m.user_id}`)} style={{ cursor: "pointer", display: "inline-flex" }}>
+                      <Avatar src={m.profile?.avatar_url} name={m.profile?.full_name ?? "?"} size={44} />
+                    </span>
+                    <div onClick={() => setLocation(`/app/usuario/${m.user_id}`)} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
                       <div style={{ fontSize: 14, fontWeight: 600, color: NAVY }}>{m.profile?.full_name ?? "Usuário"}</div>
                       {m.profile?.headline && <div style={{ fontSize: 12, color: MUTED }}>{m.profile.headline}</div>}
                     </div>
@@ -407,8 +409,10 @@ export default function GrupoConfiguracoesPage() {
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {searchResults.map(person => (
                   <div key={person.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: `1px solid ${BORDER}` }}>
-                    <Avatar src={person.avatar_url} name={person.full_name ?? "?"} size={40} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <span onClick={() => setLocation(`/app/usuario/${person.id}`)} style={{ cursor: "pointer", display: "inline-flex" }}>
+                      <Avatar src={person.avatar_url} name={person.full_name ?? "?"} size={40} />
+                    </span>
+                    <div onClick={() => setLocation(`/app/usuario/${person.id}`)} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
                       <div style={{ fontSize: 14, fontWeight: 600, color: NAVY }}>{person.full_name ?? "Usuário"}</div>
                       {person.username && <div style={{ fontSize: 12, color: MUTED }}>@{person.username}</div>}
                     </div>

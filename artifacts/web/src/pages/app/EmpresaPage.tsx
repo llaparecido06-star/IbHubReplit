@@ -47,6 +47,11 @@ function MiniPostCard({ post }: { post: Post }) {
   const authorName   = companyPage ? companyPage.name   : (post.author?.full_name ?? "Membro");
   const authorAvatar = companyPage ? companyPage.avatar_url : post.author?.avatar_url;
   const images: string[] = post.image_urls?.length ? post.image_urls : (post.image_url ? [post.image_url] : []);
+  const goToAuthor = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (companyPage) { setLocation(`/app/empresa/${companyPage.id}`); return; }
+    if (post.author?.id) setLocation(`/app/usuario/${post.author.id}`);
+  };
 
   return (
     <div
@@ -56,10 +61,12 @@ function MiniPostCard({ post }: { post: Post }) {
       onMouseLeave={e => (e.currentTarget.style.boxShadow = "none")}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <Avatar src={authorAvatar} name={authorName} size={32} bg={companyPage ? GOLD : "#722f37"} />
+        <span onClick={goToAuthor} style={{ cursor: "pointer", display: "inline-flex" }}>
+          <Avatar src={authorAvatar} name={authorName} size={32} bg={companyPage ? GOLD : "#722f37"} />
+        </span>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{authorName}</div>
+            <div onClick={goToAuthor} style={{ fontSize: 13, fontWeight: 700, color: NAVY, cursor: "pointer" }}>{authorName}</div>
             {companyPage && <span style={{ fontSize: 9, fontWeight: 700, color: WHITE, backgroundColor: GOLD, padding: "1px 5px", borderRadius: 100 }}>Empresa</span>}
           </div>
           <div style={{ fontSize: 11, color: MUTED }}>{timeAgo(post.created_at)}</div>
