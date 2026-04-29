@@ -1188,7 +1188,7 @@ export async function sendWebMessage(
   conversationId: string,
   senderId: string,
   content: string,
-  opts?: { companyPageId?: string | null; messageType?: string },
+  opts?: { companyPageId?: string | null; messageType?: string; mediaUrl?: string | null },
 ): Promise<boolean> {
   try {
     const payload: Record<string, any> = {
@@ -1198,11 +1198,46 @@ export async function sendWebMessage(
       message_type: opts?.messageType ?? "text",
     };
     if (opts?.companyPageId) payload.from_company_page_id = opts.companyPageId;
+    if (opts?.mediaUrl) payload.media_url = opts.mediaUrl;
     const { error } = await supabase.from("messages").insert(payload);
     return !error;
   } catch (e) {
     console.warn("sendWebMessage:", e);
     return false;
+  }
+}
+
+/**
+ * Upload an audio Blob recorded in the browser (e.g. MediaRecorder output)
+ * and persist it as a chat message. Mirrors the mobile audio flow: the
+ * blob is uploaded via /uploads/chat-form and then a `messages` row is
+ * inserted with `message_type=audio` and `media_url=<uploaded url>`.
+ */
+export async function sendWebAudioMessage(
+  conversationId: string,
+  senderId: string,
+  blob: Blob,
+  mimeType: string,
+  opts?: { companyPageId?: string | null; fileName?: string },
+): Promise<{ success: boolean; mediaUrl: string | null }> {
+  try {
+    // Strip codec parameters (e.g. "audio/webm;codecs=opus" → "audio/webm")
+    // because the server allowlist only matches plain mime types.
+    const cleanMime = (mimeType || "audio/webm").split(";")[0].trim() || "audio/webm";
+    const ext = (cleanMime.split("/")[1] ?? "webm") || "webm";
+    const fileName = opts?.fileName ?? `audio-${Date.now()}.${ext}`;
+    const file = new File([blob], fileName, { type: cleanMime });
+    const url = await uploadChatAttachment(file, senderId);
+    if (!url) return { success: false, mediaUrl: null };
+    const ok = await sendWebMessage(conversationId, senderId, "", {
+      companyPageId: opts?.companyPageId ?? null,
+      messageType: "audio",
+      mediaUrl: url,
+    });
+    return { success: ok, mediaUrl: url };
+  } catch (e) {
+    console.warn("sendWebAudioMessage:", e);
+    return { success: false, mediaUrl: null };
   }
 }
 
@@ -3078,6 +3113,84 @@ export async function updateCompanyPage(
   } catch (e) {
     console.warn("updateCompanyPage:", e);
     return false;
+  }
+}
+
+// ─── Account & Settings helpers ──────────────────────────────────────────────
+
+export interface MyReport {
+  id: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+  post_id: string | null;
+  reported_user_id: string | null;
+}
+
+/** Fetch the reports/denúncias filed by the current user. */
+export async function fetchMyReports(userId: string): Promise<MyReport[]> {
+  if (!userId) return [];
+  try {
+    const { data, error } = await supabase
+      .from("reports")
+      .select("id, reason, status, created_at, post_id, reported_user_id")
+      .eq("reported_by", userId)
+      .order("created_at", { ascending: false });
+    if (error || !data) return [];
+    return data as MyReport[];
+  } catch (e) {
+    console.warn("fetchMyReports:", e);
+    return [];
+  }
+}
+
+/**
+ * Update arbitrary profile columns for the current user.
+ * Used by Privacy/Security toggles (is_public, allow_messages, show_connections).
+ */
+export async function updateProfileFields(
+  profileId: string,
+  patch: Record<string, unknown>,
+): Promise<boolean> {
+  if (!profileId || !patch || Object.keys(patch).length === 0) return false;
+  try {
+    const { error } = await supabase
+      .from("profiles")
+      .update(patch)
+      .or(`id.eq.${profileId},user_id.eq.${profileId}`);
+    return !error;
+  } catch (e) {
+    console.warn("updateProfileFields:", e);
+    return false;
+  }
+}
+
+/**
+ * Permanently delete the current user's account through the API server.
+ * Mirrors the mobile `deleteAccount(token)` helper at
+ * artifacts/ibhub/services/api/account.ts.
+ */
+export async function deleteOwnAccount(
+  token: string,
+): Promise<{ success: boolean; warnings?: string[]; error?: string }> {
+  try {
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
+      ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
+    const res = await fetch(`${apiBase}/users/me`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+    const json: any = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { success: false, error: json?.error ?? "Erro ao excluir conta." };
+    }
+    return { success: true, warnings: json?.warnings ?? [] };
+  } catch (e) {
+    console.warn("deleteOwnAccount:", e);
+    return { success: false, error: "Erro de conexão. Tente novamente." };
   }
 }
 

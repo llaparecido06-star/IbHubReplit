@@ -35,6 +35,13 @@ import AnalyticsPage from "@/pages/app/AnalyticsPage";
 import ReferralPage from "@/pages/app/ReferralPage";
 import GerenciarEmpresaPage from "@/pages/app/GerenciarEmpresaPage";
 import MeusEventosPage from "@/pages/app/MeusEventosPage";
+import EventosPage from "@/pages/app/EventosPage";
+import SettingsPage from "@/pages/app/SettingsPage";
+import NotificationSettingsPage from "@/pages/app/NotificationSettingsPage";
+import PrivacySegurancaPage from "@/pages/app/PrivacySegurancaPage";
+import ReportarBugPage from "@/pages/app/ReportarBugPage";
+import ContatoPage from "@/pages/app/ContatoPage";
+import MeusReportsPage from "@/pages/app/MeusReportsPage";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminLogs from "@/pages/admin/AdminLogs";
 import AdminModeracao from "@/pages/admin/AdminModeracao";
@@ -299,6 +306,27 @@ function Router() {
       </Route>
       <Route path="/app/meus-eventos">
         <PrivateRoute component={MeusEventosPage} />
+      </Route>
+      <Route path="/app/eventos">
+        <PrivateRoute component={EventosPage} />
+      </Route>
+      <Route path="/app/configuracoes/notificacoes">
+        <PrivateRoute component={NotificationSettingsPage} />
+      </Route>
+      <Route path="/app/configuracoes/privacidade">
+        <PrivateRoute component={PrivacySegurancaPage} />
+      </Route>
+      <Route path="/app/configuracoes/reportar-bug">
+        <PrivateRoute component={ReportarBugPage} />
+      </Route>
+      <Route path="/app/configuracoes/contato">
+        <PrivateRoute component={ContatoPage} />
+      </Route>
+      <Route path="/app/configuracoes/denuncias">
+        <PrivateRoute component={MeusReportsPage} />
+      </Route>
+      <Route path="/app/configuracoes">
+        <PrivateRoute component={SettingsPage} />
       </Route>
       <Route path="/app/salvos">
         <PrivateRoute component={ItensSalvosPage} />

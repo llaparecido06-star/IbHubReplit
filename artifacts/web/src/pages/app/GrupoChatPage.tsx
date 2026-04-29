@@ -6,10 +6,12 @@ import { supabase } from "@/lib/supabase";
 import {
   fetchWebMessages,
   sendWebMessage,
+  sendWebAudioMessage,
   fetchWebGroupInfo,
   WebMessage,
   WebGroupInfo,
 } from "@/services/api";
+import { AudioRecorder } from "@/components/chat/AudioRecorder";
 
 const GOLD   = "#c9a84c";
 const NAVY   = "#0d1b2a";
@@ -103,6 +105,8 @@ export default function GrupoChatPage() {
             conversation_id: raw.conversation_id,
             sender_id: raw.sender_id,
             content: raw.content,
+            message_type: raw.message_type ?? null,
+            media_url: raw.media_url ?? null,
             created_at: raw.created_at,
             sender: profile ? { id: (profile as any).id, full_name: (profile as any).full_name, avatar_url: (profile as any).avatar_url } : undefined,
           };
@@ -124,6 +128,15 @@ export default function GrupoChatPage() {
     setSending(true);
     await sendWebMessage(groupId, user.id, text, { companyPageId: activeCompany?.id ?? null });
     setSending(false);
+  };
+
+  const handleAudioSend = async (blob: Blob, mimeType: string) => {
+    if (!user?.id) return;
+    const result = await sendWebAudioMessage(groupId, user.id, blob, mimeType, {
+      companyPageId: activeCompany?.id ?? null,
+    });
+    if (!result.success) throw new Error("Não foi possível enviar o áudio.");
+    scrollBottom();
   };
 
   const handleKey = (e: React.KeyboardEvent) => {
@@ -187,11 +200,36 @@ export default function GrupoChatPage() {
                       background: isMe ? NAVY : WHITE,
                       color: isMe ? WHITE : NAVY,
                       borderRadius: isMe ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                      padding: "10px 14px",
+                      padding: msg.media_url ? "8px 10px 10px" : "10px 14px",
                       border: isMe ? "none" : `1px solid ${BORDER}`,
                       boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
                     }}>
-                      <div style={{ fontSize: 14, lineHeight: 1.45, wordBreak: "break-word" }}>{msg.content}</div>
+                      {msg.media_url && msg.message_type === "audio" && (
+                        <audio
+                          controls
+                          src={msg.media_url}
+                          style={{ display: "block", width: 240, maxWidth: "100%", marginBottom: msg.content ? 6 : 0 }}
+                        />
+                      )}
+                      {msg.media_url && msg.message_type === "image" && (
+                        <img src={msg.media_url} alt="" style={{ display: "block", maxWidth: 280, maxHeight: 280, borderRadius: 8, marginBottom: msg.content ? 6 : 0 }} />
+                      )}
+                      {msg.media_url && msg.message_type === "video" && (
+                        <video controls src={msg.media_url} style={{ display: "block", maxWidth: 320, maxHeight: 320, borderRadius: 8, marginBottom: msg.content ? 6 : 0 }} />
+                      )}
+                      {msg.media_url && (msg.message_type === "file" || (msg.message_type !== "audio" && msg.message_type !== "image" && msg.message_type !== "video" && msg.message_type !== "text" && msg.message_type)) && (
+                        <a
+                          href={msg.media_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 8, background: isMe ? "rgba(255,255,255,0.12)" : BG, color: isMe ? WHITE : NAVY, textDecoration: "none", fontSize: 13, marginBottom: msg.content ? 6 : 0 }}
+                        >
+                          📎 <span>Abrir anexo</span>
+                        </a>
+                      )}
+                      {msg.content && (
+                        <div style={{ fontSize: 14, lineHeight: 1.45, wordBreak: "break-word" }}>{msg.content}</div>
+                      )}
                       <div style={{ fontSize: 10, color: isMe ? "rgba(255,255,255,0.55)" : MUTED, marginTop: 4, textAlign: "right" }}>{timeStr(msg.created_at)}</div>
                     </div>
                   </div>
@@ -202,6 +240,7 @@ export default function GrupoChatPage() {
 
           {/* Input */}
           <div style={{ padding: "12px 16px", borderTop: `1px solid ${BORDER}`, background: WHITE, display: "flex", gap: 10, alignItems: "flex-end" }}>
+            <AudioRecorder onSend={handleAudioSend} disabled={sending} />
             <textarea
               value={input}
               onChange={e => setInput(e.target.value)}

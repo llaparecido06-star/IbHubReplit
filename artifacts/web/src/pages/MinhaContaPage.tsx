@@ -448,27 +448,31 @@ export default function MinhaContaPage() {
         <Card>
           <SectionTitle title="Suporte & Contato" />
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {[
-              { icon: "💬", label: "Fale Conosco", desc: "Suporte e feedback", href: "mailto:contato@ibhub.com.br" },
-              { icon: "🐛", label: "Reportar Bug", desc: "Nos ajude a melhorar a plataforma", href: "mailto:bugs@ibhub.com.br" },
-              { icon: "📜", label: "Termos de Uso", desc: "Termos e condições", href: "https://www.ibhub.com.br/termos" },
-              { icon: "🔐", label: "Política de Privacidade", desc: "Como usamos seus dados", href: "https://www.ibhub.com.br/privacidade" },
-            ].map(item => (
-              <a
+            {([
+              { icon: "💬", label: "Fale Conosco",            desc: "Suporte e feedback",          to: "/app/configuracoes/contato",      external: false },
+              { icon: "🐛", label: "Reportar Bug",            desc: "Nos ajude a melhorar a plataforma", to: "/app/configuracoes/reportar-bug", external: false },
+              { icon: "🚩", label: "Minhas Denúncias",        desc: "Histórico de denúncias enviadas",   to: "/app/configuracoes/denuncias",    external: false },
+              { icon: "📜", label: "Termos de Uso",           desc: "Termos e condições",          to: "/termos-de-uso",                  external: false },
+              { icon: "🔐", label: "Política de Privacidade", desc: "Como usamos seus dados",      to: "/politica-de-privacidade",        external: false },
+            ] as const).map(item => (
+              <button
                 key={item.label}
-                href={item.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", borderRadius: 10, border: `1px solid ${BORDER}`, textDecoration: "none", color: NAVY, backgroundColor: BG, transition: "background 0.12s" }}
-                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = `${GOLD}12`; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = BG; }}
+                type="button"
+                onClick={() => {
+                  if (item.external) window.open(item.to, "_blank", "noopener,noreferrer");
+                  else setLocation(item.to);
+                }}
+                style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", borderRadius: 10, border: `1px solid ${BORDER}`, color: NAVY, backgroundColor: BG, transition: "background 0.12s", cursor: "pointer", fontFamily: "inherit", textAlign: "left", width: "100%" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = `${GOLD}12`; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = BG; }}
               >
-                <span style={{ fontSize: 22 }}>{item.icon}</span>
-                <div>
+                <span style={{ fontSize: 22 }} aria-hidden>{item.icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{item.label}</div>
                   <div style={{ fontSize: 12, color: MUTED }}>{item.desc}</div>
                 </div>
-              </a>
+                <span aria-hidden style={{ color: MUTED, fontSize: 18 }}>›</span>
+              </button>
             ))}
           </div>
           <div style={{ marginTop: 20, textAlign: "center", fontSize: 12, color: MUTED }}>ibhub v1.0 · © 2026 Ibhub Tecnologia</div>
@@ -543,10 +547,11 @@ export default function MinhaContaPage() {
       {
         title: "SUPORTE & LEGAL",
         rows: [
-          { kind: "route",   icon: FileText,      label: "Termos de Uso",           sub: "Termos e condições",          href: "https://www.ibhub.com.br/termos" },
-          { kind: "route",   icon: FileText,      label: "Política de Privacidade", sub: "Como usamos seus dados",      href: "https://www.ibhub.com.br/privacidade" },
-          { kind: "route",   icon: Mail,          label: "Fale Conosco",            sub: "Suporte e feedback",          href: "mailto:contato@ibhub.com.br" },
-          { kind: "route",   icon: AlertCircle,   label: "Reportar Bug",            sub: "Nos ajude a melhorar",        href: "mailto:bugs@ibhub.com.br" },
+          { kind: "route",   icon: Mail,          label: "Fale Conosco",            sub: "Suporte e feedback",          href: "/app/configuracoes/contato" },
+          { kind: "route",   icon: AlertCircle,   label: "Reportar Bug",            sub: "Nos ajude a melhorar",        href: "/app/configuracoes/reportar-bug" },
+          { kind: "route",   icon: AlertCircle,   label: "Minhas Denúncias",        sub: "Histórico de denúncias",      href: "/app/configuracoes/denuncias" },
+          { kind: "route",   icon: FileText,      label: "Termos de Uso",           sub: "Termos e condições",          href: "/termos-de-uso" },
+          { kind: "route",   icon: FileText,      label: "Política de Privacidade", sub: "Como usamos seus dados",      href: "/politica-de-privacidade" },
         ],
       },
     ];

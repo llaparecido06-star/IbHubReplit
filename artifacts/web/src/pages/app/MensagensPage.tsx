@@ -9,11 +9,14 @@ import {
   fetchWebConversations,
   fetchWebMessages,
   sendWebMessage,
+  sendWebAudioMessage,
   uploadChatAttachment,
   getOrCreateWebConversation,
   WebConversation,
   WebMessage,
 } from "@/services/api";
+import { validateChatFile, formatFileSize, MAX_CHAT_FILE_SIZE } from "@/constants/chatUploads";
+import { AudioRecorder } from "@/components/chat/AudioRecorder";
 
 interface UserSearchResult { id: string; full_name: string; headline?: string | null; avatar_url?: string | null; }
 
@@ -239,6 +242,12 @@ export default function MensagensPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = "";
+    const validation = validateChatFile(file);
+    if (!validation.ok) {
+      alert(validation.reason);
+      return;
+    }
     setAttachFile(file);
     if (file.type.startsWith("image/")) {
       const reader = new FileReader();
@@ -247,7 +256,26 @@ export default function MensagensPage() {
     } else {
       setAttachPreview(null);
     }
-    e.target.value = "";
+  };
+
+  const handleAudioSend = async (blob: Blob, mimeType: string) => {
+    if (!selected || !userId) return;
+    const result = await sendWebAudioMessage(selected.id, userId, blob, mimeType, {
+      companyPageId: activeCompany?.id ?? null,
+    });
+    if (!result.success || !result.mediaUrl) {
+      throw new Error("Não foi possível enviar o áudio. Tente novamente.");
+    }
+    setMessages(prev => [...prev, {
+      id: `tmp-${Date.now()}`,
+      conversation_id: selected.id,
+      sender_id: userId,
+      content: "",
+      message_type: "audio",
+      media_url: result.mediaUrl,
+      created_at: new Date().toISOString(),
+      sender: { id: userId, full_name: profile?.full_name ?? "Eu", avatar_url: profile?.avatar_url },
+    } as WebMessage]);
   };
 
   const clearAttach = () => {
@@ -263,7 +291,16 @@ export default function MensagensPage() {
 
     if (attachFile) {
       setUploading(true);
-      const url = await uploadChatAttachment(attachFile, userId);
+      // Re-validate to get a clean mime; if the picked File came in with
+      // a generic/empty mime (e.g. application/octet-stream from some
+      // browsers), upload it under the inferred mime so the server
+      // allowlist accepts it.
+      const v = validateChatFile(attachFile);
+      const uploadFile =
+        v.ok && attachFile.type !== v.mimeType
+          ? new File([attachFile], attachFile.name, { type: v.mimeType })
+          : attachFile;
+      const url = await uploadChatAttachment(uploadFile, userId);
       setUploading(false);
       if (url) {
         const label = attachFile.name;
@@ -381,10 +418,13 @@ export default function MensagensPage() {
       <div style={{ padding: "10px 16px 14px", borderTop: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0, backgroundColor: WHITE }}>
         <button
           onClick={() => fileInputRef.current?.click()}
+          aria-label="Anexar arquivo"
+          title={`Anexar arquivo (até ${formatFileSize(MAX_CHAT_FILE_SIZE)})`}
           style={{ flexShrink: 0, width: 38, height: 38, border: `1px solid ${BORDER}`, borderRadius: 19, backgroundColor: WHITE, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", outline: "none" }}
         >
           <ClipIcon size={18} color={attachFile ? GOLD : MUTED} />
         </button>
+        <AudioRecorder onSend={handleAudioSend} disabled={busy} />
         <input
           value={newMsg}
           onChange={e => setNewMsg(e.target.value)}
@@ -409,7 +449,7 @@ export default function MensagensPage() {
     if (selected) {
       return (
         <AppShell>
-          <input ref={fileInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" style={{ display: "none" }} onChange={handleFileChange} />
+          <input ref={fileInputRef} type="file" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" style={{ display: "none" }} onChange={handleFileChange} />
           <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 56px)" }}>
             {/* Thread header */}
             <div style={{ backgroundColor: WHITE, borderBottom: `1px solid ${BORDER}`, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0, position: "sticky", top: 56, zIndex: 20 }}>
@@ -429,7 +469,7 @@ export default function MensagensPage() {
     // Conversation list view
     return (
       <AppShell>
-        <input ref={fileInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" style={{ display: "none" }} onChange={handleFileChange} />
+        <input ref={fileInputRef} type="file" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" style={{ display: "none" }} onChange={handleFileChange} />
         <div style={{ backgroundColor: "#f2f3f5", minHeight: "100vh", paddingBottom: 80 }}>
 
           {/* Sticky header */}
@@ -612,7 +652,7 @@ export default function MensagensPage() {
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
         style={{ display: "none" }}
         onChange={handleFileChange}
       />

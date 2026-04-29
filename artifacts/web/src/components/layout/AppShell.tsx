@@ -1223,8 +1223,8 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
                   section: "Conta",
                   color: MUTED,
                   items: [
-                    { label: "Usuários Bloqueados", icon: I.block,    path: "/app/bloqueados", iconBg: "#e53e3e20" },
-                    { label: "Configurações",       icon: I.settings, path: "/minha-conta",    iconBg: `${NAVY}10`  },
+                    { label: "Usuários Bloqueados", icon: I.block,    path: "/app/bloqueados",     iconBg: "#e53e3e20" },
+                    { label: "Configurações",       icon: I.settings, path: "/app/configuracoes",  iconBg: `${NAVY}10`  },
                   ],
                 },
               ] as { section: string; color: string; items: { label: string; icon: React.ReactNode; path: string; iconBg: string }[] }[]).map(({ section, color, items }, sIdx) => (
