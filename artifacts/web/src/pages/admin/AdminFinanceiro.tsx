@@ -102,7 +102,7 @@ export default function AdminFinanceiro() {
         return;
       }
       setSaveMsg({ type: "success", text: `Cortesia de ${cortesiaValidade} (${cortesiaPlano}) concedida para ${found.full_name ?? cortesiaEmail}.` });
-      setCortesiaEmail(""); setCortesiaPlano(PLAN_OPTIONS[0]); setCortesiaValidade(DURATIONS[0]); setCortesiaMotivo("");
+      setCortesiaEmail(""); setCortesiaPlano(""); setCortesiaValidade(DURATIONS[0]); setCortesiaMotivo("");
       void loadData();
     } finally {
       setSaving(false);
