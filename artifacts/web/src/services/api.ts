@@ -2131,11 +2131,20 @@ export interface Group {
   is_owner?: boolean;
 }
 
-export async function fetchGroups(userId: string): Promise<{ mine: Group[]; explore: Group[] }> {
+export async function fetchGroups(
+  userId: string,
+  activeCompanyId?: string | null,
+): Promise<{ mine: Group[]; explore: Group[] }> {
   try {
+    // Scope memberships to the active identity. NULL company_page_id = personal,
+    // a UUID = that specific company. Mirrors mobile behavior (v56 migration).
+    const membershipsQuery = activeCompanyId
+      ? supabase.from("group_members").select("group_id, role").eq("user_id", userId).eq("company_page_id", activeCompanyId)
+      : supabase.from("group_members").select("group_id, role").eq("user_id", userId).is("company_page_id", null);
+
     const [groupsRes, membershipsRes] = await Promise.all([
       supabase.from("groups").select("*").order("created_at", { ascending: false }),
-      supabase.from("group_members").select("group_id, role").eq("user_id", userId),
+      membershipsQuery,
     ]);
 
     if (groupsRes.error) throw groupsRes.error;
@@ -2144,7 +2153,7 @@ export async function fetchGroups(userId: string): Promise<{ mine: Group[]; expl
       (membershipsRes.data ?? []).map((m: any) => [m.group_id, m.role])
     );
 
-    // Fetch member counts
+    // Fetch member counts (excluding pending requests so the badge matches mobile)
     const groups = (groupsRes.data ?? []) as any[];
     const countResults = await Promise.all(
       groups.map(g =>
@@ -2152,18 +2161,23 @@ export async function fetchGroups(userId: string): Promise<{ mine: Group[]; expl
           .from("group_members")
           .select("user_id", { count: "exact", head: true })
           .eq("group_id", g.id)
+          .neq("role", "pending")
       )
     );
 
-    const enriched: Group[] = groups.map((g, i) => ({
-      ...g,
-      member_count: countResults[i].count ?? 0,
-      is_member: membershipMap.has(g.id),
-      is_owner: g.owner_id === userId,
-    }));
+    const enriched: Group[] = groups.map((g, i) => {
+      const role = membershipMap.get(g.id);
+      return {
+        ...g,
+        member_count: countResults[i].count ?? 0,
+        is_member: role !== undefined && role !== "pending",
+        is_owner:  g.owner_id === userId,
+      };
+    });
 
     const mine    = enriched.filter(g => g.is_member);
-    const explore = enriched.filter(g => !g.is_member);
+    // Hide "restrito" groups from explore — only members ever see them
+    const explore = enriched.filter(g => !g.is_member && g.access !== "restrito");
     return { mine, explore };
   } catch (e) {
     console.warn("fetchGroups:", e);
@@ -2201,11 +2215,19 @@ export async function createGroup(params: {
   }
 }
 
-export async function joinGroup(groupId: string, userId: string): Promise<boolean> {
+export async function joinGroup(
+  groupId: string,
+  userId: string,
+  companyPageId?: string | null,
+): Promise<boolean> {
   try {
+    const cpId = companyPageId ?? null;
     const [{ error: gmErr }, { error: cpErr }] = await Promise.all([
-      supabase.from("group_members").insert({ group_id: groupId, user_id: userId, role: "member" }),
-      supabase.from("conversation_participants").upsert({ conversation_id: groupId, user_id: userId }, { onConflict: "conversation_id,user_id", ignoreDuplicates: true }),
+      supabase.from("group_members").insert({ group_id: groupId, user_id: userId, role: "member", company_page_id: cpId }),
+      supabase.from("conversation_participants").upsert(
+        { conversation_id: groupId, user_id: userId, company_page_id: cpId },
+        { onConflict: "conversation_id,user_id,company_page_id", ignoreDuplicates: true }
+      ),
     ]);
     if (cpErr) console.warn("joinGroup conversation_participants:", cpErr);
     return !gmErr;
@@ -2214,12 +2236,24 @@ export async function joinGroup(groupId: string, userId: string): Promise<boolea
   }
 }
 
-export async function leaveGroup(groupId: string, userId: string): Promise<boolean> {
+export async function leaveGroup(
+  groupId: string,
+  userId: string,
+  companyPageId?: string | null,
+): Promise<boolean> {
   try {
-    const [{ error: gmErr }, { error: cpErr }] = await Promise.all([
-      supabase.from("group_members").delete().eq("group_id", groupId).eq("user_id", userId),
-      supabase.from("conversation_participants").delete().eq("conversation_id", groupId).eq("user_id", userId),
-    ]);
+    const cpId = companyPageId ?? null;
+    // Delete only the identity-specific row, not ALL memberships of this user.
+    let gmQ = supabase.from("group_members").delete().eq("group_id", groupId).eq("user_id", userId);
+    let cpQ = supabase.from("conversation_participants").delete().eq("conversation_id", groupId).eq("user_id", userId);
+    if (cpId) {
+      gmQ = gmQ.eq("company_page_id", cpId);
+      cpQ = cpQ.eq("company_page_id", cpId);
+    } else {
+      gmQ = gmQ.is("company_page_id", null);
+      cpQ = cpQ.is("company_page_id", null);
+    }
+    const [{ error: gmErr }, { error: cpErr }] = await Promise.all([gmQ, cpQ]);
     if (gmErr) console.warn("leaveGroup group_members:", gmErr);
     if (cpErr) console.warn("leaveGroup conversation_participants:", cpErr);
     return !gmErr;

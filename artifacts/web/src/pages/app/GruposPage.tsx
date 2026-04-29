@@ -258,7 +258,9 @@ export function GruposContent() {
     if (!userId) { setLoading(false); return; }
     setLoading(true);
     try {
-      const { mine: m, explore: e } = await fetchGroups(userId);
+      // Scope to current identity (personal vs. company) so groups joined as
+      // company X only show when acting as that company.
+      const { mine: m, explore: e } = await fetchGroups(userId, activeCompany?.id ?? null);
       setMine(m);
       setExplore(e);
       setDbError(false);
@@ -266,17 +268,17 @@ export function GruposContent() {
       setDbError(true);
     }
     setLoading(false);
-  }, [userId]);
+  }, [userId, activeCompany?.id]);
 
   useEffect(() => { load(); }, [load]);
 
   const handleJoin = async (groupId: string) => {
-    await joinGroup(groupId, userId);
+    await joinGroup(groupId, userId, activeCompany?.id ?? null);
     await load();
   };
 
   const handleLeave = async (groupId: string) => {
-    await leaveGroup(groupId, userId);
+    await leaveGroup(groupId, userId, activeCompany?.id ?? null);
     await load();
   };
 

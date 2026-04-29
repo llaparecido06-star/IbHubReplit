@@ -1,11 +1,36 @@
 import { Router, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
+import { z } from "zod";
 import { resolveUserId } from "../lib/planCheck.js";
+import { validateBody } from "../middlewares/validate.js";
 
 const router = Router();
 
 const supabaseUrl        = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+// ─── Validation schemas ──────────────────────────────────────────────────
+// Hard limits chosen to match the existing UI: chat messages are typed by
+// hand (10k chars is generous). Media URLs are bounded so an attacker can't
+// stuff multi-MB strings into the DB through this endpoint. UUIDs are
+// validated structurally so malformed ids fail fast at the edge.
+const SendMessageSchema = z.object({
+  conversation_id: z.string().uuid(),
+  sender_id: z.string().uuid(),
+  content: z.string().max(10_000),
+  message_type: z.string().max(40).optional().default("text"),
+  media_url: z.string().url().max(2048).optional(),
+  reply_to_id: z.string().uuid().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  from_company_page_id: z.string().uuid().optional(),
+});
+
+const DirectConversationSchema = z.object({
+  user_id_1: z.string().uuid(),
+  user_id_2: z.string().uuid(),
+  company_page_id: z.string().uuid().nullable().optional(),
+  force_accepted: z.boolean().optional().default(false),
+});
 
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   auth: { autoRefreshToken: false, persistSession: false },
@@ -29,7 +54,7 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
  *   metadata              object  (optional)
  *   from_company_page_id  string  (optional)
  */
-router.post("/messages/send", async (req: Request, res: Response): Promise<void> => {
+router.post("/messages/send", validateBody(SendMessageSchema), async (req: Request, res: Response): Promise<void> => {
   const callerId = await resolveUserId(req, res);
   if (!callerId) return;
 
@@ -37,26 +62,12 @@ router.post("/messages/send", async (req: Request, res: Response): Promise<void>
     conversation_id,
     sender_id,
     content,
-    message_type = "text",
+    message_type,
     media_url,
     reply_to_id,
     metadata,
     from_company_page_id,
-  } = req.body as {
-    conversation_id?: string;
-    sender_id?: string;
-    content?: string;
-    message_type?: string;
-    media_url?: string;
-    reply_to_id?: string;
-    metadata?: Record<string, any>;
-    from_company_page_id?: string;
-  };
-
-  if (!conversation_id || !sender_id || content === undefined) {
-    res.status(400).json({ error: "conversation_id, sender_id e content são obrigatórios." });
-    return;
-  }
+  } = req.body as z.infer<typeof SendMessageSchema>;
 
   // Verify the sender_id corresponds to the authenticated user.
   // Accept direct match (auth.uid() === sender_id) OR legacy profile where
@@ -158,7 +169,7 @@ router.post("/messages/send", async (req: Request, res: Response): Promise<void>
  *   company_page_id   string  (optional)
  *   force_accepted    boolean (optional, default false)
  */
-router.post("/conversations/direct", async (req: Request, res: Response): Promise<void> => {
+router.post("/conversations/direct", validateBody(DirectConversationSchema), async (req: Request, res: Response): Promise<void> => {
   const callerId = await resolveUserId(req, res);
   if (!callerId) return;
 
@@ -167,17 +178,7 @@ router.post("/conversations/direct", async (req: Request, res: Response): Promis
     user_id_2,
     company_page_id = null,
     force_accepted  = false,
-  } = req.body as {
-    user_id_1?: string;
-    user_id_2?: string;
-    company_page_id?: string | null;
-    force_accepted?: boolean;
-  };
-
-  if (!user_id_1 || !user_id_2) {
-    res.status(400).json({ error: "user_id_1 e user_id_2 são obrigatórios." });
-    return;
-  }
+  } = req.body as z.infer<typeof DirectConversationSchema>;
 
   // Verify the caller owns user_id_1 (auth.uid() or legacy profile.id).
   if (user_id_1 !== callerId) {

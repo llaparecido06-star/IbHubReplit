@@ -26,6 +26,17 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
 
+## API Server — Segurança (baseline)
+
+Arquivos centrais em `artifacts/api-server/src/`:
+
+- `lib/config.ts` — env validado por Zod no boot. `config` (valores) + `buildAllowedOrigins()` (allow list de CORS). Nunca usar `process.env.X` direto em rotas; importar `config` daqui.
+- `middlewares/validate.ts` — `validateBody/validateParams/validateQuery` genéricos com Zod. Retornam 400 com `{ error, issues:[{field,message}] }`.
+- `middlewares/rateLimit.ts` — `apiLimiter` (300/min/IP, global) e `sensitiveLimiter` (60/min/IP) para rotas críticas.
+- `app.ts` — Helmet (CSP off para JSON), CORS por allow list (REPLIT_DOMAINS em prod; +REPLIT_DEV_DOMAIN/+localhost em dev), `trust proxy 1`, rate limiters em camadas (sensitive em `/api/admin`, `/api/stripe`, `/api/messages`, `/api/push`; healthz e webhook isentos), error handler que converte rejeição de CORS em JSON 403.
+
+Rotas com Zod aplicado: `routes/messages.ts` (`/messages/send`, `/conversations/direct`). **Pendente** (baixar prioridade conforme uso): `routes/community.ts`, `routes/uploads.ts`, `routes/admin.ts`.
+
 ---
 
 # IbHub Web — Rede do Vinho (Web App)
