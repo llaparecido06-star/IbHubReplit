@@ -59,22 +59,18 @@ ensureBucket().catch(err => console.warn("ensureBucket:", err));
  */
 router.post("/uploads/chat", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { fileBase64, fileName, mimeType, userId } = req.body as {
+    // Authenticate uploader via Bearer token; never trust a userId from the body.
+    const userId = await resolveUserId(req, res);
+    if (!userId) return;
+
+    const { fileBase64, fileName, mimeType } = req.body as {
       fileBase64: string;
       fileName: string;
       mimeType: string;
-      userId: string;
     };
 
-    if (!fileBase64 || !fileName || !userId) {
-      res.status(400).json({ error: "fileBase64, fileName and userId are required" });
-      return;
-    }
-
-    // Verify the Authorization header (user must be logged in)
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith("Bearer ")) {
-      res.status(401).json({ error: "Missing authorization header" });
+    if (!fileBase64 || !fileName) {
+      res.status(400).json({ error: "fileBase64 and fileName are required" });
       return;
     }
 
@@ -119,11 +115,12 @@ router.post(
   chatUpload.single("file"),
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const authHeader = req.headers.authorization;
-      if (!authHeader?.startsWith("Bearer ")) {
-        res.status(401).json({ error: "Missing authorization header" });
-        return;
-      }
+      // Authenticate the uploader from the Bearer token. We deliberately
+      // ignore any `userId` field in the FormData — clients used to pass
+      // it, but trusting it would let user A upload files into user B's
+      // Storage path. Always derive the userId from the verified token.
+      const userId = await resolveUserId(req, res);
+      if (!userId) return;
 
       const file = (req as any).file as Express.Multer.File | undefined;
       if (!file) {
@@ -131,11 +128,7 @@ router.post(
         return;
       }
 
-      const { userId, mimeType } = req.body as { userId?: string; mimeType?: string };
-      if (!userId) {
-        res.status(400).json({ error: "userId is required" });
-        return;
-      }
+      const { mimeType } = req.body as { mimeType?: string };
 
       const safeMime = mimeType || file.mimetype || "application/octet-stream";
       const ext = (safeMime.split("/")[1] ?? "bin")
@@ -183,11 +176,11 @@ router.post(
   postVideoUpload.single("file"),
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const authHeader = req.headers.authorization;
-      if (!authHeader?.startsWith("Bearer ")) {
-        res.status(401).json({ error: "Missing authorization header" });
-        return;
-      }
+      // Authenticate uploader from the verified token; never trust a userId
+      // sent in the body, otherwise user A could write files into user B's
+      // storage path.
+      const userId = await resolveUserId(req, res);
+      if (!userId) return;
 
       const file = (req as any).file as Express.Multer.File | undefined;
       if (!file) {
@@ -195,11 +188,7 @@ router.post(
         return;
       }
 
-      const { userId, mimeType } = req.body as { userId?: string; mimeType?: string };
-      if (!userId) {
-        res.status(400).json({ error: "userId is required" });
-        return;
-      }
+      const { mimeType } = req.body as { mimeType?: string };
 
       const safeMime = mimeType || file.mimetype || "video/mp4";
       const ext = (safeMime.split("/")[1] ?? "mp4")

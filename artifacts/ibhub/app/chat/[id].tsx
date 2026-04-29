@@ -430,6 +430,7 @@ export default function ChatScreen() {
         if (!url) {
           Alert.alert("Erro", "Não foi possível enviar a imagem. Tente novamente.");
           setMessages(prev => prev.filter(m => m.id !== tempId));
+          seenMsgIds.current.delete(tempId);
           return;
         }
         const saved = await API.sendMediaMessage(id, user.id, url, msgType);
@@ -439,6 +440,10 @@ export default function ChatScreen() {
             const filtered = prev.filter(m => m.id !== tempId && m.id !== saved.id);
             return [...filtered, saved];
           });
+        } else {
+          setMessages(prev => prev.filter(m => m.id !== tempId));
+          seenMsgIds.current.delete(tempId);
+          Alert.alert("Erro", "Não foi possível enviar a imagem. Tente novamente.");
         }
       } else {
         setUploadStatus("Enviando vídeo...");
@@ -446,6 +451,7 @@ export default function ChatScreen() {
         if (!url) {
           Alert.alert("Erro", "Não foi possível enviar o vídeo. Tente novamente.");
           setMessages(prev => prev.filter(m => m.id !== tempId));
+          seenMsgIds.current.delete(tempId);
           return;
         }
         const saved = await API.sendMediaMessage(id, user.id, url, msgType);
@@ -455,6 +461,10 @@ export default function ChatScreen() {
             const filtered = prev.filter(m => m.id !== tempId && m.id !== saved.id);
             return [...filtered, saved];
           });
+        } else {
+          setMessages(prev => prev.filter(m => m.id !== tempId));
+          seenMsgIds.current.delete(tempId);
+          Alert.alert("Erro", "Não foi possível enviar o vídeo. Tente novamente.");
         }
       }
     } finally {
@@ -487,6 +497,11 @@ export default function ChatScreen() {
           return [...filtered, saved];
         });
         setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+      } else {
+        Alert.alert(
+          "Erro",
+          "O arquivo foi enviado mas a mensagem não pôde ser registrada. Tente novamente.",
+        );
       }
     } catch (e: any) {
       setUploading(false);
@@ -567,35 +582,23 @@ export default function ChatScreen() {
 
       if (__DEV__) console.log("[Audio] Upload OK, sending message...");
 
-      // Direct Supabase insert so we can surface the exact error if it fails
-      const audioPayload: any = {
-        conversation_id: id,
-        sender_id: user.id,
-        content: "",
-        message_type: "audio",
-        media_url: url,
-      };
-      if (activeCompany?.id) audioPayload.from_company_page_id = activeCompany.id;
-
-      const { data: saved, error: msgError } = await supabase
-        .from("messages")
-        .insert(audioPayload)
-        .select()
-        .single();
-
-      if (msgError) {
-        const detail = `[${(msgError as any).code ?? "?"}] ${msgError.message}${(msgError as any).details ? " — " + (msgError as any).details : ""}${(msgError as any).hint ? "\nDica: " + (msgError as any).hint : ""}`;
-        console.error("[Audio] Supabase insert error:", JSON.stringify(msgError));
-        Alert.alert("Erro ao salvar áudio", detail);
-      } else if (saved) {
-        seenMsgIds.current.add(saved.id);
-        setMessages(prev => {
-          const filtered = prev.filter((m: any) => m.id !== saved.id);
-          return [...filtered, saved as any];
-        });
-        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
-        if (__DEV__) console.log("[Audio] Audio message sent successfully.");
+      // Use the shared API endpoint so the server can fan out push
+      // notifications and apply the same moderation/auditing logic that
+      // image, video and file messages already get.
+      const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", activeCompany?.id);
+      if (!saved) {
+        console.error("[Audio] sendMediaMessage returned null");
+        Alert.alert("Erro ao enviar áudio", "Não foi possível salvar a mensagem de áudio.");
+        return;
       }
+
+      seenMsgIds.current.add(saved.id);
+      setMessages(prev => {
+        const filtered = prev.filter((m: any) => m.id !== saved.id);
+        return [...filtered, saved as any];
+      });
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+      if (__DEV__) console.log("[Audio] Audio message sent successfully.");
     } catch (e: any) {
       console.error("[Audio] stopRecording error:", e?.message);
       setUploading(false);
