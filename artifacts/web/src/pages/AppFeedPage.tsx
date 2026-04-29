@@ -184,24 +184,33 @@ function WineTastingCardWeb({ content }: { content: string }) {
 }
 
 /* ─── Reaction config ────────────────────── */
+/* Aligned with mobile app — saude/bravo/destaque/incrivel.
+ * "curtir" stays as a legacy fallback in the picker for back-compat
+ * with rows persisted before reaction types existed. */
 const REACTIONS: { type: ReactionType; emoji: string; label: string; color: string }[] = [
-  { type: "curtir",   emoji: "👍", label: "Curtir",  color: "#1a56db" },
-  { type: "saude",    emoji: "🍷", label: "Saúde!",  color: "#c9a84c" },
-  { type: "destaque", emoji: "⭐", label: "Destaque!", color: "#f59e0b" },
-  { type: "incrivel", emoji: "🔥", label: "Incrível!", color: "#ef4444" },
+  { type: "saude",    emoji: "🍷", label: "Saúde!",   color: "#7C3AED" },
+  { type: "bravo",    emoji: "👏", label: "Bravo!",   color: "#F59E0B" },
+  { type: "destaque", emoji: "⭐", label: "Destaque!", color: "#EAB308" },
+  { type: "incrivel", emoji: "🔥", label: "Incrível!", color: "#EF4444" },
 ];
+
+/* Legacy fallback so unknown / pre-existing "curtir" rows still render an emoji
+ * instead of falling through to the thumbs-up default. */
+const REACTION_LEGACY: Record<string, { emoji: string; label: string; color: string }> = {
+  curtir: { emoji: "❤️", label: "Curtir", color: "#1a56db" },
+};
 
 function reactionLabel(r?: ReactionType | null): string {
   if (!r) return "Curtir";
-  return REACTIONS.find(x => x.type === r)?.label ?? "Curtir";
+  return REACTIONS.find(x => x.type === r)?.label ?? REACTION_LEGACY[r as string]?.label ?? "Curtir";
 }
 function reactionEmoji(r?: ReactionType | null): string {
   if (!r) return "";
-  return REACTIONS.find(x => x.type === r)?.emoji ?? "👍";
+  return REACTIONS.find(x => x.type === r)?.emoji ?? REACTION_LEGACY[r as string]?.emoji ?? "👍";
 }
 function reactionColor(r?: ReactionType | null): string {
   if (!r) return MUTED;
-  return REACTIONS.find(x => x.type === r)?.color ?? MUTED;
+  return REACTIONS.find(x => x.type === r)?.color ?? REACTION_LEGACY[r as string]?.color ?? MUTED;
 }
 
 /* ─── PollDisplay ───────────────────────── */
@@ -650,7 +659,7 @@ function PostCard({
               onClick={() => onOpenLikes?.(post.id)}
               style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 12, padding: 0 }}
             >
-              <span>{post.is_liked ? reactionEmoji(post.reaction_type ?? "curtir") : "👍"}</span>
+              <span>{post.is_liked ? reactionEmoji(post.reaction_type ?? "saude") : "👍"}</span>
               {post.likes_count}
             </button>
           )}
@@ -699,7 +708,7 @@ function PostCard({
           <button
             onMouseEnter={startPicker}
             onMouseLeave={hidePicker}
-            onClick={() => handleReact(post.reaction_type ?? "curtir")}
+            onClick={() => handleReact(post.reaction_type ?? "saude")}
             style={{
               width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
               background: "none", border: "none", cursor: "pointer", padding: "10px 8px",
@@ -1188,7 +1197,7 @@ export default function AppFeedPage() {
     return () => { supabase.removeChannel(ch); };
   }, [userId, companyId]);
 
-  const handleLike = useCallback(async (postId: string, isLiked: boolean, reaction: ReactionType = "curtir") => {
+  const handleLike = useCallback(async (postId: string, isLiked: boolean, reaction: ReactionType = "saude") => {
     if (!userId) return;
     if (isLiked) {
       const currentPost = posts.find(p => p.id === postId);

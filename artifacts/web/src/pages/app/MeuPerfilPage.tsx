@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import PlanBadge from "@/components/PlanBadge";
 import { LikesModal } from "@/components/feed/LikesModal";
 import VideoPlayer from "@/components/feed/VideoPlayer";
+import { supabase } from "@/lib/supabase";
 
 function useWindowWidth() {
   const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1280);
@@ -25,9 +26,13 @@ import {
   updatePost,
   voteOnFeedPoll,
   fetchPollVoters,
+  toggleLikePost,
+  changeReactionPost,
+  toggleBookmarkPost,
   Post,
   Poll,
   ProfilePerson,
+  ReactionType,
 } from "@/services/api";
 
 const GOLD   = "#c9a84c";
@@ -212,11 +217,36 @@ function ReadOnlyPoll({ poll, postId, userId, onUpdate }: { poll: Poll; postId: 
 }
 
 /* ── Card do feed privado ── */
-function MiniPostCard({ post, onDelete, onEdit, onPollUpdate }: {
+/* ── Reaction config (mirrors AppFeedPage / mobile PostCard) ── */
+const PROFILE_REACTIONS: { type: ReactionType; emoji: string; label: string; color: string }[] = [
+  { type: "saude",    emoji: "🍷", label: "Saúde!",   color: "#7C3AED" },
+  { type: "bravo",    emoji: "👏", label: "Bravo!",   color: "#F59E0B" },
+  { type: "destaque", emoji: "⭐", label: "Destaque!", color: "#EAB308" },
+  { type: "incrivel", emoji: "🔥", label: "Incrível!", color: "#EF4444" },
+];
+const PROFILE_REACTION_LEGACY: Record<string, { emoji: string; label: string; color: string }> = {
+  curtir: { emoji: "❤️", label: "Curtir", color: "#1a56db" },
+};
+const profReactionLabel = (r?: ReactionType | null): string =>
+  !r ? "Curtir" : PROFILE_REACTIONS.find(x => x.type === r)?.label ?? PROFILE_REACTION_LEGACY[r as string]?.label ?? "Curtir";
+const profReactionEmoji = (r?: ReactionType | null): string =>
+  !r ? "" : PROFILE_REACTIONS.find(x => x.type === r)?.emoji ?? PROFILE_REACTION_LEGACY[r as string]?.emoji ?? "👍";
+const profReactionColor = (r?: ReactionType | null): string =>
+  !r ? MUTED : PROFILE_REACTIONS.find(x => x.type === r)?.color ?? PROFILE_REACTION_LEGACY[r as string]?.color ?? MUTED;
+
+const BookmarkIcon = ({ filled }: { filled: boolean }) => (
+  <svg width="18" height="18" fill={filled ? GOLD : "none"} stroke={filled ? GOLD : MUTED} strokeWidth="2" viewBox="0 0 24 24">
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+  </svg>
+);
+
+function MiniPostCard({ post, onDelete, onEdit, onPollUpdate, onLike, onBookmark }: {
   post: Post;
   onDelete?: (id: string) => void;
   onEdit?: (id: string, content: string) => void;
   onPollUpdate?: (id: string, poll: Poll) => void;
+  onLike?: (id: string, isLiked: boolean, reaction: ReactionType) => void;
+  onBookmark?: (id: string, isBookmarked: boolean) => void;
 }) {
   const [, setLocation] = useLocation();
   const { profile } = useAuth();
@@ -226,6 +256,9 @@ function MiniPostCard({ post, onDelete, onEdit, onPollUpdate }: {
   const [editSaving, setEditSaving] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [likesModalOpen, setLikesModalOpen] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  const pickerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pickerHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const content = post.content ?? "";
   const TRUNCATE = 300;
@@ -234,8 +267,29 @@ function MiniPostCard({ post, onDelete, onEdit, onPollUpdate }: {
 
   const images = post.image_urls && post.image_urls.length > 0 ? post.image_urls : (post.image_url ? [post.image_url] : []);
 
+  // Author info — own profile, so always the logged-in user
+  const authorName = profile?.full_name ?? "Você";
+  const authorAvatar = (profile as any)?.avatar_url ?? null;
+  const authorHeadline = (profile as any)?.headline ?? null;
+
+  const startPicker = () => {
+    if (pickerHideTimer.current) clearTimeout(pickerHideTimer.current);
+    pickerTimer.current = setTimeout(() => setShowPicker(true), 400);
+  };
+  const cancelPicker = () => { if (pickerTimer.current) clearTimeout(pickerTimer.current); };
+  const hidePicker = () => {
+    cancelPicker();
+    pickerHideTimer.current = setTimeout(() => setShowPicker(false), 250);
+  };
+  const keepPicker = () => { if (pickerHideTimer.current) clearTimeout(pickerHideTimer.current); };
+  const handleReact = (reaction: ReactionType) => {
+    if (pickerHideTimer.current) clearTimeout(pickerHideTimer.current);
+    setShowPicker(false);
+    onLike?.(post.id, !!post.is_liked, reaction);
+  };
+
   return (
-    <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, marginBottom: 12, overflow: "hidden" }}>
+    <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, marginBottom: 14, overflow: "visible", position: "relative" }}>
       {/* Edit modal */}
       {showEditModal && (
         <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
@@ -262,11 +316,21 @@ function MiniPostCard({ post, onDelete, onEdit, onPollUpdate }: {
       {/* LikesModal */}
       <LikesModal postId={post.id} likesCount={post.likes_count} visible={likesModalOpen} onClose={() => setLikesModalOpen(false)} />
 
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px 8px" }}>
-        <span style={{ fontSize: 12, color: MUTED }}>{timeAgo(post.created_at)}</span>
-        <div style={{ position: "relative" }}>
-          <button onClick={() => setShowMenu(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, lineHeight: 1, padding: "2px 6px", borderRadius: 6 }}>⋮</button>
+      {/* Header — author row (avatar + name + plan badge + headline + timestamp) */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "14px 16px 10px" }}>
+        <Avatar src={authorAvatar} name={authorName} size={42} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{authorName}</span>
+            <PlanBadge plan={(profile as any)?.plan} />
+          </div>
+          {authorHeadline && (
+            <div style={{ fontSize: 12, color: MUTED, marginTop: 1 }} title={authorHeadline}>{authorHeadline}</div>
+          )}
+          <div style={{ fontSize: 11, color: "#b0b7c3", marginTop: 2 }}>{timeAgo(post.created_at)}</div>
+        </div>
+        <div style={{ position: "relative", flexShrink: 0 }}>
+          <button onClick={() => setShowMenu(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, lineHeight: 1, padding: "2px 6px", borderRadius: 6 }} title="Opções">⋮</button>
           {showMenu && (
             <div style={{ position: "absolute", top: "100%", right: 0, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 8px 28px rgba(0,0,0,0.14)", zIndex: 600, minWidth: 190, overflow: "hidden" }}
               onMouseLeave={() => setShowMenu(false)}>
@@ -289,7 +353,7 @@ function MiniPostCard({ post, onDelete, onEdit, onPollUpdate }: {
 
       {/* Text content */}
       {content.trim().length > 0 && (
-        <div style={{ padding: "0 16px 10px" }}>
+        <div style={{ padding: "0 16px 12px" }}>
           <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.65, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{displayContent}</div>
           {needsTruncation && (
             <button onClick={() => setExpanded(v => !v)} style={{ background: "none", border: "none", color: GOLD, fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "4px 0 0", fontFamily: "inherit" }}>
@@ -299,17 +363,26 @@ function MiniPostCard({ post, onDelete, onEdit, onPollUpdate }: {
         </div>
       )}
 
+      {/* Hashtags */}
+      {post.hashtags && post.hashtags.length > 0 && (
+        <div style={{ padding: "0 16px 10px", display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {post.hashtags.slice(0, 5).map((tag) => (
+            <span key={tag} style={{ fontSize: 12, color: "#1a56db", fontWeight: 600 }}>#{tag}</span>
+          ))}
+        </div>
+      )}
+
       {/* Images */}
       {images.length > 0 && (
         <div style={{
           display: "grid",
-          gridTemplateColumns: images.length === 1 ? "1fr" : images.length === 2 ? "1fr 1fr" : images.length >= 3 ? "1fr 1fr" : "1fr",
+          gridTemplateColumns: images.length === 1 ? "1fr" : "1fr 1fr",
           gap: 2,
           marginBottom: 2,
         }}>
           {images.slice(0, 4).map((url, i) => (
             <div key={i} style={{ position: "relative" }}>
-              <img src={url} alt="" style={{ width: "100%", height: images.length === 1 ? "auto" : 180, maxHeight: images.length === 1 ? 480 : undefined, objectFit: "cover", display: "block" }} />
+              <img src={url} alt="" style={{ width: "100%", height: images.length === 1 ? "auto" : 220, maxHeight: images.length === 1 ? 480 : undefined, objectFit: "cover", display: "block" }} />
               {i === 3 && images.length > 4 && (
                 <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: WHITE }}>
                   +{images.length - 4}
@@ -321,11 +394,7 @@ function MiniPostCard({ post, onDelete, onEdit, onPollUpdate }: {
       )}
 
       {/* Video */}
-      {post.video_url && (
-        <div style={{ marginBottom: 2 }}>
-          <VideoPlayer src={post.video_url} />
-        </div>
-      )}
+      {post.video_url && <VideoPlayer src={post.video_url} />}
 
       {/* Poll */}
       {post.poll && post.poll.options && post.poll.options.length > 0 && (
@@ -334,34 +403,103 @@ function MiniPostCard({ post, onDelete, onEdit, onPollUpdate }: {
         </div>
       )}
 
-      {/* Footer — action bar */}
-      <div style={{ display: "flex", borderTop: `1px solid ${BORDER}`, marginTop: 4 }}>
-        <button
-          onClick={() => post.likes_count > 0 && setLikesModalOpen(true)}
-          style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "none", border: "none", cursor: post.likes_count > 0 ? "pointer" : "default", padding: "10px 8px", borderRadius: 8, color: MUTED, fontSize: 13, fontWeight: 600, fontFamily: "inherit", transition: "background 0.15s" }}
-          onMouseEnter={e => { if (post.likes_count > 0) (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
-        >
-          <LikeIcon filled={false} />
-          <span>{post.likes_count > 0 ? `${post.likes_count} Curtida${post.likes_count !== 1 ? "s" : ""}` : "Curtidas"}</span>
-        </button>
+      {/* Stats row (X curtidas · X comentários) */}
+      {(post.likes_count > 0 || post.comments_count > 0) && (
+        <div style={{ display: "flex", gap: 12, padding: "8px 16px", fontSize: 12, color: MUTED, borderTop: `1px solid ${BORDER}` }}>
+          {post.likes_count > 0 && (
+            <button
+              onClick={() => setLikesModalOpen(true)}
+              style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 12, padding: 0 }}
+            >
+              <span>{post.is_liked ? profReactionEmoji(post.reaction_type ?? "saude") : "👍"}</span>
+              {post.likes_count}
+            </button>
+          )}
+          {post.comments_count > 0 && (
+            <span style={{ marginLeft: "auto" }}>{post.comments_count} comentário{post.comments_count !== 1 ? "s" : ""}</span>
+          )}
+        </div>
+      )}
+
+      {/* Action bar — like (with reaction picker) · comment · share · bookmark */}
+      <div style={{ display: "flex", borderTop: `1px solid ${BORDER}`, overflow: "visible", position: "relative" }}>
+        <div style={{ position: "relative", flex: 1 }} onMouseLeave={hidePicker}>
+          {showPicker && (
+            <div
+              onMouseEnter={keepPicker}
+              onMouseLeave={hidePicker}
+              style={{
+                position: "absolute", bottom: "100%", left: 0,
+                background: WHITE, border: `1px solid ${BORDER}`,
+                borderRadius: 32, boxShadow: "0 4px 20px rgba(0,0,0,0.14)",
+                display: "flex", gap: 2, padding: "8px 10px 10px", zIndex: 300,
+                whiteSpace: "nowrap",
+              }}>
+              {PROFILE_REACTIONS.map(r => (
+                <button
+                  key={r.type}
+                  onClick={() => handleReact(r.type)}
+                  title={r.label}
+                  style={{
+                    background: "none", border: "none", cursor: "pointer",
+                    fontSize: 24, lineHeight: 1, padding: "2px 6px",
+                    borderRadius: 8, transition: "transform 0.12s",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.4)"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }}
+                >
+                  <span>{r.emoji}</span>
+                  <span style={{ fontSize: 9, color: r.color, fontWeight: 700 }}>{r.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            onMouseEnter={startPicker}
+            onMouseLeave={hidePicker}
+            onClick={() => handleReact(post.reaction_type ?? "saude")}
+            style={{
+              width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+              background: "none", border: "none", cursor: "pointer", padding: "10px 8px",
+              fontSize: 13, fontWeight: 600, color: post.is_liked ? profReactionColor(post.reaction_type) : MUTED,
+            }}
+          >
+            {post.is_liked ? (
+              <span style={{ fontSize: 15 }}>{profReactionEmoji(post.reaction_type)}</span>
+            ) : (
+              <LikeIcon filled={false} />
+            )}
+            <span>{profReactionLabel(post.reaction_type ?? (post.is_liked ? "saude" : null))}</span>
+          </button>
+        </div>
+
         <button
           onClick={() => setLocation(`/app/posts/${post.id}`)}
-          style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "none", border: "none", cursor: "pointer", padding: "10px 8px", borderRadius: 8, color: MUTED, fontSize: 13, fontWeight: 600, fontFamily: "inherit", transition: "background 0.15s" }}
+          style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: "none", border: "none", cursor: "pointer", padding: "10px 8px", fontSize: 13, fontWeight: 600, color: MUTED }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
         >
-          <CommentIcon />
-          <span>{post.comments_count > 0 ? `${post.comments_count} Comentário${post.comments_count !== 1 ? "s" : ""}` : "Comentar"}</span>
+          <CommentIcon /><span>Comentar</span>
         </button>
+
         <button
           onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}/p/${post.id}`).catch(() => {}); }}
-          style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "none", border: "none", cursor: "pointer", padding: "10px 8px", borderRadius: 8, color: MUTED, fontSize: 13, fontWeight: 600, fontFamily: "inherit", transition: "background 0.15s" }}
+          style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: "none", border: "none", cursor: "pointer", padding: "10px 8px", fontSize: 13, fontWeight: 600, color: MUTED }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
         >
-          <ShareIcon />
-          <span>Compartilhar</span>
+          <ShareIcon /><span>Compartilhar</span>
+        </button>
+
+        <button
+          onClick={() => onBookmark?.(post.id, !!post.is_bookmarked)}
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", padding: "10px 12px", color: MUTED }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+          title={post.is_bookmarked ? "Remover dos salvos" : "Salvar"}
+        >
+          <BookmarkIcon filled={!!post.is_bookmarked} />
         </button>
       </div>
     </div>
@@ -381,6 +519,7 @@ export default function MeuPerfilPage() {
   const [tab, setTab] = useState<ProfileTab>("publicacoes");
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [peopleModal, setPeopleModal] = useState<{ title: string; list: ProfilePerson[] } | null>(null);
+  const [myCompanyId, setMyCompanyId] = useState<string | null>(null);
 
   const userId = profile?.id ?? user?.id ?? "";
   const displayName = profile?.full_name ?? user?.email?.split("@")[0] ?? "Usuário";
@@ -398,6 +537,22 @@ export default function MeuPerfilPage() {
     fetchUserPosts(userId)
       .then(data => { setPosts(data); setLoadingPosts(false); })
       .catch(() => setLoadingPosts(false));
+    // Look up the user's company page (if any) so the "Empresa / Minha página"
+    // card can route to /app/empresa/:id instead of the route-less /app/empresa.
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("company_pages")
+          .select("id")
+          .eq("owner_id", userId)
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        setMyCompanyId((data as { id?: string } | null)?.id ?? null);
+      } catch {
+        setMyCompanyId(null);
+      }
+    })();
   }, [userId, authLoading]);
 
   const openConnections = async () => {
@@ -425,6 +580,39 @@ export default function MeuPerfilPage() {
 
   const handlePollUpdate = (postId: string, poll: Poll) => {
     setPosts(prev => prev.map(p => p.id === postId ? { ...p, poll } : p));
+  };
+
+  const handleLike = async (postId: string, isLiked: boolean, reaction: ReactionType = "saude") => {
+    if (!userId) return;
+    if (isLiked) {
+      const current = posts.find(p => p.id === postId);
+      if (current?.reaction_type === reaction) {
+        // same reaction tapped twice → remove
+        setPosts(prev => prev.map(p =>
+          p.id === postId
+            ? { ...p, is_liked: false, reaction_type: null, likes_count: Math.max(0, p.likes_count - 1) }
+            : p
+        ));
+        await toggleLikePost(postId, userId, true, reaction);
+      } else {
+        // change to a different reaction (count stays the same)
+        setPosts(prev => prev.map(p => p.id === postId ? { ...p, reaction_type: reaction } : p));
+        await changeReactionPost(postId, userId, reaction);
+      }
+    } else {
+      setPosts(prev => prev.map(p =>
+        p.id === postId
+          ? { ...p, is_liked: true, reaction_type: reaction, likes_count: p.likes_count + 1 }
+          : p
+      ));
+      await toggleLikePost(postId, userId, false, reaction, null, profile?.full_name ?? undefined);
+    }
+  };
+
+  const handleBookmark = async (postId: string, isBookmarked: boolean) => {
+    if (!userId) return;
+    setPosts(prev => prev.map(p => p.id === postId ? { ...p, is_bookmarked: !isBookmarked } : p));
+    await toggleBookmarkPost(postId, userId, isBookmarked);
   };
 
   const completion = (() => {
@@ -544,10 +732,12 @@ export default function MeuPerfilPage() {
               </div>
             )}
 
-            {/* Action cards */}
+            {/* Action cards — "Empresa" only shows when the user owns a company page */}
             <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
               {[
-                { icon: "🏢", label: "Empresa", sub: "Minha página", onClick: () => setLocation("/app/empresa") },
+                ...(myCompanyId
+                  ? [{ icon: "🏢", label: "Empresa", sub: "Minha página", onClick: () => setLocation(`/app/empresa/${myCompanyId}`) }]
+                  : []),
                 { icon: "👥", label: "Conexões", sub: `${stats.connections} contatos`, onClick: openConnections },
                 { icon: "⭐", label: "Plano", sub: (profile as any)?.plan ?? "Gratuito", onClick: () => setLocation("/minha-conta") },
               ].map(card => (
@@ -598,7 +788,7 @@ export default function MeuPerfilPage() {
                 </div>
               ) : (
                 <div style={{ padding: "0 12px" }}>
-                  {posts.map(post => <MiniPostCard key={post.id} post={post} onDelete={handleDeletePost} onEdit={handleEditPost} onPollUpdate={handlePollUpdate} />)}
+                  {posts.map(post => <MiniPostCard key={post.id} post={post} onDelete={handleDeletePost} onEdit={handleEditPost} onPollUpdate={handlePollUpdate} onLike={handleLike} onBookmark={handleBookmark} />)}
                 </div>
               )
             ) : (
@@ -736,7 +926,7 @@ export default function MeuPerfilPage() {
               <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>Compartilhe seu conhecimento sobre vinho com a comunidade</p>
             </div>
           ) : (
-            posts.map(post => <MiniPostCard key={post.id} post={post} onDelete={handleDeletePost} onEdit={handleEditPost} onPollUpdate={handlePollUpdate} />)
+            posts.map(post => <MiniPostCard key={post.id} post={post} onDelete={handleDeletePost} onEdit={handleEditPost} onPollUpdate={handlePollUpdate} onLike={handleLike} onBookmark={handleBookmark} />)
           )
         ) : (
           <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 20 }}>

@@ -2,7 +2,7 @@ import { supabase, getCachedSession } from "@/lib/supabase";
 
 // ─── Feed / Posts ──────────────────────────────────────────────────────────────
 
-export type ReactionType = "curtir" | "saude" | "destaque" | "incrivel";
+export type ReactionType = "curtir" | "saude" | "bravo" | "destaque" | "incrivel";
 
 export interface PollOption {
   text: string;
@@ -267,7 +267,10 @@ export async function toggleLikePost(
   postId: string,
   userId: string,
   isLiked: boolean,
-  reaction: ReactionType = "curtir",
+  // Default aligned with mobile + DB constraint: likes_reaction_type_check
+  // only allows saude/bravo/destaque/incrivel. Inserting "curtir" (the previous
+  // default) was rejected at the DB layer for any caller that omitted this arg.
+  reaction: ReactionType = "saude",
   companyPageId?: string | null,
   actorName?: string,
 ): Promise<boolean> {
