@@ -2674,7 +2674,7 @@ export async function fetchWebNotifications(userId: string): Promise<WebNotifica
   try {
     const { data, error } = await supabase
       .from("notifications")
-      .select("id, user_id, actor_id, type, post_id, message, read, created_at, connection_id, connection_status")
+      .select("id, user_id, actor_id, type, post_id, message, read, created_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(60);
