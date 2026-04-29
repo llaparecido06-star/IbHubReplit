@@ -999,12 +999,20 @@ export interface WebConversation {
   last_message_at: string | null;
   unread_count: number;
   participant: { id: string; full_name: string; avatar_url?: string | null } | null;
+  /**
+   * Identity bucket the conversation belongs to:
+   * - null  → personal (1:1 between regular users), or a personal-side
+   *           conversation with a company.
+   * - uuid  → conversation belongs to that company page's inbox.
+   */
+  company_page_id?: string | null;
 }
 
 export interface WebMessage {
   id: string;
   conversation_id: string;
   sender_id: string;
+  from_company_page_id?: string | null;
   content: string;
   created_at: string;
   message_type?: string | null;
@@ -1012,18 +1020,36 @@ export interface WebMessage {
   sender?: { id: string; full_name: string; avatar_url?: string | null };
 }
 
-export async function fetchWebConversations(userId: string): Promise<WebConversation[]> {
+/**
+ * Fetch conversations scoped to the user's currently-active identity.
+ * - When `activeCompanyId` is provided (user is acting as a company), only
+ *   conversations tagged with that company_page_id are returned.
+ * - When in personal mode (`activeCompanyId == null`), conversations belonging
+ *   to companies this user OWNS are excluded so they only show under company
+ *   mode. Conversations with no company_page_id (purely personal) and ones
+ *   where the user is the non-owner side of a company chat are kept.
+ * - Group chats are always included (identity-agnostic, same rule as mobile).
+ */
+export async function fetchWebConversations(
+  userId: string,
+  activeCompanyId?: string | null,
+): Promise<WebConversation[]> {
   try {
     // Use SECURITY DEFINER RPC to bypass RLS on conversation_participants (same as mobile)
-    const [participantsRes, convosRes] = await Promise.all([
+    const [participantsRes, convosRes, ownedCompaniesRes] = await Promise.all([
       supabase.rpc("get_my_conversations_participants", { p_user_id: userId }),
       supabase
         .from("conversation_participants")
-        .select("conversation_id, accepted, last_read_at, conversation:conversations(id, is_group, name, created_at)")
+        .select("conversation_id, accepted, last_read_at, conversation:conversations(id, is_group, name, created_at, company_page_id)")
         .eq("user_id", userId),
+      supabase.from("company_pages").select("id").eq("owner_id", userId),
     ]);
 
     if (convosRes.error || !convosRes.data) return [];
+
+    const ownedCompanyIds = new Set<string>(
+      ((ownedCompaniesRes.data ?? []) as any[]).map((c: any) => c.id as string),
+    );
 
     const participantMap = new Map<string, { other_user_id: string | null }>();
     for (const row of (participantsRes.data ?? []) as any[]) {
@@ -1075,12 +1101,22 @@ export async function fetchWebConversations(userId: string): Promise<WebConversa
         last_message_at: lastMsg?.created_at ?? convo.created_at,
         unread_count: 0,
         participant,
+        company_page_id: (convo as any).company_page_id ?? null,
       });
     }
 
-    return results.sort(
-      (a, b) => new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime()
+    const sorted = results.sort(
+      (a, b) => new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime(),
     );
+
+    // ── Identity scoping (same rules as mobile fetchConversations) ────────────
+    if (activeCompanyId) {
+      // Company mode: only this company's conversations (groups always shown).
+      return sorted.filter(r => r.is_group || r.company_page_id === activeCompanyId);
+    }
+    // Personal mode: drop conversations belonging to companies this user owns
+    // (they'll show up cleanly when the user switches into that company).
+    return sorted.filter(r => r.is_group || !r.company_page_id || !ownedCompanyIds.has(r.company_page_id));
   } catch (e) {
     console.warn("fetchWebConversations:", e);
     return [];
@@ -1139,14 +1175,27 @@ export async function fetchWebMessages(conversationId: string): Promise<WebMessa
   }
 }
 
-export async function sendWebMessage(conversationId: string, senderId: string, content: string): Promise<boolean> {
+/**
+ * Send a chat message. When the user is acting as a company (companyPageId
+ * provided), `from_company_page_id` is persisted so the message is rendered
+ * with the company's name/avatar to the recipient and remains in the company
+ * inbox after switching identities.
+ */
+export async function sendWebMessage(
+  conversationId: string,
+  senderId: string,
+  content: string,
+  opts?: { companyPageId?: string | null; messageType?: string },
+): Promise<boolean> {
   try {
-    const { error } = await supabase.from("messages").insert({
+    const payload: Record<string, any> = {
       conversation_id: conversationId,
       sender_id: senderId,
       content,
-      message_type: "text",
-    });
+      message_type: opts?.messageType ?? "text",
+    };
+    if (opts?.companyPageId) payload.from_company_page_id = opts.companyPageId;
+    const { error } = await supabase.from("messages").insert(payload);
     return !error;
   } catch (e) {
     console.warn("sendWebMessage:", e);

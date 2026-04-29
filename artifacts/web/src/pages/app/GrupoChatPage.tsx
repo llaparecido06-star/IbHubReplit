@@ -46,7 +46,7 @@ export default function GrupoChatPage() {
   const [, params] = useRoute("/app/grupos/:id");
   const [, setLocation] = useLocation();
   const groupId = params?.id ?? "";
-  const { user } = useAuth();
+  const { user, activeCompany } = useAuth();
 
   const [groupInfo, setGroupInfo] = useState<WebGroupInfo | null>(null);
   const [messages, setMessages]   = useState<WebMessage[]>([]);
@@ -122,7 +122,7 @@ export default function GrupoChatPage() {
     const text = input.trim();
     setInput("");
     setSending(true);
-    await sendWebMessage(groupId, user.id, text);
+    await sendWebMessage(groupId, user.id, text, { companyPageId: activeCompany?.id ?? null });
     setSending(false);
   };
 

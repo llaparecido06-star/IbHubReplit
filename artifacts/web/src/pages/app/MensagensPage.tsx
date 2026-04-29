@@ -178,7 +178,7 @@ export default function MensagensPage() {
     setShowNewConvo(false);
     setUserSearchQuery("");
     setUserSearchResults([]);
-    const freshConvos = await fetchWebConversations(userId);
+    const freshConvos = await fetchWebConversations(userId, activeCompany?.id ?? null);
     setConversations(freshConvos);
     const target = freshConvos.find(c => c.id === convId);
     if (target) { loadMessages(target); }
@@ -199,10 +199,18 @@ export default function MensagensPage() {
   useEffect(() => {
     if (authLoading) return;
     if (!userId) { setLoading(false); return; }
-    fetchWebConversations(userId)
+    setLoading(true);
+    fetchWebConversations(userId, activeCompany?.id ?? null)
       .then(data => {
         setConversations(data);
         setLoading(false);
+        // If the currently-open conversation no longer belongs to the active
+        // identity (e.g. user just switched into / out of a company), clear it
+        // so the right pane doesn't keep showing a chat from the other inbox.
+        if (selected && !data.find(c => c.id === selected.id)) {
+          setSelected(null);
+          setMessages([]);
+        }
         if (convIdFromUrl) {
           const target = data.find(c => c.id === convIdFromUrl);
           if (target) {
@@ -212,7 +220,10 @@ export default function MensagensPage() {
         }
       })
       .catch(() => setLoading(false));
-  }, [userId, authLoading]);
+    // Re-fetch whenever the active identity changes so the conversation list
+    // matches the bucket the user is currently acting from.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, authLoading, activeCompany?.id]);
 
   const loadMessages = useCallback(async (convo: WebConversation) => {
     setSelected(convo);
@@ -258,7 +269,7 @@ export default function MensagensPage() {
         const label = attachFile.name;
         const attachContent = `[attachment]:${url}|${label}`;
         if (content) {
-          await sendWebMessage(selected.id, userId, content);
+          await sendWebMessage(selected.id, userId, content, { companyPageId: activeCompany?.id ?? null });
           content = attachContent;
         } else {
           content = attachContent;
@@ -268,7 +279,7 @@ export default function MensagensPage() {
     }
 
     if (content) {
-      const ok = await sendWebMessage(selected.id, userId, content);
+      const ok = await sendWebMessage(selected.id, userId, content, { companyPageId: activeCompany?.id ?? null });
       if (ok) {
         setMessages(prev => [...prev, {
           id: `tmp-${Date.now()}`,
