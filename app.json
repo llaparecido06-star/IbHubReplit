@@ -4,8 +4,9 @@
     "slug": "ibhub",
     "version": "1.0.0",
     "android": {
-      "package": "br.com.ibhub"
-    },
+  "package": "br.com.ibhub",
+  "googleServicesFile": "$GOOGLE_SERVICES_JSON"
+},
     "extra": {
       "eas": {
         "projectId": "539f6b05-f72f-4c35-ac84-fd8099e38582"
