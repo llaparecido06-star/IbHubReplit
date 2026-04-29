@@ -1,0 +1,51 @@
+# EAS Build ignore — overrides .gitignore for the EAS upload.
+# Mirror .gitignore EXCEPT for files that must reach the build server
+# even though we don't commit them to git (e.g. google-services.json).
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+ios/
+android/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Firebase / Google
+# NOTE: google-services.json is intentionally NOT ignored here so
+# EAS Build can find it (the Android Gradle plugin requires it for
+# :app:processReleaseGoogleServices). It stays in .gitignore so it
+# is not committed to the repo.
+GoogleService-Info.plist
+google-services-key.json
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+
+# typescript
+*.tsbuildinfo
+.vercel
+
+.env
