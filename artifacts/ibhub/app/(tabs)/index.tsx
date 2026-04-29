@@ -759,7 +759,7 @@ export default function FeedScreen() {
           />
         </TouchableOpacity>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push("/search" as any)}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push("/search" as any)} accessibilityRole="button" accessibilityLabel="Buscar">
             <Feather name="search" size={22} color={colors.navy} />
           </TouchableOpacity>
           <TouchableOpacity
@@ -780,7 +780,7 @@ export default function FeedScreen() {
               )}
             </View>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.plusBtn} onPress={() => setShowCreateMenu(true)} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.plusBtn} onPress={() => setShowCreateMenu(true)} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Adicionar">
             <Feather name="plus" size={20} color="#fff" />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setShowAccountMenu(true)}>
@@ -1142,7 +1142,7 @@ export default function FeedScreen() {
           <View style={[styles.postModal, { backgroundColor: "#fff" }]}>
             {/* Header */}
             <View style={[styles.postModalHeader, { borderBottomColor: colors.border }]}>
-              <TouchableOpacity onPress={() => setShowCreatePost(false)}>
+              <TouchableOpacity onPress={() => setShowCreatePost(false)} accessibilityRole="button" accessibilityLabel="Fechar">
                 <Feather name="x" size={20} color={colors.mutedForeground} />
               </TouchableOpacity>
               <Text style={[styles.postModalTitle, { color: colors.navy }]}>
@@ -1263,7 +1263,7 @@ export default function FeedScreen() {
                     maxLength={80}
                   />
                   {postLocation.length > 0 && (
-                    <TouchableOpacity onPress={() => setPostLocation("")}>
+                    <TouchableOpacity onPress={() => setPostLocation("")} accessibilityRole="button" accessibilityLabel="Fechar">
                       <Feather name="x" size={15} color={colors.mutedForeground} />
                     </TouchableOpacity>
                   )}
@@ -1284,8 +1284,7 @@ export default function FeedScreen() {
                       />
                       <TouchableOpacity
                         style={{ position: "absolute", top: 4, right: 4, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 12, padding: 3 }}
-                        onPress={() => setPostImageUris(prev => prev.filter((_, i) => i !== idx))}
-                      >
+                        onPress={() => setPostImageUris(prev => prev.filter((_, i) => i !== idx))} accessibilityRole="button" accessibilityLabel="Fechar">
                         <Feather name="x" size={12} color="#fff" />
                       </TouchableOpacity>
                     </View>
@@ -1294,7 +1293,9 @@ export default function FeedScreen() {
                     <TouchableOpacity
                       style={[styles.addMoreImgBtn, { borderColor: colors.border }]}
                       onPress={handlePickImage}
-                    >
+            accessibilityRole="button"
+            accessibilityLabel="Adicionar"
+          >
                       <Feather name="plus" size={24} color={colors.mutedForeground} />
                     </TouchableOpacity>
                   )}
@@ -1309,8 +1310,7 @@ export default function FeedScreen() {
                   <VideoPreview uri={postVideoUri} />
                   <TouchableOpacity
                     style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 14, padding: 5 }}
-                    onPress={() => setPostVideoUri(null)}
-                  >
+                    onPress={() => setPostVideoUri(null)} accessibilityRole="button" accessibilityLabel="Fechar">
                     <Feather name="x" size={14} color="#fff" />
                   </TouchableOpacity>
                 </View>
@@ -1348,7 +1348,7 @@ export default function FeedScreen() {
         <View style={styles.wineOverlay}>
           <View style={[styles.wineModal, { backgroundColor: "#fff" }]}>
             <View style={[styles.postModalHeader, { borderBottomColor: colors.border }]}>
-              <TouchableOpacity onPress={() => setShowWineReview(false)}>
+              <TouchableOpacity onPress={() => setShowWineReview(false)} accessibilityRole="button" accessibilityLabel="Fechar">
                 <Feather name="x" size={20} color={colors.mutedForeground} />
               </TouchableOpacity>
               <View style={styles.wineHeaderTitle}>
@@ -1385,8 +1385,7 @@ export default function FeedScreen() {
                   <TouchableOpacity
                     style={styles.wineImageRemoveBtn}
                     onPress={() => setWineImageUri(null)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityRole="button" accessibilityLabel="Fechar">
                     <Feather name="x" size={14} color="#fff" />
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.wineImageChangeBtn} onPress={handlePickWineImage}>
@@ -1447,7 +1446,7 @@ export default function FeedScreen() {
                     maxLength={14}
                   />
                   {wineEan.length > 0 && (
-                    <TouchableOpacity onPress={() => setWineEan("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <TouchableOpacity onPress={() => setWineEan("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityRole="button" accessibilityLabel="Fechar">
                       <Feather name="x" size={14} color={colors.mutedForeground} />
                     </TouchableOpacity>
                   )}
@@ -1497,10 +1496,10 @@ export default function FeedScreen() {
                   <Text style={[styles.scoreValue, { color: colors.gold }]}>{wineScore}</Text>
                 </View>
                 <View style={styles.scoreBtns}>
-                  <TouchableOpacity style={[styles.scoreBtn, { borderColor: colors.border }]} onPress={() => setWineScore((s) => Math.max(0, s - 5))}>
+                  <TouchableOpacity style={[styles.scoreBtn, { borderColor: colors.border }]} onPress={() => setWineScore((s) => Math.max(0, s - 5))} accessibilityRole="button" accessibilityLabel="Diminuir pontuação">
                     <Feather name="minus" size={14} color={colors.foreground} />
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.scoreBtn, { borderColor: colors.border }]} onPress={() => setWineScore((s) => Math.min(100, s + 5))}>
+                  <TouchableOpacity style={[styles.scoreBtn, { borderColor: colors.border }]} onPress={() => setWineScore((s) => Math.min(100, s + 5))} accessibilityRole="button" accessibilityLabel="Adicionar">
                     <Feather name="plus" size={14} color={colors.foreground} />
                   </TouchableOpacity>
                 </View>

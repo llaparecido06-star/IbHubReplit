@@ -411,7 +411,7 @@ function KPICard({ kpi, colors }: { kpi: API.MarketKPI; colors: any }) {
           <Text style={[styles.kpiChange, { color: isPos ? "#16a34a" : "#dc2626" }]}>
             {isPos ? "↑" : "↓"} {isPos ? "+" : ""}{kpi.change}%
           </Text>
-          <TouchableOpacity onPress={() => setModal({ visible: true, kpi })}>
+          <TouchableOpacity onPress={() => setModal({ visible: true, kpi })} accessibilityRole="button" accessibilityLabel="Informações">
             <Feather name="info" size={13} color={colors.gold} />
           </TouchableOpacity>
         </View>
@@ -542,7 +542,10 @@ function SlideViewerModal({
       <View style={[sliderStyles.container, { backgroundColor: "#000" }]}>
         {/* Header — paddingTop uses real safe area so X is always tappable on iPhone */}
         <View style={[sliderStyles.modalHeader, { backgroundColor: "rgba(0,0,0,0.7)", paddingTop: (insets.top || (Platform.OS === "ios" ? 52 : 20)) + 10 }]}>
-          <TouchableOpacity onPress={onClose} style={sliderStyles.closeBtn} hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}>
+          <TouchableOpacity onPress={onClose} style={sliderStyles.closeBtn} hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+            accessibilityRole="button"
+            accessibilityLabel="Fechar"
+          >
             <Feather name="x" size={22} color="#fff" />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
@@ -1335,7 +1338,10 @@ function MarketCommentsList({ postId, userId, colors, onCommentsCountChange }: {
             </Text>
             <Text style={{ fontSize: 11, color: colors.mutedForeground }} numberOfLines={1}>{replyTo.content}</Text>
           </View>
-          <TouchableOpacity onPress={cancelReply}>
+          <TouchableOpacity onPress={cancelReply}
+            accessibilityRole="button"
+            accessibilityLabel="Fechar"
+          >
             <Feather name="x" size={14} color={colors.mutedForeground} />
           </TouchableOpacity>
         </View>
@@ -1367,6 +1373,8 @@ function MarketCommentsList({ postId, userId, colors, onCommentsCountChange }: {
         <TouchableOpacity
           onPress={send}
           disabled={sending || !text.trim()}
+          accessibilityRole="button"
+          accessibilityLabel="Enviar mensagem"
           style={{
             width: 36,
             height: 36,
@@ -1380,6 +1388,7 @@ function MarketCommentsList({ postId, userId, colors, onCommentsCountChange }: {
             ? <ActivityIndicator size="small" color="#fff" />
             : <Feather name="send" size={15} color="#fff" />}
         </TouchableOpacity>
+
       </View>
     </View>
   );
@@ -1415,7 +1424,10 @@ function LikersModal({
             <Text style={{ fontWeight: "700", fontSize: 16, color: colors.navy }}>
               Reações {likers.length > 0 ? `(${likers.length})` : ""}
             </Text>
-            <TouchableOpacity onPress={onClose}>
+            <TouchableOpacity onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Fechar"
+          >
               <Feather name="x" size={20} color={colors.mutedForeground} />
             </TouchableOpacity>
           </View>
@@ -1880,7 +1892,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
       {mediaUri && mediaType === "image" ? (
         <View style={{ position: "relative" }}>
           <Image source={{ uri: mediaUri }} style={{ width: "100%", height: 180, borderRadius: 10 } as any} contentFit="cover" />
-          <TouchableOpacity onPress={() => { setMediaUri(null); setMediaType(null); }} style={{ position: "absolute", top: 6, right: 6, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 12, padding: 4 }}>
+          <TouchableOpacity onPress={() => { setMediaUri(null); setMediaType(null); }} style={{ position: "absolute", top: 6, right: 6, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 12, padding: 4 }} accessibilityRole="button" accessibilityLabel="Fechar">
             <Feather name="x" size={14} color="#fff" />
           </TouchableOpacity>
         </View>
@@ -1888,7 +1900,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
       {mediaUri && mediaType === "video" ? (
         <View style={{ position: "relative" }}>
           <NetworkMediaPreview uri={mediaUri} />
-          <TouchableOpacity onPress={() => { setMediaUri(null); setMediaType(null); }} style={{ position: "absolute", top: 6, right: 6, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 12, padding: 4 }}>
+          <TouchableOpacity onPress={() => { setMediaUri(null); setMediaType(null); }} style={{ position: "absolute", top: 6, right: 6, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 12, padding: 4 }} accessibilityRole="button" accessibilityLabel="Fechar">
             <Feather name="x" size={14} color="#fff" />
           </TouchableOpacity>
         </View>
@@ -1908,7 +1920,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
                 style={{ flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, fontSize: 13, color: colors.foreground }}
               />
               {pollOptions.length > 2 ? (
-                <TouchableOpacity onPress={() => setPollOptions(prev => prev.filter((_, j) => j !== i))}>
+                <TouchableOpacity onPress={() => setPollOptions(prev => prev.filter((_, j) => j !== i))} accessibilityRole="button" accessibilityLabel="Fechar">
                   <Feather name="x" size={16} color={colors.mutedForeground} />
                 </TouchableOpacity>
               ) : null}

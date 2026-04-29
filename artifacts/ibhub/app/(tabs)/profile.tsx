@@ -326,7 +326,7 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
           <Text style={{ fontSize: 18, fontWeight: "700", color: colors.navy, flex: 1 }} numberOfLines={1}>{companyName}</Text>
         </View>
         {isManager ? (
-          <TouchableOpacity style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.gold, alignItems: "center", justifyContent: "center" }} onPress={() => setShowFab(true)}>
+          <TouchableOpacity style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.gold, alignItems: "center", justifyContent: "center" }} onPress={() => setShowFab(true)} accessibilityRole="button" accessibilityLabel="Adicionar">
             <Feather name="plus" size={18} color="#fff" />
           </TouchableOpacity>
         ) : (
@@ -426,10 +426,10 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
                     <Feather name="message-circle" size={17} color={colors.mutedForeground} />
                     <Text style={{ fontSize: 13, color: colors.mutedForeground }}>{post.comments_count}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5 }} onPress={() => handleBookmarkPost(post)}>
+                  <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5 }} onPress={() => handleBookmarkPost(post)} accessibilityRole="button" accessibilityLabel="Salvar">
                     <Feather name="bookmark" size={17} color={post.is_bookmarked ? colors.gold : colors.mutedForeground} />
                   </TouchableOpacity>
-                  <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5, marginLeft: "auto" as any }} onPress={() => router.push(`/post/${post.id}` as any)}>
+                  <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5, marginLeft: "auto" as any }} onPress={() => router.push(`/post/${post.id}` as any)} accessibilityRole="button" accessibilityLabel="Abrir">
                     <Feather name="external-link" size={17} color={colors.mutedForeground} />
                   </TouchableOpacity>
                 </View>
@@ -546,7 +546,7 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
         <View style={{ flex: 1, backgroundColor: colors.background }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: "#fff" }}>
             <Text style={{ fontSize: 18, fontWeight: "700", color: colors.navy }}>{editingProduct ? "Editar Produto" : "Adicionar Produto"}</Text>
-            <TouchableOpacity onPress={() => setShowProductForm(false)}><Feather name="x" size={22} color={colors.navy} /></TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowProductForm(false)} accessibilityRole="button" accessibilityLabel="Fechar"><Feather name="x" size={22} color={colors.navy} /></TouchableOpacity>
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, rowGap: 14 }}>
             <TextInput style={{ borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }} placeholder="Nome do produto" placeholderTextColor={colors.mutedForeground} value={pName} onChangeText={setPName} />
@@ -580,7 +580,7 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
         <View style={{ flex: 1, backgroundColor: colors.background }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: "#fff" }}>
             <Text style={{ fontSize: 18, fontWeight: "700", color: colors.navy }} numberOfLines={1}>{selectedProduct?.name ?? ""}</Text>
-            <TouchableOpacity onPress={() => setSelectedProduct(null)}><Feather name="x" size={22} color={colors.navy} /></TouchableOpacity>
+            <TouchableOpacity onPress={() => setSelectedProduct(null)} accessibilityRole="button" accessibilityLabel="Fechar"><Feather name="x" size={22} color={colors.navy} /></TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
             {selectedProduct?.image_url && <Image source={{ uri: selectedProduct.image_url }} style={{ width: "100%", height: 220, borderRadius: 12 }} resizeMode="cover" />}
@@ -963,7 +963,7 @@ export default function ProfileScreen() {
     >
       {/* ── Cover ── */}
       <View style={[styles.cover, { backgroundColor: colors.navyLight, paddingTop: topPad }]}>
-        <TouchableOpacity style={styles.settingsBtn} onPress={() => router.push("/settings" as any)}>
+        <TouchableOpacity style={styles.settingsBtn} onPress={() => router.push("/settings" as any)} accessibilityRole="button" accessibilityLabel="Configurações">
           <Feather name="settings" size={22} color="#fff" />
         </TouchableOpacity>
       </View>
@@ -1115,8 +1115,7 @@ export default function ProfileScreen() {
               </View>
               <TouchableOpacity
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                onPress={() => Share.share({ message: `Junte-se à ibhub — Rede do Vinho!\nCadastre-se com meu convite e entre para a maior rede do vinho:\nhttps://www.ibhub.com.br/cadastro?ref=${referralCode}` })}
-              >
+                onPress={() => Share.share({ message: `Junte-se à ibhub — Rede do Vinho!\nCadastre-se com meu convite e entre para a maior rede do vinho:\nhttps://www.ibhub.com.br/cadastro?ref=${referralCode}` })} accessibilityRole="button" accessibilityLabel="Compartilhar">
                 <Feather name="share-2" size={18} color={colors.gold} />
               </TouchableOpacity>
             </View>
@@ -1309,7 +1308,7 @@ export default function ProfileScreen() {
                       {new Date(post.created_at).toLocaleDateString("pt-BR")}
                     </Text>
                   </View>
-                  <TouchableOpacity onPress={() => setShowPostMenu(post.id)}>
+                  <TouchableOpacity onPress={() => setShowPostMenu(post.id)} accessibilityRole="button" accessibilityLabel="Mais opções">
                     <Feather name="more-horizontal" size={20} color={colors.mutedForeground} />
                   </TouchableOpacity>
                 </View>
@@ -1324,13 +1323,12 @@ export default function ProfileScreen() {
                     <Feather name="message-circle" size={18} color={colors.mutedForeground} />
                     <Text style={[styles.postActionText, { color: colors.mutedForeground }]}>{post.comments_count}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.postActionBtn} onPress={() => handleBookmarkPost(post)}>
+                  <TouchableOpacity style={styles.postActionBtn} onPress={() => handleBookmarkPost(post)} accessibilityRole="button" accessibilityLabel="Salvar">
                     <Feather name="bookmark" size={18} color={post.is_bookmarked ? colors.gold : colors.mutedForeground} />
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.postActionBtn, { marginLeft: "auto" as any }]}
-                    onPress={() => router.push(`/post/${post.id}` as any)}
-                  >
+                    onPress={() => router.push(`/post/${post.id}` as any)} accessibilityRole="button" accessibilityLabel="Abrir">
                     <Feather name="external-link" size={18} color={colors.mutedForeground} />
                   </TouchableOpacity>
                 </View>
@@ -1466,7 +1464,7 @@ export default function ProfileScreen() {
           <View style={[styles.commentsSheet, { backgroundColor: "#fff" }]}>
             <View style={styles.commentsHeader}>
               <Text style={[styles.commentsTitle, { color: colors.navy }]}>Comentários</Text>
-              <TouchableOpacity onPress={() => { setShowComments(null); setCommentText(""); }}>
+              <TouchableOpacity onPress={() => { setShowComments(null); setCommentText(""); }} accessibilityRole="button" accessibilityLabel="Fechar">
                 <Feather name="x" size={20} color={colors.navy} />
               </TouchableOpacity>
             </View>
@@ -1488,8 +1486,7 @@ export default function ProfileScreen() {
                 onChangeText={setCommentText}
               />
               <TouchableOpacity
-                onPress={commentText.trim() ? handleSubmitComment : () => { if (showComments) { setCommentText(""); setShowComments(null); router.push(`/post/${showComments}` as any); } }}
-              >
+                onPress={commentText.trim() ? handleSubmitComment : () => { if (showComments) { setCommentText(""); setShowComments(null); router.push(`/post/${showComments}` as any); } }} accessibilityRole="button" accessibilityLabel="Enviar">
                 <Feather name="send" size={20} color={commentText.trim() ? colors.gold : colors.mutedForeground} />
               </TouchableOpacity>
             </View>

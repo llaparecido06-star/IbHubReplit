@@ -259,6 +259,8 @@ export default function MessagesScreen() {
           <TouchableOpacity
             style={[styles.newChatBtn, { backgroundColor: colors.gold }]}
             onPress={() => { setShowNewConvo((v) => !v); setUserSearch(""); setSearchResults([]); }}
+            accessibilityRole="button"
+            accessibilityLabel="Nova conversa"
           >
             <Feather name="edit" size={16} color="#fff" />
           </TouchableOpacity>
@@ -290,7 +292,11 @@ export default function MessagesScreen() {
               autoFocus
             />
             {userSearch.length > 0 && (
-              <TouchableOpacity onPress={() => setUserSearch("")}>
+              <TouchableOpacity
+                onPress={() => setUserSearch("")}
+                accessibilityRole="button"
+                accessibilityLabel="Limpar busca"
+              >
                 <Feather name="x" size={14} color={colors.mutedForeground} />
               </TouchableOpacity>
             )}

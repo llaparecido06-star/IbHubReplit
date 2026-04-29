@@ -277,7 +277,7 @@ export default function OportunidadesScreen() {
             onChangeText={setSearch}
           />
           {search ? (
-            <TouchableOpacity onPress={() => setSearch("")}>
+            <TouchableOpacity onPress={() => setSearch("")} accessibilityRole="button" accessibilityLabel="Fechar">
               <Feather name="x" size={15} color={colors.mutedForeground} />
             </TouchableOpacity>
           ) : null}
@@ -469,6 +469,8 @@ export default function OportunidadesScreen() {
                   <TouchableOpacity
                     onPress={(e) => { e.stopPropagation(); handleToggleSave(item); }}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={saved ? "Remover dos salvos" : "Salvar"}
                   >
                     <Feather
                       name="bookmark"
@@ -628,7 +630,10 @@ export default function OportunidadesScreen() {
               <View style={styles.sheetHandle} />
               <View style={styles.filterHeader}>
                 <Text style={[styles.filterTitle, { color: colors.navy }]}>Filtros</Text>
-                <TouchableOpacity onPress={closeFilter}>
+                <TouchableOpacity onPress={closeFilter}
+            accessibilityRole="button"
+            accessibilityLabel="Fechar"
+          >
                   <Feather name="x" size={20} color={colors.mutedForeground} />
                 </TouchableOpacity>
               </View>
