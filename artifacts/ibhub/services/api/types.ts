@@ -34,8 +34,7 @@ export interface CompanyPageLite {
   owner_id: string;
   name: string;
   avatar_url: string | null;
-  /** Not always selected; some callers read it. May be undefined. */
-  industry?: string | null;
+  industry: string | null;
 }
 
 /** Raw post row from Supabase (POST_SELECT_BASE). Author/company are attached separately. */

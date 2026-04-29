@@ -26,8 +26,9 @@ async function getIdealbiCompanyPageId(): Promise<string | null> {
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
-  idealbiCompanyPageId = (data as any)?.id ?? null;
-  return idealbiCompanyPageId;
+  const resolved: string | null = (data as { id?: string } | null)?.id ?? null;
+  idealbiCompanyPageId = resolved;
+  return resolved;
 }
 
 /**

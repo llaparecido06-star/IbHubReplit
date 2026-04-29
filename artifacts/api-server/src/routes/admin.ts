@@ -77,7 +77,7 @@ router.get("/admin/users", async (req: Request, res: Response) => {
   }
 
   const result = ((profiles as Array<Record<string, unknown>>) ?? [])
-    .map((p) => ({ ...p, email: userMap.get(p.id as string) ?? null }))
+    .map((p) => ({ ...p, email: userMap.get(p.id as string) ?? null }) as Record<string, unknown> & { email: string | null })
     .filter((p) => {
       if (!search) return true;
       const s = search.toLowerCase();

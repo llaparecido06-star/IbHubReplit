@@ -674,15 +674,21 @@ export async function fetchOpportunityApplicants(
         .order("created_at", { ascending: false });
       if (!raw) return [];
       const ids = raw.map((r: any) => r.applicant_id).filter(Boolean);
-      const profileMap = await fetchCommentProfilesForIds(ids);
-      return raw.map((r: any) => ({
-        ...r,
-        status: r.status ?? "pending",
-        full_name: profileMap.get(r.applicant_id)?.full_name ?? null,
-        avatar_url: profileMap.get(r.applicant_id)?.avatar_url ?? null,
-        headline: profileMap.get(r.applicant_id)?.headline ?? null,
-        username: profileMap.get(r.applicant_id)?.username ?? null,
-      })) as CompanyAdminApplicant[];
+      // Use full profile select (AUTHOR_SELECT) so `username` is available;
+      // COMMENT_AUTHOR_SELECT does not include username.
+      const profileMap = await fetchProfilesForIds(ids);
+      return raw.map((r: any) => {
+        const p = profileMap.get(r.applicant_id);
+        const headline = p ? ([p.position, p.company].filter(Boolean).join(" · ") || null) : null;
+        return {
+          ...r,
+          status: r.status ?? "pending",
+          full_name: p?.full_name ?? null,
+          avatar_url: p?.avatar_url ?? null,
+          headline,
+          username: p?.username ?? null,
+        };
+      }) as CompanyAdminApplicant[];
     }
     return (data ?? []).map((r: any) => ({
       ...r,

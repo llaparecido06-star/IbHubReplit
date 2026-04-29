@@ -80,7 +80,7 @@ export async function fetchCommentProfilesForIds(userIds: string[]): Promise<Map
 }
 export async function fetchCompanyPagesForIds(companyIds: string[]): Promise<Map<string, CompanyPageLite>> {
   if (companyIds.length === 0) return new Map();
-  const { data } = await supabase.from("company_pages").select("id, owner_id, name, avatar_url").in("id", companyIds);
+  const { data } = await supabase.from("company_pages").select("id, owner_id, name, avatar_url, industry").in("id", companyIds);
   return new Map((data ?? []).map((c: CompanyPageLite) => [c.id, c]));
 }
 export async function attachAuthorsToPosts<T extends { user_id: string; company_page_id?: string | null }>(

@@ -105,7 +105,7 @@ router.delete("/users/me", async (req: Request, res: Response) => {
   // ── 2. Delete database rows (fail-logged; CASCADE handles any leftovers) ─
   // Leaf rows first to avoid FK constraint violations.
   // Supabase resolves (never rejects) — check { error } in the resolved value.
-  async function deleteTable(table: string, query: () => Promise<{ error: { message: string } | null }>): Promise<string | null> {
+  async function deleteTable(table: string, query: () => PromiseLike<{ error: { message: string } | null }>): Promise<string | null> {
     try {
       const { error } = await query();
       return error ? `delete ${table}: ${error.message}` : null;
