@@ -233,7 +233,7 @@ export default function MarketItemPage() {
               </div>
               {!isOwner && (
                 <button
-                  onClick={() => setLocation(`/app/perfil/${item.seller!.username ?? item.seller!.id}`)}
+                  onClick={() => setLocation(`/app/usuario/${item.seller!.id}`)}
                   style={{ padding: "8px 16px", backgroundColor: BG, color: NAVY, border: `1px solid ${BORDER}`, borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
                 >
                   Ver perfil

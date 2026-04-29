@@ -329,6 +329,14 @@ export default function FeedScreen() {
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
 
+  // ── Cleanup pending view timers on unmount ──
+  useEffect(() => {
+    return () => {
+      Object.values(viewTimers.current).forEach(clearTimeout);
+      viewTimers.current = {};
+    };
+  }, []);
+
   // ── Realtime: remove accepted connections from suggestions ──
   useEffect(() => {
     if (!user?.id) return;
