@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.ibhub.app",
+      "bundleIdentifier": "br.com.ibhub",
       "usesAppleSignIn": true,
       "entitlements": {
         "aps-environment": "production"
@@ -33,7 +33,7 @@
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#0d1b2a"
       },
-      "package": "com.ibhub.app",
+      "package": "br.com.ibhub",
       "versionCode": 8,
       "googleServicesFile": "./google-services.json",
       "permissions": [
