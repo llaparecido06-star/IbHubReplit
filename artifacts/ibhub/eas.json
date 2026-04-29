@@ -26,6 +26,7 @@
         "EAS_SKIP_AUTO_FINGERPRINT": "1",
         "EAS_BUILD_NO_EXPO_GO_WARNING": "true"
       },
+      "prebuildCommand": "echo \"$GOOGLE_SERVICES_JSON\" > ./google-services.json",
       "ios": {
         "resourceClass": "m-medium"
       },
