@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Linking,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   StyleSheet,
@@ -28,8 +29,31 @@ import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/context/AuthContext";
 import * as API from "@/services/api";
 import type { AppMessage } from "@/services/api";
+import {
+  MAX_CHAT_FILE_SIZE,
+  MAX_AUDIO_DURATION_MS,
+  formatFileSize,
+  resolveChatMime,
+} from "@/constants/chatUploads";
 
 const REACTION_EMOJIS = ["🍷", "❤️", "👍", "😂", "🔥", "😮"];
+
+const MAX_FILE_SIZE_LABEL = formatFileSize(MAX_CHAT_FILE_SIZE);
+
+function openAppSettings() {
+  Linking.openSettings().catch(() => {});
+}
+
+function permissionAlert(message: string) {
+  Alert.alert(
+    "Permissão necessária",
+    message,
+    [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Abrir Ajustes", onPress: openAppSettings },
+    ],
+  );
+}
 
 interface GroupInfo {
   name: string;
@@ -71,8 +95,12 @@ export default function GroupChatScreen() {
 
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording]   = useState(false);
+  const isRecordingRef                  = useRef(false);
   const [recordingMs, setRecordingMs]   = useState(0);
   const recordingTimer                  = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Slide-up-to-cancel gesture state (WhatsApp-style hold-to-record).
+  const slideToCancelRef                = useRef(false);
+  const [slideToCancel, setSlideToCancel] = useState(false);
 
   const listRef            = useRef<FlatList>(null);
   const typingTimer        = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -309,31 +337,72 @@ export default function GroupChatScreen() {
       }
       return;
     }
+    if (isRecordingRef.current) {
+      void stopRecording();
+      return;
+    }
     try {
       const { granted } = await requestRecordingPermissionsAsync();
-      if (!granted) { Alert.alert("Permissão necessária", "Permita o acesso ao microfone."); return; }
+      if (!granted) {
+        permissionAlert("Permita o acesso ao microfone nas configurações do dispositivo.");
+        return;
+      }
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await audioRecorder.record();
+      isRecordingRef.current = true;
       setIsRecording(true);
       setRecordingMs(0);
+      slideToCancelRef.current = false;
+      setSlideToCancel(false);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      recordingTimer.current = setInterval(() => setRecordingMs(prev => prev + 1000), 1000);
+      recordingTimer.current = setInterval(() => {
+        setRecordingMs(prev => {
+          const next = prev + 1000;
+          if (next >= MAX_AUDIO_DURATION_MS && isRecordingRef.current) {
+            setTimeout(() => {
+              if (!isRecordingRef.current) return;
+              Alert.alert(
+                "Limite de duração",
+                `A gravação atingiu o máximo de ${Math.round(MAX_AUDIO_DURATION_MS / 60000)} minutos e foi enviada.`,
+              );
+              void stopRecording();
+            }, 0);
+          }
+          return next;
+        });
+      }, 1000);
     } catch {
       Alert.alert("Erro", "Não foi possível iniciar a gravação.");
     }
   };
 
   const stopRecording = async () => {
-    if (!isRecording || !user?.id || !id) return;
-    if (recordingTimer.current) clearInterval(recordingTimer.current);
+    if (!isRecordingRef.current || !user?.id || !id) return;
+    if (recordingTimer.current) {
+      clearInterval(recordingTimer.current);
+      recordingTimer.current = null;
+    }
+    isRecordingRef.current = false;
     setIsRecording(false);
+    setRecordingMs(0);
+    slideToCancelRef.current = false;
+    setSlideToCancel(false);
     try {
       await audioRecorder.stop();
       await setAudioModeAsync({ allowsRecording: false });
-      const uri = audioRecorder.uri;
-      if (!uri) return;
+      // Poll for URI — Android's native layer may need time to finalize the file.
+      let uri: string | null = null;
+      for (let i = 0; i < 10 && !uri; i++) {
+        await new Promise(resolve => setTimeout(resolve, 150));
+        uri = audioRecorder.uri;
+      }
+      if (!uri) {
+        Alert.alert("Áudio vazio", "Nenhum áudio foi gravado. Tente segurar o botão por mais tempo.");
+        return;
+      }
       setUploading(true);
-      const url = await API.uploadChatMedia(id, uri, "audio/m4a");
+      const mimeType = Platform.OS === "android" ? "audio/mp4" : "audio/m4a";
+      const url = await API.uploadChatMedia(id, uri, mimeType);
       setUploading(false);
       if (!url) { Alert.alert("Erro", "Não foi possível enviar o áudio."); return; }
       const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", effectiveCompanyId);
@@ -344,6 +413,8 @@ export default function GroupChatScreen() {
           return [...filtered, saved];
         });
         setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+      } else {
+        Alert.alert("Erro ao enviar áudio", "Não foi possível salvar a mensagem de áudio.");
       }
     } catch {
       setUploading(false);
@@ -352,13 +423,56 @@ export default function GroupChatScreen() {
   };
 
   const cancelRecording = async () => {
-    if (!isRecording) return;
-    if (recordingTimer.current) clearInterval(recordingTimer.current);
+    if (!isRecordingRef.current) return;
+    if (recordingTimer.current) {
+      clearInterval(recordingTimer.current);
+      recordingTimer.current = null;
+    }
+    isRecordingRef.current = false;
     setIsRecording(false);
+    setRecordingMs(0);
+    slideToCancelRef.current = false;
+    setSlideToCancel(false);
     try { await audioRecorder.stop(); } catch {}
     await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
-    setRecordingMs(0);
   };
+
+  // ── Hold-to-record gesture (WhatsApp-style) ──────────────────────────────
+  const recordHandlersRef = useRef({
+    start: () => {},
+    stop: () => {},
+    cancel: () => {},
+  });
+  recordHandlersRef.current.start = () => { void startRecording(); };
+  recordHandlersRef.current.stop = () => { void stopRecording(); };
+  recordHandlersRef.current.cancel = () => { void cancelRecording(); };
+
+  const recordPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        recordHandlersRef.current.start();
+      },
+      onPanResponderMove: (_evt, gesture) => {
+        const isCancel = gesture.dy < -60;
+        if (isCancel !== slideToCancelRef.current) {
+          slideToCancelRef.current = isCancel;
+          setSlideToCancel(isCancel);
+        }
+      },
+      onPanResponderRelease: () => {
+        if (slideToCancelRef.current) {
+          recordHandlersRef.current.cancel();
+        } else {
+          recordHandlersRef.current.stop();
+        }
+      },
+      onPanResponderTerminate: () => {
+        recordHandlersRef.current.cancel();
+      },
+    }),
+  ).current;
 
   const formatRecordingTime = (ms: number) => {
     const s = Math.floor(ms / 1000);
@@ -376,14 +490,14 @@ export default function GroupChatScreen() {
     if (type === "camera") {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert("Permissão necessária", "Permita o acesso à câmera nas configurações.");
+        permissionAlert("Permita o acesso à câmera nas configurações do dispositivo.");
         return;
       }
       result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images", "videos"], quality: 0.7 });
     } else {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert("Permissão necessária", "Permita o acesso à galeria nas configurações.");
+        permissionAlert("Permita o acesso à galeria nas configurações do dispositivo.");
         return;
       }
       result = await ImagePicker.launchImageLibraryAsync({
@@ -397,6 +511,18 @@ export default function GroupChatScreen() {
     const asset    = result.assets[0];
     const mimeType = asset.mimeType ?? (asset.type === "video" ? "video/mp4" : "image/jpeg");
     const msgType  = mimeType.startsWith("video") ? "video" : "image";
+
+    // Client-side guard: block files bigger than the server limit before
+    // we waste bandwidth uploading them.
+    const assetSize = (asset as any).fileSize as number | undefined;
+    if (typeof assetSize === "number" && assetSize > MAX_CHAT_FILE_SIZE) {
+      Alert.alert(
+        "Arquivo muito grande",
+        `O ${msgType === "video" ? "vídeo" : "arquivo"} tem ${formatFileSize(assetSize)}. ` +
+          `O limite é ${MAX_FILE_SIZE_LABEL}.`,
+      );
+      return;
+    }
 
     // Optimistic temp message
     const tempId = `tmp_${Date.now()}`;
@@ -449,26 +575,87 @@ export default function GroupChatScreen() {
   const pickAndSendFile = async () => {
     setShowAttach(false);
     if (!user?.id || !id) return;
+
+    let tempId: string | null = null;
     try {
       const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
+
+      if (typeof asset.size === "number" && asset.size > MAX_CHAT_FILE_SIZE) {
+        Alert.alert(
+          "Arquivo muito grande",
+          `${asset.name ?? "O arquivo"} tem ${formatFileSize(asset.size)}. ` +
+            `O limite é ${MAX_FILE_SIZE_LABEL}.`,
+        );
+        return;
+      }
+
+      // Resolve the mime type — picker may hand us nothing or octet-stream
+      // (Drive-shared docs on Android, in particular), so fall back to the
+      // file extension before refusing.
+      const resolvedMime = resolveChatMime(asset.mimeType, asset.name);
+      if (!resolvedMime) {
+        Alert.alert(
+          "Tipo de arquivo não suportado",
+          "Envie PDF, Word, Excel, CSV, texto, imagem, vídeo ou áudio.",
+        );
+        return;
+      }
+
+      // Optimistic temp message — same as image/video flow.
+      tempId = `tmp_${Date.now()}`;
+      seenMsgIds.current.add(tempId);
+      const tempMsg: AppMessage = {
+        id: tempId,
+        conversation_id: id,
+        sender_id: user.id,
+        content: asset.name ?? "arquivo",
+        created_at: new Date().toISOString(),
+        message_type: "file",
+        media_url: asset.uri,
+      };
+      setMessages(prev => [...prev, tempMsg]);
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+
       setUploading(true);
       const fileObj = (asset as any).file as File | undefined;
-      const url = await API.uploadChatMedia(id, asset.uri, asset.mimeType ?? "application/octet-stream", fileObj);
+      const url = await API.uploadChatMedia(id, asset.uri, resolvedMime, fileObj);
       setUploading(false);
-      if (!url) { Alert.alert("Erro", "Não foi possível enviar o arquivo."); return; }
+      if (!url) {
+        if (tempId) {
+          setMessages(prev => prev.filter(m => m.id !== tempId));
+          seenMsgIds.current.delete(tempId);
+        }
+        Alert.alert("Erro", "Não foi possível enviar o arquivo.");
+        return;
+      }
       const saved = await API.sendMediaMessage(id, user.id, url, "file", asset.name ?? "arquivo", effectiveCompanyId);
       if (saved) {
         seenMsgIds.current.add(saved.id);
         setMessages(prev => {
-          const filtered = prev.filter(m => m.id !== saved.id);
-          return [...filtered, saved];
+          const cleaned = tempId
+            ? prev.filter(m => m.id !== tempId && m.id !== saved.id)
+            : prev.filter(m => m.id !== saved.id);
+          return [...cleaned, saved];
         });
         setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+      } else {
+        if (tempId) {
+          setMessages(prev => prev.filter(m => m.id !== tempId));
+          seenMsgIds.current.delete(tempId);
+        }
+        Alert.alert(
+          "Erro",
+          "O arquivo foi enviado mas a mensagem não pôde ser registrada. Tente novamente.",
+        );
       }
     } catch (e: any) {
       setUploading(false);
+      if (tempId) {
+        setMessages(prev => prev.filter(m => m.id !== tempId));
+        seenMsgIds.current.delete(tempId);
+      }
       if (!e?.message?.includes("cancel")) Alert.alert("Erro", "Não foi possível abrir o arquivo.");
     }
   };
@@ -824,7 +1011,13 @@ export default function GroupChatScreen() {
                 {formatRecordingTime(recordingMs)}
               </Text>
             </View>
-            <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Gravando áudio…</Text>
+            <Text style={{
+              fontSize: 12,
+              color: slideToCancel ? "#dc2626" : colors.mutedForeground,
+              fontWeight: slideToCancel ? "700" : "400",
+            }}>
+              {slideToCancel ? "Solte para cancelar" : "↑ Deslize para cancelar  •  solte para enviar"}
+            </Text>
           </View>
           <TouchableOpacity onPress={stopRecording} style={[styles.recordStopBtn, { backgroundColor: colors.navy }]}>
             <Feather name="send" size={18} color="#fff" />
@@ -861,13 +1054,15 @@ export default function GroupChatScreen() {
               <Feather name="send" size={18} color="#fff" />
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity
-              style={[styles.sendBtn, { backgroundColor: colors.navy }]}
-              onPressIn={startRecording}
-              onPressOut={stopRecording}
+            <View
+              style={[
+                styles.sendBtn,
+                { backgroundColor: slideToCancel ? "#dc2626" : colors.navy },
+              ]}
+              {...recordPanResponder.panHandlers}
             >
               <Feather name="mic" size={18} color="#fff" />
-            </TouchableOpacity>
+            </View>
           )}
         </View>
       )}

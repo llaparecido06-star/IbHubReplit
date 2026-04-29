@@ -24,10 +24,25 @@ const ALLOWED_MIME_TYPES = [
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/octet-stream",
   "text/plain",
   "text/csv",
 ];
+
+/**
+ * Reject the generic "application/octet-stream" mime type. It used to be on
+ * the allowlist as a fallback, but in practice it lets clients sneak any
+ * binary (apk, exe, dmg…) past the filter. The chat client now refuses to
+ * send octet-stream and infers a real mime type before uploading.
+ */
+function rejectGenericMime(res: Response, mime: string): boolean {
+  if (mime.toLowerCase() === "application/octet-stream") {
+    res.status(415).json({
+      error: "Tipo de arquivo desconhecido. Selecione um documento, imagem ou mídia válida.",
+    });
+    return true;
+  }
+  return false;
+}
 
 async function ensureBucket() {
   if (bucketReady) return;
@@ -36,7 +51,11 @@ async function ensureBucket() {
 
   const bucketConfig = {
     public: true,
-    fileSizeLimit: 52428800,
+    // 75 MB — must match the multer limit on /uploads/chat-form and the
+    // MAX_CHAT_FILE_SIZE constant the mobile client checks against. If the
+    // bucket cap is lower than multer, files between the two values pass the
+    // client + multer checks and then fail at storage upload.
+    fileSizeLimit: 75 * 1024 * 1024,
     allowedMimeTypes: ALLOWED_MIME_TYPES,
   };
 
@@ -74,6 +93,12 @@ router.post("/uploads/chat", async (req: Request, res: Response): Promise<void> 
       return;
     }
 
+    if (mimeType && rejectGenericMime(res, mimeType)) return;
+    if (mimeType && !ALLOWED_MIME_TYPES.includes(mimeType.toLowerCase() as any)) {
+      res.status(415).json({ error: `Tipo de arquivo não suportado: ${mimeType}` });
+      return;
+    }
+
     await ensureBucket();
 
     // Decode base64 to Buffer
@@ -83,7 +108,7 @@ router.post("/uploads/chat", async (req: Request, res: Response): Promise<void> 
 
     const { error } = await supabaseAdmin.storage
       .from(BUCKET)
-      .upload(path, buffer, { contentType: mimeType || "application/octet-stream", upsert: false });
+      .upload(path, buffer, { contentType: mimeType || "application/pdf", upsert: false });
 
     if (error) {
       console.error("upload error:", error);
@@ -130,7 +155,13 @@ router.post(
 
       const { mimeType } = req.body as { mimeType?: string };
 
-      const safeMime = mimeType || file.mimetype || "application/octet-stream";
+      const candidateMime = (mimeType || file.mimetype || "").toLowerCase();
+      if (rejectGenericMime(res, candidateMime || "application/octet-stream")) return;
+      if (!ALLOWED_MIME_TYPES.includes(candidateMime as any)) {
+        res.status(415).json({ error: `Tipo de arquivo não suportado: ${candidateMime || "desconhecido"}` });
+        return;
+      }
+      const safeMime = candidateMime;
       const ext = (safeMime.split("/")[1] ?? "bin")
         .replace("jpeg", "jpg")
         .replace("quicktime", "mov")
@@ -190,7 +221,13 @@ router.post(
 
       const { mimeType } = req.body as { mimeType?: string };
 
-      const safeMime = mimeType || file.mimetype || "video/mp4";
+      const candidateMime = (mimeType || file.mimetype || "video/mp4").toLowerCase();
+      if (rejectGenericMime(res, candidateMime)) return;
+      if (!candidateMime.startsWith("video/")) {
+        res.status(415).json({ error: `Tipo de arquivo não suportado: ${candidateMime}` });
+        return;
+      }
+      const safeMime = candidateMime;
       const ext = (safeMime.split("/")[1] ?? "mp4")
         .replace("quicktime", "mov");
       const fileName = `${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;

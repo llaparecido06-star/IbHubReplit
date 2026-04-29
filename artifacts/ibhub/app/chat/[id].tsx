@@ -16,6 +16,7 @@ import {
   KeyboardAvoidingView,
   Linking,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -33,8 +34,31 @@ import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/context/AuthContext";
 import * as API from "@/services/api";
 import type { AppMessage } from "@/services/api";
+import {
+  MAX_CHAT_FILE_SIZE,
+  MAX_AUDIO_DURATION_MS,
+  formatFileSize,
+  resolveChatMime,
+} from "@/constants/chatUploads";
 
 const REACTION_EMOJIS = ["🍷", "❤️", "👍", "😂", "🔥", "😮"];
+
+const MAX_FILE_SIZE_LABEL = formatFileSize(MAX_CHAT_FILE_SIZE);
+
+function openAppSettings() {
+  Linking.openSettings().catch(() => {});
+}
+
+function permissionAlert(message: string) {
+  Alert.alert(
+    "Permissão necessária",
+    message,
+    [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Abrir Ajustes", onPress: openAppSettings },
+    ],
+  );
+}
 
 const INTRO_TEMPLATES = [
   "Olá! Sou produtor de vinho e adoraria conectar com você. Tenho interesse em conhecer seu trabalho no mercado vinícola.",
@@ -104,6 +128,9 @@ export default function ChatScreen() {
   const isRecordingRef = useRef(false); // ref mirror to avoid race conditions
   const [recordingMs,     setRecordingMs]      = useState(0);
   const recordingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Slide-up-to-cancel gesture state (WhatsApp-style hold-to-record).
+  const slideToCancelRef = useRef(false);
+  const [slideToCancel, setSlideToCancel] = useState(false);
 
   const listRef            = useRef<FlatList>(null);
   const typingTimer        = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -384,14 +411,14 @@ export default function ChatScreen() {
     if (type === "camera") {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert("Permissão necessária", "Permita o acesso à câmera nas configurações.");
+        permissionAlert("Permita o acesso à câmera nas configurações do dispositivo.");
         return;
       }
       result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images", "videos"], quality: 0.7 });
     } else {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert("Permissão necessária", "Permita o acesso à galeria nas configurações.");
+        permissionAlert("Permita o acesso à galeria nas configurações do dispositivo.");
         return;
       }
       result = await ImagePicker.launchImageLibraryAsync({
@@ -405,6 +432,19 @@ export default function ChatScreen() {
     const asset    = result.assets[0];
     const mimeType = asset.mimeType ?? (asset.type === "video" ? "video/mp4" : "image/jpeg");
     const msgType  = mimeType.startsWith("video") ? "video" : "image";
+
+    // Client-side guard: reject anything bigger than the server limit *before*
+    // we kick off the upload. Saves bandwidth and gives a clearer error than
+    // multer's MulterError: "File too large" at the end.
+    const assetSize = (asset as any).fileSize as number | undefined;
+    if (typeof assetSize === "number" && assetSize > MAX_CHAT_FILE_SIZE) {
+      Alert.alert(
+        "Arquivo muito grande",
+        `O ${msgType === "video" ? "vídeo" : "arquivo"} tem ${formatFileSize(assetSize)}. ` +
+          `O limite é ${MAX_FILE_SIZE_LABEL}.`,
+      );
+      return;
+    }
 
     const tempId = `tmp_${Date.now()}`;
     seenMsgIds.current.add(tempId);
@@ -478,26 +518,80 @@ export default function ChatScreen() {
   const pickAndSendFile = async () => {
     setShowAttach(false);
     if (!user?.id || !id) return;
+
+    let tempId: string | null = null;
     try {
       const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
+
+      // Validate size client-side. DocumentPicker exposes `size` (bytes).
+      if (typeof asset.size === "number" && asset.size > MAX_CHAT_FILE_SIZE) {
+        Alert.alert(
+          "Arquivo muito grande",
+          `${asset.name ?? "O arquivo"} tem ${formatFileSize(asset.size)}. ` +
+            `O limite é ${MAX_FILE_SIZE_LABEL}.`,
+        );
+        return;
+      }
+
+      // Resolve the mime type — picker may hand us nothing or octet-stream
+      // (Drive-shared docs on Android, in particular), so fall back to the
+      // file extension before refusing.
+      const resolvedMime = resolveChatMime(asset.mimeType, asset.name);
+      if (!resolvedMime) {
+        Alert.alert(
+          "Tipo de arquivo não suportado",
+          "Envie PDF, Word, Excel, CSV, texto, imagem, vídeo ou áudio.",
+        );
+        return;
+      }
+
+      // Optimistic bubble — same UX as image/video, so the user immediately
+      // sees the file appear in the thread while it uploads.
+      tempId = `tmp_${Date.now()}`;
+      seenMsgIds.current.add(tempId);
+      const tempMsg: AppMessage = {
+        id: tempId,
+        conversation_id: id,
+        sender_id: user.id,
+        content: asset.name ?? "arquivo",
+        created_at: new Date().toISOString(),
+        message_type: "file",
+        media_url: asset.uri,
+      };
+      setMessages(prev => [...prev, tempMsg]);
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+
       setUploading(true);
       setUploadStatus(`Enviando ${asset.name ?? "arquivo"}...`);
       const fileObj = (asset as any).file as File | undefined;
-      const url = await API.uploadChatMedia(id, asset.uri, asset.mimeType ?? "application/octet-stream", fileObj);
+      const url = await API.uploadChatMedia(id, asset.uri, resolvedMime, fileObj);
       setUploading(false);
       setUploadStatus(null);
-      if (!url) { Alert.alert("Erro", "Não foi possível enviar o arquivo."); return; }
+      if (!url) {
+        if (tempId) {
+          setMessages(prev => prev.filter(m => m.id !== tempId));
+          seenMsgIds.current.delete(tempId);
+        }
+        Alert.alert("Erro", "Não foi possível enviar o arquivo.");
+        return;
+      }
       const saved = await API.sendMediaMessage(id, user.id, url, "file", asset.name ?? "arquivo");
       if (saved) {
         seenMsgIds.current.add(saved.id);
         setMessages(prev => {
-          const filtered = prev.filter(m => m.id !== saved.id);
-          return [...filtered, saved];
+          const cleaned = tempId
+            ? prev.filter(m => m.id !== tempId && m.id !== saved.id)
+            : prev.filter(m => m.id !== saved.id);
+          return [...cleaned, saved];
         });
         setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
       } else {
+        if (tempId) {
+          setMessages(prev => prev.filter(m => m.id !== tempId));
+          seenMsgIds.current.delete(tempId);
+        }
         Alert.alert(
           "Erro",
           "O arquivo foi enviado mas a mensagem não pôde ser registrada. Tente novamente.",
@@ -505,6 +599,11 @@ export default function ChatScreen() {
       }
     } catch (e: any) {
       setUploading(false);
+      setUploadStatus(null);
+      if (tempId) {
+        setMessages(prev => prev.filter(m => m.id !== tempId));
+        seenMsgIds.current.delete(tempId);
+      }
       if (!e?.message?.includes("cancel")) Alert.alert("Erro", "Não foi possível abrir o arquivo.");
     }
   };
@@ -520,13 +619,36 @@ export default function ChatScreen() {
     }
     try {
       const { granted } = await requestRecordingPermissionsAsync();
-      if (!granted) { Alert.alert("Permissão necessária", "Permita o acesso ao microfone nas configurações do dispositivo."); return; }
+      if (!granted) {
+        permissionAlert("Permita o acesso ao microfone nas configurações do dispositivo.");
+        return;
+      }
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await audioRecorder.record();
       isRecordingRef.current = true;
       setIsRecording(true);
       setRecordingMs(0);
-      recordingTimer.current = setInterval(() => setRecordingMs(prev => prev + 1000), 1000);
+      slideToCancelRef.current = false;
+      setSlideToCancel(false);
+      recordingTimer.current = setInterval(() => {
+        setRecordingMs(prev => {
+          const next = prev + 1000;
+          // Hard cap on duration. Same approach WhatsApp uses: stop and send
+          // automatically when the user is about to hit the limit, instead of
+          // discarding the audio.
+          if (next >= MAX_AUDIO_DURATION_MS && isRecordingRef.current) {
+            setTimeout(() => {
+              if (!isRecordingRef.current) return;
+              Alert.alert(
+                "Limite de duração",
+                `A gravação atingiu o máximo de ${Math.round(MAX_AUDIO_DURATION_MS / 60000)} minutos e foi enviada.`,
+              );
+              void stopRecording();
+            }, 0);
+          }
+          return next;
+        });
+      }, 1000);
       if (__DEV__) console.log("[Audio] Recording started.");
     } catch (e: any) {
       console.error("[Audio] startRecording error:", e?.message);
@@ -547,6 +669,8 @@ export default function ChatScreen() {
     isRecordingRef.current = false;
     setIsRecording(false);
     setRecordingMs(0);
+    slideToCancelRef.current = false;
+    setSlideToCancel(false);
     try {
       await audioRecorder.stop();
       await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
@@ -616,10 +740,54 @@ export default function ChatScreen() {
     isRecordingRef.current = false;
     setIsRecording(false);
     setRecordingMs(0);
+    slideToCancelRef.current = false;
+    setSlideToCancel(false);
     try { await audioRecorder.stop(); } catch {}
     await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
     if (__DEV__) console.log("[Audio] Recording cancelled.");
   };
+
+  // ── Hold-to-record gesture (WhatsApp-style) ─────────────────────────────────
+  // PanResponder is created once with stable refs to the latest handlers, so
+  // we don't recreate it on every render and don't capture stale closures.
+  const recordHandlersRef = useRef({
+    start: () => {},
+    stop: () => {},
+    cancel: () => {},
+  });
+  recordHandlersRef.current.start = () => { void startRecording(); };
+  recordHandlersRef.current.stop = () => { void stopRecording(); };
+  recordHandlersRef.current.cancel = () => { void cancelRecording(); };
+
+  const recordPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        recordHandlersRef.current.start();
+      },
+      onPanResponderMove: (_evt, gesture) => {
+        // Slide up by ~60px to enter the "release-to-cancel" zone.
+        const isCancel = gesture.dy < -60;
+        if (isCancel !== slideToCancelRef.current) {
+          slideToCancelRef.current = isCancel;
+          setSlideToCancel(isCancel);
+        }
+      },
+      onPanResponderRelease: () => {
+        if (slideToCancelRef.current) {
+          recordHandlersRef.current.cancel();
+        } else {
+          recordHandlersRef.current.stop();
+        }
+      },
+      onPanResponderTerminate: () => {
+        // Gesture was forcibly stolen (e.g. system modal). Treat as cancel
+        // to avoid sending an audio the user didn't intend to send.
+        recordHandlersRef.current.cancel();
+      },
+    }),
+  ).current;
 
   // ── Wine card ────────────────────────────────────────────────────────────────
 
@@ -1088,9 +1256,14 @@ export default function ChatScreen() {
             <Feather name="x" size={18} color="#dc2626" />
           </TouchableOpacity>
           <View style={[st.recordingDot, { backgroundColor: "#dc2626" }]} />
-          <Text style={[st.recordingText, { color: "#dc2626", flex: 1 }]}>
-            Gravando... {formatDuration(recordingMs)}
-          </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[st.recordingText, { color: "#dc2626" }]}>
+              Gravando... {formatDuration(recordingMs)}
+            </Text>
+            <Text style={{ color: slideToCancel ? "#dc2626" : "#9b1c1c", fontSize: 11, marginTop: 2, fontWeight: slideToCancel ? "700" : "400" }}>
+              {slideToCancel ? "Solte para cancelar" : "↑ Deslize para cancelar  •  solte para enviar"}
+            </Text>
+          </View>
           <TouchableOpacity
             onPress={stopRecording}
             style={[st.recordingSend, { backgroundColor: "#dc2626" }]}
@@ -1151,12 +1324,15 @@ export default function ChatScreen() {
                 : <Feather name="send" size={17} color="#fff" />}
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity
-              style={[st.micBtnWrap, isRecording && { backgroundColor: "#fee2e2" }]}
-              onPress={startRecording}
+            <View
+              style={[
+                st.micBtnWrap,
+                isRecording && { backgroundColor: slideToCancel ? "#fecaca" : "#fee2e2" },
+              ]}
+              {...recordPanResponder.panHandlers}
             >
               <Feather name="mic" size={22} color={isRecording ? "#dc2626" : colors.mutedForeground} />
-            </TouchableOpacity>
+            </View>
           )}
         </View>
       ) : (
