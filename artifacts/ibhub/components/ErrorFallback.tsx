@@ -70,15 +70,17 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
 
       <View style={styles.content}>
         <Text style={[styles.title, { color: colors.foreground }]}>
-          Something went wrong
+          Algo deu errado
         </Text>
 
         <Text style={[styles.message, { color: colors.mutedForeground }]}>
-          Please reload the app to continue.
+          Encontramos um problema inesperado. Toque em "Tentar novamente" para recarregar o aplicativo.
         </Text>
 
         <Pressable
           onPress={handleRestart}
+          accessibilityLabel="Recarregar aplicativo"
+          accessibilityRole="button"
           style={({ pressed }) => [
             styles.button,
             {
@@ -94,7 +96,7 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
               { color: colors.primaryForeground },
             ]}
           >
-            Try Again
+            Tentar novamente
           </Text>
         </Pressable>
       </View>

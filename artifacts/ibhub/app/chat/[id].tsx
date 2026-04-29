@@ -512,7 +512,7 @@ export default function ChatScreen() {
       setIsRecording(true);
       setRecordingMs(0);
       recordingTimer.current = setInterval(() => setRecordingMs(prev => prev + 1000), 1000);
-      console.log("[Audio] Recording started.");
+      if (__DEV__) console.log("[Audio] Recording started.");
     } catch (e: any) {
       console.error("[Audio] startRecording error:", e?.message);
       Alert.alert("Erro", "Não foi possível iniciar a gravação.");
@@ -522,7 +522,7 @@ export default function ChatScreen() {
   const stopRecording = async () => {
     // Use ref instead of state to avoid React batching race condition
     if (!isRecordingRef.current || !user?.id || !id) {
-      console.log("[Audio] stopRecording skipped — not recording or missing context.");
+      if (__DEV__) console.log("[Audio] stopRecording skipped — not recording or missing context.");
       return;
     }
     if (recordingTimer.current) {
@@ -542,7 +542,7 @@ export default function ChatScreen() {
         await new Promise(resolve => setTimeout(resolve, 150));
         uri = audioRecorder.uri;
       }
-      console.log("[Audio] Recording stopped. URI:", uri ?? "null");
+      if (__DEV__) console.log("[Audio] Recording stopped. URI:", uri ?? "null");
 
       if (!uri) {
         Alert.alert("Áudio vazio", "Nenhum áudio foi gravado. Tente segurar o botão por mais tempo.");
@@ -565,7 +565,7 @@ export default function ChatScreen() {
         return;
       }
 
-      console.log("[Audio] Upload OK, sending message...");
+      if (__DEV__) console.log("[Audio] Upload OK, sending message...");
 
       // Direct Supabase insert so we can surface the exact error if it fails
       const audioPayload: any = {
@@ -594,7 +594,7 @@ export default function ChatScreen() {
           return [...filtered, saved as any];
         });
         setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
-        console.log("[Audio] Audio message sent successfully.");
+        if (__DEV__) console.log("[Audio] Audio message sent successfully.");
       }
     } catch (e: any) {
       console.error("[Audio] stopRecording error:", e?.message);
@@ -615,7 +615,7 @@ export default function ChatScreen() {
     setRecordingMs(0);
     try { await audioRecorder.stop(); } catch {}
     await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
-    console.log("[Audio] Recording cancelled.");
+    if (__DEV__) console.log("[Audio] Recording cancelled.");
   };
 
   // ── Wine card ────────────────────────────────────────────────────────────────

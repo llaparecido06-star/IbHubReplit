@@ -294,7 +294,7 @@ export default function WineCellarScreen() {
         }
       }
     } catch (e) {
-      console.log("scheduleDrinkWindowAlerts:", e);
+      if (__DEV__) console.warn("scheduleDrinkWindowAlerts:", e);
     }
   };
 
@@ -307,7 +307,7 @@ export default function WineCellarScreen() {
     try {
       await Share.share({ message });
     } catch (e) {
-      console.log("handleShareWine:", e);
+      if (__DEV__) console.warn("handleShareWine:", e);
     }
   };
 

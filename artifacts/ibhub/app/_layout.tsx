@@ -20,6 +20,7 @@ import { PermissionsProvider } from "@/context/PermissionsContext";
 import { FeatureFlagsProvider, useFeatureFlags } from "@/context/FeatureFlagsContext";
 import { UnreadProvider, useUnread } from "@/context/UnreadContext";
 import { SidebarNav, useIsDesktop } from "@/components/ui/SidebarNav";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import * as SafeNotifications from "@/utils/safeNotifications";
 
 // ── Background unread badge syncer ──────────────────────────────────────────
@@ -318,20 +319,28 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <AuthProvider>
-            <FeatureFlagsProvider>
-              <PermissionsProvider>
-                <UnreadProvider>
-                  <RootLayoutNav />
-                </UnreadProvider>
-              </PermissionsProvider>
-            </FeatureFlagsProvider>
-          </AuthProvider>
-        </GestureHandlerRootView>
-      </QueryClientProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary
+      onError={(error, stack) => {
+        if (__DEV__) {
+          console.error("[RootErrorBoundary]", error, stack);
+        }
+      }}
+    >
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <AuthProvider>
+              <FeatureFlagsProvider>
+                <PermissionsProvider>
+                  <UnreadProvider>
+                    <RootLayoutNav />
+                  </UnreadProvider>
+                </PermissionsProvider>
+              </FeatureFlagsProvider>
+            </AuthProvider>
+          </GestureHandlerRootView>
+        </QueryClientProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
