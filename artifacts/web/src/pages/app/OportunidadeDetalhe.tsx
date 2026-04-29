@@ -135,7 +135,9 @@ export default function OportunidadeDetalhe() {
           {isVaga && opp.company ? (
             <p style={{ fontSize: 15, color: "#8a93a2", margin: "0 0 16px" }}>{opp.company}</p>
           ) : opp.creator?.full_name ? (
-            <p style={{ fontSize: 15, color: GOLD, margin: "0 0 16px" }}>por {opp.creator.full_name}</p>
+            <p style={{ fontSize: 15, color: GOLD, margin: "0 0 16px" }}>
+              por <span onClick={() => opp.creator?.id && setLocation(`/app/usuario/${opp.creator.id}`)} style={{ cursor: opp.creator?.id ? "pointer" : "default", textDecoration: opp.creator?.id ? "underline" : "none" }}>{opp.creator.full_name}</span>
+            </p>
           ) : null}
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>

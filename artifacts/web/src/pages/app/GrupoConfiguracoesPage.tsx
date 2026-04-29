@@ -311,10 +311,13 @@ export default function GrupoConfiguracoesPage() {
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {members.map(m => {
                   const isMe = m.user_id === userId;
+                  const goToMember = () => setLocation(isMe ? "/app/perfil" : `/app/usuario/${m.user_id}`);
                   return (
                     <div key={m.user_id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <Avatar src={m.profile?.avatar_url} name={m.profile?.full_name ?? "?"} size={40} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
+                      <span onClick={goToMember} style={{ cursor: "pointer", display: "inline-flex" }}>
+                        <Avatar src={m.profile?.avatar_url} name={m.profile?.full_name ?? "?"} size={40} />
+                      </span>
+                      <div onClick={goToMember} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: NAVY }}>{m.profile?.full_name ?? "Usuário"}</div>
                         {m.profile?.headline && <div style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.profile.headline}</div>}
                       </div>

@@ -813,9 +813,11 @@ function SuggestionCard({
   viewingAsCompany?: boolean;
   compact?: boolean;
 }) {
+  const [, setLocation] = useLocation();
   const [status, setStatus] = useState(profile.connection_status);
   const [following, setFollowing] = useState(profile.is_following);
   const useFollowMode = viewingAsCompany || profile.is_company;
+  const goToProfile = () => setLocation(profile.is_company ? `/app/empresa/${profile.id}` : `/app/usuario/${profile.id}`);
 
   const handleConnect = () => {
     if (status !== "none") return;
@@ -837,9 +839,11 @@ function SuggestionCard({
       display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
       width: compact ? 130 : "100%",
     }}>
-      <Avatar src={profile.avatar_url} name={profile.full_name} size={compact ? 44 : 52} />
+      <div onClick={goToProfile} style={{ cursor: "pointer" }}>
+        <Avatar src={profile.avatar_url} name={profile.full_name} size={compact ? 44 : 52} />
+      </div>
       <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: compact ? 13 : 14, fontWeight: 700, color: NAVY }}>{profile.full_name}</div>
+        <div onClick={goToProfile} style={{ fontSize: compact ? 13 : 14, fontWeight: 700, color: NAVY, cursor: "pointer" }}>{profile.full_name}</div>
         {profile.headline && (
           <div style={{ fontSize: 11, color: MUTED, marginTop: 2, lineHeight: 1.4 }}>
             {profile.headline.length > 40 ? profile.headline.slice(0, 40) + "…" : profile.headline}
@@ -939,7 +943,9 @@ function SuggestionsPanel({ suggestions, onConnect, onFollow, viewingAsCompany }
   onFollow?: (id: string) => void;
   viewingAsCompany?: boolean;
 }) {
+  const [, setLocation] = useLocation();
   if (!suggestions.length) return null;
+  const goTo = (s: SuggestedProfile) => setLocation(s.is_company ? `/app/empresa/${s.id}` : `/app/usuario/${s.id}`);
   return (
     <div style={{
       backgroundColor: WHITE,
@@ -954,9 +960,11 @@ function SuggestionsPanel({ suggestions, onConnect, onFollow, viewingAsCompany }
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {suggestions.map((s) => (
           <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Avatar src={s.avatar_url} name={s.full_name} size={40} />
+            <div onClick={() => goTo(s)} style={{ cursor: "pointer", flexShrink: 0 }}>
+              <Avatar src={s.avatar_url} name={s.full_name} size={40} />
+            </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.full_name}</div>
+              <div onClick={() => goTo(s)} style={{ fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: "pointer" }}>{s.full_name}</div>
               {s.headline && <div style={{ fontSize: 11, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.headline}</div>}
               {s.company_match ? (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 700, color: "#1a56db", background: "#1a56db15", borderRadius: 6, padding: "1px 6px", marginTop: 2 }}>

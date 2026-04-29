@@ -135,13 +135,18 @@ function EmpresaCard({ c }: { c: CompanyResult }) {
 function PostCard({ p }: { p: PostResult }) {
   const [, setLocation] = useLocation();
   const authorName = p.author?.full_name ?? "?";
+  const goToAuthor = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!p.author) return;
+    setLocation(p.author.isCompany ? `/app/empresa/${p.author.id}` : `/app/usuario/${p.author.id}`);
+  };
   return (
     <Row onClick={() => setLocation(`/app/posts/${p.id}`)}>
-      {p.author && <Avatar src={p.author.avatar_url} name={authorName} size={40} />}
+      {p.author && <span onClick={goToAuthor} style={{ cursor: "pointer", display: "inline-flex" }}><Avatar src={p.author.avatar_url} name={authorName} size={40} /></span>}
       <div style={{ flex: 1, minWidth: 0 }}>
         {p.author && (
           <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{authorName}</span>
+            <span onClick={goToAuthor} style={{ fontSize: 13, fontWeight: 700, color: NAVY, cursor: "pointer" }}>{authorName}</span>
             {p.author.isCompany && <span style={{ fontSize: 10, color: MUTED, background: BG, borderRadius: 4, padding: "1px 5px" }}>Empresa</span>}
           </div>
         )}

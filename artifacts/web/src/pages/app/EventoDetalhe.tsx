@@ -208,18 +208,18 @@ export default function EventoDetalhe() {
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {participants.map((p) => (
                 <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{
+                  <div onClick={() => p.user_id && setLocation(`/app/usuario/${p.user_id}`)} style={{
                     width: 38, height: 38, borderRadius: "50%", flexShrink: 0,
                     backgroundColor: `${GOLD}22`,
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 16, overflow: "hidden",
+                    fontSize: 16, overflow: "hidden", cursor: "pointer",
                   }}>
                     {p.profile?.avatar_url ? (
                       <img src={p.profile.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     ) : "👤"}
                   </div>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: NAVY }}>
+                    <div onClick={() => p.user_id && setLocation(`/app/usuario/${p.user_id}`)} style={{ fontSize: 14, fontWeight: 600, color: NAVY, cursor: "pointer", display: "inline-block" }}>
                       {p.profile?.full_name ?? "Usuário"}
                     </div>
                     {p.profile?.plan && (

@@ -226,9 +226,11 @@ export default function MarketItemPage() {
           <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: MUTED, marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>Vendedor</div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <Avatar src={item.seller.avatar_url} name={item.seller.full_name ?? "U"} size={48} />
+              <span onClick={() => setLocation(`/app/usuario/${item.seller!.id}`)} style={{ cursor: "pointer", display: "inline-flex" }}>
+                <Avatar src={item.seller.avatar_url} name={item.seller.full_name ?? "U"} size={48} />
+              </span>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: NAVY }}>{item.seller.full_name ?? "Usuário"}</div>
+                <div onClick={() => setLocation(`/app/usuario/${item.seller!.id}`)} style={{ fontSize: 15, fontWeight: 700, color: NAVY, cursor: "pointer", display: "inline-block" }}>{item.seller.full_name ?? "Usuário"}</div>
                 {item.seller.headline && <div style={{ fontSize: 12, color: MUTED }}>{item.seller.headline}</div>}
               </div>
               {!isOwner && (
