@@ -483,11 +483,22 @@ export default function MinhaContaPage() {
     const name      = profile?.full_name ?? "Usuário";
     const initial   = name.charAt(0).toUpperCase();
     const planRaw   = profile?.plan ?? "";
+    // Match the names in the `plans` table. Legacy English aliases are
+    // normalized to the current Portuguese label so older profile rows
+    // still display the up-to-date plan name.
     const planMap2: Record<string, string> = {
-      exclusive: "Plano Exclusivo", business: "Plano Business",
-      premium: "Plano Premium", basico: "Plano Básico", gratuito: "Plano Gratuito",
+      gratuito: "Plano Gratuito",
+      profissional: "Plano Profissional",
+      basico: "Plano Básico",
+      empresa: "Plano Empresa",
+      executivo: "Plano Executivo",
+      // legacy aliases
+      free: "Plano Gratuito",
+      premium: "Plano Profissional",
+      business: "Plano Empresa",
+      exclusive: "Plano Executivo",
     };
-    const planLabel2 = planMap2[planRaw.toLowerCase()] ?? (planRaw ? planRaw : "Plano Gratuito");
+    const planLabel2 = planMap2[planRaw.toLowerCase()] ?? (planRaw ? `Plano ${planRaw}` : "Plano Gratuito");
 
     const sectionTitles: Record<Section, string> = {
       perfil: "Editar Perfil", assinatura: "Assinatura",

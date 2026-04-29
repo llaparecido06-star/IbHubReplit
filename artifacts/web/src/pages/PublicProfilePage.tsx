@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
+import PlanBadge from "@/components/PlanBadge";
 import {
   fetchPublicUserProfile,
   fetchProfileStats,
@@ -34,25 +35,6 @@ function Avatar({ src, name, size = 88 }: { src?: string | null; name: string; s
     }}>
       {(name?.[0] ?? "?").toUpperCase()}
     </div>
-  );
-}
-
-function PlanBadge({ plan }: { plan?: string | null }) {
-  if (!plan || plan === "gratuito" || plan === "free") return null;
-  const map: Record<string, [string, string]> = {
-    executivo: ["#7B2FBE", "Executivo"], exclusive: ["#7B2FBE", "Executivo"],
-    empresa:   ["#1a56db", "Business"],  business:  ["#1a56db", "Business"],
-    premium:   [GOLD,      "Premium"],   profissional: [GOLD, "Premium"],
-    basico:    ["#374151", "Básico"],
-  };
-  const [color, label] = map[plan] ?? ["#6b7280", plan];
-  return (
-    <span style={{
-      fontSize: 11, fontWeight: 700, color: WHITE,
-      background: color, padding: "2px 9px", borderRadius: 100,
-    }}>
-      {label}
-    </span>
   );
 }
 
@@ -257,7 +239,7 @@ export default function PublicProfilePage() {
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <h1 style={{ fontSize: 20, fontWeight: 800, color: NAVY, margin: 0 }}>{name}</h1>
-                    <PlanBadge plan={profile.plan} />
+                    <PlanBadge plan={profile.plan} hideFree />
                   </div>
                   {username && (
                     <div style={{ fontSize: 13, color: "#7a8494", marginTop: 2 }}>@{username}</div>

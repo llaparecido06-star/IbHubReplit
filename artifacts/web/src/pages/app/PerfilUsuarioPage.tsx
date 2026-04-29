@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { useLocation, useParams } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
+import PlanBadge from "@/components/PlanBadge";
 import {
   fetchPublicUserProfile,
   fetchUserPosts,
@@ -58,28 +59,6 @@ function Avatar({ src, name, size = 40 }: { src?: string | null; name: string; s
     <div style={{ width: size, height: size, borderRadius: "50%", backgroundColor: WINE, display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.38, fontWeight: 800, color: WHITE, flexShrink: 0 }}>
       {(name?.[0] ?? "U").toUpperCase()}
     </div>
-  );
-}
-
-function PlanBadge({ plan }: { plan?: string | null }) {
-  if (!plan || plan === "free" || plan === "gratuito") return null;
-  const colors: Record<string, string> = {
-    exclusive: "#7B2FBE", executivo: "#7B2FBE",
-    business: "#1a56db", empresa: "#1a56db",
-    premium: GOLD, profissional: GOLD,
-    basico: "#374151",
-  };
-  const labels: Record<string, string> = {
-    exclusive: "Executivo", executivo: "Executivo",
-    business: "Business", empresa: "Business",
-    premium: "Premium", profissional: "Premium",
-    basico: "Básico",
-  };
-  const color = colors[plan] ?? "#6b7280";
-  return (
-    <span style={{ fontSize: 11, fontWeight: 700, color: WHITE, backgroundColor: color, padding: "2px 9px", borderRadius: 100 }}>
-      {labels[plan] ?? plan}
-    </span>
   );
 }
 
@@ -858,7 +837,7 @@ export default function PerfilUsuarioPage() {
             <div style={{ marginTop: 20 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <h1 style={{ fontSize: 22, fontWeight: 900, color: NAVY, margin: 0 }}>{userProfile.full_name}</h1>
-                <PlanBadge plan={userProfile.plan} />
+                <PlanBadge plan={userProfile.plan} hideFree />
               </div>
               {userProfile.username && <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>@{userProfile.username}</div>}
               {headline && <div style={{ fontSize: 14, color: MUTED, marginTop: 4, lineHeight: 1.4 }}>{headline}</div>}

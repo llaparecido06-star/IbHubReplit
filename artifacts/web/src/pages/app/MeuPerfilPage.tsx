@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
+import PlanBadge from "@/components/PlanBadge";
 import { LikesModal } from "@/components/feed/LikesModal";
 import VideoPlayer from "@/components/feed/VideoPlayer";
 
@@ -75,32 +76,6 @@ function Avatar({ src, name, size = 40 }: { src?: string | null; name: string; s
     <div style={{ width: size, height: size, borderRadius: "50%", backgroundColor: "#722f37", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.38, fontWeight: 800, color: WHITE, flexShrink: 0 }}>
       {(name?.[0] ?? "U").toUpperCase()}
     </div>
-  );
-}
-
-function PlanBadge({ plan }: { plan?: string }) {
-  const colors: Record<string, string> = {
-    exclusive: "#7B2FBE",
-    executivo: "#7B2FBE",
-    business: "#1a56db",
-    empresa: "#1a56db",
-    premium: GOLD,
-    profissional: GOLD,
-  };
-  const labels: Record<string, string> = {
-    exclusive: "Executivo",
-    executivo: "Executivo",
-    business: "Business",
-    empresa: "Business",
-    premium: "Premium",
-    profissional: "Premium",
-    free: "Gratuito",
-  };
-  const color = plan ? (colors[plan] ?? "#6b7280") : "#6b7280";
-  return (
-    <span style={{ fontSize: 11, fontWeight: 700, color: WHITE, backgroundColor: color, padding: "2px 8px", borderRadius: 100 }}>
-      {labels[plan ?? ""] ?? "Gratuito"}
-    </span>
   );
 }
 

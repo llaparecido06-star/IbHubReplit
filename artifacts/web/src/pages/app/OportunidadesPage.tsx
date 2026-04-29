@@ -513,9 +513,11 @@ export default function OportunidadesPage() {
           <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setLockedPublish(false)}>
             <div style={{ backgroundColor: WHITE, borderRadius: 18, padding: 40, maxWidth: 380, width: "90%", textAlign: "center" }} onClick={e => e.stopPropagation()}>
               <div style={{ fontSize: 44, marginBottom: 16 }}>🏢</div>
-              <h3 style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Identidade Empresarial Necessária</h3>
-              <p style={{ fontSize: 14, color: MUTED, marginBottom: 24, lineHeight: 1.6 }}>Para publicar vagas e oportunidades você precisa estar operando com uma identidade empresarial. Acesse seu perfil e selecione ou crie uma empresa.</p>
-              <a href="/perfil" style={{ display: "inline-block", padding: "11px 28px", backgroundColor: GOLD, color: NAVY, borderRadius: 10, fontWeight: 800, fontSize: 14, textDecoration: "none" }}>Ir para Perfil</a>
+              <h3 style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Apenas empresas podem publicar</h3>
+              <p style={{ fontSize: 14, color: MUTED, marginBottom: 24, lineHeight: 1.6 }}>
+                A publicação de vagas, eventos e oportunidades de marketplace é exclusiva para perfis de empresa. Crie uma página de empresa ou alterne para uma já existente no seu perfil para continuar.
+              </p>
+              <a href="/app/perfil" style={{ display: "inline-block", padding: "11px 28px", backgroundColor: GOLD, color: NAVY, borderRadius: 10, fontWeight: 800, fontSize: 14, textDecoration: "none" }}>Ir para Perfil</a>
               <button onClick={() => setLockedPublish(false)} style={{ display: "block", margin: "12px auto 0", background: "none", border: "none", fontSize: 13, color: MUTED, cursor: "pointer" }}>Fechar</button>
             </div>
           </div>
@@ -951,11 +953,11 @@ export default function OportunidadesPage() {
           <div style={{ backgroundColor: "#fff", borderRadius: 18, padding: 40, maxWidth: 380, width: "90%", textAlign: "center" }}
             onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 44, marginBottom: 16 }}>🏢</div>
-            <h3 style={{ fontSize: 18, fontWeight: 800, color: "#0d1b2a", marginBottom: 8 }}>Identidade Empresarial Necessária</h3>
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: "#0d1b2a", marginBottom: 8 }}>Apenas empresas podem publicar</h3>
             <p style={{ fontSize: 14, color: "#7a8494", marginBottom: 24, lineHeight: 1.6 }}>
-              Para publicar vagas e oportunidades você precisa estar operando com uma identidade empresarial. Acesse seu perfil e selecione ou crie uma empresa.
+              A publicação de vagas, eventos e oportunidades de marketplace é exclusiva para perfis de empresa. Crie uma página de empresa ou alterne para uma já existente no seu perfil para continuar.
             </p>
-            <a href="/perfil" style={{ display: "inline-block", padding: "11px 28px", backgroundColor: "#c9a84c", color: "#0d1b2a", borderRadius: 10, fontWeight: 800, fontSize: 14, textDecoration: "none" }}>
+            <a href="/app/perfil" style={{ display: "inline-block", padding: "11px 28px", backgroundColor: "#c9a84c", color: "#0d1b2a", borderRadius: 10, fontWeight: 800, fontSize: 14, textDecoration: "none" }}>
               Ir para Perfil
             </a>
             <button onClick={() => setLockedPublish(false)} style={{ display: "block", margin: "12px auto 0", background: "none", border: "none", fontSize: 13, color: "#7a8494", cursor: "pointer" }}>Fechar</button>

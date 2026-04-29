@@ -38,11 +38,12 @@ const BG     = "#f5f5f0";
 const BORDER = "#e8e8e3";
 const MUTED  = "#7a8494";
 
-function planBadgeColor(plan?: string) {
-  if (plan === "exclusive" || plan === "executivo") return "#7B2FBE";
-  if (plan === "business"  || plan === "empresa")   return "#1a56db";
-  if (plan === "premium"   || plan === "profissional") return GOLD;
-  return null;
+import { resolvePlanStyle, isFreePlan } from "@/components/PlanBadge";
+
+function planBadgeStyle(plan?: string | null): { color: string; label: string } | null {
+  if (isFreePlan(plan)) return null;
+  const resolved = resolvePlanStyle(plan);
+  return resolved ? { color: resolved.color, label: resolved.label } : null;
 }
 
 /* ─── Avatar ─────────────────────────────── */
@@ -415,8 +416,9 @@ function PostCard({
   const companyPage = post.company_page ?? null;
   const authorName = companyPage ? companyPage.name : (post.author?.full_name ?? "Usuário");
   const authorAvatar = companyPage ? companyPage.avatar_url : post.author?.avatar_url;
-  const badgeColor = companyPage ? GOLD : planBadgeColor(post.author?.plan);
-  const badgeLabel = companyPage ? "Empresa" : (post.author?.plan ? post.author.plan.charAt(0).toUpperCase() + post.author.plan.slice(1) : null);
+  const authorBadge = companyPage ? null : planBadgeStyle(post.author?.plan);
+  const badgeColor = companyPage ? GOLD : (authorBadge?.color ?? null);
+  const badgeLabel = companyPage ? "Empresa" : (authorBadge?.label ?? null);
   const goToAuthor = () => {
     if (companyPage) { setLocation(`/app/empresa/${companyPage.id}`); return; }
     if (post.author?.id && post.author.id !== currentUserId) setLocation(`/app/usuario/${post.author.id}`);

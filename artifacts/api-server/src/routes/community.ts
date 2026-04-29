@@ -93,6 +93,36 @@ router.post("/community/opportunities", async (req: Request, res: Response): Pro
   const allowed = await requirePlanFeature(req, res, userId, "Publicar Vagas");
   if (!allowed) return;
 
+  // Authorization: only company-backed profiles (or admins) may publish.
+  // Mirrors the client-side `canPublish` gate in OportunidadesPage so a
+  // personal user cannot bypass the UI by calling the endpoint directly.
+  const { data: profileRow } = await supabaseAdmin
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (!profileRow?.is_admin) {
+    const { count: companyCount, error: companyErr } = await supabaseAdmin
+      .from("company_pages")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", userId);
+
+    if (companyErr) {
+      req.log.error({ err: companyErr, userId }, "failed to verify company ownership");
+      res.status(500).json({ error: "failed to verify company ownership" });
+      return;
+    }
+
+    if (!companyCount) {
+      res.status(403).json({
+        error: "company_required",
+        message: "Apenas perfis empresariais podem publicar oportunidades. Crie uma página de empresa antes de continuar.",
+      });
+      return;
+    }
+  }
+
   const {
     type, title, description, category, company, location,
     price, salary, contract_type, contact_email, expires_at,
