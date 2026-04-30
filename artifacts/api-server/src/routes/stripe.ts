@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
+import { applyPlanChangeToCredits } from "../lib/creditUtils.js";
 
 const router: IRouter = Router();
 
@@ -343,6 +344,8 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
           };
           if (plan) update.plan = plan;
           await supabaseAdmin.from("profiles").update(update).eq("id", userId);
+          // Adjust AI credits immediately so the user doesn't wait for next month's reset
+          if (plan) void applyPlanChangeToCredits(userId);
         }
         break;
       }
@@ -361,6 +364,8 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
           };
           if (plan) update.plan = plan;
           await supabaseAdmin.from("profiles").update(update).eq("id", userId);
+          // Adjust AI credits immediately on upgrade or downgrade
+          if (plan) void applyPlanChangeToCredits(userId);
         }
         break;
       }
@@ -375,6 +380,8 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
             stripe_subscription_status: "canceled",
             stripe_current_period_end:  new Date((sub as any).current_period_end * 1000).toISOString(),
           }).eq("id", userId);
+          // Revert credits to the free plan allocation
+          void applyPlanChangeToCredits(userId);
         }
         break;
       }
