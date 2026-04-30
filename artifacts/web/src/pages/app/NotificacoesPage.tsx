@@ -1,5 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import {
+  Heart, MessageCircle, CornerDownRight, UserPlus, Users,
+  AtSign, UserCheck, BarChart2, Bell as BellIcon,
+} from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import {
@@ -28,23 +32,19 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d`;
 }
 
-const TYPE_META: Record<string, { emoji: string; color: string; label: string }> = {
-  like:          { emoji: "❤️", color: "#e74c3c", label: "curtiu sua publicação" },
-  comment:       { emoji: "💬", color: "#3498db", label: "comentou na sua publicação" },
-  comment_reply: { emoji: "↩️", color: "#8b5cf6", label: "respondeu seu comentário" },
-  follow:        { emoji: "➕", color: "#2ecc71", label: "começou a seguir você" },
-  connection:    { emoji: "🤝", color: GOLD,       label: "enviou pedido de conexão" },
-  mention:       { emoji: "@",  color: "#9b59b6", label: "mencionou você" },
-  poll_vote:     { emoji: "📊", color: "#0ea5e9", label: "votou na sua enquete" },
+const TYPE_META: Record<string, { Icon: React.ElementType; color: string; label: string }> = {
+  like:           { Icon: Heart,           color: "#e74c3c", label: "curtiu sua publicação" },
+  comment:        { Icon: MessageCircle,   color: "#3498db", label: "comentou na sua publicação" },
+  comment_reply:  { Icon: CornerDownRight, color: "#8b5cf6", label: "respondeu seu comentário" },
+  comment_like:   { Icon: Heart,           color: "#e74c3c", label: "curtiu seu comentário" },
+  follow:         { Icon: UserPlus,        color: "#2ecc71", label: "começou a seguir você" },
+  company_follow: { Icon: UserPlus,        color: "#2ecc71", label: "começou a seguir sua empresa" },
+  connection:     { Icon: Users,           color: GOLD,      label: "enviou pedido de conexão" },
+  mention:        { Icon: AtSign,          color: "#9b59b6", label: "mencionou você" },
+  group_request:  { Icon: UserCheck,       color: "#7c3aed", label: "solicitou entrar no seu grupo" },
+  poll_vote:      { Icon: BarChart2,       color: "#0ea5e9", label: "votou na sua enquete" },
 };
 
-/**
- * Build the message text for a notification row, preferring wine-specific
- * wording when the underlying post is a wine review.
- *
- * Company-tab notifications (target_company_id set) use "a avaliação do"
- * instead of "sua avaliação do" so the phrasing matches the company context.
- */
 function buildNotifMessage(notif: WebNotification, fallbackLabel: string): string {
   const wine = notif.wine_name?.trim();
   if (wine) {
@@ -74,16 +74,17 @@ function NotifRow({ notif, onRead, onAccept, onReject }: {
   onReject: (notif: WebNotification) => void;
 }) {
   const [, setLocation] = useLocation();
-  const meta = TYPE_META[notif.type] ?? { emoji: "🔔", color: GOLD, label: "nova notificação" };
-  const isPending = notif.type === "connection" && notif.connection_status === "pending" && notif.connection_id;
+  const meta = TYPE_META[notif.type] ?? { Icon: BellIcon, color: GOLD, label: "nova notificação" };
+  const { Icon: NotifIcon, color: iconColor, label: typeLabel } = meta;
+  const isPending  = notif.type === "connection" && notif.connection_status === "pending"  && notif.connection_id;
   const isAccepted = notif.type === "connection" && notif.connection_status === "accepted";
   const isRejected = notif.type === "connection" && notif.connection_status === "rejected";
-  const actorName = notif.actor?.full_name ?? "Alguém";
+  const actorName  = notif.actor?.full_name ?? "Alguém";
 
   const handleClick = () => {
     if (!notif.read) onRead(notif.id);
-    if (notif.type === "connection" && notif.actor?.id) setLocation(`/app/usuario/${notif.actor.id}`);
-    else if (notif.post_id) setLocation(`/app/posts/${notif.post_id}`);
+    if (notif.post_id) setLocation(`/app/posts/${notif.post_id}`);
+    else if (notif.type === "connection" && notif.actor?.id) setLocation(`/app/usuario/${notif.actor.id}`);
   };
 
   return (
@@ -99,16 +100,16 @@ function NotifRow({ notif, onRead, onAccept, onReject }: {
       onMouseEnter={e => (e.currentTarget.style.background = BG)}
       onMouseLeave={e => (e.currentTarget.style.background = notif.read ? WHITE : GOLD + "0e")}
     >
-      {/* Avatar + badge */}
+      {/* Avatar + icon badge */}
       <div style={{ position: "relative", flexShrink: 0 }}>
         <Avatar src={notif.actor?.avatar_url} name={actorName} size={46} />
         <span style={{
           position: "absolute", bottom: -2, right: -2,
-          background: meta.color, borderRadius: "50%",
+          background: iconColor, borderRadius: "50%",
           width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 11, border: `2px solid ${WHITE}`,
+          border: `1.5px solid ${WHITE}`,
         }}>
-          {meta.emoji}
+          <NotifIcon size={11} color="#fff" strokeWidth={2.5} />
         </span>
       </div>
 
@@ -116,7 +117,7 @@ function NotifRow({ notif, onRead, onAccept, onReject }: {
       <div style={{ flex: 1 }}>
         <p style={{ margin: 0, fontSize: 14, color: NAVY, lineHeight: 1.45 }}>
           <strong>{actorName}</strong>{" "}
-          {buildNotifMessage(notif, meta.label)}
+          {buildNotifMessage(notif, typeLabel)}
         </p>
         <p style={{ margin: "4px 0 0", fontSize: 12, color: MUTED }}>{timeAgo(notif.created_at)}</p>
 
@@ -138,7 +139,7 @@ function NotifRow({ notif, onRead, onAccept, onReject }: {
           </div>
         )}
         {isAccepted && (
-          <span style={{ display: "inline-block", marginTop: 8, fontSize: 12, color: "#16a34a", fontWeight: 700 }}>✓ Conexão aceita</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 8, fontSize: 12, color: "#16a34a", fontWeight: 700 }}>✓ Conexão aceita</span>
         )}
         {isRejected && (
           <span style={{ display: "inline-block", marginTop: 8, fontSize: 12, color: MUTED }}>Recusado</span>
@@ -147,7 +148,7 @@ function NotifRow({ notif, onRead, onAccept, onReject }: {
 
       {/* Unread dot */}
       {!notif.read && (
-        <div style={{ width: 9, height: 9, borderRadius: "50%", background: GOLD, marginTop: 4, flexShrink: 0 }} />
+        <div style={{ width: 9, height: 9, borderRadius: "50%", background: GOLD, marginTop: 5, flexShrink: 0 }} />
       )}
     </div>
   );
@@ -224,12 +225,16 @@ export default function NotificacoesPage() {
         {/* List */}
         <div style={{ background: WHITE }}>
           {loading ? (
-            <div style={{ textAlign: "center", padding: 60, color: MUTED }}>⏳ Carregando notificações…</div>
+            <div style={{ textAlign: "center", padding: 60, color: MUTED }}>Carregando notificações…</div>
           ) : notifs.length === 0 ? (
             <div style={{ textAlign: "center", padding: 80 }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>🔔</div>
-              <p style={{ fontSize: 16, fontWeight: 700, color: NAVY, margin: "0 0 6px" }}>Tudo em dia!</p>
-              <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>Você não tem notificações novas.</p>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+                <div style={{ width: 72, height: 72, borderRadius: "50%", background: GOLD + "20", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <BellIcon size={36} color={GOLD} />
+                </div>
+              </div>
+              <p style={{ fontSize: 16, fontWeight: 800, color: NAVY, margin: "0 0 6px" }}>Tudo tranquilo por aqui</p>
+              <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>Suas notificações de curtidas, comentários e conexões aparecerão aqui.</p>
             </div>
           ) : notifs.map(n => (
             <NotifRow key={n.id} notif={n} onRead={handleRead} onAccept={handleAccept} onReject={handleReject} />

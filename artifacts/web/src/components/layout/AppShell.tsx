@@ -1,5 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import {
+  Heart, MessageCircle, CornerDownRight, UserPlus, Users,
+  AtSign, UserCheck, BarChart2, Bell as BellIcon,
+} from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import {
   fetchProfileStats,
@@ -65,6 +69,32 @@ const NAV_ITEMS = [
   { path: "/app/adega",         label: "Adega",          icon: I.wine },
   { path: "/app/notificacoes",  label: "Notificações",   icon: I.bell },
 ];
+
+/* ─── Notification helpers ───────────────────────────────────────────── */
+const NOTIF_TYPE_META: Record<string, { Icon: React.ElementType; color: string; label: string }> = {
+  like:           { Icon: Heart,           color: "#e74c3c", label: "curtiu sua publicação" },
+  comment:        { Icon: MessageCircle,   color: "#3498db", label: "comentou na sua publicação" },
+  comment_reply:  { Icon: CornerDownRight, color: "#8b5cf6", label: "respondeu seu comentário" },
+  comment_like:   { Icon: Heart,           color: "#e74c3c", label: "curtiu seu comentário" },
+  follow:         { Icon: UserPlus,        color: "#2ecc71", label: "começou a seguir você" },
+  company_follow: { Icon: UserPlus,        color: "#2ecc71", label: "começou a seguir sua empresa" },
+  connection:     { Icon: Users,           color: GOLD,      label: "enviou pedido de conexão" },
+  mention:        { Icon: AtSign,          color: "#9b59b6", label: "mencionou você" },
+  group_request:  { Icon: UserCheck,       color: "#7c3aed", label: "solicitou entrar no seu grupo" },
+  poll_vote:      { Icon: BarChart2,       color: "#0ea5e9", label: "votou na sua enquete" },
+};
+
+function buildDropdownNotifMessage(notif: WebNotification, fallbackLabel: string): string {
+  const wine = notif.wine_name?.trim();
+  if (wine) {
+    const isCompany = !!notif.target_company_id;
+    if (notif.type === "like")
+      return isCompany ? `curtiu a avaliação do ${wine}` : `curtiu sua avaliação do ${wine}`;
+    if (notif.type === "comment")
+      return isCompany ? `comentou a avaliação do ${wine}` : `comentou sua avaliação do ${wine}`;
+  }
+  return notif.message ?? fallbackLabel;
+}
 
 function useWindowWidth() {
   const [width, setWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 1280);
@@ -699,7 +729,7 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
       setNotifItems(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
       await markWebNotificationRead(notif.id);
     }
-    if (notif.post_id) setLocation("/app");
+    if (notif.post_id) setLocation(`/app/posts/${notif.post_id}`);
     else if (notif.type === "connection" && notif.actor?.id) setLocation(`/app/usuario/${notif.actor.id}`);
     else setLocation("/app/notificacoes");
     setNotifOpen(false);
@@ -849,26 +879,10 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
                     <p style={{ fontSize: 13, color: MUTED, margin: 0 }}>Tudo em dia!</p>
                   </div>
                 ) : notifItems.slice(0, 8).map(n => {
-                  const typeColors: Record<string, string> = {
-                    like: "#e74c3c", comment: "#3498db", comment_reply: "#8b5cf6",
-                    follow: "#2ecc71", connection: GOLD, mention: "#9b59b6",
-                  };
-                  const typeEmojis: Record<string, string> = {
-                    like: "❤️", comment: "💬", comment_reply: "↩️",
-                    follow: "➕", connection: "🤝", mention: "@",
-                  };
-                  const typeLabels: Record<string, string> = {
-                    like: "curtiu sua publicação",
-                    comment: "comentou na sua publicação",
-                    comment_reply: "respondeu seu comentário",
-                    follow: "começou a seguir você",
-                    connection: "enviou pedido de conexão",
-                    mention: "mencionou você",
-                  };
+                  const meta = NOTIF_TYPE_META[n.type] ?? { Icon: BellIcon, color: GOLD, label: "nova notificação" };
+                  const { Icon: NotifIcon, color: iconColor, label: typeLabel } = meta;
                   const actorName = n.actor?.full_name ?? "Alguém";
-                  const emoji = typeEmojis[n.type] ?? "🔔";
-                  const label = n.message ?? typeLabels[n.type] ?? "nova notificação";
-                  const bgColor = typeColors[n.type] ?? GOLD;
+                  const label = buildDropdownNotifMessage(n, typeLabel);
                   const timeDiff = () => {
                     const mins = Math.floor((Date.now() - new Date(n.created_at).getTime()) / 60000);
                     if (mins < 1) return "agora";
@@ -890,23 +904,23 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
                       onMouseEnter={e => (e.currentTarget.style.background = "#f8f7f3")}
                       onMouseLeave={e => (e.currentTarget.style.background = n.read ? WHITE : `${GOLD}0d`)}
                     >
-                      {/* Avatar + emoji badge */}
+                      {/* Avatar + icon badge */}
                       <div style={{ position: "relative", flexShrink: 0 }}>
                         {n.actor?.avatar_url ? (
-                          <img src={n.actor.avatar_url} alt={actorName} style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} />
+                          <img src={n.actor.avatar_url} alt={actorName} style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover" }} />
                         ) : (
-                          <div style={{ width: 40, height: 40, borderRadius: "50%", background: NAVY, color: WHITE, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700 }}>
+                          <div style={{ width: 44, height: 44, borderRadius: "50%", background: NAVY, color: WHITE, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700 }}>
                             {actorName.charAt(0).toUpperCase()}
                           </div>
                         )}
-                        <span style={{ position: "absolute", bottom: -2, right: -2, background: bgColor, borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, border: `2px solid ${WHITE}` }}>
-                          {emoji}
+                        <span style={{ position: "absolute", bottom: -2, right: -2, background: iconColor, borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${WHITE}` }}>
+                          <NotifIcon size={10} color="#fff" strokeWidth={2.5} />
                         </span>
                       </div>
 
                       {/* Text */}
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ margin: 0, fontSize: 13, color: NAVY, lineHeight: 1.4 }}>
+                        <p style={{ margin: 0, fontSize: 13, color: NAVY, lineHeight: 1.45 }}>
                           <strong>{actorName}</strong> {label}
                         </p>
                         <p style={{ margin: "3px 0 0", fontSize: 11, color: MUTED }}>{timeDiff()}</p>
@@ -914,7 +928,7 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
 
                       {/* Unread dot */}
                       {!n.read && (
-                        <div style={{ width: 8, height: 8, borderRadius: "50%", background: GOLD, flexShrink: 0, marginTop: 4 }} />
+                        <div style={{ width: 9, height: 9, borderRadius: "50%", background: GOLD, flexShrink: 0, marginTop: 5 }} />
                       )}
                     </div>
                   );
