@@ -2,7 +2,7 @@
   "expo": {
     "name": "ibhub — Rede do Vinho",
     "slug": "ibhub",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "ibhub",
@@ -34,7 +34,7 @@
         "backgroundColor": "#0d1b2a"
       },
       "package": "br.com.ibhub",
-      "versionCode": 12,
+      "versionCode": 13,
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.CAMERA",

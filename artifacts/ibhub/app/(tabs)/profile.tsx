@@ -1152,7 +1152,7 @@ export default function ProfileScreen() {
         {companyPages.length > 0 ? (
           <TouchableOpacity
             style={[styles.companyRow, { backgroundColor: colors.background, borderColor: colors.border }]}
-            onPress={() => router.push(`/manage-business-page?id=${companyPages[0].id}` as any)}
+            onPress={() => router.push(`/empresa/${companyPages[0].id}` as any)}
             activeOpacity={0.75}
           >
             <View style={[styles.companyLogoMini, { backgroundColor: colors.navy }]}>
