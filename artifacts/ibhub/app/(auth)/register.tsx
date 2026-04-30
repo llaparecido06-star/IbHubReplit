@@ -134,6 +134,7 @@ export default function RegisterScreen() {
   const [role, setRole] = useState("");
   const [certifications, setCertifications] = useState<string[]>([]);
   const [certInput, setCertInput] = useState("");
+  const certInputRef = useRef<TextInput>(null);
 
   const [selectedPlan, setSelectedPlan] = useState("gratuito");
   const { paidPlans, freePlan, loading: plansLoading } = usePlans();
@@ -260,9 +261,11 @@ export default function RegisterScreen() {
 
   const addCertification = () => {
     const trimmed = certInput.trim();
-    if (!trimmed || certifications.includes(trimmed)) { setCertInput(""); return; }
-    setCertifications((prev) => [...prev, trimmed]);
     setCertInput("");
+    if (!trimmed || certifications.includes(trimmed)) return;
+    setCertifications((prev) => [...prev, trimmed]);
+    // Keep keyboard open so the user can quickly type the next certification
+    setTimeout(() => certInputRef.current?.focus(), 50);
   };
 
   const removeCertification = (cert: string) =>
@@ -651,36 +654,44 @@ export default function RegisterScreen() {
               </View>
 
               {/* Certificações */}
-              <View>
+              <View style={{ gap: 8 }}>
+                <Text style={styles.certLabel}>Certificações (opcional)</Text>
+                <View style={styles.certInputRow}>
+                  <View style={[styles.fieldWrap, { flex: 1 }]}>
+                    <Feather name="award" size={16} color="#8fa3b8" style={styles.fieldIcon} />
+                    <TextInput
+                      ref={certInputRef}
+                      style={styles.textInput}
+                      placeholder="Ex: WSET Level 3"
+                      placeholderTextColor="#8fa3b8"
+                      value={certInput}
+                      onChangeText={setCertInput}
+                      onSubmitEditing={addCertification}
+                      returnKeyType="done"
+                      blurOnSubmit={false}
+                    />
+                  </View>
+                  <TouchableOpacity style={styles.certAddBtn} onPress={addCertification} activeOpacity={0.75}>
+                    <Feather name="plus" size={18} color="#0d1b2a" />
+                  </TouchableOpacity>
+                </View>
+                {/* Chips rendered BELOW the input so they appear in viewport even with keyboard open */}
                 {certifications.length > 0 && (
                   <View style={styles.certChips}>
                     {certifications.map((cert) => (
                       <View key={cert} style={styles.certChipItem}>
-                        <Text style={styles.certChipLabel}>{cert}</Text>
-                        <TouchableOpacity onPress={() => removeCertification(cert)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Text style={styles.certChipLabel} numberOfLines={1}>{cert}</Text>
+                        <TouchableOpacity
+                          onPress={() => removeCertification(cert)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          accessibilityLabel={`Remover ${cert}`}
+                        >
                           <Feather name="x" size={13} color="#8fa3b8" />
                         </TouchableOpacity>
                       </View>
                     ))}
                   </View>
                 )}
-                <View style={styles.certInputRow}>
-                  <View style={[styles.fieldWrap, { flex: 1 }]}>
-                    <Feather name="award" size={16} color="#8fa3b8" style={styles.fieldIcon} />
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="Certificação (ex: WSET Level 3)"
-                      placeholderTextColor="#8fa3b8"
-                      value={certInput}
-                      onChangeText={setCertInput}
-                      onSubmitEditing={addCertification}
-                      returnKeyType="done"
-                    />
-                  </View>
-                  <TouchableOpacity style={styles.certAddBtn} onPress={addCertification}>
-                    <Feather name="plus" size={18} color="#0d1b2a" />
-                  </TouchableOpacity>
-                </View>
               </View>
             </View>
           )}
@@ -1058,7 +1069,8 @@ const styles = StyleSheet.create({
   paymentNoticeText: { flex: 1, color: "#c9a84c", fontSize: 13, lineHeight: 18 },
   bioWrap: { gap: 4 },
   bioCount: { color: "#8fa3b8", fontSize: 11, textAlign: "right", marginTop: 2 },
-  certChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 },
+  certLabel: { color: "#8fa3b8", fontSize: 13, fontWeight: "600", marginBottom: 0 },
+  certChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   certChipItem: {
     flexDirection: "row", alignItems: "center", gap: 8,
     backgroundColor: "rgba(201,168,76,0.1)", borderWidth: 1,
