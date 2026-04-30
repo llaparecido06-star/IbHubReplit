@@ -6,10 +6,15 @@ import {
   fetchWebCompanyPageById,
   fetchCompanyPostsWeb,
   fetchPublicWineCellar,
+  toggleLikePost,
+  toggleBookmarkPost,
   CompanyPageFull,
   Post,
   WineEntry,
+  ReactionType,
 } from "@/services/api";
+import VideoPlayer from "@/components/feed/VideoPlayer";
+import { PostActionsBar, reactionEmoji } from "@/components/feed/PostActionsBar";
 
 const GOLD   = "#c9a84c";
 const NAVY   = "#0d1b2a";
@@ -39,50 +44,98 @@ function Avatar({ src, name, size = 40, bg = "#722f37" }: { src?: string | null;
   );
 }
 
-function MiniPostCard({ post }: { post: Post }) {
+function MiniPostCard({ post: initialPost, currentUserId }: { post: Post; currentUserId: string | null }) {
   const [, setLocation] = useLocation();
+  const [post, setPost] = useState<Post>(initialPost);
+  useEffect(() => { setPost(initialPost); }, [initialPost]);
+
   const content = post.content ?? "";
   const displayContent = content.length > 260 ? content.slice(0, 260).trimEnd() + "…" : content;
   const companyPage = post.company_page ?? null;
   const authorName   = companyPage ? companyPage.name   : (post.author?.full_name ?? "Membro");
   const authorAvatar = companyPage ? companyPage.avatar_url : post.author?.avatar_url;
   const images: string[] = post.image_urls?.length ? post.image_urls : (post.image_url ? [post.image_url] : []);
+
   const goToAuthor = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (companyPage) { setLocation(`/app/empresa/${companyPage.id}`); return; }
     if (post.author?.id) setLocation(`/app/usuario/${post.author.id}`);
   };
 
+  const handleReact = async (reaction: ReactionType) => {
+    if (!currentUserId) return;
+    const wasLiked = !!post.is_liked;
+    setPost(p => ({
+      ...p,
+      is_liked: !wasLiked || p.reaction_type !== reaction ? true : false,
+      reaction_type: !wasLiked || p.reaction_type !== reaction ? reaction : null,
+      likes_count: wasLiked && p.reaction_type === reaction ? Math.max(0, p.likes_count - 1) : (wasLiked ? p.likes_count : p.likes_count + 1),
+    }));
+    await toggleLikePost(post.id, currentUserId, wasLiked && post.reaction_type === reaction, reaction);
+  };
+
+  const handleBookmark = async () => {
+    if (!currentUserId) return;
+    const was = !!post.is_bookmarked;
+    setPost(p => ({ ...p, is_bookmarked: !was }));
+    await toggleBookmarkPost(post.id, currentUserId, was);
+  };
+
   return (
     <div
       onClick={() => setLocation(`/app/posts/${post.id}`)}
-      style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 16px", marginBottom: 10, cursor: "pointer", transition: "box-shadow .15s" }}
+      style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, marginBottom: 10, cursor: "pointer", transition: "box-shadow .15s", overflow: "hidden" }}
       onMouseEnter={e => (e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)")}
       onMouseLeave={e => (e.currentTarget.style.boxShadow = "none")}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <span onClick={goToAuthor} style={{ cursor: "pointer", display: "inline-flex" }}>
-          <Avatar src={authorAvatar} name={authorName} size={32} bg={companyPage ? GOLD : "#722f37"} />
-        </span>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <div onClick={goToAuthor} style={{ fontSize: 13, fontWeight: 700, color: NAVY, cursor: "pointer" }}>{authorName}</div>
-            {companyPage && <span style={{ fontSize: 9, fontWeight: 700, color: WHITE, backgroundColor: GOLD, padding: "1px 5px", borderRadius: 100 }}>Empresa</span>}
+      <div style={{ padding: "14px 16px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <span onClick={goToAuthor} style={{ cursor: "pointer", display: "inline-flex" }}>
+            <Avatar src={authorAvatar} name={authorName} size={32} bg={companyPage ? GOLD : "#722f37"} />
+          </span>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div onClick={goToAuthor} style={{ fontSize: 13, fontWeight: 700, color: NAVY, cursor: "pointer" }}>{authorName}</div>
+              {companyPage && <span style={{ fontSize: 9, fontWeight: 700, color: WHITE, backgroundColor: GOLD, padding: "1px 5px", borderRadius: 100 }}>Empresa</span>}
+            </div>
+            <div style={{ fontSize: 11, color: MUTED }}>{timeAgo(post.created_at)}</div>
           </div>
-          <div style={{ fontSize: 11, color: MUTED }}>{timeAgo(post.created_at)}</div>
         </div>
+        {content && <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{displayContent}</div>}
+        {images.length > 0 && (
+          <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+            {images.slice(0, 4).map((img, i) => (
+              <img key={i} src={img} alt="" style={{ flex: 1, minWidth: 0, maxHeight: 200, objectFit: "cover", borderRadius: 10, width: images.length === 1 ? "100%" : undefined }} />
+            ))}
+          </div>
+        )}
       </div>
-      {content && <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{displayContent}</div>}
-      {images.length > 0 && (
-        <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-          {images.slice(0, 4).map((img, i) => (
-            <img key={i} src={img} alt="" style={{ flex: 1, minWidth: 0, maxHeight: 200, objectFit: "cover", borderRadius: 10, width: images.length === 1 ? "100%" : undefined }} />
-          ))}
+
+      {post.video_url && (
+        <div onClick={e => e.stopPropagation()}>
+          <VideoPlayer src={post.video_url} />
         </div>
       )}
-      <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 12, color: MUTED }}>
-        <span>👍 {post.likes_count}</span>
-        <span>💬 {post.comments_count}</span>
+
+      {(post.likes_count > 0 || post.comments_count > 0) && (
+        <div style={{ display: "flex", gap: 12, padding: "8px 16px", fontSize: 12, color: MUTED, borderTop: `1px solid ${BORDER}` }}>
+          {post.likes_count > 0 && (
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span>{post.is_liked ? reactionEmoji(post.reaction_type ?? "saude") : "👍"}</span>
+              {post.likes_count}
+            </span>
+          )}
+          {post.comments_count > 0 && <span style={{ marginLeft: "auto" }}>{post.comments_count} comentário{post.comments_count !== 1 ? "s" : ""}</span>}
+        </div>
+      )}
+
+      <div onClick={e => e.stopPropagation()}>
+        <PostActionsBar
+          post={post}
+          onReact={handleReact}
+          onComment={() => setLocation(`/app/posts/${post.id}`)}
+          onBookmark={handleBookmark}
+        />
       </div>
     </div>
   );
@@ -322,7 +375,7 @@ export default function EmpresaPage() {
               <p style={{ fontSize: 14, color: MUTED }}>Esta empresa ainda não publicou nada.</p>
             </div>
           ) : (
-            posts.map(post => <MiniPostCard key={post.id} post={post} />)
+            posts.map(post => <MiniPostCard key={post.id} post={post} currentUserId={user?.id ?? null} />)
           )
         )}
 

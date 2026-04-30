@@ -1,12 +1,9 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
-import { useVideoPlayer, VideoView } from "expo-video";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Animated,
   Dimensions,
   FlatList,
   KeyboardAvoidingView,
@@ -31,169 +28,14 @@ import type { AppComment } from "@/services/api";
 import { sendMentionNotifications } from "@/services/api";
 import { MentionInput } from "@/components/ui/MentionInput";
 import { friendlyErrorMessage } from "@/hooks/useAsyncAction";
-import { Post, AdaptiveImage, buildPostShareUrl } from "@/components/feed/PostCard";
+import { Post, AdaptiveImage } from "@/components/feed/PostCard";
+import { PostActionsBar, buildPostShareUrl, type ReactionType } from "@/components/feed/PostActionsBar";
+import { FeedVideo } from "@/components/feed/FeedVideo";
 import { LikesModal } from "@/components/feed/LikesModal";
 import { formatRelativeDate } from "@/utils/dateUtils";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
-const GOLD = "#c9a84c";
-
-
-function fmtTime(s: number) {
-  if (!isFinite(s) || s < 0) return "0:00";
-  const m = Math.floor(s / 60);
-  const sec = Math.floor(s % 60);
-  return `${m}:${sec.toString().padStart(2, "0")}`;
-}
-
-function PostDetailVideo({ uri }: { uri: string }) {
-  const [playing, setPlaying]     = useState(false);
-  const [muted, setMuted]         = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration]   = useState(0);
-  const [barWidth, setBarWidth]   = useState(0);
-  const videoH = Math.round(SCREEN_W * (16 / 9));
-  const controlsAnim  = useRef(new Animated.Value(1)).current;
-  const controlsShown = useRef(true);
-  const hideTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const videoViewRef  = useRef<VideoView>(null);
-
-  const player = useVideoPlayer(uri, (p) => { p.loop = true; });
-
-  useEffect(() => {
-    const sub = player.addListener("playingChange", (e) => setPlaying(e.isPlaying));
-    return () => sub.remove();
-  }, [player]);
-
-  useEffect(() => {
-    const sub = player.addListener("mutedChange", (e) => setMuted(e.muted));
-    return () => sub.remove();
-  }, [player]);
-
-  useEffect(() => {
-    const sub = player.addListener("sourceLoad", (e: any) => {
-      if (e.duration) setDuration(e.duration);
-    });
-    return () => sub.remove();
-  }, [player]);
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      setCurrentTime(player.currentTime);
-      if (!duration && player.duration > 0) setDuration(player.duration);
-    }, 250);
-    return () => clearInterval(id);
-  }, [player, duration]);
-
-  const scheduleHide = useCallback(() => {
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => {
-      Animated.timing(controlsAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start();
-      controlsShown.current = false;
-    }, 3000);
-  }, [controlsAnim]);
-
-  const showAndSchedule = useCallback(() => {
-    controlsShown.current = true;
-    Animated.timing(controlsAnim, { toValue: 1, duration: 150, useNativeDriver: true }).start();
-    scheduleHide();
-  }, [controlsAnim, scheduleHide]);
-
-  useEffect(() => {
-    scheduleHide();
-    return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
-  }, [scheduleHide]);
-
-  const togglePlay = useCallback(() => {
-    if (player.playing) { player.pause(); } else { player.play(); }
-    showAndSchedule();
-  }, [player, showAndSchedule]);
-
-  const toggleMute = useCallback(() => {
-    player.muted = !player.muted;
-    showAndSchedule();
-  }, [player, showAndSchedule]);
-
-  const handleSeek = useCallback((e: { nativeEvent: { locationX: number } }) => {
-    if (!barWidth || !duration) return;
-    const ratio = Math.max(0, Math.min(1, e.nativeEvent.locationX / barWidth));
-    player.seekBy(ratio * duration - player.currentTime);
-    showAndSchedule();
-  }, [barWidth, duration, player, showAndSchedule]);
-
-  const fillWidth = duration > 0 ? (currentTime / duration) * barWidth : 0;
-
-  return (
-    <View style={{ width: "100%", height: videoH, backgroundColor: "#000" }}>
-      <VideoView
-        ref={videoViewRef}
-        player={player}
-        contentFit="cover"
-        style={{ width: "100%", height: "100%" }}
-        nativeControls={false}
-        allowsFullscreen
-      />
-
-      <TouchableOpacity
-        style={StyleSheet.absoluteFillObject}
-        activeOpacity={1}
-        onPress={() => { if (!controlsShown.current) { showAndSchedule(); } else { togglePlay(); } }}
-      >
-        <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: controlsAnim }]}>
-          {!playing && (
-            <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-              <View style={{
-                width: 64, height: 64, borderRadius: 32,
-                backgroundColor: "rgba(0,0,0,0.55)",
-                alignItems: "center", justifyContent: "center", paddingLeft: 4,
-              }}>
-                <Feather name="play" size={28} color="#fff" />
-              </View>
-            </View>
-          )}
-
-          <LinearGradient
-            colors={["transparent", "rgba(0,0,0,0.72)"]}
-            style={{ position: "absolute", bottom: 0, left: 0, right: 0, paddingTop: 32, paddingHorizontal: 14, paddingBottom: 10 }}
-            pointerEvents="box-none"
-          >
-            <TouchableOpacity
-              activeOpacity={1}
-              onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
-              onPress={handleSeek}
-              style={{ paddingVertical: 10, marginBottom: 4 }}
-            >
-              <View style={{ height: 3, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.35)", overflow: "hidden" }}>
-                <View style={{ width: fillWidth, height: "100%", backgroundColor: GOLD, borderRadius: 3 }} />
-              </View>
-            </TouchableOpacity>
-
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              <TouchableOpacity onPress={togglePlay} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}>
-                <Feather name={playing ? "pause" : "play"} size={18} color="#fff" />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={toggleMute} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}>
-                <Feather name={muted ? "volume-x" : "volume-2"} size={18} color="#fff" />
-              </TouchableOpacity>
-              <Text style={{ color: "#fff", fontSize: 12, flex: 1, fontVariant: ["tabular-nums"] }}>
-                {fmtTime(currentTime)} / {fmtTime(duration)}
-              </Text>
-              <TouchableOpacity
-                onPress={() => { videoViewRef.current?.enterFullscreen(); showAndSchedule(); }}
-                hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
-              >
-                <Feather name="maximize" size={18} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          </LinearGradient>
-        </Animated.View>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-// Flatten threaded comments for FlatList: [root, reply, reply, root, reply, ...]
 type FlatItem = AppComment & { isReply: boolean; depth: number };
 
 function flattenComments(roots: AppComment[]): FlatItem[] {
@@ -437,19 +279,26 @@ export default function PostDetailScreen() {
     }
   };
 
-  const handleLikePost = async () => {
+  const handleReactPost = async (_postId: string, reaction: ReactionType) => {
     if (!post || !user?.id) return;
-    const wasLiked = post.is_liked ?? false;
-    const prevCount = post.likes_count;
-    setPost(p => p ? { ...p, is_liked: !wasLiked, likes_count: wasLiked ? p.likes_count - 1 : p.likes_count + 1 } : p);
+    const prevReaction = post.reaction_type ?? null;
+    const prevLiked    = post.is_liked ?? false;
+    const prevCount    = post.likes_count;
+    const isSame       = prevReaction === reaction;
+    const nextReaction = isSame ? null : reaction;
+    const nextLiked    = !isSame;
+    const nextCount    = isSame
+      ? Math.max(0, prevCount - 1)
+      : (prevReaction ? prevCount : prevCount + 1);
+    setPost(p => p ? { ...p, reaction_type: nextReaction, is_liked: nextLiked, likes_count: nextCount } : p);
     try {
-      const ok = await API.toggleLike(post.id, user.id, wasLiked, activeCompany?.id);
+      const ok = await API.toggleReaction(post.id, user.id, reaction, prevReaction, activeCompany?.id);
       if (!ok) {
-        setPost(p => p ? { ...p, is_liked: wasLiked, likes_count: prevCount } : p);
-        Alert.alert("Erro", "Não foi possível curtir. Tente novamente.");
+        setPost(p => p ? { ...p, reaction_type: prevReaction, is_liked: prevLiked, likes_count: prevCount } : p);
+        Alert.alert("Erro", "Não foi possível reagir. Tente novamente.");
       }
     } catch (e: unknown) {
-      setPost(p => p ? { ...p, is_liked: wasLiked, likes_count: prevCount } : p);
+      setPost(p => p ? { ...p, reaction_type: prevReaction, is_liked: prevLiked, likes_count: prevCount } : p);
       Alert.alert("Erro de Conexão", friendlyErrorMessage(e));
     }
   };
@@ -458,6 +307,31 @@ export default function PostDetailScreen() {
     if (!post || !user?.id) return;
     setPost(p => p ? { ...p, is_bookmarked: !p.is_bookmarked } : p);
     API.toggleBookmark(post.id, user.id, post.is_bookmarked ?? false);
+  };
+
+  const handleSharePost = async () => {
+    if (!post) return;
+    const postUrl = buildPostShareUrl(post.id);
+    const shareText = `Veja esta publicação no ibhub:\n\n${post.content?.slice(0, 120) ?? ""}\n\n${postUrl}`;
+    if (Platform.OS === "web") {
+      const nav = typeof navigator !== "undefined" ? navigator : null;
+      if (nav?.share) {
+        try {
+          await nav.share({ title: "Compartilhar publicação", text: shareText, url: postUrl });
+          return;
+        } catch {}
+      }
+      try {
+        await nav?.clipboard.writeText(postUrl);
+        Alert.alert("Link copiado!", "Link da publicação copiado para a área de transferência.");
+      } catch {
+        Alert.alert("Erro", "Não foi possível copiar o link. Copie manualmente: " + postUrl);
+      }
+      return;
+    }
+    try {
+      await Share.share({ message: shareText, url: postUrl, title: "Compartilhar publicação" });
+    } catch {}
   };
 
   const handleVotePoll = async (postId: string, optionIndex: number) => {
@@ -478,37 +352,6 @@ export default function PostDetailScreen() {
         },
       };
     });
-  };
-
-  const handleSharePost = async () => {
-    if (!post) return;
-    const postUrl = buildPostShareUrl(post.id);
-    const shareText = `Veja esta publicação no ibhub:\n\n${post.content?.slice(0, 120) ?? ""}\n\n${postUrl}`;
-    if (Platform.OS === "web") {
-      const nav = typeof navigator !== "undefined" ? navigator : null;
-      if (nav?.share) {
-        try {
-          await nav.share({ title: "Compartilhar publicação", text: shareText, url: postUrl });
-          return;
-        } catch {
-          // user cancelled or share failed → fall through to clipboard
-        }
-      }
-      try {
-        await nav?.clipboard.writeText(postUrl);
-        Alert.alert("Link copiado!", "Link da publicação copiado para a área de transferência.");
-      } catch {
-        Alert.alert("Erro", "Não foi possível copiar o link. Copie manualmente: " + postUrl);
-      }
-      return;
-    }
-    try {
-      await Share.share({
-        message: shareText,
-        url: postUrl,
-        title: "Compartilhar publicação",
-      });
-    } catch {}
   };
 
   const renderItem = ({ item, index }: { item: FlatItem; index: number }) => {
@@ -704,43 +547,34 @@ export default function PostDetailScreen() {
                   );
                 })()}
 
-                {/* Video */}
                 {post.video_url && (
-                  <View style={{ marginTop: 8, width: "100%", borderRadius: 12, overflow: "hidden" }}>
-                    <PostDetailVideo uri={post.video_url} />
+                  <View style={{ marginTop: 8, marginHorizontal: -16 }}>
+                    <FeedVideo uri={post.video_url} width={SCREEN_W} />
                   </View>
                 )}
 
-                {/* Actions */}
-                <View style={styles.postActions}>
-                  <TouchableOpacity style={styles.postAction} onPress={handleLikePost}>
-                    <Feather name="heart" size={18} color={post.is_liked ? "#e74c3c" : colors.mutedForeground} />
-                    <Text style={[styles.postActionCount, { color: post.is_liked ? "#e74c3c" : colors.mutedForeground }]}>
-                      {post.likes_count > 0 ? post.likes_count : "Curtir"}
-                    </Text>
-                  </TouchableOpacity>
-                  {/* Tapping like count shows who liked */}
-                  {post.likes_count > 0 && (
+
+                <PostActionsBar
+                  post={post}
+                  onReact={handleReactPost}
+                  onComment={() => inputRef.current?.focus()}
+                  onBookmark={handleBookmarkPost}
+                />
+
+                {/* Ver curtidas: separate detail-page affordance */}
+                {post.likes_count > 0 && (
+                  <View style={styles.postActions}>
                     <TouchableOpacity
                       style={[styles.postAction, styles.likesCountBtn, { backgroundColor: colors.secondary }]}
                       onPress={() => setShowLikesModal(true)}
                     >
                       <Feather name="users" size={13} color={colors.mutedForeground} />
                       <Text style={[styles.likesCountText, { color: colors.mutedForeground }]}>
-                        Ver curtidas
+                        Ver curtidas ({post.likes_count})
                       </Text>
                     </TouchableOpacity>
-                  )}
-                  <TouchableOpacity style={styles.postAction} onPress={() => inputRef.current?.focus()}>
-                    <Feather name="message-circle" size={18} color={colors.mutedForeground} />
-                    <Text style={[styles.postActionCount, { color: colors.mutedForeground }]}>
-                      {totalComments > 0 ? totalComments : "Comentar"}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.postAction} onPress={handleBookmarkPost}>
-                    <Feather name="bookmark" size={18} color={post.is_bookmarked ? colors.gold : colors.mutedForeground} />
-                  </TouchableOpacity>
-                </View>
+                  </View>
+                )}
               </>
             )}
 

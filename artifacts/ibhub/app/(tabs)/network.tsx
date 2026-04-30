@@ -15,8 +15,8 @@ import {
   View,
 } from "react-native";
 import { Image } from "expo-image";
-import { useEventListener } from "expo";
 import { useVideoPlayer, VideoView } from "expo-video";
+import { FeedVideo } from "@/components/feed/FeedVideo";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -173,33 +173,11 @@ const FALLBACK: Record<Period, API.MarketOverview> = {
   },
 };
 
-// ─── Inline video players (hooks must live at component level) ────────────────
-
-const IDEAL_CARD_W = Dimensions.get("window").width - 32;
+const SCREEN_W_NET = Dimensions.get("window").width;
+const IDEAL_CARD_W = SCREEN_W_NET - 32;
 
 function NetworkPostVideo({ uri }: { uri: string }) {
-  // Default to 16:9 (YouTube landscape); updates to actual ratio when video loads
-  const [height, setHeight] = useState(Math.round(IDEAL_CARD_W * (9 / 16)));
-  const player = useVideoPlayer(uri, (p) => { p.loop = false; });
-
-  useEventListener(player, "videoTrackChange", ({ videoTrack }) => {
-    const size = videoTrack?.size;
-    if (size && size.width > 0 && size.height > 0) {
-      // Clamp: min landscape 9/16 (wide), max portrait 16/9 (tall)
-      const ratio = Math.max(9 / 16, Math.min(16 / 9, size.height / size.width));
-      setHeight(Math.round(IDEAL_CARD_W * ratio));
-    }
-  });
-
-  return (
-    <VideoView
-      player={player}
-      nativeControls
-      contentFit="contain"
-      allowsFullscreen
-      style={{ width: IDEAL_CARD_W, height, backgroundColor: "#000" }}
-    />
-  );
+  return <FeedVideo uri={uri} width={IDEAL_CARD_W} />;
 }
 
 function NetworkMediaPreview({ uri }: { uri: string }) {

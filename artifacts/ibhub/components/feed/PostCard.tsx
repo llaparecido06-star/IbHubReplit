@@ -1,50 +1,34 @@
 import { Image } from "expo-image";
-import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { LinearGradient } from "expo-linear-gradient";
-import { useVideoPlayer, VideoView } from "expo-video";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { FeedVideo } from "@/components/feed/FeedVideo";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
-  Animated,
   Dimensions,
-  FlatList,
-  Linking,
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import { formatRelativeDate } from "@/utils/dateUtils";
 import { AntDesign, Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { WineTastingCard, canParseWine } from "@/components/feed/PostRichContent";
 import { PollBlock } from "@/components/feed/PollBlock";
-import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { createReport, hidePost, blockUser, fetchConversations, sendMessage, checkIsFollowing, toggleFollow } from "@/services/api";
-import type { AppConversation } from "@/services/api";
+import { createReport, hidePost, blockUser, checkIsFollowing, toggleFollow } from "@/services/api";
+import { PostActionsBar, ReactionIcon, REACTIONS, type ReactionType as SharedReactionType } from "@/components/feed/PostActionsBar";
 
-export function buildPostShareUrl(postId: string): string {
-  return `https://www.ibhub.com.br/post/${postId}`;
-}
-
-export type ReactionType = "saude" | "bravo" | "destaque" | "incrivel";
-
-export const REACTIONS: { type: ReactionType; emoji: string; iconName: string; iconColor: string; label: string }[] = [
-  { type: "saude",    emoji: "🍷", iconName: "glass-wine", iconColor: "#7C3AED", label: "Saúde!" },
-  { type: "bravo",    emoji: "👏", iconName: "hand-clap",  iconColor: "#F59E0B", label: "Bravo!" },
-  { type: "destaque", emoji: "⭐", iconName: "star",        iconColor: "#EAB308", label: "Destaque!" },
-  { type: "incrivel", emoji: "🔥", iconName: "fire",        iconColor: "#EF4444", label: "Incrível!" },
-];
+export { REACTIONS, ReactionPicker, buildPostShareUrl } from "@/components/feed/PostActionsBar";
+export type { ReactionType } from "@/components/feed/PostActionsBar";
+type ReactionType = SharedReactionType;
 
 export interface Post {
   id: string;
@@ -93,278 +77,9 @@ export interface Post {
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CONTENT_CUTOFF = 220;
 
-const MAX_PORTRAIT_HEIGHT = 560;
-const MAX_LANDSCAPE_HEIGHT = 320;
-
-const GOLD = "#c9a84c";
-
-function fmtTime(s: number) {
-  if (!isFinite(s) || s < 0) return "0:00";
-  const m = Math.floor(s / 60);
-  const sec = Math.floor(s % 60);
-  return `${m}:${sec.toString().padStart(2, "0")}`;
-}
-
-function VideoPlayer({ videoUrl, isVisible }: { videoUrl: string; isVisible: boolean }) {
-  const [aspectRatio, setAspectRatio] = useState<number>(16 / 9);
-  const [playing, setPlaying]     = useState(false);
-  const [muted, setMuted]         = useState(true);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration]   = useState(0);
-  const [barWidth, setBarWidth]   = useState(0);
-  const controlsAnim  = useRef(new Animated.Value(1)).current;
-  const controlsShown = useRef(true);
-  const hideTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const videoViewRef  = useRef<VideoView>(null);
-
-  const player = useVideoPlayer({ uri: videoUrl }, (p) => {
-    p.loop  = true;
-    p.muted = true;
-  });
-
-  // Auto-play / pause when scroll visibility changes
-  useEffect(() => {
-    if (isVisible) { player.play(); } else { player.pause(); }
-  }, [isVisible, player]);
-
-  // Sync playing state
-  useEffect(() => {
-    const sub = player.addListener("playingChange", (e) => setPlaying(e.isPlaying));
-    return () => sub.remove();
-  }, [player]);
-
-  // Sync muted state
-  useEffect(() => {
-    const sub = player.addListener("mutedChange", (e) => setMuted(e.muted));
-    return () => sub.remove();
-  }, [player]);
-
-  // Aspect ratio from source
-  useEffect(() => {
-    const sub = player.addListener("sourceLoad", (e: any) => {
-      if (e.duration) setDuration(e.duration);
-      const track = (e.availableVideoTracks as any[])?.[0];
-      if (track?.size?.width && track?.size?.height) {
-        setAspectRatio(track.size.width / track.size.height);
-      }
-    });
-    return () => sub.remove();
-  }, [player]);
-
-  // Poll currentTime for progress bar
-  useEffect(() => {
-    const id = setInterval(() => {
-      setCurrentTime(player.currentTime);
-      if (!duration && player.duration > 0) setDuration(player.duration);
-    }, 250);
-    return () => clearInterval(id);
-  }, [player, duration]);
-
-  const scheduleHide = useCallback(() => {
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => {
-      Animated.timing(controlsAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start();
-      controlsShown.current = false;
-    }, 3000);
-  }, [controlsAnim]);
-
-  const showAndSchedule = useCallback(() => {
-    controlsShown.current = true;
-    Animated.timing(controlsAnim, { toValue: 1, duration: 150, useNativeDriver: true }).start();
-    scheduleHide();
-  }, [controlsAnim, scheduleHide]);
-
-  useEffect(() => {
-    scheduleHide();
-    return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
-  }, [scheduleHide]);
-
-  const togglePlay = useCallback(() => {
-    if (player.playing) {
-      player.pause();
-    } else {
-      player.muted = false;
-      player.play();
-    }
-    showAndSchedule();
-  }, [player, showAndSchedule]);
-
-  const toggleMute = useCallback(() => {
-    player.muted = !player.muted;
-    showAndSchedule();
-  }, [player, showAndSchedule]);
-
-  const handleSeek = useCallback((event: { nativeEvent: { locationX: number } }) => {
-    if (!barWidth || !duration) return;
-    const ratio = Math.max(0, Math.min(1, event.nativeEvent.locationX / barWidth));
-    player.seekBy(ratio * duration - player.currentTime);
-    showAndSchedule();
-  }, [barWidth, duration, player, showAndSchedule]);
-
-  const handlePress = useCallback(() => {
-    if (!controlsShown.current) { showAndSchedule(); } else { togglePlay(); }
-  }, [showAndSchedule, togglePlay]);
-
-  const isPortrait = aspectRatio < 1;
-  const containerHeight = isPortrait
-    ? Math.min(IMG_WIDTH / aspectRatio, MAX_PORTRAIT_HEIGHT)
-    : Math.min(IMG_WIDTH / aspectRatio, MAX_LANDSCAPE_HEIGHT);
-  const fillWidth = duration > 0 ? (currentTime / duration) * barWidth : 0;
-
-  return (
-    <View style={[videoStyles.container, { height: containerHeight }]}>
-      <VideoView
-        ref={videoViewRef}
-        player={player}
-        contentFit="contain"
-        style={videoStyles.video}
-        nativeControls={false}
-        allowsFullscreen
-      />
-
-      {/* Touch overlay */}
-      <TouchableOpacity
-        style={StyleSheet.absoluteFillObject}
-        activeOpacity={1}
-        onPress={handlePress}
-      >
-        <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: controlsAnim }]}>
-          {/* Center play button (only when paused) */}
-          {!playing && (
-            <View style={videoStyles.centerOverlay}>
-              <View style={videoStyles.playBtn}>
-                <Feather name="play" size={26} color="#fff" />
-              </View>
-            </View>
-          )}
-
-          {/* Bottom gradient + controls */}
-          <LinearGradient
-            colors={["transparent", "rgba(0,0,0,0.7)"]}
-            style={videoStyles.controlsBar}
-            pointerEvents="box-none"
-          >
-            {/* Seek bar */}
-            <TouchableOpacity
-              activeOpacity={1}
-              style={videoStyles.progressHit}
-              onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
-              onPress={handleSeek}
-            >
-              <View style={videoStyles.progressTrack}>
-                <View style={[videoStyles.progressFill, { width: fillWidth }]} />
-              </View>
-            </TouchableOpacity>
-
-            {/* Buttons row */}
-            <View style={videoStyles.buttonsRow}>
-              <TouchableOpacity onPress={togglePlay} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}>
-                <Feather name={playing ? "pause" : "play"} size={16} color="#fff" />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={toggleMute} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}>
-                <Feather name={muted ? "volume-x" : "volume-2"} size={16} color="#fff" />
-              </TouchableOpacity>
-              <Text style={videoStyles.timeText}>{fmtTime(currentTime)} / {fmtTime(duration)}</Text>
-              <TouchableOpacity
-                onPress={() => { videoViewRef.current?.enterFullscreen(); showAndSchedule(); }}
-                hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
-              >
-                <Feather name="maximize" size={16} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          </LinearGradient>
-        </Animated.View>
-      </TouchableOpacity>
-
-      {/* Persistent mute indicator — always visible */}
-      <TouchableOpacity
-        onPress={toggleMute}
-        style={videoStyles.muteBadge}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-      >
-        <Feather name={muted ? "volume-x" : "volume-2"} size={14} color="#fff" />
-      </TouchableOpacity>
-    </View>
-  );
-}
-
 const IMG_WIDTH = SCREEN_WIDTH - 28;
 const IMG_MAX_HEIGHT = Math.round(IMG_WIDTH * 1.78);
 const IMG_DEFAULT_HEIGHT = Math.round(IMG_WIDTH * 0.5625);
-
-const videoStyles = StyleSheet.create({
-  container: {
-    marginTop: 10,
-    width: IMG_WIDTH,
-    borderRadius: 12,
-    overflow: "hidden",
-    backgroundColor: "#000",
-  },
-  video: {
-    width: "100%",
-    height: "100%",
-  },
-  centerOverlay: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  playBtn: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingLeft: 4,
-  },
-  controlsBar: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingTop: 24,
-    paddingHorizontal: 12,
-    paddingBottom: 8,
-  },
-  progressHit: {
-    paddingVertical: 8,
-    marginBottom: 2,
-  },
-  progressTrack: {
-    height: 3,
-    borderRadius: 3,
-    backgroundColor: "rgba(255,255,255,0.35)",
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    backgroundColor: GOLD,
-    borderRadius: 3,
-  },
-  buttonsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  timeText: {
-    color: "#fff",
-    fontSize: 11,
-    flex: 1,
-    fontVariant: ["tabular-nums"],
-  },
-  muteBadge: {
-    position: "absolute",
-    top: 10,
-    right: 10,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
 
 interface PostCardProps {
   onHide?: (postId: string) => void;
@@ -524,59 +239,16 @@ function ImageCarousel({ imageUrls }: { imageUrls: string[] }) {
 
 const REPORT_REASONS = ["Spam", "Conteúdo ofensivo", "Informação falsa", "Assédio", "Outro"];
 
-function ReactionIcon({ iconName, iconColor, size }: { iconName: string; iconColor: string; size: number }) {
-  return <MaterialCommunityIcons name={iconName as any} size={size} color={iconColor} />;
-}
-
-export function ReactionPicker({
-  visible,
-  onSelect,
-  onClose,
-}: {
-  visible: boolean;
-  onSelect: (r: ReactionType) => void;
-  onClose: () => void;
-}) {
-  if (!visible) return null;
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.reactionOverlay} onPress={onClose}>
-        <View style={styles.reactionPicker}>
-          {REACTIONS.map((r) => (
-            <TouchableOpacity
-              key={r.type}
-              style={styles.reactionBtn}
-              onPress={() => { onSelect(r.type); onClose(); }}
-              activeOpacity={0.7}
-            >
-              <ReactionIcon iconName={r.iconName} iconColor={r.iconColor} size={28} />
-              <Text style={styles.reactionLabel}>{r.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </Pressable>
-    </Modal>
-  );
-}
 
 export function PostCard({ post, currentUserId, isVisible = false, onLike, onReact, onBookmark, onComment, onVote, onHide, onBlock, onViewLikes, isLiking = false }: PostCardProps) {
   const colors = useColors();
   const router = useRouter();
-  const { user } = useAuth();
   const [showOptions, setShowOptions]           = useState(false);
   const [showReportModal, setShowReportModal]   = useState(false);
   const [selectedReason, setSelectedReason]     = useState<string | null>(null);
   const [reportSending, setReportSending]       = useState(false);
   const [expanded, setExpanded]                 = useState(false);
-  const [showReactions, setShowReactions]       = useState(false);
-  const [showShareSheet, setShowShareSheet]     = useState(false);
-  const [showShareChat, setShowShareChat]       = useState(false);
-  const [conversations, setConversations]       = useState<AppConversation[]>([]);
-  const [loadingConvos, setLoadingConvos]       = useState(false);
-  const [sendingToConvo, setSendingToConvo]     = useState<string | null>(null);
   const [isFollowing, setIsFollowing]           = useState<boolean | null>(null);
-  // Track the last reaction used so tap can toggle it back on after removal
-  const lastUsedReaction = useRef<ReactionType>("saude");
 
   const isUserPost = !post.company_page_id && !!post.author?.id && post.author.id !== currentUserId;
 
@@ -599,9 +271,6 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
     }
   };
 
-  const likeScale = useRef(new Animated.Value(1)).current;
-
-  const isLiked      = post.is_liked      ?? false;
   const isBookmarked = post.is_bookmarked ?? false;
   const postType     = detectPostType(post.content ?? "");
   const wineEan      = postType === "wine" ? extractEanFromContent(post.content ?? "") : null;
@@ -612,11 +281,6 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
 
   const currentReaction = post.reaction_type ?? null;
   const reactionInfo = currentReaction ? REACTIONS.find(r => r.type === currentReaction) : null;
-
-  // Keep lastUsedReaction in sync when post has a reaction
-  if (currentReaction) {
-    lastUsedReaction.current = currentReaction;
-  }
 
   const allImageUrls = (() => {
     const urls: string[] = [];
@@ -637,101 +301,6 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
     }
     return urls;
   })();
-
-  const animateLike = () => {
-    Animated.sequence([
-      Animated.spring(likeScale, { toValue: 1.35, useNativeDriver: true, speed: 40 }),
-      Animated.spring(likeScale, { toValue: 1,    useNativeDriver: true, speed: 20 }),
-    ]).start();
-  };
-
-  const handleLike = () => {
-    animateLike();
-    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (onReact) {
-      // Reaction-first flow: toggle the last used (or current) reaction
-      onReact(post.id, lastUsedReaction.current);
-    } else {
-      // Legacy fallback for screens that don't support reactions yet
-      onLike?.(post.id);
-    }
-  };
-
-  const handleLongPress = () => {
-    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setShowReactions(true);
-  };
-
-  const handleReactionSelect = (reaction: ReactionType) => {
-    lastUsedReaction.current = reaction;
-    animateLike();
-    onReact?.(post.id, reaction);
-  };
-
-  const handleBookmark = () => {
-    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onBookmark?.(post.id);
-  };
-
-  const WEB_BASE = process.env.EXPO_PUBLIC_DOMAIN
-    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-    : (process.env.EXPO_PUBLIC_API_URL ?? "").replace(/\/api$/, "");
-
-  const handleShare = async () => {
-    const postUrl = buildPostShareUrl(post.id);
-    const shareText = `Veja esta publicação no ibhub:\n\n${post.content?.slice(0, 120) ?? ""}\n\n${postUrl}`;
-    if (Platform.OS === "web") {
-      const nav = typeof navigator !== "undefined" ? navigator : null;
-      if (nav?.share) {
-        try {
-          await nav.share({ title: "Compartilhar publicação", text: shareText, url: postUrl });
-          return;
-        } catch {
-          // user cancelled or share failed → fall through to clipboard
-        }
-      }
-      try {
-        await nav?.clipboard.writeText(postUrl);
-        Alert.alert("Link copiado!", "Link da publicação copiado para a área de transferência.");
-      } catch {
-        Alert.alert("Erro", "Não foi possível copiar o link. Copie manualmente: " + postUrl);
-      }
-      return;
-    }
-    try {
-      await Share.share({
-        message: shareText,
-        url: postUrl,
-        title: "Compartilhar publicação",
-      });
-    } catch {}
-  };
-
-  const openShareToChat = useCallback(async () => {
-    if (!user?.id) return;
-    setShowShareChat(true);
-    setLoadingConvos(true);
-    const convos = await fetchConversations(user.id);
-    setConversations(convos.filter(c => c.accepted !== false));
-    setLoadingConvos(false);
-  }, [user?.id]);
-
-  const sendToConversation = async (convoId: string) => {
-    if (!user?.id || sendingToConvo) return;
-    setSendingToConvo(convoId);
-    await sendMessage(convoId, user.id, post.content?.slice(0, 200) ?? "Publicação compartilhada", {
-      message_type: "post_share",
-      metadata: {
-        post_id: post.id,
-        content: post.content?.slice(0, 300) ?? "",
-        image_url: post.image_url ?? null,
-        author_name: post.author?.full_name ?? null,
-      },
-    });
-    setSendingToConvo(null);
-    setShowShareChat(false);
-    Alert.alert("Compartilhado!", "Publicação enviada com sucesso.");
-  };
 
   const handleSubmitReport = async () => {
     if (!selectedReason || !currentUserId) return;
@@ -770,9 +339,6 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
           router.push(`/profile/${author.id}` as any);
         }
       };
-
-  const likeButtonColor = reactionInfo ? reactionInfo.iconColor : isLiked ? "#e74c3c" : colors.border;
-  const likeButtonLabel = reactionInfo ? reactionInfo.label : isLiked ? "Curtido" : "Curtir";
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
@@ -884,7 +450,9 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
         )}
 
         {post.video_url && (
-          <VideoPlayer videoUrl={post.video_url} isVisible={isVisible} />
+          <View style={{ marginTop: 10, marginHorizontal: -14 }}>
+            <FeedVideo uri={post.video_url} isVisible={isVisible} width={SCREEN_WIDTH} />
+          </View>
         )}
       </Pressable>
 
@@ -944,59 +512,13 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
         </View>
       )}
 
-      <View style={[styles.actions, { borderTopColor: colors.border }]}>
-
-        <TouchableOpacity
-          style={styles.action}
-          onPress={isLiking ? undefined : handleLike}
-          onLongPress={isLiking ? undefined : handleLongPress}
-          delayLongPress={450}
-          activeOpacity={isLiking ? 1 : 0.7}
-          disabled={isLiking}
-        >
-          {isLiking ? (
-            <ActivityIndicator size="small" color={colors.mutedForeground} />
-          ) : (
-            <Animated.View style={{ transform: [{ scale: likeScale }] }}>
-              {reactionInfo ? (
-                <ReactionIcon iconName={reactionInfo.iconName} iconColor={reactionInfo.iconColor} size={22} />
-              ) : (
-                <AntDesign
-                  name="heart"
-                  size={22}
-                  color={likeButtonColor}
-                />
-              )}
-            </Animated.View>
-          )}
-          <Text style={[styles.actionLabel, { color: (isLiked || reactionInfo) ? "#e74c3c" : colors.mutedForeground, fontWeight: (isLiked || reactionInfo) ? "700" : "400", opacity: isLiking ? 0.5 : 1 }]}>
-            {likeButtonLabel}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.action} onPress={() => onComment?.(post.id)} activeOpacity={0.7}>
-          <MaterialCommunityIcons name="comment-outline" size={22} color={colors.mutedForeground} />
-          <Text style={[styles.actionLabel, { color: colors.mutedForeground }]}>Comentar</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.action} onPress={() => setShowShareSheet(true)} activeOpacity={0.7}>
-          <MaterialCommunityIcons name="share-variant-outline" size={22} color={colors.mutedForeground} />
-          <Text style={[styles.actionLabel, { color: colors.mutedForeground }]}>Compartilhar</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={[styles.action, { marginLeft: "auto" }]} onPress={handleBookmark} activeOpacity={0.7}>
-          <MaterialCommunityIcons
-            name={isBookmarked ? "bookmark" : "bookmark-outline"}
-            size={23}
-            color={isBookmarked ? colors.gold : colors.mutedForeground}
-          />
-        </TouchableOpacity>
-      </View>
-
-      <ReactionPicker
-        visible={showReactions}
-        onSelect={handleReactionSelect}
-        onClose={() => setShowReactions(false)}
+      <PostActionsBar
+        post={post}
+        onReact={onReact}
+        onLike={onLike}
+        onComment={onComment}
+        onBookmark={onBookmark}
+        isLiking={isLiking}
       />
 
       <Modal visible={showOptions} transparent animationType="fade" onRequestClose={() => setShowOptions(false)}>
@@ -1052,137 +574,6 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
               <Text style={[styles.menuText, { color: "#dc2626" }]}>Bloquear usuário</Text>
             </TouchableOpacity>
           </View>
-        </Pressable>
-      </Modal>
-
-      {/* ── Share Options Sheet ── */}
-      <Modal visible={showShareSheet} transparent animationType="slide" onRequestClose={() => setShowShareSheet(false)}>
-        <Pressable style={shareStyles.overlay} onPress={() => setShowShareSheet(false)}>
-          <Pressable style={[shareStyles.sheet, { backgroundColor: "#fff" }]}>
-            <View style={[shareStyles.handle, { backgroundColor: "#e5e7eb" }]} />
-            <Text style={[shareStyles.title, { color: "#0d1b2a" }]}>Compartilhar</Text>
-
-            <TouchableOpacity
-              style={shareOptionStyles.option}
-              onPress={() => { setShowShareSheet(false); openShareToChat(); }}
-            >
-              <View style={[shareOptionStyles.iconWrap, { backgroundColor: "#e0f2fe" }]}>
-                <Feather name="send" size={20} color="#0284c7" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={shareOptionStyles.label}>Enviar no chat</Text>
-                <Text style={shareOptionStyles.sub}>Envie para uma conversa existente</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={shareOptionStyles.option}
-              onPress={async () => {
-                setShowShareSheet(false);
-                const postUrl = buildPostShareUrl(post.id);
-                const text = `Veja esta publicação no ibhub:\n\n${post.content?.slice(0, 120) ?? ""}\n\n${postUrl}`;
-                const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(text)}`;
-                const canOpen = await Linking.canOpenURL(whatsappUrl);
-                if (canOpen) {
-                  Linking.openURL(whatsappUrl);
-                } else {
-                  Linking.openURL(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`);
-                }
-              }}
-            >
-              <View style={[shareOptionStyles.iconWrap, { backgroundColor: "#dcfce7" }]}>
-                <MaterialCommunityIcons name="whatsapp" size={20} color="#16a34a" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={shareOptionStyles.label}>WhatsApp</Text>
-                <Text style={shareOptionStyles.sub}>Compartilhe pelo WhatsApp</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={shareOptionStyles.option}
-              onPress={async () => {
-                setShowShareSheet(false);
-                const postUrl = buildPostShareUrl(post.id);
-                const canOpen = await Linking.canOpenURL("instagram://");
-                if (canOpen) {
-                  await Share.share({ message: postUrl, url: postUrl });
-                } else {
-                  Linking.openURL("https://www.instagram.com/");
-                }
-              }}
-            >
-              <View style={[shareOptionStyles.iconWrap, { backgroundColor: "#fce7f3" }]}>
-                <Feather name="instagram" size={20} color="#db2777" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={shareOptionStyles.label}>Instagram</Text>
-                <Text style={shareOptionStyles.sub}>Compartilhe pelo Instagram</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={shareOptionStyles.option}
-              onPress={() => { setShowShareSheet(false); handleShare(); }}
-            >
-              <View style={[shareOptionStyles.iconWrap, { backgroundColor: "#f3f4f6" }]}>
-                <Feather name="link" size={20} color="#374151" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={shareOptionStyles.label}>Copiar link</Text>
-                <Text style={shareOptionStyles.sub}>Copie o link para compartilhar</Text>
-              </View>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* ── Share to Chat Modal ── */}
-      <Modal visible={showShareChat} transparent animationType="slide" onRequestClose={() => setShowShareChat(false)}>
-        <Pressable style={shareStyles.overlay} onPress={() => setShowShareChat(false)}>
-          <Pressable style={[shareStyles.sheet, { backgroundColor: "#fff" }]}>
-            <View style={[shareStyles.handle, { backgroundColor: "#e5e7eb" }]} />
-            <Text style={[shareStyles.title, { color: "#0d1b2a" }]}>Compartilhar no Chat</Text>
-            {loadingConvos ? (
-              <View style={shareStyles.loadingWrap}>
-                <ActivityIndicator size="large" color="#c9a84c" />
-              </View>
-            ) : conversations.length === 0 ? (
-              <View style={shareStyles.emptyWrap}>
-                <Feather name="message-circle" size={36} color="#9ca3af" />
-                <Text style={shareStyles.emptyText}>Nenhuma conversa disponível</Text>
-              </View>
-            ) : (
-              <FlatList
-                data={conversations}
-                keyExtractor={(item) => item.id}
-                style={{ maxHeight: 350 }}
-                renderItem={({ item }) => {
-                  const name = item.name ?? item.participant?.full_name ?? "Chat";
-                  const isSending = sendingToConvo === item.id;
-                  return (
-                    <TouchableOpacity
-                      style={shareStyles.convoRow}
-                      onPress={() => sendToConversation(item.id)}
-                      disabled={!!sendingToConvo}
-                    >
-                      <Avatar uri={item.participant?.avatar_url ?? null} name={name} size={44} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={shareStyles.convoName} numberOfLines={1}>{name}</Text>
-                        {item.last_message && (
-                          <Text style={shareStyles.convoMsg} numberOfLines={1}>{item.last_message}</Text>
-                        )}
-                      </View>
-                      {isSending
-                        ? <ActivityIndicator size="small" color="#c9a84c" />
-                        : <Feather name="send" size={18} color="#c9a84c" />
-                      }
-                    </TouchableOpacity>
-                  );
-                }}
-              />
-            )}
-          </Pressable>
         </Pressable>
       </Modal>
 
@@ -1340,24 +731,6 @@ const styles = StyleSheet.create({
   statText: { fontSize: 12.5 },
   statDot:  { fontSize: 12.5 },
 
-  actions: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 0,
-  },
-  action: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  actionLabel: { fontSize: 13, fontWeight: "500" },
-
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.2)" },
   menu: {
     position: "absolute",
@@ -1402,58 +775,5 @@ const styles = StyleSheet.create({
   reportSubmit:      { paddingVertical: 16, borderRadius: 12, alignItems: "center", marginTop: 4 },
   reportSubmitText:  { fontSize: 15, fontWeight: "700" },
 
-  reactionOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.15)",
-    justifyContent: "flex-end",
-    paddingBottom: 100,
-    paddingHorizontal: 14,
-  },
-  reactionPicker: {
-    flexDirection: "row",
-    backgroundColor: "#fff",
-    borderRadius: 50,
-    padding: 10,
-    gap: 6,
-    alignSelf: "flex-start",
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 12,
-    elevation: 10,
-  },
-  reactionBtn: {
-    alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    gap: 2,
-  },
-  reactionEmoji: { fontSize: 28 },
-  reactionLabel: { fontSize: 10, fontWeight: "600", color: "#374151" },
 });
 
-const shareOptionStyles = StyleSheet.create({
-  option:   { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: "#f3f4f6" },
-  iconWrap: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  label:    { fontSize: 15, fontWeight: "700", color: "#0d1b2a" },
-  sub:      { fontSize: 12, color: "#9ca3af", marginTop: 1 },
-});
-
-const shareStyles = StyleSheet.create({
-  overlay:     { flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" },
-  sheet: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    paddingBottom: 36,
-    gap: 12,
-  },
-  handle:      { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 4 },
-  title:       { fontSize: 16, fontWeight: "700" },
-  loadingWrap: { alignItems: "center", paddingVertical: 40 },
-  emptyWrap:   { alignItems: "center", gap: 10, paddingVertical: 40 },
-  emptyText:   { fontSize: 14, color: "#9ca3af" },
-  convoRow:    { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#f3f4f6" },
-  convoName:   { fontSize: 14, fontWeight: "700", color: "#0d1b2a" },
-  convoMsg:    { fontSize: 12, color: "#9ca3af", marginTop: 2 },
-});

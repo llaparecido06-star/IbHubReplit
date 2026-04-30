@@ -24,6 +24,7 @@ export default function VideoPlayer({ src }: VideoPlayerProps) {
   const [showControls, setShowControls] = useState(true);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [seeking, setSeeking]     = useState(false);
+  const [aspectRatio, setAspectRatio] = useState<number>(9 / 16); // default vertical (Reels-style)
 
   const scheduleHide = () => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
@@ -110,12 +111,13 @@ export default function VideoPlayer({ src }: VideoPlayerProps) {
       style={{
         position: "relative",
         width: "100%",
-        aspectRatio: "9 / 16",
-        maxHeight: 480,
+        aspectRatio: `${aspectRatio}`,
+        maxHeight: "85vh",
         background: "#000",
         overflow: "hidden",
         cursor: "pointer",
         userSelect: "none",
+        margin: "0 auto",
       }}
       onClick={togglePlay}
       onMouseMove={showAndSchedule}
@@ -134,7 +136,13 @@ export default function VideoPlayer({ src }: VideoPlayerProps) {
           height: "100%",
           objectFit: "contain",
         }}
-        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+        onLoadedMetadata={(e) => {
+          const v = e.currentTarget;
+          setDuration(v.duration);
+          if (v.videoWidth > 0 && v.videoHeight > 0) {
+            setAspectRatio(v.videoWidth / v.videoHeight);
+          }
+        }}
         onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
