@@ -1433,6 +1433,11 @@ export default function FeedScreen() {
       {/* ── Wine Review Modal ── */}
       <Modal visible={showWineReview} transparent animationType="slide" onRequestClose={() => setShowWineReview(false)}>
         <View style={styles.wineOverlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={0}
+            style={styles.wineModalKav}
+          >
           <View style={[styles.wineModal, { backgroundColor: "#fff" }]}>
             <View style={[styles.postModalHeader, { borderBottomColor: colors.border }]}>
               <TouchableOpacity onPress={() => setShowWineReview(false)} accessibilityRole="button" accessibilityLabel="Fechar">
@@ -1615,6 +1620,7 @@ export default function FeedScreen() {
               </View>
             </ScrollView>
           </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
@@ -1784,6 +1790,7 @@ const styles = StyleSheet.create({
   addMoreImgBtn:      { width: 100, height: 100, borderRadius: 10, borderWidth: 1.5, borderStyle: "dashed", alignItems: "center", justifyContent: "center" },
   // Wine review modal
   wineOverlay:        { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  wineModalKav:       { width: "100%", flex: 1, justifyContent: "flex-end" },
   wineModal:          { borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "92%", overflow: "hidden", flex: 1 },
   wineHeaderTitle:    { flexDirection: "row", alignItems: "center", gap: 6 },
   wineFieldLabel:     { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, marginBottom: 8 },
