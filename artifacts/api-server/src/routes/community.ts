@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { resolveUserId, requirePlanFeature } from "../lib/planCheck.js";
+import { sendPushToUser } from "../lib/pushUtils.js";
 
 const router: IRouter = Router();
 
@@ -460,6 +461,31 @@ router.post("/community/groups/:id/notify-request", async (req: Request, res: Re
     res.status(500).json({ error: notifErr.message });
     return;
   }
+
+  // Push notification — fetch requester name first, then fire-and-forget
+  void (async () => {
+    const { data: requesterProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("full_name, username")
+      .eq("id", userId)
+      .maybeSingle();
+
+    const requesterName =
+      (requesterProfile as { full_name?: string; username?: string } | null)?.full_name ??
+      (requesterProfile as { full_name?: string; username?: string } | null)?.username ??
+      "Alguém";
+
+    await sendPushToUser({
+      userId: group.owner_id as string,
+      title: `👥 Solicitação para entrar em ${group.name as string}`,
+      body: `${requesterName} quer participar do grupo. Toque para aprovar ou recusar.`,
+      data: {
+        type: "group_request",
+        groupId,
+        deepLink: `/group-settings/${groupId}`,
+      },
+    });
+  })();
 
   res.status(200).json({ ok: true });
 });
