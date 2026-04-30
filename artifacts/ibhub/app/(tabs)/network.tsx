@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -179,8 +179,25 @@ const FALLBACK: Record<Period, API.MarketOverview> = {
 const SCREEN_W_NET = Dimensions.get("window").width;
 const IDEAL_CARD_W = SCREEN_W_NET - 32;
 
-function NetworkPostVideo({ uri, isVisible, onUserPlay }: { uri: string; isVisible: boolean; onUserPlay: () => void }) {
-  return <FeedVideo uri={uri} width={IDEAL_CARD_W} isVisible={isVisible} onUserPlay={onUserPlay} />;
+function NetworkPostVideo({ uri, isVisible, onUserPlay, onSwipeNext, onSwipeBack, playToken }: {
+  uri: string;
+  isVisible: boolean;
+  onUserPlay: () => void;
+  onSwipeNext?: () => void;
+  onSwipeBack?: () => void;
+  playToken: number;
+}) {
+  return (
+    <FeedVideo
+      uri={uri}
+      width={IDEAL_CARD_W}
+      isVisible={isVisible}
+      onUserPlay={onUserPlay}
+      onSwipeNext={onSwipeNext}
+      onSwipeBack={onSwipeBack}
+      playToken={playToken}
+    />
+  );
 }
 
 function NetworkMediaPreview({ uri }: { uri: string }) {
@@ -1636,12 +1653,17 @@ function MarketPollMobile({ post: initialPost, userId, colors, onPollVote }: {
   );
 }
 
-function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors, isVisible, onUserPlayVideo }: {
+function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors, isVisible, onUserPlayVideo, onSwipeNextVideo, onSwipeBackVideo, canSwipeNextVideo, canSwipeBackVideo, playToken }: {
   post: API.MarketPost; userId: string;
   onLikeToggle: (id: string, liked: boolean, reactionType: string | null, count: number) => void;
   colors: ReturnType<typeof useColors>;
   isVisible: boolean;
   onUserPlayVideo: (postId: string) => void;
+  onSwipeNextVideo: (postId: string) => void;
+  onSwipeBackVideo: (postId: string) => void;
+  canSwipeNextVideo: boolean;
+  canSwipeBackVideo: boolean;
+  playToken: number;
 }) {
   const [post,           setPost]           = useState<API.MarketPost>(initialPost);
   const [showComments,   setShowComments]   = useState(false);
@@ -1711,6 +1733,9 @@ function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors,
           uri={post.video_url}
           isVisible={isVisible}
           onUserPlay={() => onUserPlayVideo(post.id)}
+          onSwipeNext={canSwipeNextVideo ? () => onSwipeNextVideo(post.id) : undefined}
+          onSwipeBack={canSwipeBackVideo ? () => onSwipeBackVideo(post.id) : undefined}
+          playToken={playToken}
         />
       ) : null}
       {hasPoll ? (
@@ -1899,6 +1924,37 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
   const handleLikeToggle = (id: string, liked: boolean, reactionType: string | null, count: number) => {
     setPosts(prev => prev.map(p => p.id === id ? { ...p, user_liked: liked, reaction_type: reactionType, likes_count: count } : p));
   };
+
+  // Reels-style swipe navigation between video posts. Skips non-video posts;
+  // the viewability callback above promotes the new active video on landing.
+  // We remember the swipe target with a bumping nonce so the FeedVideo for
+  // *that specific post* can force play even if it was previously user-paused
+  // — ordinary scrolling never bumps the nonce so paused videos stay paused.
+  const [swipeTarget, setSwipeTarget] = useState<{ id: string; nonce: number } | null>(null);
+  const jumpToVideo = useCallback((currentId: string, direction: 1 | -1) => {
+    const videoIdxList: number[] = [];
+    posts.forEach((p, i) => { if (p.video_url) videoIdxList.push(i); });
+    const here = videoIdxList.findIndex(i => posts[i].id === currentId);
+    if (here < 0) return;
+    const targetIdxInAll = videoIdxList[here + direction];
+    if (targetIdxInAll == null) return;
+    const targetId = posts[targetIdxInAll].id;
+    setActiveVideoPostId(targetId);
+    setSwipeTarget(prev => ({ id: targetId, nonce: (prev?.nonce ?? 0) + 1 }));
+    flatListRef.current?.scrollToIndex({ index: targetIdxInAll, animated: true, viewPosition: 0 });
+  }, [posts]);
+
+  // Boundary guards used to disable the swipe gesture on the first/last
+  // video so the FlatList can keep ownership of the fling.
+  const videoPostIds = useMemo(() => posts.filter(p => p.video_url).map(p => p.id), [posts]);
+  const canSwipeNext = useCallback((id: string) => {
+    const i = videoPostIds.indexOf(id);
+    return i >= 0 && i < videoPostIds.length - 1;
+  }, [videoPostIds]);
+  const canSwipeBack = useCallback((id: string) => {
+    const i = videoPostIds.indexOf(id);
+    return i > 0;
+  }, [videoPostIds]);
 
   const pickMedia = async (type: "image" | "video") => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -2143,12 +2199,26 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
               colors={colors}
               isVisible={item.id === activeVideoPostId}
               onUserPlayVideo={setActiveVideoPostId}
+              onSwipeNextVideo={(id) => jumpToVideo(id, 1)}
+              onSwipeBackVideo={(id) => jumpToVideo(id, -1)}
+              canSwipeNextVideo={canSwipeNext(item.id)}
+              canSwipeBackVideo={canSwipeBack(item.id)}
+              playToken={swipeTarget && swipeTarget.id === item.id ? swipeTarget.nonce : 0}
             />
           )}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
           onEndReached={loadMore}
           onEndReachedThreshold={0.3}
+          // Item heights are dynamic, so a swipe-driven `scrollToIndex` to an
+          // unmeasured row can fail. Fall back to an offset estimate and retry.
+          onScrollToIndexFailed={(info) => {
+            const offset = info.averageItemLength * info.index;
+            flatListRef.current?.scrollToOffset({ offset, animated: true });
+            setTimeout(() => {
+              flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0 });
+            }, 200);
+          }}
           ListFooterComponent={
             loadingMore ? (
               <View style={{ paddingVertical: 16, alignItems: "center" }}>

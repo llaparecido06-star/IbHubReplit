@@ -95,6 +95,13 @@ interface PostCardProps {
   onViewLikes?: (postId: string) => void;
   isLiking?: boolean;
   onUserPlayVideo?: (postId: string) => void;
+  onSwipeNextVideo?: (postId: string) => void;
+  onSwipeBackVideo?: (postId: string) => void;
+  canSwipeNextVideo?: boolean;
+  canSwipeBackVideo?: boolean;
+  /** Bumped by the parent feed on each swipe-driven navigation so the
+   *  newly-active video can force-play even if it had been user-paused. */
+  playToken?: number;
 }
 
 function fmtCount(n: number): string {
@@ -241,7 +248,7 @@ function ImageCarousel({ imageUrls }: { imageUrls: string[] }) {
 const REPORT_REASONS = ["Spam", "Conteúdo ofensivo", "Informação falsa", "Assédio", "Outro"];
 
 
-export function PostCard({ post, currentUserId, isVisible = false, onLike, onReact, onBookmark, onComment, onVote, onHide, onBlock, onViewLikes, isLiking = false, onUserPlayVideo }: PostCardProps) {
+export function PostCard({ post, currentUserId, isVisible = false, onLike, onReact, onBookmark, onComment, onVote, onHide, onBlock, onViewLikes, isLiking = false, onUserPlayVideo, onSwipeNextVideo, onSwipeBackVideo, canSwipeNextVideo = false, canSwipeBackVideo = false, playToken = 0 }: PostCardProps) {
   const colors = useColors();
   const router = useRouter();
   const [showOptions, setShowOptions]           = useState(false);
@@ -457,6 +464,9 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
               isVisible={isVisible}
               width={SCREEN_WIDTH}
               onUserPlay={() => onUserPlayVideo?.(post.id)}
+              onSwipeNext={canSwipeNextVideo ? () => onSwipeNextVideo?.(post.id) : undefined}
+              onSwipeBack={canSwipeBackVideo ? () => onSwipeBackVideo?.(post.id) : undefined}
+              playToken={playToken}
             />
           </View>
         )}

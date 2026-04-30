@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
+  PanResponder,
   StyleProp,
   StyleSheet,
   Text,
@@ -37,6 +38,19 @@ export interface FeedVideoProps {
    * promote this video to the active one so other videos pause.
    */
   onUserPlay?: () => void;
+  /**
+   * Reels-style vertical swipe navigation. When the user flings up the feed
+   * should jump to the next video post; when they fling down, the previous.
+   * Pass `undefined` to disable the gesture (e.g. on the first/last video).
+   */
+  onSwipeNext?: () => void;
+  onSwipeBack?: () => void;
+  /**
+   * Bumped by the parent feed each time the user swipes to a new video. When
+   * this video is the active one and the token changes we force playback,
+   * even if the user had previously paused this specific video.
+   */
+  playToken?: number;
 }
 
 export function FeedVideo({
@@ -47,6 +61,9 @@ export function FeedVideo({
   startMuted = true,
   containerStyle,
   onUserPlay,
+  onSwipeNext,
+  onSwipeBack,
+  playToken = 0,
 }: FeedVideoProps) {
   const [aspectRatio, setAspectRatio] = useState<number>(16 / 9);
   const [playing, setPlaying] = useState(false);
@@ -145,11 +162,53 @@ export function FeedVideo({
     else togglePlay();
   }, [showAndSchedule, togglePlay]);
 
+  // Reels-style vertical swipe. Only intercept clear vertical flings so the
+  // outer FlatList still owns ordinary scrolls and inner taps still toggle
+  // play/pause. We only claim the gesture when there is actually a target to
+  // swipe to in the chosen direction, otherwise we let the FlatList scroll.
+  const swipeNextRef = useRef(onSwipeNext);
+  const swipeBackRef = useRef(onSwipeBack);
+  useEffect(() => {
+    swipeNextRef.current = onSwipeNext;
+    swipeBackRef.current = onSwipeBack;
+  }, [onSwipeNext, onSwipeBack]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_, g) => {
+        if (Math.abs(g.dy) <= 25) return false;
+        if (Math.abs(g.vy) <= 0.6) return false;
+        if (Math.abs(g.dy) <= Math.abs(g.dx) * 1.5) return false;
+        const wantsNext = g.dy < 0;
+        return wantsNext ? !!swipeNextRef.current : !!swipeBackRef.current;
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy < -40 || g.vy < -0.6) swipeNextRef.current?.();
+        else if (g.dy > 40 || g.vy > 0.6) swipeBackRef.current?.();
+      },
+    }),
+  ).current;
+
+  // Force playback when the parent feed tells us a swipe just landed on this
+  // video (active + token changed). Clears any sticky "user paused" state so
+  // the next video always plays after a swipe — Reels semantics.
+  const lastPlayTokenRef = useRef(playToken);
+  useEffect(() => {
+    if (playToken !== lastPlayTokenRef.current && playToken !== 0 && isVisible) {
+      userPausedRef.current = false;
+      try { player.play(); } catch { /* not yet ready */ }
+    }
+    lastPlayTokenRef.current = playToken;
+  }, [playToken, isVisible, player]);
+
   const containerHeight = Math.min(width / aspectRatio, maxHeight);
   const fillWidth = duration > 0 ? (currentTime / duration) * barWidth : 0;
 
   return (
-    <View style={[styles.container, { width, height: containerHeight }, containerStyle]}>
+    <View
+      {...panResponder.panHandlers}
+      style={[styles.container, { width, height: containerHeight }, containerStyle]}
+    >
       <VideoView
         ref={videoViewRef}
         player={player}

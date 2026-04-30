@@ -54,6 +54,28 @@ function setUserOverride(el: HTMLVideoElement | null) {
   scheduleSync();
 }
 
+// Reels-style swipe navigation: jump to the next/previous registered video
+// in document order, skipping any non-video posts in between. The intersection
+// coordinator above handles auto-pause of the previous and auto-play of the
+// new active video once it scrolls into view.
+function navigateVideo(current: HTMLVideoElement, direction: 1 | -1) {
+  const list = Array.from(registry.values()).sort(
+    (a, b) => a.el.getBoundingClientRect().top - b.el.getBoundingClientRect().top,
+  );
+  const idx = list.findIndex((v) => v.el === current);
+  if (idx < 0) return;
+  const target = list[idx + direction];
+  if (!target) return;
+  // Clear any sticky user-override so the new video becomes active naturally
+  // once it scrolls into view.
+  userOverrideEl = null;
+  // Reels semantics: a swipe to a video always plays it, even if the user had
+  // previously paused that specific clip. Ordinary scroll still respects the
+  // sticky pause because IntersectionObserver does not touch this flag.
+  target.userPausedRef.current = false;
+  target.el.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
 function fmt(s: number) {
   if (!isFinite(s)) return "0:00";
   const m = Math.floor(s / 60);
@@ -83,6 +105,11 @@ export default function VideoPlayer({ src }: VideoPlayerProps) {
   // When the user manually pauses, we don't want scroll-driven auto-play to
   // restart playback until they explicitly tap play again.
   const userPausedRef = useRef(false);
+  // Track the start of a touch so we can distinguish a swipe from a tap.
+  const touchStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  // Set briefly after a recognized swipe so the synthetic click that fires
+  // on touchend doesn't toggle play/pause as a side-effect.
+  const suppressNextClickRef = useRef(false);
 
   const scheduleHide = () => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
@@ -127,6 +154,12 @@ export default function VideoPlayer({ src }: VideoPlayerProps) {
 
   const togglePlay = (e: React.MouseEvent) => {
     e.stopPropagation();
+    // Skip the synthetic click that follows a recognized swipe gesture so
+    // navigation doesn't also toggle play/pause.
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false;
+      return;
+    }
     const v = videoRef.current;
     if (!v) return;
     if (v.paused) {
@@ -214,7 +247,32 @@ export default function VideoPlayer({ src }: VideoPlayerProps) {
       }}
       onClick={togglePlay}
       onMouseMove={showAndSchedule}
-      onTouchStart={showAndSchedule}
+      onTouchStart={(e) => {
+        showAndSchedule();
+        const t = e.touches[0];
+        if (t) touchStartRef.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+      }}
+      onTouchEnd={(e) => {
+        const start = touchStartRef.current;
+        touchStartRef.current = null;
+        const v = videoRef.current;
+        if (!start || !v) return;
+        const end = e.changedTouches[0];
+        if (!end) return;
+        const dy = end.clientY - start.y;
+        const dx = end.clientX - start.x;
+        const dt = Date.now() - start.t;
+        // Only treat as a Reels-style swipe when the gesture is a clear,
+        // mostly-vertical fling. Otherwise let the click-to-toggle behaviour
+        // take over (taps have tiny dy and dx).
+        if (Math.abs(dy) < 60) return;
+        if (Math.abs(dy) < Math.abs(dx) * 1.3) return;
+        if (dt > 600) return;
+        // Suppress the synthetic click that follows so we don't toggle
+        // play/pause as a side-effect of swiping.
+        suppressNextClickRef.current = true;
+        navigateVideo(v, dy < 0 ? 1 : -1);
+      }}
     >
       <video
         ref={videoRef}

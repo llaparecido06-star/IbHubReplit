@@ -3,7 +3,7 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useRouter, useFocusEffect } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -469,6 +469,38 @@ export default function FeedScreen() {
     { viewabilityConfig: { viewAreaCoveragePercentThreshold: 25 }, onViewableItemsChanged: onViewCountItemsChanged },
     { viewabilityConfig: { viewAreaCoveragePercentThreshold: 60 }, onViewableItemsChanged: onAutoPlayItemsChanged },
   ]).current;
+
+  // Reels-style swipe navigation between video posts. Skips non-video posts
+  // and animates to the next/previous video. The viewability callback above
+  // promotes it to the active video once it lands in the viewport. We also
+  // remember the swipe target with a bumping nonce so the FeedVideo for
+  // *that specific post* can force play even if it had been user-paused —
+  // ordinary scrolling never bumps the nonce so paused videos stay paused.
+  const [swipeTarget, setSwipeTarget] = useState<{ id: string; nonce: number } | null>(null);
+  const jumpToVideo = useCallback((currentId: string, direction: 1 | -1) => {
+    const videoIdxList: number[] = [];
+    posts.forEach((p, i) => { if (p.video_url) videoIdxList.push(i); });
+    const here = videoIdxList.findIndex(i => posts[i].id === currentId);
+    if (here < 0) return;
+    const targetIdxInAll = videoIdxList[here + direction];
+    if (targetIdxInAll == null) return;
+    const targetId = posts[targetIdxInAll].id;
+    setActiveVideoPostId(targetId);
+    setSwipeTarget(prev => ({ id: targetId, nonce: (prev?.nonce ?? 0) + 1 }));
+    flatListRef.current?.scrollToIndex({ index: targetIdxInAll, animated: true, viewPosition: 0 });
+  }, [posts]);
+
+  // Boundary guards used to disable the swipe gesture on the first/last
+  // video so the FlatList can keep ownership of the fling.
+  const videoPostIds = useMemo(() => posts.filter(p => p.video_url).map(p => p.id), [posts]);
+  const canSwipeNext = useCallback((id: string) => {
+    const i = videoPostIds.indexOf(id);
+    return i >= 0 && i < videoPostIds.length - 1;
+  }, [videoPostIds]);
+  const canSwipeBack = useCallback((id: string) => {
+    const i = videoPostIds.indexOf(id);
+    return i > 0;
+  }, [videoPostIds]);
 
   const handlePickImage = async () => {
     if (Platform.OS !== "web") {
@@ -965,6 +997,11 @@ export default function FeedScreen() {
             currentUserId={user?.id}
             isVisible={item.id === activeVideoPostId}
             onUserPlayVideo={setActiveVideoPostId}
+            onSwipeNextVideo={(id) => jumpToVideo(id, 1)}
+            onSwipeBackVideo={(id) => jumpToVideo(id, -1)}
+            canSwipeNextVideo={canSwipeNext(item.id)}
+            canSwipeBackVideo={canSwipeBack(item.id)}
+            playToken={swipeTarget && swipeTarget.id === item.id ? swipeTarget.nonce : 0}
             isLiking={likingPostIds.has(item.id)}
             onLike={async (id) => {
               if (likingPostIds.has(id)) return;
@@ -1083,6 +1120,15 @@ export default function FeedScreen() {
         viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
         onEndReached={loadMorePosts}
         onEndReachedThreshold={0.3}
+        // Item heights are dynamic, so a swipe-driven `scrollToIndex` to an
+        // unmeasured row can fail. Fall back to an offset estimate and retry.
+        onScrollToIndexFailed={(info) => {
+          const offset = info.averageItemLength * info.index;
+          flatListRef.current?.scrollToOffset({ offset, animated: true });
+          setTimeout(() => {
+            flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0 });
+          }, 200);
+        }}
         ListFooterComponent={
           loadingMore ? (
             <View style={{ paddingVertical: 20, alignItems: "center" }}>
