@@ -33,6 +33,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
+import { AudioBubble } from "@/components/chat/AudioBubble";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/context/AuthContext";
@@ -1150,22 +1151,22 @@ export default function ChatScreen() {
     </TouchableOpacity>
   );
 
-  const renderAudioBubble = (item: AppMessage, isMe: boolean) => (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 4, paddingHorizontal: 4, minWidth: 140 }}>
-      <TouchableOpacity
-        style={[{ width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" }, { backgroundColor: isMe ? "rgba(255,255,255,0.2)" : colors.navy + "15" }]}
-        onPress={() => {}}
-      >
-        <Feather name="play" size={16} color={isMe ? "#fff" : colors.navy} />
-      </TouchableOpacity>
-      <View style={{ flex: 1 }}>
-        <View style={[st.audioBar, { backgroundColor: isMe ? "rgba(255,255,255,0.3)" : colors.border }]}>
-          <View style={[st.audioFill, { backgroundColor: isMe ? "#fff" : colors.navy, width: "40%" }]} />
-        </View>
-      </View>
-      <Text style={[{ fontSize: 11 }, { color: isMe ? "#ffffff88" : colors.mutedForeground }]}>{formatTime(item.created_at)}</Text>
-    </View>
-  );
+  const renderAudioBubble = (item: AppMessage, isMe: boolean) => {
+    if (!item.media_url) {
+      return (
+        <Text style={[st.bubbleText, { color: isMe ? "#fff" : colors.foreground, fontStyle: "italic", opacity: 0.7 }]}>
+          🎤 Áudio indisponível
+        </Text>
+      );
+    }
+    return (
+      <AudioBubble
+        uri={item.media_url}
+        isMe={isMe}
+        timeLabel={formatTime(item.created_at)}
+      />
+    );
+  };
 
   // ── Derived ──────────────────────────────────────────────────────────────────
 

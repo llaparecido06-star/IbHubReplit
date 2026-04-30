@@ -61,13 +61,61 @@ function parseAttachment(content: string): { url: string; label?: string } | nul
   return null;
 }
 
-function AttachmentBubble({ url, label, isMe }: { url: string; label?: string; isMe: boolean }) {
-  if (isImageUrl(url)) {
+const AUDIO_EXTS = ["mp3", "m4a", "mp4", "ogg", "wav", "aac", "webm"];
+function isAudioUrl(url: string) {
+  const ext = url.split("?")[0].split(".").pop()?.toLowerCase() ?? "";
+  return AUDIO_EXTS.includes(ext);
+}
+
+type MessageKind = "audio" | "image" | "video" | "file" | "text";
+const KNOWN_MEDIA_KINDS: ReadonlySet<MessageKind> = new Set(["audio", "image", "video", "file"]);
+
+function asMessageKind(raw: string | null | undefined): MessageKind | null {
+  if (raw === "audio" || raw === "image" || raw === "video" || raw === "file" || raw === "text") {
+    return raw;
+  }
+  return null;
+}
+
+function resolveAttachmentKind(kind: MessageKind | null, url: string): "audio" | "image" | "video" | "file" {
+  // Trust an explicit media kind; only fall back to extension sniffing when
+  // the message_type is missing, "text", or otherwise non-media. Without this
+  // fallback, web-attached audio URLs (which used to be sent as plain text
+  // "[attachment]:..." with no message_type) wouldn't get an audio player.
+  if (kind && KNOWN_MEDIA_KINDS.has(kind)) {
+    return kind as "audio" | "image" | "video" | "file";
+  }
+  if (isAudioUrl(url)) return "audio";
+  if (isImageUrl(url)) return "image";
+  return "file";
+}
+
+function AttachmentBubble({ url, label, isMe, kind }: { url: string; label?: string; isMe: boolean; kind: MessageKind | null }) {
+  const resolved = resolveAttachmentKind(kind, url);
+  if (resolved === "audio") {
+    return (
+      <audio
+        controls
+        src={url}
+        style={{ display: "block", width: 240, maxWidth: "100%" }}
+      />
+    );
+  }
+  if (resolved === "image") {
     return (
       <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
         <img src={url} alt={label ?? "imagem"} style={{ maxWidth: "100%", maxHeight: 220, borderRadius: 10, display: "block", cursor: "zoom-in" }} />
         {label && <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>{label}</div>}
       </a>
+    );
+  }
+  if (resolved === "video") {
+    return (
+      <video
+        controls
+        src={url}
+        style={{ display: "block", maxWidth: 320, maxHeight: 320, borderRadius: 8 }}
+      />
     );
   }
   const filename = label ?? url.split("/").pop() ?? "arquivo";
@@ -410,7 +458,7 @@ export default function MensagensPage() {
                   boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
                 }}>
                   {attach
-                    ? <AttachmentBubble url={attach.url} label={attach.label} isMe={isMe} />
+                    ? <AttachmentBubble url={attach.url} label={attach.label} isMe={isMe} kind={asMessageKind(msg.message_type)} />
                     : (msg.content || "")
                   }
                 </div>

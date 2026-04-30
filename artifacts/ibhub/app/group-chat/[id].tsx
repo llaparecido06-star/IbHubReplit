@@ -26,6 +26,7 @@ import { getInfoAsync as fsGetInfoAsync } from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { Feather } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
+import { AudioBubble } from "@/components/chat/AudioBubble";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/context/AuthContext";
@@ -762,21 +763,22 @@ export default function GroupChatScreen() {
 
   // ── Message renderers ─────────────────────────────────────────────────────
 
-  const renderAudioBubble = (item: AppMessage, isMe: boolean) => (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 4, paddingHorizontal: 4, minWidth: 140 }}>
-      <View style={[styles.audioPlayBtn, { backgroundColor: isMe ? "rgba(255,255,255,0.2)" : colors.navy + "15" }]}>
-        <Feather name="play" size={16} color={isMe ? "#fff" : colors.navy} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <View style={[styles.audioBar, { backgroundColor: isMe ? "rgba(255,255,255,0.3)" : colors.border }]}>
-          <View style={[styles.audioFill, { backgroundColor: isMe ? "#fff" : colors.navy }]} />
-        </View>
-      </View>
-      <Text style={[styles.bubbleTime, { color: isMe ? "#ffffff88" : colors.mutedForeground }]}>
-        {new Date(item.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-      </Text>
-    </View>
-  );
+  const renderAudioBubble = (item: AppMessage, isMe: boolean) => {
+    if (!item.media_url) {
+      return (
+        <Text style={[styles.bubbleText, { color: isMe ? "#fff" : colors.foreground, fontStyle: "italic", opacity: 0.7 }]}>
+          🎤 Áudio indisponível
+        </Text>
+      );
+    }
+    return (
+      <AudioBubble
+        uri={item.media_url}
+        isMe={isMe}
+        timeLabel={new Date(item.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+      />
+    );
+  };
 
   const renderFileBubble = (item: AppMessage, isMe: boolean) => (
     <TouchableOpacity
