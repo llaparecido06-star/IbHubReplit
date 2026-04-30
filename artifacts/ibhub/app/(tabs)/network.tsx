@@ -15,6 +15,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  type ViewToken,
 } from "react-native";
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
@@ -178,8 +179,8 @@ const FALLBACK: Record<Period, API.MarketOverview> = {
 const SCREEN_W_NET = Dimensions.get("window").width;
 const IDEAL_CARD_W = SCREEN_W_NET - 32;
 
-function NetworkPostVideo({ uri }: { uri: string }) {
-  return <FeedVideo uri={uri} width={IDEAL_CARD_W} />;
+function NetworkPostVideo({ uri, isVisible }: { uri: string; isVisible: boolean }) {
+  return <FeedVideo uri={uri} width={IDEAL_CARD_W} isVisible={isVisible} />;
 }
 
 function NetworkMediaPreview({ uri }: { uri: string }) {
@@ -1635,10 +1636,11 @@ function MarketPollMobile({ post: initialPost, userId, colors, onPollVote }: {
   );
 }
 
-function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors }: {
+function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors, isVisible }: {
   post: API.MarketPost; userId: string;
   onLikeToggle: (id: string, liked: boolean, reactionType: string | null, count: number) => void;
   colors: ReturnType<typeof useColors>;
+  isVisible: boolean;
 }) {
   const [post,           setPost]           = useState<API.MarketPost>(initialPost);
   const [showComments,   setShowComments]   = useState(false);
@@ -1704,7 +1706,7 @@ function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors 
         <AdaptiveImage uri={post.image_url} width={IDEAL_CARD_W} style={{ borderRadius: 0 }} />
       ) : null}
       {post.video_url ? (
-        <NetworkPostVideo uri={post.video_url} />
+        <NetworkPostVideo uri={post.video_url} isVisible={isVisible} />
       ) : null}
       {hasPoll ? (
         <MarketPollMobile post={post} userId={userId} colors={colors} onPollVote={handlePollVote} />
@@ -1859,6 +1861,18 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
   }, [ensureFocusedInputVisible]);
   const postInputRef = useRef<TextInput>(null);
   const pollOptionRefs = useRef<(TextInput | null)[]>([]);
+
+  // Track which posts are currently on-screen so videos auto-play when
+  // visible and pause when scrolled away.
+  const [visiblePostIds, setVisiblePostIds] = useState<Set<string>>(new Set());
+  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    const next = new Set<string>();
+    for (const v of viewableItems) {
+      if (v.isViewable && v.item) next.add((v.item as API.MarketPost).id);
+    }
+    setVisiblePostIds(next);
+  }, []);
+  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
 
   const hasAccess = permHasFeature("mercado:idealbi") || isAdmin;
 
@@ -2118,8 +2132,11 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
               userId={userId}
               onLikeToggle={handleLikeToggle}
               colors={colors}
+              isVisible={visiblePostIds.has(item.id)}
             />
           )}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
           onEndReached={loadMore}
           onEndReachedThreshold={0.3}
           ListFooterComponent={

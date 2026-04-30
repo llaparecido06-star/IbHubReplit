@@ -58,9 +58,19 @@ export function FeedVideo({
     p.muted = startMuted;
   });
 
+  // Once the user explicitly pauses, don't let scroll-driven auto-play
+  // restart the video until they tap play again.
+  const userPausedRef = useRef(false);
+
   useEffect(() => {
-    if (isVisible) player.play();
-    else player.pause();
+    if (isVisible) {
+      if (!userPausedRef.current) player.play();
+    } else {
+      player.pause();
+      // Reset to the start so the next time the video scrolls back into
+      // view (or another user takes over) it begins fresh.
+      try { player.currentTime = 0; } catch { /* not yet ready */ }
+    }
   }, [isVisible, player]);
 
   useEventListener(player, "playingChange", ({ isPlaying }) => setPlaying(isPlaying));
@@ -101,8 +111,10 @@ export function FeedVideo({
 
   const togglePlay = useCallback(() => {
     if (player.playing) {
+      userPausedRef.current = true;
       player.pause();
     } else {
+      userPausedRef.current = false;
       player.muted = false;
       player.play();
     }

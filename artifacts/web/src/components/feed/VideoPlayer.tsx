@@ -14,17 +14,23 @@ interface VideoPlayerProps {
 }
 
 export default function VideoPlayer({ src }: VideoPlayerProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
 
   const [playing, setPlaying]     = useState(false);
-  const [muted, setMuted]         = useState(false);
+  // Auto-play requires the video to start muted to comply with browser
+  // autoplay policies. The user can still tap to unmute at any time.
+  const [muted, setMuted]         = useState(true);
   const [current, setCurrent]     = useState(0);
   const [duration, setDuration]   = useState(0);
   const [showControls, setShowControls] = useState(true);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [seeking, setSeeking]     = useState(false);
   const [aspectRatio, setAspectRatio] = useState<number>(9 / 16); // default vertical (Reels-style)
+  // When the user manually pauses, we don't want scroll-driven auto-play to
+  // restart playback until they explicitly tap play again.
+  const userPausedRef = useRef(false);
 
   const scheduleHide = () => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
@@ -41,11 +47,44 @@ export default function VideoPlayer({ src }: VideoPlayerProps) {
     return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
   }, []);
 
+  // Auto-play when scrolled into view, pause and reset when off-screen.
+  // Respects manual pause: once the user pauses, we don't auto-play again
+  // until they tap play.
+  useEffect(() => {
+    const v = videoRef.current;
+    const el = containerRef.current;
+    if (!v || !el || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+            if (!userPausedRef.current) {
+              v.play().catch(() => {/* autoplay may be blocked; ignore */});
+            }
+          } else {
+            if (!v.paused) v.pause();
+            // Reset to start so the next time it auto-plays it starts fresh.
+            try { v.currentTime = 0; } catch { /* not yet ready */ }
+          }
+        }
+      },
+      { threshold: [0, 0.5, 1] }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const togglePlay = (e: React.MouseEvent) => {
     e.stopPropagation();
     const v = videoRef.current;
     if (!v) return;
-    if (v.paused) { v.play(); } else { v.pause(); }
+    if (v.paused) {
+      userPausedRef.current = false;
+      v.play().catch(() => {/* ignore */});
+    } else {
+      userPausedRef.current = true;
+      v.pause();
+    }
     showAndSchedule();
   };
 
@@ -108,6 +147,7 @@ export default function VideoPlayer({ src }: VideoPlayerProps) {
 
   return (
     <div
+      ref={containerRef}
       style={{
         position: "relative",
         width: "100%",
@@ -127,6 +167,7 @@ export default function VideoPlayer({ src }: VideoPlayerProps) {
         ref={videoRef}
         src={src}
         playsInline
+        muted={muted}
         preload="metadata"
         loop
         style={{
