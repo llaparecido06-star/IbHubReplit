@@ -242,6 +242,7 @@ export function PollDisplay({ poll, postId, currentUserId, onVote }: {
     const ids = Object.keys(votesMap);
     if (ids.length === 0) {
       setVoters([]);
+      setLoadingVoters(false);
       return;
     }
     setLoadingVoters(true);
