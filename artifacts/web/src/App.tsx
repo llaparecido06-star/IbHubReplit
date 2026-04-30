@@ -1,5 +1,5 @@
 import React from "react";
-import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation, useParams } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { PermissionsProvider } from "@/context/PermissionsContext";
@@ -187,6 +187,13 @@ function AdminSubRouter() {
   return <AdminRoute component={Component} />;
 }
 
+function EventRedirect() {
+  const { id } = useParams<{ id: string }>();
+  const [, setLocation] = useLocation();
+  React.useEffect(() => { setLocation(`/app/eventos/${id}`, { replace: true }); }, [id, setLocation]);
+  return null;
+}
+
 function MaintenanceGuard({ children }: { children: React.ReactNode }) {
   const { isEnabled, isLoading } = useFeatureFlags();
   const { profile, loading, session } = useAuth();
@@ -349,6 +356,8 @@ function Router() {
       <Route path="/p/:id" component={PublicPostPage} />
       {/* Canonical post share URL: /post/:id (mirrors mobile share helper). */}
       <Route path="/post/:id" component={PublicPostPage} />
+      {/* Event share URL: /event/:id — redirects to the authenticated event detail page. */}
+      <Route path="/event/:id" component={EventRedirect} />
       <Route path="/politica-de-privacidade" component={PoliticaPrivacidadePage} />
       <Route path="/termos-de-uso" component={TermosUsoPage} />
       <Route path="/excluir-conta" component={ExcluirContaPage} />
