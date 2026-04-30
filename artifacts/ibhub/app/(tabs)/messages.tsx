@@ -178,20 +178,16 @@ export default function MessagesScreen() {
     };
   }, [user?.id]);
 
-  // Reload conversations when returning from a chat screen to clear stale unread badges
+  // Reload conversations AND follow-up badges when returning from a chat screen.
   useFocusEffect(useCallback(() => {
     load();
-  }, [load]));
-
-  // Load follow-up reminders from local storage
-  useEffect(() => {
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(FOLLOWUP_KEY);
-        if (raw) setFollowUpMap(JSON.parse(raw));
+        setFollowUpMap(raw ? JSON.parse(raw) : {});
       } catch {}
     })();
-  }, []);
+  }, [load]));
 
   // Debounced search — only connections + following
   useEffect(() => {

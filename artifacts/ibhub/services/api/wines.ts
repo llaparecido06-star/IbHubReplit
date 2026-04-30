@@ -3,12 +3,13 @@ import { isNetworkError, isValidUUID } from "./_shared";
 
 export async function fetchUserWines(userId: string): Promise<{ id: string; name: string; vintage?: string | null; region?: string | null; notes?: string | null; image_url?: string | null }[]> {
   try {
+    // Wine cards are shared from the user's personal cellar (wine_cellar table).
     const { data, error } = await supabase
-      .from("wines")
+      .from("wine_cellar")
       .select("id, name, vintage, region, notes, image_url")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
-      .limit(20);
+      .limit(50);
     if (error || !data) return [];
     return data as any[];
   } catch {

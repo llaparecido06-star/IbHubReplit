@@ -245,9 +245,14 @@ export async function fetchConversations(userId: string, activeCompanyId?: strin
           ? ((lastMsg as any).from_company_page_id ?? null)
           : null;
 
-      // Use the conversation's own company_page_id as fallback so company name/avatar
-      // always shows even when the most recent message was sent by the regular user side.
-      const displayCompanyId: string | null = otherSenderCompanyId ?? ((convo as any).company_page_id ?? null);
+      // Use the conversation's own company_page_id as the display company only when
+      // it refers to the OTHER party's company — not to the current user's own company.
+      // When activeCompanyId matches convo.company_page_id, the company IS the current
+      // user, so we fall through to the human participant's name instead.
+      const convCompanyId: string | null = (convo as any).company_page_id ?? null;
+      const displayCompanyId: string | null =
+        otherSenderCompanyId ??
+        (convCompanyId && convCompanyId !== activeCompanyId ? convCompanyId : null);
 
       results.push({
         id: convo.id,

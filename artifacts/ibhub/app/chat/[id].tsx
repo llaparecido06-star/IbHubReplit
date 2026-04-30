@@ -112,6 +112,7 @@ export default function ChatScreen() {
   const [showWines,              setShowWines]              = useState(false);
   const [showTemplates,          setShowTemplates]          = useState(false);
   const [showFollowUp,           setShowFollowUp]           = useState(false);
+  const [existingFollowUp,       setExistingFollowUp]       = useState<Date | null>(null);
   const [showReactions,          setShowReactions]          = useState<string | null>(null);
   const [replyTo,                setReplyTo]                = useState<AppMessage | null>(null);
   const [sending,                setSending]                = useState(false);
@@ -148,6 +149,15 @@ export default function ChatScreen() {
 
   // ── Load data ────────────────────────────────────────────────────────────────
 
+  const loadFollowUp = useCallback(async () => {
+    try {
+      const raw = await AsyncStorage.getItem("ibhub_followup_reminders");
+      const map: Record<string, string> = raw ? JSON.parse(raw) : {};
+      const iso = map[id];
+      setExistingFollowUp(iso ? new Date(iso) : null);
+    } catch { setExistingFollowUp(null); }
+  }, [id]);
+
   const load = useCallback(async () => {
     if (!id || !user?.id) { setLoading(false); return; }
     const [msgs, part, accepted, cpRes] = await Promise.all([
@@ -168,7 +178,8 @@ export default function ChatScreen() {
     }
     setLoading(false);
     API.markConversationRead(id, user.id);
-  }, [id, user?.id, companyId]);
+    loadFollowUp();
+  }, [id, user?.id, companyId, loadFollowUp]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -843,6 +854,7 @@ export default function ChatScreen() {
       const map: Record<string, string> = raw ? JSON.parse(raw) : {};
       map[id] = trigger.toISOString();
       await AsyncStorage.setItem("ibhub_followup_reminders", JSON.stringify(map));
+      setExistingFollowUp(trigger);
     } catch {}
     if (Platform.OS !== "web") {
       try {
@@ -863,6 +875,17 @@ export default function ChatScreen() {
       "Lembrete agendado ✓",
       `Você será lembrado em ${days} dia${days > 1 ? "s" : ""} de retomar esta conversa.`,
     );
+  };
+
+  const cancelFollowUp = async () => {
+    try {
+      const raw = await AsyncStorage.getItem("ibhub_followup_reminders");
+      const map: Record<string, string> = raw ? JSON.parse(raw) : {};
+      delete map[id];
+      await AsyncStorage.setItem("ibhub_followup_reminders", JSON.stringify(map));
+      setExistingFollowUp(null);
+    } catch {}
+    setShowFollowUp(false);
   };
 
   // ── Render helpers ────────────────────────────────────────────────────────────
@@ -1536,8 +1559,21 @@ export default function ChatScreen() {
           <View style={[st.sheet, { backgroundColor: "#fff" }]}>
             <View style={[st.sheetHandle, { backgroundColor: colors.border }]} />
             <Text style={[st.sheetTitle, { color: colors.navy }]}>Agendar Follow-up</Text>
+            {existingFollowUp && (
+              <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: colors.gold + "18", borderRadius: 10, padding: 10, marginBottom: 12, gap: 8 }}>
+                <Feather name="clock" size={14} color={existingFollowUp <= new Date() ? "#ef4444" : colors.gold} />
+                <Text style={{ fontSize: 13, color: colors.navy, flex: 1 }}>
+                  {existingFollowUp <= new Date()
+                    ? `Lembrete vencido em ${existingFollowUp.toLocaleDateString("pt-BR")}`
+                    : `Lembrete agendado para ${existingFollowUp.toLocaleDateString("pt-BR")}`}
+                </Text>
+                <TouchableOpacity onPress={cancelFollowUp}>
+                  <Feather name="x" size={16} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
+            )}
             <Text style={[{ fontSize: 14, color: colors.mutedForeground, marginBottom: 16 }]}>
-              Em quantos dias você quer ser lembrado?
+              {existingFollowUp ? "Reagendar para daqui:" : "Em quantos dias você quer ser lembrado?"}
             </Text>
             <View style={{ flexDirection: "row", gap: 10, marginBottom: 20 }}>
               {["1", "3", "7", "14", "30"].map(d => (
@@ -1560,7 +1596,7 @@ export default function ChatScreen() {
               onPress={scheduleFollowUp}
             >
               <Feather name="bell" size={16} color="#fff" />
-              <Text style={st.followUpBtnText}>Agendar Lembrete</Text>
+              <Text style={st.followUpBtnText}>{existingFollowUp ? "Reagendar Lembrete" : "Agendar Lembrete"}</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
