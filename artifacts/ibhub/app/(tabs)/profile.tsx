@@ -605,7 +605,6 @@ export default function ProfileScreen() {
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
   const { profile, user, signOut, activeCompany } = useAuth();
-  const userPlan = (user as any)?.plan as string | null | undefined;
 
   const [activeTab,    setActiveTab]    = useState<"feed" | "salvos" | "adega" | "anuncios">("feed");
   const [showComments, setShowComments] = useState<string | null>(null);
@@ -947,24 +946,30 @@ export default function ProfileScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />}
     >
       {/* ── Cover ── */}
-      <View style={[styles.cover, { backgroundColor: colors.navyLight, paddingTop: topPad }]}>
-        <TouchableOpacity style={styles.settingsBtn} onPress={() => router.push("/settings" as any)} accessibilityRole="button" accessibilityLabel="Configurações">
-          <Feather name="settings" size={22} color="#fff" />
-        </TouchableOpacity>
-      </View>
+      <View style={[styles.cover, { backgroundColor: colors.navyLight, paddingTop: topPad }]} />
 
       {/* ── Profile card ── */}
       <View style={[styles.profileCard, { backgroundColor: "#fff" }]}>
         {/* Avatar row */}
         <View style={styles.avatarRow}>
           <Avatar uri={profile?.avatar_url} name={name} size={84} />
-          <TouchableOpacity
-            style={[styles.editBtn, { borderColor: colors.border }]}
-            onPress={() => router.push("/edit-profile" as any)}
-          >
-            <Feather name="edit-2" size={14} color={colors.navy} />
-            <Text style={[styles.editBtnText, { color: colors.navy }]}>Editar perfil</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <TouchableOpacity
+              style={[styles.settingsIconBtn, { borderColor: colors.border }]}
+              onPress={() => router.push("/settings" as any)}
+              accessibilityRole="button"
+              accessibilityLabel="Configurações"
+            >
+              <Feather name="settings" size={15} color={colors.navy} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.editBtn, { borderColor: colors.border }]}
+              onPress={() => router.push("/edit-profile" as any)}
+            >
+              <Feather name="edit-2" size={14} color={colors.navy} />
+              <Text style={[styles.editBtnText, { color: colors.navy }]}>Editar perfil</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <Text style={[styles.name, { color: colors.navy }]}>{name}</Text>
@@ -1080,14 +1085,12 @@ export default function ProfileScreen() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.actionCard, { backgroundColor: "#6366f1" + "12", borderColor: "#6366f1" + "30" }]} onPress={() => router.push("/subscription" as any)} activeOpacity={0.75}>
+          <TouchableOpacity style={[styles.actionCard, { backgroundColor: "#6366f1" + "12", borderColor: "#6366f1" + "30" }]} onPress={() => setShowQrModal(true)} activeOpacity={0.75}>
             <View style={[styles.actionCardIcon, { backgroundColor: "#6366f1" }]}>
-              <Feather name="star" size={18} color="#fff" />
+              <Feather name="maximize" size={18} color="#fff" />
             </View>
-            <Text style={[styles.actionCardLabel, { color: colors.navy }]}>Plano</Text>
-            <Text style={[styles.actionCardSub, { color: colors.mutedForeground }]}>
-              {userPlan ? userPlan.charAt(0).toUpperCase() + userPlan.slice(1) : "Gratuito"}
-            </Text>
+            <Text style={[styles.actionCardLabel, { color: colors.navy }]}>QR Code</Text>
+            <Text style={[styles.actionCardSub, { color: colors.mutedForeground }]}>Compartilhar</Text>
           </TouchableOpacity>
         </View>
 
@@ -1544,6 +1547,7 @@ const styles = StyleSheet.create({
   container:          { flex: 1 },
   cover:              { height: 130, justifyContent: "flex-end", paddingHorizontal: 16, paddingBottom: 12, alignItems: "flex-end" },
   settingsBtn:        { padding: 4 },
+  settingsIconBtn:    { width: 34, height: 34, borderRadius: 17, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   profileCard:        { padding: 16, gap: 10 },
   avatarRow:          { marginTop: -48, marginBottom: 4, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
   editBtn:            { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
