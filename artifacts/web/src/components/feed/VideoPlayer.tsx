@@ -44,6 +44,9 @@ function scheduleSync() {
   syncScheduled = true;
   requestAnimationFrame(() => {
     syncScheduled = false;
+    // If the tab is hidden, leave everything paused — the visibilitychange
+    // handler will call scheduleSync again when the tab returns to view.
+    if (typeof document !== "undefined" && document.hidden) return;
     let best: RegisteredVideo | null = null;
     // A user-played video stays active as long as it remains at least
     // partially on-screen.
