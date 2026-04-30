@@ -329,16 +329,39 @@ export async function uploadChatMedia(
         formData.append("file", blob, fileName);
       }
     } else {
-      // On native (iOS/Android), copy ph:// and content:// URIs to file:// first
+      // On native (iOS/Android), copy ph:// and content:// URIs to a local file:// path first
       let localUri = uri;
       if (localUri.startsWith("ph://") || localUri.startsWith("content://")) {
         const tmpPath = `${(FileSystem as any).cacheDirectory}tmp_upload_${Date.now()}.${ext}`;
         await FileSystem.copyAsync({ from: localUri, to: tmpPath });
         localUri = tmpPath;
       }
-      // Append as a file object — React Native's native fetch streams this directly
-      // without loading the full file into JS memory (avoids base64 overhead and OOM)
-      formData.append("file", { uri: localUri, name: fileName, type: safeMime } as any);
+
+      if (safeMime.startsWith("audio/")) {
+        // Audio files from expo-audio: convert URI → Blob via fetch() before appending.
+        //
+        // The { uri, name, type } FormData pattern relies on the RN bridge resolving
+        // the file path natively. For expo-audio URIs on Android (and some iOS builds)
+        // the bridge can fail silently — the multipart body arrives with 0 bytes and
+        // multer receives an empty file. fetch() uses Expo's JS polyfill which
+        // correctly reads file:// URIs on both platforms.
+        try {
+          const blobRes = await fetch(localUri);
+          if (!blobRes.ok) throw new Error(`fetch audio URI status ${blobRes.status}`);
+          const blob = await blobRes.blob();
+          if (blob.size === 0) throw new Error("audio blob resolved to 0 bytes");
+          console.log(`[uploadChatMedia] audio blob OK: ${blob.size} bytes, type: ${blob.type || safeMime}`);
+          formData.append("file", blob, fileName);
+        } catch (blobErr: any) {
+          // Fallback: try the native { uri, name, type } pattern anyway
+          console.error("[uploadChatMedia] blob conversion failed, trying native fallback:", blobErr?.message ?? blobErr);
+          formData.append("file", { uri: localUri, name: fileName, type: safeMime } as any);
+        }
+      } else {
+        // Images, videos, documents: stream via { uri, name, type } to avoid loading
+        // the entire file into the JS heap (prevents OOM for large videos).
+        formData.append("file", { uri: localUri, name: fileName, type: safeMime } as any);
+      }
     }
 
     const res = await fetch(`${apiUrl}/uploads/chat-form`, {

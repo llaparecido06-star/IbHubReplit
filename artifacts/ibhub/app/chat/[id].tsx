@@ -730,18 +730,24 @@ export default function ChatScreen() {
 
       // Determine mime/extension — expo-audio records as m4a on both platforms
       const mimeType = Platform.OS === "android" ? "audio/mp4" : "audio/m4a";
-      const url = await API.uploadChatMedia(id, uri, mimeType);
+      console.log(`[Audio] Starting upload — platform: ${Platform.OS}, uri: ${uri}, size: ${fileSize} bytes, mime: ${mimeType}`);
+
+      let url: string | null = null;
+      try {
+        url = await API.uploadChatMedia(id, uri, mimeType);
+      } catch (uploadErr: any) {
+        console.error("[Audio] uploadChatMedia threw:", uploadErr?.message ?? uploadErr);
+      }
 
       setUploading(false);
       setUploadStatus(null);
 
       if (!url) {
-        console.error("[Audio] uploadChatMedia returned null");
+        console.error(`[Audio] uploadChatMedia returned null — platform: ${Platform.OS}, uri: ${uri}, size: ${fileSize} bytes`);
         Alert.alert("Erro", "Não foi possível enviar o áudio. Verifique sua conexão.");
         return;
       }
-
-      if (__DEV__) console.log("[Audio] Upload OK, sending message...");
+      console.log(`[Audio] Upload OK → ${url}`);
 
       // Use the shared API endpoint so the server can fan out push
       // notifications and apply the same moderation/auditing logic that
