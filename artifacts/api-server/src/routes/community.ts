@@ -329,6 +329,31 @@ router.post("/community/opportunities/:id/apply", async (req: Request, res: Resp
     if (notifErr) {
       req.log.warn({ err: notifErr, opportunityId, userId }, "applyToJob notification insert failed");
     }
+
+    // Push — fetch applicant name and fire-and-forget
+    void (async () => {
+      const { data: applicantProfile } = await supabaseAdmin
+        .from("profiles")
+        .select("full_name, username")
+        .eq("id", userId)
+        .maybeSingle();
+
+      const applicantName =
+        (applicantProfile as { full_name?: string; username?: string } | null)?.full_name ??
+        (applicantProfile as { full_name?: string; username?: string } | null)?.username ??
+        "Alguém";
+
+      await sendPushToUser({
+        userId: recipientUserId,
+        title: `💼 Nova candidatura — ${opp.title as string}`,
+        body: `${applicantName} se candidatou à sua vaga. Toque para ver o perfil.`,
+        data: {
+          type: "application",
+          opportunityId,
+          deepLink: `/opportunity/${opportunityId}`,
+        },
+      });
+    })();
   }
 
   res.status(200).json({ ok: true });
