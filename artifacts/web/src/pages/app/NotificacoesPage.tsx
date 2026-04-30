@@ -134,16 +134,16 @@ function NotifRow({ notif, onRead, onAccept, onReject }: {
 }
 
 export default function NotificacoesPage() {
-  const { user } = useAuth();
+  const { user, activeCompany } = useAuth();
   const [notifs, setNotifs] = useState<WebNotification[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     if (!user?.id) { setLoading(false); return; }
-    const data = await fetchWebNotifications(user.id);
+    const data = await fetchWebNotifications(user.id, activeCompany?.id ?? null);
     setNotifs(data);
     setLoading(false);
-  }, [user?.id]);
+  }, [user?.id, activeCompany?.id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -155,7 +155,7 @@ export default function NotificacoesPage() {
   const handleMarkAll = async () => {
     if (!user?.id) return;
     setNotifs(prev => prev.map(n => ({ ...n, read: true })));
-    await markAllWebNotificationsRead(user.id);
+    await markAllWebNotificationsRead(user.id, activeCompany?.id ?? null);
   };
 
   const handleAccept = async (notif: WebNotification) => {

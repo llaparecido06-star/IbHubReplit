@@ -762,43 +762,54 @@ export async function checkWebConnectionStatus(
   }
 }
 
+/**
+ * Get or create a 1:1 conversation between two users, optionally tagged
+ * to a company page. When `companyPageId` is set, the conversation is a
+ * company-scoped thread (the company owner side will see it under that
+ * company's inbox, the other side will see the company's name/avatar).
+ *
+ * Routes through the API server (`POST /conversations/direct`) so that:
+ * - RLS doesn't block inserting the recipient's participant row.
+ * - Company / personal threads stay separate (the SECURITY DEFINER RPC
+ *   matches on `company_page_id`).
+ */
 export async function getOrCreateWebConversation(
   currentUserId: string,
   targetId: string,
+  companyPageId?: string | null,
+  forceAccepted = false,
 ): Promise<string | null> {
   try {
-    // Look for an existing 1:1 conversation shared by both users
-    const { data: myRows } = await supabase
-      .from("conversation_participants")
-      .select("conversation_id")
-      .eq("user_id", currentUserId);
-
-    if (myRows && myRows.length > 0) {
-      const myIds = (myRows as any[]).map(r => r.conversation_id);
-      const { data: shared } = await supabase
-        .from("conversation_participants")
-        .select("conversation_id, conversation:conversations(id, is_group)")
-        .eq("user_id", targetId)
-        .in("conversation_id", myIds);
-
-      const existing = (shared as any[])?.find(r => !(r.conversation as any)?.is_group);
-      if (existing) return existing.conversation_id as string;
+    const session = await getCachedSession();
+    const token = session?.access_token;
+    if (!token) {
+      console.warn("getOrCreateWebConversation: no session token");
+      return null;
     }
 
-    // Create new 1:1 conversation
-    const { data: convo, error: convErr } = await supabase
-      .from("conversations")
-      .insert({ is_group: false })
-      .select("id")
-      .single();
-    if (convErr || !convo) return null;
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
+      ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
 
-    await supabase.from("conversation_participants").insert([
-      { conversation_id: convo.id, user_id: currentUserId, accepted: true },
-      { conversation_id: convo.id, user_id: targetId,      accepted: false },
-    ]);
+    const res = await fetch(`${apiBase}/conversations/direct`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        user_id_1:       currentUserId,
+        user_id_2:       targetId,
+        company_page_id: companyPageId ?? null,
+        force_accepted:  forceAccepted,
+      }),
+    });
 
-    return convo.id as string;
+    if (!res.ok) {
+      console.warn("getOrCreateWebConversation server error:", res.status);
+      return null;
+    }
+    const json = await res.json() as { conversation_id?: string };
+    return json.conversation_id ?? null;
   } catch (e) {
     console.warn("getOrCreateWebConversation:", e);
     return null;
@@ -1009,6 +1020,13 @@ export interface WebConversation {
    * - uuid  → conversation belongs to that company page's inbox.
    */
   company_page_id?: string | null;
+  /**
+   * Resolved company identity for the company-scoped thread (when
+   * `company_page_id` is set). Used by the chat list to render the
+   * company's name/avatar to the non-owner side instead of leaking
+   * the owner's personal profile.
+   */
+  company_page?: { id: string; owner_id: string | null; name: string; avatar_url: string | null } | null;
 }
 
 export interface WebMessage {
@@ -1021,6 +1039,10 @@ export interface WebMessage {
   message_type?: string | null;
   media_url?: string | null;
   sender?: { id: string; full_name: string; avatar_url?: string | null };
+  /** When the message was authored from a company identity, this
+   *  carries the company's display name/avatar so the recipient sees
+   *  "Empresa X" instead of the owner's personal profile. */
+  from_company?: { id: string; name: string; avatar_url: string | null } | null;
 }
 
 /**
@@ -1072,6 +1094,29 @@ export async function fetchWebConversations(
       profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
     }
 
+    // Resolve company identities for company-scoped conversations so the
+    // non-owner side renders "Empresa X" instead of the owner's personal
+    // profile (privacy: owner's personal name/avatar would otherwise leak).
+    const convoCompanyIds = [
+      ...new Set(
+        ((convosRes.data ?? []) as any[])
+          .map((r: any) => r.conversation?.company_page_id as string | null | undefined)
+          .filter(Boolean) as string[],
+      ),
+    ];
+    let companyPageMap = new Map<string, { id: string; owner_id: string | null; name: string; avatar_url: string | null }>();
+    if (convoCompanyIds.length > 0) {
+      const { data: cpRows } = await supabase
+        .from("company_pages")
+        .select("id, owner_id, name, avatar_url")
+        .in("id", convoCompanyIds);
+      if (cpRows) {
+        for (const r of cpRows as Array<{ id: string; owner_id: string | null; name: string; avatar_url: string | null }>) {
+          companyPageMap.set(r.id, r);
+        }
+      }
+    }
+
     const results: WebConversation[] = [];
     for (const row of convosRes.data as any[]) {
       const convo = row.conversation;
@@ -1079,6 +1124,8 @@ export async function fetchWebConversations(
 
       const pInfo = participantMap.get(convo.id);
       const participant = pInfo?.other_user_id ? (profileMap.get(pInfo.other_user_id) ?? null) : null;
+      const cpId = (convo as any).company_page_id ?? null;
+      const company_page = cpId ? (companyPageMap.get(cpId) ?? null) : null;
 
       const lastMsgRes = await supabase
         .from("messages")
@@ -1104,7 +1151,8 @@ export async function fetchWebConversations(
         last_message_at: lastMsg?.created_at ?? convo.created_at,
         unread_count: 0,
         participant,
-        company_page_id: (convo as any).company_page_id ?? null,
+        company_page_id: cpId,
+        company_page,
       });
     }
 
@@ -1132,46 +1180,72 @@ export async function fetchWebMessages(conversationId: string): Promise<WebMessa
     const { data: rpcData, error: rpcError } = await supabase
       .rpc("get_conversation_messages", { p_conversation_id: conversationId });
 
+    let raw: any[] | null = null;
     if (!rpcError && rpcData) {
-      return (rpcData as any[]).map((m) => ({
-        id:              m.id,
-        conversation_id: m.conversation_id,
-        sender_id:       m.sender_id,
-        content:         m.content ?? "",
-        created_at:      m.created_at,
-        message_type:    m.message_type ?? null,
-        media_url:       m.media_url ?? null,
+      raw = (rpcData as any[]).map((m) => ({
+        id:                   m.id,
+        conversation_id:      m.conversation_id,
+        sender_id:            m.sender_id,
+        content:              m.content ?? "",
+        created_at:           m.created_at,
+        message_type:         m.message_type ?? null,
+        media_url:            m.media_url ?? null,
+        from_company_page_id: m.from_company_page_id ?? null,
         sender: {
           id:         m.sender_id,
-          full_name:  m.sender_name  ?? null,
+          full_name:  m.sender_name   ?? null,
           avatar_url: m.sender_avatar ?? null,
         },
       }));
+    } else {
+      // Fallback: direct query (may only return messages where sender_id = current user due to RLS)
+      console.warn("get_conversation_messages RPC unavailable, using direct query:", rpcError?.message);
+      const { data } = await supabase
+        .from("messages")
+        .select("id, conversation_id, sender_id, content, created_at, message_type, media_url, from_company_page_id")
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: true })
+        .limit(200);
+
+      if (!data || data.length === 0) return [];
+
+      const senderIds = [...new Set(data.map((m: any) => m.sender_id))] as string[];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url")
+        .in("id", senderIds);
+      const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+
+      raw = data.map((m: any) => ({
+        ...m,
+        from_company_page_id: m.from_company_page_id ?? null,
+        sender: profileMap.get(m.sender_id) ?? null,
+      }));
     }
 
-    // Fallback: direct query (may only return messages where sender_id = current user due to RLS)
-    console.warn("get_conversation_messages RPC unavailable, using direct query:", rpcError?.message);
-    const { data } = await supabase
-      .from("messages")
-      .select("id, conversation_id, sender_id, content, created_at, message_type, media_url")
-      .eq("conversation_id", conversationId)
-      .order("created_at", { ascending: true })
-      .limit(200);
+    if (!raw) return [];
 
-    if (!data || data.length === 0) return [];
+    // Resolve company identities for messages authored as a company so the
+    // recipient sees "Empresa X" instead of the owner's personal profile.
+    const fromCpIds = [
+      ...new Set(raw.map(m => m.from_company_page_id).filter(Boolean) as string[]),
+    ];
+    if (fromCpIds.length > 0) {
+      const { data: cpRows } = await supabase
+        .from("company_pages")
+        .select("id, name, avatar_url")
+        .in("id", fromCpIds);
+      const cpMap = new Map<string, { id: string; name: string; avatar_url: string | null }>();
+      for (const c of (cpRows ?? []) as Array<{ id: string; name: string; avatar_url: string | null }>) {
+        cpMap.set(c.id, c);
+      }
+      raw = raw.map(m => ({
+        ...m,
+        from_company: m.from_company_page_id ? (cpMap.get(m.from_company_page_id) ?? null) : null,
+      }));
+    }
 
-    const senderIds = [...new Set(data.map((m: any) => m.sender_id))] as string[];
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, full_name, avatar_url")
-      .in("id", senderIds);
-
-    const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
-
-    return data.map((m: any) => ({
-      ...m,
-      sender: profileMap.get(m.sender_id) ?? null,
-    }));
+    return raw as WebMessage[];
   } catch (e) {
     console.warn("fetchWebMessages:", e);
     return [];
@@ -1183,6 +1257,12 @@ export async function fetchWebMessages(conversationId: string): Promise<WebMessa
  * provided), `from_company_page_id` is persisted so the message is rendered
  * with the company's name/avatar to the recipient and remains in the company
  * inbox after switching identities.
+ *
+ * Routed through the API server (POST /messages/send) rather than a direct
+ * Supabase insert: the server enforces sender / company-membership checks
+ * (see api-server/src/routes/messages.ts). A direct client insert would let
+ * a malicious caller spoof `from_company_page_id` for any company they don't
+ * actually administer.
  */
 export async function sendWebMessage(
   conversationId: string,
@@ -1191,16 +1271,39 @@ export async function sendWebMessage(
   opts?: { companyPageId?: string | null; messageType?: string; mediaUrl?: string | null },
 ): Promise<boolean> {
   try {
+    const session = await getCachedSession();
+    const token = session?.access_token;
+    if (!token) {
+      console.warn("sendWebMessage: no session token");
+      return false;
+    }
+
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
+      ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
+
     const payload: Record<string, any> = {
       conversation_id: conversationId,
-      sender_id: senderId,
+      sender_id:       senderId,
       content,
-      message_type: opts?.messageType ?? "text",
+      message_type:    opts?.messageType ?? "text",
     };
     if (opts?.companyPageId) payload.from_company_page_id = opts.companyPageId;
-    if (opts?.mediaUrl) payload.media_url = opts.mediaUrl;
-    const { error } = await supabase.from("messages").insert(payload);
-    return !error;
+    if (opts?.mediaUrl)      payload.media_url            = opts.mediaUrl;
+
+    const res = await fetch(`${apiBase}/messages/send`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization:  `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      console.warn("sendWebMessage server error:", res.status);
+      return false;
+    }
+    return true;
   } catch (e) {
     console.warn("sendWebMessage:", e);
     return false;
@@ -1557,6 +1660,8 @@ export interface AppOpportunity {
   interests_count?: number;
   applications_count?: number;
   cover_image_url?: string | null;
+  company_page_id?: string | null;
+  company_page?: { id: string; owner_id?: string | null; name: string; avatar_url?: string | null } | null;
   creator?: { id: string; full_name: string; avatar_url?: string | null } | null;
 }
 
@@ -1650,7 +1755,7 @@ export async function fetchOpportunities(
   const { data, error } = await supabase
     .from("opportunities")
     .select(`
-      id, type, title, description, category, company, location,
+      id, type, title, description, category, company, company_page_id, location,
       price, salary, contract_type, contact_email, expires_at, created_at,
       created_by, interests_count, applications_count, cover_image_url
     `)
@@ -1662,23 +1767,46 @@ export async function fetchOpportunities(
 
   const items = data as AppOpportunity[];
 
-  if (!userId) return items;
+  // Resolve company_page (id, name, avatar, owner) for items owned by a company page
+  const companyPageIds = [
+    ...new Set(items.map((i) => i.company_page_id).filter(Boolean) as string[]),
+  ];
+  let companyPageMap = new Map<string, { id: string; owner_id: string | null; name: string; avatar_url: string | null }>();
+  if (companyPageIds.length > 0) {
+    const { data: cpRows } = await supabase
+      .from("company_pages")
+      .select("id, owner_id, name, avatar_url")
+      .in("id", companyPageIds);
+    if (cpRows) {
+      for (const r of cpRows as Array<{ id: string; owner_id: string | null; name: string; avatar_url: string | null }>) {
+        companyPageMap.set(r.id, r);
+      }
+    }
+  }
 
-  const ids = items.map((i) => i.id);
+  const withCompany: AppOpportunity[] = items.map((i) => ({
+    ...i,
+    company_page: i.company_page_id ? (companyPageMap.get(i.company_page_id) ?? null) : null,
+  }));
+
+  if (!userId) return withCompany;
+
+  const ids = withCompany.map((i) => i.id);
   type OppIdRow = { opportunity_id: string };
-  const [savedRes, appliedRes] = await Promise.all([
-    supabase.from("saved_opportunities").select("opportunity_id").eq("user_id", userId).in("opportunity_id", ids),
+  const [appliedRes] = await Promise.all([
     type === "vaga"
-      ? supabase.from("job_applications").select("opportunity_id").eq("user_id", userId).in("opportunity_id", ids)
+      ? supabase
+          .from("opportunity_applications")
+          .select("opportunity_id")
+          .eq("applicant_id", userId)
+          .in("opportunity_id", ids)
       : Promise.resolve({ data: [] as OppIdRow[] }),
   ]);
 
-  const savedSet = new Set(((savedRes.data ?? []) as OppIdRow[]).map((r) => r.opportunity_id));
   const appliedSet = new Set(((appliedRes.data ?? []) as OppIdRow[]).map((r) => r.opportunity_id));
 
-  return items.map((i) => ({
+  return withCompany.map((i) => ({
     ...i,
-    is_saved: savedSet.has(i.id),
     is_applied: appliedSet.has(i.id),
   }));
 }
@@ -1690,7 +1818,7 @@ export async function fetchOpportunityById(
   const { data, error } = await supabase
     .from("opportunities")
     .select(`
-      id, type, title, description, category, company, location,
+      id, type, title, description, category, company, company_page_id, location,
       price, salary, contract_type, contact_email, expires_at, created_at,
       created_by, interests_count, applications_count, cover_image_url
     `)
@@ -1702,7 +1830,7 @@ export async function fetchOpportunityById(
   const rawItem = data as AppOpportunity;
   let result: AppOpportunity = { ...rawItem };
 
-  if (userId && result.created_by) {
+  if (result.created_by) {
     const { data: profile } = await supabase
       .from("profiles")
       .select("id, full_name, avatar_url")
@@ -1711,17 +1839,37 @@ export async function fetchOpportunityById(
     result.creator = (profile as AppOpportunity["creator"]) ?? null;
   }
 
+  if (result.company_page_id) {
+    const { data: cp } = await supabase
+      .from("company_pages")
+      .select("id, owner_id, name, avatar_url")
+      .eq("id", result.company_page_id)
+      .maybeSingle();
+    result.company_page = (cp as AppOpportunity["company_page"]) ?? null;
+  }
+
   if (userId) {
-    const [savedRes, appliedRes, intRes] = await Promise.all([
-      supabase.from("saved_opportunities").select("id").eq("user_id", userId).eq("opportunity_id", id).maybeSingle(),
+    const [appliedRes, intRes] = await Promise.all([
       result.type === "vaga"
-        ? supabase.from("job_applications").select("id").eq("user_id", userId).eq("opportunity_id", id).maybeSingle()
+        ? supabase
+            .from("opportunity_applications")
+            .select("id")
+            .eq("applicant_id", userId)
+            .eq("opportunity_id", id)
+            .maybeSingle()
         : Promise.resolve({ data: null }),
-      supabase.from("opportunity_interests").select("id").eq("user_id", userId).eq("opportunity_id", id).maybeSingle(),
+      result.type !== "vaga"
+        ? supabase
+            .from("notifications")
+            .select("id")
+            .eq("type", "interest")
+            .eq("opportunity_id", id)
+            .eq("actor_id", userId)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
     ]);
     result = {
       ...result,
-      is_saved: !!savedRes.data,
       is_applied: !!appliedRes.data,
       is_interested: !!intRes.data,
     };
@@ -1736,12 +1884,14 @@ export async function createOpportunity(params: {
   description?: string | null;
   category?: string | null;
   company?: string | null;
+  company_page_id?: string | null;
   location?: string | null;
   price?: string | null;
   salary?: string | null;
   contract_type?: string | null;
   contact_email?: string | null;
   expires_at?: string | null;
+  cover_image_url?: string | null;
   created_by: string;
 }): Promise<AppOpportunity | null> {
   try {
@@ -1831,28 +1981,54 @@ export async function getCvSignedUrl(cvValue: string): Promise<string | null> {
 
 export async function applyToJob(
   opportunityId: string,
-  userId: string,
+  _userId: string,
   cvUrl: string | null,
   message: string | null
 ): Promise<boolean> {
-  const { error } = await supabase.from("job_applications").insert({
-    opportunity_id: opportunityId,
-    user_id: userId,
-    cv_url: cvUrl,
-    message,
-  });
-  return !error;
+  try {
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
+      ?? `${window.location.origin}/api`;
+    const session = await getCachedSession();
+    const token = session?.access_token;
+    const res = await fetch(`${apiBase}/community/opportunities/${opportunityId}/apply`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ cv_url: cvUrl, message }),
+    });
+    if (!res.ok) { console.error("applyToJob:", res.status); return false; }
+    return true;
+  } catch (e) {
+    console.error("applyToJob:", e);
+    return false;
+  }
 }
 
 export async function expressInterest(
   opportunityId: string,
-  userId: string
+  _userId: string
 ): Promise<boolean> {
-  const { error } = await supabase.from("opportunity_interests").insert({
-    opportunity_id: opportunityId,
-    user_id: userId,
-  });
-  return !error;
+  try {
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
+      ?? `${window.location.origin}/api`;
+    const session = await getCachedSession();
+    const token = session?.access_token;
+    const res = await fetch(`${apiBase}/community/opportunities/${opportunityId}/interest`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) { console.error("expressInterest:", res.status); return false; }
+    return true;
+  } catch (e) {
+    console.error("expressInterest:", e);
+    return false;
+  }
 }
 
 export async function trackOpportunityView(opportunityId: string): Promise<void> {
@@ -2696,19 +2872,42 @@ export interface WebNotification {
   message?: string | null;
   read: boolean;
   created_at: string;
+  /** When set, the notification belongs to this company's inbox; the
+   *  personal feed must filter these out. */
+  target_company_id?: string | null;
   actor?: { id: string; full_name: string; avatar_url?: string | null } | null;
   connection_id?: string | null;
   connection_status?: "pending" | "accepted" | "rejected" | null;
 }
 
-export async function fetchWebNotifications(userId: string): Promise<WebNotification[]> {
+/**
+ * Fetch notifications scoped to the user's currently-active identity.
+ * - Personal mode (`activeCompanyId == null`): only notifications with
+ *   `target_company_id IS NULL` (so company-targeted notifications such as
+ *   job applications and marketplace inquiries do NOT leak into the
+ *   personal inbox).
+ * - Company mode (`activeCompanyId == <uuid>`): only notifications targeted
+ *   to that company (`target_company_id = activeCompanyId`).
+ */
+export async function fetchWebNotifications(
+  userId: string,
+  activeCompanyId?: string | null,
+): Promise<WebNotification[]> {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from("notifications")
-      .select("id, user_id, actor_id, type, post_id, message, read, created_at")
+      .select("id, user_id, actor_id, type, post_id, message, read, created_at, target_company_id")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(60);
+
+    if (activeCompanyId) {
+      query = query.eq("target_company_id", activeCompanyId);
+    } else {
+      query = query.is("target_company_id", null);
+    }
+
+    const { data, error } = await query;
     if (error || !data) return [];
 
     const actorIds = [...new Set((data as any[]).filter(n => n.actor_id).map((n: any) => n.actor_id as string))];
@@ -2729,8 +2928,19 @@ export async function markWebNotificationRead(notifId: string): Promise<void> {
   await supabase.from("notifications").update({ read: true }).eq("id", notifId);
 }
 
-export async function markAllWebNotificationsRead(userId: string): Promise<void> {
-  await supabase.from("notifications").update({ read: true }).eq("user_id", userId).eq("read", false);
+/**
+ * Mark all unread notifications as read, scoped to the active identity so
+ * the personal "mark all" doesn't accidentally clear company notifications
+ * the user hasn't seen yet (and vice versa).
+ */
+export async function markAllWebNotificationsRead(
+  userId: string,
+  activeCompanyId?: string | null,
+): Promise<void> {
+  let q = supabase.from("notifications").update({ read: true }).eq("user_id", userId).eq("read", false);
+  if (activeCompanyId) q = q.eq("target_company_id", activeCompanyId);
+  else                 q = q.is("target_company_id", null);
+  await q;
 }
 
 export async function acceptWebConnectionRequest(connectionId: string): Promise<boolean> {

@@ -332,13 +332,32 @@ export default function MensagensPage() {
     setSending(false);
   };
 
+  // For a company-scoped 1:1 conversation, the side that is NOT the company
+  // owner should see the company's name/avatar instead of the owner's
+  // personal profile (privacy + correct identity). The company-owner side
+  // (viewing through their company inbox) keeps seeing the candidate/buyer.
+  const showCompanyIdentity = (c: WebConversation): boolean =>
+    !c.is_group
+    && !!c.company_page
+    && !!c.company_page.id
+    && c.company_page.owner_id !== userId;
+
   const filteredConvos = conversations.filter(c => {
-    const name = c.name ?? c.participant?.full_name ?? "";
+    const name = showCompanyIdentity(c)
+      ? (c.company_page?.name ?? "")
+      : (c.name ?? c.participant?.full_name ?? "");
     return name.toLowerCase().includes(search.toLowerCase());
   });
 
-  const getConvoName   = (c: WebConversation) => c.name ?? c.participant?.full_name ?? "Conversa";
-  const getConvoAvatar = (c: WebConversation) => c.participant?.avatar_url ?? null;
+  const getConvoName = (c: WebConversation) =>
+    showCompanyIdentity(c)
+      ? (c.company_page?.name ?? "Empresa")
+      : (c.name ?? c.participant?.full_name ?? "Conversa");
+
+  const getConvoAvatar = (c: WebConversation) =>
+    showCompanyIdentity(c)
+      ? (c.company_page?.avatar_url ?? null)
+      : (c.participant?.avatar_url ?? null);
 
   const busy = sending || uploading;
   const canSend = (newMsg.trim().length > 0 || attachFile !== null) && !busy;
@@ -362,12 +381,24 @@ export default function MensagensPage() {
           const isMedia = !!attach;
           const isImageMsg = msg.message_type === "image" ||
             (isMedia && attach && isImageUrl(attach.url));
+          // When the message was authored from a company identity, render
+          // the company's name/avatar instead of the owner's personal profile.
+          const fromCompany = msg.from_company ?? null;
+          const displayName   = fromCompany?.name        ?? msg.sender?.full_name ?? "?";
+          const displayAvatar = fromCompany?.avatar_url  ?? msg.sender?.avatar_url ?? null;
+          const onClickSender = () => {
+            if (fromCompany?.id) {
+              setLocation(`/app/empresa/${fromCompany.id}`);
+            } else if (msg.sender_id) {
+              setLocation(`/app/usuario/${msg.sender_id}`);
+            }
+          };
           return (
             <div key={msg.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", gap: 8 }}>
-              {!isMe && <div onClick={() => msg.sender_id && setLocation(`/app/usuario/${msg.sender_id}`)} style={{ cursor: "pointer", flexShrink: 0, alignSelf: "flex-end" }}><Avatar src={msg.sender?.avatar_url} name={msg.sender?.full_name ?? "?"} size={30} /></div>}
+              {!isMe && <div onClick={onClickSender} style={{ cursor: "pointer", flexShrink: 0, alignSelf: "flex-end" }}><Avatar src={displayAvatar} name={displayName} size={30} /></div>}
               <div style={{ maxWidth: "76%" }}>
                 {!isMe && (
-                  <div onClick={() => msg.sender_id && setLocation(`/app/usuario/${msg.sender_id}`)} style={{ fontSize: 11, color: MUTED, marginBottom: 2, cursor: "pointer" }}>{msg.sender?.full_name}</div>
+                  <div onClick={onClickSender} style={{ fontSize: 11, color: MUTED, marginBottom: 2, cursor: "pointer" }}>{displayName}</div>
                 )}
                 <div style={{
                   backgroundColor: isMe ? GOLD : WHITE,

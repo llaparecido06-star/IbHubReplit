@@ -136,10 +136,42 @@ router.post("/messages/send", validateBody(SendMessageSchema), async (req: Reque
     content,
     message_type,
   };
-  if (media_url)            payload.media_url            = media_url;
-  if (reply_to_id)          payload.reply_to_id          = reply_to_id;
-  if (metadata)             payload.metadata             = metadata;
-  if (from_company_page_id) payload.from_company_page_id = from_company_page_id;
+  if (media_url)   payload.media_url   = media_url;
+  if (reply_to_id) payload.reply_to_id = reply_to_id;
+  if (metadata)    payload.metadata    = metadata;
+
+  // Anti-spoofing: a message can only be authored "as" a company if the
+  // sender is the owner OR a registered admin of that company page.
+  // Without this check, any caller able to send a message could pass an
+  // arbitrary `from_company_page_id` and impersonate that company in the
+  // recipient's UI (the per-message identity swap renders company name +
+  // avatar instead of the personal sender).
+  if (from_company_page_id) {
+    const ownerCheckIds = [...new Set([callerId, sender_id])];
+    const { data: ownerRow } = await supabaseAdmin
+      .from("company_pages")
+      .select("id")
+      .eq("id", from_company_page_id)
+      .in("owner_id", ownerCheckIds)
+      .maybeSingle();
+
+    let allowed = !!ownerRow;
+    if (!allowed) {
+      const { data: adminRow } = await supabaseAdmin
+        .from("company_page_admins")
+        .select("id")
+        .eq("company_id", from_company_page_id)
+        .in("user_id", ownerCheckIds)
+        .maybeSingle();
+      allowed = !!adminRow;
+    }
+
+    if (!allowed) {
+      res.status(403).json({ error: "not_company_member" });
+      return;
+    }
+    payload.from_company_page_id = from_company_page_id;
+  }
 
   const { data, error } = await supabaseAdmin
     .from("messages")
@@ -191,6 +223,38 @@ router.post("/conversations/direct", validateBody(DirectConversationSchema), asy
 
     if (!profileRow) {
       res.status(403).json({ error: "user_id_1 não corresponde ao usuário autenticado." });
+      return;
+    }
+  }
+
+  // Anti-spoofing: a conversation may carry a `company_page_id` only when
+  // it actually relates to that company — either the SENDER is sending
+  // "as" the company (caller / user_id_1 owns or admins it) OR the
+  // RECIPIENT is the company (user_id_2 owns or admins it; this is the
+  // common job-application / marketplace-inquiry flow where a candidate
+  // contacts a company-owned listing). Without this check, anyone could
+  // tag a thread with an arbitrary company id and have it appear in that
+  // company's inbox.
+  if (company_page_id) {
+    const candidateIds = [...new Set([callerId, user_id_1, user_id_2])];
+    const { data: ownerRows } = await supabaseAdmin
+      .from("company_pages")
+      .select("id")
+      .eq("id", company_page_id)
+      .in("owner_id", candidateIds);
+
+    let allowed = (ownerRows ?? []).length > 0;
+    if (!allowed) {
+      const { data: adminRows } = await supabaseAdmin
+        .from("company_page_admins")
+        .select("id")
+        .eq("company_id", company_page_id)
+        .in("user_id", candidateIds);
+      allowed = (adminRows ?? []).length > 0;
+    }
+
+    if (!allowed) {
+      res.status(403).json({ error: "not_company_member" });
       return;
     }
   }

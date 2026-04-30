@@ -124,25 +124,58 @@ router.post("/community/opportunities", async (req: Request, res: Response): Pro
   }
 
   const {
-    type, title, description, category, company, location,
-    price, salary, contract_type, contact_email, expires_at,
+    type, title, description, category, company, company_page_id, location,
+    price, salary, contract_type, contact_email, expires_at, cover_image_url,
   } = req.body as {
     type?: "marketplace" | "vaga";
     title?: string;
     description?: string | null;
     category?: string | null;
     company?: string | null;
+    company_page_id?: string | null;
     location?: string | null;
     price?: string | null;
     salary?: string | null;
     contract_type?: string | null;
     contact_email?: string | null;
     expires_at?: string | null;
+    cover_image_url?: string | null;
   };
 
   if (!title?.trim() || !type) {
     res.status(400).json({ error: "title and type are required" });
     return;
+  }
+
+  // Validate that the caller owns or admins the company page they want to publish under.
+  let resolvedCompanyPageId: string | null = null;
+  if (company_page_id) {
+    const { data: cp, error: cpErr } = await supabaseAdmin
+      .from("company_pages")
+      .select("id, owner_id")
+      .eq("id", company_page_id)
+      .maybeSingle();
+    if (cpErr || !cp) {
+      res.status(400).json({ error: "company_page_not_found" });
+      return;
+    }
+
+    let allowed = cp.owner_id === userId || !!profileRow?.is_admin;
+    if (!allowed) {
+      const { data: adminRow } = await supabaseAdmin
+        .from("company_page_admins")
+        .select("user_id")
+        .eq("company_id", company_page_id)
+        .eq("user_id", userId)
+        .maybeSingle();
+      allowed = !!adminRow;
+    }
+
+    if (!allowed) {
+      res.status(403).json({ error: "not_company_admin" });
+      return;
+    }
+    resolvedCompanyPageId = company_page_id;
   }
 
   const { data, error } = await supabaseAdmin
@@ -154,15 +187,17 @@ router.post("/community/opportunities", async (req: Request, res: Response): Pro
       description: description ?? null,
       category: category ?? null,
       company: company ?? null,
+      company_page_id: resolvedCompanyPageId,
       location: location ?? null,
       price: price ?? null,
       salary: salary ?? null,
       contract_type: contract_type ?? null,
       contact_email: contact_email ?? null,
       expires_at: expires_at ?? null,
+      cover_image_url: cover_image_url ?? null,
       is_active: true,
     })
-    .select("id, type, title, description, category, company, location, price, salary, contract_type, contact_email, expires_at, created_at, created_by, is_active")
+    .select("id, type, title, description, category, company, company_page_id, location, price, salary, contract_type, contact_email, expires_at, cover_image_url, created_at, created_by, is_active")
     .single();
 
   if (error) {
@@ -218,6 +253,162 @@ router.post("/community/companies", async (req: Request, res: Response): Promise
   }
 
   res.status(201).json({ company: data });
+});
+
+/**
+ * POST /community/opportunities/:id/apply
+ * Inserts an `opportunity_applications` row and a recipient notification.
+ * If the opportunity is owned by a company page (`opportunities.company_page_id`),
+ * the notification is routed to the company inbox via `target_company_id`
+ * (and `user_id` = company owner). Otherwise it's a personal notification.
+ *
+ * Body: { cv_url?: string|null, message?: string|null }
+ */
+router.post("/community/opportunities/:id/apply", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+
+  const opportunityId = req.params.id as string;
+  const { cv_url, message } = req.body as { cv_url?: string | null; message?: string | null };
+
+  const { data: opp, error: oppErr } = await supabaseAdmin
+    .from("opportunities")
+    .select("id, created_by, title, company_page_id")
+    .eq("id", opportunityId)
+    .maybeSingle();
+
+  if (oppErr || !opp) {
+    res.status(404).json({ error: "Opportunity not found" });
+    return;
+  }
+
+  const { error: appErr } = await supabaseAdmin
+    .from("opportunity_applications")
+    .insert({
+      opportunity_id: opportunityId,
+      applicant_id: userId,
+      cv_url: cv_url ?? null,
+      message: message ?? null,
+    });
+
+  if (appErr) {
+    // 23505 = unique violation (already applied) — treat as idempotent success
+    if (appErr.code !== "23505") {
+      req.log.error({ err: appErr, opportunityId, userId }, "applyToJob insert failed");
+      res.status(500).json({ error: appErr.message });
+      return;
+    }
+  }
+
+  // Don't notify if applicant is the opportunity creator
+  if (opp.created_by !== userId) {
+    let recipientUserId: string = opp.created_by;
+    let targetCompanyId: string | null = null;
+
+    if (opp.company_page_id) {
+      const { data: company } = await supabaseAdmin
+        .from("company_pages")
+        .select("owner_id")
+        .eq("id", opp.company_page_id)
+        .maybeSingle();
+      if (company?.owner_id) {
+        recipientUserId = company.owner_id as string;
+        targetCompanyId = opp.company_page_id;
+      }
+    }
+
+    const { error: notifErr } = await supabaseAdmin.from("notifications").insert({
+      user_id: recipientUserId,
+      actor_id: userId,
+      type: "application",
+      opportunity_id: opportunityId,
+      message: `se candidatou à vaga "${opp.title}"`,
+      target_company_id: targetCompanyId,
+    });
+    if (notifErr) {
+      req.log.warn({ err: notifErr, opportunityId, userId }, "applyToJob notification insert failed");
+    }
+  }
+
+  res.status(200).json({ ok: true });
+});
+
+/**
+ * POST /community/opportunities/:id/interest
+ * Records a marketplace interest as a notification (mobile pattern; the
+ * `interests_count` trigger reads from `notifications`). If the opportunity is
+ * owned by a company page, routes to the company inbox via `target_company_id`.
+ * Idempotent: skips when an interest notification already exists for this actor.
+ *
+ * Body: { } (none required)
+ */
+router.post("/community/opportunities/:id/interest", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+
+  const opportunityId = req.params.id as string;
+
+  const { data: opp, error: oppErr } = await supabaseAdmin
+    .from("opportunities")
+    .select("id, created_by, title, company_page_id")
+    .eq("id", opportunityId)
+    .maybeSingle();
+
+  if (oppErr || !opp) {
+    res.status(404).json({ error: "Opportunity not found" });
+    return;
+  }
+
+  if (opp.created_by === userId) {
+    res.status(200).json({ ok: true, skipped: "creator cannot express interest in own opportunity" });
+    return;
+  }
+
+  // Dedupe: check for existing interest notification from this actor
+  const { data: existing } = await supabaseAdmin
+    .from("notifications")
+    .select("id")
+    .eq("type", "interest")
+    .eq("opportunity_id", opportunityId)
+    .eq("actor_id", userId)
+    .maybeSingle();
+
+  if (existing) {
+    res.status(200).json({ ok: true, deduped: true });
+    return;
+  }
+
+  let recipientUserId: string = opp.created_by;
+  let targetCompanyId: string | null = null;
+
+  if (opp.company_page_id) {
+    const { data: company } = await supabaseAdmin
+      .from("company_pages")
+      .select("owner_id")
+      .eq("id", opp.company_page_id)
+      .maybeSingle();
+    if (company?.owner_id) {
+      recipientUserId = company.owner_id as string;
+      targetCompanyId = opp.company_page_id;
+    }
+  }
+
+  const { error: notifErr } = await supabaseAdmin.from("notifications").insert({
+    user_id: recipientUserId,
+    actor_id: userId,
+    type: "interest",
+    opportunity_id: opportunityId,
+    message: `tem interesse no seu anúncio "${opp.title}"`,
+    target_company_id: targetCompanyId,
+  });
+
+  if (notifErr) {
+    req.log.error({ err: notifErr, opportunityId, userId }, "expressInterest notification insert failed");
+    res.status(500).json({ error: notifErr.message });
+    return;
+  }
+
+  res.status(200).json({ ok: true });
 });
 
 /**

@@ -670,10 +670,10 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
   const loadNotifs = useCallback(async () => {
     if (!userId) return;
     setNotifLoading(true);
-    const data = await fetchWebNotifications(userId);
+    const data = await fetchWebNotifications(userId, activeCompany?.id ?? null);
     setNotifItems(data);
     setNotifLoading(false);
-  }, [userId]);
+  }, [userId, activeCompany?.id]);
 
   useEffect(() => { loadNotifs(); }, [loadNotifs]);
 
@@ -691,7 +691,7 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
   const handleMarkAllRead = async () => {
     if (!userId) return;
     setNotifItems(prev => prev.map(n => ({ ...n, read: true })));
-    await markAllWebNotificationsRead(userId);
+    await markAllWebNotificationsRead(userId, activeCompany?.id ?? null);
   };
 
   const handleNotifRead = async (notif: WebNotification) => {

@@ -126,6 +126,7 @@ export default function OportunidadesPage() {
       description: createForm.description.trim() || null,
       category: createForm.category.trim() || null,
       company: createForm.company.trim() || null,
+      company_page_id: activeCompany?.id ?? null,
       location: createForm.location.trim() || null,
       price: createTab === "marketplace" ? (createForm.price.trim() || null) : null,
       salary: createTab === "vaga" ? (createForm.salary.trim() || null) : null,

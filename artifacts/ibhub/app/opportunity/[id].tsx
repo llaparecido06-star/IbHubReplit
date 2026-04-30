@@ -144,9 +144,9 @@ export default function OpportunityDetailScreen() {
       setOpp((prev) => prev ? { ...prev, is_applied: true, applications_count: (prev.applications_count ?? 0) + 1 } : prev);
 
       const chatTargetId = opp.company_page?.owner_id ?? opp.created_by;
-      const convoId = await getOrCreateDirectConversation(user.id, chatTargetId, true, null);
+      const cpId = opp.company_page_id ?? null;
+      const convoId = await getOrCreateDirectConversation(user.id, chatTargetId, true, cpId);
       if (convoId) {
-        const cpId = opp.company_page_id ?? null;
         const appMsg = [
           `Me candidatei na sua vaga **${opp.title}**${cvUrl ? " e meu currículo abaixo" : ""}.`,
           message.trim() ? `\n\n${message.trim()}` : "",
@@ -159,7 +159,6 @@ export default function OpportunityDetailScreen() {
             metadata: { file_url: cvUrl, file_name: cvFileName, file_type: "document" },
           });
         }
-
         const route = cpId ? `/chat/${convoId}?companyId=${cpId}` : `/chat/${convoId}`;
         router.push(route as any);
       } else {
@@ -178,11 +177,11 @@ export default function OpportunityDetailScreen() {
     setContactSending(true);
     try {
       const chatTargetId = opp.company_page?.owner_id ?? opp.created_by;
-      const convoId = await getOrCreateDirectConversation(user.id, chatTargetId, true, null);
+      const cpId = opp.company_page_id ?? null;
+      const convoId = await getOrCreateDirectConversation(user.id, chatTargetId, true, cpId);
       if (convoId) {
         await sendMessage(convoId, user.id, text);
         closeContactSheet();
-        const cpId = opp.company_page_id ?? null;
         const route = cpId ? `/chat/${convoId}?companyId=${cpId}` : `/chat/${convoId}`;
         router.push(route as any);
       } else {

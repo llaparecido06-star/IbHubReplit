@@ -312,32 +312,27 @@ export async function fetchUserLastCV(userId: string): Promise<{ url: string; na
 
 export async function applyToJob(
   opportunityId: string,
-  applicantId: string,
+  _applicantId: string,
   cvUrl: string | null,
   message: string | null,
 ): Promise<boolean> {
   try {
-    const { error } = await supabase
-      .from("opportunity_applications")
-      .insert({ opportunity_id: opportunityId, applicant_id: applicantId, cv_url: cvUrl, message });
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
 
-    if (error) { console.error("applyToJob:", error); return false; }
+    const res = await fetch(`${API_URL}/community/opportunities/${opportunityId}/apply`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ cv_url: cvUrl, message }),
+    });
 
-    // Notifica o criador da vaga
-    const { data: opp } = await supabase
-      .from("opportunities")
-      .select("created_by, title")
-      .eq("id", opportunityId)
-      .single();
-
-    if (opp && opp.created_by !== applicantId) {
-      await supabase.from("notifications").insert({
-        user_id: opp.created_by,
-        actor_id: applicantId,
-        type: "application",
-        opportunity_id: opportunityId,
-        message: `se candidatou à vaga "${opp.title}"`,
-      });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      console.error("applyToJob server error:", res.status, errText);
+      return false;
     }
 
     return true;
@@ -349,38 +344,27 @@ export async function applyToJob(
 
 export async function expressInterest(
   opportunityId: string,
-  userId: string,
-  message: string | null,
+  _userId: string,
+  _message: string | null,
 ): Promise<boolean> {
   try {
-    const { data: opp } = await supabase
-      .from("opportunities")
-      .select("created_by, title")
-      .eq("id", opportunityId)
-      .single();
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
 
-    if (!opp) return false;
-
-    if (opp.created_by === userId) return true;
-
-    // Evita notificação duplicada: verifica se já existe interesse deste usuário neste anúncio
-    const { data: existing } = await supabase
-      .from("notifications")
-      .select("id")
-      .eq("type", "interest")
-      .eq("opportunity_id", opportunityId)
-      .eq("actor_id", userId)
-      .maybeSingle();
-
-    if (existing) return true; // já registrado — sem nova notificação
-
-    await supabase.from("notifications").insert({
-      user_id: opp.created_by,
-      actor_id: userId,
-      type: "interest",
-      opportunity_id: opportunityId,
-      message: `tem interesse no seu anúncio "${opp.title}"`,
+    const res = await fetch(`${API_URL}/community/opportunities/${opportunityId}/interest`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({}),
     });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      console.error("expressInterest server error:", res.status, errText);
+      return false;
+    }
 
     return true;
   } catch (e) {

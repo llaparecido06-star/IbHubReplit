@@ -10,6 +10,8 @@ import {
   getCvSignedUrl,
   expressInterest,
   trackOpportunityView,
+  getOrCreateWebConversation,
+  sendWebMessage,
 } from "@/services/api";
 
 const GOLD = "#c9a84c";
@@ -65,29 +67,71 @@ export default function OportunidadeDetalhe() {
     }
 
     const ok = await applyToJob(opp.id, user.id, finalCvUrl, message.trim() || null);
-    setSubmitting(false);
-    if (ok) {
-      setShowApply(false);
-      setOpp((prev) => prev ? { ...prev, is_applied: true, applications_count: (prev.applications_count ?? 0) + 1 } : prev);
-      setMessage("");
-      setCvUrl("");
-      setCvFile(null);
-      if (finalCvUrl) {
-        getCvSignedUrl(finalCvUrl).then((url) => setMyCvSignedUrl(url));
-      }
-    } else {
+    if (!ok) {
+      setSubmitting(false);
       alert("Não foi possível enviar a candidatura. Você já se candidatou?");
+      return;
     }
+
+    setShowApply(false);
+    setOpp((prev) => prev ? { ...prev, is_applied: true, applications_count: (prev.applications_count ?? 0) + 1 } : prev);
+    const candidateMsg = message.trim();
+    setMessage("");
+    setCvUrl("");
+    setCvFile(null);
+    if (finalCvUrl) {
+      getCvSignedUrl(finalCvUrl).then((url) => setMyCvSignedUrl(url));
+    }
+
+    // Open a company-scoped chat so the recruiter receives the candidate's
+    // opening message in the COMPANY inbox (not the owner's personal DM).
+    const chatTargetId = opp.company_page?.owner_id ?? opp.created_by ?? null;
+    const cpId = opp.company_page_id ?? null;
+    if (chatTargetId && chatTargetId !== user.id) {
+      const convoId = await getOrCreateWebConversation(user.id, chatTargetId, cpId, true);
+      if (convoId) {
+        const appMsg = [
+          `Me candidatei na sua vaga **${opp.title}**${finalCvUrl ? " e meu currículo abaixo" : ""}.`,
+          candidateMsg ? `\n\n${candidateMsg}` : "",
+        ].join("");
+        await sendWebMessage(convoId, user.id, appMsg);
+        if (finalCvUrl) {
+          const cvLabel = cvFile?.name ?? "Currículo.pdf";
+          await sendWebMessage(convoId, user.id, `[attachment]:${finalCvUrl}|${cvLabel}`);
+        }
+        setSubmitting(false);
+        setLocation(`/app/mensagens?conv=${convoId}`);
+        return;
+      }
+    }
+    setSubmitting(false);
   };
 
   const handleInterest = async () => {
     if (!opp || !user?.id || isInterested) return;
     setSubmitting(true);
     const ok = await expressInterest(opp.id, user.id);
-    setSubmitting(false);
-    if (ok) {
-      setIsInterested(true);
+    if (!ok) {
+      setSubmitting(false);
+      return;
     }
+    setIsInterested(true);
+
+    // Open a company-scoped chat so the buyer's inquiry lands in the
+    // COMPANY inbox (not the owner's personal DM).
+    const chatTargetId = opp.company_page?.owner_id ?? opp.created_by ?? null;
+    const cpId = opp.company_page_id ?? null;
+    if (chatTargetId && chatTargetId !== user.id) {
+      const convoId = await getOrCreateWebConversation(user.id, chatTargetId, cpId, true);
+      if (convoId) {
+        const intMsg = `Tenho interesse em **${opp.title}**. Pode me passar mais informações?`;
+        await sendWebMessage(convoId, user.id, intMsg);
+        setSubmitting(false);
+        setLocation(`/app/mensagens?conv=${convoId}`);
+        return;
+      }
+    }
+    setSubmitting(false);
   };
 
   if (loading) {

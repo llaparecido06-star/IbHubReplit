@@ -21,6 +21,7 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import {
   AppOpportunity,
+  expressInterest,
   fetchOpportunityById,
   getOrCreateDirectConversation,
   sendMessage,
@@ -62,9 +63,17 @@ export default function MarketItemScreen() {
 
     setContacting(true);
     try {
-      const convoId = await getOrCreateDirectConversation(user.id, sellerId, true, null);
+      const companyId = item.company_page_id ?? null;
+
+      // Record interest first so the listing's interests_count and the
+      // recipient's company inbox notification both fire even if the chat
+      // creation/message step below fails. Mirrors the web
+      // OportunidadeDetalhe flow. Failures here are non-fatal — the chat
+      // is still the primary outcome of "Negociar".
+      expressInterest(item.id, user.id, null).catch(() => {});
+
+      const convoId = await getOrCreateDirectConversation(user.id, sellerId, true, companyId);
       if (convoId) {
-        const companyId = item.company_page_id;
 
         // Send opening message if user typed one
         const msgText = contactMsg.trim()

@@ -107,7 +107,8 @@ export default function JobScreen() {
       setOpp((prev) => prev ? { ...prev, is_applied: true } : prev);
 
       const chatTargetId = opp.company_page?.owner_id ?? opp.created_by;
-      const convoId = await getOrCreateDirectConversation(user.id, chatTargetId, true, null);
+      const cpId = opp.company_page_id ?? null;
+      const convoId = await getOrCreateDirectConversation(user.id, chatTargetId, true, cpId);
       if (convoId) {
         const appMsg = [
           `Me candidatei na sua vaga **${opp.title}**${cvUrl ? " e enviei meu currículo." : "."}`,
@@ -120,7 +121,8 @@ export default function JobScreen() {
             metadata: { file_url: cvUrl, file_name: finalCvName, file_type: "document" },
           });
         }
-        router.push(`/chat/${convoId}` as any);
+        const route = cpId ? `/chat/${convoId}?companyId=${cpId}` : `/chat/${convoId}`;
+        router.push(route as any);
       } else {
         Alert.alert("Candidatura enviada!", "O recrutador foi notificado da sua candidatura.");
       }
