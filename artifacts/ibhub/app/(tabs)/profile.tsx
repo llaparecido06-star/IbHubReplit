@@ -605,6 +605,7 @@ export default function ProfileScreen() {
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
   const { profile, user, signOut, activeCompany } = useAuth();
+  const userPlan = (user as any)?.plan as string | null | undefined;
 
   const [activeTab,    setActiveTab]    = useState<"feed" | "salvos" | "adega" | "anuncios">("feed");
   const [showComments, setShowComments] = useState<string | null>(null);
@@ -787,15 +788,15 @@ export default function ProfileScreen() {
     if (companyPages.length === 0) {
       router.push("/manage-business-page" as any);
     } else if (companyPages.length === 1) {
-      router.push(`/manage-business-page?id=${companyPages[0].id}` as any);
+      router.push(`/empresa/${companyPages[0].id}` as any);
     } else {
       Alert.alert(
         "Suas páginas",
-        "Selecione qual página gerenciar:",
+        "Selecione qual página abrir:",
         [
           ...companyPages.map((p) => ({
             text: p.name,
-            onPress: () => router.push(`/manage-business-page?id=${p.id}` as any),
+            onPress: () => router.push(`/empresa/${p.id}` as any),
           })),
           { text: "Cancelar", style: "cancel" as const },
         ],
@@ -1065,7 +1066,7 @@ export default function ProfileScreen() {
               {companyPages.length === 0 ? "Empresa" : "Empresa"}
             </Text>
             <Text style={[styles.actionCardSub, { color: colors.mutedForeground }]}>
-              {companyPages.length === 0 ? "Criar página" : "Gerenciar"}
+              {companyPages.length === 0 ? "Criar página" : "Minha página"}
             </Text>
           </TouchableOpacity>
 
@@ -1079,12 +1080,14 @@ export default function ProfileScreen() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.actionCard, { backgroundColor: "#6366f1" + "12", borderColor: "#6366f1" + "30" }]} onPress={() => setShowQrModal(true)} activeOpacity={0.75}>
+          <TouchableOpacity style={[styles.actionCard, { backgroundColor: "#6366f1" + "12", borderColor: "#6366f1" + "30" }]} onPress={() => router.push("/subscription" as any)} activeOpacity={0.75}>
             <View style={[styles.actionCardIcon, { backgroundColor: "#6366f1" }]}>
-              <Feather name="maximize" size={18} color="#fff" />
+              <Feather name="star" size={18} color="#fff" />
             </View>
-            <Text style={[styles.actionCardLabel, { color: colors.navy }]}>QR Code</Text>
-            <Text style={[styles.actionCardSub, { color: colors.mutedForeground }]}>Compartilhar</Text>
+            <Text style={[styles.actionCardLabel, { color: colors.navy }]}>Plano</Text>
+            <Text style={[styles.actionCardSub, { color: colors.mutedForeground }]}>
+              {userPlan ? userPlan.charAt(0).toUpperCase() + userPlan.slice(1) : "Gratuito"}
+            </Text>
           </TouchableOpacity>
         </View>
 
