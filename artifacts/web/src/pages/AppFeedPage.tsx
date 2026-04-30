@@ -232,26 +232,41 @@ export function PollDisplay({ poll, postId, currentUserId, onVote }: {
     setVoting(false);
   };
 
-  const loadVoters = async () => {
-    if (voters.length === 0 && poll.user_votes && Object.keys(poll.user_votes).length > 0) {
-      setLoadingVoters(true);
-      const ids = Object.keys(poll.user_votes);
+  // Keep voter list in sync when a realtime poll update arrives while the
+  // modal is open. We key on the serialised user_votes map so adds/removes
+  // both trigger a refetch. The loader is inlined so the effect's only
+  // dependencies are the boolean and the stable string key — a new `poll`
+  // object reference alone (e.g. caused by an unrelated parent rerender)
+  // does not refire the request.
+  const userVotesKey = poll.user_votes ? JSON.stringify(poll.user_votes) : "";
+  useEffect(() => {
+    if (!showVoters) return;
+    let cancelled = false;
+    const votesMap = userVotesKey ? (JSON.parse(userVotesKey) as Record<string, number | number[]>) : {};
+    const ids = Object.keys(votesMap);
+    if (ids.length === 0) {
+      setVoters([]);
+      return;
+    }
+    setLoadingVoters(true);
+    void (async () => {
       const profiles = await fetchPollVoters(ids);
-      const expanded: typeof voters = [];
+      if (cancelled) return;
+      const expanded: { id: string; full_name: string | null; avatar_url: string | null; username: string | null; optionIndex: number }[] = [];
       for (const p of profiles) {
-        const raw = poll.user_votes![p.id];
+        const raw = votesMap[p.id];
         const indices = Array.isArray(raw) ? raw : (typeof raw === "number" ? [raw] : []);
         for (const idx of indices) expanded.push({ ...p, optionIndex: idx });
       }
       setVoters(expanded);
       setLoadingVoters(false);
-    }
-  };
+    })();
+    return () => { cancelled = true; };
+  }, [showVoters, userVotesKey]);
 
-  const handleShowVoters = async (optionIndex: number | null) => {
+  const handleShowVoters = (optionIndex: number | null) => {
     setFocusedOption(optionIndex);
     setShowVoters(true);
-    await loadVoters();
   };
 
   const handleOptionClick = (i: number) => {

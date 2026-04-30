@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Modal,
   Pressable,
@@ -45,15 +45,24 @@ export function PollBlock({ post, onVote }: Props) {
   const hasVoted = votedIndices.length > 0;
   const lockedFromVoting = isClosed;
 
-  const openVoters = async (optionIndex: number | null) => {
+  const loadVoters = useCallback(async () => {
+    setLoadingPollVoters(true);
+    const v = await fetchPollVoters(post.id);
+    setPollVoters(v);
+    setLoadingPollVoters(false);
+  }, [post.id]);
+
+  // Keep voter list in sync when a realtime poll update arrives while the
+  // modal is open. Key on the serialised user_votes map so adds/removes both
+  // trigger a refetch.
+  const userVotesKey = post.poll?.user_votes ? JSON.stringify(post.poll.user_votes) : "";
+  useEffect(() => {
+    if (showPollVoters) void loadVoters();
+  }, [showPollVoters, userVotesKey, loadVoters]);
+
+  const openVoters = (optionIndex: number | null) => {
     setFocusedOption(optionIndex);
     setShowPollVoters(true);
-    if (pollVoters.length === 0 && !loadingPollVoters) {
-      setLoadingPollVoters(true);
-      const v = await fetchPollVoters(post.id);
-      setPollVoters(v);
-      setLoadingPollVoters(false);
-    }
   };
 
   const goToProfile = (voterId: string) => {

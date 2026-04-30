@@ -20,7 +20,7 @@ export interface Poll {
   user_voted_indices?: number[];
 }
 
-function normalizePollIndices(userVotes: Record<string, number | number[]> | undefined, userId: string): number[] {
+export function normalizePollIndices(userVotes: Record<string, number | number[]> | undefined, userId: string): number[] {
   const v = userVotes?.[userId];
   if (v == null) return [];
   if (Array.isArray(v)) return v;

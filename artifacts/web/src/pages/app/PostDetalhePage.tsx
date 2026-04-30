@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabase";
 import {
   fetchPostById, fetchPostComments, addPostComment, toggleLikePost, toggleBookmarkPost,
   changeReactionPost, toggleCommentLike, Post, AppComment, ReactionType,
-  sendMentionNotifications,
+  sendMentionNotifications, normalizePollIndices, Poll,
 } from "@/services/api";
 import { MentionTextArea } from "@/components/MentionTextArea";
 import { formatRelativeDate as relativeDate } from "@/utils/dateUtils";
@@ -161,6 +161,53 @@ export default function PostDetalhePage() {
           return [...prev, newComment];
         });
         setPost(prev => prev ? { ...prev, comments_count: prev.comments_count + 1 } : prev);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [postId, profile?.id]);
+
+  // Realtime: live poll updates from other users.
+  // The poll lives in the `poll` JSONB column on `posts`; the api-server vote
+  // handler issues an UPDATE on the row. We subscribe to that UPDATE filtered
+  // by id and patch only the `poll` field of local state. We don't touch
+  // likes_count / comments_count here — those have their own existing flows.
+  useEffect(() => {
+    if (!postId) return;
+    const userId = profile?.id;
+    const ch = supabase
+      .channel(`post_poll_${postId}`)
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "posts",
+        filter: `id=eq.${postId}`,
+      }, (payload) => {
+        const next = payload.new as { poll?: Poll | null };
+        const nextPoll = next?.poll;
+        if (!nextPoll) return;
+        setPost(prev => {
+          if (!prev) return prev;
+          // Skip when this UPDATE event was triggered by an unrelated column
+          // change (e.g. likes_count / comments_count via DB trigger) and the
+          // poll content is unchanged. Avoids unnecessary re-renders of the
+          // detail page on every like / comment.
+          const prevPollKey = prev.poll ? JSON.stringify({
+            options: prev.poll.options, total_votes: prev.poll.total_votes,
+            closed: prev.poll.closed, expires_at: prev.poll.expires_at,
+            allow_multiple: prev.poll.allow_multiple, user_votes: prev.poll.user_votes,
+          }) : "";
+          const nextPollKey = JSON.stringify({
+            options: nextPoll.options, total_votes: nextPoll.total_votes,
+            closed: nextPoll.closed, expires_at: nextPoll.expires_at,
+            allow_multiple: nextPoll.allow_multiple, user_votes: nextPoll.user_votes,
+          });
+          if (prevPollKey === nextPollKey) return prev;
+          const indices = userId ? normalizePollIndices(nextPoll.user_votes, userId) : [];
+          return {
+            ...prev,
+            poll: { ...nextPoll, user_voted_indices: indices, user_voted_index: indices[0] ?? null },
+          };
+        });
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
