@@ -92,7 +92,7 @@ export async function applyPlanChangeToCredits(userId: string): Promise<{
     logger.info({ userId, newTotal, op: "insert" }, "creditUtils: new credits row created on plan change");
 
     if (newTotal > 0) {
-      void sendPlanChangePush(userId, newTotal, 0);
+      void sendPlanChangePush(userId, newTotal, 0, newTotal);
     }
     return { credits_remaining: newTotal, credits_total: newTotal, changed: true };
   }
@@ -130,8 +130,9 @@ export async function applyPlanChangeToCredits(userId: string): Promise<{
     "creditUtils: credits adjusted on plan change",
   );
 
-  if (newTotal > oldTotal && newRemaining > oldRemaining) {
-    void sendPlanChangePush(userId, newRemaining, oldRemaining);
+  // Notify the user regardless of direction (upgrade or downgrade)
+  if (newRemaining !== oldRemaining) {
+    void sendPlanChangePush(userId, newRemaining, oldRemaining, newTotal);
   }
 
   return { credits_remaining: newRemaining, credits_total: newTotal, changed: true };
@@ -148,16 +149,27 @@ async function sendPlanChangePush(
   userId: string,
   newRemaining: number,
   previousRemaining: number,
+  newTotal: number,
 ): Promise<void> {
-  const gained = newRemaining - previousRemaining;
-  const body =
-    gained > 0
-      ? `Você ganhou +${gained} crédito${gained === 1 ? "" : "s"} de IA. Total disponível: ${newRemaining}.`
-      : `Você tem ${newRemaining} crédito${newRemaining === 1 ? "" : "s"} de IA disponíve${newRemaining === 1 ? "l" : "is"} este mês.`;
+  const diff = newRemaining - previousRemaining;
+  let title: string;
+  let body: string;
+
+  if (diff > 0) {
+    title = "✨ Créditos de IA atualizados!";
+    body  = `Você ganhou +${diff} crédito${diff === 1 ? "" : "s"} de IA. Disponível agora: ${newRemaining}/${newTotal}.`;
+  } else if (newRemaining === 0) {
+    title = "Créditos de IA removidos";
+    body  = "Seu plano atual não inclui busca por IA. Faça upgrade para ter acesso.";
+  } else {
+    const lost = Math.abs(diff);
+    title = "Créditos de IA ajustados";
+    body  = `${lost} crédito${lost === 1 ? "" : "s"} de IA removido${lost === 1 ? "" : "s"}. Você tem ${newRemaining}/${newTotal} disponíve${newRemaining === 1 ? "l" : "is"} este mês.`;
+  }
 
   await sendPushToUser({
     userId,
-    title: "✨ Créditos de IA atualizados!",
+    title,
     body,
     data: { type: "credits_updated", deepLink: "/(tabs)/mercado" },
   });
