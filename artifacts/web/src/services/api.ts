@@ -1952,7 +1952,10 @@ export async function uploadCV(file: File, userId: string): Promise<string | nul
   }
 }
 
-export async function getCvSignedUrl(cvValue: string): Promise<string | null> {
+export async function getCvSignedUrl(
+  cvValue: string,
+  opts?: { applicationId?: string },
+): Promise<string | null> {
   if (!cvValue.startsWith(CV_STORAGE_PREFIX)) {
     return cvValue;
   }
@@ -1968,7 +1971,7 @@ export async function getCvSignedUrl(cvValue: string): Promise<string | null> {
     const res = await fetch(`${apiBase}/cv/signed-url`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ path: storagePath }),
+      body: JSON.stringify({ path: storagePath, application_id: opts?.applicationId }),
     });
     if (!res.ok) return null;
     const json = await res.json() as { signedUrl?: string };
@@ -1976,6 +1979,125 @@ export async function getCvSignedUrl(cvValue: string): Promise<string | null> {
   } catch (e) {
     console.error("getCvSignedUrl:", e);
     return null;
+  }
+}
+
+export async function updateOpportunity(
+  id: string,
+  fields: Partial<Pick<AppOpportunity,
+    | "title" | "description" | "category" | "company" | "location"
+    | "price" | "salary" | "contract_type" | "contact_email" | "expires_at"
+  >>,
+): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("opportunities").update(fields).eq("id", id);
+    if (error) { console.error("updateOpportunity:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("updateOpportunity:", e);
+    return false;
+  }
+}
+
+export interface CompanyAdminOpportunity extends AppOpportunity {
+  view_count?: number;
+  sold?: boolean;
+  company_page_id: string | null;
+}
+
+export interface CompanyAdminApplicant {
+  id: string;
+  applicant_id: string;
+  cv_url: string | null;
+  message: string | null;
+  status: "pending" | "reviewed" | "shortlisted" | "hired" | "rejected";
+  created_at: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  headline: string | null;
+  username: string | null;
+}
+
+export async function fetchCompanyOpportunities(
+  companyPageId: string,
+  ownerId: string,
+  type: "vaga" | "marketplace",
+): Promise<CompanyAdminOpportunity[]> {
+  try {
+    const { data, error } = await supabase
+      .from("opportunities")
+      .select(`
+        id, created_by, type, title, description, category, location, price,
+        cover_image_url, company, contract_type, salary, contact_email,
+        expires_at, is_active, created_at,
+        interests_count, applications_count,
+        view_count, sold, company_page_id
+      `)
+      .eq("type", type)
+      .or(`company_page_id.eq.${companyPageId},created_by.eq.${ownerId}`)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) { console.error("fetchCompanyOpportunities:", error); return []; }
+    return (data ?? []) as CompanyAdminOpportunity[];
+  } catch (e) {
+    console.error("fetchCompanyOpportunities:", e);
+    return [];
+  }
+}
+
+export async function fetchOpportunityApplicants(
+  opportunityId: string,
+): Promise<CompanyAdminApplicant[]> {
+  try {
+    const { data: apps, error } = await supabase
+      .from("opportunity_applications")
+      .select("id, applicant_id, cv_url, message, status, created_at")
+      .eq("opportunity_id", opportunityId)
+      .order("created_at", { ascending: false });
+    if (error) { console.error("fetchOpportunityApplicants:", error); return []; }
+    if (!apps?.length) return [];
+    const ids = [...new Set(apps.map((a: any) => a.applicant_id as string))];
+    const { data: profs } = await supabase
+      .from("profiles")
+      .select("id, full_name, avatar_url, headline, username")
+      .in("id", ids);
+    const map = new Map<string, any>();
+    (profs ?? []).forEach((p: any) => map.set(p.id, p));
+    return apps.map((a: any) => {
+      const p = map.get(a.applicant_id) ?? {};
+      return {
+        id: a.id,
+        applicant_id: a.applicant_id,
+        cv_url: a.cv_url,
+        message: a.message,
+        status: a.status,
+        created_at: a.created_at,
+        full_name: p.full_name ?? null,
+        avatar_url: p.avatar_url ?? null,
+        headline: p.headline ?? null,
+        username: p.username ?? null,
+      };
+    });
+  } catch (e) {
+    console.error("fetchOpportunityApplicants:", e);
+    return [];
+  }
+}
+
+export async function updateApplicantStatus(
+  applicationId: string,
+  status: CompanyAdminApplicant["status"],
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("opportunity_applications")
+      .update({ status })
+      .eq("id", applicationId);
+    if (error) { console.error("updateApplicantStatus:", error); return false; }
+    return true;
+  } catch (e) {
+    console.error("updateApplicantStatus:", e);
+    return false;
   }
 }
 

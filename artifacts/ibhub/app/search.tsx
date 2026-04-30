@@ -28,6 +28,7 @@ type Filter =
 interface PersonResult {
   id: string; full_name: string | null; username: string | null;
   avatar_url: string | null; headline: string | null; plan: string;
+  kind?: "profile" | "company_page";
 }
 interface PostResult {
   id: string; content: string; created_at: string;
@@ -133,7 +134,7 @@ export default function SearchScreen() {
         return { data: enriched };
       };
 
-      const [resP, resPub, resE, resV, resEv, resG] = await Promise.all([
+      const [resP, resPub, resE, resCP, resV, resEv, resG] = await Promise.all([
         (isAll || f === "pessoas")
           ? supabase.from("profiles")
               .select("id, full_name, username, avatar_url, headline, plan")
@@ -148,6 +149,12 @@ export default function SearchScreen() {
               .select("id, full_name, username, avatar_url, headline, plan")
               .or(`full_name.ilike.%${trimmed}%,username.ilike.%${trimmed}%,headline.ilike.%${trimmed}%`)
               .eq("profile_type", "empresa").limit(lim(20))
+          : Promise.resolve({ data: [] }),
+
+        (isAll || f === "empresas")
+          ? supabase.from("company_pages")
+              .select("id, name, avatar_url, industry")
+              .ilike("name", `%${trimmed}%`).limit(lim(20))
           : Promise.resolve({ data: [] }),
 
         (isAll || f === "vagas")
@@ -182,10 +189,35 @@ export default function SearchScreen() {
         author: Array.isArray(p.author) ? p.author[0] : p.author,
       }));
 
+      const profileEmpresas: PersonResult[] = ((resE.data ?? []) as any[]).map(p => ({
+        id: p.id,
+        full_name: p.full_name ?? null,
+        username: p.username ?? null,
+        avatar_url: p.avatar_url ?? null,
+        headline: p.headline ?? null,
+        plan: p.plan ?? "",
+        kind: "profile",
+      }));
+      const companyPages: PersonResult[] = ((resCP.data ?? []) as any[]).map(c => ({
+        id: c.id,
+        full_name: c.name ?? null,
+        username: null,
+        avatar_url: c.avatar_url ?? null,
+        headline: c.industry ?? null,
+        plan: "",
+        kind: "company_page",
+      }));
+      const seenIds = new Set<string>();
+      const mergedEmpresas = [...companyPages, ...profileEmpresas].filter(e => {
+        if (seenIds.has(e.id)) return false;
+        seenIds.add(e.id);
+        return true;
+      });
+
       setResults({
         pessoas:    (resP.data   ?? []) as PersonResult[],
         publicacoes: mappedPosts,
-        empresas:   (resE.data   ?? []) as PersonResult[],
+        empresas:   mergedEmpresas,
         vagas:      (resV.data   ?? []) as VagaResult[],
         eventos:    (resEv.data  ?? []) as EventResult[],
         grupos:     (resG.data   ?? []) as GroupResult[],
@@ -213,7 +245,9 @@ export default function SearchScreen() {
 
   const PersonRow = ({ item }: { item: PersonResult }) => (
     <TouchableOpacity style={[styles.row, { borderBottomColor: colors.border }]}
-      onPress={() => router.push(`/profile/${item.id}` as any)}>
+      onPress={() => router.push(
+        (item.kind === "company_page" ? `/empresa/${item.id}` : `/profile/${item.id}`) as any,
+      )}>
       <Avatar uri={item.avatar_url} name={item.full_name ?? "?"} size={46} />
       <View style={styles.rowBody}>
         <View style={styles.rowNameRow}>

@@ -21,8 +21,33 @@ import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
+import { maskDate } from "@/utils/masks";
 
 type AdminTab = "vagas" | "anuncios" | "eventos";
+
+const JOB_CATS       = ["Sommelier", "Enólogo", "Gerência", "Marketing", "Vendas", "Exportação", "Produção", "Outros"];
+const MARKET_CATS    = ["Vinho", "Insumo", "Equipamento", "Serviço", "Outros"];
+const CONTRACT_TYPES = ["CLT", "PJ", "Freelancer", "Estágio"];
+
+function isoToDDMMYYYY(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function ddmmyyyyToISO(str: string): string | null {
+  const parts = str.split("/");
+  if (parts.length === 3) {
+    const [dd, mm, yyyy] = parts;
+    const d = new Date(`${yyyy}-${mm}-${dd}`);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+  return null;
+}
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pending:     { label: "Pendente",     color: "#f39c12" },
@@ -155,7 +180,14 @@ function ApplicantsModal({ opportunity, visible, onClose }: ApplicantsModalProps
                     {item.cv_url ? (
                       <TouchableOpacity
                         style={[styles.cvBtn, { backgroundColor: colors.gold + "20", borderRadius: 8 }]}
-                        onPress={() => Linking.openURL(item.cv_url!)}
+                        onPress={async () => {
+                          const url = await API.getCvSignedUrl(item.cv_url!, { applicationId: item.id });
+                          if (url) {
+                            Linking.openURL(url);
+                          } else {
+                            Alert.alert("Erro", "Não foi possível abrir o CV.");
+                          }
+                        }}
                       >
                         <Feather name="file-text" size={14} color={colors.gold} />
                         <Text style={[styles.cvBtnText, { color: colors.gold }]}>Ver CV</Text>
@@ -269,12 +301,17 @@ interface EditOppModalProps {
 function EditOppModal({ opp, visible, onClose, onSaved }: EditOppModalProps) {
   const colors = useColors();
   const isMarket = opp?.type === "marketplace";
+  const catOptions = isMarket ? MARKET_CATS : JOB_CATS;
 
   const [title,    setTitle]    = useState("");
   const [desc,     setDesc]     = useState("");
   const [money,    setMoney]    = useState("");
   const [location, setLocation] = useState("");
   const [contact,  setContact]  = useState("");
+  const [category, setCategory] = useState<string | null>(null);
+  const [contract, setContract] = useState<string | null>(null);
+  const [company,  setCompany]  = useState("");
+  const [expiry,   setExpiry]   = useState("");
   const [saving,   setSaving]   = useState(false);
 
   useEffect(() => {
@@ -284,24 +321,70 @@ function EditOppModal({ opp, visible, onClose, onSaved }: EditOppModalProps) {
       setMoney(isMarket ? (opp.price ?? "") : (opp.salary ?? ""));
       setLocation(opp.location ?? "");
       setContact(opp.contact_email ?? "");
+      setCategory(opp.category ?? null);
+      setContract(opp.contract_type ?? null);
+      setCompany(opp.company ?? "");
+      setExpiry(isoToDDMMYYYY(opp.expires_at));
     }
   }, [opp?.id, visible]);
 
   const handleSave = async () => {
     if (!opp || !title.trim()) return;
     setSaving(true);
-    const fields = isMarket
-      ? { title: title.trim(), description: desc.trim() || undefined, price: money.trim() || undefined, location: location.trim() || undefined, contact_email: contact.trim() || undefined }
-      : { title: title.trim(), description: desc.trim() || undefined, salary: money.trim() || undefined, location: location.trim() || undefined, contact_email: contact.trim() || undefined };
-    const ok = await API.updateOpportunity(opp.id, fields);
+    const trimmedExpiry = expiry.trim();
+    const expiresIso = trimmedExpiry ? ddmmyyyyToISO(trimmedExpiry) : null;
+    if (trimmedExpiry && !expiresIso) {
+      setSaving(false);
+      Alert.alert("Data inválida", "Use o formato DD/MM/AAAA.");
+      return;
+    }
+    const baseFields: Record<string, unknown> = {
+      title: title.trim(),
+      description: desc.trim() || null,
+      category: category ?? null,
+      location: location.trim() || null,
+      contact_email: contact.trim() || null,
+      expires_at: expiresIso,
+    };
+    if (isMarket) {
+      baseFields.price = money.trim() || null;
+    } else {
+      baseFields.salary = money.trim() || null;
+      baseFields.contract_type = contract ?? null;
+      baseFields.company = company.trim() || null;
+    }
+    const ok = await API.updateOpportunity(opp.id, baseFields as Parameters<typeof API.updateOpportunity>[1]);
     setSaving(false);
     if (ok) {
-      onSaved({ ...fields });
+      onSaved(baseFields as Partial<API.CompanyAdminOpportunity>);
       onClose();
     } else {
       Alert.alert("Erro", "Não foi possível salvar. Tente novamente.");
     }
   };
+
+  const renderChips = (options: string[], selected: string | null, onSelect: (v: string) => void) => (
+    <View style={styles.chipWrap}>
+      {options.map(opt => {
+        const active = selected === opt;
+        return (
+          <TouchableOpacity
+            key={opt}
+            style={[
+              styles.chip,
+              { borderColor: active ? colors.gold : colors.border,
+                backgroundColor: active ? colors.gold + "20" : colors.background },
+            ]}
+            onPress={() => onSelect(opt)}
+          >
+            <Text style={{ color: active ? colors.gold : colors.foreground, fontSize: 13, fontWeight: active ? "700" : "400" }}>
+              {opt}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
@@ -344,6 +427,11 @@ function EditOppModal({ opp, visible, onClose, onSaved }: EditOppModalProps) {
             </View>
 
             <View style={styles.fieldGroup}>
+              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Categoria</Text>
+              {renderChips(catOptions, category, setCategory)}
+            </View>
+
+            <View style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
                 Descrição
               </Text>
@@ -357,6 +445,26 @@ function EditOppModal({ opp, visible, onClose, onSaved }: EditOppModalProps) {
                 numberOfLines={4}
               />
             </View>
+
+            {!isMarket ? (
+              <>
+                <View style={styles.fieldGroup}>
+                  <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Tipo de contrato</Text>
+                  {renderChips(CONTRACT_TYPES, contract, setContract)}
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Empresa</Text>
+                  <TextInput
+                    style={[styles.textInput, { backgroundColor: colors.secondary, color: colors.foreground, borderColor: colors.border }]}
+                    value={company}
+                    onChangeText={setCompany}
+                    placeholder="Nome da empresa"
+                    placeholderTextColor={colors.mutedForeground}
+                  />
+                </View>
+              </>
+            ) : null}
 
             <View style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
@@ -379,6 +487,19 @@ function EditOppModal({ opp, visible, onClose, onSaved }: EditOppModalProps) {
                 onChangeText={setLocation}
                 placeholder="Ex: São Paulo, SP"
                 placeholderTextColor={colors.mutedForeground}
+              />
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Expira em</Text>
+              <TextInput
+                style={[styles.textInput, { backgroundColor: colors.secondary, color: colors.foreground, borderColor: colors.border }]}
+                value={expiry}
+                onChangeText={(v) => setExpiry(maskDate(v))}
+                placeholder="DD/MM/AAAA"
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType="numeric"
+                maxLength={10}
               />
             </View>
 
@@ -1062,6 +1183,8 @@ const styles = StyleSheet.create({
   fieldLabel:        { fontSize: 12, fontWeight: "600", letterSpacing: 0.3, textTransform: "uppercase" },
   textInput:         { borderRadius: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15 },
   textArea:          { minHeight: 100, textAlignVertical: "top", paddingTop: 10 },
+  chipWrap:          { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip:              { borderWidth: 1, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
   // applicants
   applicantCard:     { padding: 14, gap: 10 },
   applicantTop:      { flexDirection: "row", alignItems: "flex-start" },

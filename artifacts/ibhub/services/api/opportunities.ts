@@ -264,6 +264,8 @@ export async function createOpportunity(
   }
 }
 
+export const CV_STORAGE_PREFIX = "cvs://";
+
 export async function uploadCV(uri: string, userId: string): Promise<string | null> {
   try {
     const ext = uri.split(".").pop()?.toLowerCase() ?? "pdf";
@@ -281,10 +283,44 @@ export async function uploadCV(uri: string, userId: string): Promise<string | nu
 
     if (error) { console.error("uploadCV:", error); return null; }
 
-    const { data } = supabase.storage.from("cvs").getPublicUrl(path);
-    return data.publicUrl;
+    return `${CV_STORAGE_PREFIX}${path}`;
   } catch (e) {
     console.error("uploadCV:", e);
+    return null;
+  }
+}
+
+/**
+ * Resolve a CV reference into a fetchable URL.
+ * - `cvs://cvs/<user>/<file>` → POST /cv/signed-url with optional application_id
+ *   so recruiters viewing applicants' CVs are authorized via opportunity ownership.
+ * - Public/legacy URLs are returned as-is.
+ */
+export async function getCvSignedUrl(
+  cvValue: string,
+  opts?: { applicationId?: string },
+): Promise<string | null> {
+  if (!cvValue.startsWith(CV_STORAGE_PREFIX)) {
+    return cvValue;
+  }
+  const storagePath = cvValue.slice(CV_STORAGE_PREFIX.length);
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) return null;
+    const res = await fetch(`${API_URL}/cv/signed-url`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ path: storagePath, application_id: opts?.applicationId }),
+    });
+    if (!res.ok) {
+      console.error("getCvSignedUrl:", res.status);
+      return null;
+    }
+    const json = await res.json() as { signedUrl?: string };
+    return json.signedUrl ?? null;
+  } catch (e) {
+    console.error("getCvSignedUrl:", e);
     return null;
   }
 }
@@ -300,10 +336,12 @@ export async function fetchUserLastCV(userId: string): Promise<{ url: string; na
       .limit(1)
       .maybeSingle();
     if (error || !data?.cv_url) return null;
-    const segments = data.cv_url.split("/");
+    const raw = data.cv_url as string;
+    const stripped = raw.startsWith(CV_STORAGE_PREFIX) ? raw.slice(CV_STORAGE_PREFIX.length) : raw;
+    const segments = stripped.split("/");
     const rawName = decodeURIComponent(segments[segments.length - 1] ?? "curriculo.pdf");
     const name = rawName.split("?")[0] ?? rawName;
-    return { url: data.cv_url, name };
+    return { url: raw, name };
   } catch (e) {
     console.error("fetchUserLastCV:", e);
     return null;

@@ -564,11 +564,18 @@ export default function EmpresaScreen() {
                   </Text>
                 </View>
                 <TouchableOpacity
-                  style={[styles.ctaBtn, styles.ctaBtnPrimary, { backgroundColor: colors.gold }]}
+                  style={[styles.ctaBtn, styles.ctaBtnPrimary, { flex: 1, backgroundColor: colors.gold }]}
                   onPress={() => router.push(`/manage-business-page?id=${id}` as any)}
                 >
                   <Feather name="settings" size={14} color="#fff" />
                   <Text style={styles.ctaBtnPrimaryText}>Gerenciar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.ctaBtn, styles.ctaBtnOutline, { flex: 1, borderColor: colors.gold }]}
+                  onPress={() => router.push(`/empresa/admin?id=${id}` as any)}
+                >
+                  <Feather name="briefcase" size={14} color={colors.gold} />
+                  <Text style={[styles.ctaBtnOutlineText, { color: colors.gold }]}>Gerenciar vagas</Text>
                 </TouchableOpacity>
               </View>
             ) : user?.id ? (

@@ -252,12 +252,20 @@ export default function EmpresaPage() {
                 <Avatar src={company.avatar_url} name={company.name} size={80} bg={GOLD} />
               </div>
               {isOwner && (
-                <button
-                  onClick={() => setLocation(`/app/empresa/${companyId}/editar`)}
-                  style={{ padding: "8px 18px", border: `1.5px solid ${BORDER}`, borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", backgroundColor: WHITE, color: NAVY, marginBottom: 6 }}
-                >
-                  ✏️ Editar página
-                </button>
+                <div style={{ display: "flex", gap: 8, marginBottom: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  <button
+                    onClick={() => setLocation(`/app/empresa/${companyId}/admin`)}
+                    style={{ padding: "8px 18px", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", backgroundColor: GOLD, color: WHITE }}
+                  >
+                    💼 Gerenciar vagas
+                  </button>
+                  <button
+                    onClick={() => setLocation(`/app/empresa/${companyId}/editar`)}
+                    style={{ padding: "8px 18px", border: `1.5px solid ${BORDER}`, borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", backgroundColor: WHITE, color: NAVY }}
+                  >
+                    ✏️ Editar página
+                  </button>
+                </div>
               )}
             </div>
 

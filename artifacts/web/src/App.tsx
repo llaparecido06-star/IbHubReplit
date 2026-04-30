@@ -33,6 +33,7 @@ import UsuariosBloqueadosPage from "@/pages/app/UsuariosBloqueadosPage";
 import AnalyticsPage from "@/pages/app/AnalyticsPage";
 import ReferralPage from "@/pages/app/ReferralPage";
 import GerenciarEmpresaPage from "@/pages/app/GerenciarEmpresaPage";
+import EmpresaAdminPage from "@/pages/app/EmpresaAdminPage";
 import MeusEventosPage from "@/pages/app/MeusEventosPage";
 import EventosPage from "@/pages/app/EventosPage";
 import SettingsPage from "@/pages/app/SettingsPage";
@@ -299,6 +300,9 @@ function Router() {
       </Route>
       <Route path="/app/empresa/:id/editar">
         <PrivateRoute component={GerenciarEmpresaPage} />
+      </Route>
+      <Route path="/app/empresa/:id/admin">
+        <PrivateRoute component={EmpresaAdminPage} />
       </Route>
       <Route path="/app/meus-eventos">
         <PrivateRoute component={MeusEventosPage} />

@@ -770,10 +770,10 @@ export async function deleteEventById(id: string): Promise<boolean> {
   }
 }
 
-/** Partial update an opportunity (title, description, price, salary, expires_at, contact_email, location, category). */
+/** Partial update an opportunity (title, description, price, salary, expires_at, contact_email, location, category, contract_type, company). */
 export async function updateOpportunity(
   id: string,
-  fields: Partial<Pick<AppOpportunity, "title" | "description" | "price" | "salary" | "expires_at" | "contact_email" | "location" | "category">>,
+  fields: Partial<Pick<AppOpportunity, "title" | "description" | "price" | "salary" | "expires_at" | "contact_email" | "location" | "category" | "contract_type" | "company">>,
 ): Promise<boolean> {
   try {
     const { error } = await supabase.from("opportunities").update(fields).eq("id", id);

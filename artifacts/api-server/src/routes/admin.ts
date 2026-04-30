@@ -518,7 +518,7 @@ router.post("/cv/signed-url", async (req: Request, res: Response) => {
     return;
   }
 
-  const { path } = req.body as { path?: string };
+  const { path, application_id } = req.body as { path?: string; application_id?: string };
   if (!path || typeof path !== "string" || !path.startsWith("cvs/")) {
     res.status(400).json({ error: "Invalid or missing storage path" });
     return;
@@ -533,8 +533,54 @@ router.post("/cv/signed-url", async (req: Request, res: Response) => {
     .maybeSingle();
   const isAdmin = !!(profile as { is_admin?: boolean } | null)?.is_admin;
 
-  if (!path.startsWith(expectedPrefix) && !isAdmin) {
-    res.status(403).json({ error: "Access denied: you can only access your own CVs" });
+  let authorized = path.startsWith(expectedPrefix) || isAdmin;
+
+  // Recruiter access: caller is opportunity owner or company-page admin
+  // for the application that holds this cv_url.
+  if (!authorized && application_id) {
+    const { data: app } = await supabaseAdmin
+      .from("opportunity_applications")
+      .select("opportunity_id, cv_url")
+      .eq("id", application_id)
+      .maybeSingle();
+    const appRow = app as { opportunity_id?: string; cv_url?: string | null } | null;
+    if (appRow?.opportunity_id) {
+      // Confirm the requested path matches the stored cv_url for this application.
+      const stored = appRow.cv_url ?? "";
+      const storedPath = stored.startsWith("cvs://") ? stored.slice("cvs://".length) : null;
+      if (storedPath === path) {
+        const { data: opp } = await supabaseAdmin
+          .from("opportunities")
+          .select("created_by, company_page_id")
+          .eq("id", appRow.opportunity_id)
+          .maybeSingle();
+        const oppRow = opp as { created_by?: string; company_page_id?: string | null } | null;
+        if (oppRow?.created_by === userId) {
+          authorized = true;
+        } else if (oppRow?.company_page_id) {
+          const { data: pageOwner } = await supabaseAdmin
+            .from("company_pages")
+            .select("owner_id")
+            .eq("id", oppRow.company_page_id)
+            .maybeSingle();
+          if ((pageOwner as { owner_id?: string } | null)?.owner_id === userId) {
+            authorized = true;
+          } else {
+            const { data: adminRow } = await supabaseAdmin
+              .from("company_page_admins")
+              .select("user_id")
+              .eq("company_page_id", oppRow.company_page_id)
+              .eq("user_id", userId)
+              .maybeSingle();
+            if (adminRow) authorized = true;
+          }
+        }
+      }
+    }
+  }
+
+  if (!authorized) {
+    res.status(403).json({ error: "Access denied: you cannot access this CV" });
     return;
   }
 
