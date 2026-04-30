@@ -273,16 +273,21 @@ const SCREEN_WIDTH_SMART = Dimensions.get("window").width;
 
 function SmartImage({ url }: { url: string }) {
   const [portrait, setPortrait] = useState<boolean | null>(null);
+
+  // Reset orientation state when the URL changes (recycled cells in FlatList).
+  useEffect(() => {
+    setPortrait(null);
+  }, [url]);
+
   const imgHeight = portrait === null ? 220 : portrait ? Math.round(SCREEN_WIDTH_SMART * (5 / 4)) : 220;
   return (
     <Image
       source={{ uri: url }}
-      style={{ width: "100%", height: imgHeight, borderRadius: 10 }}
+      style={{ width: "100%", height: imgHeight, borderRadius: 10, backgroundColor: "#f0f0f0" }}
       contentFit="cover"
       cachePolicy="memory-disk"
       recyclingKey={url}
       priority="high"
-      transition={{ duration: 150 }}
       onLoad={(e) => {
         const { width: w, height: h } = e.source;
         if (w > 0 && h > 0) setPortrait(h > w);

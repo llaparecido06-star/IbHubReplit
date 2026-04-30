@@ -167,11 +167,19 @@ export function AdaptiveImage({
   style?: object;
 }) {
   const maxH = Math.round(width * 1.78);
-  const [height, setHeight] = useState(Math.round(width * 0.5625));
+  const defaultH = Math.round(width * 0.5625);
+  const [height, setHeight] = useState(defaultH);
+
+  // Reset height when the URI changes so recycled FlatList cells
+  // don't inherit the previous item's dimensions.
+  useEffect(() => {
+    setHeight(defaultH);
+  }, [uri]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <Image
       source={{ uri }}
-      style={[{ width, height, borderRadius: 12, backgroundColor: "#0d1b2a08" }, style]}
+      style={[{ width, height, borderRadius: 12, backgroundColor: "#f0f0f0" }, style]}
       contentFit="contain"
       cachePolicy="memory-disk"
       recyclingKey={uri}
@@ -181,7 +189,6 @@ export function AdaptiveImage({
           setHeight(Math.round(Math.min(width * (h / w), maxH)));
         }
       }}
-      transition={{ duration: 150 }}
       priority={priority}
     />
   );
@@ -219,7 +226,7 @@ function ImageCarousel({ imageUrls }: { imageUrls: string[] }) {
           <Image
             key={uri}
             source={{ uri }}
-            style={{ width: IMG_WIDTH, height: carouselHeight, borderRadius: 12, backgroundColor: "#0d1b2a08" }}
+            style={{ width: IMG_WIDTH, height: carouselHeight, borderRadius: 12, backgroundColor: "#f0f0f0" }}
             contentFit="contain"
             cachePolicy="memory-disk"
             recyclingKey={uri}
@@ -231,7 +238,6 @@ function ImageCarousel({ imageUrls }: { imageUrls: string[] }) {
                 }
               }
             }}
-            transition={{ duration: 150 }}
             priority={i === 0 ? "high" : "normal"}
           />
         ))}
