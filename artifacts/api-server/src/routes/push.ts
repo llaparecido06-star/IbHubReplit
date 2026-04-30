@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { logger } from "../lib/logger";
 import { resolveUserId } from "../lib/planCheck.js";
 import { extractWineName, truncate } from "../lib/winePost.js";
+import { sendPushToUser } from "../lib/pushUtils.js";
 
 const router = Router();
 
@@ -22,11 +23,24 @@ interface ExpoPushMessage {
   badge?: number;
 }
 
+interface ExpoTicket {
+  status: "ok" | "error";
+  id?: string;
+  message?: string;
+  details?: { error?: string };
+}
+
+/**
+ * Sends Expo push messages in chunks, parses tickets, and purges
+ * `DeviceNotRegistered` tokens from the database automatically.
+ */
 async function sendExpoPushNotifications(messages: ExpoPushMessage[]): Promise<void> {
   const chunks: ExpoPushMessage[][] = [];
   for (let i = 0; i < messages.length; i += 100) {
     chunks.push(messages.slice(i, i + 100));
   }
+  const deadTokens: string[] = [];
+  let offset = 0;
   for (const chunk of chunks) {
     try {
       const res = await fetch("https://exp.host/--/api/v2/push/send", {
@@ -40,10 +54,25 @@ async function sendExpoPushNotifications(messages: ExpoPushMessage[]): Promise<v
       });
       if (!res.ok) {
         logger.warn({ status: res.status }, "Expo push API returned non-OK");
+      } else {
+        const json = await res.json() as { data?: ExpoTicket[] };
+        (json.data ?? []).forEach((ticket, idx) => {
+          if (ticket.status === "error" && ticket.details?.error === "DeviceNotRegistered") {
+            const token = messages[offset + idx]?.to;
+            if (token) deadTokens.push(token);
+          }
+        });
       }
     } catch (err) {
       logger.error({ err }, "Failed to send Expo push notification");
     }
+    offset += chunk.length;
+  }
+  if (deadTokens.length > 0) {
+    void supabaseAdmin.from("push_tokens").delete().in("token", deadTokens).then(({ error }) => {
+      if (error) logger.warn({ err: error, count: deadTokens.length }, "push.ts: failed to purge dead tokens");
+      else logger.info({ count: deadTokens.length }, "push.ts: purged dead tokens");
+    });
   }
 }
 
@@ -443,6 +472,143 @@ router.post("/push/mention", async (req: Request, res: Response): Promise<void> 
   await sendExpoPushNotifications(messages);
   logger.info({ count: messages.length, actorId, postId, commentId }, "Mention push dispatched");
   res.json({ sent: messages.length });
+});
+
+// ─── Helper: resolve actor display name from DB ───────────────────────────────
+async function resolveActorName(actorId: string): Promise<string> {
+  const { data } = await supabaseAdmin
+    .from("profiles")
+    .select("full_name")
+    .eq("id", actorId)
+    .maybeSingle() as { data: { full_name: string | null } | null };
+  return data?.full_name ?? "Alguém";
+}
+
+// ─── POST /push/connection ────────────────────────────────────────────────────
+/**
+ * Sends a push notification to the target user when the caller sends them a
+ * connection request. The actor's display name is resolved server-side from
+ * their auth token — clients don't supply it.
+ *
+ * Body: { targetId: string }
+ * Auth: Bearer token (resolves actorId)
+ */
+router.post("/push/connection", async (req: Request, res: Response): Promise<void> => {
+  const actorId = await resolveUserId(req, res);
+  if (!actorId) return;
+
+  if (!checkRateLimit(actorId)) {
+    res.status(429).json({ error: "Muitas solicitações — tente novamente em breve." });
+    return;
+  }
+
+  const { targetId } = req.body as { targetId?: string };
+
+  if (!targetId) {
+    res.status(400).json({ error: "targetId é obrigatório" });
+    return;
+  }
+
+  if (targetId === actorId) {
+    res.json({ sent: 0, skipped: "actor is target" });
+    return;
+  }
+
+  const actorName = await resolveActorName(actorId);
+
+  await sendPushToUser({
+    userId: targetId,
+    title: "🤝 Novo pedido de conexão",
+    body: `${actorName} quer se conectar com você`,
+    data: { type: "connection", actorId, deepLink: `/profile/${actorId}` },
+  });
+
+  logger.info({ actorId, targetId }, "Connection request push dispatched");
+  res.json({ sent: 1 });
+});
+
+// ─── POST /push/connection-accepted ──────────────────────────────────────────
+/**
+ * Sends a push notification to the original requester when their connection
+ * request is accepted. The acceptor's name is resolved server-side.
+ *
+ * Body: { requesterId: string }
+ * Auth: Bearer token (resolves acceptorId — the person who accepted)
+ */
+router.post("/push/connection-accepted", async (req: Request, res: Response): Promise<void> => {
+  const acceptorId = await resolveUserId(req, res);
+  if (!acceptorId) return;
+
+  if (!checkRateLimit(acceptorId)) {
+    res.status(429).json({ error: "Muitas solicitações — tente novamente em breve." });
+    return;
+  }
+
+  const { requesterId } = req.body as { requesterId?: string };
+
+  if (!requesterId) {
+    res.status(400).json({ error: "requesterId é obrigatório" });
+    return;
+  }
+
+  if (requesterId === acceptorId) {
+    res.json({ sent: 0, skipped: "actor is requester" });
+    return;
+  }
+
+  const actorName = await resolveActorName(acceptorId);
+
+  await sendPushToUser({
+    userId: requesterId,
+    title: "✅ Conexão aceita!",
+    body: `${actorName} aceitou seu pedido de conexão`,
+    data: { type: "connection_accepted", actorId: acceptorId, deepLink: `/profile/${acceptorId}` },
+  });
+
+  logger.info({ acceptorId, requesterId }, "Connection accepted push dispatched");
+  res.json({ sent: 1 });
+});
+
+// ─── POST /push/follow ────────────────────────────────────────────────────────
+/**
+ * Sends a push notification to the target user when the caller starts following them.
+ * The follower's name is resolved server-side.
+ *
+ * Body: { targetId: string }
+ * Auth: Bearer token (resolves actorId)
+ */
+router.post("/push/follow", async (req: Request, res: Response): Promise<void> => {
+  const actorId = await resolveUserId(req, res);
+  if (!actorId) return;
+
+  if (!checkRateLimit(actorId)) {
+    res.status(429).json({ error: "Muitas solicitações — tente novamente em breve." });
+    return;
+  }
+
+  const { targetId } = req.body as { targetId?: string };
+
+  if (!targetId) {
+    res.status(400).json({ error: "targetId é obrigatório" });
+    return;
+  }
+
+  if (targetId === actorId) {
+    res.json({ sent: 0, skipped: "actor is target" });
+    return;
+  }
+
+  const actorName = await resolveActorName(actorId);
+
+  await sendPushToUser({
+    userId: targetId,
+    title: "👤 Novo seguidor",
+    body: `${actorName} começou a seguir você`,
+    data: { type: "follow", actorId, deepLink: `/profile/${actorId}` },
+  });
+
+  logger.info({ actorId, targetId }, "Follow push dispatched");
+  res.json({ sent: 1 });
 });
 
 export default router;

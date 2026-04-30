@@ -1,7 +1,26 @@
 import { supabase } from "@/context/AuthContext";
 import { Post } from "@/components/feed/PostCard";
 import { compressAvatar } from "@/utils/compressImage";
-import { POST_SELECT_BASE, attachAuthorsToPosts, fetchCompanyPagesForIds, fetchProfilesForIds, isNetworkError, isValidUUID } from "./_shared";
+import { API_URL, POST_SELECT_BASE, attachAuthorsToPosts, fetchCompanyPagesForIds, fetchProfilesForIds, isNetworkError, isValidUUID } from "./_shared";
+
+/**
+ * Fire-and-forget helper that calls a server-side push route.
+ * The server resolves the actor name from their auth token.
+ * Never throws — errors are swallowed to avoid blocking the primary action.
+ */
+async function _dispatchPush(path: string, body: Record<string, string>): Promise<void> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token || !API_URL) return;
+    await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+  } catch {
+  }
+}
 
 // ─── UPDATE PROFILE ─────────────────────────────────────────────────────────────
 
@@ -223,6 +242,7 @@ export async function toggleFollow(
         { follower_id: currentUserId, following_id: targetId },
         { onConflict: "follower_id,following_id" },
       );
+      void _dispatchPush("/push/follow", { targetId });
     }
   } catch (e) {
     console.warn("toggleFollow:", e);
@@ -254,6 +274,7 @@ export async function sendConnectionRequest(targetId: string, currentUserId: str
       user_id: targetId, actor_id: currentUserId, type: "connection",
       message: "enviou um pedido de conexão",
     });
+    void _dispatchPush("/push/connection", { targetId });
   } catch (e) {
     console.error("sendConnectionRequest:", e);
   }
@@ -354,6 +375,9 @@ export async function respondToConnection(
       { follower_id: userId2, following_id: userId1 },
       { onConflict: "follower_id,following_id" },
     );
+
+    // Push to the requester (userId1) letting them know their request was accepted
+    void _dispatchPush("/push/connection-accepted", { requesterId: userId1 });
 
     // Unlock any existing direct conversations between these two users
     try {

@@ -16,11 +16,24 @@ interface ExpoPushMessage {
   badge?: number;
 }
 
-async function sendExpoPushChunks(messages: ExpoPushMessage[]): Promise<void> {
+interface ExpoTicket {
+  status: "ok" | "error";
+  id?: string;
+  message?: string;
+  details?: { error?: string };
+}
+
+/**
+ * Sends push messages to Expo in chunks of 100 and returns the set of tokens
+ * that came back as `DeviceNotRegistered` so callers can purge them.
+ */
+async function sendExpoPushChunks(messages: ExpoPushMessage[]): Promise<Set<string>> {
+  const deadTokens = new Set<string>();
   const chunks: ExpoPushMessage[][] = [];
   for (let i = 0; i < messages.length; i += 100) {
     chunks.push(messages.slice(i, i + 100));
   }
+  let offset = 0;
   for (const chunk of chunks) {
     try {
       const res = await fetch("https://exp.host/--/api/v2/push/send", {
@@ -34,10 +47,33 @@ async function sendExpoPushChunks(messages: ExpoPushMessage[]): Promise<void> {
       });
       if (!res.ok) {
         logger.warn({ status: res.status }, "Expo push API returned non-OK");
+      } else {
+        const json = await res.json() as { data?: ExpoTicket[] };
+        const tickets = json.data ?? [];
+        tickets.forEach((ticket, idx) => {
+          if (ticket.status === "error" && ticket.details?.error === "DeviceNotRegistered") {
+            const token = messages[offset + idx]?.to;
+            if (token) deadTokens.add(token);
+          }
+        });
       }
     } catch (err) {
       logger.error({ err }, "Failed to send Expo push chunk");
     }
+    offset += chunk.length;
+  }
+  return deadTokens;
+}
+
+/** Removes expired/unregistered device tokens from the push_tokens table. */
+async function purgeDeadTokens(tokens: Set<string>): Promise<void> {
+  if (tokens.size === 0) return;
+  const list = Array.from(tokens);
+  const { error } = await supabaseAdmin.from("push_tokens").delete().in("token", list);
+  if (error) {
+    logger.warn({ err: error, count: list.length }, "pushUtils: failed to purge dead tokens");
+  } else {
+    logger.info({ count: list.length }, "pushUtils: purged dead tokens");
   }
 }
 
@@ -77,7 +113,9 @@ export async function sendPushToUser(opts: {
       sound: "default",
     }));
 
-    await sendExpoPushChunks(messages);
+    const dead = await sendExpoPushChunks(messages);
+    void purgeDeadTokens(dead);
+
     logger.info(
       { count: messages.length, userId: opts.userId, title: opts.title },
       "sendPushToUser: sent",
@@ -130,7 +168,9 @@ export async function broadcastPushToAllUsers(opts: {
       sound: "default",
     }));
 
-    await sendExpoPushChunks(messages);
+    const dead = await sendExpoPushChunks(messages);
+    void purgeDeadTokens(dead);
+
     logger.info({ count: messages.length, title: opts.title }, "broadcastPush: sent");
   } catch (err) {
     logger.error({ err }, "broadcastPush: unexpected error");
