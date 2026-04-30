@@ -22,6 +22,17 @@ import { SidebarNav, useIsDesktop } from "@/components/ui/SidebarNav";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import * as SafeNotifications from "@/utils/safeNotifications";
 
+// Must be called once at module load, before any notification can arrive.
+// Without this, notifications received while the app is foregrounded are
+// silently discarded — no banner appears on iOS or Android.
+SafeNotifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false, // badge managed manually via UnreadContext
+  }),
+});
+
 // ── Background unread badge syncer ──────────────────────────────────────────
 function UnreadSyncer() {
   const { user } = useAuth();
