@@ -32,13 +32,14 @@ const FILTER_OPTIONS: { key: FilterKey; label: string }[] = [
   { key: "adega",       label: "Na Adega" },
   { key: "consumido",   label: "Consumido" },
   { key: "presenteado", label: "Presenteado" },
+  { key: "wishlist",    label: "Lista de Desejos" },
 ];
 
 const STATUS_OPTIONS: { key: WineStatus; label: string }[] = [
   { key: "adega",       label: "Na Adega" },
   { key: "consumido",   label: "Consumido" },
   { key: "presenteado", label: "Presenteado" },
-  { key: "wishlist",    label: "Wishlist" },
+  { key: "wishlist",    label: "Lista de Desejos" },
 ];
 
 function PortfolioManagerTab({ companyId }: { companyId: string }) {
@@ -452,27 +453,31 @@ export default function WineCellarScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
-          <Feather name="arrow-left" size={22} color={colors.navy} />
-          <View>
-            <Text style={[styles.headerTitle, { color: colors.navy }]}>{screenTab === "portfolio" ? "Portifólio" : "Adega"}</Text>
-            <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Feather name="arrow-left" size={22} color={colors.navy} />
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.headerTitle, { color: colors.navy }]} numberOfLines={1}>
+              {screenTab === "portfolio" ? "Portifólio" : "Adega"}
+            </Text>
+            <Text style={[styles.headerSub, { color: colors.mutedForeground }]} numberOfLines={1}>
               {screenTab === "portfolio" ? "Produtos da empresa" : "Gerencie sua adega pessoal"}
             </Text>
           </View>
-        </TouchableOpacity>
-        {screenTab === "adega" && (
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <TouchableOpacity style={[styles.addBtn, { backgroundColor: colors.navy + "14", borderWidth: 1, borderColor: colors.navy + "20" }]} onPress={() => router.push("/wine-ranking" as any)}>
-              <Feather name="bar-chart-2" size={15} color={colors.navy} />
-              <Text style={[styles.addBtnText, { color: colors.navy }]}>Ranking</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.addBtn, { backgroundColor: colors.gold }]} onPress={() => setShowForm(true)}>
-              <Feather name="plus" size={15} color="#fff" />
-              <Text style={styles.addBtnText}>Adicionar</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+          {screenTab === "adega" && (
+            <View style={{ flexDirection: "row", gap: 8, flexShrink: 0 }}>
+              <TouchableOpacity style={[styles.headerBtn, { backgroundColor: colors.navy + "14", borderWidth: 1, borderColor: colors.navy + "20" }]} onPress={() => router.push("/wine-ranking" as any)}>
+                <Feather name="bar-chart-2" size={15} color={colors.navy} />
+                <Text style={[styles.headerBtnText, { color: colors.navy }]}>Ranking</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.headerBtn, { backgroundColor: colors.gold }]} onPress={() => setShowForm(true)}>
+                <Feather name="plus" size={15} color="#fff" />
+                <Text style={styles.headerBtnText}>Adicionar</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       </View>
 
       {/* Screen tabs (only for company accounts) */}
@@ -509,9 +514,9 @@ export default function WineCellarScreen() {
         {/* KPI cards */}
         <View style={styles.kpiRow}>
           {[
-            { icon: "wind",   label: "Na Adega",   val: counts.adega,    color: colors.gold },
-            { icon: "coffee", label: "Consumidos", val: counts.consumido, color: colors.mutedForeground },
-            { icon: "star",   label: "Wishlist",   val: counts.wishlist,  color: "#f59e0b" },
+            { icon: "wind",         label: "Na Adega",        val: counts.adega,    color: colors.gold },
+            { icon: "check-circle", label: "Consumidos",      val: counts.consumido, color: "#16a34a" },
+            { icon: "star",         label: "Lista de Desejos", val: counts.wishlist,  color: "#f59e0b" },
           ].map((k) => (
             <View key={k.label} style={[styles.kpiCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
               <Feather name={k.icon as any} size={22} color={k.color} />
@@ -561,16 +566,34 @@ export default function WineCellarScreen() {
         </View>
 
         {/* Filter chips */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-          {FILTER_OPTIONS.map((f) => (
-            <TouchableOpacity
-              key={f.key}
-              style={[styles.chip, { backgroundColor: filter === f.key ? colors.gold : "#fff", borderColor: filter === f.key ? colors.gold : colors.border }]}
-              onPress={() => setFilter(f.key)}
-            >
-              <Text style={[styles.chipText, { color: filter === f.key ? "#fff" : colors.mutedForeground }]}>{f.label}</Text>
-            </TouchableOpacity>
-          ))}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chips}
+        >
+          {FILTER_OPTIONS.map((f) => {
+            const count = f.key === "todos"
+              ? wines.length
+              : wines.filter((w) => w.status === f.key).length;
+            const active = filter === f.key;
+            return (
+              <TouchableOpacity
+                key={f.key}
+                style={[styles.chip, {
+                  backgroundColor: active ? colors.gold : "#fff",
+                  borderColor: active ? colors.gold : colors.border,
+                }]}
+                onPress={() => setFilter(f.key)}
+              >
+                <Text style={[styles.chipText, { color: active ? "#fff" : colors.mutedForeground }]}>
+                  {f.label}
+                </Text>
+                <View style={[styles.chipBadge, { backgroundColor: active ? "rgba(255,255,255,0.3)" : colors.border + "60" }]}>
+                  <Text style={[styles.chipBadgeText, { color: active ? "#fff" : colors.mutedForeground }]}>{count}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
 
         {/* Wine list */}
@@ -755,10 +778,12 @@ export default function WineCellarScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
+  header: { paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
   backRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   headerTitle: { fontSize: 22, fontWeight: "800" },
   headerSub: { fontSize: 12, marginTop: 1 },
+  headerBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20 },
+  headerBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   addBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20 },
   addBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
   kpiRow: { flexDirection: "row", gap: 10, padding: 16, paddingBottom: 8 },
@@ -772,9 +797,11 @@ const styles = StyleSheet.create({
   searchWrap: { paddingHorizontal: 16, paddingBottom: 8 },
   searchBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
   searchInput: { flex: 1, fontSize: 14 },
-  chips: { paddingHorizontal: 16, gap: 8, paddingBottom: 12 },
-  chip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  chips: { flexDirection: "row", paddingHorizontal: 16, gap: 8, paddingBottom: 12, paddingRight: 24 },
+  chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
   chipText: { fontSize: 13, fontWeight: "600" },
+  chipBadge: { minWidth: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 },
+  chipBadgeText: { fontSize: 11, fontWeight: "700" },
   empty: { alignItems: "center", gap: 14, paddingTop: 60, paddingHorizontal: 40 },
   emptyTitle: { fontSize: 15, textAlign: "center" },
   emptyBtn: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 30 },
@@ -785,7 +812,7 @@ const styles = StyleSheet.create({
   wineSub: { fontSize: 12, marginTop: 2 },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   statusBadgeText: { fontSize: 11, fontWeight: "600" },
-  wineMeta: { flexDirection: "row", gap: 12 },
+  wineMeta: { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" },
   wineMetaText: { fontSize: 12 },
   formContainer: { flex: 1 },
   formHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1 },
