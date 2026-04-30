@@ -1,5 +1,6 @@
 import { useEventListener } from "expo";
 import { LinearGradient } from "expo-linear-gradient";
+import { useFocusEffect } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -112,6 +113,23 @@ export function FeedVideo({
     return () => sub.remove();
   }, [isVisible, player]);
 
+  // Pause when the user switches to a different tab in the Tab Navigator.
+  // AppState stays "active" during tab switches so we need a separate hook.
+  useFocusEffect(
+    useCallback(() => {
+      // Screen gained focus — let the isVisible effect handle play resumption.
+      return () => {
+        // Screen lost focus — immediately pause and reset mute to the start
+        // state so the next visit begins muted (autoplay policy compliant).
+        try {
+          player.pause();
+          player.muted = true;
+          setMuted(true);
+        } catch { /* player not yet ready */ }
+      };
+    }, [player]),
+  );
+
   useEventListener(player, "playingChange", ({ isPlaying }) => setPlaying(isPlaying));
   useEventListener(player, "mutedChange", (e) => setMuted(e.muted));
   useEventListener(player, "videoTrackChange", ({ videoTrack }) => {
@@ -149,12 +167,19 @@ export function FeedVideo({
   }, [scheduleHide]);
 
   const togglePlay = useCallback(() => {
-    if (player.playing) {
+    if (player.playing && player.muted) {
+      // Video is autoplaying muted — first deliberate tap should unmute,
+      // not pause. This avoids the "pause then play to hear audio" pattern.
+      player.muted = false;
+      setMuted(false);
+    } else if (player.playing) {
       userPausedRef.current = true;
       player.pause();
     } else {
+      // Not playing — start fresh with audio enabled.
       userPausedRef.current = false;
       player.muted = false;
+      setMuted(false);
       player.play();
       onUserPlay?.();
     }
@@ -240,10 +265,19 @@ export function FeedVideo({
         onPress={handlePress}
       >
         <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: controlsAnim }]}>
+          {/* Center overlay: play button when paused, unmute cue when autoplay-muted */}
           {!playing && (
             <View style={styles.centerOverlay}>
               <View style={styles.playBtn}>
                 <Feather name="play" size={26} color="#fff" />
+              </View>
+            </View>
+          )}
+          {playing && muted && (
+            <View style={styles.centerOverlay} pointerEvents="none">
+              <View style={[styles.playBtn, styles.unmuteBtn]}>
+                <Feather name="volume-x" size={22} color="#fff" />
+                <Text style={styles.unmuteTxt}>Toque para ativar o som</Text>
               </View>
             </View>
           )}
@@ -265,8 +299,13 @@ export function FeedVideo({
             </TouchableOpacity>
 
             <View style={styles.buttonsRow}>
+              {/* When autoplaying muted the button unmutes; otherwise toggles play/pause */}
               <TouchableOpacity onPress={togglePlay} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}>
-                <Feather name={playing ? "pause" : "play"} size={16} color="#fff" />
+                <Feather
+                  name={playing && muted ? "volume-2" : playing ? "pause" : "play"}
+                  size={16}
+                  color="#fff"
+                />
               </TouchableOpacity>
               <TouchableOpacity onPress={toggleMute} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}>
                 <Feather name={muted ? "volume-x" : "volume-2"} size={16} color="#fff" />
@@ -317,6 +356,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingLeft: 4,
+  },
+  unmuteBtn: {
+    width: "auto",
+    height: "auto",
+    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    flexDirection: "row",
+    gap: 8,
+  },
+  unmuteTxt: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "600",
   },
   controlsBar: {
     position: "absolute",
