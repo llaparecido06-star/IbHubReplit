@@ -256,7 +256,7 @@ export function PollDisplay({ poll, postId, currentUserId, onVote }: {
         }
         setVoters(expanded);
       })
-      .catch(() => { /* swallow; loading state cleared in finally */ })
+      .catch(err => { if (!cancelled) console.warn("fetchPollVoters failed:", err); })
       .finally(() => { if (!cancelled) setLoadingVoters(false); });
     return () => { cancelled = true; };
   }, [showVoters, userVotesKey]);

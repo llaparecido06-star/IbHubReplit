@@ -45,7 +45,7 @@ export function PollBlock({ post, onVote }: Props) {
     setLoadingPollVoters(true);
     fetchPollVoters(postId)
       .then(v => { if (!cancelled) setPollVoters(v); })
-      .catch(() => { /* swallow; loading state cleared in finally */ })
+      .catch(err => { if (!cancelled) console.warn("fetchPollVoters failed:", err); })
       .finally(() => { if (!cancelled) setLoadingPollVoters(false); });
     return () => { cancelled = true; };
   }, [showPollVoters, userVotesKey, postId]);
