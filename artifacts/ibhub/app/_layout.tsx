@@ -292,6 +292,17 @@ function RootLayoutNav() {
     );
   }
 
+  // Session was just established (e.g. OAuth SIGNED_IN fired) but the first
+  // profile fetch hasn't completed yet. Show a loading screen instead of
+  // briefly flashing AuthenticatedLayout with no valid route (blank screen).
+  if (session && !profileChecked) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0d1b2a" }}>
+        <ActivityIndicator color="#c9a84c" size="large" />
+      </View>
+    );
+  }
+
   if (isRecovering || mustChangePassword) {
     return (
       <Stack screenOptions={{ headerShown: false }}>

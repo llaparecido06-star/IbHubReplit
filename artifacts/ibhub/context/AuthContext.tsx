@@ -562,55 +562,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (Platform.OS === "android") {
         // ── Android (Google AND Apple) ───────────────────────────────────────
-        // This branch is provider-agnostic and is the single hardened path used
-        // by both signInWithGoogle() and signInWithApple()'s Android fallback
-        // (iOS Apple uses native AppleAuthentication.signInAsync instead).
-        // Keep this code provider-agnostic — do not branch on `provider` here.
+        // On Android, Chrome Custom Tab fires the OAuth redirect as an Android
+        // intent (custom scheme: ibhub://auth/callback?code=xxx). This intent is
+        // delivered via Linking to handleDeepLink, which calls
+        // exchangeCodeForSession and stores the session. The SIGNED_IN event then
+        // fires in the main onAuthStateChange subscription in AuthProvider, which
+        // sets session state and navigates to /(tabs).
         //
-        // Chrome Custom Tab CAN signal user-initiated dismissal back to
-        // openAuthSessionAsync (resolves with "dismiss"/"cancel"), but it CANNOT
-        // intercept the custom-scheme redirect — that's delivered as a Linking
-        // event to handleDeepLink, which performs the PKCE exchange and triggers
-        // SIGNED_IN. So we wait for whichever happens first:
-        //   - SIGNED_IN  → auth succeeded, navigation will happen via RootLayoutNav
-        //   - browser closed (no SIGNED_IN within a short grace period) → cancelled
+        // IMPORTANT: openAuthSessionAsync on Android does NOT reliably resolve
+        // when the Chrome Custom Tab is dismissed via a custom-scheme redirect
+        // (the .then() callback may never fire). Waiting for it — even with a
+        // short inner timeout — leaves the login button spinner running for up to
+        // 60 s while the session is already saved and navigation already happened
+        // in the main subscription. The user sees "eternal loading."
         //
-        // Previous implementation raced against AppState "active", but that fires
-        // before handleDeepLink completes the exchange, leaving the spinner cleared
-        // while the session is still in flight. That manifested as "loading forever"
-        // (because the user perceived the OAuth flow as incomplete) followed by the
-        // app appearing to restart when the deep link finally fired.
-        await new Promise<void>((resolve) => {
-          let done = false;
-          const finish = () => { if (!done) { done = true; resolve(); } };
-
-          const { data: { subscription: signInSub } } = supabase.auth.onAuthStateChange((event) => {
-            if (event === "SIGNED_IN") {
-              console.log(`[OAuth] Android (${provider}): SIGNED_IN received, completing flow.`);
-              signInSub.unsubscribe();
-              finish();
-            }
-          });
-
-          WebBrowser.openAuthSessionAsync(data.url, redirectTo)
-            .then((result) => {
-              console.log(`[OAuth] Android (${provider}): browser closed (${result.type}). Awaiting late SIGNED_IN...`);
-              // Browser closed (user cancelled OR success-redirect dismissed it).
-              // Give handleDeepLink up to 2s to fire SIGNED_IN. If nothing arrives,
-              // assume the user cancelled and clear the spinner.
-              setTimeout(() => { signInSub.unsubscribe(); finish(); }, 2000);
-            })
-            .catch((e) => {
-              console.warn(`[OAuth] Android (${provider}): openAuthSessionAsync error:`, e);
-              signInSub.unsubscribe();
-              finish();
-            });
-
-          // Hard safety timeout (60s) — never let the spinner hang forever.
-          setTimeout(() => { signInSub.unsubscribe(); finish(); }, 60_000);
+        // Fix: fire the browser and return immediately. The loading indicator on
+        // the button shows only during the brief signInWithOAuth URL fetch (~500 ms).
+        // Navigation to /(tabs) happens automatically via RootLayoutNav when
+        // SIGNED_IN fires in the main onAuthStateChange handler.
+        WebBrowser.openAuthSessionAsync(data.url, redirectTo).catch((e) => {
+          console.warn(`[OAuth] Android (${provider}): openAuthSessionAsync error:`, e);
         });
-
-        console.log(`[OAuth] Android (${provider}): signInWithOAuthProvider returning.`);
+        console.log(`[OAuth] Android (${provider}): browser opened, returning immediately.`);
         return { error: null };
       }
 
