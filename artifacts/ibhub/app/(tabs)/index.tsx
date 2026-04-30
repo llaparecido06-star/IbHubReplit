@@ -110,7 +110,10 @@ export default function FeedScreen() {
   const flatListRef                                 = useRef<FlatList>(null);
   // View tracking
   const viewTimers                                  = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const [visiblePostIds, setVisiblePostIds]         = useState<Set<string>>(new Set());
+  // Reels/TikTok-style autoplay: only the single most-visible post's video
+  // plays; others pause and reset. We pick the topmost item meeting the
+  // visibility threshold (FlatList returns viewableItems in render order).
+  const [activeVideoPostId, setActiveVideoPostId]   = useState<string | null>(null);
 
   // Connection suggestions
   const [suggestions, setSuggestions] = useState<SuggestedProfile[]>([]);
@@ -424,12 +427,15 @@ export default function FeedScreen() {
   };
 
   // ── Viewable items tracking ──
-  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    const nowVisible = new Set<string>();
+  // Two viewability passes via callback pairs:
+  //   1. 25% threshold drives view-count tracking (start a 1s timer when
+  //      a post becomes >=25% visible, increment view count if it sticks).
+  //   2. 60% threshold elects the single active video post — only the
+  //      topmost item meeting that threshold gets isVisible=true.
+  const onViewCountItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     viewableItems.forEach(({ item, isViewable }) => {
       const post = item as Post;
       if (isViewable) {
-        nowVisible.add(post.id);
         if (!viewTimers.current[post.id]) {
           viewTimers.current[post.id] = setTimeout(() => {
             setPosts(prev => prev.map(p =>
@@ -446,10 +452,17 @@ export default function FeedScreen() {
         }
       }
     });
-    setVisiblePostIds(nowVisible);
   }, []);
 
-  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 25 }).current;
+  const onAutoPlayItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    const first = viewableItems.find(v => v.isViewable && v.item);
+    setActiveVideoPostId(first ? (first.item as Post).id : null);
+  }, []);
+
+  const viewabilityConfigCallbackPairs = useRef([
+    { viewabilityConfig: { viewAreaCoveragePercentThreshold: 25 }, onViewableItemsChanged: onViewCountItemsChanged },
+    { viewabilityConfig: { viewAreaCoveragePercentThreshold: 60 }, onViewableItemsChanged: onAutoPlayItemsChanged },
+  ]).current;
 
   const handlePickImage = async () => {
     if (Platform.OS !== "web") {
@@ -944,7 +957,7 @@ export default function FeedScreen() {
           <PostCard
             post={item}
             currentUserId={user?.id}
-            isVisible={visiblePostIds.has(item.id)}
+            isVisible={item.id === activeVideoPostId}
             isLiking={likingPostIds.has(item.id)}
             onLike={async (id) => {
               if (likingPostIds.has(id)) return;
@@ -1060,8 +1073,7 @@ export default function FeedScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} colors={[colors.gold]} />}
         contentContainerStyle={{ paddingBottom: bottomPad }}
         showsVerticalScrollIndicator={false}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
+        viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
         onEndReached={loadMorePosts}
         onEndReachedThreshold={0.3}
         ListFooterComponent={

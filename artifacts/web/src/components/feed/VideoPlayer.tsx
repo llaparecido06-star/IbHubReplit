@@ -2,6 +2,43 @@ import React, { useEffect, useRef, useState } from "react";
 
 const GOLD = "#c9a84c";
 
+// ── Single-active-video coordinator ──────────────────────────────────────────
+// Reels/TikTok-style: only the *most-visible* video on the page plays. Each
+// VideoPlayer registers its current intersection ratio and the coordinator
+// elects the highest-ratio video as the one that plays; all others pause and
+// reset. A user-paused video stays paused even if it would otherwise win.
+type RegisteredVideo = {
+  el: HTMLVideoElement;
+  userPausedRef: React.MutableRefObject<boolean>;
+  ratio: number;
+};
+const registry = new Map<HTMLVideoElement, RegisteredVideo>();
+let syncScheduled = false;
+const MIN_RATIO = 0.5;
+
+function scheduleSync() {
+  if (syncScheduled) return;
+  syncScheduled = true;
+  requestAnimationFrame(() => {
+    syncScheduled = false;
+    let best: RegisteredVideo | null = null;
+    for (const v of registry.values()) {
+      if (v.ratio < MIN_RATIO) continue;
+      if (!best || v.ratio > best.ratio) best = v;
+    }
+    for (const v of registry.values()) {
+      if (v === best) {
+        if (!v.userPausedRef.current && v.el.paused) {
+          v.el.play().catch(() => {/* autoplay may be blocked */});
+        }
+      } else {
+        if (!v.el.paused) v.el.pause();
+        try { v.el.currentTime = 0; } catch { /* not yet ready */ }
+      }
+    }
+  });
+}
+
 function fmt(s: number) {
   if (!isFinite(s)) return "0:00";
   const m = Math.floor(s / 60);
@@ -47,31 +84,30 @@ export default function VideoPlayer({ src }: VideoPlayerProps) {
     return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
   }, []);
 
-  // Auto-play when scrolled into view, pause and reset when off-screen.
-  // Respects manual pause: once the user pauses, we don't auto-play again
-  // until they tap play.
+  // Register with the page-level coordinator so only the *most-visible*
+  // video on the page plays at any moment. Off-screen and partially-visible
+  // siblings pause and reset.
   useEffect(() => {
     const v = videoRef.current;
     const el = containerRef.current;
     if (!v || !el || typeof IntersectionObserver === "undefined") return;
+    registry.set(v, { el: v, userPausedRef, ratio: 0 });
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
-            if (!userPausedRef.current) {
-              v.play().catch(() => {/* autoplay may be blocked; ignore */});
-            }
-          } else {
-            if (!v.paused) v.pause();
-            // Reset to start so the next time it auto-plays it starts fresh.
-            try { v.currentTime = 0; } catch { /* not yet ready */ }
-          }
+          const reg = registry.get(v);
+          if (reg) reg.ratio = entry.intersectionRatio;
         }
+        scheduleSync();
       },
-      { threshold: [0, 0.5, 1] }
+      { threshold: [0, 0.25, 0.5, 0.75, 1] }
     );
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      registry.delete(v);
+      scheduleSync();
+    };
   }, []);
 
   const togglePlay = (e: React.MouseEvent) => {

@@ -1862,17 +1862,17 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
   const postInputRef = useRef<TextInput>(null);
   const pollOptionRefs = useRef<(TextInput | null)[]>([]);
 
-  // Track which posts are currently on-screen so videos auto-play when
-  // visible and pause when scrolled away.
-  const [visiblePostIds, setVisiblePostIds] = useState<Set<string>>(new Set());
+  // Reels/TikTok-style autoplay: only the single most-visible post's video
+  // plays at any time. We pick the topmost item meeting the area threshold —
+  // FlatList returns viewableItems in render order and the post cards are
+  // taller than typical sibling overlap, so the first one is effectively the
+  // most-visible card the user is looking at.
+  const [activeVideoPostId, setActiveVideoPostId] = useState<string | null>(null);
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    const next = new Set<string>();
-    for (const v of viewableItems) {
-      if (v.isViewable && v.item) next.add((v.item as API.MarketPost).id);
-    }
-    setVisiblePostIds(next);
+    const first = viewableItems.find(v => v.isViewable && v.item);
+    setActiveVideoPostId(first ? (first.item as API.MarketPost).id : null);
   }, []);
-  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
+  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 60 }).current;
 
   const hasAccess = permHasFeature("mercado:idealbi") || isAdmin;
 
@@ -2132,7 +2132,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
               userId={userId}
               onLikeToggle={handleLikeToggle}
               colors={colors}
-              isVisible={visiblePostIds.has(item.id)}
+              isVisible={item.id === activeVideoPostId}
             />
           )}
           onViewableItemsChanged={onViewableItemsChanged}
