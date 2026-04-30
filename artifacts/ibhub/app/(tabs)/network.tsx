@@ -1816,36 +1816,47 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
   const [posting, setPosting] = useState(false);
 
   // Keyboard-aware composer: track the focused input and the FlatList's scroll
-  // offset so that when the keyboard appears we can scroll the focused input
-  // above the keyboard line (KeyboardAvoidingView shrinks the viewport but
-  // does not auto-scroll FlatList contents).
+  // offset so we can scroll the focused input above the keyboard line.
+  // KeyboardAvoidingView shrinks the viewport but does not auto-scroll
+  // FlatList contents on focus changes.
   const flatListRef = useRef<FlatList<API.MarketPost> | null>(null);
   const scrollOffset = useRef(0);
   const focusedInputRef = useRef<TextInput | null>(null);
+  const keyboardHeight = useRef(0);
+  const ensureFocusedInputVisible = useCallback(() => {
+    if (Platform.OS === "web") return;
+    const input = focusedInputRef.current;
+    if (!input || keyboardHeight.current <= 0) return;
+    const screenH = Dimensions.get("window").height;
+    const visibleBottom = screenH - keyboardHeight.current;
+    input.measureInWindow((_x, y, _w, h) => {
+      const inputBottom = y + h;
+      const overlap = inputBottom - (visibleBottom - 16);
+      if (overlap > 0) {
+        flatListRef.current?.scrollToOffset({
+          offset: scrollOffset.current + overlap,
+          animated: true,
+        });
+      }
+    });
+  }, []);
   useEffect(() => {
     if (Platform.OS === "web") return;
-    const sub = Keyboard.addListener("keyboardDidShow", e => {
-      const input = focusedInputRef.current;
-      if (!input) return;
-      const kbHeight = e.endCoordinates.height;
-      const screenH = Dimensions.get("window").height;
-      const visibleBottom = screenH - kbHeight;
-      input.measureInWindow((_x, y, _w, h) => {
-        const inputBottom = y + h;
-        const overlap = inputBottom - (visibleBottom - 16);
-        if (overlap > 0) {
-          flatListRef.current?.scrollToOffset({
-            offset: scrollOffset.current + overlap,
-            animated: true,
-          });
-        }
-      });
+    const showSub = Keyboard.addListener("keyboardDidShow", e => {
+      keyboardHeight.current = e.endCoordinates.height;
+      ensureFocusedInputVisible();
     });
-    return () => sub.remove();
-  }, []);
+    const hideSub = Keyboard.addListener("keyboardDidHide", () => {
+      keyboardHeight.current = 0;
+    });
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, [ensureFocusedInputVisible]);
   const handleInputFocus = useCallback((ref: React.RefObject<TextInput | null>) => () => {
     focusedInputRef.current = ref.current;
-  }, []);
+    // Re-run scroll-into-view in case the keyboard is already open and focus
+    // moved from one input to another (no new keyboardDidShow fires then).
+    setTimeout(ensureFocusedInputVisible, 50);
+  }, [ensureFocusedInputVisible]);
   const postInputRef = useRef<TextInput>(null);
   const pollOptionRefs = useRef<(TextInput | null)[]>([]);
 
@@ -1989,7 +2000,10 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
                 ref={el => { pollOptionRefs.current[i] = el; }}
                 value={opt}
                 onChangeText={v => setPollOptions(prev => prev.map((o, j) => j === i ? v : o))}
-                onFocus={() => { focusedInputRef.current = pollOptionRefs.current[i]; }}
+                onFocus={() => {
+                  focusedInputRef.current = pollOptionRefs.current[i];
+                  setTimeout(ensureFocusedInputVisible, 50);
+                }}
                 placeholder={`Opção ${i + 1}`}
                 placeholderTextColor={colors.mutedForeground}
                 style={{ flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, fontSize: 13, color: colors.foreground }}
