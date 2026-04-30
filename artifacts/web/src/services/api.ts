@@ -1663,6 +1663,7 @@ export interface AppOpportunity {
   company_page_id?: string | null;
   company_page?: { id: string; owner_id?: string | null; name: string; avatar_url?: string | null } | null;
   creator?: { id: string; full_name: string; avatar_url?: string | null } | null;
+  is_active?: boolean;
 }
 
 export interface AppEvent {
@@ -2041,6 +2042,32 @@ export async function fetchCompanyOpportunities(
     return (data ?? []) as CompanyAdminOpportunity[];
   } catch (e) {
     console.error("fetchCompanyOpportunities:", e);
+    return [];
+  }
+}
+
+export async function fetchUserOpportunities(
+  userId: string,
+  type: "vaga" | "marketplace",
+): Promise<CompanyAdminOpportunity[]> {
+  try {
+    const { data, error } = await supabase
+      .from("opportunities")
+      .select(`
+        id, created_by, type, title, description, category, location, price,
+        cover_image_url, company, contract_type, salary, contact_email,
+        expires_at, is_active, created_at,
+        interests_count, applications_count,
+        view_count, sold, company_page_id
+      `)
+      .eq("created_by", userId)
+      .eq("type", type)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) { console.error("fetchUserOpportunities:", error); return []; }
+    return (data ?? []) as CompanyAdminOpportunity[];
+  } catch (e) {
+    console.error("fetchUserOpportunities:", e);
     return [];
   }
 }

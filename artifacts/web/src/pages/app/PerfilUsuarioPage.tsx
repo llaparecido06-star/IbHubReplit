@@ -23,11 +23,13 @@ import {
   updatePost,
   blockUser,
   reportPost,
+  fetchUserOpportunities,
   UserProfile,
   Post,
   WineEntry,
   ReactionType,
   ProfilePerson,
+  CompanyAdminOpportunity,
 } from "@/services/api";
 
 const GOLD   = "#c9a84c";
@@ -572,8 +574,9 @@ export default function PerfilUsuarioPage() {
   const [stats, setStats] = useState({ connections: 0, followers: 0, following: 0 });
   const [posts, setPosts] = useState<Post[]>([]);
   const [wines, setWines] = useState<WineEntry[]>([]);
+  const [anuncios, setAnuncios] = useState<CompanyAdminOpportunity[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"publicacoes" | "adega" | "sobre">("publicacoes");
+  const [tab, setTab] = useState<"publicacoes" | "anuncios" | "adega" | "sobre">("publicacoes");
 
   /* Connection / follow state */
   const [connectionStatus, setConnectionStatus] = useState<"none" | "pending" | "connected">("none");
@@ -609,13 +612,15 @@ export default function PerfilUsuarioPage() {
       fetchPublicWineCellar(targetId),
       currentUserId ? checkWebConnectionStatus(targetId, currentUserId) : Promise.resolve("none" as const),
       currentUserId ? checkWebFollowStatus(targetId, currentUserId) : Promise.resolve(false),
-    ]).then(([prof, s, p, w, connStatus, following]) => {
+      fetchUserOpportunities(targetId, "marketplace"),
+    ]).then(([prof, s, p, w, connStatus, following, ann]) => {
       setUserProfile(prof);
       setStats(s);
       setPosts(p);
       setWines(w);
       setConnectionStatus(connStatus);
       setIsFollowing(following);
+      setAnuncios(ann.filter(a => a.is_active));
       setLoading(false);
     });
   }, [targetId, currentUserId]);
@@ -909,8 +914,8 @@ export default function PerfilUsuarioPage() {
 
         {/* Tabs */}
         <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "0 4px", marginBottom: 16, display: "flex" }}>
-          {(["publicacoes", tab2, "sobre"] as const).map(t => {
-            const labels: Record<string, string> = { publicacoes: "Publicações", [tab2]: tab2Label, sobre: "Sobre" };
+          {(["publicacoes", "anuncios", tab2, "sobre"] as const).map(t => {
+            const labels: Record<string, string> = { publicacoes: "Publicações", anuncios: "Anúncios", [tab2]: tab2Label, sobre: "Sobre" };
             const active = tab === t;
             return (
               <button key={t} onClick={() => setTab(t as any)} style={{
@@ -949,6 +954,37 @@ export default function PerfilUsuarioPage() {
                 onBlock={handleBlockUserPost}
               />
             ))
+          )
+        )}
+
+        {tab === "anuncios" && (
+          anuncios.length === 0 ? (
+            <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "56px 24px", textAlign: "center" }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🏷️</div>
+              <h3 style={{ fontSize: 16, fontWeight: 800, color: NAVY, margin: "0 0 8px" }}>Nenhum anúncio</h3>
+              <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>Este usuário ainda não publicou anúncios no Mercado.</p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {anuncios.map(a => (
+                <div
+                  key={a.id}
+                  onClick={() => setLocation("/app/mercado")}
+                  style={{ display: "flex", gap: 12, alignItems: "center", padding: 12, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, cursor: "pointer" }}
+                >
+                  {a.cover_image_url ? (
+                    <img src={a.cover_image_url} alt={a.title} style={{ width: 72, height: 72, borderRadius: 10, objectFit: "cover", flexShrink: 0 }} />
+                  ) : (
+                    <div style={{ width: 72, height: 72, borderRadius: 10, backgroundColor: BORDER, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 24 }}>🖼️</div>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2 }}>{a.title}</div>
+                    {a.price ? <div style={{ fontSize: 13, fontWeight: 700, color: GOLD, marginTop: 2 }}>{a.price}</div> : null}
+                    {a.category ? <div style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>{a.category}</div> : null}
+                  </div>
+                </div>
+              ))}
+            </div>
           )
         )}
 

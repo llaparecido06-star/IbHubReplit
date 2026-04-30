@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   Alert,
+  Image,
   Linking,
   Platform,
   RefreshControl,
@@ -360,28 +361,43 @@ export default function EmpresaDashboard() {
                 onPress={() => router.push(`/opportunity/${anuncio.id}` as any)}
                 activeOpacity={0.75}
               >
-                <View style={styles.oppCardRow}>
-                  <Text style={[styles.oppTitle, { color: colors.navy, flex: 1 }]} numberOfLines={1}>{anuncio.title}</Text>
-                  <TouchableOpacity
-                    style={[styles.statusChip, { backgroundColor: isActive ? "#dcfce7" : "#fee2e2" }]}
-                    onPress={(e) => { e.stopPropagation(); handleToggle(anuncio.id, isActive, "marketplace"); }}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Feather name={isActive ? "eye" : "eye-off"} size={11} color={isActive ? "#16a34a" : "#dc2626"} />
-                    <Text style={[styles.statusText, { color: isActive ? "#16a34a" : "#dc2626" }]}>
-                      {isActive ? "Ativo" : "Inativo"}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.oppMeta}>
-                  {anuncio.price ? (
-                    <Text style={[styles.oppPrice, { color: colors.gold }]}>{anuncio.price}</Text>
-                  ) : null}
-                  {anuncio.category ? (
-                    <View style={[styles.chip, { backgroundColor: colors.background }]}>
-                      <Text style={[styles.chipText, { color: colors.mutedForeground }]}>{anuncio.category}</Text>
+                <View style={styles.anuncioRow}>
+                  <View style={[styles.anuncioThumb, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    {anuncio.cover_image_url ? (
+                      <Image
+                        source={{ uri: anuncio.cover_image_url }}
+                        style={styles.anuncioThumbImg}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <Feather name="image" size={22} color={colors.mutedForeground} />
+                    )}
+                  </View>
+                  <View style={{ flex: 1, gap: 6 }}>
+                    <View style={styles.oppCardRow}>
+                      <Text style={[styles.oppTitle, { color: colors.navy, flex: 1 }]} numberOfLines={2}>{anuncio.title}</Text>
+                      <TouchableOpacity
+                        style={[styles.statusChip, { backgroundColor: isActive ? "#dcfce7" : "#fee2e2" }]}
+                        onPress={(e) => { e.stopPropagation(); handleToggle(anuncio.id, isActive, "marketplace"); }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Feather name={isActive ? "eye" : "eye-off"} size={11} color={isActive ? "#16a34a" : "#dc2626"} />
+                        <Text style={[styles.statusText, { color: isActive ? "#16a34a" : "#dc2626" }]}>
+                          {isActive ? "Ativo" : "Inativo"}
+                        </Text>
+                      </TouchableOpacity>
                     </View>
-                  ) : null}
+                    <View style={styles.oppMeta}>
+                      {anuncio.price ? (
+                        <Text style={[styles.oppPrice, { color: colors.gold }]}>{anuncio.price}</Text>
+                      ) : null}
+                      {anuncio.category ? (
+                        <View style={[styles.chip, { backgroundColor: colors.background }]}>
+                          <Text style={[styles.chipText, { color: colors.mutedForeground }]}>{anuncio.category}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
                 </View>
               </TouchableOpacity>
             );
@@ -471,6 +487,9 @@ const styles = StyleSheet.create({
   appBtnFillText: { color: "#fff", fontSize: 13, fontWeight: "600" },
   oppCard: { borderRadius: 10, borderWidth: 1, padding: 12, gap: 6 },
   oppCardRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  anuncioRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  anuncioThumb: { width: 64, height: 64, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  anuncioThumbImg: { width: "100%", height: "100%" },
   oppTitle: { fontSize: 14, fontWeight: "700" },
   statusChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   statusText: { fontSize: 11, fontWeight: "700" },

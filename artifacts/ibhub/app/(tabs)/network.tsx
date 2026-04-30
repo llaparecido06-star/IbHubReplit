@@ -47,12 +47,18 @@ type MercadoTab = "visao" | "apresentacoes" | "idealbi";
 type IdealBISubTab = "feed" | "search";
 
 // ─── Ideal.BI Search Mock Data ─────────────────────────────────────────────────
+interface WineDistribuidor {
+  name: string;
+  company_page_id: string | null;
+}
+
 interface WineRecord {
   id?: number;
   marcaCompleta: string;
   marcaRelatorio?: string;
   paisDeOrigem?: string;
   distribuidor: string;
+  distribuidores: WineDistribuidor[];
 }
 
 interface TooltipState {
@@ -852,6 +858,7 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
       if (!res.ok) throw new Error("server error");
       const json = await res.json() as {
         data: { id: number; marca_completa: string; marca_relatorio: string | null; pais_de_origem: string | null; distribuidor: string | null }[];
+        distribuidores?: { name: string; company_page_id: string | null }[];
         brand_extracted: string | null;
         credits_remaining: number;
         credits_total: number;
@@ -862,12 +869,27 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
       const rows = json.data ?? [];
       if (rows.length > 0) {
         const first = rows[0];
+        // Prefer server-deduped distribuidores; fall back to deriving from rows.
+        let distribuidores: WineDistribuidor[] = (json.distribuidores ?? []).map((d) => ({
+          name: d.name,
+          company_page_id: d.company_page_id ?? null,
+        }));
+        if (distribuidores.length === 0) {
+          const seen = new Set<string>();
+          for (const r of rows) {
+            const n = (r.distribuidor ?? "").trim();
+            if (!n) continue;
+            const k = n.toLowerCase();
+            if (!seen.has(k)) { seen.add(k); distribuidores.push({ name: n, company_page_id: null }); }
+          }
+        }
         setResult({
           id: first.id,
           marcaCompleta: first.marca_completa,
           marcaRelatorio: first.marca_relatorio ?? undefined,
           paisDeOrigem: first.pais_de_origem ?? undefined,
-          distribuidor: first.distribuidor ?? "—",
+          distribuidor: distribuidores[0]?.name ?? (first.distribuidor ?? "—"),
+          distribuidores,
         });
       } else {
         setResult("not_found");
@@ -1093,7 +1115,6 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
             ...(result.paisDeOrigem
               ? [{ icon: "globe",   label: "País de Origem",     value: result.paisDeOrigem  }]
               : []),
-            { icon: "package",    label: "Distribuidor BR",      value: result.distribuidor  },
           ] as { icon: any; label: string; value: string }[]).map(row => (
             <View key={row.label} style={[styles.kpiCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
               <View style={styles.kpiLeft}>
@@ -1107,6 +1128,42 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
               </View>
             </View>
           ))}
+
+          {/* Distribuidores BR — pode ter 2+ */}
+          {result.distribuidores.length > 0 && (
+            <View style={[styles.kpiCard, { backgroundColor: "#fff", borderColor: colors.border, alignItems: "flex-start" }]}>
+              <View style={[styles.kpiLeft, { alignItems: "flex-start" }]}>
+                <View style={[styles.kpiIconBox, { backgroundColor: colors.gold + "18" }]}>
+                  <Feather name="package" size={20} color={colors.gold} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>
+                    {result.distribuidores.length > 1
+                      ? `Distribuído no Brasil por (${result.distribuidores.length})`
+                      : "Distribuidor BR"}
+                  </Text>
+                  <View style={{ marginTop: 4, gap: 4 }}>
+                    {result.distribuidores.map((d, idx) => (
+                      <TouchableOpacity
+                        key={`${d.name}-${idx}`}
+                        disabled={!d.company_page_id}
+                        onPress={() => d.company_page_id && router.push(`/empresa/${d.company_page_id}` as any)}
+                        activeOpacity={d.company_page_id ? 0.6 : 1}
+                        style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+                      >
+                        <Text style={{ fontSize: 15, fontWeight: "700", color: d.company_page_id ? colors.gold : colors.navy, textDecorationLine: d.company_page_id ? "underline" : "none" }}>
+                          {d.name}
+                        </Text>
+                        {d.company_page_id ? (
+                          <Feather name="external-link" size={12} color={colors.gold} />
+                        ) : null}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            </View>
+          )}
         </View>
       )}
 

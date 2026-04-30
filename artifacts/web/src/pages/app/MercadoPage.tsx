@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/context/AuthContext";
 import { usePermissions } from "@/context/PermissionsContext";
@@ -1109,7 +1109,14 @@ function IdealBISearch({ userId }: { userId: string }) {
   const [creditsTotal, setCreditsTotal] = useState(3);
   const [creditsLoading, setCreditsLoading] = useState(true);
   const [searching, setSearching] = useState(false);
-  type WineResult = { marcaCompleta: string; marcaRelatorio?: string; paisDeOrigem?: string; distribuidor: string };
+  type WineDistribuidor = { name: string; company_page_id: string | null };
+  type WineResult = {
+    marcaCompleta: string;
+    marcaRelatorio?: string;
+    paisDeOrigem?: string;
+    distribuidor: string;
+    distribuidores: WineDistribuidor[];
+  };
   const [result, setResult] = useState<WineResult | null | "not_found" | "out_of_scope">(null);
   const [brandExtracted, setBrandExtracted] = useState<string | null>(null);
 
@@ -1188,6 +1195,7 @@ function IdealBISearch({ userId }: { userId: string }) {
       if (!res.ok) throw new Error("server error");
       const json = await res.json() as {
         data: { marca_completa: string; marca_relatorio: string | null; pais_de_origem: string | null; distribuidor: string | null }[];
+        distribuidores?: { name: string; company_page_id: string | null }[];
         brand_extracted: string | null;
         credits_remaining: number;
         credits_total: number;
@@ -1198,7 +1206,26 @@ function IdealBISearch({ userId }: { userId: string }) {
       const rows = json.data ?? [];
       if (rows.length > 0) {
         const f = rows[0];
-        setResult({ marcaCompleta: f.marca_completa, marcaRelatorio: f.marca_relatorio ?? undefined, paisDeOrigem: f.pais_de_origem ?? undefined, distribuidor: f.distribuidor ?? "—" });
+        let distribuidores: WineDistribuidor[] = (json.distribuidores ?? []).map(d => ({
+          name: d.name,
+          company_page_id: d.company_page_id ?? null,
+        }));
+        if (distribuidores.length === 0) {
+          const seen = new Set<string>();
+          for (const r of rows) {
+            const n = (r.distribuidor ?? "").trim();
+            if (!n) continue;
+            const k = n.toLowerCase();
+            if (!seen.has(k)) { seen.add(k); distribuidores.push({ name: n, company_page_id: null }); }
+          }
+        }
+        setResult({
+          marcaCompleta: f.marca_completa,
+          marcaRelatorio: f.marca_relatorio ?? undefined,
+          paisDeOrigem: f.pais_de_origem ?? undefined,
+          distribuidor: distribuidores[0]?.name ?? (f.distribuidor ?? "—"),
+          distribuidores,
+        });
       } else {
         setResult("not_found");
       }
@@ -1367,7 +1394,6 @@ function IdealBISearch({ userId }: { userId: string }) {
             ...(result.paisDeOrigem
               ? [{ icon: "🌍", label: "País de Origem", value: result.paisDeOrigem }]
               : []),
-            { icon: "📦", label: "Distribuidor BR", value: result.distribuidor },
           ] as { icon: string; label: string; value: string }[]).map(row => (
             <div key={row.label} style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
               <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
@@ -1379,6 +1405,38 @@ function IdealBISearch({ userId }: { userId: string }) {
               </div>
             </div>
           ))}
+
+          {/* Distribuidores BR — pode ter 2+ */}
+          {result.distribuidores.length > 0 && (
+            <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 20px", display: "flex", alignItems: "flex-start", gap: 14 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
+                📦
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, color: MUTED, fontWeight: 600 }}>
+                  {result.distribuidores.length > 1
+                    ? `Distribuído no Brasil por (${result.distribuidores.length})`
+                    : "Distribuidor BR"}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+                  {result.distribuidores.map((d, idx) => (
+                    d.company_page_id ? (
+                      <Link
+                        key={`${d.name}-${idx}`}
+                        href={`/app/empresa/${d.company_page_id}`}
+                        style={{ fontSize: 15, fontWeight: 800, color: GOLD, textDecoration: "underline", display: "inline-flex", alignItems: "center", gap: 6 }}
+                      >
+                        {d.name}
+                        <span style={{ fontSize: 11 }}>↗</span>
+                      </Link>
+                    ) : (
+                      <span key={`${d.name}-${idx}`} style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>{d.name}</span>
+                    )
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

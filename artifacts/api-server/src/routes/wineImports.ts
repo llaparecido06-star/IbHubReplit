@@ -212,7 +212,7 @@ router.get("/wine-imports/search", async (req: Request, res: Response) => {
     .select("id, marca_completa, marca_relatorio, pais_de_origem, distribuidor")
     .or(`marca_completa.ilike.${pattern},marca_relatorio.ilike.${pattern}`)
     .order("marca_completa")
-    .limit(20);
+    .limit(50);
 
   if (error) {
     console.error("wine-imports search error", error);
@@ -220,6 +220,50 @@ router.get("/wine-imports/search", async (req: Request, res: Response) => {
   }
 
   const rows = data ?? [];
+
+  // Build deduplicated distributor list (case-insensitive on trimmed name)
+  // and try to resolve a company_pages link for each distributor name.
+  const distribuidoresMap = new Map<string, { name: string; company_page_id: string | null }>();
+  for (const r of rows as { distribuidor: string | null }[]) {
+    const raw = (r.distribuidor ?? "").trim();
+    if (!raw) continue;
+    const key = raw.toLowerCase();
+    if (!distribuidoresMap.has(key)) {
+      distribuidoresMap.set(key, { name: raw, company_page_id: null });
+    }
+  }
+
+  const distribuidoresList = Array.from(distribuidoresMap.values());
+
+  if (distribuidoresList.length > 0) {
+    try {
+      const lookups = await Promise.all(
+        distribuidoresList.map(async (d): Promise<{ key: string; id: string | null }> => {
+          try {
+            const { data } = await supabaseAdmin
+              .from("company_pages")
+              .select("id, name")
+              .ilike("name", d.name)
+              .limit(1)
+              .maybeSingle();
+            return { key: d.name.toLowerCase(), id: (data as { id?: string } | null)?.id ?? null };
+          } catch {
+            return { key: d.name.toLowerCase(), id: null };
+          }
+        })
+      );
+      const pagesByName = new Map<string, string>();
+      for (const r of lookups) {
+        if (r.id) pagesByName.set(r.key, r.id);
+      }
+      for (const d of distribuidoresList) {
+        const link = pagesByName.get(d.name.toLowerCase());
+        if (link) d.company_page_id = link;
+      }
+    } catch (e) {
+      console.error("wine-imports company_pages lookup error", e);
+    }
+  }
 
   if (rows.length > 0) {
     const newRemaining = credits.credits_remaining - 1;
@@ -230,6 +274,7 @@ router.get("/wine-imports/search", async (req: Request, res: Response) => {
 
     return res.json({
       data: rows,
+      distribuidores: distribuidoresList,
       brand_extracted: brandName,
       credits_remaining: newRemaining,
       credits_total: credits.credits_total,
@@ -238,6 +283,7 @@ router.get("/wine-imports/search", async (req: Request, res: Response) => {
 
   return res.json({
     data: [],
+    distribuidores: [],
     brand_extracted: brandName,
     credits_remaining: credits.credits_remaining,
     credits_total: credits.credits_total,

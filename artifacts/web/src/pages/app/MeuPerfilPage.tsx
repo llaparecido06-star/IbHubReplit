@@ -29,10 +29,12 @@ import {
   toggleLikePost,
   changeReactionPost,
   toggleBookmarkPost,
+  fetchUserOpportunities,
   Post,
   Poll,
   ProfilePerson,
   ReactionType,
+  CompanyAdminOpportunity,
 } from "@/services/api";
 
 const GOLD   = "#c9a84c";
@@ -506,7 +508,7 @@ function MiniPostCard({ post, onDelete, onEdit, onPollUpdate, onLike, onBookmark
   );
 }
 
-type ProfileTab = "publicacoes" | "sobre";
+type ProfileTab = "publicacoes" | "anuncios" | "sobre";
 
 export default function MeuPerfilPage() {
   const { profile, user, loading: authLoading } = useAuth();
@@ -516,8 +518,10 @@ export default function MeuPerfilPage() {
 
   const [stats, setStats] = useState({ connections: 0, followers: 0, following: 0 });
   const [posts, setPosts] = useState<Post[]>([]);
+  const [anuncios, setAnuncios] = useState<CompanyAdminOpportunity[]>([]);
   const [tab, setTab] = useState<ProfileTab>("publicacoes");
   const [loadingPosts, setLoadingPosts] = useState(true);
+  const [loadingAnuncios, setLoadingAnuncios] = useState(true);
   const [peopleModal, setPeopleModal] = useState<{ title: string; list: ProfilePerson[] } | null>(null);
   const [myCompanyId, setMyCompanyId] = useState<string | null>(null);
 
@@ -537,6 +541,9 @@ export default function MeuPerfilPage() {
     fetchUserPosts(userId)
       .then(data => { setPosts(data); setLoadingPosts(false); })
       .catch(() => setLoadingPosts(false));
+    fetchUserOpportunities(userId, "marketplace")
+      .then(data => { setAnuncios(data); setLoadingAnuncios(false); })
+      .catch(() => setLoadingAnuncios(false));
     // Look up the user's company page (if any) so the "Empresa / Minha página"
     // card can route to /app/empresa/:id instead of the route-less /app/empresa.
     (async () => {
@@ -629,6 +636,55 @@ export default function MeuPerfilPage() {
     ];
     return Math.round((fields.filter(Boolean).length / fields.length) * 100);
   })();
+
+  const renderAnunciosTab = () => {
+    if (loadingAnuncios) {
+      return (
+        <div style={{ textAlign: "center", padding: 40, color: MUTED }}>
+          <div style={{ fontSize: 24, marginBottom: 8 }}>🍷</div>Carregando anúncios…
+        </div>
+      );
+    }
+    if (anuncios.length === 0) {
+      return (
+        <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "40px 24px", textAlign: "center" }}>
+          <div style={{ fontSize: 36, marginBottom: 10 }}>🏷️</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 6 }}>Nenhum anúncio</div>
+          <div style={{ fontSize: 13, color: MUTED, marginBottom: 14 }}>Você ainda não publicou anúncios no Mercado</div>
+          <button
+            onClick={() => setLocation("/mercado")}
+            style={{ padding: "9px 18px", backgroundColor: GOLD, color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+          >
+            Ir para o Mercado
+          </button>
+        </div>
+      );
+    }
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {anuncios.map(a => (
+          <div
+            key={a.id}
+            onClick={() => setLocation("/mercado")}
+            style={{ display: "flex", gap: 12, alignItems: "center", padding: 10, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, cursor: "pointer" }}
+          >
+            {a.cover_image_url ? (
+              <img src={a.cover_image_url} alt={a.title} style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+            ) : (
+              <div style={{ width: 64, height: 64, borderRadius: 8, backgroundColor: BORDER, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 22 }}>🖼️</div>
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2 }}>{a.title}</div>
+              {a.price ? <div style={{ fontSize: 13, fontWeight: 700, color: GOLD, marginTop: 2 }}>{a.price}</div> : null}
+              <div style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>
+                {a.category ?? ""}{!a.is_active ? " · inativo" : ""}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   if (isMobile) {
     const COVER_H = 120;
@@ -756,8 +812,8 @@ export default function MeuPerfilPage() {
 
           {/* Tabs */}
           <div style={{ backgroundColor: "#fff", display: "flex", borderBottom: `1px solid ${BORDER}`, marginBottom: 10 }}>
-            {(["publicacoes", "sobre"] as ProfileTab[]).map(t => {
-              const labels: Record<ProfileTab, string> = { publicacoes: "Publicações", sobre: "Sobre" };
+            {(["publicacoes", "anuncios", "sobre"] as ProfileTab[]).map(t => {
+              const labels: Record<ProfileTab, string> = { publicacoes: "Publicações", anuncios: "Anúncios", sobre: "Sobre" };
               const active = tab === t;
               return (
                 <button key={t} onClick={() => setTab(t)} style={{
@@ -791,6 +847,8 @@ export default function MeuPerfilPage() {
                   {posts.map(post => <MiniPostCard key={post.id} post={post} onDelete={handleDeletePost} onEdit={handleEditPost} onPollUpdate={handlePollUpdate} onLike={handleLike} onBookmark={handleBookmark} />)}
                 </div>
               )
+            ) : tab === "anuncios" ? (
+              <div style={{ padding: "0 12px" }}>{renderAnunciosTab()}</div>
             ) : (
               <div style={{ backgroundColor: "#fff", padding: "20px 16px" }}>
                 <div style={{ fontSize: 14, fontWeight: 800, color: NAVY, marginBottom: 12 }}>Sobre mim</div>
@@ -896,8 +954,8 @@ export default function MeuPerfilPage() {
 
         {/* Tabs */}
         <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "0 4px", marginBottom: 16, display: "flex" }}>
-          {(["publicacoes", "sobre"] as ProfileTab[]).map(t => {
-            const labels: Record<ProfileTab, string> = { publicacoes: "Publicações", sobre: "Sobre" };
+          {(["publicacoes", "anuncios", "sobre"] as ProfileTab[]).map(t => {
+            const labels: Record<ProfileTab, string> = { publicacoes: "Publicações", anuncios: "Anúncios", sobre: "Sobre" };
             const active = tab === t;
             return (
               <button key={t} onClick={() => setTab(t)} style={{
@@ -928,6 +986,8 @@ export default function MeuPerfilPage() {
           ) : (
             posts.map(post => <MiniPostCard key={post.id} post={post} onDelete={handleDeletePost} onEdit={handleEditPost} onPollUpdate={handlePollUpdate} onLike={handleLike} onBookmark={handleBookmark} />)
           )
+        ) : tab === "anuncios" ? (
+          renderAnunciosTab()
         ) : (
           <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 20 }}>
             <h3 style={{ fontSize: 15, fontWeight: 800, color: NAVY, margin: "0 0 16px" }}>Sobre mim</h3>

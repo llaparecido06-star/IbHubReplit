@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -859,6 +860,17 @@ export default function CompanyAdminScreen() {
   const renderAnuncio = ({ item }: { item: API.CompanyAdminOpportunity }) => (
     <View style={[styles.card, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
       <View style={styles.cardTop}>
+        <View style={[styles.anuncioThumb, { backgroundColor: colors.background, borderColor: colors.border }]}>
+          {item.cover_image_url ? (
+            <Image
+              source={{ uri: item.cover_image_url }}
+              style={styles.anuncioThumbImg}
+              resizeMode="cover"
+            />
+          ) : (
+            <Feather name="image" size={22} color={colors.mutedForeground} />
+          )}
+        </View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.cardTitle, { color: colors.foreground }]} numberOfLines={2}>
             {item.title}
@@ -1154,6 +1166,8 @@ const styles = StyleSheet.create({
   card:              { borderRadius: 14, borderWidth: 1, padding: 14, gap: 12 },
   cardTop:           { flexDirection: "row", gap: 10, alignItems: "flex-start" },
   cardTitle:         { fontSize: 15, fontWeight: "700", lineHeight: 20 },
+  anuncioThumb:      { width: 56, height: 56, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  anuncioThumbImg:   { width: "100%", height: "100%" },
   cardSub:           { fontSize: 13, marginTop: 2 },
   cardDate:          { fontSize: 12, marginTop: 2 },
   cardPrice:         { fontSize: 15, fontWeight: "700", marginTop: 2 },

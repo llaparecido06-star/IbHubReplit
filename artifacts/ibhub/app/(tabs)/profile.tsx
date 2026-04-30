@@ -59,6 +59,8 @@ import {
   ensureReferralCode,
   fetchMyReferralStats,
   fetchCompanyPageById,
+  fetchMyOpportunities,
+  type AppOpportunity,
 } from "@/services/api";
 import { Post } from "@/components/feed/PostCard";
 import EmpresaDashboard from "@/components/EmpresaDashboard";
@@ -625,7 +627,7 @@ export default function ProfileScreen() {
   const insets  = useSafeAreaInsets();
   const { profile, user, signOut, activeCompany } = useAuth();
 
-  const [activeTab,    setActiveTab]    = useState<"feed" | "salvos" | "adega">("feed");
+  const [activeTab,    setActiveTab]    = useState<"feed" | "salvos" | "adega" | "anuncios">("feed");
   const [showComments, setShowComments] = useState<string | null>(null);
   const [showPostMenu, setShowPostMenu] = useState<string | null>(null);
   const [commentText,  setCommentText]  = useState("");
@@ -634,6 +636,7 @@ export default function ProfileScreen() {
   const [posts,          setPosts]          = useState<Post[]>([]);
   const [savedPosts,     setSavedPosts]     = useState<Post[]>([]);
   const [wineEntries,    setWineEntries]    = useState<WineEntry[]>([]);
+  const [anuncios,       setAnuncios]       = useState<AppOpportunity[]>([]);
   const [followers,      setFollowers]      = useState<FollowProfile[]>([]);
   const [following,      setFollowing]      = useState<FollowProfile[]>([]);
   const [suggestions,    setSuggestions]    = useState<SuggestedProfile[]>([]);
@@ -677,7 +680,7 @@ export default function ProfileScreen() {
     // Skip heavy personal data when in company mode (we show EmpresaProfileProxy anyway)
     if (isCompany) { setLoadingData(false); setRefreshing(false); return; }
     const areas = profile?.areas_of_expertise ?? [];
-    const [p, saved, wines, fr, fg, sg, ls] = await Promise.all([
+    const [p, saved, wines, fr, fg, sg, ls, ann] = await Promise.all([
       fetchUserPosts(user.id, user.id),
       fetchBookmarkedPosts(user.id),
       fetchWineCellar(user.id),
@@ -685,10 +688,12 @@ export default function ProfileScreen() {
       fetchFollowing(user.id),
       fetchSuggestedConnections(user.id, areas, profile?.company ?? null, 8),
       fetchProfileStats(user.id),
+      fetchMyOpportunities(user.id, "marketplace"),
     ]);
     setPosts(p);
     setSavedPosts(saved);
     setWineEntries(wines);
+    setAnuncios(ann);
     setFollowers(fr);
     setFollowing(fg);
     setFollowingSet(new Set(fg.map((f) => f.id)));
@@ -1265,9 +1270,10 @@ export default function ProfileScreen() {
       {/* ── Profile tabs ── */}
       <View style={[styles.tabRow, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         {([
-          { key: "feed",   label: "FEED",   icon: null },
-          { key: "salvos", label: "SALVOS", icon: "bookmark" },
-          { key: "adega",  label: "ADEGA",  icon: "wind" },
+          { key: "feed",     label: "FEED",     icon: null },
+          { key: "anuncios", label: "ANÚNCIOS", icon: "tag" },
+          { key: "salvos",   label: "SALVOS",   icon: "bookmark" },
+          { key: "adega",    label: "ADEGA",    icon: "wind" },
         ] as const).map((t) => (
           <Pressable
             key={t.key}
@@ -1458,6 +1464,62 @@ export default function ProfileScreen() {
         </View>
       )}
 
+      {/* ── ANÚNCIOS ── */}
+      {activeTab === "anuncios" && (
+        <View style={{ backgroundColor: "#fff" }}>
+          {loadingData ? (
+            <ActivityIndicator color={colors.gold} style={{ marginTop: 40 }} />
+          ) : anuncios.length === 0 ? (
+            <View style={styles.emptyTab}>
+              <Feather name="tag" size={32} color={colors.mutedForeground} />
+              <Text style={[styles.emptyTabTitle, { color: colors.navy }]}>Nenhum anúncio</Text>
+              <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>
+                Você ainda não publicou anúncios no Mercado
+              </Text>
+              <TouchableOpacity
+                style={[styles.emptyTabBtn, { backgroundColor: colors.gold }]}
+                onPress={() => router.push("/opportunities" as any)}
+              >
+                <Text style={styles.emptyTabBtnText}>Ir para o Mercado</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, gap: 10 }}>
+              {anuncios.map((a) => (
+                <TouchableOpacity
+                  key={a.id}
+                  style={[styles.anuncioRow, { borderColor: colors.border }]}
+                  onPress={() => router.push(`/opportunity/${a.id}` as any)}
+                  activeOpacity={0.85}
+                >
+                  {a.cover_image_url ? (
+                    <Image source={{ uri: a.cover_image_url }} style={styles.anuncioThumb} />
+                  ) : (
+                    <View style={[styles.anuncioThumb, { backgroundColor: colors.border, alignItems: "center", justifyContent: "center" }]}>
+                      <Feather name="image" size={20} color={colors.mutedForeground} />
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.anuncioTitle, { color: colors.navy }]} numberOfLines={2}>{a.title}</Text>
+                    {a.price ? (
+                      <Text style={[styles.anuncioPrice, { color: colors.gold }]} numberOfLines={1}>{a.price}</Text>
+                    ) : null}
+                    <View style={styles.anuncioMetaRow}>
+                      {a.category ? (
+                        <Text style={[styles.anuncioMeta, { color: colors.mutedForeground }]} numberOfLines={1}>{a.category}</Text>
+                      ) : null}
+                      {!a.is_active ? (
+                        <Text style={[styles.anuncioInactive, { color: "#9ca3af" }]}>· inativo</Text>
+                      ) : null}
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
+
       {/* ── Comments modal ── */}
       <Modal visible={showComments !== null} transparent animationType="slide" onRequestClose={() => { setShowComments(null); setCommentText(""); }}>
         <Pressable style={styles.modalOverlay} onPress={() => { setShowComments(null); setCommentText(""); }}>
@@ -1629,6 +1691,13 @@ const styles = StyleSheet.create({
   adegaMoreText:      { fontSize: 12, textAlign: "center", marginTop: 4 },
   adegaOpenBtn:       { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, borderRadius: 12 },
   adegaOpenBtnText:   { color: "#fff", fontSize: 15, fontWeight: "700" },
+  anuncioRow:         { flexDirection: "row", alignItems: "center", gap: 12, padding: 10, borderRadius: 12, borderWidth: 1, backgroundColor: "#fff" },
+  anuncioThumb:       { width: 64, height: 64, borderRadius: 8, overflow: "hidden" },
+  anuncioTitle:       { fontSize: 14, fontWeight: "700" },
+  anuncioPrice:       { fontSize: 13, fontWeight: "700", marginTop: 2 },
+  anuncioMetaRow:     { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
+  anuncioMeta:        { fontSize: 12 },
+  anuncioInactive:    { fontSize: 11, fontStyle: "italic" },
   modalOverlay:       { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
   commentsSheet:      { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: "70%" },
   commentsHeader:     { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
