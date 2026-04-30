@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { logger } from "../lib/logger";
 import { resolveUserId } from "../lib/planCheck.js";
+import { extractWineName, truncate } from "../lib/winePost.js";
 
 const router = Router();
 
@@ -205,10 +206,11 @@ router.post("/push/social", async (req: Request, res: Response): Promise<void> =
     return;
   }
 
-  // Fetch the post to get its author
+  // Fetch the post to get its author and content (wine reviews surface their
+  // wine name in the notification preview).
   const { data: postRow, error: postErr } = await supabaseAdmin
     .from("posts")
-    .select("user_id")
+    .select("user_id, content")
     .eq("id", postId)
     .maybeSingle();
 
@@ -218,6 +220,7 @@ router.post("/push/social", async (req: Request, res: Response): Promise<void> =
   }
 
   const authorId: string = postRow.user_id;
+  const wineName = extractWineName(postRow.content as string | null);
 
   // Don't notify if actor is the post author
   if (authorId === actorId) {
@@ -249,19 +252,31 @@ router.post("/push/social", async (req: Request, res: Response): Promise<void> =
   let title: string;
   let body: string;
 
+  // Cap the wine name length used in the title so combined title text stays
+  // legible on a notification banner across iOS/Android.
+  const wineLabel = wineName ? truncate(wineName, 60) : null;
+
   if (type === "comment") {
-    title = `💬 ${actorName} comentou na sua publicação`;
-    body = commentText ? (commentText.length > 80 ? commentText.slice(0, 80) + "…" : commentText) : "Veja o que disseram.";
+    title = wineLabel
+      ? `💬 ${actorName} comentou sua avaliação do ${wineLabel}`
+      : `💬 ${actorName} comentou na sua publicação`;
+    body = commentText ? truncate(commentText, 80) : "Veja o que disseram.";
   } else {
-    title = `❤️ ${actorName} curtiu sua publicação`;
-    body = "Toque para ver.";
+    title = wineLabel
+      ? `❤️ ${actorName} curtiu sua avaliação do ${wineLabel}`
+      : `❤️ ${actorName} curtiu sua publicação`;
+    body = wineLabel ? "Toque para ver a ficha do vinho." : "Toque para ver.";
   }
 
   const messages: ExpoPushMessage[] = validTokens.map((token) => ({
     to: token,
     title,
     body,
-    data: { postId, type },
+    // `deepLink` is read by the Expo app's notification-response handler
+    // (artifacts/ibhub/app/_layout.tsx) and routed via expo-router. Pointing
+    // at /post/<id> opens the structured wine card on mobile; the web app's
+    // in-app notification list deep-links to the same canonical id.
+    data: { postId, type, deepLink: `/post/${postId}` },
     sound: "default",
   }));
 

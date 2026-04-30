@@ -34,6 +34,21 @@ const TYPE_META: Record<string, { icon: any; color: string; label: string }> = {
   poll_vote:        { icon: "bar-chart-2",      color: "#0ea5e9", label: "votou na sua enquete" },
 };
 
+/**
+ * Build the message text for a notification row, preferring wine-specific
+ * wording when the underlying post is a wine review. Falls back to the
+ * server-stored `notif.message` (which is the canonical Portuguese phrase
+ * inserted by the postgres trigger) and finally to the type label.
+ */
+function buildNotifMessage(notif: AppNotification, fallbackLabel: string): string {
+  const wine = notif.wine_name?.trim();
+  if (wine) {
+    if (notif.type === "like")    return `curtiu sua avaliação do ${wine}`;
+    if (notif.type === "comment") return `comentou sua avaliação do ${wine}`;
+  }
+  return notif.message ?? fallbackLabel;
+}
+
 type UserCompany = { id: string; name: string; avatar_url: string | null };
 
 function NotifRow({
@@ -79,7 +94,7 @@ function NotifRow({
           <Text style={{ fontWeight: "700" }}>
             {notif.actor_company?.name ?? notif.actor?.full_name ?? "Alguém"}
           </Text>{" "}
-          {notif.message ?? meta.label}
+          {buildNotifMessage(notif, meta.label)}
         </Text>
         <Text style={[styles.rowTime, { color: colors.mutedForeground }]}>
           {formatRelativeDate(notif.created_at)}

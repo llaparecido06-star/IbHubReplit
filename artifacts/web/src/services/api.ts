@@ -1,4 +1,5 @@
 import { supabase, getCachedSession } from "@/lib/supabase";
+import { extractWineName } from "@/utils/winePost";
 
 // ─── Feed / Posts ──────────────────────────────────────────────────────────────
 
@@ -3200,6 +3201,10 @@ export interface WebNotification {
   actor?: { id: string; full_name: string; avatar_url?: string | null } | null;
   connection_id?: string | null;
   connection_status?: "pending" | "accepted" | "rejected" | null;
+  /** Set when the referenced post is a wine review; the notifications page
+   *  uses this to show "curtiu sua avaliação do <wine>" instead of the
+   *  generic "publicação" wording. */
+  wine_name?: string | null;
 }
 
 /**
@@ -3233,13 +3238,38 @@ export async function fetchWebNotifications(
     if (error || !data) return [];
 
     const actorIds = [...new Set((data as any[]).filter(n => n.actor_id).map((n: any) => n.actor_id as string))];
-    let actorMap: Map<string, { id: string; full_name: string; avatar_url?: string | null }> = new Map();
-    if (actorIds.length > 0) {
-      const { data: actors } = await supabase.from("profiles").select("id, full_name, avatar_url").in("id", actorIds);
-      if (actors) for (const a of actors as any[]) actorMap.set(a.id, a);
-    }
+    const postIds  = [...new Set((data as any[]).filter(n => n.post_id).map((n: any) => n.post_id as string))];
 
-    return (data as any[]).map(n => ({ ...n, actor: n.actor_id ? (actorMap.get(n.actor_id) ?? null) : null })) as WebNotification[];
+    let actorMap: Map<string, { id: string; full_name: string; avatar_url?: string | null }> = new Map();
+    const wineNameMap = new Map<string, string>();
+
+    const tasks: Promise<void>[] = [];
+    if (actorIds.length > 0) {
+      tasks.push((async () => {
+        const { data: actors } = await supabase.from("profiles").select("id, full_name, avatar_url").in("id", actorIds);
+        if (actors) for (const a of actors as any[]) actorMap.set(a.id, a);
+      })());
+    }
+    if (postIds.length > 0) {
+      // Fetch the source post content so the row can show the wine name
+      // when the referenced post is a wine review.
+      tasks.push((async () => {
+        const { data: posts } = await supabase.from("posts").select("id, content").in("id", postIds);
+        if (posts) {
+          for (const p of posts as Array<{ id: string; content: string | null }>) {
+            const name = extractWineName(p.content);
+            if (name) wineNameMap.set(p.id, name);
+          }
+        }
+      })());
+    }
+    await Promise.all(tasks);
+
+    return (data as any[]).map(n => ({
+      ...n,
+      actor: n.actor_id ? (actorMap.get(n.actor_id) ?? null) : null,
+      wine_name: n.post_id ? (wineNameMap.get(n.post_id) ?? null) : null,
+    })) as WebNotification[];
   } catch (e) {
     console.warn("fetchWebNotifications:", e);
     return [];

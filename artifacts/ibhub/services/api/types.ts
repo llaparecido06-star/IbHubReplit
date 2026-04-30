@@ -84,6 +84,9 @@ export interface AppNotification {
   connection_id?: string | null;
   connection_status?: "pending" | "accepted" | "rejected" | null;
   metadata?: Record<string, any> | null;
+  /** Set when the referenced post is a wine review; used to enrich the
+   *  message preview (e.g. "curtiu sua avaliação do Château ..."). */
+  wine_name?: string | null;
 }
 
 export interface AppComment {

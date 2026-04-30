@@ -1,6 +1,29 @@
 import { supabase } from "@/context/AuthContext";
 import { API_URL, fetchCommentProfilesForIds } from "./_shared";
 import type { AppNotification } from "./types";
+import { extractWineName } from "@/utils/winePost";
+
+/**
+ * Fetch wine names for the given post ids in a single query. Returns a map
+ * from postId → wine name (only entries that resolved to a wine review are
+ * included).
+ *
+ * Used to enrich notification previews so wine reviews surface their wine
+ * name instead of a generic "publicação" string.
+ */
+async function fetchWineNamesForPosts(postIds: string[]): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  if (postIds.length === 0) return result;
+  const { data } = await supabase
+    .from("posts")
+    .select("id, content")
+    .in("id", postIds);
+  for (const row of (data ?? []) as Array<{ id: string; content: string | null }>) {
+    const name = extractWineName(row.content);
+    if (name) result.set(row.id, name);
+  }
+  return result;
+}
 
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
 
@@ -22,13 +45,14 @@ export async function fetchNotifications(userId: string): Promise<AppNotificatio
 
     const actorIds = [...new Set((data as any[]).map(n => n.actor_id).filter(Boolean))];
     const actorCompanyIds = [...new Set((data as any[]).map(n => n.actor_company_id).filter(Boolean))];
+    const postIds = [...new Set((data as any[]).map(n => n.post_id).filter(Boolean))];
 
     // For connection notifications, fetch the corresponding connection record
     const connectionActorIds = (data as any[])
       .filter(n => n.type === "connection" && n.actor_id)
       .map(n => n.actor_id);
 
-    const [profileMap, connectionsRes, companiesRes] = await Promise.all([
+    const [profileMap, connectionsRes, companiesRes, wineNameMap] = await Promise.all([
       fetchCommentProfilesForIds(actorIds),
       connectionActorIds.length > 0
         ? supabase
@@ -43,6 +67,7 @@ export async function fetchNotifications(userId: string): Promise<AppNotificatio
             .select("id, name, avatar_url")
             .in("id", actorCompanyIds)
         : Promise.resolve({ data: [] }),
+      fetchWineNamesForPosts(postIds),
     ]);
 
     const connectionMap = new Map<string, { id: string; status: string }>();
@@ -60,6 +85,7 @@ export async function fetchNotifications(userId: string): Promise<AppNotificatio
         ...n,
         actor: profileMap.get(n.actor_id) ?? null,
         actor_company: n.actor_company_id ? (companyMap.get(n.actor_company_id) ?? null) : null,
+        wine_name: n.post_id ? (wineNameMap.get(n.post_id) ?? null) : null,
       };
       if (n.type === "connection" && n.actor_id) {
         const conn = connectionMap.get(n.actor_id);
@@ -107,12 +133,14 @@ export async function fetchCompanyNotifications(companyId: string): Promise<AppN
 
     const actorIds = [...new Set((data as any[]).map(n => n.actor_id).filter(Boolean))];
     const actorCompanyIds = [...new Set((data as any[]).map(n => n.actor_company_id).filter(Boolean))];
+    const postIds = [...new Set((data as any[]).map(n => n.post_id).filter(Boolean))];
 
-    const [profileMap, companiesRes] = await Promise.all([
+    const [profileMap, companiesRes, wineNameMap] = await Promise.all([
       fetchCommentProfilesForIds(actorIds),
       actorCompanyIds.length > 0
         ? supabase.from("company_pages").select("id, name, avatar_url").in("id", actorCompanyIds)
         : Promise.resolve({ data: [] }),
+      fetchWineNamesForPosts(postIds),
     ]);
 
     const companyMap = new Map<string, { id: string; name: string; avatar_url?: string | null }>();
@@ -124,6 +152,7 @@ export async function fetchCompanyNotifications(companyId: string): Promise<AppN
       ...n,
       actor: profileMap.get(n.actor_id) ?? null,
       actor_company: n.actor_company_id ? (companyMap.get(n.actor_company_id) ?? null) : null,
+      wine_name: n.post_id ? (wineNameMap.get(n.post_id) ?? null) : null,
     })) as unknown as AppNotification[];
   } catch (e) {
     console.warn("fetchCompanyNotifications:", e);

@@ -10,6 +10,55 @@ type LikeRow = { post_id: string; reaction_type?: string | null };
 type BookmarkRow = { post_id: string };
 type CommentLikeRow = { comment_id: string };
 
+/**
+ * Fire-and-forget social push dispatcher (parallels web's `_dispatchSocialPush`).
+ *
+ * The server endpoint /push/social is the single source of truth for the
+ * notification copy (wine name in title, /post/<id> deep-link), so both
+ * web and mobile call it instead of building Expo messages on their own.
+ * Skipped silently when the user is acting on behalf of a company page —
+ * the like/comment is then attributed to the company, not to the actor,
+ * and the recipient's inbox shows the company message.
+ */
+async function _dispatchSocialPush(opts: {
+  type: "like" | "comment";
+  postId: string;
+  userId: string;
+  commentText?: string;
+  companyPageId?: string | null;
+}): Promise<void> {
+  if (!API_URL) return;
+  if (opts.companyPageId) return;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return;
+
+    let actorName = (session?.user?.user_metadata as { full_name?: string } | undefined)?.full_name?.trim() || "";
+    if (!actorName) {
+      const { data: profileRow } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", opts.userId)
+        .maybeSingle();
+      actorName = (profileRow?.full_name as string | undefined)?.trim() || "Alguém";
+    }
+
+    await fetch(`${API_URL}/push/social`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        type: opts.type,
+        postId: opts.postId,
+        actorName,
+        commentText: opts.commentText,
+      }),
+    });
+  } catch {
+    // fire-and-forget — push failure must not break the like/comment write
+  }
+}
+
 export async function fetchFeedPosts(
   currentUserId: string,
   activeCompanyId?: string | null,
@@ -245,7 +294,10 @@ export async function toggleLike(postId: string, userId: string, isCurrentlyLike
       if (error) { console.error("toggleLike insert:", JSON.stringify(error)); return false; }
       // Increment count via RPC (bypasses RLS)
       await supabase.rpc("increment_post_likes", { p_post_id: postId });
-      // Note: like notification is handled by DB trigger notify_on_like
+      // In-app row is created by DB trigger notify_on_like; the push banner
+      // (with wine context + deep-link) is dispatched here so the post
+      // author gets a tap-to-open notification on mobile and web.
+      void _dispatchSocialPush({ type: "like", postId, userId, companyPageId });
     }
     return true;
   } catch (e) {
@@ -287,7 +339,9 @@ export async function toggleReaction(
     if (!hadPrevious) {
       // Fresh reaction (no previous) → increment
       await supabase.rpc("increment_post_likes", { p_post_id: postId });
-      // Note: like notification is handled by DB trigger notify_on_like
+      // Trigger creates the in-app notification; mobile fires the push so
+      // the wine-aware title and deep-link reach the post author.
+      void _dispatchSocialPush({ type: "like", postId, userId, companyPageId });
     }
     // Changed reaction type (delete old, insert new) → count unchanged
 
@@ -487,7 +541,12 @@ export async function addComment(
     // Increment comments_count via RPC (bypasses RLS)
     await supabase.rpc("increment_post_comments", { p_post_id: postId });
 
-    // Note: comment/reply notifications are handled by DB trigger notify_on_comment
+    // In-app row is created by DB trigger notify_on_comment; the push banner
+    // is dispatched here so wine context + deep-link reach the author. Reply
+    // pushes are skipped — only top-level comments notify the post author.
+    if (!parentCommentId) {
+      void _dispatchSocialPush({ type: "comment", postId, userId, commentText: content, companyPageId });
+    }
 
     return {
       ...(data as any),

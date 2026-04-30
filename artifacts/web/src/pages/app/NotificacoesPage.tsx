@@ -38,6 +38,19 @@ const TYPE_META: Record<string, { emoji: string; color: string; label: string }>
   poll_vote:     { emoji: "📊", color: "#0ea5e9", label: "votou na sua enquete" },
 };
 
+/**
+ * Build the message text for a notification row, preferring wine-specific
+ * wording when the underlying post is a wine review.
+ */
+function buildNotifMessage(notif: WebNotification, fallbackLabel: string): string {
+  const wine = notif.wine_name?.trim();
+  if (wine) {
+    if (notif.type === "like")    return `curtiu sua avaliação do ${wine}`;
+    if (notif.type === "comment") return `comentou sua avaliação do ${wine}`;
+  }
+  return notif.message ?? fallbackLabel;
+}
+
 function Avatar({ src, name, size = 46 }: { src?: string | null; name: string; size?: number }) {
   const initials = name.split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase();
   if (src) return <img src={src} alt={name} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
@@ -97,7 +110,7 @@ function NotifRow({ notif, onRead, onAccept, onReject }: {
       <div style={{ flex: 1 }}>
         <p style={{ margin: 0, fontSize: 14, color: NAVY, lineHeight: 1.45 }}>
           <strong>{actorName}</strong>{" "}
-          {notif.message ?? meta.label}
+          {buildNotifMessage(notif, meta.label)}
         </p>
         <p style={{ margin: "4px 0 0", fontSize: 12, color: MUTED }}>{timeAgo(notif.created_at)}</p>
 
