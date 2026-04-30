@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
+import { getCanonicalWebBaseUrl } from "../lib/canonicalUrl.js";
 
 const router: IRouter = Router();
 
@@ -13,9 +14,7 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
 router.get("/profile/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
 
-  const webBaseUrl = process.env.EXPO_PUBLIC_DOMAIN
-    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-    : null;
+  const webBaseUrl = process.env.EXPO_PUBLIC_DOMAIN ? getCanonicalWebBaseUrl() : null;
 
   if (webBaseUrl) {
     res.redirect(302, `${webBaseUrl}/u/${id}`);

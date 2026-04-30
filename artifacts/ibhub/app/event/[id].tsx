@@ -19,6 +19,7 @@ import { Feather } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { getCanonicalWebBaseUrl } from "@/utils/canonicalUrl";
 import {
   AppEvent,
   AppEventAttendee,
@@ -119,8 +120,7 @@ export default function EventScreen() {
 
   const handleShare = async () => {
     if (!event) return;
-    const domain = process.env.EXPO_PUBLIC_DOMAIN ?? "ibhub.com.br";
-    const shareUrl = `https://${domain}/event/${event.id}`;
+    const shareUrl = `${getCanonicalWebBaseUrl()}/event/${event.id}`;
     const locationStr = event.location_type === "online" ? "Online" : (event.location ?? "");
     try {
       await Share.share({

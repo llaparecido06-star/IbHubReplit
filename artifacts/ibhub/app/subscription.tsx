@@ -20,12 +20,10 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { getEntitlementStatus } from "@/utils/entitlement";
 import { usePlans, formatPlanPrice, formatOriginalPrice, calcDiscount } from "@/hooks/usePlans";
+import { getCanonicalWebBaseUrl } from "@/utils/canonicalUrl";
 
 function getWebBaseUrl(): string {
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  if (domain) return `https://${domain}`;
-  const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? "";
-  return apiUrl.replace(/\/api\/?$/, "");
+  return getCanonicalWebBaseUrl();
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {

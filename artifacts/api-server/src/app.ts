@@ -6,12 +6,26 @@ import router from "./routes";
 import { logger } from "./lib/logger";
 import { config, buildAllowedOrigins } from "./lib/config";
 import { apiLimiter, sensitiveLimiter } from "./middlewares/rateLimit";
+import { APEX_HOST, CANONICAL_HOST } from "./lib/canonicalUrl";
 
 const app: Express = express();
 
 // Trust the Replit proxy chain so req.ip / X-Forwarded-For are honored
 // (required for accurate rate limiting per real client IP).
 app.set("trust proxy", 1);
+
+// Canonical-host redirect: any traffic that hits the API on the bare apex
+// `ibhub.com.br` is 301'd to the www variant so the canonical URL matches
+// what the app emits in share links and OpenGraph tags. The redirect only
+// triggers when the deploy is actually serving these hosts (not in dev).
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const host = (req.headers.host ?? "").toLowerCase().split(":")[0];
+  if (host === APEX_HOST) {
+    res.redirect(301, `https://${CANONICAL_HOST}${req.originalUrl}`);
+    return;
+  }
+  next();
+});
 
 app.use(
   pinoHttp({

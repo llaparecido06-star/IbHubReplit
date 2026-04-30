@@ -65,11 +65,10 @@ import {
 import { Post } from "@/components/feed/PostCard";
 import EmpresaDashboard from "@/components/EmpresaDashboard";
 import { UserListModal, UserListType } from "@/components/profile/UserListModal";
+import { getCanonicalWebBaseUrl } from "@/utils/canonicalUrl";
 
 const API_URL  = process.env.EXPO_PUBLIC_API_URL ?? "";
-const WEB_BASE = process.env.EXPO_PUBLIC_DOMAIN
-  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-  : API_URL.replace(/\/api$/, "");
+const WEB_BASE = getCanonicalWebBaseUrl();
 
 type StatModal = UserListType | null;
 

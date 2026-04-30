@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { logger } from "./logger.js";
+import { pairApexAndWwwOrigins } from "./canonicalUrl.js";
 
 /**
  * Centralized, Zod-validated environment configuration.
@@ -105,5 +106,8 @@ export function buildAllowedOrigins(): (string | RegExp)[] | true {
   }
 
   if (origins.size === 0 && regexes.length === 0 && config.NODE_ENV !== "production") return true;
-  return [...Array.from(origins), ...regexes];
+  // Auto-include the apex/www counterpart for ibhub.com.br so requests work
+  // from either host even if only one is listed in REPLIT_DOMAINS.
+  const paired = pairApexAndWwwOrigins(Array.from(origins));
+  return [...paired, ...regexes];
 }

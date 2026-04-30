@@ -208,3 +208,50 @@ Implementadas e integradas ao Supabase:
 - Arquivo: `supabase/migrations_v16_engagement.sql`
 - Tabela `profile_views (viewer_id, profile_id, viewed_at, unique daily)` + coluna `profiles.referral_code`
 - **Precisa ser executada no Supabase SQL Editor**
+
+---
+
+# Domínio canônico (www.ibhub.com.br)
+
+## Regra
+- **Canônico**: `https://www.ibhub.com.br`
+- **Apex**: `https://ibhub.com.br` deve **301-redirect** para o canônico
+- Todos os links compartilhados pelo app (post / perfil / empresa / vaga / evento) devem usar o domínio canônico
+
+## Onde o app já enforca isso (código)
+- Web (`buildPostShareUrl` em `artifacts/web/src/components/feed/PostActionsBar.tsx`): hardcoded `https://www.ibhub.com.br/post/...`
+- Mobile (`buildPostShareUrl` em `artifacts/ibhub/components/feed/PostActionsBar.tsx`): idem
+- Helper `getCanonicalWebBaseUrl()` em `artifacts/api-server/src/lib/canonicalUrl.ts` e `artifacts/ibhub/utils/canonicalUrl.ts`: normaliza qualquer `EXPO_PUBLIC_DOMAIN` apontado para o apex (`ibhub.com.br`) para o canônico (`www.ibhub.com.br`). Usado em:
+  - `artifacts/api-server/src/routes/profile.ts` (redirect `/profile/:id` → web)
+  - `artifacts/ibhub/app/event/[id].tsx` (compartilhar evento)
+  - `artifacts/ibhub/app/(tabs)/profile.tsx` (`WEB_BASE`)
+  - `artifacts/ibhub/app/subscription.tsx` (`getWebBaseUrl()`)
+- Middleware em `artifacts/api-server/src/app.ts`: requisições com `Host: ibhub.com.br` para o **API** são 301-redirected para `https://www.ibhub.com.br`. Defesa-em-profundidade — o redirect principal precisa ser configurado fora do código (ver abaixo).
+- CORS em `artifacts/api-server/src/lib/config.ts` (`pairApexAndWwwOrigins`): se `REPLIT_DOMAINS` contém apenas uma das variantes (apex ou www), a outra é adicionada automaticamente.
+
+## O que precisa ser configurado **fora do código** (operacional)
+O web é servido como **estático** em produção (`artifacts/web/.replit-artifact/artifact.toml` usa `serve = "static"`). Não há middleware Node.js na frente do SPA, então o redirect apex → www para `https://ibhub.com.br/post/123` precisa ser feito em uma camada superior:
+
+1. **DNS** — no provedor do domínio:
+   - Apontar `www.ibhub.com.br` para o Replit Deploy (CNAME ou A/AAAA conforme o provedor pedir).
+   - Apontar `ibhub.com.br` (apex) para o mesmo destino. Use ALIAS/ANAME se o provedor suportar; caso contrário registro A para o IP do Replit Deploy.
+
+2. **Replit Deployments** — na aba *Custom Domains* do deploy:
+   - Adicionar **ambos** `www.ibhub.com.br` e `ibhub.com.br`.
+   - Marcar o canônico (`www.ibhub.com.br`) como primário.
+   - Habilitar redirect 301 do não-canônico (apex) para o canônico se a UI oferecer essa opção.
+
+3. **Alternativa via Cloudflare** (se for usado como proxy DNS): criar uma *Page Rule* `ibhub.com.br/*` → 301 Forward URL para `https://www.ibhub.com.br/$1`.
+
+## Variáveis de ambiente (EAS / Replit Deploy)
+- `EXPO_PUBLIC_DOMAIN` deve ser `www.ibhub.com.br` (ou pode ser `ibhub.com.br` que o helper normaliza).
+- `EXPO_PUBLIC_API_URL` deve ser `https://www.ibhub.com.br/api`.
+
+## Verificação
+Após configurar DNS + Deploy, validar:
+```sh
+curl -I https://ibhub.com.br/post/algumid          # esperado: 301 Location: https://www.ibhub.com.br/post/algumid
+curl -I https://www.ibhub.com.br/post/algumid      # esperado: 200
+curl -I https://ibhub.com.br/api/healthz           # esperado: 301 (ou 200 se chega no api-server)
+curl -I https://www.ibhub.com.br/api/healthz       # esperado: 200
+```
