@@ -800,7 +800,7 @@ export default function FeedScreen() {
   const toggleTag = (tag: string) =>
     setSelectedTags((p) => p.includes(tag) ? p.filter((t) => t !== tag) : [...p, tag]);
 
-  const renderHeader = () => (
+  const feedHeader = useMemo(() => (
     <>
       {/* Company banner */}
       {activeCompany && (
@@ -966,7 +966,13 @@ export default function FeedScreen() {
         <View style={[styles.scrollBarInner, { backgroundColor: colors.navy }]} />
       </View>
     </>
-  );
+  ), [
+    activeCompany, colors, topPad, profile,
+    unreadNotifCount, isFlagEnabled, firstName,
+    suggestions, connectingId,
+    handleConnect, handleFollowSuggestion,
+    router,
+  ]);
 
   if (loading) {
     return (
@@ -1106,7 +1112,7 @@ export default function FeedScreen() {
             }}
           />
         )}
-        ListHeaderComponent={renderHeader}
+        ListHeaderComponent={feedHeader}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
