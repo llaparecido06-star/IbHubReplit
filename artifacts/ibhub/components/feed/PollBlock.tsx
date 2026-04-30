@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Modal,
   Pressable,
@@ -35,6 +35,21 @@ export function PollBlock({ post, onVote }: Props) {
   }[]>([]);
   const [loadingPollVoters, setLoadingPollVoters] = useState(false);
 
+  // Refetch voters reactively while the modal is open. Keyed on a stable
+  // serialised user_votes string so unrelated parent re-renders don't refire.
+  const userVotesKey = post.poll?.user_votes ? JSON.stringify(post.poll.user_votes) : "";
+  const postId = post.id;
+  useEffect(() => {
+    if (!showPollVoters) return;
+    let cancelled = false;
+    setLoadingPollVoters(true);
+    fetchPollVoters(postId)
+      .then(v => { if (!cancelled) setPollVoters(v); })
+      .catch(() => { /* swallow; loading state cleared in finally */ })
+      .finally(() => { if (!cancelled) setLoadingPollVoters(false); });
+    return () => { cancelled = true; };
+  }, [showPollVoters, userVotesKey, postId]);
+
   if (!post.poll) return null;
 
   const isExpired = post.poll.expires_at ? new Date(post.poll.expires_at) < new Date() : false;
@@ -44,21 +59,6 @@ export function PollBlock({ post, onVote }: Props) {
     (post.poll.user_voted_index != null ? [post.poll.user_voted_index] : []);
   const hasVoted = votedIndices.length > 0;
   const lockedFromVoting = isClosed;
-
-  const loadVoters = useCallback(async () => {
-    setLoadingPollVoters(true);
-    const v = await fetchPollVoters(post.id);
-    setPollVoters(v);
-    setLoadingPollVoters(false);
-  }, [post.id]);
-
-  // Keep voter list in sync when a realtime poll update arrives while the
-  // modal is open. Key on the serialised user_votes map so adds/removes both
-  // trigger a refetch.
-  const userVotesKey = post.poll?.user_votes ? JSON.stringify(post.poll.user_votes) : "";
-  useEffect(() => {
-    if (showPollVoters) void loadVoters();
-  }, [showPollVoters, userVotesKey, loadVoters]);
 
   const openVoters = (optionIndex: number | null) => {
     setFocusedOption(optionIndex);

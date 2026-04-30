@@ -232,12 +232,8 @@ export function PollDisplay({ poll, postId, currentUserId, onVote }: {
     setVoting(false);
   };
 
-  // Keep voter list in sync when a realtime poll update arrives while the
-  // modal is open. We key on the serialised user_votes map so adds/removes
-  // both trigger a refetch. The loader is inlined so the effect's only
-  // dependencies are the boolean and the stable string key — a new `poll`
-  // object reference alone (e.g. caused by an unrelated parent rerender)
-  // does not refire the request.
+  // Refetch voters reactively while the modal is open. Keyed on a stable
+  // serialised user_votes string so unrelated parent re-renders don't refire.
   const userVotesKey = poll.user_votes ? JSON.stringify(poll.user_votes) : "";
   useEffect(() => {
     if (!showVoters) return;
@@ -249,18 +245,19 @@ export function PollDisplay({ poll, postId, currentUserId, onVote }: {
       return;
     }
     setLoadingVoters(true);
-    void (async () => {
-      const profiles = await fetchPollVoters(ids);
-      if (cancelled) return;
-      const expanded: { id: string; full_name: string | null; avatar_url: string | null; username: string | null; optionIndex: number }[] = [];
-      for (const p of profiles) {
-        const raw = votesMap[p.id];
-        const indices = Array.isArray(raw) ? raw : (typeof raw === "number" ? [raw] : []);
-        for (const idx of indices) expanded.push({ ...p, optionIndex: idx });
-      }
-      setVoters(expanded);
-      setLoadingVoters(false);
-    })();
+    fetchPollVoters(ids)
+      .then(profiles => {
+        if (cancelled) return;
+        const expanded: { id: string; full_name: string | null; avatar_url: string | null; username: string | null; optionIndex: number }[] = [];
+        for (const p of profiles) {
+          const raw = votesMap[p.id];
+          const indices = Array.isArray(raw) ? raw : (typeof raw === "number" ? [raw] : []);
+          for (const idx of indices) expanded.push({ ...p, optionIndex: idx });
+        }
+        setVoters(expanded);
+      })
+      .catch(() => { /* swallow; loading state cleared in finally */ })
+      .finally(() => { if (!cancelled) setLoadingVoters(false); });
     return () => { cancelled = true; };
   }, [showVoters, userVotesKey]);
 

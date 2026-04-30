@@ -55,6 +55,13 @@ function countAll(roots: AppComment[]): number {
   return roots.reduce((s, c) => s + 1 + (c.replies?.length ?? 0), 0);
 }
 
+/** Stable serialisation of poll fields that affect display, used to compare
+ *  two poll snapshots and ignore unrelated row updates. */
+function pollContentKey(p: Post["poll"] | undefined): string {
+  if (!p) return "";
+  return JSON.stringify([p.options, p.total_votes, p.closed, p.expires_at, p.allow_multiple, p.user_votes]);
+}
+
 export default function PostDetailScreen() {
   const colors = useColors();
   const router = useRouter();
@@ -126,11 +133,7 @@ export default function PostDetailScreen() {
     return () => { supabase.removeChannel(channel); };
   }, [id, user?.id]);
 
-  // Realtime: live poll updates from other users.
-  // The poll lives in the `poll` JSONB column on `posts`; the api-server vote
-  // handler issues an UPDATE on the row. We subscribe and patch only the
-  // `poll` field of local state. likes_count / comments_count are intentionally
-  // ignored here — they have their own existing flows.
+  // Realtime: subscribe to UPDATE on this post and patch only the poll field.
   useEffect(() => {
     if (!id) return;
     const uid = Math.random().toString(36).slice(2, 8);
@@ -145,20 +148,8 @@ export default function PostDetailScreen() {
           if (!nextPoll) return;
           setPost(prev => {
             if (!prev) return prev;
-            // Skip when this UPDATE was triggered by an unrelated column change
-            // (likes_count / comments_count via DB trigger). Avoids unnecessary
-            // re-renders of the detail screen on every like / comment.
-            const prevPollKey = prev.poll ? JSON.stringify({
-              options: prev.poll.options, total_votes: prev.poll.total_votes,
-              closed: prev.poll.closed, expires_at: prev.poll.expires_at,
-              allow_multiple: prev.poll.allow_multiple, user_votes: prev.poll.user_votes,
-            }) : "";
-            const nextPollKey = JSON.stringify({
-              options: nextPoll.options, total_votes: nextPoll.total_votes,
-              closed: nextPoll.closed, expires_at: nextPoll.expires_at,
-              allow_multiple: nextPoll.allow_multiple, user_votes: nextPoll.user_votes,
-            });
-            if (prevPollKey === nextPollKey) return prev;
+            // Skip if poll content unchanged (e.g. UPDATE was for likes_count).
+            if (pollContentKey(prev.poll) === pollContentKey(nextPoll)) return prev;
             const indices = user?.id ? normalizePollIndices(nextPoll.user_votes, user.id) : [];
             return {
               ...prev,
