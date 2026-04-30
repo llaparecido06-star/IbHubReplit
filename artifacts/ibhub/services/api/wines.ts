@@ -137,6 +137,44 @@ export async function deleteWineEntry(id: string): Promise<boolean> {
   }
 }
 
+export interface WineEanReview {
+  id: string;
+  user_id: string;
+  rating: number | null;
+  score: number | null;
+  notes: string | null;
+  tasted_at: string | null;
+  profile: { full_name: string; avatar_url: string | null; username: string | null } | null;
+}
+
+/**
+ * Busca todas as avaliações individuais de um EAN específico.
+ */
+export async function fetchWineEanReviews(ean: string): Promise<WineEanReview[]> {
+  try {
+    const { data, error } = await supabase
+      .from("wine_cellar")
+      .select("id, user_id, rating, score, notes, tasted_at, profiles(full_name, avatar_url, username)")
+      .eq("ean", ean)
+      .eq("is_private", false)
+      .not("rating", "is", null)
+      .order("score", { ascending: false, nullsFirst: false });
+    if (error || !data) return [];
+    return (data as any[]).map(r => ({
+      id: r.id,
+      user_id: r.user_id,
+      rating: r.rating,
+      score: r.score,
+      notes: r.notes,
+      tasted_at: r.tasted_at,
+      profile: Array.isArray(r.profiles) ? (r.profiles[0] ?? null) : (r.profiles ?? null),
+    }));
+  } catch (e) {
+    console.warn("fetchWineEanReviews:", e);
+    return [];
+  }
+}
+
 /**
  * Busca o ranking comunitário de vinhos via RPC `wine_community_ratings`.
  * Vinhos ordenados por nota média desc.

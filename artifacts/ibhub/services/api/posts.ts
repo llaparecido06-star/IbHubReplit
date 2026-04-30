@@ -571,6 +571,7 @@ export async function fetchUserPosts(targetUserId: string, currentUserId: string
       .from("posts")
       .select(POST_SELECT_BASE)
       .eq("user_id", targetUserId)
+      .is("company_page_id", null)
       .order("created_at", { ascending: false })
       .limit(20);
 

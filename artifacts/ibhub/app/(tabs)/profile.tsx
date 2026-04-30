@@ -62,7 +62,7 @@ import {
   fetchMyOpportunities,
   type AppOpportunity,
 } from "@/services/api";
-import { Post } from "@/components/feed/PostCard";
+import { Post, PostCard } from "@/components/feed/PostCard";
 import EmpresaDashboard from "@/components/EmpresaDashboard";
 import { UserListModal, UserListType } from "@/components/profile/UserListModal";
 import { getCanonicalWebBaseUrl } from "@/utils/canonicalUrl";
@@ -407,34 +407,14 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
                 <Text style={{ fontSize: 13, color: colors.mutedForeground }}>Nenhuma publicação ainda</Text>
               </View>
             ) : posts.map(post => (
-              <View key={post.id} style={{ backgroundColor: "#fff", padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 10 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  {companyLogo ? <Image source={{ uri: companyLogo }} style={{ width: 40, height: 40, borderRadius: 20 }} /> :
-                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" }}><Text style={{ fontSize: 16, fontWeight: "800", color: colors.gold }}>{nameInitial}</Text></View>}
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 14, fontWeight: "700", color: colors.navy }}>{companyName}</Text>
-                    <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{new Date(post.created_at).toLocaleDateString("pt-BR")}</Text>
-                  </View>
-                </View>
-                <Text style={{ fontSize: 14, lineHeight: 21, color: colors.foreground }}>{post.content}</Text>
-                <PostRichContent post={post as any} />
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 20, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border }}>
-                  <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5 }} onPress={() => handleLikePost(post)}>
-                    <Feather name="heart" size={17} color={post.is_liked ? "#e11d48" : colors.mutedForeground} />
-                    <Text style={{ fontSize: 13, color: post.is_liked ? "#e11d48" : colors.mutedForeground }}>{post.likes_count}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-                    <Feather name="message-circle" size={17} color={colors.mutedForeground} />
-                    <Text style={{ fontSize: 13, color: colors.mutedForeground }}>{post.comments_count}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5 }} onPress={() => handleBookmarkPost(post)} accessibilityRole="button" accessibilityLabel="Salvar">
-                    <Feather name="bookmark" size={17} color={post.is_bookmarked ? colors.gold : colors.mutedForeground} />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5, marginLeft: "auto" as any }} onPress={() => router.push(`/post/${post.id}` as any)} accessibilityRole="button" accessibilityLabel="Abrir">
-                    <Feather name="external-link" size={17} color={colors.mutedForeground} />
-                  </TouchableOpacity>
-                </View>
-              </View>
+              <PostCard
+                key={post.id}
+                post={post as any}
+                currentUserId={user?.id ?? null}
+                onLike={() => handleLikePost(post)}
+                onBookmark={() => handleBookmarkPost(post)}
+                onComment={pid => router.push(`/post/${pid}` as any)}
+              />
             ))}
           </View>
         )}
@@ -1304,40 +1284,14 @@ export default function ProfileScreen() {
             </View>
           ) : (
             posts.map((post) => (
-              <View key={post.id} style={[styles.postCard, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
-                <View style={styles.postHeader}>
-                  <Avatar uri={profile?.avatar_url} name={name} size={40} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.postName, { color: colors.navy }]}>{name}</Text>
-                    <Text style={[styles.postDate, { color: colors.mutedForeground }]}>
-                      {new Date(post.created_at).toLocaleDateString("pt-BR")}
-                    </Text>
-                  </View>
-                  <TouchableOpacity onPress={() => setShowPostMenu(post.id)} accessibilityRole="button" accessibilityLabel="Mais opções">
-                    <Feather name="more-horizontal" size={20} color={colors.mutedForeground} />
-                  </TouchableOpacity>
-                </View>
-                <Text style={[styles.postContent, { color: colors.foreground }]}>{post.content}</Text>
-                <PostRichContent post={post as any} />
-                <View style={[styles.postActions, { borderTopColor: colors.border }]}>
-                  <TouchableOpacity style={styles.postActionBtn} onPress={() => handleLikePost(post)}>
-                    <Feather name="heart" size={18} color={post.is_liked ? "#e11d48" : colors.mutedForeground} />
-                    <Text style={[styles.postActionText, { color: post.is_liked ? "#e11d48" : colors.mutedForeground }]}>{post.likes_count}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.postActionBtn} onPress={() => setShowComments(post.id)}>
-                    <Feather name="message-circle" size={18} color={colors.mutedForeground} />
-                    <Text style={[styles.postActionText, { color: colors.mutedForeground }]}>{post.comments_count}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.postActionBtn} onPress={() => handleBookmarkPost(post)} accessibilityRole="button" accessibilityLabel="Salvar">
-                    <Feather name="bookmark" size={18} color={post.is_bookmarked ? colors.gold : colors.mutedForeground} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.postActionBtn, { marginLeft: "auto" as any }]}
-                    onPress={() => router.push(`/post/${post.id}` as any)} accessibilityRole="button" accessibilityLabel="Abrir">
-                    <Feather name="external-link" size={18} color={colors.mutedForeground} />
-                  </TouchableOpacity>
-                </View>
-              </View>
+              <PostCard
+                key={post.id}
+                post={post as any}
+                currentUserId={user?.id ?? null}
+                onLike={() => handleLikePost(post)}
+                onBookmark={() => handleBookmarkPost(post)}
+                onComment={pid => router.push(`/post/${pid}` as any)}
+              />
             ))
           )}
         </View>

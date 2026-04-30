@@ -3,7 +3,10 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Modal,
   Platform,
+  Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -11,7 +14,8 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather } from "@/components/ui/Icon";
+import { Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
+import { Avatar } from "@/components/ui/Avatar";
 import { useColors } from "@/hooks/useColors";
 import * as API from "@/services/api";
 
@@ -59,6 +63,11 @@ export default function WineRankingScreen() {
   const [eanFilter, setEanFilter]     = useState(initialEan);
   const [searching, setSearching]     = useState(false);
   const [sortBy, setSortBy]           = useState<SortKey>("score");
+
+  // Detail modal
+  const [detailWine,    setDetailWine]    = useState<API.WineCommunityRating | null>(null);
+  const [detailReviews, setDetailReviews] = useState<API.WineEanReview[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const pageRef = useRef(0);
 
@@ -130,8 +139,21 @@ export default function WineRankingScreen() {
     { key: "alpha", label: "Alfabética" },
   ];
 
+  const openDetail = async (wine: API.WineCommunityRating) => {
+    setDetailWine(wine);
+    setDetailReviews([]);
+    setDetailLoading(true);
+    const reviews = await API.fetchWineEanReviews(wine.ean);
+    setDetailReviews(reviews);
+    setDetailLoading(false);
+  };
+
   const renderItem = ({ item, index }: { item: API.WineCommunityRating; index: number }) => (
-    <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
+    <TouchableOpacity
+      style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}
+      onPress={() => openDetail(item)}
+      activeOpacity={0.75}
+    >
       <View style={styles.rankBadge}>
         <Text style={[styles.rankNum, { color: index < 3 ? colors.gold : colors.mutedForeground }]}>
           #{index + 1}
@@ -150,7 +172,8 @@ export default function WineRankingScreen() {
           <Text style={[styles.eanText, { color: colors.mutedForeground }]}>EAN {item.ean}</Text>
         </View>
       </View>
-    </View>
+      <Feather name="chevron-right" size={16} color={colors.border} style={{ alignSelf: "center" }} />
+    </TouchableOpacity>
   );
 
   return (
@@ -258,6 +281,128 @@ export default function WineRankingScreen() {
           }
         />
       )}
+
+      {/* ── Detail Modal ── */}
+      <Modal
+        visible={!!detailWine}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setDetailWine(null)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setDetailWine(null)}>
+          <Pressable style={[styles.modalSheet, { backgroundColor: "#fff" }]} onPress={() => {}}>
+            {/* Handle */}
+            <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+
+            {/* Title */}
+            <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 4 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.modalTitle, { color: colors.navy }]} numberOfLines={2}>
+                  {detailWine?.name}
+                </Text>
+                {(detailWine?.producer || detailWine?.vintage) && (
+                  <Text style={[styles.modalSub, { color: colors.mutedForeground }]}>
+                    {[detailWine?.producer, detailWine?.vintage].filter(Boolean).join(" · ")}
+                  </Text>
+                )}
+              </View>
+              <TouchableOpacity onPress={() => setDetailWine(null)} style={{ padding: 4, marginTop: -2 }}>
+                <Feather name="x" size={20} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Aggregate */}
+            {detailWine && (
+              <View style={[styles.modalAggregate, { backgroundColor: colors.gold + "12", borderColor: colors.gold + "40" }]}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <MaterialCommunityIcons name="star" size={20} color={colors.gold} />
+                  <Text style={{ fontSize: 22, fontWeight: "800", color: colors.navy }}>
+                    {Number(detailWine.avg_rating).toFixed(1)}
+                  </Text>
+                  <Text style={{ fontSize: 14, color: colors.mutedForeground }}>/5</Text>
+                </View>
+                {detailWine.avg_score != null && (
+                  <View style={[styles.scoreBadge, { backgroundColor: colors.gold }]}>
+                    <MaterialCommunityIcons name="star" size={12} color="#fff" />
+                    <Text style={{ fontSize: 13, fontWeight: "800", color: "#fff" }}>
+                      {Math.round(Number(detailWine.avg_score))}/100
+                    </Text>
+                  </View>
+                )}
+                <Text style={{ fontSize: 13, color: colors.mutedForeground }}>
+                  {Number(detailWine.total_ratings)} {Number(detailWine.total_ratings) === 1 ? "avaliação" : "avaliações"}
+                </Text>
+              </View>
+            )}
+
+            <Text style={[styles.reviewsLabel, { color: colors.mutedForeground }]}>Avaliações individuais</Text>
+
+            {detailLoading ? (
+              <ActivityIndicator color={colors.gold} style={{ marginVertical: 24 }} />
+            ) : detailReviews.length === 0 ? (
+              <Text style={[styles.emptyReviews, { color: colors.mutedForeground }]}>
+                Nenhuma avaliação pública encontrada.
+              </Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+                <View style={{ gap: 12 }}>
+                  {detailReviews.map((rev, idx) => (
+                    <View key={rev.id} style={[styles.reviewRow, { borderColor: colors.border }]}>
+                      {/* Rank + avatar */}
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                        <Text style={[styles.reviewRank, { color: idx < 3 ? colors.gold : colors.mutedForeground }]}>
+                          #{idx + 1}
+                        </Text>
+                        <Avatar
+                          name={rev.profile?.full_name ?? "?"}
+                          uri={rev.profile?.avatar_url ?? undefined}
+                          size={34}
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.reviewName, { color: colors.navy }]} numberOfLines={1}>
+                            {rev.profile?.full_name ?? "Usuário"}
+                          </Text>
+                          {rev.tasted_at && (
+                            <Text style={{ fontSize: 11, color: colors.mutedForeground }}>
+                              {new Date(rev.tasted_at).toLocaleDateString("pt-BR")}
+                            </Text>
+                          )}
+                        </View>
+                        {/* Score badge */}
+                        {rev.score != null && (
+                          <View style={[styles.scoreBadge, { backgroundColor: colors.gold }]}>
+                            <MaterialCommunityIcons name="star" size={11} color="#fff" />
+                            <Text style={{ fontSize: 12, fontWeight: "800", color: "#fff" }}>{rev.score}/100</Text>
+                          </View>
+                        )}
+                      </View>
+                      {/* Star rating */}
+                      {rev.rating != null && (
+                        <View style={{ flexDirection: "row", gap: 3, marginBottom: 4 }}>
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Feather
+                              key={i}
+                              name="star"
+                              size={13}
+                              color={i < rev.rating! ? colors.gold : colors.border}
+                            />
+                          ))}
+                        </View>
+                      )}
+                      {/* Notes */}
+                      {rev.notes?.trim() ? (
+                        <Text style={[styles.reviewNotes, { color: colors.foreground }]}>
+                          {rev.notes.trim()}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -281,4 +426,18 @@ const styles = StyleSheet.create({
   wineName:     { fontSize: 15, fontWeight: "700" },
   wineSub:      { fontSize: 12 },
   eanText:      { fontSize: 11 },
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  modalSheet:   { borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 20, paddingBottom: 40, maxHeight: "85%" as any },
+  modalHandle:  { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 16 },
+  modalTitle:   { fontSize: 18, fontWeight: "800", marginRight: 8 },
+  modalSub:     { fontSize: 13, marginTop: 2 },
+  modalAggregate: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 12, borderWidth: 1, padding: 14, marginVertical: 12, flexWrap: "wrap" as any },
+  scoreBadge:   { flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  reviewsLabel: { fontSize: 12, fontWeight: "700", textTransform: "uppercase" as any, letterSpacing: 0.8, marginBottom: 10 },
+  emptyReviews: { fontSize: 13, textAlign: "center", paddingVertical: 24 },
+  reviewRow:    { borderWidth: 1, borderRadius: 12, padding: 12 },
+  reviewRank:   { fontSize: 14, fontWeight: "800", minWidth: 28 },
+  reviewName:   { fontSize: 14, fontWeight: "700" },
+  reviewNotes:  { fontSize: 13, lineHeight: 18, marginTop: 2 },
 });
