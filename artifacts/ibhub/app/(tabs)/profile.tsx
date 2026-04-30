@@ -63,6 +63,7 @@ import {
   type AppOpportunity,
 } from "@/services/api";
 import { Post, PostCard } from "@/components/feed/PostCard";
+import { SkeletonProfile } from "@/components/ui/SkeletonCard";
 import EmpresaDashboard from "@/components/EmpresaDashboard";
 import { UserListModal, UserListType } from "@/components/profile/UserListModal";
 import { getCanonicalWebBaseUrl } from "@/utils/canonicalUrl";
@@ -305,11 +306,7 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
   const nameInitial    = companyName.charAt(0).toUpperCase();
 
   if (companyLoading) {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
-        <ActivityIndicator size="large" color={colors.gold} />
-      </View>
-    );
+    return <SkeletonProfile />;
   }
 
   return (

@@ -33,6 +33,7 @@ import { Post, PostCard, ReactionType } from "@/components/feed/PostCard";
 import { LikesModal } from "@/components/feed/LikesModal";
 import { StoryBar } from "@/components/feed/StoryBar";
 import { Avatar } from "@/components/ui/Avatar";
+import { SkeletonFeed } from "@/components/ui/SkeletonCard";
 import { useAuth } from "@/context/AuthContext";
 import { useFeatureFlags } from "@/context/FeatureFlagsContext";
 import { useColors } from "@/hooks/useColors";
@@ -1010,9 +1011,13 @@ export default function FeedScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.loadingView, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.gold} />
-      </View>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: colors.background }}
+        scrollEnabled={false}
+        contentContainerStyle={{ paddingTop: 8 }}
+      >
+        <SkeletonFeed count={5} />
+      </ScrollView>
     );
   }
 

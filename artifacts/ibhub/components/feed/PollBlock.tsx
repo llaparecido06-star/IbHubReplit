@@ -1,14 +1,18 @@
-import React, { useEffect, useState } from "react";
+import * as Haptics from "expo-haptics";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  Animated,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { AntDesign, Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
+import { Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
@@ -35,10 +39,35 @@ export function PollBlock({ post, onVote }: Props) {
   }[]>([]);
   const [loadingPollVoters, setLoadingPollVoters] = useState(false);
 
-  // Refetch voters reactively while the modal is open. Keyed on a stable
-  // serialised user_votes string so unrelated parent re-renders don't refire.
+  // One Animated.Value per option for the progress bar width (0 → 1 fraction)
+  const optionCount = post.poll?.options.length ?? 0;
+  const barAnims = useRef(
+    Array.from({ length: optionCount }, () => new Animated.Value(0)),
+  ).current;
+
   const userVotesKey = post.poll?.user_votes ? JSON.stringify(post.poll.user_votes) : "";
   const postId = post.id;
+
+  // Animate bars when the user has voted or when vote counts update
+  const votedIndices =
+    post.poll?.user_voted_indices ??
+    (post.poll?.user_voted_index != null ? [post.poll.user_voted_index] : []);
+  const hasVoted = votedIndices.length > 0;
+
+  useEffect(() => {
+    if (!post.poll || !hasVoted) return;
+    const total = post.poll.total_votes;
+    const anims = post.poll.options.map((opt, i) => {
+      const fraction = total > 0 ? opt.votes / total : 0;
+      return Animated.timing(barAnims[i] ?? new Animated.Value(0), {
+        toValue: fraction,
+        duration: 600,
+        useNativeDriver: false, // width % animation requires JS driver
+      });
+    });
+    Animated.parallel(anims).start();
+  }, [hasVoted, post.poll?.total_votes, userVotesKey]);
+
   useEffect(() => {
     if (!showPollVoters) return;
     let cancelled = false;
@@ -54,10 +83,6 @@ export function PollBlock({ post, onVote }: Props) {
 
   const isExpired = post.poll.expires_at ? new Date(post.poll.expires_at) < new Date() : false;
   const isClosed = post.poll.closed || isExpired;
-  const votedIndices =
-    post.poll.user_voted_indices ??
-    (post.poll.user_voted_index != null ? [post.poll.user_voted_index] : []);
-  const hasVoted = votedIndices.length > 0;
   const lockedFromVoting = isClosed;
 
   const openVoters = (optionIndex: number | null) => {
@@ -74,9 +99,16 @@ export function PollBlock({ post, onVote }: Props) {
     }
   };
 
+  const handleVote = (optionIndex: number) => {
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    onVote?.(post.id, optionIndex);
+  };
+
   return (
     <>
-      <View style={{ marginTop: 8, gap: 6 }}>
+      <View style={{ marginTop: 8, gap: 8 }}>
         {post.poll.options.map((opt, i) => {
           const total = post.poll!.total_votes;
           const pct = total > 0 ? Math.round((opt.votes / total) * 100) : 0;
@@ -89,80 +121,83 @@ export function PollBlock({ post, onVote }: Props) {
           return (
             <TouchableOpacity
               key={i}
-              activeOpacity={0.75}
+              activeOpacity={0.72}
               onPress={() => {
                 if (lockedFromVoting) {
                   openVoters(i);
                 } else {
-                  onVote?.(post.id, i);
+                  handleVote(i);
                 }
               }}
               onLongPress={() => {
                 if (post.poll && post.poll.total_votes > 0) openVoters(i);
               }}
-              style={{
-                borderRadius: 8,
-                borderWidth: isMyVote || isWinner ? 1.5 : 1,
-                borderColor: isMyVote
-                  ? colors.gold
-                  : isWinner
-                  ? colors.navy + "80"
-                  : colors.border,
-                overflow: "hidden",
-                backgroundColor: colors.background,
-                minHeight: 42,
-                justifyContent: "center",
-              }}
+              style={[
+                styles.option,
+                {
+                  borderColor: isMyVote
+                    ? colors.gold
+                    : isWinner
+                    ? colors.navy + "80"
+                    : colors.border,
+                  borderWidth: isMyVote || isWinner ? 1.5 : 1,
+                  backgroundColor: colors.background,
+                },
+              ]}
             >
-              {hasVoted && pct > 0 && (
-                <View
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    bottom: 0,
-                    width: `${pct}%`,
-                    backgroundColor: isMyVote ? colors.gold + "30" : colors.secondary ?? colors.border,
-                  }}
+              {/* Animated progress bar background */}
+              {hasVoted && (
+                <Animated.View
+                  style={[
+                    styles.progressBar,
+                    {
+                      width: (barAnims[i] ?? new Animated.Value(0)).interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ["0%", "100%"],
+                      }),
+                      backgroundColor: isMyVote
+                        ? colors.gold + "28"
+                        : colors.border,
+                    },
+                  ]}
                 />
               )}
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  gap: 6,
-                }}
-              >
-                {isMyVote ? (
-                  post.poll!.allow_multiple ? (
-                    <Feather name="check-square" size={18} color={colors.gold} />
-                  ) : (
-                    <AntDesign name="checkcircle" size={18} color={colors.gold} />
-                  )
-                ) : post.poll!.allow_multiple ? (
-                  <Feather name="square" size={18} color={colors.mutedForeground} />
-                ) : (
-                  <Feather name="circle" size={18} color={colors.mutedForeground} />
+
+              <View style={styles.optionContent}>
+                {/* Winner crown or voted checkmark — only shown when voted */}
+                {hasVoted && (
+                  isMyVote ? (
+                    <Feather
+                      name={post.poll!.allow_multiple ? "check-square" : "check-circle"}
+                      size={15}
+                      color={colors.gold}
+                    />
+                  ) : isWinner ? (
+                    <MaterialCommunityIcons name="crown-outline" size={15} color={colors.navy} />
+                  ) : null
                 )}
+
                 <Text
-                  style={{
-                    flex: 1,
-                    fontSize: 14,
-                    fontWeight: isMyVote ? "700" : "400",
-                    color: colors.foreground,
-                  }}
+                  style={[
+                    styles.optionText,
+                    {
+                      color: colors.foreground,
+                      fontWeight: isMyVote ? "700" : "500",
+                      flex: 1,
+                    },
+                  ]}
+                  numberOfLines={2}
                 >
                   {opt.text}
                 </Text>
+
                 {hasVoted && (
                   <Text
-                    style={{
-                      fontSize: 13,
-                      fontWeight: isMyVote ? "700" : "400",
-                      color: isMyVote ? colors.gold : colors.mutedForeground,
-                    }}
+                    style={[
+                      styles.pctText,
+                      { color: isMyVote ? colors.gold : colors.mutedForeground,
+                        fontWeight: isMyVote ? "700" : "500" },
+                    ]}
                   >
                     {pct}%
                   </Text>
@@ -172,24 +207,18 @@ export function PollBlock({ post, onVote }: Props) {
           );
         })}
 
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 5,
-            paddingHorizontal: 2,
-            paddingTop: 2,
-          }}
-        >
+        <View style={styles.footer}>
           <MaterialCommunityIcons name="poll" size={12} color={colors.mutedForeground} />
-          <Text style={{ fontSize: 12, color: colors.mutedForeground }}>
-            {post.poll.total_votes} {post.poll.total_votes === 1 ? "voto" : "votos"}
+          <Text style={[styles.footerText, { color: colors.mutedForeground }]}>
+            {post.poll.total_votes}{" "}
+            {post.poll.total_votes === 1 ? "voto" : "votos"}
             {!hasVoted && !isClosed
               ? post.poll.allow_multiple
                 ? "  ·  Selecione as opções"
                 : "  ·  Toque para votar"
               : ""}
           </Text>
+
           {post.poll.expires_at && !post.poll.closed && (() => {
             const d = new Date(post.poll.expires_at);
             const diffMs = d.getTime() - Date.now();
@@ -197,21 +226,24 @@ export function PollBlock({ post, onVote }: Props) {
             const diffH = Math.floor(diffMs / 3600000);
             const label = diffH < 24 ? `${diffH}h` : `${Math.floor(diffH / 24)}d`;
             return (
-              <Text style={{ fontSize: 12, color: colors.mutedForeground, marginLeft: 4 }}>
+              <Text style={[styles.footerText, { color: colors.mutedForeground, marginLeft: 4 }]}>
                 · Encerra em {label}
               </Text>
             );
           })()}
+
           <View style={{ flex: 1 }} />
+
           {post.poll.total_votes > 0 && (
             <TouchableOpacity onPress={() => openVoters(null)} style={{ marginRight: 8 }}>
-              <Text style={{ fontSize: 11, color: colors.primary }}>Ver todos os votos</Text>
+              <Text style={{ fontSize: 11, color: colors.primary }}>Ver votos</Text>
             </TouchableOpacity>
           )}
+
           {isClosed && (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
               <Feather name="lock" size={10} color={colors.mutedForeground} />
-              <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Encerrada</Text>
+              <Text style={[styles.footerText, { color: colors.mutedForeground }]}>Encerrada</Text>
             </View>
           )}
         </View>
@@ -321,3 +353,45 @@ export function PollBlock({ post, onVote }: Props) {
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  option: {
+    borderRadius: 10,
+    overflow: "hidden",
+    minHeight: 46,
+    justifyContent: "center",
+    position: "relative",
+  },
+  progressBar: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    bottom: 0,
+  },
+  optionContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    gap: 8,
+  },
+  optionText: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  pctText: {
+    fontSize: 13,
+    minWidth: 36,
+    textAlign: "right",
+  },
+  footer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 2,
+    paddingTop: 2,
+  },
+  footerText: {
+    fontSize: 12,
+  },
+});
