@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Dimensions,
   FlatList,
+  KeyboardAvoidingView,
   Linking,
   Modal,
   Platform,
@@ -2033,6 +2034,11 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
       {idealbiSubTab === "search" ? (
         <IdealBISearchView colors={colors} bottomPad={bottomPad} />
       ) : (
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined}
+          keyboardVerticalOffset={0}
+        >
         <FlatList
           data={posts}
           keyExtractor={p => p.id}
@@ -2068,6 +2074,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
             ) : null
           }
         />
+        </KeyboardAvoidingView>
       )}
     </View>
   );
