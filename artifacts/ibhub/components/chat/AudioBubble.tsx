@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
-import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from "expo-audio";
 import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
 
@@ -87,6 +87,10 @@ export function AudioBubble({ uri, isMe, timeLabel, containerStyle }: Props) {
         if (__DEV__) console.warn("[AudioBubble] seek before replay failed:", err);
       }
     }
+    // Ensure the audio session allows playback through the speaker even
+    // when the device ringer switch is off (silent mode), matching
+    // WhatsApp / Telegram behaviour.
+    setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
     try {
       player.play();
       activePauseRef = pauseSelfRef.current;

@@ -6,6 +6,7 @@ const WHITE  = "#ffffff";
 const BORDER = "#e8e8e3";
 const MUTED  = "#7a8494";
 const RED    = "#dc2626";
+const GOLD   = "#c9a84c";
 
 export type AudioRecorderProps = {
   /** Called once the user releases / clicks "send". Receives the recorded Blob. */
@@ -14,6 +15,17 @@ export type AudioRecorderProps = {
   onCancel?: () => void;
   /** Disable the microphone button (e.g. while another upload is in flight). */
   disabled?: boolean;
+  /**
+   * When true and in idle state, renders nothing — the parent shows a send
+   * button instead and the mic button should be suppressed. This enables
+   * WhatsApp-style: mic when empty, send when text is typed.
+   */
+  hasText?: boolean;
+  /**
+   * Called whenever the recording state changes so the parent can show/hide
+   * the text input (true = recording, false = idle/done).
+   */
+  onRecordingChange?: (isRecording: boolean) => void;
 };
 
 type State = "idle" | "requesting" | "recording" | "uploading" | "error";
@@ -40,7 +52,7 @@ function formatMs(ms: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export function AudioRecorder({ onSend, onCancel, disabled }: AudioRecorderProps) {
+export function AudioRecorder({ onSend, onCancel, disabled, hasText, onRecordingChange }: AudioRecorderProps) {
   const [state, setState] = useState<State>("idle");
   const [recordingMs, setRecordingMs] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -52,22 +64,9 @@ export function AudioRecorder({ onSend, onCancel, disabled }: AudioRecorderProps
   const tickRef     = useRef<ReturnType<typeof setInterval> | null>(null);
   const cancelledRef = useRef(false);
   const mimeRef     = useRef<string>("audio/webm");
-  // Resolves when the MediaRecorder has fully stopped AND its final
-  // `dataavailable` event has been delivered. This eliminates the classic
-  // race where `onstop` fires before the last chunk has been pushed,
-  // producing a Blob of size 0.
   const stoppedResolveRef = useRef<(() => void) | null>(null);
-  // Cached promise for the current stop cycle. Concurrent callers (e.g.
-  // user click + max-duration auto-stop firing on the same tick) all share
-  // the same promise so we never read `chunksRef` until `onstop` fires.
   const stopPromiseRef = useRef<Promise<void> | null>(null);
-  // Single-flight guard for stopAndSendInternal — without this, a double
-  // click on the send button (or click + auto-stop) would race and one of
-  // them would observe `recorder.state === "inactive"` and assemble the
-  // blob before the final `dataavailable` arrived.
   const sendingAudioRef = useRef(false);
-  // Tracks whether the component is still mounted so we never call setState
-  // after unmount (and don't try to upload from a vanished component).
   const mountedRef = useRef(true);
 
   const cleanupStreamOnly = () => {
@@ -94,7 +93,6 @@ export function AudioRecorder({ onSend, onCancel, disabled }: AudioRecorderProps
           recorderRef.current.stop();
         }
       } catch {}
-      // Release any in-flight stop awaiter so it doesn't leak.
       const pending = stoppedResolveRef.current;
       stoppedResolveRef.current = null;
       stopPromiseRef.current = null;
@@ -102,6 +100,12 @@ export function AudioRecorder({ onSend, onCancel, disabled }: AudioRecorderProps
       cleanup();
     };
   }, []);
+
+  // Notify parent when recording state changes
+  useEffect(() => {
+    const isRecording = state === "recording" || state === "uploading";
+    onRecordingChange?.(isRecording);
+  }, [state, onRecordingChange]);
 
   const start = async () => {
     if (state !== "idle" || disabled) return;
@@ -143,15 +147,9 @@ export function AudioRecorder({ onSend, onCancel, disabled }: AudioRecorderProps
 
     chunksRef.current = [];
     recorder.ondataavailable = (ev) => {
-      // Push every chunk we receive, including small ones — codec headers
-      // can live in tiny chunks and dropping them produces an unreadable
-      // file on the server.
       if (ev.data) chunksRef.current.push(ev.data);
     };
     recorder.onstop = () => {
-      // Just signal: the actual blob assembly + upload happens inside
-      // stopAndSend() (or the cancel path), which awaits this promise so
-      // we are guaranteed all `dataavailable` events have already fired.
       const resolve = stoppedResolveRef.current;
       stoppedResolveRef.current = null;
       stopPromiseRef.current = null;
@@ -163,9 +161,6 @@ export function AudioRecorder({ onSend, onCancel, disabled }: AudioRecorderProps
     cancelledRef.current = false;
     startedAt.current = Date.now();
     setRecordingMs(0);
-    // Use a 1s timeslice so we still accumulate periodic chunks during
-    // long recordings (browsers flush per-timeslice, then deliver one
-    // final chunk on stop()).
     recorder.start(1000);
     setState("recording");
 
@@ -173,15 +168,12 @@ export function AudioRecorder({ onSend, onCancel, disabled }: AudioRecorderProps
       const elapsed = Date.now() - startedAt.current;
       setRecordingMs(elapsed);
       if (elapsed >= MAX_AUDIO_DURATION_MS) {
-        // Auto-stop and send when we hit the cap.
         void stopAndSendInternal();
       }
     }, 250);
   };
 
   const waitForStop = (recorder: MediaRecorder): Promise<void> => {
-    // Reuse an in-flight stop promise so concurrent callers all wait for
-    // the same `onstop` event instead of racing each other.
     if (stopPromiseRef.current) return stopPromiseRef.current;
     if (recorder.state === "inactive") return Promise.resolve();
     const p = new Promise<void>((resolve) => {
@@ -207,15 +199,11 @@ export function AudioRecorder({ onSend, onCancel, disabled }: AudioRecorderProps
     if (!recorder) return;
     sendingAudioRef.current = true;
     try {
-      // Move to "uploading" immediately so the user sees feedback while
-      // the recorder finishes flushing.
       safeSetState("uploading");
       if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
 
       await waitForStop(recorder);
 
-      // If the user cancelled or the component unmounted while we were
-      // waiting for the recorder to flush, abort cleanly.
       if (cancelledRef.current || !mountedRef.current) {
         cancelledRef.current = false;
         cleanup();
@@ -232,7 +220,7 @@ export function AudioRecorder({ onSend, onCancel, disabled }: AudioRecorderProps
       safeSetRecordingMs(0);
 
       if (durationMs < 400) {
-        safeSetError("Áudio muito curto. Mantenha pressionado por mais tempo.");
+        safeSetError("Áudio muito curto. Mantenha por mais tempo.");
         safeSetState("error");
         return;
       }
@@ -267,10 +255,6 @@ export function AudioRecorder({ onSend, onCancel, disabled }: AudioRecorderProps
       }
       return;
     }
-    // If a send is mid-flight (waiting for onstop or onSend), just signal
-    // cancellation; stopAndSendInternal will pick it up after the await
-    // and short-circuit to idle. Resetting state mid-await would corrupt
-    // chunksRef before the blob is assembled.
     cancelledRef.current = true;
     if (sendingAudioRef.current) {
       if (onCancel) onCancel();
@@ -288,7 +272,10 @@ export function AudioRecorder({ onSend, onCancel, disabled }: AudioRecorderProps
     if (onCancel) onCancel();
   };
 
+  // ── Idle: mic button (only shown when no text is typed) ──────────────────
   if (state === "idle" || state === "requesting") {
+    // When the parent has text, it shows a send button instead — hide mic
+    if (hasText) return null;
     return (
       <button
         type="button"
@@ -298,17 +285,23 @@ export function AudioRecorder({ onSend, onCancel, disabled }: AudioRecorderProps
         title="Gravar áudio"
         style={{
           width: 42, height: 42, borderRadius: 21,
-          border: `1px solid ${BORDER}`, background: WHITE,
+          border: "none", background: GOLD,
           cursor: disabled ? "not-allowed" : "pointer",
           display: "flex", alignItems: "center", justifyContent: "center",
-          color: NAVY, fontSize: 18, flexShrink: 0,
+          flexShrink: 0, opacity: disabled ? 0.5 : 1,
         }}
       >
-        🎤
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={WHITE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
       </button>
     );
   }
 
+  // ── Error ──────────────────────────────────────────────────────────────────
   if (state === "error") {
     return (
       <div style={{
@@ -330,6 +323,7 @@ export function AudioRecorder({ onSend, onCancel, disabled }: AudioRecorderProps
     );
   }
 
+  // ── Uploading ──────────────────────────────────────────────────────────────
   if (state === "uploading") {
     return (
       <div style={{
@@ -338,7 +332,7 @@ export function AudioRecorder({ onSend, onCancel, disabled }: AudioRecorderProps
         fontSize: 13, flex: 1, minWidth: 0,
       }}>
         <span style={{
-          width: 10, height: 10, borderRadius: "50%", backgroundColor: "#c9a84c",
+          width: 10, height: 10, borderRadius: "50%", backgroundColor: GOLD,
           animation: "ibhubAudioPulse 1s ease-in-out infinite",
         }} aria-hidden />
         <span>Enviando áudio…</span>
@@ -347,48 +341,67 @@ export function AudioRecorder({ onSend, onCancel, disabled }: AudioRecorderProps
     );
   }
 
-  // recording
+  // ── Recording ─────────────────────────────────────────────────────────────
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 10,
-      padding: "6px 8px 6px 14px", borderRadius: 22,
-      backgroundColor: "#fff5f5", border: `1px solid ${BORDER}`,
+      display: "flex", alignItems: "center", gap: 8,
       flex: 1, minWidth: 0,
     }}>
-      <span style={{
-        width: 10, height: 10, borderRadius: "50%", backgroundColor: RED,
-        animation: "ibhubAudioPulse 1s ease-in-out infinite", flexShrink: 0,
-      }} aria-hidden />
-      <span style={{ fontSize: 14, fontWeight: 700, color: NAVY, fontVariantNumeric: "tabular-nums" }}>
-        {formatMs(recordingMs)}
-      </span>
-      <span style={{ fontSize: 12, color: MUTED, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
-        Gravando…
-      </span>
+      {/* Cancel */}
       <button
         type="button"
         onClick={cancel}
         aria-label="Cancelar gravação"
         title="Cancelar"
         style={{
-          width: 32, height: 32, borderRadius: 16, border: "none",
-          background: "transparent", color: RED, cursor: "pointer",
+          width: 42, height: 42, borderRadius: 21, border: `1px solid ${BORDER}`,
+          background: WHITE, color: RED, cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 18, flexShrink: 0,
+          flexShrink: 0, fontSize: 18,
         }}
-      >✕</button>
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={RED} strokeWidth="2.5" strokeLinecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+
+      {/* Timer + waveform indicator */}
+      <div style={{
+        flex: 1, display: "flex", alignItems: "center", gap: 10,
+        padding: "10px 14px", borderRadius: 22,
+        backgroundColor: "#fff5f5", border: `1px solid #fecaca`,
+        minWidth: 0,
+      }}>
+        <span style={{
+          width: 10, height: 10, borderRadius: "50%", backgroundColor: RED,
+          animation: "ibhubAudioPulse 1s ease-in-out infinite", flexShrink: 0,
+        }} aria-hidden />
+        <span style={{ fontSize: 14, fontWeight: 700, color: NAVY, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
+          {formatMs(recordingMs)}
+        </span>
+        <span style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          Gravando…
+        </span>
+      </div>
+
+      {/* Send */}
       <button
         type="button"
         onClick={stopAndSend}
         aria-label="Enviar áudio"
         title="Enviar"
         style={{
-          width: 36, height: 36, borderRadius: 18, border: "none",
-          background: NAVY, color: WHITE, cursor: "pointer",
+          width: 42, height: 42, borderRadius: 21, border: "none",
+          background: GOLD, color: WHITE, cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 16, flexShrink: 0,
+          flexShrink: 0,
         }}
-      >➤</button>
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={WHITE} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"/>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        </svg>
+      </button>
       <style>{`@keyframes ibhubAudioPulse { 0%,100% { opacity:.4 } 50% { opacity:1 } }`}</style>
     </div>
   );

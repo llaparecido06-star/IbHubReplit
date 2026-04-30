@@ -55,6 +55,7 @@ export default function GrupoChatPage() {
   const [loading, setLoading]     = useState(true);
   const [input, setInput]         = useState("");
   const [sending, setSending]     = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
 
   const listRef    = useRef<HTMLDivElement>(null);
   const seenIds    = useRef<Set<string>>(new Set());
@@ -238,24 +239,38 @@ export default function GrupoChatPage() {
             })}
           </div>
 
-          {/* Input */}
-          <div style={{ padding: "12px 16px", borderTop: `1px solid ${BORDER}`, background: WHITE, display: "flex", gap: 10, alignItems: "flex-end" }}>
-            <AudioRecorder onSend={handleAudioSend} disabled={sending} />
-            <textarea
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKey}
-              placeholder="Mensagem no grupo…"
-              rows={1}
-              style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 22, padding: "10px 16px", fontSize: 14, fontFamily: "inherit", outline: "none", resize: "none", maxHeight: 100, background: BG, color: NAVY }}
+          {/* Input — WhatsApp style */}
+          <div style={{ padding: "12px 16px", borderTop: `1px solid ${BORDER}`, background: WHITE, display: "flex", gap: 8, alignItems: "center" }}>
+            {/* Text area — hidden while recording */}
+            {!isRecording && (
+              <textarea
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={handleKey}
+                placeholder="Mensagem no grupo…"
+                rows={1}
+                style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 22, padding: "10px 16px", fontSize: 14, fontFamily: "inherit", outline: "none", resize: "none", maxHeight: 100, background: BG, color: NAVY }}
+              />
+            )}
+
+            {/* AudioRecorder: mic when empty, recording UI when active, nothing when typing */}
+            <AudioRecorder
+              onSend={handleAudioSend}
+              disabled={sending}
+              hasText={!!input.trim()}
+              onRecordingChange={setIsRecording}
             />
-            <button
-              onClick={handleSend}
-              disabled={!input.trim() || sending}
-              style={{ width: 42, height: 42, borderRadius: "50%", background: input.trim() ? NAVY : BORDER, border: "none", cursor: input.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", color: WHITE, flexShrink: 0 }}
-            >
-              <SendIcon />
-            </button>
+
+            {/* Send button — only when text is typed and not recording */}
+            {!isRecording && input.trim() && (
+              <button
+                onClick={handleSend}
+                disabled={!input.trim() || sending}
+                style={{ width: 42, height: 42, borderRadius: 21, background: NAVY, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: WHITE, flexShrink: 0 }}
+              >
+                <SendIcon />
+              </button>
+            )}
           </div>
         </div>
       </div>

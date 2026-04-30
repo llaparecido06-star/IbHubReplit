@@ -392,7 +392,7 @@ export default function GroupChatScreen() {
     setSlideToCancel(false);
     try {
       await audioRecorder.stop();
-      await setAudioModeAsync({ allowsRecording: false });
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
       // Poll for URI AND non-empty file. See chat/[id].tsx for the rationale —
       // `audioRecorder.uri` can be set before the file on disk has any bytes,
       // and uploading at that moment ships an empty multipart part.
@@ -451,7 +451,7 @@ export default function GroupChatScreen() {
     slideToCancelRef.current = false;
     setSlideToCancel(false);
     try { await audioRecorder.stop(); } catch {}
-    await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
+    await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
   };
 
   // ── Hold-to-record gesture (WhatsApp-style) ──────────────────────────────

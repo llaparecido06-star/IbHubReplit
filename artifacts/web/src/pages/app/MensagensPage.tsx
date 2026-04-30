@@ -240,6 +240,7 @@ export default function MensagensPage() {
   const [attachFile, setAttachFile]       = useState<File | null>(null);
   const [attachPreview, setAttachPreview] = useState<string | null>(null);
   const [uploading, setUploading]         = useState(false);
+  const [isRecording, setIsRecording]     = useState(false);
 
   const bottomRef  = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -493,8 +494,9 @@ export default function MensagensPage() {
         </div>
       )}
 
-      {/* Input bar */}
+      {/* Input bar — WhatsApp style */}
       <div style={{ padding: "10px 16px 14px", borderTop: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0, backgroundColor: WHITE }}>
+        {/* Attachment button — always visible */}
         <button
           onClick={() => fileInputRef.current?.click()}
           aria-label="Anexar arquivo"
@@ -503,21 +505,36 @@ export default function MensagensPage() {
         >
           <ClipIcon size={18} color={attachFile ? GOLD : MUTED} />
         </button>
-        <AudioRecorder onSend={handleAudioSend} disabled={busy} />
-        <input
-          value={newMsg}
-          onChange={e => setNewMsg(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-          placeholder="Escreva uma mensagem…"
-          style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 24, padding: "10px 16px", fontSize: 14, outline: "none", fontFamily: "inherit", backgroundColor: "#f9f9f7" }}
+
+        {/* Text input — hidden while recording */}
+        {!isRecording && (
+          <input
+            value={newMsg}
+            onChange={e => setNewMsg(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+            placeholder="Mensagem…"
+            style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 24, padding: "10px 16px", fontSize: 14, outline: "none", fontFamily: "inherit", backgroundColor: "#f9f9f7" }}
+          />
+        )}
+
+        {/* AudioRecorder: mic when empty, recording UI when active, nothing when typing */}
+        <AudioRecorder
+          onSend={handleAudioSend}
+          disabled={busy}
+          hasText={!!newMsg.trim() || !!attachFile}
+          onRecordingChange={setIsRecording}
         />
-        <button
-          onClick={handleSend}
-          disabled={!canSend}
-          style={{ flexShrink: 0, width: 38, height: 38, border: "none", borderRadius: 19, backgroundColor: canSend ? GOLD : `${GOLD}40`, cursor: canSend ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", outline: "none" }}
-        >
-          {busy ? <span style={{ fontSize: 13 }}>⏳</span> : <SendIcon size={16} color={canSend ? NAVY : "#999"} />}
-        </button>
+
+        {/* Send button — only when there's text/attachment and not recording */}
+        {!isRecording && canSend && (
+          <button
+            onClick={handleSend}
+            disabled={!canSend}
+            style={{ flexShrink: 0, width: 42, height: 42, border: "none", borderRadius: 21, backgroundColor: GOLD, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", outline: "none" }}
+          >
+            {busy ? <span style={{ fontSize: 13 }}>⏳</span> : <SendIcon size={18} color={WHITE} />}
+          </button>
+        )}
       </div>
     </>
   ) : null;

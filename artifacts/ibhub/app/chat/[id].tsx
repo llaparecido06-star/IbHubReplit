@@ -689,7 +689,9 @@ export default function ChatScreen() {
     setSlideToCancel(false);
     try {
       await audioRecorder.stop();
-      await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
+      // Restore playback mode: allow silent mode so audio plays even when
+      // the device ringer is off (same behaviour as WhatsApp/Telegram).
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
 
       // Poll for URI AND a non-empty file. Android's MediaRecorder layer can
       // resolve `stop()` and even expose `audioRecorder.uri` before the file
@@ -776,7 +778,7 @@ export default function ChatScreen() {
     slideToCancelRef.current = false;
     setSlideToCancel(false);
     try { await audioRecorder.stop(); } catch {}
-    await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
+    await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
     if (__DEV__) console.log("[Audio] Recording cancelled.");
   };
 
