@@ -4,6 +4,7 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
+  AppState,
   Dimensions,
   PanResponder,
   StyleProp,
@@ -94,6 +95,21 @@ export function FeedVideo({
       // view (or another user takes over) it begins fresh.
       try { player.currentTime = 0; } catch { /* not yet ready */ }
     }
+  }, [isVisible, player]);
+
+  // Pause when the app is backgrounded; resume according to visibility +
+  // user-pause preference when it returns to the foreground.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        if (isVisible && !userPausedRef.current) {
+          try { player.play(); } catch { /* not yet ready */ }
+        }
+      } else {
+        try { player.pause(); } catch { /* not yet ready */ }
+      }
+    });
+    return () => sub.remove();
   }, [isVisible, player]);
 
   useEventListener(player, "playingChange", ({ isPlaying }) => setPlaying(isPlaying));

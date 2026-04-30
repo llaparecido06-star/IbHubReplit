@@ -17,6 +17,28 @@ let syncScheduled = false;
 let userOverrideEl: HTMLVideoElement | null = null;
 const MIN_RATIO = 0.5;
 
+// Pause every registered video immediately (used when the tab goes hidden).
+// Does not touch userPausedRef so the coordinator restores the right one on
+// visibility restore.
+function pauseAll() {
+  for (const v of registry.values()) {
+    if (!v.el.paused) v.el.pause();
+  }
+}
+
+// Listen to the browser's Page Visibility API so videos stop consuming
+// bandwidth and battery the moment the user switches to another tab, and
+// resume according to existing coordinator rules when they come back.
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      pauseAll();
+    } else {
+      scheduleSync();
+    }
+  });
+}
+
 function scheduleSync() {
   if (syncScheduled) return;
   syncScheduled = true;
