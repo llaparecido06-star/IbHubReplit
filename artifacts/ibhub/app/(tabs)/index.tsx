@@ -1,9 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useRouter, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as SafeNotifications from "@/utils/safeNotifications";
 import {
   ActivityIndicator,
   Alert,
@@ -163,6 +165,38 @@ export default function FeedScreen() {
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
   const firstName = profile?.full_name?.split(" ")[0] ?? "você";
+
+  // ── Push-token registration ────────────────────────────────────────────────
+  // Deliberately done here (feed screen) instead of _layout.tsx so that the
+  // OS permission dialog only appears after the main feed is fully visible.
+  // A 2-second delay lets the navigation transition settle first, preventing
+  // the dialog from flashing over the onboarding stack.
+  const pushRegistered = useRef(false);
+  useEffect(() => {
+    if (!user?.id || pushRegistered.current) return;
+    pushRegistered.current = true;
+
+    const timer = setTimeout(async () => {
+      try {
+        const { status } = await SafeNotifications.requestPermissionsAsync();
+        if (status !== "granted") return;
+        const easConfig = (Constants.expoConfig?.extra as Record<string, unknown> | undefined)?.eas;
+        const projectId = (easConfig as Record<string, unknown> | undefined)?.projectId as string | undefined;
+        const tokenResult = await SafeNotifications.getExpoPushTokenAsync(
+          projectId ? { projectId } : undefined,
+        );
+        const token = tokenResult.data;
+        if (!token) return;
+        await supabase
+          .from("push_tokens")
+          .upsert({ user_id: user.id, token }, { onConflict: "user_id,token" });
+      } catch {
+        // Push not available in Expo Go or if permissions were denied
+      }
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [user?.id]);
 
   const loadPosts = useCallback(async () => {
     feedOffsetRef.current = 0;

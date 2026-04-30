@@ -7,7 +7,6 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import Constants from "expo-constants";
 import { Stack, useRouter, usePathname, type Href } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useRef } from "react";
@@ -76,28 +75,10 @@ function PushNotificationHandler() {
   useEffect(() => {
     if (!user?.id) return;
 
-    // Register push token when user signs in
-    const registerToken = async () => {
-      try {
-        const { status } = await SafeNotifications.requestPermissionsAsync();
-        if (status !== "granted") return;
-        // Pass projectId when available (required in standalone/EAS builds)
-        const easConfig = (Constants.expoConfig?.extra as Record<string, unknown> | undefined)?.eas;
-        const projectId = (easConfig as Record<string, unknown> | undefined)?.projectId as string | undefined;
-        const tokenResult = await SafeNotifications.getExpoPushTokenAsync(
-          projectId ? { projectId } : undefined,
-        );
-        const token = tokenResult.data;
-        if (!token) return;
-        await supabase
-          .from("push_tokens")
-          .upsert({ user_id: user.id, token }, { onConflict: "user_id,token" });
-      } catch {
-        // Push not available in this environment (Expo Go)
-      }
-    };
-
-    // Handle cold-start: app was launched by tapping a notification
+    // Handle cold-start: app was launched by tapping a notification.
+    // Token registration (requestPermissionsAsync) is intentionally NOT done
+    // here — it is done in the feed screen after navigation has settled, so
+    // the OS permission dialog never appears mid-onboarding.
     const handleLastResponse = async () => {
       try {
         const response = await SafeNotifications.getLastNotificationResponseAsync();
@@ -113,7 +94,6 @@ function PushNotificationHandler() {
       }
     };
 
-    registerToken();
     handleLastResponse();
 
     // Listen for notification taps while app is foregrounded/backgrounded
@@ -269,9 +249,18 @@ function RootLayoutNav() {
     const shouldRedirect = isAuthPath || lastDestination.current !== destination;
     if (!shouldRedirect) return;
 
+    // Never auto-redirect from the register screen — it drives its own
+    // navigation at the end of the signup flow. Auto-redirecting here would
+    // race with the register screen's own router.replace("/(tabs)") and cause
+    // a visible flash back to the first onboarding step.
+    if (pathname.includes("register")) {
+      lastDestination.current = destination;
+      return;
+    }
+
     // Edge case: needsProfileCompletion=true but already on social-complete or
     // an auth screen → don't bounce the user off it.
-    const completionBlockPaths = ["social-complete", "register", "reset-password", "forgot-password"];
+    const completionBlockPaths = ["social-complete", "reset-password", "forgot-password"];
     if (needsProfileCompletion && completionBlockPaths.some(p => pathname.includes(p))) {
       lastDestination.current = destination;
       return;
