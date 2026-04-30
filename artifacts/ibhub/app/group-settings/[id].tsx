@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import * as Linking from "expo-linking";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -9,6 +10,7 @@ import {
   Share,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -58,6 +60,13 @@ export default function GroupSettingsScreen() {
   const [updating, setUpdating]         = useState(false);
   const [pendingMembers, setPending]    = useState<{ id: string; name: string; avatar_url: string | null }[]>([]);
   const [approvingId, setApprovingId]   = useState<string | null>(null);
+
+  // Invite search state
+  const [inviteQuery,   setInviteQuery]  = useState("");
+  const [inviteResults, setInviteResults] = useState<{ id: string; full_name: string; avatar_url: string | null; headline: string | null }[]>([]);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [invitingId,    setInvitingId]   = useState<string | null>(null);
+  const inviteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -238,6 +247,51 @@ export default function GroupSettingsScreen() {
     );
   };
 
+  const handleInviteSearch = (text: string) => {
+    setInviteQuery(text);
+    if (inviteTimer.current) clearTimeout(inviteTimer.current);
+    if (!text.trim()) { setInviteResults([]); return; }
+    setInviteLoading(true);
+    inviteTimer.current = setTimeout(async () => {
+      try {
+        const memberIds = new Set(group.members.map(m => m.id));
+        const { data } = await supabase
+          .from("profiles")
+          .select("id, full_name, avatar_url, headline")
+          .ilike("full_name", `%${text.trim()}%`)
+          .limit(20);
+        const filtered = ((data ?? []) as any[]).filter(
+          (p: any) => !memberIds.has(p.id) && p.id !== userId
+        );
+        setInviteResults(filtered.map((p: any) => ({
+          id: p.id,
+          full_name: p.full_name ?? "Usuário",
+          avatar_url: p.avatar_url ?? null,
+          headline: p.headline ?? null,
+        })));
+      } finally {
+        setInviteLoading(false);
+      }
+    }, 350);
+  };
+
+  const handleInvite = async (person: { id: string; full_name: string }) => {
+    setInvitingId(person.id);
+    try {
+      const { error } = await supabase
+        .from("group_members")
+        .upsert({ group_id: id, user_id: person.id, role: "pending" }, { onConflict: "group_id,user_id" });
+      if (error) throw error;
+      Alert.alert("Convite enviado", `${person.full_name} foi convidado(a) para o grupo.`);
+      // Remove from results so double-invite can't happen
+      setInviteResults(prev => prev.filter(r => r.id !== person.id));
+    } catch {
+      Alert.alert("Erro", "Não foi possível enviar o convite.");
+    } finally {
+      setInvitingId(null);
+    }
+  };
+
   const renderTab = () => {
     switch (activeTab) {
       case "membros":
@@ -382,23 +436,71 @@ export default function GroupSettingsScreen() {
 
       case "convidar":
         return (
-          <View style={styles.emptyTab}>
-            <Feather name="user-plus" size={36} color={colors.border} />
-            <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>
-              Pesquise usuários para convidar
-            </Text>
+          <View style={{ padding: 16, gap: 12 }}>
+            <View style={[styles.searchBox, { backgroundColor: "#fff", borderColor: colors.border }]}>
+              <Feather name="search" size={16} color={colors.mutedForeground} />
+              <TextInput
+                style={[styles.searchInput, { color: colors.navy }]}
+                placeholder="Buscar pelo nome..."
+                placeholderTextColor={colors.mutedForeground}
+                value={inviteQuery}
+                onChangeText={handleInviteSearch}
+                autoCapitalize="none"
+                returnKeyType="search"
+              />
+              {inviteLoading && <ActivityIndicator size="small" color={colors.gold} />}
+            </View>
+
+            {!inviteQuery.trim() ? (
+              <View style={styles.emptyTab}>
+                <Feather name="user-plus" size={36} color={colors.border} />
+                <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>
+                  Pesquise usuários para convidar
+                </Text>
+              </View>
+            ) : inviteResults.length === 0 && !inviteLoading ? (
+              <View style={styles.emptyTab}>
+                <Feather name="users" size={36} color={colors.border} />
+                <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>
+                  Nenhum usuário encontrado
+                </Text>
+              </View>
+            ) : (
+              <View style={{ gap: 8 }}>
+                {inviteResults.map(person => (
+                  <View key={person.id} style={[styles.memberRow, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                    <Avatar name={person.full_name} uri={person.avatar_url ?? undefined} size={42} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.memberName, { color: colors.navy }]}>{person.full_name}</Text>
+                      {person.headline ? (
+                        <Text style={[styles.roleText, { color: colors.mutedForeground }]} numberOfLines={1}>{person.headline}</Text>
+                      ) : null}
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.inviteBtn, { backgroundColor: invitingId === person.id ? colors.border : colors.gold }]}
+                      onPress={() => handleInvite(person)}
+                      disabled={invitingId === person.id}
+                    >
+                      {invitingId === person.id
+                        ? <ActivityIndicator size="small" color="#fff" />
+                        : <Text style={styles.inviteBtnText}>Convidar</Text>}
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
         );
 
       case "link": {
-        const deepLink = `ibhub://group-chat/${id}`;
+        const inviteLink = Linking.createURL(`group-chat/${id}`);
         const handleShare = async () => {
           try {
             await Share.share({
-              message: `Participe do grupo "${group.name}" no ibhub!\n${deepLink}`,
-              url: deepLink,
+              message: `Participe do grupo "${group.name}" no ibhub!\n${inviteLink}`,
+              url: inviteLink,
             });
-          } catch (e: any) {
+          } catch {
             Alert.alert("Erro", "Não foi possível compartilhar o link.");
           }
         };
@@ -410,7 +512,7 @@ export default function GroupSettingsScreen() {
             <View style={[styles.linkBox, { backgroundColor: "#fff", borderColor: colors.border }]}>
               <Feather name="link-2" size={18} color={colors.gold} />
               <Text style={[styles.linkText, { color: colors.navy }]} numberOfLines={1} selectable>
-                {deepLink}
+                {inviteLink}
               </Text>
             </View>
             <TouchableOpacity style={[styles.copyBtn, { backgroundColor: colors.gold }]} onPress={handleShare}>
@@ -503,6 +605,17 @@ const styles = StyleSheet.create({
   deleteBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   emptyTab:      { alignItems: "center", paddingTop: 60, gap: 12 },
   emptyTabText:  { fontSize: 14 },
+  searchBox: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    padding: 12, borderRadius: 10, borderWidth: 1,
+  },
+  searchInput:   { flex: 1, fontSize: 15, paddingVertical: 0 },
+  inviteBtn: {
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 8, alignItems: "center", justifyContent: "center",
+    minWidth: 80,
+  },
+  inviteBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   approveBtn: {
     width: 34, height: 34, borderRadius: 8, borderWidth: 1.5,
     alignItems: "center", justifyContent: "center",
