@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
-import { broadcastPushToAllUsers } from "../lib/pushUtils.js";
+import { broadcastPushToAllUsers, sendPushToUser } from "../lib/pushUtils.js";
 
 const router: IRouter = Router();
 
@@ -840,6 +840,91 @@ router.put("/admin/presentations/:id/published", async (req: Request, res: Respo
   }
 
   res.json({ ok: true, published });
+});
+
+// ─── GET /admin/users/:id/credits ─────────────────────────────────────────────
+/** Returns the current AI search credits state for a user. Admin-only. */
+router.get("/admin/users/:id/credits", async (req: Request, res: Response): Promise<void> => {
+  const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(
+    (req.headers.authorization ?? "").replace("Bearer ", ""),
+  );
+  if (authErr || !user) { res.status(401).json({ error: "Não autenticado." }); return; }
+
+  const { data: profile } = await supabaseAdmin
+    .from("profiles").select("is_admin").eq("id", user.id).maybeSingle() as { data: { is_admin: boolean } | null };
+  if (!profile?.is_admin) { res.status(403).json({ error: "Acesso negado." }); return; }
+
+  const { data } = await supabaseAdmin
+    .from("ai_search_credits")
+    .select("credits_remaining, credits_total")
+    .eq("user_id", req.params.id)
+    .maybeSingle() as { data: { credits_remaining: number; credits_total: number } | null };
+
+  res.json({ credits_remaining: data?.credits_remaining ?? 0, credits_total: data?.credits_total ?? 0 });
+});
+
+// ─── POST /admin/users/:id/credits ────────────────────────────────────────────
+/**
+ * Manually grants extra AI search credits to a user.
+ * Body: { amount: number }  — positive integer, added on top of current remaining.
+ * credits_total is also bumped by the same amount so the UI shows the correct quota.
+ * Admin-only.
+ */
+router.post("/admin/users/:id/credits", async (req: Request, res: Response): Promise<void> => {
+  const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(
+    (req.headers.authorization ?? "").replace("Bearer ", ""),
+  );
+  if (authErr || !user) { res.status(401).json({ error: "Não autenticado." }); return; }
+
+  const { data: profile } = await supabaseAdmin
+    .from("profiles").select("is_admin, full_name").eq("id", user.id).maybeSingle() as { data: { is_admin: boolean; full_name: string | null } | null };
+  if (!profile?.is_admin) { res.status(403).json({ error: "Acesso negado." }); return; }
+
+  const { amount } = req.body as { amount?: number };
+  if (typeof amount !== "number" || !Number.isInteger(amount) || amount === 0) {
+    res.status(400).json({ error: "amount deve ser um inteiro diferente de zero." });
+    return;
+  }
+
+  const targetId = req.params.id as string;
+
+  const { data: existing } = await supabaseAdmin
+    .from("ai_search_credits")
+    .select("credits_remaining, credits_total")
+    .eq("user_id", targetId)
+    .maybeSingle() as { data: { credits_remaining: number; credits_total: number } | null };
+
+  const now = new Date().toISOString();
+  const period = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`;
+
+  let credits_remaining: number;
+  let credits_total: number;
+
+  if (!existing) {
+    credits_remaining = Math.max(0, amount);
+    credits_total     = Math.max(0, amount);
+    await supabaseAdmin.from("ai_search_credits").insert({
+      user_id: targetId, credits_remaining, credits_total, period_start: period,
+    });
+  } else {
+    credits_remaining = Math.max(0, existing.credits_remaining + amount);
+    credits_total     = Math.max(0, existing.credits_total + amount);
+    await supabaseAdmin.from("ai_search_credits")
+      .update({ credits_remaining, credits_total, updated_at: now })
+      .eq("user_id", targetId);
+  }
+
+  // Notify the user about the manual grant
+  if (amount > 0) {
+    void sendPushToUser({
+      userId: targetId,
+      title: "🎁 Créditos de IA adicionados!",
+      body: `+${amount} crédito${amount === 1 ? "" : "s"} de busca IA adicionado${amount === 1 ? "" : "s"} à sua conta. Total disponível: ${credits_remaining}.`,
+      data: { type: "credits_granted", deepLink: "/(tabs)/mercado" },
+    });
+  }
+
+  res.json({ ok: true, credits_remaining, credits_total });
 });
 
 export default router;

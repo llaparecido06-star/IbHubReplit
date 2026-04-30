@@ -114,6 +114,33 @@ export async function changeUserPlan(userId: string, plan: string, isCourtesy?: 
   }
 }
 
+export interface UserCredits {
+  credits_remaining: number;
+  credits_total: number;
+}
+
+export async function getUserCredits(userId: string): Promise<UserCredits> {
+  const headers = await getAdminHeaders();
+  const res = await fetch(`${API_URL}/admin/users/${userId}/credits`, { headers });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(body.error ?? `HTTP ${res.status}`);
+  }
+  return res.json() as Promise<UserCredits>;
+}
+
+export async function addUserCredits(userId: string, amount: number): Promise<UserCredits> {
+  const headers = await getAdminHeaders();
+  const res = await fetch(`${API_URL}/admin/users/${userId}/credits`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ amount }),
+  });
+  const body = await res.json().catch(() => ({ error: "Unknown error" }));
+  if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+  return body as UserCredits;
+}
+
 export async function broadcastPushNotification(params: {
   title: string;
   body: string;

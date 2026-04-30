@@ -2,11 +2,14 @@ import React, { useCallback, useEffect, useState } from "react";
 import { AdminShell } from "@/components/layout/AdminShell";
 import {
   AdminUser,
+  UserCredits,
   fetchAdminUsers,
   banUser,
   shadowbanUser,
   changeUserPlan,
   resetUserPassword,
+  getUserCredits,
+  addUserCredits,
 } from "@/services/adminApi";
 import { supabase } from "@/lib/supabase";
 
@@ -36,6 +39,8 @@ export default function AdminCRM() {
   const [actionLoading, setActionLoading] = useState(false);
   const [resetLinkMsg, setResetLinkMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [planOptions, setPlanOptions] = useState<PlanOption[]>([]);
+  const [userCredits, setUserCredits] = useState<UserCredits | null>(null);
+  const [creditsToAdd, setCreditsToAdd] = useState("");
 
   useEffect(() => {
     supabase.from("plans").select("id, name").eq("is_active", true).order("sort_order", { ascending: true })
@@ -71,11 +76,16 @@ export default function AdminCRM() {
     if (isSel) {
       setSelectedUser(null);
       setResetLinkMsg(null);
+      setUserCredits(null);
+      setCreditsToAdd("");
     } else {
       setSelectedUser(user);
       setPlanEdit(user.plan);
       setIsCourtesy(!!user.courtesy_until && new Date(user.courtesy_until) > new Date());
       setResetLinkMsg(null);
+      setUserCredits(null);
+      setCreditsToAdd("");
+      getUserCredits(user.id).then(setUserCredits).catch(() => {});
     }
   };
 
@@ -127,9 +137,27 @@ export default function AdminCRM() {
     if (ok) {
       setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, plan: planEdit } : u));
       setSelectedUser((prev) => prev ? { ...prev, plan: planEdit } : prev);
+      // Refresh credits as plan change may have adjusted them
+      getUserCredits(user.id).then(setUserCredits).catch(() => {});
       alert(`Plano atualizado para "${planEdit}"${isCourtesy ? " (Cortesia)" : ""}.`);
     } else {
       alert("Erro ao atualizar plano.");
+    }
+  };
+
+  const handleAddCredits = async (user: AdminUser) => {
+    const amount = parseInt(creditsToAdd, 10);
+    if (isNaN(amount) || amount === 0) {
+      alert("Insira uma quantidade válida (diferente de zero).");
+      return;
+    }
+    try {
+      const updated = await addUserCredits(user.id, amount);
+      setUserCredits(updated);
+      setCreditsToAdd("");
+      alert(`${amount > 0 ? `+${amount}` : amount} crédito${Math.abs(amount) === 1 ? "" : "s"} aplicado${Math.abs(amount) === 1 ? "" : "s"}. Agora: ${updated.credits_remaining}/${updated.credits_total}`);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Erro ao ajustar créditos.");
     }
   };
 
@@ -244,6 +272,30 @@ export default function AdminCRM() {
                             disabled={savingPlan}
                             style={{ padding: "8px 20px", backgroundColor: GOLD, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: savingPlan ? 0.6 : 1 }}
                           >{savingPlan ? "Salvando..." : "Salvar Plano"}</button>
+                        </div>
+
+                        <div style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 12, padding: 16 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Créditos de IA</div>
+                          <div style={{ fontSize: 12, color: "#8a93a2", marginBottom: 12 }}>
+                            {userCredits
+                              ? `Disponível: ${userCredits.credits_remaining} / ${userCredits.credits_total} este mês`
+                              : "Carregando..."}
+                          </div>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                            <input
+                              type="number"
+                              value={creditsToAdd}
+                              onChange={(e) => setCreditsToAdd(e.target.value)}
+                              placeholder="Ex: 5 ou -2"
+                              style={{ width: 110, padding: "8px 10px", border: "1px solid #e8eaed", borderRadius: 8, fontSize: 14, outline: "none" }}
+                            />
+                            <button
+                              onClick={() => handleAddCredits(user)}
+                              disabled={!creditsToAdd || creditsToAdd === "0"}
+                              style={{ padding: "8px 16px", backgroundColor: GOLD, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: !creditsToAdd || creditsToAdd === "0" ? 0.5 : 1 }}
+                            >Aplicar</button>
+                          </div>
+                          <div style={{ fontSize: 11, color: "#aaa", marginTop: 6 }}>Positivo = acrescentar · Negativo = remover</div>
                         </div>
 
                         <div style={{ backgroundColor: "#fff", border: "1px solid #fca5a5", borderRadius: 12, padding: 16 }}>

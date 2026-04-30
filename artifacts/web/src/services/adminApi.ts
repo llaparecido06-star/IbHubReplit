@@ -458,6 +458,27 @@ export function computeActivityCounts(logs: ActivityLog[]): ActivityCounts {
   return { cadastros, curtidas, conexoes, seguiu };
 }
 
+export interface UserCredits {
+  credits_remaining: number;
+  credits_total: number;
+}
+
+export async function getUserCredits(userId: string): Promise<UserCredits> {
+  const res = await adminFetch(`/admin/users/${userId}/credits`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json() as Promise<UserCredits>;
+}
+
+export async function addUserCredits(userId: string, amount: number): Promise<UserCredits> {
+  const res = await adminFetch(`/admin/users/${userId}/credits`, {
+    method: "POST",
+    body: JSON.stringify({ amount }),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+  return body as UserCredits;
+}
+
 export function relativeTime(isoString: string): string {
   const diff = Date.now() - new Date(isoString).getTime();
   const seconds = Math.floor(diff / 1000);

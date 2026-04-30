@@ -21,7 +21,10 @@ import {
   banUser,
   shadowbanUser,
   changeUserPlan,
+  getUserCredits,
+  addUserCredits,
   type AdminUser,
+  type UserCredits,
 } from "@/services/admin-api";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/context/AuthContext";
@@ -59,6 +62,8 @@ export default function AdminCRMScreen() {
   const [isCourtesy, setIsCourtesy] = useState(false);
   const [savingPlan, setSavingPlan] = useState(false);
   const [planOptions, setPlanOptions] = useState<PlanOption[]>([]);
+  const [userCredits, setUserCredits] = useState<UserCredits | null>(null);
+  const [creditsToAdd, setCreditsToAdd] = useState("");
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -97,10 +102,15 @@ export default function AdminCRMScreen() {
   const selectUser = (user: AdminUser, isSel: boolean) => {
     if (isSel) {
       setSelectedUser(null);
+      setUserCredits(null);
+      setCreditsToAdd("");
     } else {
       setSelectedUser(user);
       setPlanEdit(user.plan);
       setIsCourtesy(!!user.courtesy_until && new Date(user.courtesy_until) > new Date());
+      setUserCredits(null);
+      setCreditsToAdd("");
+      getUserCredits(user.id).then(setUserCredits).catch(() => {});
     }
   };
 
@@ -201,11 +211,32 @@ export default function AdminCRMScreen() {
       if (adminUser.id === user?.id) {
         await refreshProfile();
       }
+      // Refresh credits display since plan change adjusts them automatically
+      getUserCredits(adminUser.id).then(setUserCredits).catch(() => {});
       Alert.alert("Sucesso", `Plano atualizado para "${planEdit}"${isCourtesy ? " (Cortesia)" : ""}.`);
     } catch (e: unknown) {
       Alert.alert("Erro", e instanceof Error ? e.message : "Erro ao salvar plano");
     } finally {
       setSavingPlan(false);
+    }
+  };
+
+  const handleAddCredits = async (adminUser: AdminUser) => {
+    const amount = parseInt(creditsToAdd, 10);
+    if (isNaN(amount) || amount === 0) {
+      Alert.alert("Valor inválido", "Insira um número diferente de zero.");
+      return;
+    }
+    try {
+      const updated = await addUserCredits(adminUser.id, amount);
+      setUserCredits(updated);
+      setCreditsToAdd("");
+      Alert.alert(
+        "Créditos atualizados",
+        `${amount > 0 ? `+${amount}` : amount} crédito${Math.abs(amount) === 1 ? "" : "s"} aplicado${Math.abs(amount) === 1 ? "" : "s"}.\nAgora: ${updated.credits_remaining}/${updated.credits_total}`,
+      );
+    } catch (e: unknown) {
+      Alert.alert("Erro", e instanceof Error ? e.message : "Erro ao ajustar créditos.");
     }
   };
 
@@ -368,6 +399,38 @@ export default function AdminCRMScreen() {
                           </TouchableOpacity>
                         </View>
 
+                        {/* ── Créditos de IA ─────────────────────────── */}
+                        <View style={[styles.planSection, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                            <Text style={[styles.sectionTitle, { color: colors.navy }]}>Créditos de IA</Text>
+                            <Text style={{ fontSize: 13, color: colors.mutedForeground }}>
+                              {userCredits
+                                ? `${userCredits.credits_remaining} / ${userCredits.credits_total}`
+                                : "—"}
+                            </Text>
+                          </View>
+                          <Text style={{ fontSize: 11, color: colors.mutedForeground, marginBottom: 8 }}>
+                            Positivo = acrescentar · Negativo = remover
+                          </Text>
+                          <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                            <TextInput
+                              style={[styles.creditInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: "#fff" }]}
+                              keyboardType="numeric"
+                              placeholder="Ex: 5 ou -2"
+                              placeholderTextColor={colors.mutedForeground}
+                              value={creditsToAdd}
+                              onChangeText={setCreditsToAdd}
+                            />
+                            <TouchableOpacity
+                              onPress={() => handleAddCredits(user)}
+                              disabled={!creditsToAdd || creditsToAdd === "0"}
+                              style={[styles.savePlanBtn, { flex: 0, paddingHorizontal: 18, opacity: !creditsToAdd || creditsToAdd === "0" ? 0.4 : 1, backgroundColor: colors.gold }]}
+                            >
+                              <Text style={styles.savePlanBtnText}>Aplicar</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
                         <Text style={[styles.dangerTitle, { color: colors.gold }]}>ZONA DE PERIGO</Text>
 
                         {actionLoading ? (
@@ -449,8 +512,10 @@ const styles = StyleSheet.create({
   courtesyRow:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   courtesyLabel:    { fontSize: 14, fontWeight: "600" },
   courtesySub:      { fontSize: 11, marginTop: 2 },
-  savePlanBtn:      { paddingVertical: 12, borderRadius: 10, alignItems: "center" },
+  savePlanBtn:      { paddingVertical: 12, borderRadius: 10, alignItems: "center", flex: 1 },
   savePlanBtnText:  { color: "#fff", fontSize: 14, fontWeight: "700" },
+  sectionTitle:     { fontSize: 13, fontWeight: "700" },
+  creditInput:      { flex: 1, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
   dangerTitle:      { fontSize: 12, fontWeight: "800", letterSpacing: 0.5, marginTop: 4 },
   dangerBtn:        { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 13, borderRadius: 10, borderWidth: 1 },
   dangerBtnText:    { fontSize: 14, fontWeight: "600" },
