@@ -4,7 +4,7 @@ import * as AppleAuthentication from "expo-apple-authentication";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { AppState, Platform, type AppStateStatus } from "react-native";
+import { Platform } from "react-native";
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -79,6 +79,13 @@ interface AuthContextType {
   isRecovering: boolean;
   mustChangePassword: boolean;
   needsProfileCompletion: boolean;
+  /**
+   * True once the first profile fetch for the current session has resolved.
+   * Used by RootLayoutNav to avoid navigating to /(tabs) before we know whether
+   * a freshly signed-in social-auth user actually needs to complete their profile
+   * (which would cause a brief flash of /(tabs) followed by /social-complete).
+   */
+  profileChecked: boolean;
   activeCompany: ActiveCompany | null;
   setActiveCompany: (company: ActiveCompany | null) => void;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -127,6 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isRecovering, setIsRecovering]         = useState(false);
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [needsProfileCompletion, setNeedsProfileCompletion] = useState(false);
+  const [profileChecked, setProfileChecked]     = useState(false);
   const [activeCompany, setActiveCompany]       = useState<ActiveCompany | null>(null);
 
   const fetchProfile = useCallback(async (userId: string) => {
@@ -157,6 +165,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (e: any) {
       console.error(`[fetchProfile] Exception:`, e?.message);
+    } finally {
+      setProfileChecked(true);
     }
   }, []);
 
@@ -249,20 +259,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // ── Close Chrome Custom Tab when app returns to foreground (Android fix) ──
-    // openAuthSessionAsync on Android uses Chrome Custom Tab. When the OAuth provider
-    // redirects to the app's deep-link scheme, the OS brings Expo Go to the foreground
-    // but Chrome Custom Tab may stay open, causing openAuthSessionAsync to hang forever.
-    // Calling maybeCompleteAuthSession() on every "active" AppState event signals the
-    // Custom Tab to close itself, which unblocks openAuthSessionAsync (returns "dismiss").
-    // The deep-link URL is then handled by handleDeepLink via Linking.addEventListener.
+    // maybeCompleteAuthSession is a no-op on native (web-only API), but it's
+    // safe to call once at startup to ensure any in-flight web auth session
+    // completes properly when running under expo-web.
     WebBrowser.maybeCompleteAuthSession();
-    const handleAppStateChange = (nextState: AppStateStatus) => {
-      if (nextState === "active") {
-        WebBrowser.maybeCompleteAuthSession();
-      }
-    };
-    const appStateSub = AppState.addEventListener("change", handleAppStateChange);
 
     // 1. Resolve deep links BEFORE finalising loading state.
     //    If the app was cold-started by a password-recovery link (PKCE: ?code=xxx),
@@ -371,6 +371,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setProfile(null);
         setNeedsProfileCompletion(false);
+        setProfileChecked(false);
       }
     });
 
@@ -379,7 +380,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const linkSub = Linking.addEventListener("url", ({ url }) => handleDeepLink(url));
 
     return () => {
-      appStateSub.remove();
       subscription.unsubscribe();
       linkSub.remove();
     };
@@ -538,32 +538,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (Platform.OS === "android") {
         // ── Android ──────────────────────────────────────────────────────────
-        // Chrome Custom Tab cannot intercept exp:// / ibhub:// deep links — they
-        // are always delivered as Linking events (handleDeepLink). openAuthSessionAsync
-        // would hang indefinitely waiting for a "success" that never comes.
+        // Chrome Custom Tab CAN signal user-initiated dismissal back to
+        // openAuthSessionAsync (resolves with "dismiss"/"cancel"), but it CANNOT
+        // intercept the custom-scheme redirect — that's delivered as a Linking
+        // event to handleDeepLink, which performs the PKCE exchange and triggers
+        // SIGNED_IN. So we wait for whichever happens first:
+        //   - SIGNED_IN  → auth succeeded, navigation will happen via RootLayoutNav
+        //   - browser closed (no SIGNED_IN within a short grace period) → cancelled
         //
-        // Solution: race openAuthSessionAsync against the app returning to the
-        // foreground (AppState "active"). Whichever resolves first wins.
-        //   - Happy path: user logs in → OS brings app to foreground → race wins
-        //     → spinner clears → handleDeepLink exchanges the PKCE code → SIGNED_IN
-        //   - User cancels: Chrome Custom Tab closes → openAuthSessionAsync wins
-        //     with "dismiss" → spinner clears, no navigation
-        //
-        // Note: in Expo Go this causes a cold-start ("Fecha e Abre") because
-        // exp:// triggers a new Expo Go activity. This is an Expo Go limitation;
-        // a production build with ibhub:// and correct Android launchMode is seamless.
-        let appStateSub: { remove: () => void } | null = null;
-        const waitForForeground = new Promise<void>((resolve) => {
-          appStateSub = AppState.addEventListener("change", (next) => {
-            if (next === "active") resolve();
+        // Previous implementation raced against AppState "active", but that fires
+        // before handleDeepLink completes the exchange, leaving the spinner cleared
+        // while the session is still in flight. That manifested as "loading forever"
+        // (because the user perceived the OAuth flow as incomplete) followed by the
+        // app appearing to restart when the deep link finally fired.
+        await new Promise<void>((resolve) => {
+          let done = false;
+          const finish = () => { if (!done) { done = true; resolve(); } };
+
+          const { data: { subscription: signInSub } } = supabase.auth.onAuthStateChange((event) => {
+            if (event === "SIGNED_IN") {
+              console.log("[OAuth] Android: SIGNED_IN received, completing flow.");
+              signInSub.unsubscribe();
+              finish();
+            }
           });
+
+          WebBrowser.openAuthSessionAsync(data.url, redirectTo)
+            .then((result) => {
+              console.log(`[OAuth] Android: browser closed (${result.type}). Awaiting late SIGNED_IN...`);
+              // Browser closed (user cancelled OR success-redirect dismissed it).
+              // Give handleDeepLink up to 2s to fire SIGNED_IN. If nothing arrives,
+              // assume the user cancelled and clear the spinner.
+              setTimeout(() => { signInSub.unsubscribe(); finish(); }, 2000);
+            })
+            .catch((e) => {
+              console.warn("[OAuth] Android: openAuthSessionAsync error:", e);
+              signInSub.unsubscribe();
+              finish();
+            });
+
+          // Hard safety timeout (60s) — never let the spinner hang forever.
+          setTimeout(() => { signInSub.unsubscribe(); finish(); }, 60_000);
         });
-        await Promise.race([
-          WebBrowser.openAuthSessionAsync(data.url, redirectTo).then(() => {}),
-          waitForForeground,
-        ]);
-        (appStateSub as any)?.remove();
-        console.log(`[OAuth] Android: browser race resolved, auth continues via handleDeepLink.`);
+
+        console.log(`[OAuth] Android: signInWithOAuthProvider returning.`);
         return { error: null };
       }
 
@@ -667,6 +685,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     setActiveCompany(null);
     setNeedsProfileCompletion(false);
+    setProfileChecked(false);
     await supabase.auth.signOut();
   };
 
@@ -695,6 +714,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider
       value={{
         session, user, profile, loading, isRecovering, mustChangePassword, needsProfileCompletion,
+        profileChecked,
         activeCompany, setActiveCompany,
         signIn, signUp, signInWithGoogle, signInWithApple, signOut,
         resetPassword, updatePassword, clearRecovery, clearProfileCompletion,

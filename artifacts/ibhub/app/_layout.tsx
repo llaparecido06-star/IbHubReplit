@@ -224,11 +224,13 @@ function AuthenticatedLayout() {
 }
 
 function RootLayoutNav() {
-  const { session, loading, isRecovering, mustChangePassword, needsProfileCompletion } = useAuth();
+  const { session, loading, isRecovering, mustChangePassword, needsProfileCompletion, profileChecked } = useAuth();
   const { isEnabled, isLoading: flagsLoading } = useFeatureFlags();
   const router = useRouter();
   const pathname = usePathname();
-  const didNavigateIn = useRef(false);
+  // Track the last destination we navigated to so we can re-navigate when the
+  // intended destination changes (e.g. needsProfileCompletion flips during OAuth).
+  const lastDestination = useRef<string | null>(null);
   const manutencao = isEnabled("manutencao");
 
   // Auth routes that must remain accessible without a session
@@ -239,32 +241,48 @@ function RootLayoutNav() {
   useEffect(() => {
     if (loading || isRecovering || mustChangePassword || flagsLoading) return;
 
+    // ── Unauthenticated ────────────────────────────────────────────────────
     if (!session) {
-      didNavigateIn.current = false;
+      lastDestination.current = null;
       if (manutencao && !isAuthPath) {
-        // Unauthenticated + maintenance: show maintenance (unless already on an auth route)
         router.replace("/maintenance" as any);
-      } else if (!manutencao) {
+      } else if (!manutencao && !isAuthPath) {
         router.replace("/(auth)/login" as any);
       }
-      // else: maintenance + isAuthPath → stay on login, let admin sign in
-    } else if (!didNavigateIn.current) {
-      didNavigateIn.current = true;
-      setTimeout(() => router.replace("/(tabs)" as any), 80);
+      return;
     }
-  }, [session, loading, isRecovering, mustChangePassword, manutencao, flagsLoading, isAuthPath]);
 
-  // Separate effect: redirect social-auth users to profile completion screen.
-  // This fires even after the main effect already navigated to /(tabs), so
-  // Google/Apple users who skipped completion are always intercepted.
-  useEffect(() => {
-    if (loading || isRecovering || mustChangePassword || !session || !needsProfileCompletion) return;
-    // Block redirect when user is on any auth/registration screen.
-    // Note: Expo Router strips group names, so (auth)/register → /register, not /auth/register.
-    const blockPaths = ["social-complete", "register", "login", "reset-password", "forgot-password", "auth"];
-    if (blockPaths.some(p => pathname.includes(p))) return;
-    router.replace("/social-complete" as any);
-  }, [loading, isRecovering, mustChangePassword, session, needsProfileCompletion, pathname]);
+    // ── Authenticated ──────────────────────────────────────────────────────
+    // Wait for the first profile fetch to complete before deciding destination.
+    // Otherwise, for new social-auth users, needsProfileCompletion starts as false,
+    // we navigate to /(tabs), and then a moment later it flips to true and we
+    // bounce them to /social-complete — visible flicker.
+    if (!profileChecked) return;
+
+    // Decide destination once, based on whether the social-auth user still needs
+    // to complete their profile. Single source of truth avoids the previous
+    // double-effect race.
+    const destination = needsProfileCompletion ? "/social-complete" : "/(tabs)";
+
+    // Don't override screens the user explicitly navigated to (settings, profile, etc.).
+    // Only redirect when on an auth screen or when the destination actually changed.
+    const shouldRedirect = isAuthPath || lastDestination.current !== destination;
+    if (!shouldRedirect) return;
+
+    // Edge case: needsProfileCompletion=true but already on social-complete or
+    // an auth screen → don't bounce the user off it.
+    const completionBlockPaths = ["social-complete", "register", "reset-password", "forgot-password"];
+    if (needsProfileCompletion && completionBlockPaths.some(p => pathname.includes(p))) {
+      lastDestination.current = destination;
+      return;
+    }
+
+    lastDestination.current = destination;
+    router.replace(destination as any);
+  }, [
+    session, loading, isRecovering, mustChangePassword, manutencao,
+    flagsLoading, isAuthPath, needsProfileCompletion, profileChecked, pathname,
+  ]);
 
   if (loading) {
     return (
