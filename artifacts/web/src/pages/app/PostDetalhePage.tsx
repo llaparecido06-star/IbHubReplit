@@ -177,8 +177,9 @@ export default function PostDetalhePage() {
   useEffect(() => {
     if (!postId) return;
     const userId = profile?.id;
+    const uid = Math.random().toString(36).slice(2, 8);
     const ch = supabase
-      .channel(`post_poll_${postId}`)
+      .channel(`post_poll_${postId}_${uid}`)
       .on("postgres_changes", {
         event: "UPDATE",
         schema: "public",
