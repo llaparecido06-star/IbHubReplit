@@ -131,7 +131,8 @@ export default function NewGroupScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? topPad + 50 : 0}
     >
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
@@ -153,6 +154,8 @@ export default function NewGroupScreen() {
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad }]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
       >
         {/* Avatar picker */}
         <View style={styles.avatarSection}>

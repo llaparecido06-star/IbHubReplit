@@ -203,6 +203,7 @@ export default function NewEventScreen() {
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior={kavBehavior}
+      keyboardVerticalOffset={Platform.OS === "ios" ? topPad + 50 : 0}
     >
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
@@ -236,6 +237,7 @@ export default function NewEventScreen() {
         contentContainerStyle={{ padding: 16, rowGap: 20, paddingBottom: bottomPad }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
       >
         {/* ── Step 1 ── */}
         {step === 1 && <>

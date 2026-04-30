@@ -3,6 +3,7 @@ import React, { useCallback, useRef, useState } from "react";
 import {
   Alert,
   Image,
+  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -230,7 +231,12 @@ export default function EditProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, rowGap: 18, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" bounces>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? topPad + 50 : 0}
+      >
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, rowGap: 18, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets bounces>
         {/* Avatar */}
         <View style={styles.avatarWrap}>
           {avatarUri ? (
@@ -384,6 +390,7 @@ export default function EditProfileScreen() {
         </View>
 
       </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }

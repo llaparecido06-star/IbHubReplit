@@ -1151,6 +1151,11 @@ export default function FeedScreen() {
       {/* ── Create Post Modal ── */}
       <Modal visible={showCreatePost} transparent animationType="fade" onRequestClose={() => setShowCreatePost(false)}>
         <Pressable style={styles.postOverlay} onPress={Keyboard.dismiss}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={0}
+            style={styles.postModalKav}
+          >
           <View style={[styles.postModal, { backgroundColor: "#fff" }]}>
             {/* Header */}
             <View style={[styles.postModalHeader, { borderBottomColor: colors.border }]}>
@@ -1170,7 +1175,11 @@ export default function FeedScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              automaticallyAdjustKeyboardInsets
+              showsVerticalScrollIndicator={false}
+            >
               {/* Author */}
               <View style={styles.postAuthorRow}>
                 <Avatar
@@ -1352,6 +1361,7 @@ export default function FeedScreen() {
               </TouchableOpacity>
             </View>
           </View>
+          </KeyboardAvoidingView>
         </Pressable>
       </Modal>
 
@@ -1669,6 +1679,7 @@ const styles = StyleSheet.create({
   menuDivider:        { height: 1 },
   // Create post modal
   postOverlay:        { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center", padding: 16 },
+  postModalKav:       { width: "100%", maxWidth: 420, alignItems: "center" },
   postModal:          { width: "100%", maxWidth: 420, borderRadius: 16, maxHeight: "85%", overflow: "hidden" },
   postModalHeader:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1 },
   postModalTitle:     { fontSize: 16, fontWeight: "700" },

@@ -282,6 +282,7 @@ export default function CreatePostScreen() {
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? topPad + 50 : 0}
     >
       <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
@@ -331,7 +332,7 @@ export default function CreatePostScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.body} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false}>
         <View style={styles.authorRow}>
           <Avatar
             uri={isCompanyPost ? companyAvatarUrl : profile?.avatar_url}

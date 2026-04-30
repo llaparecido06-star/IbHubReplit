@@ -443,8 +443,12 @@ export default function OpportunityDetailScreen() {
       {/* Apply bottom sheet */}
       {showApply && (
         <Pressable style={styles.overlay} onPress={closeSheet}>
-          <Pressable onPress={(e) => e.stopPropagation()}>
-            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "padding" : undefined}
+            keyboardVerticalOffset={0}
+            style={styles.sheetKav}
+          >
+            <Pressable onPress={(e) => e.stopPropagation()}>
               <Animated.View
                 style={[
                   styles.sheet,
@@ -517,16 +521,20 @@ export default function OpportunityDetailScreen() {
                   )}
                 </TouchableOpacity>
               </Animated.View>
-            </KeyboardAvoidingView>
-          </Pressable>
+            </Pressable>
+          </KeyboardAvoidingView>
         </Pressable>
       )}
 
       {/* Direct message to company sheet */}
       {showContact && (
         <Pressable style={styles.overlay} onPress={closeContactSheet}>
-          <Pressable onPress={(e) => e.stopPropagation()}>
-            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "padding" : undefined}
+            keyboardVerticalOffset={0}
+            style={styles.sheetKav}
+          >
+            <Pressable onPress={(e) => e.stopPropagation()}>
               <Animated.View
                 style={[
                   styles.sheet,
@@ -567,8 +575,8 @@ export default function OpportunityDetailScreen() {
                   )}
                 </TouchableOpacity>
               </Animated.View>
-            </KeyboardAvoidingView>
-          </Pressable>
+            </Pressable>
+          </KeyboardAvoidingView>
         </Pressable>
       )}
     </View>
@@ -604,6 +612,7 @@ const styles = StyleSheet.create({
   appliedBadge:           { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, borderRadius: 14 },
   appliedText:            { fontSize: 14, fontWeight: "600" },
   overlay:                { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  sheetKav:               { width: "100%" },
   sheet:                  { borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 20, paddingBottom: 40, gap: 14, shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 20 },
   sheetHandle:            { width: 38, height: 4, borderRadius: 2, backgroundColor: "#ccc", alignSelf: "center", marginBottom: 4 },
   sheetTitle:             { fontSize: 18, fontWeight: "800" },
