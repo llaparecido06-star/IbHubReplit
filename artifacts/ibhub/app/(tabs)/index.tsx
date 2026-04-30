@@ -1157,6 +1157,10 @@ export default function FeedScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} colors={[colors.gold]} />}
         contentContainerStyle={{ paddingBottom: bottomPad }}
         showsVerticalScrollIndicator={false}
+        initialNumToRender={5}
+        maxToRenderPerBatch={3}
+        windowSize={7}
+        removeClippedSubviews={Platform.OS !== "web"}
         viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
         onEndReached={loadMorePosts}
         onEndReachedThreshold={0.3}

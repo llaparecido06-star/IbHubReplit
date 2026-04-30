@@ -104,16 +104,24 @@ export async function fetchNotifications(userId: string): Promise<AppNotificatio
 }
 
 export async function markNotificationRead(notifId: string): Promise<void> {
-  await supabase.from("notifications").update({ read: true }).eq("id", notifId);
+  try {
+    await supabase.from("notifications").update({ read: true }).eq("id", notifId);
+  } catch (e) {
+    console.warn("markNotificationRead:", e);
+  }
 }
 
 export async function markAllNotificationsRead(userId: string): Promise<void> {
-  await supabase
-    .from("notifications")
-    .update({ read: true })
-    .eq("user_id", userId)
-    .is("target_company_id", null)
-    .eq("read", false);
+  try {
+    await supabase
+      .from("notifications")
+      .update({ read: true })
+      .eq("user_id", userId)
+      .is("target_company_id", null)
+      .eq("read", false);
+  } catch (e) {
+    console.warn("markAllNotificationsRead:", e);
+  }
 }
 
 export async function fetchCompanyNotifications(companyId: string): Promise<AppNotification[]> {
@@ -161,11 +169,15 @@ export async function fetchCompanyNotifications(companyId: string): Promise<AppN
 }
 
 export async function markAllCompanyNotificationsRead(companyId: string): Promise<void> {
-  await supabase
-    .from("notifications")
-    .update({ read: true })
-    .eq("target_company_id", companyId)
-    .eq("read", false);
+  try {
+    await supabase
+      .from("notifications")
+      .update({ read: true })
+      .eq("target_company_id", companyId)
+      .eq("read", false);
+  } catch (e) {
+    console.warn("markAllCompanyNotificationsRead:", e);
+  }
 }
 
 export async function getUnreadNotifCount(userId: string): Promise<number> {

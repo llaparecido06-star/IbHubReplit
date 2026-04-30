@@ -84,6 +84,7 @@ export default function OportunidadesScreen() {
   const [eventos, setEventos] = useState<AppEvent[]>([]);
   const [loading, setLoading]     = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError]   = useState(false);
 
   const [marketFilter, setMarketFilter] = useState<MarketFilter>({ sort: "recente", category: null });
   const [vagasFilter, setVagasFilter] = useState<VagasFilter>({ modalidade: null, contrato: null });
@@ -110,16 +111,22 @@ export default function OportunidadesScreen() {
   ];
 
   const loadData = useCallback(async () => {
-    const [m, v, ev] = await Promise.all([
-      fetchOpportunities("marketplace", "", user?.id ?? ""),
-      fetchOpportunities("vaga",        "", user?.id ?? ""),
-      fetchEvents("", user?.id ?? ""),
-    ]);
-    setMarket(m);
-    setVagas(v);
-    setEventos(ev);
-    setLoading(false);
-    setRefreshing(false);
+    setLoadError(false);
+    try {
+      const [m, v, ev] = await Promise.all([
+        fetchOpportunities("marketplace", "", user?.id ?? ""),
+        fetchOpportunities("vaga",        "", user?.id ?? ""),
+        fetchEvents("", user?.id ?? ""),
+      ]);
+      setMarket(m);
+      setVagas(v);
+      setEventos(ev);
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [user?.id]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -174,11 +181,18 @@ export default function OportunidadesScreen() {
   const handleToggleSave = async (item: AppOpportunity) => {
     if (!user?.id) return;
     const wasSaved = !!item.is_saved;
-    const updater = (list: AppOpportunity[]) =>
+    const updater    = (list: AppOpportunity[]) =>
       list.map((i) => i.id === item.id ? { ...i, is_saved: !wasSaved } : i);
+    const rollback   = (list: AppOpportunity[]) =>
+      list.map((i) => i.id === item.id ? { ...i, is_saved: wasSaved } : i);
     if (item.type === "marketplace") setMarket(updater);
     else setVagas(updater);
-    await toggleSaveOpportunity(item.id, user.id, wasSaved);
+    try {
+      await toggleSaveOpportunity(item.id, user.id, wasSaved);
+    } catch {
+      if (item.type === "marketplace") setMarket(rollback);
+      else setVagas(rollback);
+    }
   };
 
   const filteredMarket = (() => {
@@ -323,6 +337,20 @@ export default function OportunidadesScreen() {
       >
         {loading ? (
           <ActivityIndicator color={colors.gold} style={{ marginTop: 40 }} />
+        ) : null}
+
+        {!loading && loadError ? (
+          <View style={{ alignItems: "center", marginTop: 48, rowGap: 12 }}>
+            <Text style={{ color: colors.mutedForeground, fontSize: 15, textAlign: "center" }}>
+              Não foi possível carregar o conteúdo.{"\n"}Verifique sua conexão e tente novamente.
+            </Text>
+            <TouchableOpacity
+              onPress={() => { setLoading(true); loadData(); }}
+              style={{ paddingHorizontal: 20, paddingVertical: 10, backgroundColor: colors.gold, borderRadius: 8 }}
+            >
+              <Text style={{ color: "#fff", fontWeight: "600" }}>Tentar novamente</Text>
+            </TouchableOpacity>
+          </View>
         ) : null}
 
         {/* ── Market ── */}
