@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
+import { broadcastPushToAllUsers } from "../lib/pushUtils.js";
 
 const router: IRouter = Router();
 
@@ -761,6 +762,84 @@ router.post("/admin/broadcast-push", async (req: Request, res: Response) => {
   }
 
   res.json({ success: true, sent, total: tokens.length });
+});
+
+// ─── PUT /admin/presentations/:id/published ───────────────────────────────────
+/**
+ * Toggles the `published` flag on a market_presentation.
+ * When publishing (draft → published), broadcasts a push to all users.
+ * Admin-only.
+ *
+ * Body: { published: boolean }
+ */
+router.put("/admin/presentations/:id/published", async (req: Request, res: Response): Promise<void> => {
+  const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(
+    (req.headers.authorization ?? "").replace("Bearer ", ""),
+  );
+
+  if (authErr || !user) {
+    res.status(401).json({ error: "Não autenticado." });
+    return;
+  }
+
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", user.id)
+    .maybeSingle() as { data: { is_admin: boolean } | null };
+
+  if (!profile?.is_admin) {
+    res.status(403).json({ error: "Apenas administradores podem alterar o status de publicação." });
+    return;
+  }
+
+  const { published } = req.body as { published?: boolean };
+  if (typeof published !== "boolean") {
+    res.status(400).json({ error: "published (boolean) é obrigatório" });
+    return;
+  }
+
+  const presentationId = req.params.id;
+
+  // Fetch current status to detect the draft → published transition
+  const { data: current } = await supabaseAdmin
+    .from("market_presentations")
+    .select("id, title, published")
+    .eq("id", presentationId)
+    .maybeSingle() as { data: { id: string; title: string; published: boolean } | null };
+
+  if (!current) {
+    res.status(404).json({ error: "Apresentação não encontrada." });
+    return;
+  }
+
+  const wasPublished = current.published;
+
+  const { error: updateErr } = await supabaseAdmin
+    .from("market_presentations")
+    .update({ published, updated_at: new Date().toISOString() })
+    .eq("id", presentationId);
+
+  if (updateErr) {
+    res.status(500).json({ error: updateErr.message });
+    return;
+  }
+
+  // Broadcast push only on the draft → published transition
+  if (!wasPublished && published) {
+    const titleLabel = current.title.length > 60 ? current.title.slice(0, 60) + "…" : current.title;
+    void broadcastPushToAllUsers({
+      title: "🎬 Nova apresentação disponível!",
+      body: titleLabel,
+      data: {
+        type: "new_presentation",
+        presentationId,
+        deepLink: "/(tabs)/mercado",
+      },
+    });
+  }
+
+  res.json({ ok: true, published });
 });
 
 export default router;

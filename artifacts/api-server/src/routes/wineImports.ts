@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { resolveUserId } from "../lib/planCheck.js";
+import { sendPushToUser } from "../lib/pushUtils.js";
 import OpenAI from "openai";
 
 // Lazy singleton — prioriza OPENAI_API_KEY direto; cai para integração Replit se ausente
@@ -96,6 +97,17 @@ async function getOrCreateCredits(userId: string): Promise<{
       .from("ai_search_credits")
       .update({ credits_remaining: total, credits_total: total, period_start: period, updated_at: new Date().toISOString() })
       .eq("user_id", userId);
+
+    // Notify the user that their AI credits have been renewed for the new period
+    if (total > 0) {
+      void sendPushToUser({
+        userId,
+        title: "✨ Créditos de IA renovados!",
+        body: `Você tem ${total} crédito${total === 1 ? "" : "s"} disponíve${total === 1 ? "l" : "is"} este mês na busca inteligente de vinhos.`,
+        data: { type: "credits_renewed", deepLink: "/(tabs)/mercado" },
+      });
+    }
+
     return { credits_remaining: total, credits_total: total, period_start: period };
   }
 

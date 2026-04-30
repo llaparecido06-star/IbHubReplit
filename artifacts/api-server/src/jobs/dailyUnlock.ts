@@ -1,7 +1,9 @@
 import { supabaseAdmin, applyDeliveryStrategy, type DeliveryStrategy, type PresentationGroup } from "../lib/deliveryStrategies.js";
+import { sendPushToUser } from "../lib/pushUtils.js";
+import { logger } from "../lib/logger.js";
 
 export async function dailyUnlockJob(): Promise<void> {
-  console.info("[dailyUnlockJob] Starting daily presentation unlock...");
+  logger.info("Starting daily presentation unlock…");
 
   const { data: profiles, error: profilesErr } = await supabaseAdmin
     .from("profiles")
@@ -9,7 +11,7 @@ export async function dailyUnlockJob(): Promise<void> {
     .not("plan", "is", null);
 
   if (profilesErr || !profiles || profiles.length === 0) {
-    console.warn("[dailyUnlockJob] No profiles found or error:", profilesErr?.message);
+    logger.warn({ err: profilesErr }, "dailyUnlockJob: no profiles found or error");
     return;
   }
 
@@ -18,7 +20,7 @@ export async function dailyUnlockJob(): Promise<void> {
     .select("id, delivery_strategy");
 
   if (plansErr || !plans) {
-    console.warn("[dailyUnlockJob] Failed to fetch plans:", plansErr?.message);
+    logger.warn({ err: plansErr }, "dailyUnlockJob: failed to fetch plans");
     return;
   }
 
@@ -36,7 +38,7 @@ export async function dailyUnlockJob(): Promise<void> {
     .order("created_at", { ascending: true });
 
   if (presErr || !presentations || presentations.length === 0) {
-    console.info("[dailyUnlockJob] No active presentations.");
+    logger.info("dailyUnlockJob: no active presentations");
     return;
   }
 
@@ -49,7 +51,7 @@ export async function dailyUnlockJob(): Promise<void> {
     .order("sequence_order", { ascending: true });
 
   if (slidesErr || !allSlides) {
-    console.warn("[dailyUnlockJob] Failed to fetch slides:", slidesErr?.message);
+    logger.warn({ err: slidesErr }, "dailyUnlockJob: failed to fetch slides");
     return;
   }
 
@@ -67,19 +69,44 @@ export async function dailyUnlockJob(): Promise<void> {
 
   let processed = 0;
   let errors = 0;
+  const usersWithNewContent: string[] = [];
 
   for (const profile of profiles as { id: string; plan: string; created_at: string }[]) {
     const strategy = planStrategyMap.get(profile.plan) ?? "NONE";
     if (strategy === "NONE") continue;
 
     try {
-      await applyDeliveryStrategy(profile.id, profile, strategy, allPresentationGroups);
+      const newlyUnlocked = await applyDeliveryStrategy(profile.id, profile, strategy, allPresentationGroups);
       processed++;
+
+      // Only notify users who actually received new content today
+      if (newlyUnlocked > 0) {
+        usersWithNewContent.push(profile.id);
+      }
     } catch (e) {
       errors++;
-      console.error(`[dailyUnlockJob] Error for user ${profile.id}:`, e);
+      logger.error({ err: e, userId: profile.id }, "dailyUnlockJob: error for user");
     }
   }
 
-  console.info(`[dailyUnlockJob] Done. Processed: ${processed}, Errors: ${errors}`);
+  logger.info({ processed, errors, notifying: usersWithNewContent.length }, "dailyUnlockJob: unlock phase done");
+
+  // Send push notifications to users who had content unlocked today.
+  // Fire concurrently in chunks to avoid overwhelming the Expo API.
+  const CHUNK = 20;
+  for (let i = 0; i < usersWithNewContent.length; i += CHUNK) {
+    const batch = usersWithNewContent.slice(i, i + CHUNK);
+    await Promise.allSettled(
+      batch.map((userId) =>
+        sendPushToUser({
+          userId,
+          title: "📚 Novo conteúdo disponível",
+          body: "Suas apresentações de hoje foram liberadas. Toque para ver.",
+          data: { type: "content_unlock", deepLink: "/(tabs)/mercado" },
+        }),
+      ),
+    );
+  }
+
+  logger.info({ notified: usersWithNewContent.length }, "dailyUnlockJob: done");
 }

@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase";
 const GOLD = "#c9a84c";
 const NAVY = "#0d1b2a";
 
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "/api";
+
 const MAIN_TABS = ["Apresentações", "Dados de Mercado", "Categorias"] as const;
 type MainTab = typeof MAIN_TABS[number];
 type Period = "mes" | "trimestre" | "ano";
@@ -181,7 +183,13 @@ export default function AdminSlidesMercado() {
   };
 
   const handleTogglePublished = async (p: MarketPresentation) => {
-    await supabase.from("market_presentations").update({ published: !p.published, updated_at: new Date().toISOString() }).eq("id", p.id);
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token ?? "";
+    await fetch(`${API_BASE}/admin/presentations/${p.id}/published`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ published: !p.published }),
+    });
     void loadPresentations();
   };
 

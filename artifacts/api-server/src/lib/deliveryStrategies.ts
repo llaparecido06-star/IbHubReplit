@@ -40,17 +40,19 @@ export interface UserProfile {
  * Presentations are expected to be passed in canonical display order (sorted by created_at asc).
  * Slide-level `user_unlocked_slides` rows are used for persistence and serve as the
  * authoritative unlock record.
+ *
+ * Returns the number of newly unlocked slides (0 means nothing new was unlocked).
  */
 export async function applyDeliveryStrategy(
   userId: string,
   profile: UserProfile,
   strategy: DeliveryStrategy,
   presentations: PresentationGroup[],
-): Promise<void> {
-  if (strategy === "NONE" || presentations.length === 0) return;
+): Promise<number> {
+  if (strategy === "NONE" || presentations.length === 0) return 0;
 
   const allSlideIds = presentations.flatMap((p) => p.slides.map((s) => s.id));
-  if (allSlideIds.length === 0) return;
+  if (allSlideIds.length === 0) return 0;
 
   const { data: alreadyUnlocked } = await supabaseAdmin
     .from("user_unlocked_slides")
@@ -67,11 +69,11 @@ export async function applyDeliveryStrategy(
 
   if (strategy === "FULL_ACCESS") {
     const toUnlock = presentations.flatMap((p) => p.slides).filter((s) => !unlockedIds.has(s.id));
-    if (toUnlock.length === 0) return;
+    if (toUnlock.length === 0) return 0;
     await supabaseAdmin
       .from("user_unlocked_slides")
       .upsert(toUnlock.map((s) => ({ user_id: userId, slide_id: s.id })), { onConflict: "user_id,slide_id" });
-    return;
+    return toUnlock.length;
   }
 
   if (strategy === "SEQUENTIAL_MONTHLY") {
@@ -80,7 +82,7 @@ export async function applyDeliveryStrategy(
       [...p.slides].sort((a, b) => a.sequence_order - b.sequence_order),
     );
     const totalSlides = allSlides.length;
-    if (totalSlides === 0) return;
+    if (totalSlides === 0) return 0;
 
     // How many days has this user been active?
     const createdAt = new Date(profile.created_at);
@@ -92,23 +94,25 @@ export async function applyDeliveryStrategy(
     const targetCount = Math.min(totalSlides, Math.ceil(daysElapsed * slidesPerDay));
 
     const toUnlock = allSlides.slice(0, targetCount).filter((s) => !unlockedIds.has(s.id));
-    if (toUnlock.length === 0) return;
+    if (toUnlock.length === 0) return 0;
     await supabaseAdmin
       .from("user_unlocked_slides")
       .upsert(toUnlock.map((s) => ({ user_id: userId, slide_id: s.id })), { onConflict: "user_id,slide_id" });
-    return;
+    return toUnlock.length;
   }
 
   if (strategy === "RANDOM_DAILY") {
-    if (lockedPresentations.length === 0) return;
+    if (lockedPresentations.length === 0) return 0;
     const pick = lockedPresentations[Math.floor(Math.random() * lockedPresentations.length)];
     const toUnlock = pick.slides.filter((s) => !unlockedIds.has(s.id));
-    if (toUnlock.length === 0) return;
+    if (toUnlock.length === 0) return 0;
     await supabaseAdmin
       .from("user_unlocked_slides")
       .upsert(toUnlock.map((s) => ({ user_id: userId, slide_id: s.id })), { onConflict: "user_id,slide_id" });
-    return;
+    return toUnlock.length;
   }
+
+  return 0;
 }
 
 export { supabaseAdmin };
