@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
+import { sendPushToUser } from "../lib/pushUtils.js";
 
 const router: IRouter = Router();
 
@@ -326,7 +327,7 @@ router.post("/posts/:postId/poll/vote", async (req: Request, res: Response): Pro
 
   const { data: row, error: fetchError } = await supabaseAdmin
     .from("posts")
-    .select("poll")
+    .select("poll, user_id, company_page_id")
     .eq("id", postId)
     .single();
 
@@ -334,6 +335,9 @@ router.post("/posts/:postId/poll/vote", async (req: Request, res: Response): Pro
     res.status(404).json({ error: "Post or poll not found" });
     return;
   }
+
+  const postAuthorId: string = row.user_id;
+  const postCompanyId: string | null = row.company_page_id ?? null;
 
   const poll = row.poll as {
     options: { text: string; votes: number }[];
@@ -395,6 +399,66 @@ router.post("/posts/:postId/poll/vote", async (req: Request, res: Response): Pro
     .eq("id", postId);
 
   if (updateError) { res.status(500).json({ error: updateError.message }); return; }
+
+  // Notify the poll author when a NEW vote was added (i.e. newIndices contains
+  // an index that wasn't in prevIndices). Skip when the voter is the author.
+  // Insert an in-app notification of type "poll_vote" and dispatch a push.
+  // For company-page posts, route to the company owner (matching the trigger
+  // pattern used by notify_on_like).
+  const addedIndex = newIndices.find((i) => !prevIndices.includes(i));
+  if (addedIndex !== undefined) {
+    let recipientUserId: string = postAuthorId;
+    let targetCompanyId: string | null = null;
+    if (postCompanyId) {
+      const { data: company } = await supabaseAdmin
+        .from("company_pages")
+        .select("owner_id")
+        .eq("id", postCompanyId)
+        .maybeSingle();
+      if (company?.owner_id) {
+        recipientUserId = company.owner_id as string;
+        targetCompanyId = postCompanyId;
+      }
+    }
+
+    if (recipientUserId && recipientUserId !== userId) {
+      const chosenOptionText = poll.options[addedIndex]?.text ?? "";
+
+      // Fetch voter's display name for the push body.
+      const { data: voterProfile } = await supabaseAdmin
+        .from("profiles")
+        .select("full_name, username")
+        .eq("id", userId)
+        .maybeSingle();
+      const voterName: string =
+        voterProfile?.full_name ??
+        voterProfile?.username ??
+        "Alguém";
+
+      const { error: notifErr } = await supabaseAdmin
+        .from("notifications")
+        .insert({
+          user_id: recipientUserId,
+          actor_id: userId,
+          type: "poll_vote",
+          post_id: postId,
+          message: "votou na sua enquete",
+          target_company_id: targetCompanyId,
+          metadata: { option_index: addedIndex, option_text: chosenOptionText },
+        });
+      if (notifErr) {
+        req.log.warn({ err: notifErr, postId, userId }, "poll_vote notification insert failed");
+      }
+
+      // Fire-and-forget push notification (won't block the response).
+      void sendPushToUser({
+        userId: recipientUserId,
+        title: "Novo voto na sua enquete",
+        body: `${voterName} votou em "${chosenOptionText}"`,
+        data: { type: "poll_vote", postId },
+      });
+    }
+  }
 
   res.json({ poll: updatedPoll, indices: newIndices });
 });

@@ -36,6 +36,8 @@ const WINE_FIELDS: WineField[] = [
   { prefix: "🏠 Produtor:",   iconLib: "feather",  icon: "home",       label: "Produtor" },
   { prefix: "🌿 Uva/Casta:", iconLib: "feather",  icon: "layers",     label: "Uva/Casta" },
   { prefix: "📅 Safra:",      iconLib: "feather",  icon: "calendar",   label: "Safra" },
+  { prefix: "📍 Região:",     iconLib: "feather",  icon: "map-pin",    label: "Região" },
+  { prefix: "🌍 País:",       iconLib: "feather",  icon: "globe",      label: "País" },
   { prefix: "🏷️ EAN:",        iconLib: "feather",  icon: "tag",        label: "EAN" },
   { prefix: "⭐ Pontuação:",   iconLib: "mci",      icon: "star",       label: "Pontuação",    isScore: true },
   { prefix: "👃 Aroma:",       iconLib: "feather",  icon: "wind",       label: "Aroma" },
@@ -50,8 +52,35 @@ function normalizeEmoji(s: string): string {
   return s.replace(/\uFE0F/g, "");
 }
 
+function normalizeLegacyWineContent(content: string): string {
+  if (/^🍷 Degustação:/m.test(content)) return content;
+  const lines = content.split("\n");
+  if (lines.length === 0 || !/^⭐+\s+/.test(lines[0])) return content;
+  const out: string[] = [];
+  const firstLine = lines[0].replace(/^⭐+\s+/, "").trim();
+  if (firstLine) out.push(`🍷 Degustação: ${firstLine}`);
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    if (/·/.test(line) && /^[🍇📅🏭📍🌍]\s/.test(line)) {
+      for (const tok of line.split("·").map((t) => t.trim())) {
+        if (/^🍇\s/.test(tok))      out.push(`🌿 Uva/Casta: ${tok.replace(/^🍇\s+/, "")}`);
+        else if (/^📅\s/.test(tok)) out.push(`📅 Safra: ${tok.replace(/^📅\s+/, "")}`);
+        else if (/^🏭\s/.test(tok)) out.push(`🏠 Produtor: ${tok.replace(/^🏭\s+/, "")}`);
+        else if (/^📍\s/.test(tok)) out.push(`📍 Região: ${tok.replace(/^📍\s+/, "")}`);
+        else if (/^🌍\s/.test(tok)) out.push(`🌍 País: ${tok.replace(/^🌍\s+/, "")}`);
+      }
+      continue;
+    }
+    if (/^📊 Pontuação:/.test(line))      out.push(line.replace(/^📊/, "⭐"));
+    else if (/^🍷 Notas:/.test(line))     out.push(line.replace(/^🍷 Notas:/, "📝 Notas:"));
+    else                                   out.push(line);
+  }
+  return out.join("\n");
+}
+
 function parseWineContent(content: string): { field: WineField; value: string }[] {
-  const lines = content.split("\n").map((l) => l.trim()).filter(Boolean);
+  const lines = normalizeLegacyWineContent(content).split("\n").map((l) => l.trim()).filter(Boolean);
   const result: { field: WineField; value: string }[] = [];
   for (const line of lines) {
     const normLine = normalizeEmoji(line);

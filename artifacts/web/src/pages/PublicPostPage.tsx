@@ -2,6 +2,11 @@ import React, { useEffect, useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { fetchPostById, Post } from "@/services/api";
+import { WineTastingCardWeb } from "@/pages/AppFeedPage";
+
+function looksLikeWine(content: string): boolean {
+  return /^🍷 Degustação:/m.test(content) || (/^⭐/.test(content) && /Pontuação/.test(content));
+}
 
 const GOLD  = "#c9a84c";
 const NAVY  = "#0d1b2a";
@@ -188,9 +193,13 @@ export default function PublicPostPage() {
 
             {/* Post content */}
             <div style={{ padding: "16px 20px" }}>
-              <p style={{ fontSize: 15, color: NAVY, lineHeight: 1.65, margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                {post.content}
-              </p>
+              {looksLikeWine(post.content) ? (
+                <WineTastingCardWeb content={post.content} />
+              ) : (
+                <p style={{ fontSize: 15, color: NAVY, lineHeight: 1.65, margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                  {post.content}
+                </p>
+              )}
             </div>
 
             {/* Image */}

@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -21,6 +22,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@/components/ui/Icon";
 import { WineTastingCard, canParseWine } from "@/components/feed/PostRichContent";
+import { PollBlock } from "@/components/feed/PollBlock";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth, supabase } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
@@ -29,7 +31,7 @@ import type { AppComment } from "@/services/api";
 import { sendMentionNotifications } from "@/services/api";
 import { MentionInput } from "@/components/ui/MentionInput";
 import { friendlyErrorMessage } from "@/hooks/useAsyncAction";
-import { Post, AdaptiveImage } from "@/components/feed/PostCard";
+import { Post, AdaptiveImage, buildPostShareUrl } from "@/components/feed/PostCard";
 import { LikesModal } from "@/components/feed/LikesModal";
 import { formatRelativeDate } from "@/utils/dateUtils";
 
@@ -458,6 +460,57 @@ export default function PostDetailScreen() {
     API.toggleBookmark(post.id, user.id, post.is_bookmarked ?? false);
   };
 
+  const handleVotePoll = async (postId: string, optionIndex: number) => {
+    if (!user?.id) return;
+    const result = await API.voteOnPoll(postId, user.id, optionIndex);
+    if (!result) return;
+    setPost(prev => {
+      if (!prev || !prev.poll) return prev;
+      return {
+        ...prev,
+        poll: {
+          ...prev.poll,
+          options: result.options,
+          total_votes: result.total_votes,
+          user_voted_indices: result.indices,
+          user_voted_index: result.indices[0] ?? null,
+          user_votes: result.user_votes,
+        },
+      };
+    });
+  };
+
+  const handleSharePost = async () => {
+    if (!post) return;
+    const postUrl = buildPostShareUrl(post.id);
+    const shareText = `Veja esta publicação no ibhub:\n\n${post.content?.slice(0, 120) ?? ""}\n\n${postUrl}`;
+    if (Platform.OS === "web") {
+      const nav = typeof navigator !== "undefined" ? navigator : null;
+      if (nav?.share) {
+        try {
+          await nav.share({ title: "Compartilhar publicação", text: shareText, url: postUrl });
+          return;
+        } catch {
+          // user cancelled or share failed → fall through to clipboard
+        }
+      }
+      try {
+        await nav?.clipboard.writeText(postUrl);
+        Alert.alert("Link copiado!", "Link da publicação copiado para a área de transferência.");
+      } catch {
+        Alert.alert("Erro", "Não foi possível copiar o link. Copie manualmente: " + postUrl);
+      }
+      return;
+    }
+    try {
+      await Share.share({
+        message: shareText,
+        url: postUrl,
+        title: "Compartilhar publicação",
+      });
+    } catch {}
+  };
+
   const renderItem = ({ item, index }: { item: FlatItem; index: number }) => {
     const isHighlighted = item.id === highlightCommentId;
     const isTemp = item.id.startsWith("tmp_");
@@ -568,7 +621,7 @@ export default function PostDetailScreen() {
           <Feather name="arrow-left" size={24} color={colors.foreground} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Publicação</Text>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={handleSharePost} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Feather name="share-2" size={22} color={colors.foreground} />
         </TouchableOpacity>
       </View>
@@ -618,6 +671,11 @@ export default function PostDetailScreen() {
                   <WineTastingCard content={post.content} />
                 ) : (
                   <Text style={[styles.postContentPreview, { color: colors.foreground }]}>{post.content}</Text>
+                )}
+
+                {/* Poll */}
+                {post.poll && (
+                  <PollBlock post={post} onVote={handleVotePoll} />
                 )}
 
                 {/* Images */}

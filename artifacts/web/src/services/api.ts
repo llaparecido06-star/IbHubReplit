@@ -3160,6 +3160,10 @@ export async function fetchPostById(postId: string, currentUserId?: string, comp
     if (error || !data) return null;
     const profileMap = await _fetchProfilesMap([data.user_id]);
     const post = _normalisePost(data, profileMap);
+    if (post.poll && currentUserId) {
+      const indices = normalizePollIndices(post.poll.user_votes, currentUserId);
+      post.poll = { ...post.poll, user_voted_indices: indices, user_voted_index: indices[0] ?? null };
+    }
     if (currentUserId) {
       const likeQuery = companyPageId
         ? supabase.from("likes").select("reaction_type").eq("post_id", postId).eq("company_page_id", companyPageId).maybeSingle()

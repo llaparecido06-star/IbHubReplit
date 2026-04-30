@@ -12,7 +12,11 @@ export default defineConfig({
   define: {
     "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(process.env.EXPO_PUBLIC_SUPABASE_URL ?? ""),
     "import.meta.env.VITE_SUPABASE_ANON_KEY": JSON.stringify(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? ""),
-    "import.meta.env.VITE_API_URL": JSON.stringify(process.env.EXPO_PUBLIC_API_URL ?? ""),
+    // Intentionally do NOT inject VITE_API_URL here. EXPO_PUBLIC_API_URL is for
+    // the mobile app and may point at a domain that does not proxy /api in
+    // dev. The web app uses a same-origin runtime fallback so it always talks
+    // to the API through the current proxied domain (works in dev preview and
+    // in deployed REPLIT_DOMAINS).
   },
   plugins: [
     react(),

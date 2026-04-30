@@ -484,7 +484,7 @@ function MiniPostCard({ post, onDelete, onEdit, onPollUpdate, onLike, onBookmark
         </button>
 
         <button
-          onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}/p/${post.id}`).catch(() => {}); }}
+          onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}/post/${post.id}`).catch(() => {}); }}
           style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: "none", border: "none", cursor: "pointer", padding: "10px 8px", fontSize: 13, fontWeight: 600, color: MUTED }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}

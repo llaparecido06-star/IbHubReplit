@@ -35,6 +35,7 @@ const TYPE_META: Record<string, { emoji: string; color: string; label: string }>
   follow:        { emoji: "➕", color: "#2ecc71", label: "começou a seguir você" },
   connection:    { emoji: "🤝", color: GOLD,       label: "enviou pedido de conexão" },
   mention:       { emoji: "@",  color: "#9b59b6", label: "mencionou você" },
+  poll_vote:     { emoji: "📊", color: "#0ea5e9", label: "votou na sua enquete" },
 };
 
 function Avatar({ src, name, size = 46 }: { src?: string | null; name: string; size?: number }) {
@@ -63,7 +64,7 @@ function NotifRow({ notif, onRead, onAccept, onReject }: {
   const handleClick = () => {
     if (!notif.read) onRead(notif.id);
     if (notif.type === "connection" && notif.actor?.id) setLocation(`/app/usuario/${notif.actor.id}`);
-    else if (notif.post_id) setLocation(`/app`);
+    else if (notif.post_id) setLocation(`/app/posts/${notif.post_id}`);
   };
 
   return (

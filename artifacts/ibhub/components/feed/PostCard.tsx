@@ -27,10 +27,15 @@ import { formatRelativeDate } from "@/utils/dateUtils";
 import { AntDesign, Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { WineTastingCard, canParseWine } from "@/components/feed/PostRichContent";
+import { PollBlock } from "@/components/feed/PollBlock";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { createReport, hidePost, blockUser, fetchConversations, sendMessage, checkIsFollowing, toggleFollow, fetchPollVoters } from "@/services/api";
+import { createReport, hidePost, blockUser, fetchConversations, sendMessage, checkIsFollowing, toggleFollow } from "@/services/api";
 import type { AppConversation } from "@/services/api";
+
+export function buildPostShareUrl(postId: string): string {
+  return `https://www.ibhub.com.br/post/${postId}`;
+}
 
 export type ReactionType = "saude" | "bravo" | "destaque" | "incrivel";
 
@@ -399,6 +404,7 @@ function pollExpiryLabel(expiresAt?: string | null): string {
 }
 
 function detectPostType(content: string): "wine" | "poll" | "text" {
+  if (/^🍷 Degustação:/m.test(content)) return "wine";
   if (/^⭐/.test(content) && /Pontuação/.test(content)) return "wine";
   return "text";
 }
@@ -564,9 +570,6 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
   const [expanded, setExpanded]                 = useState(false);
   const [showReactions, setShowReactions]       = useState(false);
   const [showShareSheet, setShowShareSheet]     = useState(false);
-  const [showPollVoters, setShowPollVoters]     = useState(false);
-  const [pollVoters, setPollVoters]             = useState<{ id: string; full_name: string | null; avatar_url: string | null; username: string | null; optionIndex: number }[]>([]);
-  const [loadingPollVoters, setLoadingPollVoters] = useState(false);
   const [showShareChat, setShowShareChat]       = useState(false);
   const [conversations, setConversations]       = useState<AppConversation[]>([]);
   const [loadingConvos, setLoadingConvos]       = useState(false);
@@ -675,10 +678,20 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
     : (process.env.EXPO_PUBLIC_API_URL ?? "").replace(/\/api$/, "");
 
   const handleShare = async () => {
-    const postUrl = `${WEB_BASE}/p/${post.id}`;
+    const postUrl = buildPostShareUrl(post.id);
+    const shareText = `Veja esta publicação no ibhub:\n\n${post.content?.slice(0, 120) ?? ""}\n\n${postUrl}`;
     if (Platform.OS === "web") {
+      const nav = typeof navigator !== "undefined" ? navigator : null;
+      if (nav?.share) {
+        try {
+          await nav.share({ title: "Compartilhar publicação", text: shareText, url: postUrl });
+          return;
+        } catch {
+          // user cancelled or share failed → fall through to clipboard
+        }
+      }
       try {
-        await navigator.clipboard.writeText(postUrl);
+        await nav?.clipboard.writeText(postUrl);
         Alert.alert("Link copiado!", "Link da publicação copiado para a área de transferência.");
       } catch {
         Alert.alert("Erro", "Não foi possível copiar o link. Copie manualmente: " + postUrl);
@@ -687,7 +700,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
     }
     try {
       await Share.share({
-        message: `Veja esta publicação no ibhub:\n\n${post.content?.slice(0, 120) ?? ""}\n\n${postUrl}`,
+        message: shareText,
         url: postUrl,
         title: "Compartilhar publicação",
       });
@@ -738,11 +751,9 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
     }
   };
 
-  const handleVote = (optionIndex: number) => {
-    if (post.poll?.closed) return;
-    if (pollIsExpired(post.poll?.expires_at)) return;
+  const handleVote = (postId: string, optionIndex: number) => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onVote?.(post.id, optionIndex);
+    onVote?.(postId, optionIndex);
   };
 
   const author = post.author;
@@ -879,119 +890,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
 
       {post.poll && (
         <View style={styles.pollWrap}>
-          {post.poll.options.map((opt, i) => {
-            const total    = post.poll!.total_votes;
-            const pct      = total > 0 ? Math.round((opt.votes / total) * 100) : 0;
-            const votedIndices = post.poll!.user_voted_indices ?? (post.poll!.user_voted_index != null ? [post.poll!.user_voted_index] : []);
-            const hasVoted = votedIndices.length > 0;
-            const isMyVote = votedIndices.includes(i);
-            const isWinner = hasVoted && opt.votes === Math.max(...post.poll!.options.map(o => o.votes)) && opt.votes > 0;
-
-            return (
-              <TouchableOpacity
-                key={i}
-                activeOpacity={post.poll!.closed ? 1 : 0.75}
-                onPress={() => handleVote(i)}
-                style={[
-                  styles.pollOption,
-                  {
-                    borderColor: isMyVote
-                      ? colors.gold
-                      : isWinner
-                      ? colors.navy + "80"
-                      : colors.border,
-                    borderWidth: isMyVote || isWinner ? 1.5 : 1,
-                    backgroundColor: colors.background,
-                  },
-                ]}
-              >
-                {hasVoted && pct > 0 && (
-                  <View
-                    style={[
-                      styles.pollFill,
-                      {
-                        width: `${pct}%` as any,
-                        backgroundColor: isMyVote ? colors.gold + "30" : colors.secondary,
-                      },
-                    ]}
-                  />
-                )}
-                <View style={styles.pollRow}>
-                  <View style={styles.pollLeft}>
-                    {/* Radio / checkbox indicator — always visible */}
-                    {isMyVote ? (
-                      post.poll!.allow_multiple ? (
-                        <AntDesign name={"checksquare" as any} size={18} color={colors.gold} style={{ marginRight: 8 }} />
-                      ) : (
-                        <AntDesign name={"checkcircle" as any} size={18} color={colors.gold} style={{ marginRight: 8 }} />
-                      )
-                    ) : (
-                      post.poll!.allow_multiple ? (
-                        <AntDesign name={"checksquareo" as any} size={18} color={colors.mutedForeground} style={{ marginRight: 8 }} />
-                      ) : (
-                        <AntDesign name={"circleo" as any} size={18} color={colors.mutedForeground} style={{ marginRight: 8 }} />
-                      )
-                    )}
-                    <Text
-                      style={[
-                        styles.pollOptionText,
-                        { color: colors.foreground, fontWeight: isMyVote ? "700" : "500" },
-                      ]}
-                    >
-                      {opt.text}
-                    </Text>
-                  </View>
-                  {hasVoted && (
-                    <Text style={[styles.pollPct, { color: isMyVote ? colors.gold : colors.mutedForeground, fontWeight: isMyVote ? "700" : "400" }]}>
-                      {pct}%
-                    </Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-
-          <View style={styles.pollFooter}>
-            <MaterialCommunityIcons name="poll" size={13} color={colors.mutedForeground} />
-            <Text style={[styles.pollFooterText, { color: colors.mutedForeground }]}>
-              {post.poll.total_votes} {post.poll.total_votes === 1 ? "voto" : "votos"}
-              {(post.poll.user_voted_indices?.length ?? (post.poll.user_voted_index != null ? 1 : 0)) === 0 && !post.poll.closed && !pollIsExpired(post.poll.expires_at)
-                ? (post.poll.allow_multiple ? "  ·  Selecione as opções" : "  ·  Toque para votar")
-                : ""}
-            </Text>
-            {post.poll.expires_at && !post.poll.closed && (
-              <Text style={[styles.pollFooterText, { color: colors.mutedForeground, marginLeft: 4 }]}>
-                · {pollExpiryLabel(post.poll.expires_at)}
-              </Text>
-            )}
-            <View style={{ flex: 1 }} />
-            {post.poll.total_votes > 0 && (
-              (post.poll.user_voted_indices?.length ?? (post.poll.user_voted_index != null ? 1 : 0)) > 0
-              || post.poll.closed
-              || pollIsExpired(post.poll.expires_at)
-            ) && (
-              <TouchableOpacity
-                onPress={async () => {
-                  setShowPollVoters(true);
-                  if (pollVoters.length === 0 && !loadingPollVoters) {
-                    setLoadingPollVoters(true);
-                    const v = await fetchPollVoters(post.id);
-                    setPollVoters(v);
-                    setLoadingPollVoters(false);
-                  }
-                }}
-                style={{ marginRight: 8 }}
-              >
-                <Text style={{ fontSize: 11, color: colors.primary }}>Ver votos</Text>
-              </TouchableOpacity>
-            )}
-            {(post.poll.closed || pollIsExpired(post.poll.expires_at)) && (
-              <View style={[styles.closedBadge, { backgroundColor: colors.border + "80" }]}>
-                <Feather name="lock" size={10} color={colors.mutedForeground} />
-                <Text style={[styles.closedText, { color: colors.mutedForeground }]}>Encerrada</Text>
-              </View>
-            )}
-          </View>
+          <PollBlock post={post} onVote={handleVote} />
         </View>
       )}
 
@@ -1180,7 +1079,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
               style={shareOptionStyles.option}
               onPress={async () => {
                 setShowShareSheet(false);
-                const postUrl = `${WEB_BASE}/p/${post.id}`;
+                const postUrl = buildPostShareUrl(post.id);
                 const text = `Veja esta publicação no ibhub:\n\n${post.content?.slice(0, 120) ?? ""}\n\n${postUrl}`;
                 const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(text)}`;
                 const canOpen = await Linking.canOpenURL(whatsappUrl);
@@ -1204,7 +1103,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
               style={shareOptionStyles.option}
               onPress={async () => {
                 setShowShareSheet(false);
-                const postUrl = `${WEB_BASE}/p/${post.id}`;
+                const postUrl = buildPostShareUrl(post.id);
                 const canOpen = await Linking.canOpenURL("instagram://");
                 if (canOpen) {
                   await Share.share({ message: postUrl, url: postUrl });
@@ -1330,51 +1229,6 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
         </Pressable>
       </Modal>
 
-      {/* ── Poll Voters Modal ── */}
-      <Modal visible={showPollVoters} transparent animationType="fade" onRequestClose={() => setShowPollVoters(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" }} onPress={() => setShowPollVoters(false)}>
-          <Pressable style={{ backgroundColor: colors.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "70%", paddingBottom: 24 }} onPress={() => {}}>
-            <View style={{ alignItems: "center", paddingVertical: 12 }}>
-              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border }} />
-            </View>
-            <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground, paddingHorizontal: 20, marginBottom: 4 }}>
-              Votos · {post.poll?.total_votes ?? 0} {(post.poll?.total_votes ?? 0) === 1 ? "voto" : "votos"}
-            </Text>
-            <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8 }}>
-              {loadingPollVoters ? (
-                <Text style={{ color: colors.mutedForeground, fontSize: 14 }}>Carregando…</Text>
-              ) : pollVoters.length === 0 ? (
-                <Text style={{ color: colors.mutedForeground, fontSize: 14 }}>Nenhum voto ainda.</Text>
-              ) : (
-                post.poll?.options.map((opt, optIdx) => {
-                  const optVoters = pollVoters.filter(v => v.optionIndex === optIdx);
-                  if (optVoters.length === 0) return null;
-                  return (
-                    <View key={optIdx} style={{ marginBottom: 16 }}>
-                      <Text style={{ fontSize: 13, fontWeight: "600", color: colors.mutedForeground, marginBottom: 8 }}>
-                        {opt.text} · {optVoters.length}
-                      </Text>
-                      {optVoters.map(v => (
-                        <TouchableOpacity
-                          key={v.id}
-                          onPress={() => { v.id === currentUserId ? router.push("/(tabs)/profile" as any) : router.push(`/profile/${v.id}` as any); }}
-                          activeOpacity={0.7}
-                          style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10, paddingVertical: 4 }}
-                        >
-                          <Avatar uri={v.avatar_url} name={v.full_name ?? v.username ?? "?"} size={34} />
-                          <Text style={{ fontSize: 14, color: colors.foreground, fontWeight: "500" }}>
-                            {v.full_name ?? v.username ?? "Usuário"}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  );
-                })
-              )}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </View>
   );
 }

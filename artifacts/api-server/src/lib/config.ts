@@ -73,6 +73,7 @@ export const config: AppConfig = parseEnv();
  */
 export function buildAllowedOrigins(): (string | RegExp)[] | true {
   const origins = new Set<string>();
+  const regexes: RegExp[] = [];
 
   if (config.REPLIT_DOMAINS) {
     for (const d of config.REPLIT_DOMAINS.split(",").map((s) => s.trim()).filter(Boolean)) {
@@ -85,6 +86,14 @@ export function buildAllowedOrigins(): (string | RegExp)[] | true {
     if (config.REPLIT_DEV_DOMAIN) {
       origins.add(`https://${config.REPLIT_DEV_DOMAIN}`);
       origins.add(`http://${config.REPLIT_DEV_DOMAIN}`);
+      // The dev domain often has a "-smovk05m" style suffix that may be present
+      // or absent depending on how the proxy resolves the request. Build a
+      // regex that matches the same REPL stem with or without that suffix on
+      // any *.replit.dev subdomain.
+      const stem = config.REPLIT_DEV_DOMAIN.split(".")[0];
+      const baseStem = stem.replace(/-[^-]+$/, "");
+      const escaped = baseStem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      regexes.push(new RegExp(`^https?://${escaped}(-[^.]+)?\\.[^.]+\\.replit\\.dev$`));
     }
     if (config.REPLIT_EXPO_DEV_DOMAIN) {
       origins.add(`https://${config.REPLIT_EXPO_DEV_DOMAIN}`);
@@ -95,6 +104,6 @@ export function buildAllowedOrigins(): (string | RegExp)[] | true {
     origins.add("http://127.0.0.1");
   }
 
-  if (origins.size === 0 && config.NODE_ENV !== "production") return true;
-  return Array.from(origins);
+  if (origins.size === 0 && regexes.length === 0 && config.NODE_ENV !== "production") return true;
+  return [...Array.from(origins), ...regexes];
 }

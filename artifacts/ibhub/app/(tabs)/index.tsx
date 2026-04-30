@@ -661,19 +661,23 @@ export default function FeedScreen() {
       return;
     }
 
-    const stars = "⭐".repeat(wineStars);
-    const metaLine = [
-      wineGrape.trim()    ? `🍇 ${wineGrape.trim()}`    : "",
-      wineSafra.trim()    ? `📅 ${wineSafra.trim()}`     : "",
-      wineProducer.trim() ? `🏭 ${wineProducer.trim()}`  : "",
-      wineRegion.trim()   ? `📍 ${wineRegion.trim()}`    : "",
-      wineCountry.trim()  ? `🌍 ${wineCountry.trim()}`   : "",
-    ].filter(Boolean).join(" · ");
-    const tags = selectedTags.length > 0 ? `\n🍷 Notas: ${selectedTags.join(", ")}` : "";
-    const harmonizacao = wineHarmonizacao.trim() ? `\n🍽️ Harmonização: ${wineHarmonizacao.trim()}` : "";
-    const obs = wineObs.trim() ? `\n📝 ${wineObs.trim()}` : "";
-    const eanLine = wineEan.trim() ? `\n🏷️ EAN: ${wineEan.trim()}` : "";
-    const content = `${stars} ${wineName.trim()}\n${metaLine ? metaLine + "\n" : ""}📊 Pontuação: ${wineScore}/100${tags}${harmonizacao}${eanLine}${obs}`;
+    // Build content using canonical wine field prefixes recognized by
+    // parseWineContent (PostRichContent.tsx). This guarantees the post is
+    // rendered as a structured WineTastingCard in feed and detail screens
+    // (and on the web).
+    const lines: string[] = [];
+    lines.push(`🍷 Degustação: ${wineName.trim()}`);
+    if (wineProducer.trim()) lines.push(`🏠 Produtor: ${wineProducer.trim()}`);
+    if (wineGrape.trim())    lines.push(`🌿 Uva/Casta: ${wineGrape.trim()}`);
+    if (wineSafra.trim())    lines.push(`📅 Safra: ${wineSafra.trim()}`);
+    if (wineRegion.trim())   lines.push(`📍 Região: ${wineRegion.trim()}`);
+    if (wineCountry.trim())  lines.push(`🌍 País: ${wineCountry.trim()}`);
+    if (wineEan.trim())      lines.push(`🏷️ EAN: ${wineEan.trim()}`);
+    lines.push(`⭐ Pontuação: ${wineScore}/100`);
+    if (selectedTags.length > 0)    lines.push(`📝 Notas: ${selectedTags.join(", ")}`);
+    if (wineHarmonizacao.trim())    lines.push(`🍽️ Harmonização: ${wineHarmonizacao.trim()}`);
+    if (wineObs.trim())             lines.push(`📝 ${wineObs.trim()}`);
+    const content = lines.join("\n");
 
     let uploadedImageUrl: string | null = null;
     if (wineImageUri) {

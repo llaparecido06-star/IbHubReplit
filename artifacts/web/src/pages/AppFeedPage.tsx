@@ -103,6 +103,8 @@ const WINE_FIELDS: WineField[] = [
   { prefix: "🏠 Produtor:",   icon: "🏠", label: "Produtor" },
   { prefix: "🌿 Uva/Casta:", icon: "🍃", label: "Uva/Casta" },
   { prefix: "📅 Safra:",      icon: "📅", label: "Safra" },
+  { prefix: "📍 Região:",     icon: "📍", label: "Região" },
+  { prefix: "🌍 País:",       icon: "🌍", label: "País" },
   { prefix: "🏷️ EAN:",        icon: "🏷", label: "EAN" },
   { prefix: "⭐ Pontuação:",   icon: "⭐", label: "Pontuação", isScore: true },
   { prefix: "👃 Aroma:",       icon: "💨", label: "Aroma" },
@@ -111,8 +113,35 @@ const WINE_FIELDS: WineField[] = [
   { prefix: "📝 Notas:",       icon: "📄", label: "Notas" },
 ];
 
+function normalizeLegacyWineContent(content: string): string {
+  if (/^🍷 Degustação:/m.test(content)) return content;
+  const lines = content.split("\n");
+  if (lines.length === 0 || !/^⭐+\s+/.test(lines[0])) return content;
+  const out: string[] = [];
+  const firstLine = lines[0].replace(/^⭐+\s+/, "").trim();
+  if (firstLine) out.push(`🍷 Degustação: ${firstLine}`);
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    if (/·/.test(line) && /^[🍇📅🏭📍🌍]\s/.test(line)) {
+      for (const tok of line.split("·").map(t => t.trim())) {
+        if (/^🍇\s/.test(tok))      out.push(`🌿 Uva/Casta: ${tok.replace(/^🍇\s+/, "")}`);
+        else if (/^📅\s/.test(tok)) out.push(`📅 Safra: ${tok.replace(/^📅\s+/, "")}`);
+        else if (/^🏭\s/.test(tok)) out.push(`🏠 Produtor: ${tok.replace(/^🏭\s+/, "")}`);
+        else if (/^📍\s/.test(tok)) out.push(`📍 Região: ${tok.replace(/^📍\s+/, "")}`);
+        else if (/^🌍\s/.test(tok)) out.push(`🌍 País: ${tok.replace(/^🌍\s+/, "")}`);
+      }
+      continue;
+    }
+    if (/^📊 Pontuação:/.test(line))      out.push(line.replace(/^📊/, "⭐"));
+    else if (/^🍷 Notas:/.test(line))     out.push(line.replace(/^🍷 Notas:/, "📝 Notas:"));
+    else                                   out.push(line);
+  }
+  return out.join("\n");
+}
+
 function parseWineContent(content: string): { field: WineField; value: string }[] {
-  return content.split("\n").map(l => l.trim()).filter(Boolean).flatMap(line => {
+  return normalizeLegacyWineContent(content).split("\n").map(l => l.trim()).filter(Boolean).flatMap(line => {
     for (const field of WINE_FIELDS) {
       if (line.startsWith(field.prefix)) {
         const value = line.slice(field.prefix.length).trim();
@@ -123,7 +152,7 @@ function parseWineContent(content: string): { field: WineField; value: string }[
   });
 }
 
-function WineTastingCardWeb({ content }: { content: string }) {
+export function WineTastingCardWeb({ content }: { content: string }) {
   const parsed = parseWineContent(content);
   if (parsed.length === 0) return null;
   const titleEntry = parsed.find(p => p.field.isTitle);
@@ -214,7 +243,7 @@ function reactionColor(r?: ReactionType | null): string {
 }
 
 /* ─── PollDisplay ───────────────────────── */
-function PollDisplay({ poll, postId, currentUserId, onVote }: {
+export function PollDisplay({ poll, postId, currentUserId, onVote }: {
   poll: Poll;
   postId: string;
   currentUserId: string;
@@ -223,6 +252,7 @@ function PollDisplay({ poll, postId, currentUserId, onVote }: {
   const [, setLocation] = useLocation();
   const [voting, setVoting] = useState(false);
   const [showVoters, setShowVoters] = useState(false);
+  const [focusedOption, setFocusedOption] = useState<number | null>(null);
   const [voters, setVoters] = useState<{ id: string; full_name: string | null; avatar_url: string | null; username: string | null; optionIndex: number }[]>([]);
   const [loadingVoters, setLoadingVoters] = useState(false);
 
@@ -230,6 +260,7 @@ function PollDisplay({ poll, postId, currentUserId, onVote }: {
   const hasVoted = votedIndices.length > 0;
   const isExpired = poll.expires_at ? new Date(poll.expires_at) < new Date() : false;
   const isClosed = poll.closed || isExpired;
+  const lockedFromVoting = isClosed;
   const total = poll.total_votes;
 
   const fmtExpiry = (iso: string) => {
@@ -244,22 +275,40 @@ function PollDisplay({ poll, postId, currentUserId, onVote }: {
   };
 
   const handleVote = async (i: number) => {
-    if (voting || isClosed) return;
+    if (voting || lockedFromVoting) return;
     setVoting(true);
     const updated = await voteOnFeedPoll(postId, currentUserId, i);
     if (updated) onVote(postId, updated);
     setVoting(false);
   };
 
-  const handleShowVoters = async () => {
-    if (!hasVoted && !isClosed) return;
-    setShowVoters(true);
+  const loadVoters = async () => {
     if (voters.length === 0 && poll.user_votes && Object.keys(poll.user_votes).length > 0) {
       setLoadingVoters(true);
       const ids = Object.keys(poll.user_votes);
       const profiles = await fetchPollVoters(ids);
-      setVoters(profiles.map(p => ({ ...p, optionIndex: poll.user_votes![p.id] as number })));
+      const expanded: typeof voters = [];
+      for (const p of profiles) {
+        const raw = poll.user_votes![p.id];
+        const indices = Array.isArray(raw) ? raw : (typeof raw === "number" ? [raw] : []);
+        for (const idx of indices) expanded.push({ ...p, optionIndex: idx });
+      }
+      setVoters(expanded);
       setLoadingVoters(false);
+    }
+  };
+
+  const handleShowVoters = async (optionIndex: number | null) => {
+    setFocusedOption(optionIndex);
+    setShowVoters(true);
+    await loadVoters();
+  };
+
+  const handleOptionClick = (i: number) => {
+    if (lockedFromVoting) {
+      void handleShowVoters(i);
+    } else {
+      void handleVote(i);
     }
   };
 
@@ -272,11 +321,17 @@ function PollDisplay({ poll, postId, currentUserId, onVote }: {
           const showBar = hasVoted || isClosed;
           return (
             <div key={i}
-              onClick={() => handleVote(i)}
+              onClick={() => handleOptionClick(i)}
+              onContextMenu={(e) => {
+                if (opt.votes > 0) {
+                  e.preventDefault();
+                  void handleShowVoters(i);
+                }
+              }}
               style={{
                 position: "relative", borderRadius: 10, overflow: "hidden",
                 border: `2px solid ${isMyVote ? GOLD : BORDER}`,
-                cursor: (!isClosed && !voting) ? "pointer" : "default",
+                cursor: (lockedFromVoting && opt.votes > 0) || (!lockedFromVoting && !voting) ? "pointer" : "default",
                 background: WHITE,
               }}
             >
@@ -320,12 +375,12 @@ function PollDisplay({ poll, postId, currentUserId, onVote }: {
           <span>· {fmtExpiry(poll.expires_at)}</span>
         )}
         {isClosed && <span style={{ color: "#dc2626", fontWeight: 700 }}>· Encerrada</span>}
-        {(hasVoted || isClosed) && total > 0 && (
+        {total > 0 && (
           <button
-            onClick={handleShowVoters}
+            onClick={() => handleShowVoters(null)}
             style={{ background: "none", border: "none", color: GOLD, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0, marginLeft: "auto" }}
           >
-            Ver quem votou
+            Ver todos os votos
           </button>
         )}
       </div>
@@ -336,19 +391,26 @@ function PollDisplay({ poll, postId, currentUserId, onVote }: {
           <div style={{ background: WHITE, borderRadius: 16, width: "90%", maxWidth: 420, maxHeight: "80vh", overflowY: "auto", padding: 20, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}
             onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: NAVY }}>Votos ({total})</h3>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: NAVY }}>
+                {focusedOption != null
+                  ? `Votos · ${poll.options[focusedOption]?.text ?? ""}`
+                  : `Todos os votos (${total})`}
+              </h3>
               <button onClick={() => setShowVoters(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: MUTED }}>×</button>
             </div>
             {poll.options.map((opt, i) => {
+              if (focusedOption != null && i !== focusedOption) return null;
               const optVoters = voters.filter(v => v.optionIndex === i);
               const pct = total > 0 ? Math.round((opt.votes / total) * 100) : 0;
               if (opt.votes === 0 && !loadingVoters) return null;
               return (
                 <div key={i} style={{ marginBottom: 16 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{opt.text}</span>
-                    <span style={{ fontSize: 12, color: MUTED }}>{opt.votes} voto{opt.votes !== 1 ? "s" : ""} · {pct}%</span>
-                  </div>
+                  {focusedOption == null && (
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{opt.text}</span>
+                      <span style={{ fontSize: 12, color: MUTED }}>{opt.votes} voto{opt.votes !== 1 ? "s" : ""} · {pct}%</span>
+                    </div>
+                  )}
                   {loadingVoters ? (
                     <div style={{ fontSize: 12, color: MUTED }}>Carregando...</div>
                   ) : optVoters.map(v => (
@@ -421,7 +483,7 @@ function PostCard({
   const displayContent = isLong && !expanded ? content.slice(0, CUTOFF).trimEnd() + "…" : content;
 
   const [, setLocation] = useLocation();
-  const isWinePost = /^⭐/.test(content) && /Pontuação/.test(content);
+  const isWinePost = /^🍷 Degustação:/m.test(content) || (/^⭐/.test(content) && /Pontuação/.test(content));
   const companyPage = post.company_page ?? null;
   const authorName = companyPage ? companyPage.name : (post.author?.full_name ?? "Usuário");
   const authorAvatar = companyPage ? companyPage.avatar_url : post.author?.avatar_url;
@@ -732,7 +794,17 @@ function PostCard({
 
         <div ref={shareRef} style={{ flex: 1, position: "relative" }}>
           <button
-            onClick={() => setShowShare(v => !v)}
+            onClick={async () => {
+              const shareUrl = `https://www.ibhub.com.br/post/${post.id}`;
+              if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+                try {
+                  await navigator.share({ url: shareUrl, title: "ibhub" });
+                  return;
+                } catch {
+                }
+              }
+              setShowShare(v => !v);
+            }}
             style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: "none", border: "none", cursor: "pointer", padding: "10px 8px", fontSize: 13, fontWeight: 600, color: showShare ? GOLD : MUTED }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}0d`; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
@@ -748,12 +820,15 @@ function PostCard({
               }}
               onMouseLeave={() => setShowShare(false)}
             >
-              {[
-                { label: "Copiar link", icon: "🔗", action: () => { navigator.clipboard.writeText(`https://ibhub.app/post/${post.id}`); setShowShare(false); } },
-                { label: "WhatsApp", icon: "💬", action: () => { window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent("https://ibhub.app/post/" + post.id)}`); setShowShare(false); } },
-                { label: "Instagram DM", icon: "📸", action: () => { window.open("https://instagram.com/direct/inbox/"); setShowShare(false); } },
-                { label: "Enviar no chat", icon: "✉️", action: () => { setLocation(`/app/mensagens?share=${post.id}`); setShowShare(false); } },
-              ].map(item => (
+              {(() => {
+                const shareUrl = `https://www.ibhub.com.br/post/${post.id}`;
+                return [
+                  { label: "Copiar link", icon: "🔗", action: () => { navigator.clipboard.writeText(shareUrl); setShowShare(false); } },
+                  { label: "WhatsApp", icon: "💬", action: () => { window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(shareUrl)}`); setShowShare(false); } },
+                  { label: "Instagram DM", icon: "📸", action: () => { window.open("https://instagram.com/direct/inbox/"); setShowShare(false); } },
+                  { label: "Enviar no chat", icon: "✉️", action: () => { setLocation(`/app/mensagens?share=${post.id}`); setShowShare(false); } },
+                ];
+              })().map(item => (
                 <button
                   key={item.label}
                   onClick={item.action}

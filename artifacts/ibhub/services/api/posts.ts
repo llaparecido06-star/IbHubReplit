@@ -202,6 +202,11 @@ export async function fetchPostById(postId: string, currentUserId?: string): Pro
       is_bookmarked: false,
     };
 
+    if (post.poll && currentUserId) {
+      const indices = normalizePollIndices(post.poll.user_votes, currentUserId);
+      post.poll = { ...post.poll, user_voted_indices: indices, user_voted_index: indices[0] ?? null };
+    }
+
     if (currentUserId) {
       const [l, b] = await Promise.all([
         supabase.from("likes").select("id, reaction_type").match({ post_id: postId, user_id: currentUserId }).maybeSingle(),
@@ -577,11 +582,16 @@ export async function fetchPollVoters(postId: string): Promise<{
     if (!userIds.length) return [];
     const { data: profiles } = await supabase.from("profiles").select("id, full_name, avatar_url, username").in("id", userIds);
     if (!profiles) return [];
-    return profiles.map((p: any) => {
+    type ProfileRow = { id: string; full_name: string | null; avatar_url: string | null; username: string | null };
+    const expanded: { id: string; full_name: string | null; avatar_url: string | null; username: string | null; optionIndex: number }[] = [];
+    for (const p of profiles as ProfileRow[]) {
       const vote = userVotesMap[p.id];
-      const idx = Array.isArray(vote) ? (vote[0] ?? 0) : (vote as number);
-      return { id: p.id, full_name: p.full_name, avatar_url: p.avatar_url, username: p.username, optionIndex: idx };
-    });
+      const indices = Array.isArray(vote) ? vote : (typeof vote === "number" ? [vote] : []);
+      for (const idx of indices) {
+        expanded.push({ id: p.id, full_name: p.full_name, avatar_url: p.avatar_url, username: p.username, optionIndex: idx });
+      }
+    }
+    return expanded;
   } catch {
     return [];
   }

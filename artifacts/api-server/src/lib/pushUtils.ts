@@ -42,6 +42,52 @@ async function sendExpoPushChunks(messages: ExpoPushMessage[]): Promise<void> {
 }
 
 /**
+ * Sends a push notification to a single user (across all of their registered
+ * devices/tokens). Fire-and-forget — does not throw. Silently skips when the
+ * user has no registered push tokens.
+ */
+export async function sendPushToUser(opts: {
+  userId: string;
+  title: string;
+  body: string;
+  data?: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    const { data: tokenRows, error } = await supabaseAdmin
+      .from("push_tokens")
+      .select("token")
+      .eq("user_id", opts.userId);
+
+    if (error) {
+      logger.error({ err: error, userId: opts.userId }, "sendPushToUser: failed to fetch push_tokens");
+      return;
+    }
+
+    const validTokens = (tokenRows ?? [])
+      .map((r: { token: string }) => r.token)
+      .filter((t: string) => typeof t === "string" && t.startsWith("ExponentPushToken["));
+
+    if (validTokens.length === 0) return;
+
+    const messages: ExpoPushMessage[] = validTokens.map((token) => ({
+      to: token,
+      title: opts.title,
+      body: opts.body,
+      data: opts.data ?? {},
+      sound: "default",
+    }));
+
+    await sendExpoPushChunks(messages);
+    logger.info(
+      { count: messages.length, userId: opts.userId, title: opts.title },
+      "sendPushToUser: sent",
+    );
+  } catch (err) {
+    logger.error({ err, userId: opts.userId }, "sendPushToUser: unexpected error");
+  }
+}
+
+/**
  * Sends a push notification to ALL registered users (broadcast).
  * Excludes the `excludeUserId` (typically the author so they don't notify themselves).
  * Fire-and-forget — does not throw.

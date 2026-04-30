@@ -31,6 +31,7 @@ const TYPE_META: Record<string, { icon: any; color: string; label: string }> = {
   connection:       { icon: "users",            color: "#c9a84c", label: "enviou pedido de conexão" },
   mention:          { icon: "at-sign",          color: "#9b59b6", label: "mencionou você" },
   group_request:    { icon: "user-check",       color: "#7c3aed", label: "solicitou entrar no seu grupo" },
+  poll_vote:        { icon: "bar-chart-2",      color: "#0ea5e9", label: "votou na sua enquete" },
 };
 
 type UserCompany = { id: string; name: string; avatar_url: string | null };

@@ -347,6 +347,8 @@ function Router() {
       {/* Public pages — no auth required */}
       <Route path="/u/:id" component={PublicProfilePage} />
       <Route path="/p/:id" component={PublicPostPage} />
+      {/* Canonical post share URL: /post/:id (mirrors mobile share helper). */}
+      <Route path="/post/:id" component={PublicPostPage} />
       <Route path="/politica-de-privacidade" component={PoliticaPrivacidadePage} />
       <Route path="/termos-de-uso" component={TermosUsoPage} />
       <Route path="/excluir-conta" component={ExcluirContaPage} />

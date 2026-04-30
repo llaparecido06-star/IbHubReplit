@@ -440,7 +440,7 @@ function PostCard({ post, currentUserId, onLike, onReact, onBookmark, onDelete, 
         {/* Compartilhar */}
         <button
           onClick={() => {
-            const url = `${window.location.origin}/p/${post.id}`;
+            const url = `${window.location.origin}/post/${post.id}`;
             navigator.clipboard?.writeText(url).catch(() => {});
           }}
           style={{
