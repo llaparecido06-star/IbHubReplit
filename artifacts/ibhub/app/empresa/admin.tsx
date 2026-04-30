@@ -1027,12 +1027,12 @@ export default function CompanyAdminScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
 
       {/* Header */}
-      <View style={[styles.header, { paddingTop: topPad + 10, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Feather name="arrow-left" size={22} color={colors.foreground} />
+      <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Feather name="arrow-left" size={20} color={colors.navy} />
         </TouchableOpacity>
-        <View style={{ flex: 1, marginLeft: 12 }}>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.headerTitle, { color: colors.navy }]}>
             Gerenciar Anúncios
           </Text>
           {companyName ? (
@@ -1041,8 +1041,8 @@ export default function CompanyAdminScreen() {
             </Text>
           ) : null}
         </View>
-        <TouchableOpacity onPress={loadAll}>
-          <Feather name="refresh-cw" size={18} color={colors.mutedForeground} />
+        <TouchableOpacity style={[styles.refreshBtn, { backgroundColor: colors.navy + "10" }]} onPress={loadAll} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Feather name="refresh-cw" size={15} color={colors.navy} />
         </TouchableOpacity>
       </View>
 
@@ -1050,22 +1050,29 @@ export default function CompanyAdminScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={[styles.tabBar, { borderBottomColor: colors.border }]}
+        contentContainerStyle={styles.tabChips}
       >
         {TABS.map(tab => {
           const active = activeTab === tab.key;
           return (
             <TouchableOpacity
               key={tab.key}
-              style={[styles.tabBtn, active && { borderBottomColor: colors.gold, borderBottomWidth: 2 }]}
+              style={[
+                styles.tabChip,
+                {
+                  backgroundColor: active ? colors.gold : colors.background,
+                  borderColor:     active ? colors.gold : colors.border,
+                },
+              ]}
               onPress={() => setActiveTab(tab.key)}
+              activeOpacity={0.75}
             >
-              <Feather name={tab.icon as any} size={14} color={active ? colors.gold : colors.mutedForeground} />
-              <Text style={[styles.tabLabel, { color: active ? colors.gold : colors.mutedForeground }]}>
+              <Feather name={tab.icon as any} size={13} color={active ? "#fff" : colors.mutedForeground} />
+              <Text style={[styles.tabChipLabel, { color: active ? "#fff" : colors.mutedForeground }]}>
                 {tab.label}
               </Text>
-              <View style={[styles.tabBadge, { backgroundColor: active ? colors.gold : colors.border }]}>
-                <Text style={[styles.tabBadgeText, { color: active ? "#fff" : colors.mutedForeground }]}>
+              <View style={[styles.tabChipBadge, { backgroundColor: active ? "rgba(255,255,255,0.28)" : colors.border + "80" }]}>
+                <Text style={[styles.tabChipBadgeText, { color: active ? "#fff" : colors.mutedForeground }]}>
                   {tab.count}
                 </Text>
               </View>
@@ -1152,14 +1159,16 @@ export default function CompanyAdminScreen() {
 
 const styles = StyleSheet.create({
   container:         { flex: 1 },
-  header:            { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1 },
-  headerTitle:       { fontSize: 18, fontWeight: "700" },
-  headerSub:         { fontSize: 13 },
-  tabBar:            { paddingHorizontal: 12, gap: 4, borderBottomWidth: 1 },
-  tabBtn:            { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 12 },
-  tabLabel:          { fontSize: 14, fontWeight: "600" },
-  tabBadge:          { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
-  tabBadgeText:      { fontSize: 11, fontWeight: "700" },
+  header:            { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
+  backBtn:           { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  refreshBtn:        { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
+  headerTitle:       { fontSize: 22, fontWeight: "800" },
+  headerSub:         { fontSize: 12, marginTop: 1 },
+  tabChips:          { flexDirection: "row", paddingHorizontal: 16, paddingVertical: 12, gap: 8, paddingRight: 24 },
+  tabChip:           { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  tabChipLabel:      { fontSize: 13, fontWeight: "600" },
+  tabChipBadge:      { minWidth: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 },
+  tabChipBadgeText:  { fontSize: 11, fontWeight: "700" },
   center:            { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, padding: 32 },
   emptyTitle:        { fontSize: 16, fontWeight: "700", textAlign: "center" },
   emptyText:         { fontSize: 14, textAlign: "center", lineHeight: 20 },
