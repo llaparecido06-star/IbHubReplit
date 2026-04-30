@@ -177,25 +177,73 @@ export default function FeedScreen() {
     if (!user?.id || pushRegistered.current) return;
     pushRegistered.current = true;
 
-    const timer = setTimeout(async () => {
-      try {
-        const { status } = await SafeNotifications.requestPermissionsAsync();
-        if (status !== "granted") return;
-        const easConfig = (Constants.expoConfig?.extra as Record<string, unknown> | undefined)?.eas;
-        const projectId = (easConfig as Record<string, unknown> | undefined)?.projectId as string | undefined;
-        const tokenResult = await SafeNotifications.getExpoPushTokenAsync(
-          projectId ? { projectId } : undefined,
-        );
-        const token = tokenResult.data;
-        if (!token) return;
-        await supabase
-          .from("push_tokens")
-          .upsert({ user_id: user.id, token }, { onConflict: "user_id,token" });
-      } catch {
-        // Push not available in Expo Go or if permissions were denied
-      }
-    }, 2000);
+    // Resolve EAS projectId from two possible locations in the SDK.
+    // expo-constants exposes it differently depending on the build type
+    // (development client vs EAS production build).
+    const easExtra = (Constants.expoConfig?.extra as Record<string, unknown> | undefined)?.eas;
+    const PUSH_PROJECT_ID =
+      (easExtra as Record<string, unknown> | undefined)?.projectId as string | undefined
+      ?? (Constants as any).easConfig?.projectId as string | undefined
+      ?? undefined;
 
+    /** Single attempt: request permission, fetch token, upsert + prune stale. */
+    async function doRegister(userId: string): Promise<void> {
+      const { status } = await SafeNotifications.requestPermissionsAsync();
+      if (status !== "granted") return; // user denied — no retry needed
+
+      const tokenResult = await SafeNotifications.getExpoPushTokenAsync(
+        PUSH_PROJECT_ID ? { projectId: PUSH_PROJECT_ID } : undefined,
+      );
+      const token = tokenResult.data;
+      if (!token) {
+        console.warn("[Push] getExpoPushTokenAsync returned null — projectId:", PUSH_PROJECT_ID ?? "none (builds may fail)");
+        throw new Error("empty token");
+      }
+
+      // Upsert new token (create or refresh updated_at for existing pair)
+      const { error: upsertErr } = await supabase
+        .from("push_tokens")
+        .upsert(
+          { user_id: userId, token, updated_at: new Date().toISOString() },
+          { onConflict: "user_id,token" },
+        );
+      if (upsertErr) {
+        console.warn("[Push] upsert failed:", upsertErr.message);
+        throw upsertErr; // surface to retry loop
+      }
+
+      // Remove stale tokens for this user (different token value = old device
+      // or app reinstall). This prevents dead-token accumulation and ensures
+      // the first notification after reinstall is delivered without requiring
+      // a DeviceNotRegistered round-trip first.
+      await supabase
+        .from("push_tokens")
+        .delete()
+        .eq("user_id", userId)
+        .neq("token", token);
+    }
+
+    /** Retry with backoff: immediately → 30 s → 2 min. */
+    async function registerWithRetry(userId: string): Promise<void> {
+      const delays = [0, 30_000, 120_000];
+      for (let attempt = 0; attempt < delays.length; attempt++) {
+        if (delays[attempt] > 0) {
+          await new Promise<void>(resolve => setTimeout(resolve, delays[attempt]));
+        }
+        try {
+          await doRegister(userId);
+          return; // success — stop retrying
+        } catch (err: any) {
+          if (attempt < delays.length - 1) {
+            console.warn(`[Push] registration attempt ${attempt + 1} failed, will retry:`, err?.message ?? err);
+          } else {
+            console.error("[Push] all registration attempts exhausted:", err?.message ?? err);
+          }
+        }
+      }
+    }
+
+    const timer = setTimeout(() => void registerWithRetry(user.id), 2_000);
     return () => clearTimeout(timer);
   }, [user?.id]);
 
