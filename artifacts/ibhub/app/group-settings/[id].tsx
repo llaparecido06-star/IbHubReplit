@@ -60,6 +60,8 @@ export default function GroupSettingsScreen() {
   const [updating, setUpdating]         = useState(false);
   const [pendingMembers, setPending]    = useState<{ id: string; name: string; avatar_url: string | null }[]>([]);
   const [approvingId, setApprovingId]   = useState<string | null>(null);
+  const [isMuted, setIsMuted]           = useState(false);
+  const [mutingGroup, setMutingGroup]   = useState(false);
 
   // Invite search state
   const [inviteQuery,   setInviteQuery]  = useState("");
@@ -76,11 +78,13 @@ export default function GroupSettingsScreen() {
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    const [groupRes, membersRes, pendingRes] = await Promise.all([
+    const [groupRes, membersRes, pendingRes, muteRes] = await Promise.all([
       supabase.from("groups").select("name, avatar_url, owner_id").eq("id", id).maybeSingle(),
       supabase.from("group_members").select("user_id, role").eq("group_id", id).neq("role", "pending"),
       supabase.from("group_members").select("user_id").eq("group_id", id).eq("role", "pending"),
+      supabase.from("group_mutes").select("id").eq("group_id", id).eq("user_id", userId).maybeSingle(),
     ]);
+    setIsMuted(!!muteRes.data);
 
     const groupData   = groupRes.data as any;
     const rawMembers  = (membersRes.data ?? []) as any[];
@@ -247,6 +251,24 @@ export default function GroupSettingsScreen() {
     );
   };
 
+  const handleToggleMute = async () => {
+    if (!id || !userId || mutingGroup) return;
+    setMutingGroup(true);
+    try {
+      if (isMuted) {
+        await supabase.from("group_mutes").delete().eq("group_id", id).eq("user_id", userId);
+        setIsMuted(false);
+      } else {
+        await supabase.from("group_mutes").upsert({ group_id: id, user_id: userId }, { onConflict: "user_id,group_id" });
+        setIsMuted(true);
+      }
+    } catch {
+      Alert.alert("Erro", "Não foi possível alterar as notificações.");
+    } finally {
+      setMutingGroup(false);
+    }
+  };
+
   const handleInviteSearch = (text: string) => {
     setInviteQuery(text);
     if (inviteTimer.current) clearTimeout(inviteTimer.current);
@@ -349,6 +371,28 @@ export default function GroupSettingsScreen() {
 
             {/* Actions */}
             <View style={{ marginTop: 8, gap: 10 }}>
+              {/* Mute toggle — available to all members */}
+              <TouchableOpacity
+                style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: isMuted ? "#f1f5f9" : "#fff" }]}
+                onPress={handleToggleMute}
+                disabled={mutingGroup}
+                activeOpacity={0.7}
+              >
+                {mutingGroup ? (
+                  <ActivityIndicator size="small" color={colors.mutedForeground} />
+                ) : (
+                  <Feather name={isMuted ? "bell-off" : "bell"} size={16} color={isMuted ? colors.mutedForeground : colors.navy} />
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.actionBtnText, { color: isMuted ? colors.mutedForeground : colors.navy }]}>
+                    {isMuted ? "Notificações silenciadas" : "Notificações ativas"}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>
+                    {isMuted ? "Toque para reativar" : "Toque para silenciar este grupo"}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
               {!isOwner && (
                 <TouchableOpacity
                   style={[styles.actionBtn, { borderColor: "#fca5a5", backgroundColor: "#fef2f2" }]}

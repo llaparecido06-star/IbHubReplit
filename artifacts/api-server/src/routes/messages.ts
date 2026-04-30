@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { resolveUserId } from "../lib/planCheck.js";
 import { validateBody } from "../middlewares/validate.js";
+import { sendPushToUser } from "../lib/pushUtils.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -186,6 +188,92 @@ router.post("/messages/send", validateBody(SendMessageSchema), async (req: Reque
   }
 
   res.json({ data });
+
+  // ── Group push fan-out (fire-and-forget, does not block the response) ──────
+  // Only runs for group conversations. Direct-chat push is handled client-side
+  // via dispatchPushToConversation. Group chats have no client-side dispatch,
+  // so the server fans out to all non-muted participants here.
+  if (conversation.is_group) {
+    void (async () => {
+      try {
+        // 1. Fetch group name + all participants in parallel
+        const [groupRes, participantsRes] = await Promise.all([
+          supabaseAdmin
+            .from("conversations")
+            .select("name")
+            .eq("id", conversation_id)
+            .maybeSingle(),
+          supabaseAdmin
+            .from("conversation_participants")
+            .select("user_id")
+            .eq("conversation_id", conversation_id),
+        ]);
+
+        const groupName = (groupRes.data as { name?: string } | null)?.name ?? "Grupo";
+
+        // Exclude the sender from the recipient list
+        const allParticipantIds = ((participantsRes.data ?? []) as { user_id: string }[])
+          .map((p) => p.user_id)
+          .filter((uid) => uid !== callerId && uid !== sender_id);
+
+        if (allParticipantIds.length === 0) return;
+
+        // 2. Filter out users who have muted this group
+        const { data: mutedRows } = await supabaseAdmin
+          .from("group_mutes")
+          .select("user_id")
+          .eq("group_id", conversation_id)
+          .in("user_id", allParticipantIds);
+
+        const mutedIds = new Set(((mutedRows ?? []) as { user_id: string }[]).map((r) => r.user_id));
+        const targetIds = allParticipantIds.filter((uid) => !mutedIds.has(uid));
+
+        if (targetIds.length === 0) return;
+
+        // 3. Fetch sender display name
+        const { data: senderProfile } = await supabaseAdmin
+          .from("profiles")
+          .select("full_name, username")
+          .eq("id", sender_id)
+          .maybeSingle();
+
+        const senderName = (senderProfile as { full_name?: string; username?: string } | null)?.full_name
+          ?? (senderProfile as { full_name?: string; username?: string } | null)?.username
+          ?? "Alguém";
+
+        // 4. Build notification body with a content preview
+        const preview =
+          message_type === "text" && content ? content.slice(0, 80)
+          : message_type === "image"         ? "📷 Foto"
+          : message_type === "video"         ? "🎥 Vídeo"
+          : message_type === "audio"         ? "🎤 Áudio"
+          :                                    "Nova mensagem";
+
+        // 5. Fan out — one push per recipient (sendPushToUser handles token fan-out per user)
+        await Promise.all(
+          targetIds.map((userId) =>
+            sendPushToUser({
+              userId,
+              title: `${senderName} em ${groupName}`,
+              body: preview,
+              data: {
+                type: "group_message",
+                conversationId: conversation_id,
+                deepLink: `/group-chat/${conversation_id}`,
+              },
+            }),
+          ),
+        );
+
+        logger.info(
+          { conversationId: conversation_id, recipients: targetIds.length, muted: mutedIds.size },
+          "group push: fan-out complete",
+        );
+      } catch (err) {
+        logger.error({ err, conversationId: conversation_id }, "group push: fan-out error");
+      }
+    })();
+  }
 });
 
 /**
