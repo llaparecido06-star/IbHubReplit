@@ -59,6 +59,25 @@ async function _dispatchSocialPush(opts: {
   }
 }
 
+/**
+ * Generic fire-and-forget push dispatcher for posts-related events.
+ * The server resolves actor name from the auth token — no need to pass it.
+ */
+async function _dispatchPush(path: string, body: Record<string, string>): Promise<void> {
+  if (!API_URL) return;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return;
+    await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+  } catch {
+  }
+}
+
 export async function fetchFeedPosts(
   currentUserId: string,
   activeCompanyId?: string | null,
@@ -542,10 +561,13 @@ export async function addComment(
     await supabase.rpc("increment_post_comments", { p_post_id: postId });
 
     // In-app row is created by DB trigger notify_on_comment; the push banner
-    // is dispatched here so wine context + deep-link reach the author. Reply
-    // pushes are skipped — only top-level comments notify the post author.
+    // is dispatched here so wine context + deep-link reach the author.
     if (!parentCommentId) {
+      // Top-level comment → notify the post author
       void _dispatchSocialPush({ type: "comment", postId, userId, commentText: content, companyPageId });
+    } else {
+      // Reply → notify the parent comment author
+      void _dispatchPush("/push/comment-reply", { parentCommentId, ...(content ? { commentText: content } : {}) });
     }
 
     return {
@@ -669,6 +691,24 @@ export async function toggleCommentLike(commentId: string, userId: string, isCur
         .from("comment_likes")
         .upsert({ comment_id: commentId, user_id: userId }, { onConflict: "comment_id,user_id", ignoreDuplicates: true });
       if (error) { console.warn("toggleCommentLike:", JSON.stringify(error)); return false; }
+
+      // Fetch the comment to create an in-app notification for the author
+      const { data: commentRow } = await supabase
+        .from("comments")
+        .select("user_id, post_id")
+        .eq("id", commentId)
+        .maybeSingle();
+      if (commentRow && (commentRow as any).user_id !== userId) {
+        void supabase.from("notifications").insert({
+          user_id: (commentRow as any).user_id,
+          actor_id: userId,
+          type: "comment_like",
+          post_id: (commentRow as any).post_id,
+          comment_id: commentId,
+          message: "curtiu seu comentário",
+        });
+        void _dispatchPush("/push/comment-like", { commentId });
+      }
       return true;
     }
   } catch (e) {

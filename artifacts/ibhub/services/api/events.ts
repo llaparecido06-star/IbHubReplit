@@ -1,6 +1,21 @@
 import { supabase } from "@/context/AuthContext";
 import { compressPostImage } from "@/utils/compressImage";
-import { fetchProfilesForIds } from "./_shared";
+import { API_URL, fetchProfilesForIds } from "./_shared";
+
+async function _dispatchEventPush(path: string, body: Record<string, string>): Promise<void> {
+  if (!API_URL) return;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return;
+    await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+  } catch {
+  }
+}
 
 // ── Events ────────────────────────────────────────────────────────────────────
 export interface AppEvent {
@@ -310,6 +325,7 @@ export async function confirmAttendance(
         type: "event_rsvp",
         message: `confirmou presença no seu evento "${eventTitle}"`,
       });
+      void _dispatchEventPush("/push/event-rsvp", { eventId });
     }
     return true;
   } catch (e) {

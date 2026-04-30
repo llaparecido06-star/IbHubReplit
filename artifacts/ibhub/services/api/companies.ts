@@ -544,11 +544,27 @@ export async function toggleCompanyFollow(companyId: string, userId: string, isC
     } else {
       const { error } = await supabase.from("company_follows").upsert({ company_id: companyId, user_id: userId }, { onConflict: "company_id,user_id" });
       if (error) { console.error("toggleCompanyFollow (follow):", error); return false; }
+      void _dispatchCompanyPush("/push/company-follow", { companyId });
     }
     return true;
   } catch (e) {
     console.error("toggleCompanyFollow:", e);
     return false;
+  }
+}
+
+async function _dispatchCompanyPush(path: string, body: Record<string, string>): Promise<void> {
+  if (!API_URL) return;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return;
+    await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+  } catch {
   }
 }
 

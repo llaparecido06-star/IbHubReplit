@@ -611,4 +611,253 @@ router.post("/push/follow", async (req: Request, res: Response): Promise<void> =
   res.json({ sent: 1 });
 });
 
+// ─── POST /push/comment-reply ─────────────────────────────────────────────────
+/**
+ * Sends a push + creates an in-app-style push when someone replies to a comment.
+ * The parent comment author is looked up server-side.
+ *
+ * Body: { parentCommentId: string, commentText?: string }
+ * Auth: Bearer token (resolves actorId — the person replying)
+ */
+router.post("/push/comment-reply", async (req: Request, res: Response): Promise<void> => {
+  const actorId = await resolveUserId(req, res);
+  if (!actorId) return;
+
+  if (!checkRateLimit(actorId)) {
+    res.status(429).json({ error: "Muitas solicitações — tente novamente em breve." });
+    return;
+  }
+
+  const { parentCommentId, commentText } = req.body as {
+    parentCommentId?: string;
+    commentText?: string;
+  };
+
+  if (!parentCommentId) {
+    res.status(400).json({ error: "parentCommentId é obrigatório" });
+    return;
+  }
+
+  interface CommentRow { user_id: string; post_id: string }
+  const { data: parentComment } = await supabaseAdmin
+    .from("comments")
+    .select("user_id, post_id")
+    .eq("id", parentCommentId)
+    .maybeSingle() as { data: CommentRow | null };
+
+  if (!parentComment) {
+    res.status(404).json({ error: "Comentário pai não encontrado." });
+    return;
+  }
+
+  const targetId = parentComment.user_id;
+  if (targetId === actorId) {
+    res.json({ sent: 0, skipped: "actor is comment author" });
+    return;
+  }
+
+  const actorName = await resolveActorName(actorId);
+  const body = commentText
+    ? (commentText.length > 80 ? commentText.slice(0, 80) + "…" : commentText)
+    : "Toque para ver a resposta.";
+
+  await sendPushToUser({
+    userId: targetId,
+    title: `💬 ${actorName} respondeu seu comentário`,
+    body,
+    data: {
+      type: "comment_reply",
+      postId: parentComment.post_id,
+      parentCommentId,
+      actorId,
+      deepLink: `/post/${parentComment.post_id}`,
+    },
+  });
+
+  logger.info({ actorId, targetId, parentCommentId }, "Comment reply push dispatched");
+  res.json({ sent: 1 });
+});
+
+// ─── POST /push/comment-like ──────────────────────────────────────────────────
+/**
+ * Sends a push when someone likes a comment.
+ * The comment author is looked up server-side.
+ *
+ * Body: { commentId: string }
+ * Auth: Bearer token (resolves actorId)
+ */
+router.post("/push/comment-like", async (req: Request, res: Response): Promise<void> => {
+  const actorId = await resolveUserId(req, res);
+  if (!actorId) return;
+
+  if (!checkRateLimit(actorId)) {
+    res.status(429).json({ error: "Muitas solicitações — tente novamente em breve." });
+    return;
+  }
+
+  const { commentId } = req.body as { commentId?: string };
+
+  if (!commentId) {
+    res.status(400).json({ error: "commentId é obrigatório" });
+    return;
+  }
+
+  interface CommentRow { user_id: string; post_id: string }
+  const { data: comment } = await supabaseAdmin
+    .from("comments")
+    .select("user_id, post_id")
+    .eq("id", commentId)
+    .maybeSingle() as { data: CommentRow | null };
+
+  if (!comment) {
+    res.status(404).json({ error: "Comentário não encontrado." });
+    return;
+  }
+
+  const targetId = comment.user_id;
+  if (targetId === actorId) {
+    res.json({ sent: 0, skipped: "actor is comment author" });
+    return;
+  }
+
+  const actorName = await resolveActorName(actorId);
+
+  await sendPushToUser({
+    userId: targetId,
+    title: `❤️ ${actorName} curtiu seu comentário`,
+    body: "Toque para ver.",
+    data: {
+      type: "comment_like",
+      postId: comment.post_id,
+      commentId,
+      actorId,
+      deepLink: `/post/${comment.post_id}`,
+    },
+  });
+
+  logger.info({ actorId, targetId, commentId }, "Comment like push dispatched");
+  res.json({ sent: 1 });
+});
+
+// ─── POST /push/company-follow ────────────────────────────────────────────────
+/**
+ * Sends a push to the company owner when someone follows their company page.
+ * The company owner is resolved server-side from the companyId.
+ *
+ * Body: { companyId: string }
+ * Auth: Bearer token (resolves actorId — the follower)
+ */
+router.post("/push/company-follow", async (req: Request, res: Response): Promise<void> => {
+  const actorId = await resolveUserId(req, res);
+  if (!actorId) return;
+
+  if (!checkRateLimit(actorId)) {
+    res.status(429).json({ error: "Muitas solicitações — tente novamente em breve." });
+    return;
+  }
+
+  const { companyId } = req.body as { companyId?: string };
+
+  if (!companyId) {
+    res.status(400).json({ error: "companyId é obrigatório" });
+    return;
+  }
+
+  interface CompanyRow { owner_id: string; name: string }
+  const { data: company } = await supabaseAdmin
+    .from("company_pages")
+    .select("owner_id, name")
+    .eq("id", companyId)
+    .maybeSingle() as { data: CompanyRow | null };
+
+  if (!company) {
+    res.status(404).json({ error: "Empresa não encontrada." });
+    return;
+  }
+
+  const targetId = company.owner_id;
+  if (targetId === actorId) {
+    res.json({ sent: 0, skipped: "actor is company owner" });
+    return;
+  }
+
+  const actorName = await resolveActorName(actorId);
+
+  await sendPushToUser({
+    userId: targetId,
+    title: `👤 Novo seguidor na empresa`,
+    body: `${actorName} começou a seguir ${company.name}`,
+    data: {
+      type: "company_follow",
+      companyId,
+      actorId,
+      deepLink: `/empresa/${companyId}`,
+    },
+  });
+
+  logger.info({ actorId, targetId, companyId }, "Company follow push dispatched");
+  res.json({ sent: 1 });
+});
+
+// ─── POST /push/event-rsvp ────────────────────────────────────────────────────
+/**
+ * Sends a push to the event organizer when someone confirms attendance.
+ * Event title and organizer are resolved server-side from eventId.
+ *
+ * Body: { eventId: string }
+ * Auth: Bearer token (resolves actorId — the attendee)
+ */
+router.post("/push/event-rsvp", async (req: Request, res: Response): Promise<void> => {
+  const actorId = await resolveUserId(req, res);
+  if (!actorId) return;
+
+  if (!checkRateLimit(actorId)) {
+    res.status(429).json({ error: "Muitas solicitações — tente novamente em breve." });
+    return;
+  }
+
+  const { eventId } = req.body as { eventId?: string };
+
+  if (!eventId) {
+    res.status(400).json({ error: "eventId é obrigatório" });
+    return;
+  }
+
+  interface EventRow { organizer_id: string; title: string }
+  const { data: event } = await supabaseAdmin
+    .from("events")
+    .select("organizer_id, title")
+    .eq("id", eventId)
+    .maybeSingle() as { data: EventRow | null };
+
+  if (!event) {
+    res.status(404).json({ error: "Evento não encontrado." });
+    return;
+  }
+
+  const targetId = event.organizer_id;
+  if (targetId === actorId) {
+    res.json({ sent: 0, skipped: "actor is organizer" });
+    return;
+  }
+
+  const actorName = await resolveActorName(actorId);
+  const eventLabel = event.title.length > 50 ? event.title.slice(0, 50) + "…" : event.title;
+
+  await sendPushToUser({
+    userId: targetId,
+    title: `🎉 Nova confirmação de presença`,
+    body: `${actorName} vai ao seu evento "${eventLabel}"`,
+    data: {
+      type: "event_rsvp",
+      eventId,
+      actorId,
+      deepLink: `/event/${eventId}`,
+    },
+  });
+
+  logger.info({ actorId, targetId, eventId }, "Event RSVP push dispatched");
+  res.json({ sent: 1 });
+});
+
 export default router;
