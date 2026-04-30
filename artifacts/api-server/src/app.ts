@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
 import router from "./routes";
+import postShareRouter from "./routes/postShare";
 import { logger } from "./lib/logger";
 import { config, buildAllowedOrigins } from "./lib/config";
 import { apiLimiter, sensitiveLimiter } from "./middlewares/rateLimit";
@@ -107,6 +108,12 @@ app.use("/api/messages", sensitiveLimiter);
 app.use("/api/push", sensitiveLimiter);
 
 app.use("/api", router);
+
+// ─── Public share previews ─────────────────────────────────────────────────
+// `/post/:id` is the canonical share URL. We serve the web SPA shell with
+// per-post OpenGraph tags injected so WhatsApp/Twitter/etc. can unfurl rich
+// previews. See artifacts/api-server/src/routes/postShare.ts for details.
+app.use("/", postShareRouter);
 
 // ─── Error handlers ────────────────────────────────────────────────────────
 // Convert CORS rejections (and other Error()s from middlewares) into clean
