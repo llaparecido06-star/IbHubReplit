@@ -9,8 +9,11 @@ import {
   updateApplicantStatus,
   updateOpportunity,
   getCvSignedUrl,
+  fetchCompanyAdminEvents,
+  deleteEvent,
   CompanyAdminOpportunity,
   CompanyAdminApplicant,
+  AppEvent,
 } from "@/services/api";
 
 const GOLD   = "#c9a84c";
@@ -61,11 +64,13 @@ export default function EmpresaAdminPage() {
 
   const [company, setCompany] = useState<CompanyHead | null>(null);
   const [authorized, setAuthorized] = useState<boolean | null>(null);
-  const [tab, setTab] = useState<"vagas" | "anuncios">("vagas");
+  const [tab, setTab] = useState<"vagas" | "anuncios" | "eventos">("vagas");
   const [items, setItems] = useState<CompanyAdminOpportunity[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<CompanyAdminOpportunity | null>(null);
   const [applicantsOf, setApplicantsOf] = useState<CompanyAdminOpportunity | null>(null);
+  const [events, setEvents] = useState<AppEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
 
   // ── Authorize + load company head ───────────────────────────────────────
   useEffect(() => {
@@ -96,7 +101,7 @@ export default function EmpresaAdminPage() {
 
   // ── Load opportunities ──────────────────────────────────────────────────
   const loadItems = useCallback(async () => {
-    if (!company || !authorized) return;
+    if (!company || !authorized || tab === "eventos") return;
     setLoading(true);
     const list = await fetchCompanyOpportunities(
       company.id,
@@ -108,6 +113,15 @@ export default function EmpresaAdminPage() {
   }, [company, authorized, tab]);
 
   useEffect(() => { loadItems(); }, [loadItems]);
+
+  // ── Load events ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!company || !authorized || tab !== "eventos") return;
+    setEventsLoading(true);
+    fetchCompanyAdminEvents(company.owner_id)
+      .then(setEvents)
+      .finally(() => setEventsLoading(false));
+  }, [company, authorized, tab]);
 
   if (authorized === false) {
     return (
@@ -137,20 +151,23 @@ export default function EmpresaAdminPage() {
             ←
           </button>
           <div style={{ flex: 1 }}>
-            <h1 style={{ fontSize: 20, fontWeight: 900, color: NAVY, margin: 0 }}>Gerenciar vagas</h1>
+            <h1 style={{ fontSize: 20, fontWeight: 900, color: NAVY, margin: 0 }}>Gerenciar Anúncios</h1>
             <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>{company?.name ?? ""}</div>
           </div>
         </div>
 
         {/* Tabs */}
         <div style={{ display: "flex", gap: 6, marginBottom: 16, borderBottom: `2px solid ${BORDER}` }}>
-          {(["vagas", "anuncios"] as const).map(t => {
-            const active = tab === t;
-            const label = t === "vagas" ? "💼 Vagas" : "🛍️ Anúncios";
+          {([
+            { key: "vagas",    label: "💼 Vagas" },
+            { key: "anuncios", label: "🛍️ Anúncios" },
+            { key: "eventos",  label: "📅 Eventos" },
+          ] as const).map(t => {
+            const active = tab === t.key;
             return (
               <button
-                key={t}
-                onClick={() => setTab(t)}
+                key={t.key}
+                onClick={() => setTab(t.key)}
                 style={{
                   background: "none", border: "none", padding: "10px 16px", cursor: "pointer",
                   fontWeight: active ? 800 : 500, fontSize: 14,
@@ -159,14 +176,76 @@ export default function EmpresaAdminPage() {
                   marginBottom: -2,
                 }}
               >
-                {label}
+                {t.label}
               </button>
             );
           })}
         </div>
 
-        {/* List */}
-        {loading || authorized === null ? (
+        {/* Eventos tab content */}
+        {tab === "eventos" && (
+          eventsLoading ? (
+            <div style={{ padding: 60, textAlign: "center", color: MUTED }}>Carregando...</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
+                <a
+                  href="/app/meus-eventos"
+                  style={{ padding: "9px 18px", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", backgroundColor: GOLD, color: WHITE, textDecoration: "none" }}
+                >
+                  + Criar evento
+                </a>
+              </div>
+              {events.length === 0 ? (
+                <div style={{ padding: 60, textAlign: "center", backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, color: MUTED }}>
+                  <div style={{ fontSize: 36, marginBottom: 8 }}>📅</div>
+                  <p>Nenhum evento por aqui.</p>
+                  <p style={{ fontSize: 13 }}>Crie eventos na página "Meus Eventos" e eles aparecerão aqui.</p>
+                </div>
+              ) : (
+                events.map(ev => (
+                  <div key={ev.id} style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 4 }}>{ev.title}</div>
+                      {ev.description && (
+                        <p style={{ margin: "0 0 6px", fontSize: 13, color: "#555", lineHeight: 1.5, maxHeight: 60, overflow: "hidden" }}>{ev.description}</p>
+                      )}
+                      <div style={{ display: "flex", gap: 14, fontSize: 12, color: MUTED, flexWrap: "wrap" }}>
+                        <span>📅 {new Date(ev.start_date).toLocaleDateString("pt-BR")}</span>
+                        {ev.location && <span>📍 {ev.location}</span>}
+                        {ev.location_type && <span>{ev.location_type === "online" ? "🌐 Online" : "🏛️ Presencial"}</span>}
+                        {ev.entry_type && <span style={{ color: GOLD, fontWeight: 700 }}>{ev.entry_type === "pago" ? "💳 Pago" : "🎟️ Gratuito"}</span>}
+                        {ev.attendees_count !== undefined && <span>👥 {ev.attendees_count} inscrito{ev.attendees_count === 1 ? "" : "s"}</span>}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "stretch", minWidth: 110 }}>
+                      <a
+                        href={`/app/eventos/${ev.id}`}
+                        style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${BORDER}`, backgroundColor: WHITE, color: NAVY, fontWeight: 700, cursor: "pointer", fontSize: 13, textDecoration: "none", textAlign: "center" }}
+                      >
+                        👁️ Ver
+                      </a>
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`Excluir evento "${ev.title}"?`)) return;
+                          const ok = await deleteEvent(ev.id, company?.owner_id ?? "");
+                          if (ok) setEvents(prev => prev.filter(e => e.id !== ev.id));
+                          else alert("Não foi possível excluir o evento.");
+                        }}
+                        style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #f1c1c5", backgroundColor: "#fff5f5", color: "#a82a2a", fontWeight: 700, cursor: "pointer", fontSize: 13 }}
+                      >
+                        🗑️ Excluir
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )
+        )}
+
+        {/* Vagas / Anúncios list */}
+        {tab !== "eventos" && (loading || authorized === null ? (
           <div style={{ padding: 60, textAlign: "center", color: MUTED }}>Carregando...</div>
         ) : items.length === 0 ? (
           <div style={{ padding: 60, textAlign: "center", backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, color: MUTED }}>
@@ -213,7 +292,7 @@ export default function EmpresaAdminPage() {
               </div>
             ))}
           </div>
-        )}
+        ))}
       </div>
 
       {editing && (

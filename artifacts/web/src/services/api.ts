@@ -2190,15 +2190,17 @@ export async function fetchCompanyOpportunities(
   }
 }
 
-/** Active vagas/marketplace items strictly linked to a company page.
- *  Safe for public company profile listings.
+/** Active vagas/marketplace items linked to a company page or created by the owner.
+ *  Safe for public company profile listings. Pass ownerId to also catch items
+ *  created directly by the owner without a company_page_id.
  */
 export async function fetchPublicCompanyOpportunities(
   companyPageId: string,
   type: "vaga" | "marketplace",
+  ownerId?: string,
 ): Promise<CompanyAdminOpportunity[]> {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from("opportunities")
       .select(`
         id, created_by, type, title, description, category, location, price,
@@ -2208,10 +2210,15 @@ export async function fetchPublicCompanyOpportunities(
         view_count, sold, company_page_id
       `)
       .eq("type", type)
-      .eq("company_page_id", companyPageId)
-      .eq("is_active", true)
-      .order("created_at", { ascending: false })
-      .limit(100);
+      .eq("is_active", true);
+
+    if (ownerId) {
+      query = query.or(`company_page_id.eq.${companyPageId},created_by.eq.${ownerId}`);
+    } else {
+      query = query.eq("company_page_id", companyPageId);
+    }
+
+    const { data, error } = await query.order("created_at", { ascending: false }).limit(100);
     if (error) { console.error("fetchPublicCompanyOpportunities:", error); return []; }
     return (data ?? []) as CompanyAdminOpportunity[];
   } catch (e) {
@@ -3811,6 +3818,24 @@ export async function fetchMyEvents(userId: string): Promise<AppEvent[]> {
     return (data as EventDbRow[]).map(mapEventRow);
   } catch (e) {
     console.warn("fetchMyEvents:", e);
+    return [];
+  }
+}
+
+/** Admin view of a company's events: includes all events by the owner user,
+ *  regardless of is_active status. */
+export async function fetchCompanyAdminEvents(ownerId: string): Promise<AppEvent[]> {
+  try {
+    const { data, error } = await supabase
+      .from("events")
+      .select(EVENT_COLUMNS)
+      .eq("user_id", ownerId)
+      .order("start_date", { ascending: false })
+      .limit(100);
+    if (error || !data) return [];
+    return (data as EventDbRow[]).map(mapEventRow);
+  } catch (e) {
+    console.warn("fetchCompanyAdminEvents:", e);
     return [];
   }
 }

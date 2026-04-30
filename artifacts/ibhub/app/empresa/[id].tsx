@@ -651,7 +651,7 @@ export default function EmpresaScreen() {
                   onPress={() => router.push(`/empresa/admin?id=${id}` as any)}
                 >
                   <Feather name="briefcase" size={14} color={colors.gold} />
-                  <Text style={[styles.ctaBtnOutlineText, { color: colors.gold }]}>Gerenciar vagas</Text>
+                  <Text style={[styles.ctaBtnOutlineText, { color: colors.gold }]}>Gerenciar Anúncios</Text>
                 </TouchableOpacity>
               </View>
             ) : user?.id ? (

@@ -624,7 +624,7 @@ export default function EmpresaPage() {
     if (!companyId || !company) return;
     if (tab === "vagas" && !oppsLoaded && !oppsLoading) {
       setOppsLoading(true);
-      fetchPublicCompanyOpportunities(companyId, "vaga")
+      fetchPublicCompanyOpportunities(companyId, "vaga", company.owner_id)
         .then(setOpps)
         .catch(() => {})
         .finally(() => { setOppsLoaded(true); setOppsLoading(false); });
@@ -740,7 +740,7 @@ export default function EmpresaPage() {
                       onClick={() => setLocation(`/app/empresa/${companyId}/admin`)}
                       style={{ padding: "9px 18px", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", backgroundColor: GOLD, color: WHITE }}
                     >
-                      💼 Gerenciar vagas
+                      📋 Gerenciar Anúncios
                     </button>
                     <button
                       onClick={() => setLocation(`/app/empresa/${companyId}/editar`)}
@@ -848,14 +848,6 @@ export default function EmpresaPage() {
         {/* Tab: Vagas */}
         {tab === "vagas" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {isManager && (
-              <button
-                onClick={() => setLocation(`/app/empresa/${companyId}/admin`)}
-                style={{ padding: "11px 16px", border: `1.5px dashed ${GOLD}`, borderRadius: 12, fontSize: 14, fontWeight: 800, cursor: "pointer", backgroundColor: GOLD + "10", color: GOLD }}
-              >
-                + Publicar nova vaga
-              </button>
-            )}
             {oppsLoading || !oppsLoaded ? (
               <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "48px 24px", textAlign: "center", color: MUTED }}>
                 <div style={{ width: 28, height: 28, border: `3px solid ${GOLD}30`, borderTopColor: GOLD, borderRadius: "50%", animation: "spin .8s linear infinite", margin: "0 auto 10px" }} />
