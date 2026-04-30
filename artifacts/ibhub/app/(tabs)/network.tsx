@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Dimensions,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -1814,6 +1815,40 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
   const [pollAllowMultiple, setPollAllowMultiple] = useState(false);
   const [posting, setPosting] = useState(false);
 
+  // Keyboard-aware composer: track the focused input and the FlatList's scroll
+  // offset so that when the keyboard appears we can scroll the focused input
+  // above the keyboard line (KeyboardAvoidingView shrinks the viewport but
+  // does not auto-scroll FlatList contents).
+  const flatListRef = useRef<FlatList<API.MarketPost> | null>(null);
+  const scrollOffset = useRef(0);
+  const focusedInputRef = useRef<TextInput | null>(null);
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const sub = Keyboard.addListener("keyboardDidShow", e => {
+      const input = focusedInputRef.current;
+      if (!input) return;
+      const kbHeight = e.endCoordinates.height;
+      const screenH = Dimensions.get("window").height;
+      const visibleBottom = screenH - kbHeight;
+      input.measureInWindow((_x, y, _w, h) => {
+        const inputBottom = y + h;
+        const overlap = inputBottom - (visibleBottom - 16);
+        if (overlap > 0) {
+          flatListRef.current?.scrollToOffset({
+            offset: scrollOffset.current + overlap,
+            animated: true,
+          });
+        }
+      });
+    });
+    return () => sub.remove();
+  }, []);
+  const handleInputFocus = useCallback((ref: React.RefObject<TextInput | null>) => () => {
+    focusedInputRef.current = ref.current;
+  }, []);
+  const postInputRef = useRef<TextInput>(null);
+  const pollOptionRefs = useRef<(TextInput | null)[]>([]);
+
   const hasAccess = permHasFeature("mercado:idealbi") || isAdmin;
 
   const fetcher = useCallback(
@@ -1916,8 +1951,10 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
     <View style={{ marginHorizontal: 16, marginBottom: 14, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: "#fff", padding: 14, gap: 10 }}>
       <Text style={{ fontSize: 14, fontWeight: "700", color: colors.navy }}>📡 Nova publicação Ideal.BI</Text>
       <TextInput
+        ref={postInputRef}
         value={newContent}
         onChangeText={setNewContent}
+        onFocus={handleInputFocus(postInputRef)}
         placeholder="Escreva um insight ou análise..."
         placeholderTextColor={colors.mutedForeground}
         multiline
@@ -1949,8 +1986,10 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
           {pollOptions.map((opt, i) => (
             <View key={i} style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
               <TextInput
+                ref={el => { pollOptionRefs.current[i] = el; }}
                 value={opt}
                 onChangeText={v => setPollOptions(prev => prev.map((o, j) => j === i ? v : o))}
+                onFocus={() => { focusedInputRef.current = pollOptionRefs.current[i]; }}
                 placeholder={`Opção ${i + 1}`}
                 placeholderTextColor={colors.mutedForeground}
                 style={{ flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, fontSize: 13, color: colors.foreground }}
@@ -2040,11 +2079,14 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
           keyboardVerticalOffset={0}
         >
         <FlatList
+          ref={flatListRef}
           data={posts}
           keyExtractor={p => p.id}
           contentContainerStyle={{ paddingTop: 12, paddingBottom: bottomPad, flexGrow: 1 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          onScroll={e => { scrollOffset.current = e.nativeEvent.contentOffset.y; }}
+          scrollEventThrottle={32}
           ListHeaderComponent={AdminHeader}
           ListEmptyComponent={loading ? (
             <ActivityIndicator size="large" color={colors.gold} style={{ marginTop: 60 }} />
