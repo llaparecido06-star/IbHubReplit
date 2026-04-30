@@ -94,6 +94,7 @@ interface PostCardProps {
   onVote?: (postId: string, optionIndex: number) => void;
   onViewLikes?: (postId: string) => void;
   isLiking?: boolean;
+  onUserPlayVideo?: (postId: string) => void;
 }
 
 function fmtCount(n: number): string {
@@ -240,7 +241,7 @@ function ImageCarousel({ imageUrls }: { imageUrls: string[] }) {
 const REPORT_REASONS = ["Spam", "Conteúdo ofensivo", "Informação falsa", "Assédio", "Outro"];
 
 
-export function PostCard({ post, currentUserId, isVisible = false, onLike, onReact, onBookmark, onComment, onVote, onHide, onBlock, onViewLikes, isLiking = false }: PostCardProps) {
+export function PostCard({ post, currentUserId, isVisible = false, onLike, onReact, onBookmark, onComment, onVote, onHide, onBlock, onViewLikes, isLiking = false, onUserPlayVideo }: PostCardProps) {
   const colors = useColors();
   const router = useRouter();
   const [showOptions, setShowOptions]           = useState(false);
@@ -451,7 +452,12 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
 
         {post.video_url && (
           <View style={{ marginTop: 10, marginHorizontal: -14 }}>
-            <FeedVideo uri={post.video_url} isVisible={isVisible} width={SCREEN_WIDTH} />
+            <FeedVideo
+              uri={post.video_url}
+              isVisible={isVisible}
+              width={SCREEN_WIDTH}
+              onUserPlay={() => onUserPlayVideo?.(post.id)}
+            />
           </View>
         )}
       </Pressable>

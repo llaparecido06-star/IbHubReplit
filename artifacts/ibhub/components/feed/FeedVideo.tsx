@@ -32,6 +32,11 @@ export interface FeedVideoProps {
   maxHeight?: number;
   startMuted?: boolean;
   containerStyle?: StyleProp<ViewStyle>;
+  /**
+   * Called when the user manually starts playback. The parent feed should
+   * promote this video to the active one so other videos pause.
+   */
+  onUserPlay?: () => void;
 }
 
 export function FeedVideo({
@@ -41,6 +46,7 @@ export function FeedVideo({
   maxHeight = DEFAULT_MAX_HEIGHT,
   startMuted = true,
   containerStyle,
+  onUserPlay,
 }: FeedVideoProps) {
   const [aspectRatio, setAspectRatio] = useState<number>(16 / 9);
   const [playing, setPlaying] = useState(false);
@@ -117,9 +123,10 @@ export function FeedVideo({
       userPausedRef.current = false;
       player.muted = false;
       player.play();
+      onUserPlay?.();
     }
     showAndSchedule();
-  }, [player, showAndSchedule]);
+  }, [player, showAndSchedule, onUserPlay]);
 
   const toggleMute = useCallback(() => {
     player.muted = !player.muted;

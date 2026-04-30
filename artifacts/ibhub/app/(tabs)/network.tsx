@@ -179,8 +179,8 @@ const FALLBACK: Record<Period, API.MarketOverview> = {
 const SCREEN_W_NET = Dimensions.get("window").width;
 const IDEAL_CARD_W = SCREEN_W_NET - 32;
 
-function NetworkPostVideo({ uri, isVisible }: { uri: string; isVisible: boolean }) {
-  return <FeedVideo uri={uri} width={IDEAL_CARD_W} isVisible={isVisible} />;
+function NetworkPostVideo({ uri, isVisible, onUserPlay }: { uri: string; isVisible: boolean; onUserPlay: () => void }) {
+  return <FeedVideo uri={uri} width={IDEAL_CARD_W} isVisible={isVisible} onUserPlay={onUserPlay} />;
 }
 
 function NetworkMediaPreview({ uri }: { uri: string }) {
@@ -1636,11 +1636,12 @@ function MarketPollMobile({ post: initialPost, userId, colors, onPollVote }: {
   );
 }
 
-function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors, isVisible }: {
+function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors, isVisible, onUserPlayVideo }: {
   post: API.MarketPost; userId: string;
   onLikeToggle: (id: string, liked: boolean, reactionType: string | null, count: number) => void;
   colors: ReturnType<typeof useColors>;
   isVisible: boolean;
+  onUserPlayVideo: (postId: string) => void;
 }) {
   const [post,           setPost]           = useState<API.MarketPost>(initialPost);
   const [showComments,   setShowComments]   = useState(false);
@@ -1706,7 +1707,11 @@ function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors,
         <AdaptiveImage uri={post.image_url} width={IDEAL_CARD_W} style={{ borderRadius: 0 }} />
       ) : null}
       {post.video_url ? (
-        <NetworkPostVideo uri={post.video_url} isVisible={isVisible} />
+        <NetworkPostVideo
+          uri={post.video_url}
+          isVisible={isVisible}
+          onUserPlay={() => onUserPlayVideo(post.id)}
+        />
       ) : null}
       {hasPoll ? (
         <MarketPollMobile post={post} userId={userId} colors={colors} onPollVote={handlePollVote} />
@@ -1862,15 +1867,19 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
   const postInputRef = useRef<TextInput>(null);
   const pollOptionRefs = useRef<(TextInput | null)[]>([]);
 
-  // Reels/TikTok-style autoplay: only the single most-visible post's video
-  // plays at any time. We pick the topmost item meeting the area threshold —
-  // FlatList returns viewableItems in render order and the post cards are
-  // taller than typical sibling overlap, so the first one is effectively the
-  // most-visible card the user is looking at.
+  // Single-active video: only the most-centered visible video post plays.
   const [activeVideoPostId, setActiveVideoPostId] = useState<string | null>(null);
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    const first = viewableItems.find(v => v.isViewable && v.item);
-    setActiveVideoPostId(first ? (first.item as API.MarketPost).id : null);
+    const videoItems = viewableItems.filter(v => {
+      if (!v.isViewable || !v.item) return false;
+      return !!(v.item as API.MarketPost).video_url;
+    });
+    if (videoItems.length === 0) {
+      setActiveVideoPostId(null);
+      return;
+    }
+    const mid = videoItems[Math.floor(videoItems.length / 2)];
+    setActiveVideoPostId((mid.item as API.MarketPost).id);
   }, []);
   const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 60 }).current;
 
@@ -2133,6 +2142,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
               onLikeToggle={handleLikeToggle}
               colors={colors}
               isVisible={item.id === activeVideoPostId}
+              onUserPlayVideo={setActiveVideoPostId}
             />
           )}
           onViewableItemsChanged={onViewableItemsChanged}

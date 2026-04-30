@@ -14,6 +14,7 @@ type RegisteredVideo = {
 };
 const registry = new Map<HTMLVideoElement, RegisteredVideo>();
 let syncScheduled = false;
+let userOverrideEl: HTMLVideoElement | null = null;
 const MIN_RATIO = 0.5;
 
 function scheduleSync() {
@@ -22,9 +23,18 @@ function scheduleSync() {
   requestAnimationFrame(() => {
     syncScheduled = false;
     let best: RegisteredVideo | null = null;
-    for (const v of registry.values()) {
-      if (v.ratio < MIN_RATIO) continue;
-      if (!best || v.ratio > best.ratio) best = v;
+    // A user-played video stays active as long as it remains at least
+    // partially on-screen.
+    if (userOverrideEl) {
+      const reg = registry.get(userOverrideEl);
+      if (reg && reg.ratio > 0) best = reg;
+      else userOverrideEl = null;
+    }
+    if (!best) {
+      for (const v of registry.values()) {
+        if (v.ratio < MIN_RATIO) continue;
+        if (!best || v.ratio > best.ratio) best = v;
+      }
     }
     for (const v of registry.values()) {
       if (v === best) {
@@ -37,6 +47,11 @@ function scheduleSync() {
       }
     }
   });
+}
+
+function setUserOverride(el: HTMLVideoElement | null) {
+  userOverrideEl = el;
+  scheduleSync();
 }
 
 function fmt(s: number) {
@@ -116,9 +131,11 @@ export default function VideoPlayer({ src }: VideoPlayerProps) {
     if (!v) return;
     if (v.paused) {
       userPausedRef.current = false;
+      setUserOverride(v);
       v.play().catch(() => {/* ignore */});
     } else {
       userPausedRef.current = true;
+      if (userOverrideEl === v) userOverrideEl = null;
       v.pause();
     }
     showAndSchedule();

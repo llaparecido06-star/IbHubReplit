@@ -110,9 +110,7 @@ export default function FeedScreen() {
   const flatListRef                                 = useRef<FlatList>(null);
   // View tracking
   const viewTimers                                  = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  // Reels/TikTok-style autoplay: only the single most-visible post's video
-  // plays; others pause and reset. We pick the topmost item meeting the
-  // visibility threshold (FlatList returns viewableItems in render order).
+  // Single-active video: only one video plays at a time across the feed.
   const [activeVideoPostId, setActiveVideoPostId]   = useState<string | null>(null);
 
   // Connection suggestions
@@ -427,11 +425,9 @@ export default function FeedScreen() {
   };
 
   // ── Viewable items tracking ──
-  // Two viewability passes via callback pairs:
-  //   1. 25% threshold drives view-count tracking (start a 1s timer when
-  //      a post becomes >=25% visible, increment view count if it sticks).
-  //   2. 60% threshold elects the single active video post — only the
-  //      topmost item meeting that threshold gets isVisible=true.
+  // Two viewability passes:
+  //   1. 25% threshold drives view-count tracking.
+  //   2. 60% threshold elects the active video post (videos only).
   const onViewCountItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     viewableItems.forEach(({ item, isViewable }) => {
       const post = item as Post;
@@ -455,8 +451,18 @@ export default function FeedScreen() {
   }, []);
 
   const onAutoPlayItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    const first = viewableItems.find(v => v.isViewable && v.item);
-    setActiveVideoPostId(first ? (first.item as Post).id : null);
+    const videoItems = viewableItems.filter(v => {
+      if (!v.isViewable || !v.item) return false;
+      return !!(v.item as Post).video_url;
+    });
+    if (videoItems.length === 0) {
+      setActiveVideoPostId(null);
+      return;
+    }
+    // Among the visible video posts, the one closest to the middle of the
+    // viewable list is the most-centered.
+    const mid = videoItems[Math.floor(videoItems.length / 2)];
+    setActiveVideoPostId((mid.item as Post).id);
   }, []);
 
   const viewabilityConfigCallbackPairs = useRef([
@@ -958,6 +964,7 @@ export default function FeedScreen() {
             post={item}
             currentUserId={user?.id}
             isVisible={item.id === activeVideoPostId}
+            onUserPlayVideo={setActiveVideoPostId}
             isLiking={likingPostIds.has(item.id)}
             onLike={async (id) => {
               if (likingPostIds.has(id)) return;
