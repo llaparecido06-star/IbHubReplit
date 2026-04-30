@@ -111,7 +111,7 @@ export default function EventoDetalhe() {
               {isOnline ? "Online" : "Presencial"}
             </span>
             <span style={{ backgroundColor: isFree ? "#dcfce7" : "#fff7ed", color: isFree ? "#16a34a" : "#ea580c", fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 8 }}>
-              {isFree ? "Gratuito" : event.price ? `R$ ${event.price}` : "Pago"}
+              {isFree ? "Gratuito" : "Pago"}
             </span>
             {isPast && (
               <span style={{ backgroundColor: "#f3f4f6", color: "#6b7280", fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 8 }}>

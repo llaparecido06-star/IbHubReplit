@@ -1008,7 +1008,7 @@ function EventCard({ ev, onToggle, past = false, highlighted = false }: { ev: Ap
             {isOnline ? "Online" : "Presencial"}
           </span>
           <span style={{ backgroundColor: isFree ? "#dcfce7" : "#fff7ed", color: isFree ? "#16a34a" : "#ea580c", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>
-            {isFree ? "Gratuito" : ev.price ? `R$ ${ev.price}` : "Pago"}
+            {isFree ? "Gratuito" : "Pago"}
           </span>
         </div>
         <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: "0 0 6px", lineHeight: 1.3 }}>{ev.title}</h3>

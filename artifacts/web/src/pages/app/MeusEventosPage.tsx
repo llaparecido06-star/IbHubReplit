@@ -36,7 +36,6 @@ export default function MeusEventosPage() {
     location: "",
     location_type: "presencial" as "presencial" | "online",
     entry_type: "gratuito" as "gratuito" | "pago",
-    price: "",
     max_attendees: "",
   });
 
@@ -63,14 +62,13 @@ export default function MeusEventosPage() {
       location: form.location.trim() || undefined,
       location_type: form.location_type,
       entry_type: form.entry_type,
-      price: form.entry_type === "pago" && form.price ? parseFloat(form.price) : undefined,
       max_attendees: form.max_attendees ? parseInt(form.max_attendees) : undefined,
       created_by: profile.id,
     });
     if (event) {
       setEvents(prev => [event, ...prev]);
       setShowForm(false);
-      setForm({ title: "", description: "", start_date: "", end_date: "", location: "", location_type: "presencial", entry_type: "gratuito", price: "", max_attendees: "" });
+      setForm({ title: "", description: "", start_date: "", end_date: "", location: "", location_type: "presencial", entry_type: "gratuito", max_attendees: "" });
     }
     setSubmitting(false);
   };
@@ -143,12 +141,6 @@ export default function MeusEventosPage() {
                     <option value="pago">Pago</option>
                   </select>
                 </div>
-                {form.entry_type === "pago" && (
-                  <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 13, fontWeight: 600, color: NAVY, display: "block", marginBottom: 6 }}>Preço (R$)</label>
-                    <input type="number" min="0" step="0.01" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} placeholder="0,00" style={inputStyle} />
-                  </div>
-                )}
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: 13, fontWeight: 600, color: NAVY, display: "block", marginBottom: 6 }}>Máx. participantes</label>
                   <input type="number" min="1" value={form.max_attendees} onChange={e => setForm(f => ({ ...f, max_attendees: e.target.value }))} placeholder="Ilimitado" style={inputStyle} />
@@ -217,7 +209,7 @@ export default function MeusEventosPage() {
                           backgroundColor: evt.entry_type === "pago" ? "#fff3cd" : "#d4edda",
                           color: evt.entry_type === "pago" ? "#856404" : "#155724",
                         }}>
-                          {evt.entry_type === "pago" ? `R$ ${evt.price?.toFixed(2)}` : "Gratuito"}
+                          {evt.entry_type === "pago" ? "Pago" : "Gratuito"}
                         </span>
                         {evt.attendees_count !== undefined && (
                           <span style={{ fontSize: 12, color: MUTED }}>👥 {evt.attendees_count} inscritos</span>

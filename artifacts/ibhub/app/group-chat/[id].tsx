@@ -21,6 +21,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAudioRecorder, requestRecordingPermissionsAsync, setAudioModeAsync, RecordingPresets } from "expo-audio";
 import * as DocumentPicker from "expo-document-picker";
+// Use the legacy module for `getInfoAsync` — see chat/[id].tsx for context.
+import { getInfoAsync as fsGetInfoAsync } from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { Feather } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
@@ -390,14 +392,28 @@ export default function GroupChatScreen() {
     try {
       await audioRecorder.stop();
       await setAudioModeAsync({ allowsRecording: false });
-      // Poll for URI — Android's native layer may need time to finalize the file.
+      // Poll for URI AND non-empty file. See chat/[id].tsx for the rationale —
+      // `audioRecorder.uri` can be set before the file on disk has any bytes,
+      // and uploading at that moment ships an empty multipart part.
       let uri: string | null = null;
-      for (let i = 0; i < 10 && !uri; i++) {
+      let fileSize = 0;
+      for (let i = 0; i < 40; i++) {
         await new Promise(resolve => setTimeout(resolve, 150));
         uri = audioRecorder.uri;
+        if (!uri) continue;
+        try {
+          const info: any = await fsGetInfoAsync(uri, { size: true } as any);
+          if (info?.exists && typeof info.size === "number") {
+            fileSize = info.size;
+            if (fileSize > 0) break;
+          }
+        } catch {}
       }
-      if (!uri) {
-        Alert.alert("Áudio vazio", "Nenhum áudio foi gravado. Tente segurar o botão por mais tempo.");
+      if (!uri || fileSize === 0) {
+        Alert.alert(
+          "Áudio vazio",
+          "Nenhum áudio foi capturado. Verifique a permissão do microfone e tente novamente segurando o botão por mais tempo.",
+        );
         return;
       }
       setUploading(true);

@@ -1569,7 +1569,6 @@ export interface AppEvent {
   location?: string | null;
   location_type?: "online" | "presencial";
   entry_type?: "gratuito" | "pago";
-  price?: number | null;
   cover_image_url?: string | null;
   max_attendees?: number | null;
   attendees_count?: number;
@@ -1862,26 +1861,60 @@ export async function trackOpportunityView(opportunityId: string): Promise<void>
 
 // ─── Events ───────────────────────────────────────────────────────────────────
 
+type EventDbRow = {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string | null;
+  start_date: string;
+  end_date: string | null;
+  location: string | null;
+  location_type: AppEvent["location_type"];
+  entry_type: AppEvent["entry_type"];
+  image_url: string | null;
+  capacity: number | null;
+  attendees_count: number | null;
+  created_at: string;
+};
+
+const EVENT_COLUMNS =
+  "id, user_id, title, description, start_date, end_date, location, location_type, entry_type, image_url, capacity, attendees_count, created_at";
+
+function mapEventRow(row: EventDbRow): AppEvent {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    start_date: row.start_date,
+    end_date: row.end_date,
+    location: row.location,
+    location_type: row.location_type,
+    entry_type: row.entry_type,
+    cover_image_url: row.image_url,
+    max_attendees: row.capacity,
+    attendees_count: row.attendees_count ?? 0,
+    created_by: row.user_id,
+    created_at: row.created_at,
+  };
+}
+
 export async function fetchEvents(userId: string): Promise<AppEvent[]> {
   const { data, error } = await supabase
     .from("events")
-    .select(`
-      id, title, description, start_date, end_date, location, location_type,
-      entry_type, price, cover_image_url, max_attendees, attendees_count,
-      created_by, created_at
-    `)
+    .select(EVENT_COLUMNS)
+    .eq("is_active", true)
     .order("start_date", { ascending: true })
     .limit(100);
 
   if (error || !data) return [];
 
-  const items = data as AppEvent[];
+  const items = (data as EventDbRow[]).map(mapEventRow);
 
   if (userId && items.length > 0) {
     const ids = items.map((i) => i.id);
     type EventIdRow = { event_id: string };
     const { data: regData } = await supabase
-      .from("event_registrations")
+      .from("event_attendees")
       .select("event_id")
       .eq("user_id", userId)
       .in("event_id", ids);
@@ -1895,19 +1928,15 @@ export async function fetchEvents(userId: string): Promise<AppEvent[]> {
 export async function fetchEventById(id: string, userId: string): Promise<AppEvent | null> {
   const { data, error } = await supabase
     .from("events")
-    .select(`
-      id, title, description, start_date, end_date, location, location_type,
-      entry_type, price, cover_image_url, max_attendees, attendees_count,
-      created_by, created_at
-    `)
+    .select(EVENT_COLUMNS)
     .eq("id", id)
     .maybeSingle();
 
   if (error || !data) return null;
 
-  let result: AppEvent = { ...(data as AppEvent) };
+  let result: AppEvent = mapEventRow(data as EventDbRow);
 
-  if (userId && result.created_by) {
+  if (result.created_by) {
     const { data: profile } = await supabase
       .from("profiles")
       .select("id, full_name, avatar_url")
@@ -1918,7 +1947,7 @@ export async function fetchEventById(id: string, userId: string): Promise<AppEve
 
   if (userId) {
     const { data: regData } = await supabase
-      .from("event_registrations")
+      .from("event_attendees")
       .select("id")
       .eq("user_id", userId)
       .eq("event_id", id)
@@ -1938,7 +1967,7 @@ export interface EventParticipant {
 
 export async function fetchEventParticipants(eventId: string): Promise<EventParticipant[]> {
   const { data, error } = await supabase
-    .from("event_registrations")
+    .from("event_attendees")
     .select("id, user_id, created_at")
     .eq("event_id", eventId)
     .order("created_at", { ascending: true })
@@ -1971,16 +2000,18 @@ export async function fetchEventParticipants(eventId: string): Promise<EventPart
 }
 
 export async function registerForEvent(eventId: string, userId: string): Promise<boolean> {
-  const { error } = await supabase.from("event_registrations").insert({
-    event_id: eventId,
-    user_id: userId,
-  });
+  const { error } = await supabase
+    .from("event_attendees")
+    .upsert(
+      { event_id: eventId, user_id: userId, status: "confirmed" },
+      { onConflict: "event_id,user_id" },
+    );
   return !error;
 }
 
 export async function unregisterFromEvent(eventId: string, userId: string): Promise<boolean> {
   const { error } = await supabase
-    .from("event_registrations")
+    .from("event_attendees")
     .delete()
     .eq("event_id", eventId)
     .eq("user_id", userId);
@@ -3200,11 +3231,11 @@ export async function fetchMyEvents(userId: string): Promise<AppEvent[]> {
   try {
     const { data, error } = await supabase
       .from("events")
-      .select("id, title, description, start_date, end_date, location, location_type, entry_type, price, cover_image_url, max_attendees, attendees_count, created_by, created_at")
-      .eq("created_by", userId)
+      .select(EVENT_COLUMNS)
+      .eq("user_id", userId)
       .order("start_date", { ascending: false });
     if (error || !data) return [];
-    return data as AppEvent[];
+    return (data as EventDbRow[]).map(mapEventRow);
   } catch (e) {
     console.warn("fetchMyEvents:", e);
     return [];
@@ -3219,14 +3250,33 @@ export async function createEvent(params: {
   location?: string;
   location_type?: "online" | "presencial";
   entry_type?: "gratuito" | "pago";
-  price?: number;
   max_attendees?: number;
   created_by: string;
 }): Promise<AppEvent | null> {
   try {
-    const { data, error } = await supabase.from("events").insert(params).select().single();
-    if (error || !data) return null;
-    return data as AppEvent;
+    const insertPayload = {
+      user_id: params.created_by,
+      title: params.title,
+      description: params.description ?? null,
+      start_date: params.start_date,
+      end_date: params.end_date ?? null,
+      location: params.location ?? null,
+      location_type: params.location_type ?? "presencial",
+      entry_type: params.entry_type ?? "gratuito",
+      capacity: params.max_attendees ?? null,
+      visibility: "publico",
+      is_active: true,
+    };
+    const { data, error } = await supabase
+      .from("events")
+      .insert(insertPayload)
+      .select(EVENT_COLUMNS)
+      .single();
+    if (error || !data) {
+      if (error) console.warn("createEvent:", error);
+      return null;
+    }
+    return mapEventRow(data as EventDbRow);
   } catch (e) {
     console.warn("createEvent:", e);
     return null;
@@ -3235,7 +3285,7 @@ export async function createEvent(params: {
 
 export async function deleteEvent(eventId: string, userId: string): Promise<boolean> {
   try {
-    const { error } = await supabase.from("events").delete().eq("id", eventId).eq("created_by", userId);
+    const { error } = await supabase.from("events").delete().eq("id", eventId).eq("user_id", userId);
     return !error;
   } catch (e) {
     console.warn("deleteEvent:", e);

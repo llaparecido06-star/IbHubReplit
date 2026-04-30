@@ -2,6 +2,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAudioRecorder, requestRecordingPermissionsAsync, setAudioModeAsync, RecordingPresets } from "expo-audio";
 import { VideoView, useVideoPlayer } from "expo-video";
 import * as DocumentPicker from "expo-document-picker";
+// Use the legacy module for `getInfoAsync` — the new (v19) main module
+// only exposes the class-based File API and re-exports legacy helpers as
+// stubs that throw at runtime.
+import { getInfoAsync as fsGetInfoAsync } from "expo-file-system/legacy";
 import * as Haptics from "expo-haptics";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
@@ -675,16 +679,33 @@ export default function ChatScreen() {
       await audioRecorder.stop();
       await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
 
-      // Poll for URI — Android's native layer may need time to finalize the file
+      // Poll for URI AND a non-empty file. Android's MediaRecorder layer can
+      // resolve `stop()` and even expose `audioRecorder.uri` before the file
+      // on disk is fully flushed — uploading at that moment streams 0 bytes
+      // to the server and the resulting message is unplayable. We wait for
+      // both the URI to appear AND the file to have non-zero size, with a
+      // generous timeout (~6s) for slow devices.
       let uri: string | null = null;
-      for (let i = 0; i < 10 && !uri; i++) {
+      let fileSize = 0;
+      for (let i = 0; i < 40; i++) {
         await new Promise(resolve => setTimeout(resolve, 150));
         uri = audioRecorder.uri;
+        if (!uri) continue;
+        try {
+          const info: any = await fsGetInfoAsync(uri, { size: true } as any);
+          if (info?.exists && typeof info.size === "number") {
+            fileSize = info.size;
+            if (fileSize > 0) break;
+          }
+        } catch {}
       }
-      if (__DEV__) console.log("[Audio] Recording stopped. URI:", uri ?? "null");
+      if (__DEV__) console.log("[Audio] Recording stopped. URI:", uri ?? "null", "size:", fileSize);
 
-      if (!uri) {
-        Alert.alert("Áudio vazio", "Nenhum áudio foi gravado. Tente segurar o botão por mais tempo.");
+      if (!uri || fileSize === 0) {
+        Alert.alert(
+          "Áudio vazio",
+          "Nenhum áudio foi capturado. Verifique a permissão do microfone e tente novamente segurando o botão por mais tempo.",
+        );
         return;
       }
 
