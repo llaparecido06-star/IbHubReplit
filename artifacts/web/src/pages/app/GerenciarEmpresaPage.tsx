@@ -124,7 +124,8 @@ export default function GerenciarEmpresaPage() {
     );
   }
 
-  const canEdit = isOwner || userRole === "editor" || userRole === "moderador";
+  // Owner-only: matches company_pages RLS.
+  const canEdit = isOwner;
 
   if (!loading && company && !canEdit) {
     return (
@@ -338,6 +339,32 @@ export default function GerenciarEmpresaPage() {
                   <option value="">Selecione um setor...</option>
                   {INDUSTRIES.map(ind => <option key={ind} value={ind}>{ind}</option>)}
                 </select>
+              </div>
+
+              {/* Quick links — content is edited inline on the public profile
+                  to keep a single source of truth for managers and visitors. */}
+              <div style={{ paddingTop: 14, borderTop: `1px solid ${BORDER}` }}>
+                <h3 style={{ fontSize: 14, fontWeight: 800, color: NAVY, margin: "0 0 10px" }}>Gerenciar conteúdo</h3>
+                <p style={{ fontSize: 12, color: MUTED, margin: "0 0 12px" }}>
+                  Portfólio, vagas e publicações são editados direto na página pública
+                  (você verá os controles de adicionar/editar quando estiver logado como gestor).
+                </p>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {[
+                    { key: "portfolio", label: "Portfólio", icon: "🛒" },
+                    { key: "vagas",     label: "Vagas",     icon: "💼" },
+                    { key: "publicacoes", label: "Publicações", icon: "📝" },
+                  ].map(s => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => setLocation(`/app/empresa/${companyId}?tab=${s.key}`)}
+                      style={{ padding: "9px 14px", borderRadius: 10, border: `1.5px solid ${BORDER}`, backgroundColor: WHITE, color: NAVY, fontWeight: 700, cursor: "pointer", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 8 }}
+                    >
+                      <span aria-hidden>{s.icon}</span> {s.label} →
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {error && <p style={{ color: "#dc3545", fontSize: 13, fontWeight: 600, margin: 0 }}>{error}</p>}

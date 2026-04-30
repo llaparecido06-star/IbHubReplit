@@ -38,11 +38,15 @@ import {
   toggleBookmark,
   checkUserCompanyRole,
   getOrCreateDirectConversation,
+  fetchPublicCompanyOpportunities,
+  fetchPublicCompanyEvents,
+  type AppOpportunity,
+  type AppEvent,
 } from "@/services/api";
 import { Post } from "@/components/feed/PostCard";
 import { friendlyErrorMessage } from "@/hooks/useAsyncAction";
 
-type CompanyTab  = "publicacoes" | "portfolio" | "painel" | "anuncios";
+type CompanyTab  = "publicacoes" | "vagas" | "sobre" | "portfolio" | "eventos" | "painel";
 type ProductCat  = "produto" | "vinho" | "acessorio" | "servico";
 type SortKey     = "data" | "preco" | "categoria";
 
@@ -84,7 +88,7 @@ export default function EmpresaScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, activeCompany } = useAuth();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, tab: tabParam } = useLocalSearchParams<{ id: string; tab?: string }>();
 
   const [companyPage, setCompanyPage] = useState<CompanyPage | null>(null);
   const [companyLoading, setCompanyLoading] = useState(true);
@@ -94,8 +98,20 @@ export default function EmpresaScreen() {
   const [followLoading, setFollowLoading] = useState(false);
   const [messagingLoading, setMessagingLoading] = useState(false);
   const [profileFollowers, setProfileFollowers] = useState<number | null>(null);
+  const [profilePostsCount, setProfilePostsCount] = useState<number | null>(null);
 
-  const [activeTab, setActiveTab] = useState<CompanyTab>("publicacoes");
+  const [activeTab, setActiveTab] = useState<CompanyTab>(() => {
+    const valid: CompanyTab[] = ["publicacoes", "vagas", "sobre", "portfolio", "eventos", "painel"];
+    return (valid as string[]).includes(tabParam ?? "") ? (tabParam as CompanyTab) : "publicacoes";
+  });
+  // Sync activeTab when the route ?tab= param changes.
+  useEffect(() => {
+    const valid: CompanyTab[] = ["publicacoes", "vagas", "sobre", "portfolio", "eventos", "painel"];
+    if (tabParam && (valid as string[]).includes(tabParam) && tabParam !== activeTab) {
+      setActiveTab(tabParam as CompanyTab);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabParam]);
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
@@ -128,6 +144,14 @@ export default function EmpresaScreen() {
 
   const [showFab, setShowFab] = useState(false);
 
+  const [opportunities, setOpportunities] = useState<AppOpportunity[]>([]);
+  const [opportunitiesLoaded, setOpportunitiesLoaded] = useState(false);
+  const [opportunitiesLoading, setOpportunitiesLoading] = useState(false);
+
+  const [companyEvents, setCompanyEvents] = useState<AppEvent[]>([]);
+  const [eventsLoaded, setEventsLoaded] = useState(false);
+  const [eventsLoading, setEventsLoading] = useState(false);
+
   // Analytics (Painel)
   const [analyticsLoaded, setAnalyticsLoaded] = useState(false);
   const [followersCount, setFollowersCount] = useState<number | null>(null);
@@ -145,19 +169,22 @@ export default function EmpresaScreen() {
     const page = await fetchCompanyPageById(id);
     setCompanyPage(page);
 
-    const [followersRes, ..._] = await Promise.all([
+    const [followersRes, postsCountRes, ..._] = await Promise.all([
       supabase.from("company_follows").select("id", { count: "exact", head: true }).eq("company_id", id),
+      supabase.from("posts").select("id", { count: "exact", head: true }).eq("company_page_id", id),
       user?.id && page
         ? Promise.all([
             checkIsFollowingCompany(id, user.id).then(f => setIsFollowing(f)),
             checkUserCompanyRole(id, user.id).then(r => {
-              setIsManager(r.isOwner || r.role !== null);
+              // Owner-only: matches company_pages / company_products RLS.
+              setIsManager(r.isOwner);
               setUserRole(r.role);
             }),
           ])
         : Promise.resolve(null),
     ]);
     setProfileFollowers(followersRes.count ?? 0);
+    setProfilePostsCount(postsCountRes.count ?? 0);
     setCompanyLoading(false);
   }, [id, user?.id]);
 
@@ -181,9 +208,44 @@ export default function EmpresaScreen() {
 
   useEffect(() => { loadCompany(); }, [loadCompany]);
 
+  // Reset lazy-loaded tab state when companyId changes.
+  useEffect(() => {
+    setPosts([]); setPostsLoaded(false); setPostsLoading(false);
+    setProducts([]); setProductsLoaded(false); setProductsLoading(false);
+    setOpportunities([]); setOpportunitiesLoaded(false); setOpportunitiesLoading(false);
+    setCompanyEvents([]); setEventsLoaded(false); setEventsLoading(false);
+    setAnalyticsLoaded(false);
+  }, [id]);
+
+  const loadOpportunities = useCallback(async () => {
+    if (!id || opportunitiesLoaded) return;
+    setOpportunitiesLoading(true);
+    try {
+      const data = await fetchPublicCompanyOpportunities(id, "vaga");
+      setOpportunities(data);
+      setOpportunitiesLoaded(true);
+    } finally {
+      setOpportunitiesLoading(false);
+    }
+  }, [id, opportunitiesLoaded]);
+
+  const loadCompanyEvents = useCallback(async () => {
+    if (!id || eventsLoaded) return;
+    setEventsLoading(true);
+    try {
+      const data = await fetchPublicCompanyEvents(id);
+      setCompanyEvents(data);
+      setEventsLoaded(true);
+    } finally {
+      setEventsLoading(false);
+    }
+  }, [id, eventsLoaded]);
+
   useEffect(() => {
     if (activeTab === "publicacoes") { loadPosts(); }
     if (activeTab === "portfolio")   { loadProducts(); }
+    if (activeTab === "vagas")       { loadOpportunities(); }
+    if (activeTab === "eventos")     { loadCompanyEvents(); }
     if (activeTab === "painel" && !analyticsLoaded && id) {
       (async () => {
         const ownerId = companyPage?.owner_id ?? null;
@@ -216,7 +278,7 @@ export default function EmpresaScreen() {
         setAnalyticsLoaded(true);
       })();
     }
-  }, [activeTab, loadPosts, loadProducts, analyticsLoaded, id, companyPage]);
+  }, [activeTab, loadPosts, loadProducts, loadOpportunities, loadCompanyEvents, analyticsLoaded, id, companyPage]);
 
   // ── Realtime: posts, likes and comments for this company ──
   useEffect(() => {
@@ -278,7 +340,23 @@ export default function EmpresaScreen() {
       quality: 0.8,
     });
     if (!result.canceled && result.assets[0]) {
-      setPImageUri(result.assets[0].uri);
+      const asset = result.assets[0];
+      const MAX_BYTES = 5 * 1024 * 1024;
+      if (asset.fileSize && asset.fileSize > MAX_BYTES) {
+        Alert.alert(
+          "Imagem muito grande",
+          `A foto tem ${(asset.fileSize / (1024 * 1024)).toFixed(1)} MB. O limite é 5 MB. Tente uma imagem menor.`,
+        );
+        return;
+      }
+      const uri = asset.uri;
+      const ext = uri.split(".").pop()?.toLowerCase();
+      const allowed = ["jpg", "jpeg", "png", "webp", "heic"];
+      if (ext && !allowed.includes(ext)) {
+        Alert.alert("Formato inválido", "Use JPG, PNG, WEBP ou HEIC.");
+        return;
+      }
+      setPImageUri(uri);
       setPImageChanged(true);
     }
   };
@@ -535,7 +613,7 @@ export default function EmpresaScreen() {
               <Text style={[styles.profileBio, { color: colors.foreground }]}>{companyBio}</Text>
             ) : null}
 
-            {/* Stats */}
+            {/* Stats — Companies don't have a "Conexões" counter. */}
             <View style={[styles.profileStats, { borderTopColor: colors.border }]}>
               <View style={styles.profileStat}>
                 <Text style={[styles.profileStatNum, { color: colors.navy }]}>
@@ -543,15 +621,13 @@ export default function EmpresaScreen() {
                 </Text>
                 <Text style={[styles.profileStatLabel, { color: colors.mutedForeground }]}>Seguidores</Text>
               </View>
-              {postsLoaded && posts.length > 0 ? (
-                <>
-                  <View style={[styles.profileStatDivider, { backgroundColor: colors.border }]} />
-                  <View style={styles.profileStat}>
-                    <Text style={[styles.profileStatNum, { color: colors.navy }]}>{posts.length}</Text>
-                    <Text style={[styles.profileStatLabel, { color: colors.mutedForeground }]}>Publicações</Text>
-                  </View>
-                </>
-              ) : null}
+              <View style={[styles.profileStatDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.profileStat}>
+                <Text style={[styles.profileStatNum, { color: colors.navy }]}>
+                  {profilePostsCount === null ? "—" : String(profilePostsCount)}
+                </Text>
+                <Text style={[styles.profileStatLabel, { color: colors.mutedForeground }]}>Publicações</Text>
+              </View>
             </View>
 
             {/* CTA buttons */}
@@ -621,21 +697,18 @@ export default function EmpresaScreen() {
         >
           {([
             { key: "publicacoes", label: "PUBLICAÇÕES" },
-            { key: "portfolio",   label: "PORTIFÓLIO" },
-            ...(isManager ? [
-              { key: "painel"   as CompanyTab, label: "PAINEL" },
-              { key: "anuncios" as CompanyTab, label: "ANÚNCIOS" },
-            ] : []),
+            { key: "vagas",       label: "VAGAS" },
+            { key: "sobre",       label: "SOBRE" },
+            { key: "portfolio",   label: "PORTFÓLIO" },
+            { key: "eventos",     label: "EVENTOS" },
+            ...(isManager ? [{ key: "painel" as CompanyTab, label: "PAINEL" }] : []),
           ] as { key: CompanyTab; label: string }[]).map((t) => (
             <TouchableOpacity
               key={t.key}
               style={[styles.tabItem, { flex: 0, paddingHorizontal: 16 }, activeTab === t.key && { borderBottomColor: colors.gold, borderBottomWidth: 2 }]}
               onPress={() => {
-                if (t.key === "anuncios") {
-                  router.push({ pathname: "/empresa/admin" as any, params: { id, name: companyPage?.name ?? "" } });
-                } else {
-                  setActiveTab(t.key);
-                }
+                setActiveTab(t.key);
+                router.setParams({ tab: t.key });
               }}
             >
               <Text style={[styles.tabLabel, { color: activeTab === t.key ? colors.gold : colors.mutedForeground }]}>
@@ -697,7 +770,7 @@ export default function EmpresaScreen() {
           </View>
         )}
 
-        {/* ── Portifólio ── */}
+        {/* ── Portfólio ── */}
         {activeTab === "portfolio" && (
           <View style={{ padding: 16, rowGap: 14 }}>
             {isManager ? (
@@ -705,8 +778,8 @@ export default function EmpresaScreen() {
                 style={[styles.addProductBtn, { backgroundColor: colors.gold }]}
                 onPress={() => { resetProductForm(); setShowProductForm(true); }}
               >
-                <Feather name="plus" size={16} color="#fff" />
-                <Text style={styles.addProductBtnText}>Adicionar Produto</Text>
+                <Feather name="plus" size={18} color="#fff" />
+                <Text style={styles.addProductBtnText}>Adicionar item ao portfólio</Text>
               </TouchableOpacity>
             ) : null}
 
@@ -749,35 +822,61 @@ export default function EmpresaScreen() {
               <ActivityIndicator color={colors.gold} style={{ marginTop: 20 }} />
             ) : filteredProducts.length === 0 ? (
               <View style={styles.portfolioEmpty}>
-                <Feather name="package" size={32} color={colors.border} />
-                <Text style={[styles.portfolioEmptyText, { color: colors.mutedForeground }]}>Nenhum produto cadastrado</Text>
+                <Feather name="package" size={40} color={colors.border} />
+                <Text style={[styles.portfolioEmptyText, { color: colors.mutedForeground }]}>
+                  {isManager ? "Mostre o que sua empresa oferece." : "Esta empresa ainda não cadastrou itens."}
+                </Text>
+                {isManager ? (
+                  <TouchableOpacity
+                    style={[styles.addProductBtn, { backgroundColor: colors.gold, marginTop: 8, paddingHorizontal: 20 }]}
+                    onPress={() => { resetProductForm(); setShowProductForm(true); }}
+                  >
+                    <Feather name="plus" size={16} color="#fff" />
+                    <Text style={styles.addProductBtnText}>Adicionar primeiro item</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             ) : (
               filteredProducts.map((p) => (
                 <TouchableOpacity
                   key={p.id}
-                  style={[styles.productCard, { backgroundColor: "#fff", borderColor: colors.border }]}
-                  onPress={() => !isManager && setSelectedProduct(p)}
-                  activeOpacity={isManager ? 1 : 0.75}
+                  style={[styles.productCardV, { backgroundColor: "#fff", borderColor: colors.border }]}
+                  onPress={() => setSelectedProduct(p)}
+                  activeOpacity={0.85}
                 >
-                  <View style={[styles.productImgWrap, { backgroundColor: colors.background }]}>
+                  <View style={[styles.productCardImgWrap, { backgroundColor: colors.background }]}>
                     {p.image_url ? (
-                      <Image source={{ uri: p.image_url }} style={styles.productImg} />
+                      <Image source={{ uri: p.image_url }} style={styles.productCardImg} resizeMode="cover" />
                     ) : (
-                      <Feather name="package" size={28} color={colors.border} />
+                      <Feather name="package" size={36} color={colors.border} />
                     )}
                   </View>
-                  <View style={{ flex: 1, gap: 4 }}>
-                    <Text style={[styles.productName, { color: colors.navy }]} numberOfLines={2}>{p.name}</Text>
-                    <View style={[styles.catBadgeSmall, { backgroundColor: colors.gold + "18" }]}>
-                      <Text style={[styles.catBadgeSmallText, { color: colors.gold }]}>
-                        {PRODUCT_CATS.find((c) => c.key === p.cat)?.label}
-                      </Text>
+                  <View style={{ padding: 12, gap: 6 }}>
+                    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+                      <Text style={[styles.productCardName, { color: colors.navy, flex: 1 }]} numberOfLines={2}>{p.name}</Text>
+                      {p.price ? (
+                        <Text style={[styles.productCardPrice, { color: colors.gold }]} numberOfLines={1}>{p.price}</Text>
+                      ) : null}
                     </View>
-                    {p.price ? <Text style={[styles.productPrice, { color: colors.gold }]}>{p.price}</Text> : null}
+                    {p.desc ? (
+                      <Text style={[styles.productCardDesc, { color: colors.mutedForeground }]} numberOfLines={2}>{p.desc}</Text>
+                    ) : null}
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
+                      <View style={[styles.catBadgePill, { backgroundColor: colors.gold + "18" }]}>
+                        <Text style={[styles.catBadgeSmallText, { color: colors.gold }]}>
+                          {PRODUCT_CATS.find((c) => c.key === p.cat)?.label}
+                        </Text>
+                      </View>
+                      {!isManager ? (
+                        <Text style={[styles.productActionText, { color: colors.gold, fontWeight: "700" }]}>Ver detalhes →</Text>
+                      ) : null}
+                    </View>
                     {isManager ? (
-                      <View style={styles.productActions}>
-                        <TouchableOpacity style={styles.productActionBtn} onPress={() => openEditProduct(p)}>
+                      <View style={[styles.productActions, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10, marginTop: 6, paddingHorizontal: 0 }]}>
+                        <TouchableOpacity
+                          style={styles.productActionBtn}
+                          onPress={() => openEditProduct(p)}
+                        >
                           <Feather name="edit-2" size={14} color={colors.navy} />
                           <Text style={[styles.productActionText, { color: colors.navy }]}>Editar</Text>
                         </TouchableOpacity>
@@ -794,9 +893,193 @@ export default function EmpresaScreen() {
                           </Text>
                         </TouchableOpacity>
                       </View>
-                    ) : (
-                      <Text style={[styles.productActionText, { color: colors.gold, marginTop: 4 }]}>Ver detalhes →</Text>
-                    )}
+                    ) : null}
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
+        )}
+
+        {/* ── Vagas ── */}
+        {activeTab === "vagas" && (
+          <View style={{ padding: 16, gap: 12 }}>
+            {isManager && (
+              <TouchableOpacity
+                style={[styles.addProductBtn, { backgroundColor: colors.gold }]}
+                onPress={() => router.push({ pathname: "/empresa/admin", params: { id, name: companyPage?.name ?? "" } })}
+              >
+                <Feather name="plus" size={16} color="#fff" />
+                <Text style={styles.addProductBtnText}>Publicar nova vaga</Text>
+              </TouchableOpacity>
+            )}
+            {opportunitiesLoading ? (
+              <ActivityIndicator color={colors.gold} style={{ marginTop: 20 }} />
+            ) : opportunities.length === 0 ? (
+              <View style={styles.emptyTab}>
+                <Feather name="briefcase" size={32} color={colors.mutedForeground} />
+                <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>Nenhuma vaga publicada</Text>
+              </View>
+            ) : (
+              opportunities.map((op) => (
+                <TouchableOpacity
+                  key={op.id}
+                  style={[styles.opCard, { backgroundColor: "#fff", borderColor: colors.border }]}
+                  onPress={() => router.push(`/opportunity/${op.id}`)}
+                  activeOpacity={0.85}
+                >
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.opTitle, { color: colors.navy }]} numberOfLines={2}>{op.title}</Text>
+                      {op.location ? (
+                        <View style={styles.opMetaRow}>
+                          <Feather name="map-pin" size={11} color={colors.mutedForeground} />
+                          <Text style={[styles.opMeta, { color: colors.mutedForeground }]}>{op.location}</Text>
+                        </View>
+                      ) : null}
+                      {op.contract_type ? (
+                        <View style={styles.opMetaRow}>
+                          <Feather name="briefcase" size={11} color={colors.mutedForeground} />
+                          <Text style={[styles.opMeta, { color: colors.mutedForeground }]}>{op.contract_type}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    {op.salary ? (
+                      <Text style={[styles.opSalary, { color: colors.gold }]}>{op.salary}</Text>
+                    ) : null}
+                  </View>
+                  {op.description ? (
+                    <Text style={[styles.opDesc, { color: colors.foreground }]} numberOfLines={2}>{op.description}</Text>
+                  ) : null}
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
+        )}
+
+        {/* ── Sobre ── */}
+        {activeTab === "sobre" && (
+          <View style={{ padding: 16, gap: 14 }}>
+            <View style={[styles.sobreCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+              <Text style={[styles.sobreSectionTitle, { color: colors.navy }]}>Sobre a empresa</Text>
+              {companyPage?.bio ? (
+                <Text style={[styles.sobreBio, { color: colors.foreground }]}>{companyPage.bio}</Text>
+              ) : (
+                <Text style={[styles.sobreBio, { color: colors.mutedForeground, fontStyle: "italic" }]}>
+                  Nenhuma descrição adicionada.
+                </Text>
+              )}
+            </View>
+
+            <View style={[styles.sobreCard, { backgroundColor: "#fff", borderColor: colors.border, gap: 14 }]}>
+              {companyPage?.industry ? (
+                <View style={styles.sobreRow}>
+                  <View style={[styles.sobreIcon, { backgroundColor: colors.gold + "20" }]}>
+                    <Feather name="briefcase" size={16} color={colors.gold} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.sobreLabel, { color: colors.mutedForeground }]}>Setor</Text>
+                    <Text style={[styles.sobreValue, { color: colors.navy }]}>{companyPage.industry}</Text>
+                  </View>
+                </View>
+              ) : null}
+              {companyPage?.location ? (
+                <View style={styles.sobreRow}>
+                  <View style={[styles.sobreIcon, { backgroundColor: colors.gold + "20" }]}>
+                    <Feather name="map-pin" size={16} color={colors.gold} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.sobreLabel, { color: colors.mutedForeground }]}>Localização</Text>
+                    <Text style={[styles.sobreValue, { color: colors.navy }]}>{companyPage.location}</Text>
+                  </View>
+                </View>
+              ) : null}
+              {companyPage?.website ? (
+                <TouchableOpacity
+                  style={styles.sobreRow}
+                  onPress={() => Linking.openURL(
+                    companyPage.website!.startsWith("http") ? companyPage.website! : `https://${companyPage.website}`
+                  )}
+                >
+                  <View style={[styles.sobreIcon, { backgroundColor: colors.gold + "20" }]}>
+                    <Feather name="link" size={16} color={colors.gold} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.sobreLabel, { color: colors.mutedForeground }]}>Website</Text>
+                    <Text style={[styles.sobreValue, { color: colors.gold }]} numberOfLines={1}>
+                      {companyPage.website.replace(/^https?:\/\//, "")}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ) : null}
+              {companyPage?.created_at ? (
+                <View style={styles.sobreRow}>
+                  <View style={[styles.sobreIcon, { backgroundColor: colors.gold + "20" }]}>
+                    <Feather name="calendar" size={16} color={colors.gold} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.sobreLabel, { color: colors.mutedForeground }]}>No ibhub desde</Text>
+                    <Text style={[styles.sobreValue, { color: colors.navy }]}>
+                      {new Date(companyPage.created_at).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+              {!companyPage?.industry && !companyPage?.location && !companyPage?.website && !companyPage?.created_at ? (
+                <Text style={[styles.sobreBio, { color: colors.mutedForeground, fontStyle: "italic" }]}>
+                  Sem informações adicionais.
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        )}
+
+        {/* ── Eventos ── */}
+        {activeTab === "eventos" && (
+          <View style={{ padding: 16, gap: 12 }}>
+            {eventsLoading ? (
+              <ActivityIndicator color={colors.gold} style={{ marginTop: 20 }} />
+            ) : companyEvents.length === 0 ? (
+              <View style={styles.emptyTab}>
+                <Feather name="calendar" size={32} color={colors.mutedForeground} />
+                <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>Nenhum evento publicado</Text>
+              </View>
+            ) : (
+              companyEvents.map((ev) => (
+                <TouchableOpacity
+                  key={ev.id}
+                  style={[styles.eventCard, { backgroundColor: "#fff", borderColor: colors.border }]}
+                  onPress={() => router.push(`/event/${ev.id}`)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.opTitle, { color: colors.navy }]} numberOfLines={2}>{ev.title}</Text>
+                  <View style={styles.opMetaRow}>
+                    <Feather name="calendar" size={11} color={colors.mutedForeground} />
+                    <Text style={[styles.opMeta, { color: colors.mutedForeground }]}>
+                      {new Date(ev.start_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
+                    </Text>
+                  </View>
+                  {ev.location ? (
+                    <View style={styles.opMetaRow}>
+                      <Feather name="map-pin" size={11} color={colors.mutedForeground} />
+                      <Text style={[styles.opMeta, { color: colors.mutedForeground }]}>{ev.location}</Text>
+                    </View>
+                  ) : null}
+                  <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
+                    {ev.location_type ? (
+                      <View style={[styles.evChip, { backgroundColor: colors.background }]}>
+                        <Text style={[styles.evChipText, { color: colors.navy }]}>
+                          {ev.location_type === "online" ? "Online" : "Presencial"}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {ev.entry_type ? (
+                      <View style={[styles.evChip, { backgroundColor: colors.gold + "18" }]}>
+                        <Text style={[styles.evChipText, { color: colors.gold }]}>
+                          {ev.entry_type === "gratuito" ? "Gratuito" : "Pago"}
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
                 </TouchableOpacity>
               ))
@@ -855,42 +1138,65 @@ export default function EmpresaScreen() {
             </TouchableOpacity>
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, rowGap: 14 }}>
-            <TextInput
-              style={[styles.formInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-              placeholder="Nome do produto" placeholderTextColor={colors.mutedForeground} value={pName} onChangeText={setPName} />
-            <TextInput
-              style={[styles.formInput, styles.formTextarea, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-              placeholder="Descrição" placeholderTextColor={colors.mutedForeground} value={pDesc} onChangeText={setPDesc} multiline textAlignVertical="top" />
-            <TextInput
-              style={[styles.formInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-              placeholder="Preço (ex: R$ 150,00)" placeholderTextColor={colors.mutedForeground} value={pPrice} onChangeText={setPPrice} />
-            <View style={styles.catChips}>
-              {PRODUCT_CATS.map((c) => (
-                <TouchableOpacity
-                  key={c.key}
-                  style={[styles.catChip, { backgroundColor: pCat === c.key ? colors.gold : "#fff", borderColor: pCat === c.key ? colors.gold : colors.border }]}
-                  onPress={() => setPCat(c.key)}
-                >
-                  <Text style={[styles.catChipText, { color: pCat === c.key ? "#fff" : colors.foreground }]}>{c.label}</Text>
-                </TouchableOpacity>
-              ))}
+            <View style={{ gap: 6 }}>
+              <Text style={[styles.fieldLabel, { color: colors.navy }]}>Nome <Text style={{ color: "#dc2626" }}>*</Text></Text>
+              <TextInput
+                style={[styles.formInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+                placeholder="Ex: Vinho Cabernet 2022" placeholderTextColor={colors.mutedForeground} value={pName} onChangeText={setPName} />
             </View>
 
-            {/* Product image */}
-            <TouchableOpacity
-              style={[styles.photoBtn, { borderColor: colors.border }]}
-              onPress={handlePickProductImage}
-              disabled={uploadingProductImg}
-            >
-              {pImageUri ? (
-                <Image source={{ uri: pImageUri }} style={styles.productImgPreview} />
-              ) : (
-                <Feather name="image" size={16} color={colors.mutedForeground} />
-              )}
-              <Text style={[styles.photoBtnText, { color: colors.mutedForeground }]}>
-                {pImageUri ? "Trocar foto" : "Adicionar foto"}
-              </Text>
-            </TouchableOpacity>
+            <View style={{ gap: 6 }}>
+              <Text style={[styles.fieldLabel, { color: colors.navy }]}>Descrição</Text>
+              <TextInput
+                style={[styles.formInput, styles.formTextarea, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+                placeholder="Conte mais sobre o item, características, origem..." placeholderTextColor={colors.mutedForeground} value={pDesc} onChangeText={setPDesc} multiline textAlignVertical="top" />
+            </View>
+
+            <View style={{ gap: 6 }}>
+              <Text style={[styles.fieldLabel, { color: colors.navy }]}>Preço</Text>
+              <TextInput
+                style={[styles.formInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
+                placeholder="Ex: R$ 150,00 ou Sob consulta" placeholderTextColor={colors.mutedForeground} value={pPrice} onChangeText={setPPrice} />
+              <Text style={[styles.fieldHelper, { color: colors.mutedForeground }]}>Opcional. Use o formato que preferir.</Text>
+            </View>
+
+            <View style={{ gap: 6 }}>
+              <Text style={[styles.fieldLabel, { color: colors.navy }]}>Categoria <Text style={{ color: "#dc2626" }}>*</Text></Text>
+              <View style={styles.catChips}>
+                {PRODUCT_CATS.map((c) => (
+                  <TouchableOpacity
+                    key={c.key}
+                    style={[styles.catChip, { backgroundColor: pCat === c.key ? colors.gold : "#fff", borderColor: pCat === c.key ? colors.gold : colors.border }]}
+                    onPress={() => setPCat(c.key)}
+                  >
+                    <Text style={[styles.catChipText, { color: pCat === c.key ? "#fff" : colors.foreground }]}>{c.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={{ gap: 6 }}>
+              <Text style={[styles.fieldLabel, { color: colors.navy }]}>Foto</Text>
+              <TouchableOpacity
+                style={[styles.photoBtn, { borderColor: colors.border }]}
+                onPress={handlePickProductImage}
+                disabled={uploadingProductImg}
+              >
+                {pImageUri ? (
+                  <Image source={{ uri: pImageUri }} style={styles.productImgPreview} />
+                ) : (
+                  <Feather name="image" size={16} color={colors.mutedForeground} />
+                )}
+                <Text style={[styles.photoBtnText, { color: colors.mutedForeground }]}>
+                  {pImageUri ? "Trocar foto" : "Adicionar foto"}
+                </Text>
+              </TouchableOpacity>
+              <Text style={[styles.fieldHelper, { color: colors.mutedForeground }]}>Recomendado: imagem quadrada até 5 MB.</Text>
+            </View>
+
+            {!pName.trim() ? (
+              <Text style={[styles.fieldHelper, { color: "#dc2626" }]}>* O nome é obrigatório.</Text>
+            ) : null}
 
             <View style={styles.formBtns}>
               <TouchableOpacity
@@ -900,9 +1206,9 @@ export default function EmpresaScreen() {
                 <Text style={[styles.formCancelText, { color: colors.foreground }]}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.formSaveBtn, { backgroundColor: savingProduct ? colors.gold + "88" : colors.gold }]}
+                style={[styles.formSaveBtn, { backgroundColor: (savingProduct || !pName.trim()) ? colors.gold + "88" : colors.gold }]}
                 onPress={handleSaveProduct}
-                disabled={savingProduct}
+                disabled={savingProduct || !pName.trim()}
               >
                 <Text style={styles.formSaveBtnText}>{savingProduct ? "Salvando..." : "Salvar"}</Text>
               </TouchableOpacity>
@@ -1086,4 +1392,33 @@ const styles = StyleSheet.create({
   panelActionRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderBottomWidth: 1 },
   panelActionIcon: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   panelActionLabel: { flex: 1, fontSize: 14, fontWeight: "600" },
+  // Vagas / Eventos cards
+  opCard: { borderWidth: 1, borderRadius: 12, padding: 14, gap: 6 },
+  opTitle: { fontSize: 15, fontWeight: "700" },
+  opMetaRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
+  opMeta: { fontSize: 12 },
+  opSalary: { fontSize: 13, fontWeight: "700" },
+  opDesc: { fontSize: 13, lineHeight: 19, marginTop: 4 },
+  eventCard: { borderWidth: 1, borderRadius: 12, padding: 14, gap: 4 },
+  evChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  evChipText: { fontSize: 11, fontWeight: "700" },
+  // Sobre
+  sobreCard: { borderWidth: 1, borderRadius: 12, padding: 16, gap: 10 },
+  sobreSectionTitle: { fontSize: 15, fontWeight: "700", marginBottom: 4 },
+  sobreBio: { fontSize: 14, lineHeight: 21 },
+  sobreRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  sobreIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  sobreLabel: { fontSize: 11, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.4 },
+  sobreValue: { fontSize: 14, fontWeight: "600", marginTop: 2 },
+  // Form labels
+  fieldLabel: { fontSize: 13, fontWeight: "700" },
+  fieldHelper: { fontSize: 12, lineHeight: 17 },
+  // Vertical product card
+  productCardV: { borderWidth: 1, borderRadius: 12, overflow: "hidden" },
+  productCardImgWrap: { width: "100%", height: 160, alignItems: "center", justifyContent: "center" },
+  productCardImg: { width: "100%", height: "100%" },
+  productCardName: { fontSize: 15, fontWeight: "700" },
+  productCardPrice: { fontSize: 15, fontWeight: "800" },
+  productCardDesc: { fontSize: 13, lineHeight: 19 },
+  catBadgePill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
 });

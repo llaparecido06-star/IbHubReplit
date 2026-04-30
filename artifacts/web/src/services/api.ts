@@ -1460,6 +1460,146 @@ export async function deleteCompanyProduct(productId: string): Promise<boolean> 
   }
 }
 
+/** Uploads a product image for a company portfolio item.
+ *  Storage path uses the authenticated user id (matches mobile +
+ *  existing RLS policy: bucket "post-images" is keyed by uploader uid).
+ */
+export async function uploadCompanyProductImage(
+  productId: string,
+  file: File,
+): Promise<string | null> {
+  try {
+    if (!file.type.startsWith("image/")) {
+      console.warn("uploadCompanyProductImage: not an image");
+      return null;
+    }
+    const MAX_BYTES = 5 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      console.warn("uploadCompanyProductImage: image too large", file.size);
+      return null;
+    }
+    const { data: sessionRes } = await supabase.auth.getSession();
+    const userId = sessionRes.session?.user?.id;
+    if (!userId) { console.warn("uploadCompanyProductImage: no session"); return null; }
+    const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+    const path = `${userId}/product-images/${productId}.${ext}`;
+    const { error } = await supabase.storage
+      .from("post-images")
+      .upload(path, file, { contentType: file.type, upsert: true });
+    if (error) { console.warn("uploadCompanyProductImage:", error); return null; }
+    const { data } = supabase.storage.from("post-images").getPublicUrl(path);
+    return data.publicUrl ? `${data.publicUrl}?t=${Date.now()}` : null;
+  } catch (e) {
+    console.warn("uploadCompanyProductImage:", e);
+    return null;
+  }
+}
+
+// ─── Company Follow ──────────────────────────────────────────────────────────
+
+export async function checkIsFollowingCompany(
+  companyId: string,
+  userId: string,
+): Promise<boolean> {
+  if (!companyId || !userId) return false;
+  try {
+    const { data } = await supabase
+      .from("company_follows")
+      .select("id")
+      .match({ company_id: companyId, user_id: userId })
+      .maybeSingle();
+    return !!data;
+  } catch {
+    return false;
+  }
+}
+
+export async function toggleCompanyFollow(
+  companyId: string,
+  userId: string,
+  isCurrentlyFollowing: boolean,
+): Promise<boolean> {
+  if (!companyId || !userId) return false;
+  try {
+    if (isCurrentlyFollowing) {
+      const { error } = await supabase
+        .from("company_follows")
+        .delete()
+        .match({ company_id: companyId, user_id: userId });
+      if (error) { console.warn("toggleCompanyFollow (unfollow):", error); return false; }
+    } else {
+      const { error } = await supabase
+        .from("company_follows")
+        .upsert(
+          { company_id: companyId, user_id: userId },
+          { onConflict: "company_id,user_id" },
+        );
+      if (error) { console.warn("toggleCompanyFollow (follow):", error); return false; }
+    }
+    return true;
+  } catch (e) {
+    console.warn("toggleCompanyFollow:", e);
+    return false;
+  }
+}
+
+export async function fetchCompanyFollowersCount(companyId: string): Promise<number> {
+  if (!companyId) return 0;
+  try {
+    const { count, error } = await supabase
+      .from("company_follows")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", companyId);
+    if (error) { console.warn("fetchCompanyFollowersCount:", error); return 0; }
+    return count ?? 0;
+  } catch (e) {
+    console.warn("fetchCompanyFollowersCount:", e);
+    return 0;
+  }
+}
+
+export async function fetchCompanyPostsCount(companyId: string): Promise<number> {
+  if (!companyId) return 0;
+  try {
+    const { count, error } = await supabase
+      .from("posts")
+      .select("id", { count: "exact", head: true })
+      .eq("company_page_id", companyId);
+    if (error) { console.warn("fetchCompanyPostsCount:", error); return 0; }
+    return count ?? 0;
+  } catch (e) {
+    console.warn("fetchCompanyPostsCount:", e);
+    return 0;
+  }
+}
+
+// ─── Company Events ──────────────────────────────────────────────────────────
+
+/** Active, non-restricted events strictly linked to a company page.
+ *  Safe for public company profile listings.
+ */
+export async function fetchPublicCompanyEvents(
+  companyPageId: string,
+): Promise<AppEvent[]> {
+  if (!companyPageId) return [];
+  try {
+    const { data, error } = await supabase
+      .from("events")
+      .select(EVENT_COLUMNS)
+      .eq("company_page_id", companyPageId)
+      .eq("is_active", true)
+      // Allow-list: only "publico" (or legacy NULL) reach the public profile.
+      .or("visibility.is.null,visibility.eq.publico")
+      .order("start_date", { ascending: true })
+      .limit(100);
+    if (error || !data) return [];
+    return (data as EventDbRow[]).map(mapEventRow);
+  } catch (e) {
+    console.warn("fetchPublicCompanyEvents:", e);
+    return [];
+  }
+}
+
 export async function uploadPortfolioImage(file: File, userId: string): Promise<string | null> {
   try {
     const sessionData = await getCachedSession();
@@ -2019,6 +2159,9 @@ export interface CompanyAdminApplicant {
   username: string | null;
 }
 
+/** ADMIN view — includes inactive items and personal items by the owner.
+ *  Use fetchPublicCompanyOpportunities on public profile pages.
+ */
 export async function fetchCompanyOpportunities(
   companyPageId: string,
   ownerId: string,
@@ -2042,6 +2185,36 @@ export async function fetchCompanyOpportunities(
     return (data ?? []) as CompanyAdminOpportunity[];
   } catch (e) {
     console.error("fetchCompanyOpportunities:", e);
+    return [];
+  }
+}
+
+/** Active vagas/marketplace items strictly linked to a company page.
+ *  Safe for public company profile listings.
+ */
+export async function fetchPublicCompanyOpportunities(
+  companyPageId: string,
+  type: "vaga" | "marketplace",
+): Promise<CompanyAdminOpportunity[]> {
+  try {
+    const { data, error } = await supabase
+      .from("opportunities")
+      .select(`
+        id, created_by, type, title, description, category, location, price,
+        cover_image_url, company, contract_type, salary, contact_email,
+        expires_at, is_active, created_at,
+        interests_count, applications_count,
+        view_count, sold, company_page_id
+      `)
+      .eq("type", type)
+      .eq("company_page_id", companyPageId)
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) { console.error("fetchPublicCompanyOpportunities:", error); return []; }
+    return (data ?? []) as CompanyAdminOpportunity[];
+  } catch (e) {
+    console.error("fetchPublicCompanyOpportunities:", e);
     return [];
   }
 }

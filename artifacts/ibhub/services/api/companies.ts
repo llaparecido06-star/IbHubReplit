@@ -605,7 +605,10 @@ export interface CompanyAdminEvent extends AppEvent {
   company_page_id: string | null;
 }
 
-/** All vagas/anúncios linked to a company page (or created by the owner). */
+/** All vagas/anúncios linked to a company page (or created by the owner).
+ *  ADMIN view — includes inactive items and personal items by the owner.
+ *  Use fetchPublicCompanyOpportunities for public profile pages.
+ */
 export async function fetchCompanyOpportunities(
   companyPageId: string,
   ownerId: string,
@@ -633,7 +636,39 @@ export async function fetchCompanyOpportunities(
   }
 }
 
-/** All events linked to a company page (or created by the owner). */
+/** Active vagas/marketplace items strictly linked to a company page.
+ *  Safe for public company profile listings — never returns inactive items
+ *  or personal items by the owner.
+ */
+export async function fetchPublicCompanyOpportunities(
+  companyPageId: string,
+  type: "vaga" | "marketplace",
+): Promise<AppOpportunity[]> {
+  try {
+    const { data, error } = await supabase
+      .from("opportunities")
+      .select(`
+        id, created_by, type, title, description, category, location, price,
+        cover_image_url, company, company_page_id, contract_type, salary,
+        contact_email, expires_at, is_active, created_at
+      `)
+      .eq("type", type)
+      .eq("company_page_id", companyPageId)
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) { console.error("fetchPublicCompanyOpportunities:", error); return []; }
+    return (data ?? []) as AppOpportunity[];
+  } catch (e) {
+    console.error("fetchPublicCompanyOpportunities:", e);
+    return [];
+  }
+}
+
+/** All events linked to a company page (or created by the owner).
+ *  ADMIN view — includes inactive/restrito events and personal events
+ *  by the owner. Use fetchPublicCompanyEvents for public profile pages.
+ */
 export async function fetchCompanyEvents(
   companyPageId: string,
   ownerId: string,
@@ -653,6 +688,34 @@ export async function fetchCompanyEvents(
     return (data ?? []) as CompanyAdminEvent[];
   } catch (e) {
     console.error("fetchCompanyEvents:", e);
+    return [];
+  }
+}
+
+/** Active, non-restricted events strictly linked to a company page.
+ *  Safe for public company profile listings.
+ */
+export async function fetchPublicCompanyEvents(
+  companyPageId: string,
+): Promise<AppEvent[]> {
+  try {
+    const { data, error } = await supabase
+      .from("events")
+      .select(`
+        id, user_id, title, description, start_date, end_date,
+        location_type, location, link, image_url, restricted_positions,
+        entry_type, capacity, visibility, is_active, pay_link, created_at
+      `)
+      .eq("company_page_id", companyPageId)
+      .eq("is_active", true)
+      // Allow-list: only "publico" (or legacy NULL) reach the public profile.
+      .or("visibility.is.null,visibility.eq.publico")
+      .order("start_date", { ascending: true })
+      .limit(100);
+    if (error) { console.error("fetchPublicCompanyEvents:", error); return []; }
+    return (data ?? []) as AppEvent[];
+  } catch (e) {
+    console.error("fetchPublicCompanyEvents:", e);
     return [];
   }
 }

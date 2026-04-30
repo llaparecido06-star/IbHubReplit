@@ -341,7 +341,8 @@ export default function ManageBusinessPageScreen() {
 
   const isCreateMode = !pageId;
 
-  const canEdit = isOwner || userRole === "editor";
+  // Owner-only: matches company_pages RLS.
+  const canEdit = isOwner;
 
   const tabList: Array<{ key: Tab; label: string; icon: string }> = [
     { key: "preview", label: "Preview", icon: "eye" },
@@ -453,6 +454,33 @@ export default function ManageBusinessPageScreen() {
                 ) : null}
               </View>
             </View>
+
+            {/* Content is edited inline on the public Empresa page. */}
+            {!isCreateMode && pageId && canEdit && (
+              <View style={[styles.quickLinksCard, { borderColor: colors.border }]}>
+                <Text style={[styles.quickLinksTitle, { color: colors.navy }]}>Gerenciar conteúdo</Text>
+                <Text style={[styles.quickLinksHint, { color: colors.mutedForeground }]}>
+                  Portfólio, vagas e publicações: os controles de adicionar/editar aparecem na página pública quando você está logado como gestor.
+                </Text>
+                <View style={styles.quickLinksRow}>
+                  {[
+                    { key: "portfolio", label: "Portfólio", icon: "shopping-bag" },
+                    { key: "vagas",     label: "Vagas",     icon: "briefcase" },
+                    { key: "publicacoes", label: "Posts",   icon: "edit-3" },
+                  ].map(s => (
+                    <TouchableOpacity
+                      key={s.key}
+                      style={[styles.quickLinkBtn, { borderColor: colors.border }]}
+                      onPress={() => router.push(`/empresa/${pageId}?tab=${s.key}`)}
+                      activeOpacity={0.85}
+                    >
+                      <Feather name={s.icon} size={14} color={colors.gold} />
+                      <Text style={[styles.quickLinkLabel, { color: colors.navy }]}>{s.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
 
             {isOwner && (
               <TouchableOpacity
@@ -746,6 +774,13 @@ const styles = StyleSheet.create({
   previewMetaText: { fontSize: 13 },
   deletePageBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, borderRadius: 10, borderWidth: 1.5 },
   deletePageText: { fontSize: 15, fontWeight: "700" },
+
+  quickLinksCard: { padding: 14, borderRadius: 12, borderWidth: 1, backgroundColor: "#fff" },
+  quickLinksTitle: { fontSize: 14, fontWeight: "800", marginBottom: 4 },
+  quickLinksHint: { fontSize: 12, lineHeight: 17, marginBottom: 10 },
+  quickLinksRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  quickLinkBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 999, borderWidth: 1.5, backgroundColor: "#fff" },
+  quickLinkLabel: { fontSize: 13, fontWeight: "700" },
 
   // Editar
   logoWrap: { alignSelf: "center", position: "relative" },
