@@ -41,12 +41,18 @@ const TYPE_META: Record<string, { emoji: string; color: string; label: string }>
 /**
  * Build the message text for a notification row, preferring wine-specific
  * wording when the underlying post is a wine review.
+ *
+ * Company-tab notifications (target_company_id set) use "a avaliação do"
+ * instead of "sua avaliação do" so the phrasing matches the company context.
  */
 function buildNotifMessage(notif: WebNotification, fallbackLabel: string): string {
   const wine = notif.wine_name?.trim();
   if (wine) {
-    if (notif.type === "like")    return `curtiu sua avaliação do ${wine}`;
-    if (notif.type === "comment") return `comentou sua avaliação do ${wine}`;
+    const isCompany = !!notif.target_company_id;
+    if (notif.type === "like")
+      return isCompany ? `curtiu a avaliação do ${wine}` : `curtiu sua avaliação do ${wine}`;
+    if (notif.type === "comment")
+      return isCompany ? `comentou a avaliação do ${wine}` : `comentou sua avaliação do ${wine}`;
   }
   return notif.message ?? fallbackLabel;
 }

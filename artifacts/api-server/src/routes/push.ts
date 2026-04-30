@@ -206,21 +206,113 @@ router.post("/push/social", async (req: Request, res: Response): Promise<void> =
     return;
   }
 
-  // Fetch the post to get its author and content (wine reviews surface their
-  // wine name in the notification preview).
+  if (type !== "like" && type !== "comment") {
+    res.status(400).json({ error: "type deve ser 'like' ou 'comment'" });
+    return;
+  }
+
+  interface PostRow {
+    user_id: string;
+    company_page_id: string | null;
+    content: string | null;
+  }
+
+  interface CompanyRow {
+    owner_id: string;
+  }
+
+  // Fetch the post to get its author, company ownership, and content.
+  // Wine reviews surface their wine name in the notification preview.
   const { data: postRow, error: postErr } = await supabaseAdmin
     .from("posts")
-    .select("user_id, content")
+    .select("user_id, company_page_id, content")
     .eq("id", postId)
-    .maybeSingle();
+    .maybeSingle() as { data: PostRow | null; error: unknown };
 
   if (postErr || !postRow) {
     res.status(404).json({ error: "Post não encontrado." });
     return;
   }
 
+  const wineName = extractWineName(postRow.content);
+  // Cap the wine name length so it stays legible on a notification banner.
+  const wineLabel = wineName ? truncate(wineName, 60) : null;
+
+  const companyPageId: string | null = postRow.company_page_id;
+
+  // ── Company post: find the company owner and notify them ──────────────────
+  if (companyPageId) {
+    const { data: companyRow, error: companyErr } = await supabaseAdmin
+      .from("company_pages")
+      .select("owner_id")
+      .eq("id", companyPageId)
+      .maybeSingle() as { data: CompanyRow | null; error: unknown };
+
+    if (companyErr) {
+      logger.error({ err: companyErr, postId, companyPageId }, "DB error fetching company owner for social push");
+      res.status(500).json({ error: "Erro ao buscar dados da empresa." });
+      return;
+    }
+
+    const companyOwnerId: string | null = companyRow?.owner_id ?? null;
+
+    // Skip if the actor is the company owner (they acted on their own post)
+    if (!companyOwnerId || companyOwnerId === actorId) {
+      res.json({ sent: 0, skipped: "actor is company owner or owner not found" });
+      return;
+    }
+
+    const { data: tokenRows, error: tokensErr } = await supabaseAdmin
+      .from("push_tokens")
+      .select("token")
+      .eq("user_id", companyOwnerId);
+
+    if (tokensErr) {
+      logger.error({ err: tokensErr, postId, companyOwnerId }, "DB error fetching push tokens for company social push");
+      res.status(500).json({ error: "Erro ao buscar tokens." });
+      return;
+    }
+
+    const validTokens = (tokenRows ?? [])
+      .map((r: { token: string }) => r.token)
+      .filter((t: string) => typeof t === "string" && t.startsWith("ExponentPushToken["));
+
+    if (validTokens.length === 0) {
+      res.json({ sent: 0, skipped: "no valid tokens for company owner" });
+      return;
+    }
+
+    let title: string;
+    let body: string;
+
+    if (type === "comment") {
+      title = wineLabel
+        ? `💬 ${actorName} comentou a avaliação do ${wineLabel}`
+        : `💬 ${actorName} comentou na publicação da empresa`;
+      body = commentText ? truncate(commentText, 80) : "Veja o que disseram.";
+    } else {
+      title = wineLabel
+        ? `❤️ ${actorName} curtiu a avaliação do ${wineLabel}`
+        : `❤️ ${actorName} curtiu a publicação da empresa`;
+      body = wineLabel ? "Toque para ver a ficha do vinho." : "Toque para ver.";
+    }
+
+    const messages: ExpoPushMessage[] = validTokens.map((token) => ({
+      to: token,
+      title,
+      body,
+      data: { postId, type, deepLink: `/post/${postId}` },
+      sound: "default",
+    }));
+
+    await sendExpoPushNotifications(messages);
+    logger.info({ count: messages.length, postId, type, actorId, companyOwnerId }, "Company social push dispatched");
+    res.json({ sent: messages.length });
+    return;
+  }
+
+  // ── Personal post: notify the post author ─────────────────────────────────
   const authorId: string = postRow.user_id;
-  const wineName = extractWineName(postRow.content as string | null);
 
   // Don't notify if actor is the post author
   if (authorId === actorId) {
@@ -251,10 +343,6 @@ router.post("/push/social", async (req: Request, res: Response): Promise<void> =
 
   let title: string;
   let body: string;
-
-  // Cap the wine name length used in the title so combined title text stays
-  // legible on a notification banner across iOS/Android.
-  const wineLabel = wineName ? truncate(wineName, 60) : null;
 
   if (type === "comment") {
     title = wineLabel

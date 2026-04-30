@@ -39,12 +39,18 @@ const TYPE_META: Record<string, { icon: any; color: string; label: string }> = {
  * wording when the underlying post is a wine review. Falls back to the
  * server-stored `notif.message` (which is the canonical Portuguese phrase
  * inserted by the postgres trigger) and finally to the type label.
+ *
+ * Company-tab notifications (target_company_id set) use "a avaliação do"
+ * instead of "sua avaliação do" so the phrasing matches the company context.
  */
 function buildNotifMessage(notif: AppNotification, fallbackLabel: string): string {
   const wine = notif.wine_name?.trim();
   if (wine) {
-    if (notif.type === "like")    return `curtiu sua avaliação do ${wine}`;
-    if (notif.type === "comment") return `comentou sua avaliação do ${wine}`;
+    const isCompany = !!notif.target_company_id;
+    if (notif.type === "like")
+      return isCompany ? `curtiu a avaliação do ${wine}` : `curtiu sua avaliação do ${wine}`;
+    if (notif.type === "comment")
+      return isCompany ? `comentou a avaliação do ${wine}` : `comentou sua avaliação do ${wine}`;
   }
   return notif.message ?? fallbackLabel;
 }

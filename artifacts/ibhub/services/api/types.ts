@@ -87,6 +87,10 @@ export interface AppNotification {
   /** Set when the referenced post is a wine review; used to enrich the
    *  message preview (e.g. "curtiu sua avaliação do Château ..."). */
   wine_name?: string | null;
+  /** Set when this notification is addressed to a company page rather than
+   *  the user's personal inbox. Used to adjust message wording accordingly
+   *  (e.g. "a avaliação do" instead of "sua avaliação do"). */
+  target_company_id?: string | null;
 }
 
 export interface AppComment {
