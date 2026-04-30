@@ -134,4 +134,168 @@ router.post("/market/posts", async (req: Request, res: Response): Promise<void> 
   res.status(201).json({ post: data });
 });
 
+const REPLY_PREFIX_RE = /^\[R:([0-9a-f-]{36})\]/i;
+
+/**
+ * POST /market/posts/:id/like
+ * Toggle / change a reaction on a market post.
+ * Body: { reaction_type: string }
+ * - Same reaction as existing → unlike (remove)
+ * - Different reaction → swap reaction (count unchanged)
+ * - No previous reaction → add (count +1)
+ * Returns: { user_liked, reaction_type, likes_count }
+ */
+router.post("/market/posts/:id/like", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+
+  const allowed = await requirePlanFeature(req, res, userId, "mercado:idealbi");
+  if (!allowed) return;
+
+  const postId = req.params.id;
+  const { reaction_type: reactionType = "saude" } = req.body as { reaction_type?: string };
+
+  // Fetch current like state
+  const { data: existing } = await supabaseAdmin
+    .from("market_post_likes")
+    .select("reaction_type")
+    .eq("post_id", postId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const { data: postData } = await supabaseAdmin
+    .from("market_posts")
+    .select("likes_count")
+    .eq("id", postId)
+    .single();
+  const currentCount = (postData as any)?.likes_count ?? 0;
+
+  if (existing) {
+    const existingReaction = (existing as any).reaction_type as string;
+    if (existingReaction === reactionType) {
+      // Same reaction → unlike
+      await supabaseAdmin.from("market_post_likes").delete().eq("post_id", postId).eq("user_id", userId);
+      const newCount = Math.max(0, currentCount - 1);
+      await supabaseAdmin.from("market_posts").update({ likes_count: newCount }).eq("id", postId);
+      res.json({ user_liked: false, reaction_type: null, likes_count: newCount });
+    } else {
+      // Different reaction → swap (count unchanged)
+      await supabaseAdmin.from("market_post_likes").update({ reaction_type: reactionType }).eq("post_id", postId).eq("user_id", userId);
+      res.json({ user_liked: true, reaction_type: reactionType, likes_count: currentCount });
+    }
+  } else {
+    // New reaction
+    await supabaseAdmin.from("market_post_likes").insert({ post_id: postId, user_id: userId, reaction_type: reactionType });
+    const newCount = currentCount + 1;
+    await supabaseAdmin.from("market_posts").update({ likes_count: newCount }).eq("id", postId);
+    res.json({ user_liked: true, reaction_type: reactionType, likes_count: newCount });
+  }
+});
+
+/**
+ * POST /market/posts/:id/comments
+ * Add a comment to a market post.
+ * Body: { content: string, reply_to_id?: string | null }
+ * Returns: { comment }
+ */
+router.post("/market/posts/:id/comments", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+
+  const allowed = await requirePlanFeature(req, res, userId, "mercado:idealbi");
+  if (!allowed) return;
+
+  const postId = req.params.id;
+  const { content, reply_to_id: replyToId = null } = req.body as { content?: string; reply_to_id?: string | null };
+
+  if (!content?.trim()) {
+    res.status(400).json({ error: "content is required" });
+    return;
+  }
+
+  const storedContent = replyToId ? `[R:${replyToId}]${content.trim()}` : content.trim();
+
+  const { data: comment, error } = await supabaseAdmin
+    .from("market_post_comments")
+    .insert({ post_id: postId, author_id: userId, content: storedContent })
+    .select("id, post_id, author_id, content, created_at")
+    .single();
+
+  if (error || !comment) {
+    res.status(500).json({ error: error?.message ?? "insert failed" });
+    return;
+  }
+
+  // Only increment comments_count for top-level comments (not replies)
+  if (!replyToId) {
+    const { data: postRow } = await supabaseAdmin.from("market_posts").select("comments_count").eq("id", postId).single();
+    await supabaseAdmin.from("market_posts").update({ comments_count: ((postRow as any)?.comments_count ?? 0) + 1 }).eq("id", postId);
+  }
+
+  // Resolve author profile
+  const { data: authorProfile } = await supabaseAdmin
+    .from("profiles")
+    .select("id, user_id, full_name, avatar_url, position, company")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const match = REPLY_PREFIX_RE.exec((comment as any).content ?? "");
+  const cleanContent = match ? (comment as any).content.slice(match[0].length) : (comment as any).content;
+
+  res.status(201).json({
+    comment: {
+      ...(comment as any),
+      reply_to_id: replyToId ?? null,
+      content: cleanContent,
+      replies: [],
+      likes_count: 0,
+      is_liked: false,
+      author: authorProfile ?? undefined,
+    },
+  });
+});
+
+/**
+ * POST /market/comments/:id/like
+ * Toggle a like on a market comment.
+ * Returns: { is_liked, likes_count }
+ */
+router.post("/market/comments/:id/like", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+
+  const allowed = await requirePlanFeature(req, res, userId, "mercado:idealbi");
+  if (!allowed) return;
+
+  const commentId = req.params.id;
+
+  const { data: existing } = await supabaseAdmin
+    .from("market_comment_likes")
+    .select("id")
+    .eq("comment_id", commentId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const { data: commentRow } = await supabaseAdmin
+    .from("market_post_comments")
+    .select("likes_count")
+    .eq("id", commentId)
+    .single();
+  const currentCount = (commentRow as any)?.likes_count ?? 0;
+
+  if (existing) {
+    // Unlike
+    await supabaseAdmin.from("market_comment_likes").delete().eq("comment_id", commentId).eq("user_id", userId);
+    const newCount = Math.max(0, currentCount - 1);
+    await supabaseAdmin.from("market_post_comments").update({ likes_count: newCount }).eq("id", commentId);
+    res.json({ is_liked: false, likes_count: newCount });
+  } else {
+    // Like
+    await supabaseAdmin.from("market_comment_likes").insert({ comment_id: commentId, user_id: userId });
+    const newCount = currentCount + 1;
+    await supabaseAdmin.from("market_post_comments").update({ likes_count: newCount }).eq("id", commentId);
+    res.json({ is_liked: true, likes_count: newCount });
+  }
+});
+
 export default router;

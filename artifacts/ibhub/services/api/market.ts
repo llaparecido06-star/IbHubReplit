@@ -538,7 +538,7 @@ export async function uploadMarketPostMediaBase64(
 }
 
 /**
- * Toggle / change a reaction on a market post.
+ * Toggle / change a reaction on a market post via the API server (service role).
  * Returns { user_liked, reaction_type, likes_count } after the operation.
  * - Same reaction → unlike (remove)
  * - Different reaction → swap reaction (count unchanged)
@@ -546,35 +546,30 @@ export async function uploadMarketPostMediaBase64(
  */
 export async function toggleMarketPostReaction(
   postId: string,
-  userId: string,
+  _userId: string,
   reactionType: string,
   currentReaction: string | null,
   currentCount: number,
 ): Promise<{ user_liked: boolean; reaction_type: string | null; likes_count: number }> {
   try {
-    if (currentReaction === reactionType) {
-      // Same → remove
-      await supabase.from("market_post_likes").delete().eq("post_id", postId).eq("user_id", userId);
-      await supabase.from("market_posts").update({ likes_count: Math.max(0, currentCount - 1) }).eq("id", postId);
-      return { user_liked: false, reaction_type: null, likes_count: Math.max(0, currentCount - 1) };
-    } else if (currentReaction) {
-      // Different → update (count unchanged)
-      await supabase.from("market_post_likes").update({ reaction_type: reactionType }).eq("post_id", postId).eq("user_id", userId);
-      return { user_liked: true, reaction_type: reactionType, likes_count: currentCount };
-    } else {
-      // New reaction
-      await supabase.from("market_post_likes").insert({ post_id: postId, user_id: userId, reaction_type: reactionType });
-      await supabase.from("market_posts").update({ likes_count: currentCount + 1 }).eq("id", postId);
-      return { user_liked: true, reaction_type: reactionType, likes_count: currentCount + 1 };
-    }
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return { user_liked: !!currentReaction, reaction_type: currentReaction, likes_count: currentCount };
+    const res = await fetch(`${API_URL}/market/posts/${postId}/like`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ reaction_type: reactionType }),
+    });
+    if (!res.ok) return { user_liked: !!currentReaction, reaction_type: currentReaction, likes_count: currentCount };
+    const json = await res.json() as { user_liked: boolean; reaction_type: string | null; likes_count: number };
+    return json;
   } catch {
     return { user_liked: !!currentReaction, reaction_type: currentReaction, likes_count: currentCount };
   }
 }
 
 /** Back-compat alias kept so any remaining callers don't break. */
-export async function toggleMarketPostLike(postId: string, userId: string, currentlyLiked: boolean): Promise<boolean> {
-  const result = await toggleMarketPostReaction(postId, userId, "saude", currentlyLiked ? "saude" : null, 0);
+export async function toggleMarketPostLike(postId: string, _userId: string, currentlyLiked: boolean): Promise<boolean> {
+  const result = await toggleMarketPostReaction(postId, _userId, "saude", currentlyLiked ? "saude" : null, 0);
   return result.user_liked;
 }
 
@@ -646,21 +641,19 @@ export async function fetchMarketComments(postId: string, currentUserId?: string
 
 export async function toggleMarketCommentLike(
   commentId: string,
-  userId: string,
+  _userId: string,
   currentlyLiked: boolean,
 ): Promise<{ is_liked: boolean; likes_count: number } | null> {
   try {
-    if (currentlyLiked) {
-      await supabase.from("market_comment_likes").delete().eq("comment_id", commentId).eq("user_id", userId);
-      await supabase.rpc("decrement_market_comment_likes", { p_comment_id: commentId });
-      const { data } = await supabase.from("market_post_comments").select("likes_count").eq("id", commentId).single();
-      return { is_liked: false, likes_count: data?.likes_count ?? 0 };
-    } else {
-      await supabase.from("market_comment_likes").insert({ comment_id: commentId, user_id: userId });
-      await supabase.rpc("increment_market_comment_likes", { p_comment_id: commentId });
-      const { data } = await supabase.from("market_post_comments").select("likes_count").eq("id", commentId).single();
-      return { is_liked: true, likes_count: data?.likes_count ?? 0 };
-    }
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return null;
+    const res = await fetch(`${API_URL}/market/comments/${commentId}/like`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+    });
+    if (!res.ok) return null;
+    const json = await res.json() as { is_liked: boolean; likes_count: number };
+    return json;
   } catch { return null; }
 }
 
@@ -703,38 +696,20 @@ export async function deleteDirectConversation(conversationId: string): Promise<
 
 export async function addMarketComment(
   postId: string,
-  authorId: string,
+  _authorId: string,
   content: string,
   replyToId?: string | null,
 ): Promise<MarketComment | null> {
   try {
-    // Embed reply reference as a prefix in the content field (no schema change needed)
-    const storedContent = replyToId ? `[R:${replyToId}]${content}` : content;
-    const { data, error } = await supabase
-      .from("market_post_comments")
-      .insert({ post_id: postId, author_id: authorId, content: storedContent })
-      .select("id, post_id, author_id, content, created_at")
-      .single();
-    if (error || !data) return null;
-
-    // Only increment comments_count for top-level comments (not replies)
-    if (!replyToId) {
-      const { data: cur } = await supabase.from("market_posts").select("comments_count").eq("id", postId).single();
-      await supabase.from("market_posts").update({ comments_count: (cur?.comments_count ?? 0) + 1 }).eq("id", postId);
-    }
-
-    const { data: authorProfile } = await supabase
-      .from("profiles")
-      .select("id, user_id, full_name, avatar_url, position, company")
-      .eq("user_id", authorId)
-      .maybeSingle();
-
-    return {
-      ...data,
-      reply_to_id: replyToId ?? null,
-      content, // return the clean content without prefix
-      replies: [],
-      author: authorProfile ?? undefined,
-    };
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return null;
+    const res = await fetch(`${API_URL}/market/posts/${postId}/comments`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ content, reply_to_id: replyToId ?? null }),
+    });
+    if (!res.ok) return null;
+    const json = await res.json() as { comment: MarketComment };
+    return json.comment ?? null;
   } catch { return null; }
 }

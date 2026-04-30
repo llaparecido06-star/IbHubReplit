@@ -840,38 +840,36 @@ function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idea
 
   const handleReaction = async (reaction: MarketReactionType) => {
     setShowPicker(false);
+    // Optimistic update
     const wasLiked = post.user_liked;
     const sameReaction = wasLiked && post.user_reaction === reaction;
-    if (sameReaction) {
-      // Unlike
-      const newLiked = await toggleMarketPostLike(post.id, userId, true);
-      onLikeToggle(post.id, newLiked, post.likes_count - 1);
-      setPost(p => ({ ...p, user_liked: false, user_reaction: null, likes_count: p.likes_count - 1 }));
-    } else if (!wasLiked) {
-      // First reaction — insert + set type
-      await toggleMarketPostLike(post.id, userId, false, reaction);
-      await changeMarketReaction(post.id, userId, reaction);
-      onLikeToggle(post.id, true, post.likes_count + 1);
-      setPost(p => ({ ...p, user_liked: true, user_reaction: reaction, likes_count: p.likes_count + 1 }));
-    } else {
-      // Change reaction type
-      await changeMarketReaction(post.id, userId, reaction);
-      setPost(p => ({ ...p, user_reaction: reaction }));
+    const optimisticLiked = !sameReaction;
+    const optimisticReaction = sameReaction ? null : reaction;
+    const optimisticCount = sameReaction ? post.likes_count - 1 : (wasLiked ? post.likes_count : post.likes_count + 1);
+    setPost(p => ({ ...p, user_liked: optimisticLiked, user_reaction: optimisticReaction, likes_count: Math.max(0, optimisticCount) }));
+    onLikeToggle(post.id, optimisticLiked, Math.max(0, optimisticCount));
+    // Always call the single API endpoint — it handles toggle / swap / insert correctly
+    const ok = await changeMarketReaction(post.id, userId, reaction);
+    if (!ok) {
+      // Revert optimistic update on failure
+      setPost(p => ({ ...p, user_liked: wasLiked, user_reaction: post.user_reaction, likes_count: post.likes_count }));
+      onLikeToggle(post.id, wasLiked, post.likes_count);
     }
   };
 
   const handleLikeBtn = async () => {
-    // If already liked, clicking the button removes the reaction
-    if (post.user_liked) {
-      const newLiked = await toggleMarketPostLike(post.id, userId, true);
-      onLikeToggle(post.id, newLiked, post.likes_count - 1);
-      setPost(p => ({ ...p, user_liked: false, user_reaction: null, likes_count: p.likes_count - 1 }));
-    } else {
-      // Default reaction
-      await toggleMarketPostLike(post.id, userId, false, "saude");
-      await changeMarketReaction(post.id, userId, "saude");
-      onLikeToggle(post.id, true, post.likes_count + 1);
-      setPost(p => ({ ...p, user_liked: true, user_reaction: "saude", likes_count: p.likes_count + 1 }));
+    const wasLiked = post.user_liked;
+    const optimisticLiked = !wasLiked;
+    const optimisticCount = wasLiked ? post.likes_count - 1 : post.likes_count + 1;
+    setPost(p => ({ ...p, user_liked: optimisticLiked, user_reaction: optimisticLiked ? "saude" : null, likes_count: Math.max(0, optimisticCount) }));
+    onLikeToggle(post.id, optimisticLiked, Math.max(0, optimisticCount));
+    // When unliking, send the current reaction so the API knows to remove it (same reaction → unlike)
+    const reactionToSend = (wasLiked ? (post.user_reaction as MarketReactionType | null) : null) ?? "saude";
+    const newLiked = await toggleMarketPostLike(post.id, userId, wasLiked, reactionToSend);
+    if (newLiked !== optimisticLiked) {
+      // Revert optimistic on mismatch
+      setPost(p => ({ ...p, user_liked: wasLiked, user_reaction: wasLiked ? (post.user_reaction as MarketReactionType | null) : null, likes_count: post.likes_count }));
+      onLikeToggle(post.id, wasLiked, post.likes_count);
     }
   };
 
