@@ -269,18 +269,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     //    we must exchange the code and set isRecovering=true BEFORE calling getSession()
     //    — otherwise getSession() returns null, loading becomes false, and RootLayoutNav
     //    redirects to /login while the exchange is still in flight (race condition).
-    const init = async () => {
-      const initialUrl = await Linking.getInitialURL();
-      if (initialUrl) await handleDeepLink(initialUrl);
-
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      setUser(session?.user ?? null);
-      setMustChangePassword(session?.user?.user_metadata?.must_change_password === true);
-      if (session?.user) {
-        await fetchProfile(session.user.id);
+    //
+    // Safety net: if init hangs (network not ready at cold-start, token refresh
+    // stalls, etc.) we must still unblock the UI so the user isn't stuck on the
+    // loading spinner forever. The onAuthStateChange listener will eventually
+    // fire INITIAL_SESSION / TOKEN_REFRESHED and set the session correctly.
+    let loadingResolved = false;
+    const resolveLoading = () => {
+      if (!loadingResolved) {
+        loadingResolved = true;
+        setLoading(false);
       }
-      setLoading(false);
+    };
+    const initTimeoutId = setTimeout(() => {
+      console.warn("[AuthInit] 12s timeout reached — unblocking UI. Session will resolve via onAuthStateChange.");
+      resolveLoading();
+    }, 12_000);
+
+    const init = async () => {
+      try {
+        const initialUrl = await Linking.getInitialURL();
+        if (initialUrl) await handleDeepLink(initialUrl);
+
+        const { data: { session } } = await supabase.auth.getSession();
+        setSession(session);
+        setUser(session?.user ?? null);
+        setMustChangePassword(session?.user?.user_metadata?.must_change_password === true);
+        if (session?.user) {
+          await fetchProfile(session.user.id);
+        }
+      } catch (e: any) {
+        // Never let an unhandled error silently keep loading=true forever
+        console.error("[AuthInit] Unhandled error during init:", e?.message ?? e);
+      } finally {
+        clearTimeout(initTimeoutId);
+        resolveLoading();
+      }
     };
     init();
 
