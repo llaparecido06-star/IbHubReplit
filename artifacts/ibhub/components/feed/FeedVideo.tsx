@@ -18,7 +18,9 @@ import {
 import { Feather } from "@/components/ui/Icon";
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
-const DEFAULT_MAX_HEIGHT = Math.round(SCREEN_H * 0.85);
+// Cap portrait videos at 72 % of screen height — tall enough to feel immersive,
+// short enough that the card below remains visible during scroll.
+const DEFAULT_MAX_HEIGHT = Math.round(SCREEN_H * 0.72);
 const GOLD = "#c9a84c";
 
 function fmtTime(s: number) {
@@ -242,7 +244,14 @@ export function FeedVideo({
     lastPlayTokenRef.current = playToken;
   }, [playToken, isVisible, player]);
 
-  const containerHeight = Math.min(width / aspectRatio, maxHeight);
+  // Choose a display aspect ratio that's optimised for the actual video
+  // orientation, regardless of the exact recorded ratio.
+  //   Portrait (9:16, 3:4, etc.) → show as Instagram-style 4:5
+  //   Landscape / square (16:9, 4:3, 1:1, etc.) → show as widescreen 16:9
+  // `contentFit="cover"` fills the frame completely so there are no black bars.
+  const isPortrait = aspectRatio < 1;
+  const displayRatio = isPortrait ? 4 / 5 : 16 / 9;
+  const containerHeight = Math.min(width / displayRatio, maxHeight);
   const fillWidth = duration > 0 ? (currentTime / duration) * barWidth : 0;
 
   return (
@@ -253,7 +262,7 @@ export function FeedVideo({
       <VideoView
         ref={videoViewRef}
         player={player}
-        contentFit="contain"
+        contentFit="cover"
         style={styles.video}
         nativeControls={false}
         allowsFullscreen
@@ -337,7 +346,7 @@ const styles = StyleSheet.create({
   container: {
     overflow: "hidden",
     backgroundColor: "#000",
-    alignSelf: "center",
+    width: "100%",
   },
   video: {
     width: "100%",
