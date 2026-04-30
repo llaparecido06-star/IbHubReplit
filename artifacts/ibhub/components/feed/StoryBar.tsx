@@ -29,8 +29,10 @@ export function StoryBar() {
     }, [loadStories])
   );
 
-  const ownGroup = groups.find(g => g.userId === user?.id);
-  const otherGroups = groups.filter(g => g.userId !== user?.id);
+  // Personal slot: only the user's own non-company story group
+  const ownGroup = groups.find(g => g.userId === user?.id && !g.companyPageId);
+  // Others: everyone else, PLUS company story groups from this user (must be separate entries)
+  const otherGroups = groups.filter(g => g.userId !== user?.id || !!g.companyPageId);
 
   const openViewer = (groupIdx: number) => {
     const href: RouterHref = {
@@ -97,8 +99,9 @@ export function StoryBar() {
 
       {otherGroups.map((group) => {
         const globalIdx = groups.indexOf(group);
+        const groupKey = group.companyPageId ? `company_${group.companyPageId}` : group.userId;
         return (
-          <TouchableOpacity key={group.userId} style={styles.item} onPress={() => openViewer(globalIdx)}>
+          <TouchableOpacity key={groupKey} style={styles.item} onPress={() => openViewer(globalIdx)}>
             <LinearGradient
               colors={group.hasUnseen ? [colors.gold, colors.wine] : [colors.border, colors.border]}
               style={styles.ring}
