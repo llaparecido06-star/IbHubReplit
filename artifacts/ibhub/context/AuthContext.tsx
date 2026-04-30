@@ -537,7 +537,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log(`[OAuth] Opening browser for ${provider}...`);
 
       if (Platform.OS === "android") {
-        // ── Android ──────────────────────────────────────────────────────────
+        // ── Android (Google AND Apple) ───────────────────────────────────────
+        // This branch is provider-agnostic and is the single hardened path used
+        // by both signInWithGoogle() and signInWithApple()'s Android fallback
+        // (iOS Apple uses native AppleAuthentication.signInAsync instead).
+        // Keep this code provider-agnostic — do not branch on `provider` here.
+        //
         // Chrome Custom Tab CAN signal user-initiated dismissal back to
         // openAuthSessionAsync (resolves with "dismiss"/"cancel"), but it CANNOT
         // intercept the custom-scheme redirect — that's delivered as a Linking
@@ -557,7 +562,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           const { data: { subscription: signInSub } } = supabase.auth.onAuthStateChange((event) => {
             if (event === "SIGNED_IN") {
-              console.log("[OAuth] Android: SIGNED_IN received, completing flow.");
+              console.log(`[OAuth] Android (${provider}): SIGNED_IN received, completing flow.`);
               signInSub.unsubscribe();
               finish();
             }
@@ -565,14 +570,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           WebBrowser.openAuthSessionAsync(data.url, redirectTo)
             .then((result) => {
-              console.log(`[OAuth] Android: browser closed (${result.type}). Awaiting late SIGNED_IN...`);
+              console.log(`[OAuth] Android (${provider}): browser closed (${result.type}). Awaiting late SIGNED_IN...`);
               // Browser closed (user cancelled OR success-redirect dismissed it).
               // Give handleDeepLink up to 2s to fire SIGNED_IN. If nothing arrives,
               // assume the user cancelled and clear the spinner.
               setTimeout(() => { signInSub.unsubscribe(); finish(); }, 2000);
             })
             .catch((e) => {
-              console.warn("[OAuth] Android: openAuthSessionAsync error:", e);
+              console.warn(`[OAuth] Android (${provider}): openAuthSessionAsync error:`, e);
               signInSub.unsubscribe();
               finish();
             });
@@ -581,7 +586,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setTimeout(() => { signInSub.unsubscribe(); finish(); }, 60_000);
         });
 
-        console.log(`[OAuth] Android: signInWithOAuthProvider returning.`);
+        console.log(`[OAuth] Android (${provider}): signInWithOAuthProvider returning.`);
         return { error: null };
       }
 
@@ -678,7 +683,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Android / Web: fallback to web OAuth flow
+    // Android / Web: fallback to web OAuth flow.
+    // signInWithOAuthProvider's Android branch is provider-agnostic and applies
+    // the same hardened SIGNED_IN-vs-browser-close race handling that was added
+    // for Google. Apple-on-Android automatically inherits that fix here — do
+    // not duplicate or reimplement that logic in this function.
     return signInWithOAuthProvider("apple");
   };
 
