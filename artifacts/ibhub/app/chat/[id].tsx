@@ -37,6 +37,7 @@ import { AudioBubble } from "@/components/chat/AudioBubble";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/context/AuthContext";
+import { useUnread } from "@/context/UnreadContext";
 import * as API from "@/services/api";
 import type { AppMessage } from "@/services/api";
 import {
@@ -102,6 +103,7 @@ export default function ChatScreen() {
   const router   = useRouter();
   const { id, companyId } = useLocalSearchParams<{ id: string; companyId?: string }>();
   const { user, activeCompany } = useAuth();
+  const { refreshUnread } = useUnread();
   const insets   = useSafeAreaInsets();
 
   const [messages,               setMessages]               = useState<AppMessage[]>([]);
@@ -177,9 +179,9 @@ export default function ChatScreen() {
       setCompanyInfo({ id: cp.id, name: cp.name, avatar_url: cp.avatar_url ?? null });
     }
     setLoading(false);
-    API.markConversationRead(id, user.id);
+    API.markConversationRead(id, user.id).then(() => refreshUnread(user.id));
     loadFollowUp();
-  }, [id, user?.id, companyId, loadFollowUp]);
+  }, [id, user?.id, companyId, loadFollowUp, refreshUnread]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -208,7 +210,7 @@ export default function ChatScreen() {
           setMessages(prev => [...prev, enriched]);
           setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
           if (raw.sender_id !== user.id) {
-            API.markConversationRead(id, user.id);
+            API.markConversationRead(id, user.id).then(() => refreshUnread(user.id));
           }
         },
       )
