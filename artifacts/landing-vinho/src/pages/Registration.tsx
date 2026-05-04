@@ -181,30 +181,51 @@ export default function Registration() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
           </a>
 
-          {/* Event meta — status bar */}
+          {/* Event meta — premium status bar */}
           <div style={{
-            display: "flex", gap: "0",
-            background: "rgba(255,255,255,0.03)",
-            border: `1px solid rgba(201,168,76,0.15)`,
-            borderRadius: "12px",
+            display: "flex",
+            background: "linear-gradient(135deg, rgba(201,168,76,0.07) 0%, rgba(201,168,76,0.03) 50%, rgba(201,168,76,0.06) 100%)",
+            border: `1px solid rgba(201,168,76,0.22)`,
+            borderRadius: "14px",
             overflow: "hidden",
-            maxWidth: "420px",
+            maxWidth: "430px",
+            position: "relative",
           }}>
+            {/* top shimmer line */}
+            <div style={{
+              position: "absolute", top: 0, left: "10%", right: "10%", height: "1px",
+              background: "linear-gradient(90deg, transparent, rgba(201,168,76,0.6), transparent)",
+            }} />
             {[
-              { icon: <IconCalendar />, top: "18 DE MAIO",      bot: "Segunda-feira"  },
-              { icon: <IconClock />,    top: "20H00",           bot: "Duração: 60 min"},
-              { icon: <IconLock />,     top: "Evento fechado",  bot: "Apenas membros" },
+              { icon: <IconCalendar />, top: "18 DE MAIO",     bot: "Segunda-feira"  },
+              { icon: <IconClock />,    top: "20H00",          bot: "Duração: 60 min"},
+              { icon: <IconLock />,     top: "Evento fechado", bot: "Apenas membros" },
             ].map((col, i) => (
               <div key={i} style={{
-                flex: 1, padding: "16px 14px",
-                borderRight: i < 2 ? `1px solid rgba(201,168,76,0.1)` : "none",
-                display: "flex", flexDirection: "column", gap: "6px",
+                flex: 1, padding: "18px 16px 16px",
+                borderRight: i < 2 ? `1px solid rgba(201,168,76,0.12)` : "none",
+                display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "8px",
               }}>
-                <div style={{ color: C.gold, opacity: 0.8 }}>{col.icon}</div>
-                <div style={{ fontSize: "12px", fontWeight: 800, letterSpacing: "0.04em", color: C.white }}>
+                {/* icon circle */}
+                <div style={{
+                  width: "32px", height: "32px", borderRadius: "8px",
+                  background: "rgba(201,168,76,0.12)",
+                  border: "1px solid rgba(201,168,76,0.2)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  boxShadow: "0 0 10px rgba(201,168,76,0.1)",
+                  color: C.gold,
+                }}>
+                  {col.icon}
+                </div>
+                <div style={{
+                  fontSize: "13px", fontWeight: 900, letterSpacing: "0.04em",
+                  background: `linear-gradient(135deg, #fff 30%, ${C.goldL})`,
+                  WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+                  lineHeight: 1,
+                }}>
                   {col.top}
                 </div>
-                <div style={{ fontSize: "10px", color: C.dimmed, letterSpacing: "0.02em" }}>
+                <div style={{ fontSize: "10px", color: C.dimmed, letterSpacing: "0.04em", lineHeight: 1 }}>
                   {col.bot}
                 </div>
               </div>
