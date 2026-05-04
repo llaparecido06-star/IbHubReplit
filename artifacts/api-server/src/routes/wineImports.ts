@@ -273,6 +273,7 @@ router.get("/wine-imports/search", async (req: Request, res: Response) => {
         .limit(50);
       if (prefixData && prefixData.length > 0) {
         rows = prefixData as typeof rows;
+        brandName = prefix; // use the effective prefix, not the AI's wrong extraction
         break;
       }
     }

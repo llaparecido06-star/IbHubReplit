@@ -1091,7 +1091,7 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
           {/* Brand header card */}
           <View style={[styles.kpiCard, { backgroundColor: colors.gold, borderColor: colors.gold, flexDirection: "column", alignItems: "flex-start", gap: 2 }]}>
             <Text style={{ fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.75)", letterSpacing: 0.8, textTransform: "uppercase" }}>
-              {brandExtracted && brandExtracted.toLowerCase() !== result.marcaCompleta.toLowerCase()
+              {brandExtracted && !result.marcaCompleta.toLowerCase().includes(brandExtracted.toLowerCase())
                 ? `IA identificou: ${brandExtracted}`
                 : "Resultado encontrado"}
             </Text>
