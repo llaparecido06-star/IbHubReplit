@@ -283,7 +283,7 @@ export default function Registration() {
             fontFamily: "'Barlow Condensed', sans-serif",
             fontWeight: 900, fontSize: "26px",
             textTransform: "uppercase", letterSpacing: "0.04em",
-            color: C.white, marginBottom: "6px",
+            color: C.white, marginBottom: "6px", textAlign: "center",
           }}>
             GARANTA SUA VAGA
           </h3>
@@ -292,7 +292,7 @@ export default function Registration() {
           </p>
 
           {/* Top gold accent */}
-          <div style={{ height: "2px", background: `linear-gradient(90deg,${C.gold},transparent)`, marginBottom: "24px", borderRadius: "1px" }} />
+          <div style={{ height: "2px", background: C.gold, marginBottom: "24px", borderRadius: "1px" }} />
 
           <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             {[
@@ -339,11 +339,14 @@ export default function Registration() {
                 transition: "opacity 0.2s",
               }}
             >
-              {loading ? "PROCESSANDO..." : "QUERO PARTICIPAR E RECEBER\nO MATERIAL PREPARATÓRIO"}
+              {loading ? "PROCESSANDO..." : <>QUERO PARTICIPAR E RECEBER<br />O MATERIAL PREPARATÓRIO</>}
             </button>
 
-            <p style={{ fontSize: "12px", color: C.dimmed, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: "5px", marginTop: "2px" }}>
-              <IconShield /> Seus dados estão seguros conosco.
+            <p style={{ fontSize: "12px", color: C.dimmed, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: "5px", marginTop: "4px" }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.dimmed} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="5" y="11" width="14" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              Seus dados estão seguros conosco.
             </p>
           </form>
         </div>
@@ -372,10 +375,10 @@ export default function Registration() {
           gap: "24px", maxWidth: "1040px", margin: "0 auto",
         }}>
           {[
-            { icon: <IconTarget />, title: "Conteúdo prático\ne direto ao ponto",  body: "Nada de teoria. Só o\nque realmente importa."             },
-            { icon: <IconChart />,  title: "Baseado em dados\ne inteligência real", body: "Informação confiável\npara decisões melhores."             },
-            { icon: <IconGlobe />,  title: "Visão estratégica\ndo mercado",         body: "Entenda o todo para\nagir melhor no detalhe."             },
-            { icon: <IconUsers />,  title: "Comunidade que\npensa à frente",        body: "Conecte-se com quem está\nconstruindo o futuro do vinho." },
+            { icon: <IconTarget />, title: "Conteúdo prático e direto ao ponto",  body: "Nada de teoria. Só o que realmente importa."             },
+            { icon: <IconChart />,  title: "Baseado em dados e inteligência real", body: "Informação confiável para decisões melhores."             },
+            { icon: <IconGlobe />,  title: "Visão estratégica do mercado",         body: "Entenda o todo para agir melhor no detalhe."             },
+            { icon: <IconUsers />,  title: "Comunidade que pensa à frente",        body: "Conecte-se com quem está construindo o futuro do vinho." },
           ].map((item, i) => (
             <div key={i} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               <div style={{
@@ -386,10 +389,10 @@ export default function Registration() {
               }}>
                 {item.icon}
               </div>
-              <div style={{ fontSize: "13px", fontWeight: 700, color: C.white, lineHeight: 1.45, whiteSpace: "pre-line" }}>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: C.white, lineHeight: 1.45 }}>
                 {item.title}
               </div>
-              <div style={{ fontSize: "12px", color: C.dimmed, lineHeight: 1.65, whiteSpace: "pre-line" }}>
+              <div style={{ fontSize: "12px", color: C.dimmed, lineHeight: 1.65 }}>
                 {item.body}
               </div>
             </div>
