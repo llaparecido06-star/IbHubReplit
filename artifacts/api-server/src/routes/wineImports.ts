@@ -162,7 +162,7 @@ router.get("/wine-imports/suggestions", async (req: Request, res: Response) => {
     .select("marca_completa")
     .ilike("marca_completa", pattern)
     .order("marca_completa")
-    .limit(10);
+    .limit(25);
 
   if (error) {
     return res.status(500).json({ suggestions: [] });
