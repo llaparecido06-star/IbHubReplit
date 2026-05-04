@@ -32,7 +32,7 @@ function GoogleLogo({ size = 18 }: { size?: number }) {
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn, signInWithGoogle, signInWithApple } = useAuth();
+  const { signIn, signInWithGoogle, signInWithApple, session } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [email, setEmail]               = useState("");
@@ -51,6 +51,18 @@ export default function LoginScreen() {
       }
     });
   }, []);
+
+  // Clear the social-login spinner the moment a session arrives.
+  // On Android, openAuthSessionAsync may never resolve (Chrome Custom Tab fires
+  // an intent instead of returning to the app), so we cannot rely on the
+  // signInWithGoogle() promise resolving to clear the spinner. Instead we watch
+  // the session from AuthContext: as soon as SIGNED_IN fires and RootLayoutNav
+  // is about to navigate away, make sure the button is back to its idle state.
+  useEffect(() => {
+    if (session && socialLoading) {
+      setSocialLoading(null);
+    }
+  }, [session, socialLoading]);
 
   const handleLogin = async () => {
     if (!email || !password) { setError("Preencha todos os campos"); return; }

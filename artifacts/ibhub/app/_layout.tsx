@@ -155,6 +155,7 @@ function AuthenticatedLayout() {
   const stack = (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="social-complete" options={{ headerShown: false }} />
+      <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="maintenance" options={{ headerShown: false }} />
       <Stack.Screen name="create-post" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
@@ -315,6 +316,9 @@ function RootLayoutNav() {
     return (
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        {/* auth/callback handles the OAuth deep-link on Android; must be in
+            both stacks so Expo Router never shows "This screen doesn't exist" */}
+        <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" redirect />
         <Stack.Screen name="maintenance" options={{ headerShown: false }} />
         <Stack.Screen name="terms-of-use" options={{ animation: "slide_from_right" }} />

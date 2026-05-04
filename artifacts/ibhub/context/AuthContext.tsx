@@ -314,6 +314,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event === "PASSWORD_RECOVERY") {
         setIsRecovering(true);
       }
+      // Force-unblock the loading spinner the moment a session arrives via any
+      // auth event (SIGNED_IN, TOKEN_REFRESHED, INITIAL_SESSION).  This is a
+      // safety net for the OAuth path where init() may have already resolved
+      // loading=false, but if it hasn't yet (race condition on slow networks)
+      // the user would be stuck on the spinner indefinitely.
+      if (session) {
+        setLoading(false);
+      }
       setSession(session);
       setUser(session?.user ?? null);
       setMustChangePassword(session?.user?.user_metadata?.must_change_password === true);
