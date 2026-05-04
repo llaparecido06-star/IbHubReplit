@@ -79,7 +79,7 @@ export default function Registration() {
         }}>
           {/* Logos */}
           <div style={{ display: "flex", alignItems: "center", gap: "18px", marginBottom: "8px" }}>
-            <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="ibhub" style={{ height: "60px" }} />
+            <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="ibhub" style={{ height: "44px" }} />
             <span style={{ color: "#3a4050", fontSize: "32px", fontWeight: 300 }}>|</span>
             <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: "120px" }} />
           </div>
