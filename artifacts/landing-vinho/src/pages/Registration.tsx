@@ -61,7 +61,6 @@ export default function Registration() {
 
   return (
     <div style={{ background: C.bg, color: C.white, fontFamily: "'Inter', sans-serif" }}>
-
       {/* ═══ HERO ═══ */}
       <section style={{
         display: "grid",
@@ -82,7 +81,11 @@ export default function Registration() {
           <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "8px" }}>
             <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="ibhub" style={{ height: "44px" }} />
             <span style={{ color: "#3a4050", fontSize: "28px", fontWeight: 300 }}>|</span>
-            <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: "48px" }} />
+            <img
+              src={`${BASE}idealbi-logo2-transparent.png`}
+              alt="IDEAL.BI"
+              style={{ height: "48px" }}
+              className="ml-[0px] mr-[0px] pl-[150px] pr-[150px] mt-[0px] mb-[0px] pt-[0px] pb-[0px]" />
           </div>
           <div style={{ fontSize: "12px", color: C.dimmed, letterSpacing: "0.06em", marginBottom: "44px", lineHeight: 1.4 }}>
             INTELIGÊNCIA ESTRATÉGICA PARA O<br />MERCADO DE VINHOS
@@ -156,7 +159,6 @@ export default function Registration() {
           }} />
         </div>
       </section>
-
       {/* ═══ PARTICIPE + FORM ═══ */}
       <section style={{
         display: "grid",
@@ -337,7 +339,6 @@ export default function Registration() {
           </form>
         </div>
       </section>
-
       {/* ═══ POR QUE PARTICIPAR? ═══ */}
       <section style={{
         background: C.dark,
@@ -384,7 +385,6 @@ export default function Registration() {
           ))}
         </div>
       </section>
-
       {/* ═══ FOOTER ═══ */}
       <footer style={{ textAlign: "center", padding: "28px 32px", background: C.bg, borderTop: `1px solid ${C.border}` }}>
         <p style={{ fontSize: "14px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: C.dimmed }}>
