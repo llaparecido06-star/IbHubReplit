@@ -78,10 +78,10 @@ export default function Registration() {
           zIndex: 1,
         }}>
           {/* Logos */}
-          <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "8px" }}>
-            <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="ibhub" style={{ height: "44px" }} />
-            <span style={{ color: "#3a4050", fontSize: "28px", fontWeight: 300 }}>|</span>
-            <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: "60px" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: "18px", marginBottom: "8px" }}>
+            <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="ibhub" style={{ height: "60px" }} />
+            <span style={{ color: "#3a4050", fontSize: "32px", fontWeight: 300 }}>|</span>
+            <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: "120px" }} />
           </div>
           <div style={{ fontSize: "12px", color: C.dimmed, letterSpacing: "0.06em", marginBottom: "44px", lineHeight: 1.4 }}>
             INTELIGÊNCIA ESTRATÉGICA PARA O<br />MERCADO DE VINHOS
