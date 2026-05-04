@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 
 const BASE = import.meta.env.BASE_URL;
@@ -17,13 +17,13 @@ const C = {
 };
 
 const IconCalendar = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
 );
 const IconClock = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 15.5"/></svg>
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
 );
 const IconLock = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><rect x="5" y="11" width="14" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
 );
 const IconUser = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.dimmed} strokeWidth="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -38,31 +38,37 @@ const IconBriefcase = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.dimmed} strokeWidth="1.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
 );
 const IconTarget = () => (
-  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
 );
 const IconChart = () => (
-  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
 );
 const IconGlobe = () => (
-  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg>
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg>
 );
 const IconUsers = () => (
-  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
 );
 
 export default function Registration() {
   const [, setLocation] = useLocation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
-
     const form = e.target as HTMLFormElement;
     const formData = new FormData(form);
-
     try {
       const res = await fetch("/api/event-registrations", {
         method: "POST",
@@ -74,9 +80,7 @@ export default function Registration() {
           company: formData.get("company"),
         }),
       });
-
       const data = await res.json();
-
       if (!res.ok) {
         setError(data.error === "ALREADY_REGISTERED"
           ? "Este e-mail já está inscrito."
@@ -84,7 +88,6 @@ export default function Registration() {
         setLoading(false);
         return;
       }
-
       setLocation("/confirmacao");
     } catch {
       setError("Erro de conexão. Tente novamente.");
@@ -94,33 +97,39 @@ export default function Registration() {
 
   return (
     <div style={{ background: C.bg, color: C.white, fontFamily: "'Inter', sans-serif" }}>
-      {/* ═══ HERO ═══ */}
-      <section style={{ display: "grid", gridTemplateColumns: "44% 56%", minHeight: "760px" }}>
 
-        {/* LEFT */}
+      {/* ═══ HERO ═══ */}
+      <section style={{
+        display: "grid",
+        gridTemplateColumns: isMobile ? "1fr" : "44% 56%",
+        minHeight: isMobile ? "auto" : "760px",
+      }}>
+
+        {/* LEFT — content */}
         <div style={{
           background: `radial-gradient(ellipse 100% 70% at -10% 60%, rgba(201,168,76,0.09) 0%, transparent 65%),
                        radial-gradient(ellipse 60% 40% at 50% 0%, rgba(201,168,76,0.04) 0%, transparent 70%),
                        ${C.bg}`,
-          padding: "44px 64px 56px",
+          padding: isMobile ? "36px 24px 40px" : "44px 64px 56px",
           display: "flex", flexDirection: "column", justifyContent: "flex-start",
           position: "relative", zIndex: 1,
+          order: isMobile ? 1 : 0,
         }}>
           {/* thin gold line top */}
           <div style={{
             position: "absolute", top: 0, left: 0, right: 0, height: "1px",
-            background: `linear-gradient(90deg, rgba(201,168,76,0.6) 0%, rgba(201,168,76,0.15) 60%, transparent 100%)`,
+            background: "linear-gradient(90deg, rgba(201,168,76,0.6) 0%, rgba(201,168,76,0.15) 60%, transparent 100%)",
           }} />
 
           {/* Logos */}
-          <div style={{ display: "flex", alignItems: "center", gap: "20px", marginBottom: "6px" }}>
-            <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="ibhub" style={{ height: "40px" }} />
-            <div style={{ width: "1px", height: "32px", background: `linear-gradient(180deg, transparent, rgba(201,168,76,0.5), transparent)` }} />
-            <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: "110px" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "6px" }}>
+            <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="ibhub" style={{ height: isMobile ? "32px" : "40px" }} />
+            <div style={{ width: "1px", height: "26px", background: "linear-gradient(180deg, transparent, rgba(201,168,76,0.5), transparent)" }} />
+            <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: isMobile ? "80px" : "110px" }} />
           </div>
           <div style={{
             fontSize: "10px", color: C.dimmed, letterSpacing: "0.14em",
-            marginBottom: "44px", textTransform: "uppercase", fontWeight: 500,
+            marginBottom: isMobile ? "28px" : "44px", textTransform: "uppercase", fontWeight: 500,
           }}>
             Inteligência Estratégica para o Mercado de Vinhos
           </div>
@@ -129,14 +138,14 @@ export default function Registration() {
           <div style={{
             display: "inline-flex", alignItems: "center", gap: "8px",
             background: "rgba(201,168,76,0.08)",
-            border: `1px solid rgba(201,168,76,0.28)`,
+            border: "1px solid rgba(201,168,76,0.28)",
             borderRadius: "100px",
             padding: "6px 14px",
-            marginBottom: "22px",
+            marginBottom: "18px",
             alignSelf: "flex-start",
           }}>
             <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: C.gold, boxShadow: `0 0 8px ${C.gold}` }} />
-            <span style={{ fontSize: "11px", color: C.gold, letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 700 }}>
+            <span style={{ fontSize: "11px", color: C.gold, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700 }}>
               Encontro exclusivo para a comunidade
             </span>
           </div>
@@ -144,17 +153,17 @@ export default function Registration() {
           <h1 style={{
             fontFamily: "'Barlow Condensed', sans-serif",
             fontWeight: 900,
-            fontSize: "clamp(52px, 5.5vw, 76px)",
+            fontSize: isMobile ? "clamp(44px, 12vw, 64px)" : "clamp(52px, 5.5vw, 76px)",
             lineHeight: 0.92,
             textTransform: "uppercase",
-            margin: "0 0 22px",
-            whiteSpace: "nowrap",
+            margin: "0 0 20px",
+            whiteSpace: isMobile ? "normal" : "nowrap",
           }}>
             <span style={{ color: C.white }}>O FUTURO NO</span><br />
             <span style={{ color: C.gold }}>MERCADO DE VINHOS</span>
           </h1>
 
-          <p style={{ fontSize: "15px", color: C.muted, lineHeight: 1.75, margin: "0 0 28px", maxWidth: "380px" }}>
+          <p style={{ fontSize: "15px", color: C.muted, lineHeight: 1.75, margin: "0 0 24px", maxWidth: "380px" }}>
             O que está acontecendo no mercado hoje<br />e como isso impacta suas decisões.
           </p>
 
@@ -163,19 +172,17 @@ export default function Registration() {
             href="#inscricao"
             onClick={e => { e.preventDefault(); document.getElementById("inscricao")?.scrollIntoView({ behavior: "smooth" }); }}
             style={{
-              display: "inline-flex", alignItems: "center", gap: "10px",
+              display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "10px",
               background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldL} 100%)`,
               color: "#0a0800", borderRadius: "10px",
               padding: "14px 24px",
               fontSize: "12px", fontWeight: 900,
               letterSpacing: "0.08em", textTransform: "uppercase",
-              textDecoration: "none", alignSelf: "flex-start",
+              textDecoration: "none",
+              alignSelf: isMobile ? "stretch" : "flex-start",
               boxShadow: "0 4px 24px rgba(201,168,76,0.35)",
-              marginBottom: "40px",
-              transition: "transform 0.15s, box-shadow 0.15s",
+              marginBottom: "32px",
             }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 32px rgba(201,168,76,0.5)"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 24px rgba(201,168,76,0.35)"; }}
           >
             Garantir minha vaga
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
@@ -185,30 +192,29 @@ export default function Registration() {
           <div style={{
             display: "flex",
             background: "linear-gradient(135deg, rgba(201,168,76,0.07) 0%, rgba(201,168,76,0.03) 50%, rgba(201,168,76,0.06) 100%)",
-            border: `1px solid rgba(201,168,76,0.22)`,
+            border: "1px solid rgba(201,168,76,0.22)",
             borderRadius: "14px",
             overflow: "hidden",
-            maxWidth: "430px",
+            maxWidth: isMobile ? "100%" : "430px",
             position: "relative",
           }}>
-            {/* top shimmer line */}
             <div style={{
               position: "absolute", top: 0, left: "10%", right: "10%", height: "1px",
               background: "linear-gradient(90deg, transparent, rgba(201,168,76,0.6), transparent)",
             }} />
             {[
-              { icon: <IconCalendar />, top: "18 DE MAIO",     bot: "Segunda-feira"  },
-              { icon: <IconClock />,    top: "20H00",          bot: "Duração: 60 min"},
-              { icon: <IconLock />,     top: "Evento fechado", bot: "Apenas membros" },
+              { icon: <IconCalendar />, top: "18 DE MAIO",     bot: "Segunda-feira"   },
+              { icon: <IconClock />,    top: "20H00",          bot: "Duração: 60 min" },
+              { icon: <IconLock />,     top: "Evento fechado", bot: "Apenas membros"  },
             ].map((col, i) => (
               <div key={i} style={{
-                flex: 1, padding: "18px 16px 16px",
-                borderRight: i < 2 ? `1px solid rgba(201,168,76,0.12)` : "none",
-                display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "8px",
+                flex: 1, padding: isMobile ? "14px 10px 12px" : "18px 16px 16px",
+                borderRight: i < 2 ? "1px solid rgba(201,168,76,0.12)" : "none",
+                display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "6px",
               }}>
-                {/* icon circle */}
                 <div style={{
-                  width: "32px", height: "32px", borderRadius: "8px",
+                  width: isMobile ? "28px" : "32px", height: isMobile ? "28px" : "32px",
+                  borderRadius: "8px",
                   background: "rgba(201,168,76,0.12)",
                   border: "1px solid rgba(201,168,76,0.2)",
                   display: "flex", alignItems: "center", justifyContent: "center",
@@ -218,14 +224,14 @@ export default function Registration() {
                   {col.icon}
                 </div>
                 <div style={{
-                  fontSize: "13px", fontWeight: 900, letterSpacing: "0.04em",
+                  fontSize: isMobile ? "11px" : "13px", fontWeight: 900, letterSpacing: "0.03em",
                   background: `linear-gradient(135deg, #fff 30%, ${C.goldL})`,
                   WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
                   lineHeight: 1,
                 }}>
                   {col.top}
                 </div>
-                <div style={{ fontSize: "10px", color: C.dimmed, letterSpacing: "0.04em", lineHeight: 1 }}>
+                <div style={{ fontSize: "9px", color: C.dimmed, letterSpacing: "0.03em", lineHeight: 1 }}>
                   {col.bot}
                 </div>
               </div>
@@ -233,74 +239,86 @@ export default function Registration() {
           </div>
         </div>
 
-        {/* RIGHT — wine */}
-        <div style={{ position: "relative", overflow: "hidden", background: "#06080a" }}>
+        {/* RIGHT — wine image */}
+        <div style={{
+          position: "relative", overflow: "hidden", background: "#06080a",
+          height: isMobile ? "280px" : "auto",
+          order: isMobile ? 0 : 1,
+        }}>
           <img
             src={`${BASE}hero-wine2.png`}
             alt="Taça de vinho"
             style={{
               width: "100%", height: "100%",
-              objectFit: "cover", objectPosition: "62% center",
+              objectFit: "cover", objectPosition: isMobile ? "62% 20%" : "62% center",
               display: "block",
               filter: "brightness(0.88) contrast(1.06)",
             }}
           />
-          {/* left fade — dissolve completamente na borda, sem divisória */}
           <div style={{
             position: "absolute", inset: 0,
-            background: "linear-gradient(90deg, #0c0d0f 0%, rgba(12,13,15,0.92) 8%, rgba(12,13,15,0.6) 20%, rgba(12,13,15,0.2) 38%, transparent 58%)",
+            background: isMobile
+              ? "linear-gradient(180deg, transparent 40%, #0c0d0f 100%)"
+              : "linear-gradient(90deg, #0c0d0f 0%, rgba(12,13,15,0.92) 8%, rgba(12,13,15,0.6) 20%, rgba(12,13,15,0.2) 38%, transparent 58%)",
           }} />
-          {/* right fade — foto termina antes da borda direita */}
-          <div style={{
-            position: "absolute", inset: 0,
-            background: "linear-gradient(270deg, #0c0d0f 0%, rgba(12,13,15,0.5) 8%, transparent 22%)",
-          }} />
-          {/* bottom fade */}
+          {!isMobile && (
+            <div style={{
+              position: "absolute", inset: 0,
+              background: "linear-gradient(270deg, #0c0d0f 0%, rgba(12,13,15,0.5) 8%, transparent 22%)",
+            }} />
+          )}
           <div style={{
             position: "absolute", inset: 0,
             background: "linear-gradient(180deg, transparent 60%, rgba(12,13,15,0.65) 100%)",
           }} />
         </div>
       </section>
+
       {/* ═══ PARTICIPE + FORM ═══ */}
       <section id="inscricao" style={{
-        display: "grid", gridTemplateColumns: "1fr 1fr",
-        borderTop: `1px solid rgba(201,168,76,0.15)`,
+        display: "grid",
+        gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+        borderTop: "1px solid rgba(201,168,76,0.15)",
         background: `radial-gradient(ellipse 70% 80% at 25% 50%, rgba(201,168,76,0.05) 0%, transparent 65%), #0c0d0f`,
         alignItems: "center",
         position: "relative",
       }}>
         {/* LEFT — ebook pitch */}
         <div style={{
-          background: "transparent",
-          padding: "56px 44px 56px 56px",
+          padding: isMobile ? "40px 24px 32px" : "56px 44px 56px 56px",
           display: "flex", flexDirection: "column", justifyContent: "center",
         }}>
-          {/* título alinhado com a borda esquerda do ebook */}
           <h2 style={{
             fontFamily: "'Barlow Condensed', sans-serif",
-            fontWeight: 900, fontSize: "38px", textTransform: "uppercase",
-            letterSpacing: "0.02em", lineHeight: 1.1, marginBottom: "40px",
-            marginLeft: "45px",
+            fontWeight: 900, fontSize: isMobile ? "28px" : "38px",
+            textTransform: "uppercase",
+            letterSpacing: "0.02em", lineHeight: 1.1,
+            marginBottom: isMobile ? "28px" : "40px",
+            marginLeft: isMobile ? "0" : "45px",
           }}>
             PARTICIPE E RECEBA<br />
             <span style={{ color: C.gold }}>O MATERIAL PREPARATÓRIO</span>
           </h2>
 
-          {/* Ebook cover + texto lado a lado */}
-          <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: "36px" }}>
+          <div style={{
+            display: "flex",
+            flexDirection: isMobile ? "column" : "row",
+            alignItems: isMobile ? "center" : "center",
+            gap: isMobile ? "24px" : "36px",
+          }}>
             <div style={{ perspective: "900px", flexShrink: 0 }}>
               <div style={{ position: "relative", display: "inline-block" }}>
                 <div style={{
                   position: "absolute", inset: "-30px -20px",
-                  background: `radial-gradient(ellipse at 50% 65%, rgba(201,168,76,0.28) 0%, transparent 65%)`,
+                  background: "radial-gradient(ellipse at 50% 65%, rgba(201,168,76,0.28) 0%, transparent 65%)",
                   filter: "blur(24px)", zIndex: 0,
                 }} />
                 <img
                   src={`${BASE}ebook-parte1.png`}
                   alt="O Futuro no Mercado de Vinhos — Parte 1"
                   style={{
-                    width: "200px", display: "block", position: "relative", zIndex: 1,
+                    width: isMobile ? "150px" : "200px",
+                    display: "block", position: "relative", zIndex: 1,
                     transform: "rotateY(-12deg) rotateX(3deg)",
                     transformOrigin: "center center",
                     filter: "drop-shadow(24px 36px 64px rgba(0,0,0,1))",
@@ -334,21 +352,18 @@ export default function Registration() {
 
         {/* RIGHT — card de inscrição */}
         <div style={{
-          background: "transparent",
-          padding: "48px 56px 48px 32px",
+          padding: isMobile ? "8px 24px 48px" : "48px 56px 48px 32px",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          {/* card */}
           <div style={{
             position: "relative",
             width: "100%", maxWidth: "440px",
             background: "linear-gradient(160deg, #161a24 0%, #111318 100%)",
-            border: `1.5px solid rgba(201,168,76,0.5)`,
+            border: "1.5px solid rgba(201,168,76,0.5)",
             borderRadius: "18px",
-            padding: "40px 36px 32px",
+            padding: isMobile ? "32px 20px 24px" : "40px 36px 32px",
             boxShadow: "0 0 0 1px rgba(201,168,76,0.08), 0 8px 48px rgba(0,0,0,0.6), 0 0 80px rgba(201,168,76,0.07)",
           }}>
-            {/* gold top bar */}
             <div style={{
               position: "absolute", top: 0, left: "15%", right: "15%", height: "3px",
               background: `linear-gradient(90deg, transparent, ${C.gold}, ${C.goldL}, ${C.gold}, transparent)`,
@@ -363,7 +378,7 @@ export default function Registration() {
             }}>
               GARANTA SUA VAGA
             </h3>
-            <p style={{ fontSize: "13px", color: C.muted, marginBottom: "28px", lineHeight: 1.6, textAlign: "center" }}>
+            <p style={{ fontSize: "13px", color: C.muted, marginBottom: "24px", lineHeight: 1.6, textAlign: "center" }}>
               Preencha seus dados para se inscrever<br />e receber o material preparatório.
             </p>
 
@@ -419,10 +434,8 @@ export default function Registration() {
                   textAlign: "center", lineHeight: 1.5,
                   boxShadow: loading ? "none" : "0 4px 24px rgba(201,168,76,0.4), 0 0 0 1px rgba(201,168,76,0.2)",
                   fontFamily: "'Inter', sans-serif",
-                  transition: "transform 0.15s, box-shadow 0.15s",
+                  width: "100%",
                 }}
-                onMouseEnter={e => { if (!loading) { (e.target as HTMLElement).style.transform = "translateY(-2px)"; (e.target as HTMLElement).style.boxShadow = "0 8px 32px rgba(201,168,76,0.55), 0 0 0 1px rgba(201,168,76,0.3)"; }}}
-                onMouseLeave={e => { (e.target as HTMLElement).style.transform = "translateY(0)"; (e.target as HTMLElement).style.boxShadow = "0 4px 24px rgba(201,168,76,0.4), 0 0 0 1px rgba(201,168,76,0.2)"; }}
               >
                 {loading ? "PROCESSANDO..." : <>QUERO PARTICIPAR E RECEBER<br />O MATERIAL PREPARATÓRIO</>}
               </button>
@@ -442,14 +455,15 @@ export default function Registration() {
           </div>
         </div>
       </section>
+
       {/* ═══ POR QUE PARTICIPAR? ═══ */}
       <section style={{
         background: `radial-gradient(ellipse 90% 60% at 50% 100%, rgba(201,168,76,0.06) 0%, transparent 70%), #0c0d0f`,
-        borderTop: `1px solid rgba(201,168,76,0.15)`,
-        padding: "80px 64px 96px",
+        borderTop: "1px solid rgba(201,168,76,0.15)",
+        padding: isMobile ? "56px 20px 64px" : "80px 64px 96px",
         position: "relative",
       }}>
-        <div style={{ textAlign: "center", marginBottom: "64px" }}>
+        <div style={{ textAlign: "center", marginBottom: isMobile ? "40px" : "64px" }}>
           <p style={{
             fontSize: "11px", letterSpacing: "0.25em", textTransform: "uppercase",
             color: C.gold, fontWeight: 600, marginBottom: "16px",
@@ -458,7 +472,7 @@ export default function Registration() {
           </p>
           <h2 style={{
             fontFamily: "'Barlow Condensed', sans-serif",
-            fontWeight: 900, fontSize: "36px",
+            fontWeight: 900, fontSize: isMobile ? "28px" : "36px",
             textTransform: "uppercase", letterSpacing: "0.12em",
             color: C.white, marginBottom: "20px",
           }}>
@@ -468,8 +482,10 @@ export default function Registration() {
         </div>
 
         <div style={{
-          display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
-          gap: "24px", maxWidth: "1140px", margin: "0 auto",
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)",
+          gap: isMobile ? "14px" : "24px",
+          maxWidth: "1140px", margin: "0 auto",
         }}>
           {[
             { icon: <IconTarget />, title: "Conteúdo prático e direto ao ponto",  body: "Nada de teoria. Só o que realmente importa para o seu negócio." },
@@ -480,39 +496,39 @@ export default function Registration() {
             <div key={i} style={{
               textAlign: "center",
               background: "linear-gradient(160deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)",
-              border: `1px solid rgba(201,168,76,0.18)`,
+              border: "1px solid rgba(201,168,76,0.18)",
               borderRadius: "16px",
-              padding: "36px 24px 32px",
+              padding: isMobile ? "24px 14px 20px" : "36px 24px 32px",
               position: "relative",
               overflow: "hidden",
-              transition: "border-color 0.2s",
             }}>
-              {/* subtle top accent per card */}
               <div style={{
                 position: "absolute", top: 0, left: "20%", right: "20%", height: "1px",
-                background: `linear-gradient(90deg, transparent, rgba(201,168,76,0.5), transparent)`,
+                background: "linear-gradient(90deg, transparent, rgba(201,168,76,0.5), transparent)",
               }} />
               <div style={{
-                width: "56px", height: "56px", borderRadius: "14px",
-                border: `1px solid rgba(201,168,76,0.3)`,
+                width: isMobile ? "44px" : "56px", height: isMobile ? "44px" : "56px",
+                borderRadius: "14px",
+                border: "1px solid rgba(201,168,76,0.3)",
                 background: "linear-gradient(135deg, rgba(201,168,76,0.1) 0%, rgba(201,168,76,0.03) 100%)",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                margin: "0 auto 20px",
+                margin: "0 auto 16px",
               }}>
                 {item.icon}
               </div>
-              <div style={{ fontSize: "14px", fontWeight: 700, color: C.white, lineHeight: 1.4, marginBottom: "12px" }}>
+              <div style={{ fontSize: isMobile ? "12px" : "14px", fontWeight: 700, color: C.white, lineHeight: 1.4, marginBottom: "10px" }}>
                 {item.title}
               </div>
-              <div style={{ fontSize: "12px", color: C.dimmed, lineHeight: 1.75 }}>
+              <div style={{ fontSize: isMobile ? "11px" : "12px", color: C.dimmed, lineHeight: 1.7 }}>
                 {item.body}
               </div>
             </div>
           ))}
         </div>
       </section>
+
       {/* ═══ FOOTER ═══ */}
-      <footer style={{ textAlign: "center", padding: "28px 32px", background: "#0c0d0f", borderTop: `1px solid rgba(201,168,76,0.15)` }}>
+      <footer style={{ textAlign: "center", padding: isMobile ? "24px 20px" : "28px 32px", background: "#0c0d0f", borderTop: "1px solid rgba(201,168,76,0.15)" }}>
         <p style={{ fontSize: "13px", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: C.dimmed, margin: "0 0 8px" }}>
           VAGAS LIMITADAS. GARANTA SUA PARTICIPAÇÃO.
         </p>
