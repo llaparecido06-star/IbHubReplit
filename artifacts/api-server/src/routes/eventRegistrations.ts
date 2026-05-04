@@ -1,12 +1,17 @@
 import { Router } from "express";
-import pg from "pg";
+import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { BrevoClient } from "@getbrevo/brevo";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
 
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const supabase = createClient(
+  process.env.EXPO_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { autoRefreshToken: false, persistSession: false } },
+);
+
 const brevo = new BrevoClient({ apiKey: process.env.BREVO_API_KEY });
 
 const registrationSchema = z.object({
@@ -38,16 +43,19 @@ router.post("/event-registrations", async (req, res) => {
 
     const { name, email, whatsapp, company } = parsed.data;
 
-    const result = await pool.query(
-      `INSERT INTO event_registrations (name, email, whatsapp, company)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (email) DO NOTHING
-       RETURNING id`,
-      [name, email, whatsapp, company || null],
-    );
+    const { data, error: dbError } = await supabase
+      .from("event_registrations")
+      .insert({ name, email, whatsapp, company: company || null })
+      .select("id")
+      .single();
 
-    if (result.rows.length === 0) {
-      res.status(409).json({ error: "ALREADY_REGISTERED", message: "Este e-mail já está inscrito." });
+    if (dbError) {
+      if (dbError.code === "23505") {
+        res.status(409).json({ error: "ALREADY_REGISTERED", message: "Este e-mail já está inscrito." });
+        return;
+      }
+      logger.error({ dbError }, "Failed to insert event registration");
+      res.status(500).json({ error: "DB_ERROR" });
       return;
     }
 
@@ -62,7 +70,7 @@ router.post("/event-registrations", async (req, res) => {
       logger.error({ emailErr }, "Failed to send confirmation email via Brevo");
     }
 
-    res.status(201).json({ success: true, id: result.rows[0].id });
+    res.status(201).json({ success: true, id: data.id });
   } catch (err) {
     logger.error({ err }, "Unhandled error in event registration");
     res.status(500).json({ error: "INTERNAL_ERROR" });
