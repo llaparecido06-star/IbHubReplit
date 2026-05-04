@@ -169,13 +169,13 @@ export default function Registration() {
         {/* RIGHT — wine */}
         <div style={{ position: "relative", overflow: "hidden", background: "#080605" }}>
           <img
-            src={`${BASE}hero-wine.png`}
+            src={`${BASE}hero-wine2.png`}
             alt="Taça de vinho"
             style={{
               width: "100%", height: "100%",
-              objectFit: "cover", objectPosition: "center 15%",
+              objectFit: "cover", objectPosition: "center center",
               display: "block",
-              filter: "brightness(0.65) contrast(1.15)",
+              filter: "brightness(0.75) contrast(1.1)",
             }}
           />
           <div style={{
