@@ -301,6 +301,7 @@ export default function Registration() {
             letterSpacing: "0.02em", lineHeight: 1.1,
             marginBottom: isMobile ? "28px" : "40px",
             marginLeft: isMobile ? "0" : "45px",
+            textAlign: isMobile ? "center" : "left",
           }}>
             PARTICIPE E RECEBA<br />
             <span style={{ color: C.gold }}>O MATERIAL PREPARATÓRIO</span>
