@@ -210,8 +210,8 @@ export default function Registration() {
             <span style={{ color: C.gold }}>O MATERIAL PREPARATÓRIO</span>
           </h2>
 
-          {/* Ebook cover — destaque centralizado */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "36px" }}>
+          {/* Ebook cover — esquerda, texto ao lado */}
+          <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: "40px" }}>
             <div style={{ perspective: "900px" }}>
               <div style={{ position: "relative", display: "inline-block" }}>
                 {/* glow */}
@@ -238,7 +238,7 @@ export default function Registration() {
               </div>
             </div>
 
-            <div style={{ fontSize: "15px", color: C.muted, lineHeight: 1.8, width: "100%" }}>
+            <div style={{ fontSize: "15px", color: C.muted, lineHeight: 1.8, flex: 1 }}>
               <p style={{ margin: "0 0 12px" }}>
                 Ao se inscrever, você recebe a{" "}
                 <strong style={{ color: C.white, fontWeight: 600 }}>Parte 1 do Ralo-X do Mercado de Vinhos 2026</strong>.
