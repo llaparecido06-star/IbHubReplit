@@ -1,5 +1,5 @@
 kind = "web"
-previewPath = "/landing-vinho/"
+previewPath = "/ofuturodomercado/"
 title = "Landing Page — O Futuro no Mercado de Vinhos"
 version = "1.0.0"
 id = "artifacts/landing-vinho"
@@ -11,7 +11,7 @@ version = "1.0.0"
 
 [[services]]
 name = "web"
-paths = [ "/landing-vinho/" ]
+paths = [ "/ofuturodomercado/" ]
 localPort = 22832
 
 [services.development]
@@ -28,4 +28,4 @@ to = "/index.html"
 
 [services.env]
 PORT = "22832"
-BASE_PATH = "/landing-vinho/"
+BASE_PATH = "/ofuturodomercado/"
