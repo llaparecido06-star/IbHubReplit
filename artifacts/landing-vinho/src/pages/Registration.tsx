@@ -101,7 +101,7 @@ export default function Registration() {
         <div style={{
           background: `radial-gradient(ellipse 80% 60% at 0% 50%, rgba(201,168,76,0.06) 0%, transparent 70%), ${C.bg}`,
           padding: "52px 64px 56px",
-          display: "flex", flexDirection: "column", justifyContent: "center",
+          display: "flex", flexDirection: "column", justifyContent: "flex-start",
           position: "relative", zIndex: 1,
         }}>
           {/* Logos */}
