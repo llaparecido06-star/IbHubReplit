@@ -211,7 +211,7 @@ export default function Registration() {
           <h2 style={{
             fontFamily: "'Barlow Condensed', sans-serif",
             fontWeight: 900, fontSize: "38px", textTransform: "uppercase",
-            letterSpacing: "0.02em", lineHeight: 1.1, marginBottom: "28px",
+            letterSpacing: "0.02em", lineHeight: 1.1, marginBottom: "40px",
           }}>
             PARTICIPE E RECEBA<br />
             <span style={{ color: C.gold }}>O MATERIAL PREPARATÓRIO</span>
