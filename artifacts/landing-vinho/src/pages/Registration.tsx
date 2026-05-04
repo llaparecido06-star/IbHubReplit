@@ -4,16 +4,85 @@ import { useLocation } from "wouter";
 const BASE = import.meta.env.BASE_URL;
 
 const C = {
-  bg:        "#0a0b0e",
-  section:   "#0d1117",
-  card:      "#111820",
-  border:    "#1a2840",
-  orange:    "#e89918",
-  white:     "#ffffff",
-  muted:     "#8595a8",
-  dimmed:    "#4a5a6a",
-  input:     "#080d14",
+  bg:      "#0c0d0f",
+  dark:    "#111318",
+  card:    "#1a1d24",
+  beige:   "#c8b98a",
+  beigeL:  "#e8dfc8",
+  gold:    "#c9a84c",
+  goldL:   "#e0b84a",
+  orange:  "#d4900a",
+  white:   "#ffffff",
+  offWhite:"#e8e0d0",
+  muted:   "#9aa0a8",
+  dimmed:  "#5a6270",
+  border:  "#2a2f3a",
+  inputBg: "#0a0c10",
 };
+
+/* ── tiny SVG icons ─────────────────────── */
+const IconCalendar = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+  </svg>
+);
+const IconClock = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 15.5"/>
+  </svg>
+);
+const IconLock = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="5" y="11" width="14" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+  </svg>
+);
+const IconUser = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.dimmed} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+  </svg>
+);
+const IconMail = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.dimmed} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2 7 12 13 22 7"/>
+  </svg>
+);
+const IconPhone = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.dimmed} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 12 19.79 19.79 0 0 1 1.08 3.4 2 2 0 0 1 3.06 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11l-1.27 1.27a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+  </svg>
+);
+const IconBriefcase = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.dimmed} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+  </svg>
+);
+const IconShield = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.dimmed} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+  </svg>
+);
+
+/* ── Why icons ─────────────────────────── */
+const IconTarget = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+  </svg>
+);
+const IconChart = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+  </svg>
+);
+const IconGlobe = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/>
+  </svg>
+);
+const IconUsers = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+  </svg>
+);
 
 export default function Registration() {
   const [, setLocation] = useLocation();
@@ -26,277 +95,307 @@ export default function Registration() {
   };
 
   return (
-    <div style={{ background: C.bg, color: C.white, fontFamily: "'Inter', sans-serif", minHeight: "100vh" }}>
+    <div style={{ background: C.bg, color: C.white, fontFamily: "'Inter', sans-serif" }}>
 
-      {/* ══════════════════════════════════════
-          HEADER — ibhub logo + IDEAL.BI logo
-      ══════════════════════════════════════ */}
-      <header style={{
-        maxWidth: "1060px", margin: "0 auto", padding: "24px 32px",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        borderBottom: `1px solid ${C.border}`,
-      }}>
-        {/* ibhub logo — white background chip */}
-        <div style={{
-          background: "#ffffff", borderRadius: "8px",
-          padding: "8px 14px", display: "inline-flex", alignItems: "center",
-        }}>
-          <img
-            src={`${BASE}ibhub-logo.png`}
-            alt="ibhub"
-            style={{ height: "28px", display: "block" }}
-          />
-        </div>
-
-        {/* IDEAL.BI logo */}
-        <img
-          src={`${BASE}idealbi-logo-transparent.png`}
-          alt="IDEAL.BI"
-          style={{ height: "52px", display: "block" }}
-        />
-      </header>
-
-      {/* ══════════════════════════════════════
-          HERO — centered badge + title
-      ══════════════════════════════════════ */}
-      <section style={{ textAlign: "center", padding: "52px 32px 44px", maxWidth: "860px", margin: "0 auto" }}>
-
-        {/* Badge */}
-        <div style={{
-          display: "inline-block",
-          border: `1px solid rgba(232,153,24,0.45)`,
-          borderRadius: "4px",
-          padding: "5px 18px",
-          fontSize: "11px", fontWeight: 700,
-          letterSpacing: "0.15em", textTransform: "uppercase",
-          color: C.orange, marginBottom: "18px",
-        }}>
-          INTELIGÊNCIA ESTRATÉGICA PARA O MERCADO DE VINHOS
-        </div>
-
-        <div style={{
-          fontSize: "13px", letterSpacing: "0.12em", textTransform: "uppercase",
-          color: C.muted, marginBottom: "28px", fontWeight: 500,
-        }}>
-          ENCONTRO EXCLUSIVO PARA A COMUNIDADE
-        </div>
-
-        <h1 style={{
-          fontFamily: "'Barlow Condensed', sans-serif",
-          fontWeight: 900, fontSize: "clamp(52px, 8vw, 80px)",
-          lineHeight: 1.0, textTransform: "uppercase",
-          letterSpacing: "0.01em", color: C.white,
-          marginBottom: "20px",
-        }}>
-          O FUTURO NO<br />MERCADO DE VINHOS
-        </h1>
-
-        <p style={{ fontSize: "16px", color: C.muted, lineHeight: 1.7, marginBottom: "40px" }}>
-          O que está acontecendo no mercado hoje<br />e como isso impacta suas decisões.
-        </p>
-
-        {/* Event meta — 3 columns */}
-        <div style={{
-          display: "grid", gridTemplateColumns: "1fr 1px 1fr 1px 1fr",
-          alignItems: "center", gap: "0",
-          maxWidth: "680px", margin: "0 auto",
-        }}>
-          {[
-            { top: "18 DE MAIO", bot: "SEGUNDA-FEIRA" },
-            { top: "20H00", bot: "DURAÇÃO: 60 MINUTOS" },
-            { top: "EVENTO FECHADO", bot: "APENAS PARA MEMBROS DA COMUNIDADE" },
-          ].map((col, i) => (
-            <Fragment key={i}>
-              <div style={{ padding: "0 20px" }}>
-                <div style={{ fontSize: "13px", fontWeight: 800, letterSpacing: "0.07em", color: C.white, marginBottom: "4px" }}>
-                  {col.top}
-                </div>
-                <div style={{ fontSize: "11px", color: C.dimmed, letterSpacing: "0.07em" }}>
-                  {col.bot}
-                </div>
-              </div>
-              {i < 2 && <div style={{ height: "36px", width: "1px", background: C.border, margin: "0 auto" }} />}
-            </Fragment>
-          ))}
-        </div>
-      </section>
-
-      {/* divider */}
-      <div style={{ maxWidth: "1060px", margin: "0 auto 0", borderTop: `1px solid ${C.border}` }} />
-
-      {/* ══════════════════════════════════════
-          MAIN 2-COLUMN
-      ══════════════════════════════════════ */}
+      {/* ══════════════════════════════════════════════════════
+          HERO — left text + right wine glass photo
+      ══════════════════════════════════════════════════════ */}
       <section style={{
-        maxWidth: "1060px", margin: "0 auto",
-        padding: "52px 32px 72px",
-        display: "grid", gridTemplateColumns: "1fr 400px", gap: "56px", alignItems: "start",
+        display: "grid", gridTemplateColumns: "1fr 1fr",
+        minHeight: "100vh", position: "relative",
       }}>
+        {/* Left dark panel */}
+        <div style={{
+          background: "linear-gradient(135deg, #0a0b0d 0%, #0f1218 70%, #161c24 100%)",
+          padding: "0 48px 48px 48px",
+          display: "flex", flexDirection: "column", justifyContent: "space-between",
+          position: "relative", zIndex: 1,
+        }}>
+          {/* Logo bar */}
+          <div style={{ paddingTop: "32px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+              {/* ibhub logo on white bg */}
+              <div style={{ background: "#ffffff", borderRadius: "6px", padding: "5px 10px" }}>
+                <img src={`${BASE}ibhub-logo.png`} alt="ibhub" style={{ height: "22px", display: "block" }} />
+              </div>
+              <span style={{ color: "#3a4050", fontSize: "20px", fontWeight: 300 }}>|</span>
+              {/* IDEAL.BI logo */}
+              <img src={`${BASE}idealbi-logo-transparent.png`} alt="IDEAL.BI" style={{ height: "28px", display: "block" }} />
+            </div>
+            <div style={{ fontSize: "10px", color: C.muted, letterSpacing: "0.05em", lineHeight: 1.4 }}>
+              INTELIGÊNCIA ESTRATÉGICA PARA O<br />MERCADO DE VINHOS
+            </div>
+          </div>
 
-        {/* ── LEFT ── */}
-        <div>
-          <h2 style={{
-            fontFamily: "'Barlow Condensed', sans-serif",
-            fontWeight: 800, fontSize: "28px",
-            textTransform: "uppercase", letterSpacing: "0.04em",
-            lineHeight: 1.2, marginBottom: "28px",
-          }}>
-            <span style={{ color: C.orange }}>PARTICIPE E RECEBA</span>
-            <br />
-            <span style={{ color: C.white }}>O MATERIAL PREPARATÓRIO</span>
-          </h2>
+          {/* Hero text */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", paddingTop: "60px" }}>
+            <div style={{ fontSize: "11px", color: C.gold, letterSpacing: "0.14em", textTransform: "uppercase", fontWeight: 600, marginBottom: "20px" }}>
+              ENCONTRO EXCLUSIVO PARA A COMUNIDADE
+            </div>
 
-          {/* Ebook card */}
-          <div style={{
-            display: "flex", gap: "24px", alignItems: "flex-start",
-            background: C.card, border: `1px solid ${C.border}`,
-            borderRadius: "10px", padding: "22px",
-          }}>
-            <img
-              src={`${BASE}ebook-cover.png`}
-              alt="Raio-X Mercado de Vinhos 2026"
-              style={{ width: "88px", height: "116px", objectFit: "cover", borderRadius: "6px", flexShrink: 0 }}
-            />
-            <div style={{ fontSize: "14px", color: C.muted, lineHeight: 1.75 }}>
-              <p style={{ marginBottom: "10px" }}>
-                Ao se inscrever, você recebe a{" "}
-                <strong style={{ color: C.white }}>Parte 1 do Raio-X do Mercado de Vinhos 2026</strong>.
-              </p>
-              <p style={{ marginBottom: "14px" }}>
-                Um material estratégico com a base da nossa leitura de mercado.
-              </p>
-              <p style={{
-                borderLeft: `3px solid ${C.orange}`,
-                paddingLeft: "12px",
-                color: C.white, fontWeight: 600,
-                lineHeight: 1.65, fontSize: "13px",
-              }}>
-                Mas o mais importante não está nele.<br />
-                A aplicação prática será revelada no encontro.
-              </p>
+            <h1 style={{
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontWeight: 900, fontSize: "clamp(52px, 7vw, 76px)",
+              lineHeight: 1.0, textTransform: "uppercase",
+              letterSpacing: "0.01em", margin: "0 0 16px",
+            }}>
+              <span style={{ color: C.white }}>O FUTURO NO<br /></span>
+              <span style={{ color: C.gold }}>MERCADO DE VINHOS</span>
+            </h1>
+
+            <p style={{ fontSize: "15px", color: "#c0c8d4", lineHeight: 1.65, margin: "0 0 20px", maxWidth: "380px" }}>
+              O que está acontecendo no mercado hoje<br />e como isso impacta suas decisões.
+            </p>
+
+            {/* Gold accent line */}
+            <div style={{ width: "40px", height: "3px", background: C.gold, borderRadius: "2px", marginBottom: "48px" }} />
+
+            {/* Event meta — 3 columns with icons */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, auto)", gap: "0 32px", maxWidth: "420px" }}>
+              {[
+                { icon: <IconCalendar />, top: "18 DE MAIO",      bot: "SEGUNDA-FEIRA"               },
+                { icon: <IconClock />,    top: "20H00",           bot: "DURAÇÃO: 60 MINUTOS"          },
+                { icon: <IconLock />,     top: "EVENTO FECHADO",  bot: "APENAS PARA MEMBROS\nDA COMUNIDADE" },
+              ].map((col, i) => (
+                <div key={i} style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {/* Icon in circle */}
+                  <div style={{
+                    width: "40px", height: "40px", borderRadius: "50%",
+                    border: `1px solid rgba(201,168,76,0.35)`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    marginBottom: "6px",
+                  }}>
+                    {col.icon}
+                  </div>
+                  <div style={{ fontSize: "12px", fontWeight: 800, letterSpacing: "0.06em", color: C.white }}>
+                    {col.top}
+                  </div>
+                  <div style={{ fontSize: "10px", color: C.dimmed, letterSpacing: "0.06em", whiteSpace: "pre-line" }}>
+                    {col.bot}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
 
-        {/* ── RIGHT — Form card ── */}
+        {/* Right photo panel */}
         <div style={{
-          background: C.card, border: `1px solid ${C.border}`,
-          borderRadius: "12px", padding: "32px 28px",
-          position: "sticky", top: "24px",
-          boxShadow: "0 24px 48px rgba(0,0,0,0.5)",
+          position: "relative", overflow: "hidden",
+          background: "#1a1008",
         }}>
-          {/* top accent */}
-          <div style={{ height: "3px", background: `linear-gradient(90deg,${C.orange},#f5c040,${C.orange})`, borderRadius: "12px 12px 0 0", margin: "-32px -28px 28px", borderTopLeftRadius: "12px", borderTopRightRadius: "12px" }} />
+          <img
+            src={`${BASE}hero-wine.png`}
+            alt="Taça de vinho"
+            style={{
+              width: "100%", height: "100%",
+              objectFit: "cover", objectPosition: "center top",
+              display: "block",
+              filter: "brightness(0.75) contrast(1.1)",
+            }}
+          />
+          {/* Left edge gradient — blends with left panel */}
+          <div style={{
+            position: "absolute", top: 0, left: 0, width: "30%", height: "100%",
+            background: "linear-gradient(90deg, #0f1218 0%, transparent 100%)",
+          }} />
+        </div>
+      </section>
 
+      {/* ══════════════════════════════════════════════════════
+          PARTICIPE E RECEBA + FORM
+      ══════════════════════════════════════════════════════ */}
+      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
+
+        {/* ── LEFT — beige/cream panel ── */}
+        <div style={{
+          background: "linear-gradient(160deg, #c8b88a 0%, #a89460 40%, #7a6838 100%)",
+          padding: "52px 48px",
+        }}>
+          <h2 style={{
+            fontFamily: "'Barlow Condensed', sans-serif",
+            fontWeight: 900, fontSize: "30px", textTransform: "uppercase",
+            letterSpacing: "0.02em", lineHeight: 1.15, marginBottom: "6px",
+          }}>
+            <span style={{ color: "#1a1208" }}>PARTICIPE E RECEBA<br /></span>
+            <span style={{ color: "#0a0b0d" }}>O MATERIAL PREPARATÓRIO</span>
+          </h2>
+
+          {/* Ebook row */}
+          <div style={{ display: "flex", gap: "20px", alignItems: "flex-start", margin: "28px 0" }}>
+            {/* Ebook cover — styled */}
+            <div style={{
+              width: "90px", flexShrink: 0,
+              background: "linear-gradient(160deg, #0f1420 0%, #1a2030 100%)",
+              border: "1px solid rgba(201,168,76,0.4)",
+              borderRadius: "6px", padding: "14px 10px",
+              boxShadow: "4px 8px 20px rgba(0,0,0,0.5)",
+              minHeight: "118px",
+              display: "flex", flexDirection: "column", justifyContent: "space-between",
+            }}>
+              <div>
+                <div style={{ fontSize: "6px", color: "#aaa", letterSpacing: "0.08em", marginBottom: "4px" }}>ibhub | IDEALBI</div>
+                <div style={{ fontSize: "9px", fontWeight: 800, color: "#fff", lineHeight: 1.3, fontFamily: "'Barlow Condensed', sans-serif", textTransform: "uppercase" }}>
+                  O FUTURO NO<br />MERCADO DE<br />VINHOS
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "2px", alignItems: "flex-end", height: "24px", marginTop: "8px" }}>
+                {[6,10,7,13,9,14,11,16,12].map((h, i) => (
+                  <div key={i} style={{ flex: 1, height: `${h}px`, background: C.gold, borderRadius: "1px", opacity: 0.85 }} />
+                ))}
+              </div>
+              <div style={{ marginTop: "6px", background: C.gold, borderRadius: "3px", padding: "2px 6px", fontSize: "7px", fontWeight: 700, color: "#000", display: "inline-block" }}>
+                PARTE 1
+              </div>
+            </div>
+
+            {/* Text */}
+            <div style={{ fontSize: "13px", color: "#2a1e08", lineHeight: 1.7 }}>
+              <p style={{ margin: "0 0 10px" }}>
+                Ao se inscrever, você recebe a <strong>Parte 1 do Ralo-X do Mercado de Vinhos 2026</strong>.
+              </p>
+              <p style={{ margin: "0 0 14px" }}>
+                Um material estratégico com a base da nossa leitura de mercado.
+              </p>
+              <div style={{ borderLeft: "3px solid #5a3a08", paddingLeft: "12px" }}>
+                <p style={{ margin: 0, fontWeight: 700, color: "#1a0e02" }}>
+                  Mas o mais importante não está nele.<br />
+                  <span style={{ fontWeight: 400, color: "#3a2808" }}>A aplicação prática será revelada no encontro.</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── RIGHT — dark form panel ── */}
+        <div style={{
+          background: "#13161e",
+          padding: "52px 48px",
+          display: "flex", flexDirection: "column",
+        }}>
           <h3 style={{
             fontFamily: "'Barlow Condensed', sans-serif",
-            fontWeight: 800, fontSize: "22px",
-            textTransform: "uppercase", letterSpacing: "0.05em",
+            fontWeight: 900, fontSize: "26px",
+            textTransform: "uppercase", letterSpacing: "0.04em",
             color: C.white, marginBottom: "6px",
           }}>
             GARANTA SUA VAGA
           </h3>
-          <p style={{ fontSize: "13px", color: C.dimmed, marginBottom: "24px", lineHeight: 1.55 }}>
+          <p style={{ fontSize: "13px", color: C.muted, marginBottom: "24px", lineHeight: 1.55, textAlign: "center" }}>
             Preencha seus dados para se inscrever<br />e receber o material preparatório.
           </p>
 
-          <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          {/* Top gold accent */}
+          <div style={{ height: "2px", background: `linear-gradient(90deg,${C.gold},transparent)`, marginBottom: "24px", borderRadius: "1px" }} />
+
+          <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             {[
-              { ph: "Nome completo",               type: "text",  req: true  },
-              { ph: "E-mail",                       type: "email", req: true  },
-              { ph: "WhatsApp",                     type: "text",  req: true  },
-              { ph: "Atuação / Empresa (opcional)", type: "text",  req: false },
+              { ph: "Nome completo",               icon: <IconUser />,      type: "text",  req: true  },
+              { ph: "E-mail",                       icon: <IconMail />,      type: "email", req: true  },
+              { ph: "WhatsApp",                     icon: <IconPhone />,     type: "text",  req: true  },
+              { ph: "Atuação / Empresa (opcional)", icon: <IconBriefcase />, type: "text",  req: false },
             ].map((f, i) => (
-              <input
-                key={i}
-                type={f.type}
-                required={f.req}
-                placeholder={f.ph}
-                style={{
-                  width: "100%", boxSizing: "border-box",
-                  background: C.input, border: `1px solid ${C.border}`,
-                  borderRadius: "6px", padding: "13px 14px",
-                  fontSize: "14px", color: C.white, outline: "none",
-                  transition: "border-color 0.2s",
-                }}
-                onFocus={e => (e.target.style.borderColor = C.orange)}
-                onBlur={e  => (e.target.style.borderColor = C.border)}
-              />
+              <div key={i} style={{
+                display: "flex", alignItems: "center", gap: "10px",
+                background: C.inputBg, border: `1px solid ${C.border}`,
+                borderRadius: "6px", padding: "12px 14px",
+              }}>
+                {f.icon}
+                <input
+                  type={f.type}
+                  required={f.req}
+                  placeholder={f.ph}
+                  style={{
+                    flex: 1, background: "transparent", border: "none",
+                    fontSize: "13px", color: C.white, outline: "none",
+                  }}
+                  onFocus={e => { (e.target.parentElement as HTMLElement).style.borderColor = C.gold; }}
+                  onBlur={e  => { (e.target.parentElement as HTMLElement).style.borderColor = C.border; }}
+                />
+              </div>
             ))}
 
             <button
               type="submit"
               disabled={loading}
               style={{
-                marginTop: "8px",
-                background: loading ? "#9a6510" : C.orange,
-                color: "#000",
+                marginTop: "10px",
+                background: loading ? "#7a5e20" : `linear-gradient(135deg, ${C.gold} 0%, ${C.goldL} 100%)`,
+                color: "#0a0800",
                 border: "none", borderRadius: "6px",
-                padding: "15px 10px",
-                fontSize: "13px", fontWeight: 800,
-                letterSpacing: "0.05em", textTransform: "uppercase",
+                padding: "16px 10px",
+                fontSize: "12px", fontWeight: 800,
+                letterSpacing: "0.07em", textTransform: "uppercase",
                 cursor: loading ? "not-allowed" : "pointer",
-                lineHeight: 1.4, textAlign: "center",
-                boxShadow: `0 4px 20px rgba(232,153,24,0.35)`,
-                transition: "background 0.2s",
+                lineHeight: 1.45, textAlign: "center",
+                boxShadow: `0 4px 24px rgba(201,168,76,0.35)`,
                 fontFamily: "'Inter', sans-serif",
+                transition: "opacity 0.2s",
               }}
-              onMouseEnter={e => { if (!loading) (e.target as HTMLButtonElement).style.background = "#cf8610"; }}
-              onMouseLeave={e => { if (!loading) (e.target as HTMLButtonElement).style.background = C.orange; }}
             >
               {loading ? "PROCESSANDO..." : "QUERO PARTICIPAR E RECEBER\nO MATERIAL PREPARATÓRIO"}
             </button>
 
-            <p style={{ fontSize: "12px", color: C.dimmed, textAlign: "center", marginTop: "2px" }}>
-              🔒 Seus dados estão seguros conosco.
+            <p style={{ fontSize: "12px", color: C.dimmed, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: "5px", marginTop: "2px" }}>
+              <IconShield /> Seus dados estão seguros conosco.
             </p>
           </form>
         </div>
       </section>
 
-      {/* ══════════════════════════════════════
+      {/* ══════════════════════════════════════════════════════
           POR QUE PARTICIPAR
-      ══════════════════════════════════════ */}
-      <section style={{ background: C.section, borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ maxWidth: "1060px", margin: "0 auto", padding: "56px 32px 64px" }}>
-          <h2 style={{
-            fontFamily: "'Barlow Condensed', sans-serif",
-            fontWeight: 800, fontSize: "20px",
-            textTransform: "uppercase", letterSpacing: "0.14em",
-            textAlign: "center", color: C.white, marginBottom: "44px",
-          }}>
-            POR QUE PARTICIPAR?
-          </h2>
+      ══════════════════════════════════════════════════════ */}
+      <section style={{
+        background: C.dark,
+        borderTop: `1px solid ${C.border}`,
+        borderBottom: `1px solid ${C.border}`,
+        padding: "56px 48px 64px",
+      }}>
+        <h2 style={{
+          fontFamily: "'Barlow Condensed', sans-serif",
+          fontWeight: 800, fontSize: "18px",
+          textTransform: "uppercase", letterSpacing: "0.16em",
+          textAlign: "center", color: C.white, marginBottom: "44px",
+        }}>
+          POR QUE PARTICIPAR?
+        </h2>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "20px" }}>
-            {[
-              { title: "Conteúdo prático e direto ao ponto",  body: "Nada de teoria. Só o que realmente importa."             },
-              { title: "Baseado em dados e inteligência real", body: "Informação confiável para decisões melhores."             },
-              { title: "Visão estratégica do mercado",         body: "Entenda o todo para agir melhor no detalhe."             },
-              { title: "Comunidade que pensa à frente",        body: "Conecte-se com quem está construindo o futuro do vinho." },
-            ].map((item, i) => (
-              <div key={i} style={{
-                background: C.card, border: `1px solid ${C.border}`,
-                borderRadius: "10px", padding: "24px 18px",
+        <div style={{
+          display: "grid", gridTemplateColumns: "repeat(4,1fr)",
+          gap: "24px", maxWidth: "1040px", margin: "0 auto",
+        }}>
+          {[
+            { icon: <IconTarget />, title: "Conteúdo prático\ne direto ao ponto",  body: "Nada de teoria. Só o\nque realmente importa."             },
+            { icon: <IconChart />,  title: "Baseado em dados\ne inteligência real", body: "Informação confiável\npara decisões melhores."             },
+            { icon: <IconGlobe />,  title: "Visão estratégica\ndo mercado",         body: "Entenda o todo para\nagir melhor no detalhe."             },
+            { icon: <IconUsers />,  title: "Comunidade que\npensa à frente",        body: "Conecte-se com quem está\nconstruindo o futuro do vinho." },
+          ].map((item, i) => (
+            <div key={i} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div style={{
+                width: "48px", height: "48px", borderRadius: "50%",
+                border: `1px solid rgba(201,168,76,0.4)`,
+                background: "rgba(201,168,76,0.06)",
+                display: "flex", alignItems: "center", justifyContent: "center",
               }}>
-                <div style={{ width: "24px", height: "3px", background: C.orange, borderRadius: "2px", marginBottom: "14px" }} />
-                <div style={{ fontSize: "13px", fontWeight: 700, color: C.white, marginBottom: "8px", lineHeight: 1.4 }}>
-                  {item.title}
-                </div>
-                <div style={{ fontSize: "12px", color: C.dimmed, lineHeight: 1.65 }}>
-                  {item.body}
-                </div>
+                {item.icon}
               </div>
-            ))}
-          </div>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: C.white, lineHeight: 1.45, whiteSpace: "pre-line" }}>
+                {item.title}
+              </div>
+              <div style={{ fontSize: "12px", color: C.dimmed, lineHeight: 1.65, whiteSpace: "pre-line" }}>
+                {item.body}
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* ══════════════════════════════════════
+      {/* ══════════════════════════════════════════════════════
           FOOTER
-      ══════════════════════════════════════ */}
-      <footer style={{ textAlign: "center", padding: "24px 32px", background: C.bg }}>
-        <p style={{ fontSize: "12px", fontWeight: 700, letterSpacing: "0.13em", textTransform: "uppercase", color: C.dimmed }}>
+      ══════════════════════════════════════════════════════ */}
+      <footer style={{ textAlign: "center", padding: "22px 32px", background: C.bg }}>
+        <p style={{ fontSize: "12px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: C.dimmed }}>
           VAGAS LIMITADAS. GARANTA SUA PARTICIPAÇÃO.
         </p>
       </footer>
