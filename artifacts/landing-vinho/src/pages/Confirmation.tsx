@@ -1,16 +1,15 @@
 const BASE = import.meta.env.BASE_URL;
 
 const C = {
-  bg:        "#0c0d0f",
-  dark:      "#111318",
-  card:      "#13161e",
-  gold:      "#c9a84c",
-  goldL:     "#e0b84a",
-  white:     "#ffffff",
-  muted:     "#9aa0a8",
-  dimmed:    "#5a6270",
-  border:    "#2a2f3a",
-  borderL:   "#353d4e",
+  bg:     "#0c0d0f",
+  dark:   "#111318",
+  card:   "#13161e",
+  gold:   "#c9a84c",
+  goldL:  "#e0b84a",
+  white:  "#ffffff",
+  muted:  "#9aa0a8",
+  dimmed: "#5a6270",
+  border: "rgba(201,168,76,0.15)",
 };
 
 const IconCheck = () => (
@@ -19,16 +18,28 @@ const IconCheck = () => (
   </svg>
 );
 
+const IconCalendar = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+);
+
+const IconClock = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+);
+
+const IconLock = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+);
+
 const IconMail = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2 7 12 13 22 7"/></svg>
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2 7 12 13 22 7"/></svg>
 );
 
 const IconBook = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
 );
 
 const IconStar = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
 );
 
 export default function Confirmation() {
@@ -37,38 +48,45 @@ export default function Confirmation() {
 
       {/* ── HEADER ── */}
       <header style={{
-        padding: "20px 48px",
-        display: "flex", alignItems: "center", gap: "16px",
+        padding: "16px 52px",
+        display: "flex", alignItems: "center", gap: "20px",
         borderBottom: `1px solid ${C.border}`,
-        background: "rgba(12,13,15,0.95)",
+        background: "rgba(12,13,15,0.97)",
         backdropFilter: "blur(8px)",
         position: "sticky", top: 0, zIndex: 10,
+        position: "relative",
       }}>
-        <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="ibhub" style={{ height: "32px" }} />
-        <span style={{ color: C.border, fontSize: "22px", fontWeight: 300 }}>|</span>
-        <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: "68px" }} />
+        {/* thin gold top line */}
+        <div style={{
+          position: "absolute", top: 0, left: 0, right: 0, height: "1px",
+          background: "linear-gradient(90deg, rgba(201,168,76,0.6) 0%, rgba(201,168,76,0.15) 60%, transparent 100%)",
+        }} />
+        <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="ibhub" style={{ height: "36px" }} />
+        <div style={{ width: "1px", height: "28px", background: "linear-gradient(180deg, transparent, rgba(201,168,76,0.5), transparent)" }} />
+        <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: "88px" }} />
       </header>
 
       {/* ── HERO ── */}
       <div style={{
-        background: `radial-gradient(ellipse 70% 50% at 50% 0%, rgba(201,168,76,0.08) 0%, transparent 70%)`,
+        background: `radial-gradient(ellipse 80% 60% at 50% 0%, rgba(201,168,76,0.08) 0%, transparent 70%)`,
         borderBottom: `1px solid ${C.border}`,
-        padding: "64px 48px 56px",
+        padding: "60px 48px 52px",
         textAlign: "center",
+        position: "relative",
       }}>
         {/* Checkmark badge */}
         <div style={{
           display: "inline-flex", alignItems: "center", justifyContent: "center",
           width: "64px", height: "64px", borderRadius: "50%",
           background: `linear-gradient(135deg, ${C.gold}, ${C.goldL})`,
-          boxShadow: `0 0 0 8px rgba(201,168,76,0.12), 0 0 0 16px rgba(201,168,76,0.05)`,
+          boxShadow: `0 0 0 8px rgba(201,168,76,0.12), 0 0 0 18px rgba(201,168,76,0.05)`,
           marginBottom: "28px",
         }}>
           <IconCheck />
         </div>
 
-        <div style={{ fontSize: "11px", color: C.dimmed, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: "16px" }}>
-          INTELIGÊNCIA ESTRATÉGICA PARA O MERCADO DE VINHOS
+        <div style={{ fontSize: "10px", color: C.dimmed, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: "16px", fontWeight: 500 }}>
+          Inteligência Estratégica para o Mercado de Vinhos
         </div>
 
         <h1 style={{
@@ -79,28 +97,26 @@ export default function Confirmation() {
           textTransform: "uppercase",
           color: C.white,
           margin: "0 0 14px",
-          letterSpacing: "-0.01em",
         }}>
           INSCRIÇÃO CONFIRMADA!
         </h1>
 
-        <p style={{ fontSize: "19px", color: C.gold, fontWeight: 600, margin: "0 0 24px" }}>
+        <p style={{ fontSize: "19px", color: C.gold, fontWeight: 600, margin: "0 0 28px" }}>
           Você já está dentro.
         </p>
 
+        {/* email pill */}
         <div style={{
           display: "inline-flex", alignItems: "center", gap: "10px",
           background: "rgba(201,168,76,0.07)",
-          border: `1px solid rgba(201,168,76,0.2)`,
-          borderRadius: "8px",
-          padding: "12px 20px",
-          fontSize: "14px", color: C.muted,
-          maxWidth: "480px",
+          border: `1px solid rgba(201,168,76,0.22)`,
+          borderRadius: "100px",
+          padding: "10px 20px",
+          fontSize: "13px", color: C.muted,
         }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2 7 12 13 22 7"/></svg>
-          <span>Material preparatório enviado ao seu e-mail.{" "}
-            <span style={{ color: C.dimmed, fontSize: "13px" }}>Cheque o spam se necessário.</span>
-          </span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2 7 12 13 22 7"/></svg>
+          Material preparatório enviado ao seu e-mail.{" "}
+          <span style={{ color: C.dimmed }}>Cheque o spam se necessário.</span>
         </div>
       </div>
 
@@ -109,21 +125,22 @@ export default function Confirmation() {
 
         {/* EBOOK CARD */}
         <div style={{
-          background: `linear-gradient(135deg, #14181f 0%, #111520 100%)`,
-          border: `1px solid ${C.borderL}`,
+          background: "linear-gradient(135deg, rgba(201,168,76,0.06) 0%, rgba(201,168,76,0.02) 50%, rgba(201,168,76,0.05) 100%)",
+          border: `1px solid rgba(201,168,76,0.22)`,
           borderRadius: "16px",
           padding: "40px 44px",
-          marginBottom: "24px",
+          marginBottom: "20px",
           position: "relative",
           overflow: "hidden",
         }}>
-          {/* top gold accent line */}
+          {/* shimmer line top */}
           <div style={{
-            position: "absolute", top: 0, left: 0, right: 0, height: "3px",
-            background: `linear-gradient(90deg, transparent, ${C.gold}, transparent)`,
+            position: "absolute", top: 0, left: "10%", right: "10%", height: "1px",
+            background: "linear-gradient(90deg, transparent, rgba(201,168,76,0.6), transparent)",
           }} />
 
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}>
+            <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: C.gold, boxShadow: `0 0 6px ${C.gold}` }} />
             <span style={{ fontSize: "11px", color: C.gold, textTransform: "uppercase", letterSpacing: "0.14em", fontWeight: 700 }}>
               Você acabou de receber
             </span>
@@ -134,7 +151,6 @@ export default function Confirmation() {
             fontWeight: 900, fontSize: "30px",
             textTransform: "uppercase", color: C.white,
             marginBottom: "10px",
-            letterSpacing: "0.01em",
           }}>
             O FUTURO NO MERCADO DE VINHOS{" "}
             <span style={{ color: C.gold }}>– PARTE 1</span>
@@ -164,13 +180,13 @@ export default function Confirmation() {
           <div style={{
             display: "grid", gridTemplateColumns: "1fr 1fr",
             gap: "32px", alignItems: "start",
-            borderTop: `1px solid ${C.border}`, paddingTop: "28px",
+            borderTop: `1px solid rgba(201,168,76,0.12)`, paddingTop: "28px",
           }}>
             <div>
-              <p style={{ fontSize: "13px", color: C.dimmed, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, marginBottom: "10px" }}>
+              <p style={{ fontSize: "11px", color: C.dimmed, textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700, marginBottom: "10px" }}>
                 No dia 18 de maio, liberamos
               </p>
-              <p style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: "26px", fontWeight: 900, color: C.gold, textTransform: "uppercase", margin: 0, lineHeight: 1.1 }}>
+              <p style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: "28px", fontWeight: 900, color: C.gold, textTransform: "uppercase", margin: 0, lineHeight: 1.1 }}>
                 A PARTE 2
               </p>
             </div>
@@ -189,30 +205,52 @@ export default function Confirmation() {
           </div>
         </div>
 
-        {/* EVENT META */}
+        {/* EVENT META — premium status bar */}
         <div style={{
-          display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
-          border: `1px solid ${C.border}`,
-          borderRadius: "12px", overflow: "hidden",
-          marginBottom: "24px",
+          display: "flex",
+          background: "linear-gradient(135deg, rgba(201,168,76,0.07) 0%, rgba(201,168,76,0.03) 50%, rgba(201,168,76,0.06) 100%)",
+          border: `1px solid rgba(201,168,76,0.22)`,
+          borderRadius: "14px",
+          overflow: "hidden",
+          marginBottom: "20px",
+          position: "relative",
         }}>
+          {/* shimmer line top */}
+          <div style={{
+            position: "absolute", top: 0, left: "10%", right: "10%", height: "1px",
+            background: "linear-gradient(90deg, transparent, rgba(201,168,76,0.6), transparent)",
+          }} />
           {[
-            { label: "Data", value: "18 de Maio", sub: "Segunda-feira" },
-            { label: "Horário", value: "20h00", sub: "Duração: 60 minutos" },
-            { label: "Formato", value: "Evento Fechado", sub: "Apenas membros da comunidade" },
+            { icon: <IconCalendar />, top: "18 DE MAIO",     bot: "Segunda-feira"   },
+            { icon: <IconClock />,    top: "20H00",          bot: "Duração: 60 min" },
+            { icon: <IconLock />,     top: "Evento fechado", bot: "Apenas membros"  },
           ].map((col, i) => (
             <div key={i} style={{
-              textAlign: "center", padding: "28px 20px",
-              background: i === 1 ? "rgba(201,168,76,0.04)" : C.dark,
-              borderRight: i < 2 ? `1px solid ${C.border}` : undefined,
+              flex: 1, padding: "20px 20px 18px",
+              borderRight: i < 2 ? `1px solid rgba(201,168,76,0.12)` : "none",
+              display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "8px",
             }}>
-              <div style={{ fontSize: "10px", color: C.dimmed, textTransform: "uppercase", letterSpacing: "0.14em", fontWeight: 700, marginBottom: "10px" }}>
-                {col.label}
+              <div style={{
+                width: "32px", height: "32px", borderRadius: "8px",
+                background: "rgba(201,168,76,0.12)",
+                border: "1px solid rgba(201,168,76,0.2)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: "0 0 10px rgba(201,168,76,0.1)",
+                color: C.gold,
+              }}>
+                {col.icon}
               </div>
-              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: "22px", fontWeight: 800, color: C.white, lineHeight: 1, marginBottom: "6px" }}>
-                {col.value}
+              <div style={{
+                fontSize: "13px", fontWeight: 900, letterSpacing: "0.04em",
+                background: `linear-gradient(135deg, #fff 30%, ${C.goldL})`,
+                WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+                lineHeight: 1,
+              }}>
+                {col.top}
               </div>
-              <div style={{ fontSize: "12px", color: C.dimmed, lineHeight: 1.4 }}>{col.sub}</div>
+              <div style={{ fontSize: "10px", color: C.dimmed, letterSpacing: "0.04em", lineHeight: 1 }}>
+                {col.bot}
+              </div>
             </div>
           ))}
         </div>
@@ -221,10 +259,10 @@ export default function Confirmation() {
         <div style={{
           background: "rgba(220,38,38,0.06)",
           border: "1px solid rgba(220,38,38,0.18)",
-          borderRadius: "10px",
+          borderRadius: "12px",
           padding: "16px 24px",
           display: "flex", alignItems: "center", gap: "12px",
-          marginBottom: "40px",
+          marginBottom: "36px",
         }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fca5a5" strokeWidth="1.5" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
           <p style={{ fontSize: "14px", fontWeight: 600, color: "#fca5a5", margin: 0 }}>
@@ -233,39 +271,55 @@ export default function Confirmation() {
         </div>
 
         {/* STEPS */}
-        <div style={{ marginBottom: "48px" }}>
-          <h3 style={{
-            fontFamily: "'Barlow Condensed', sans-serif",
-            fontWeight: 800, fontSize: "20px",
-            textTransform: "uppercase", letterSpacing: "0.1em",
-            color: C.white, marginBottom: "20px",
-          }}>
-            Agora faça o seguinte:
-          </h3>
+        <div style={{ marginBottom: "52px" }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", marginBottom: "20px" }}>
+            <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: C.gold, boxShadow: `0 0 6px ${C.gold}` }} />
+            <h3 style={{
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontWeight: 800, fontSize: "20px",
+              textTransform: "uppercase", letterSpacing: "0.1em",
+              color: C.white, margin: 0,
+            }}>
+              Agora faça o seguinte:
+            </h3>
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "14px" }}>
             {[
               { n: "01", icon: <IconMail />, title: "Verifique seu e-mail", body: "O material já está a caminho." },
-              { n: "02", icon: <IconBook />, title: "Leia o material", body: "Com calma e atenção." },
-              { n: "03", icon: <IconStar />, title: "Esteja no dia 18", body: "A Parte 2 é liberada exclusivamente ao vivo." },
+              { n: "02", icon: <IconBook />, title: "Leia o material",       body: "Com calma e atenção." },
+              { n: "03", icon: <IconStar />, title: "Esteja no dia 18",      body: "A Parte 2 é liberada exclusivamente ao vivo." },
             ].map((step, i) => (
               <div key={i} style={{
-                background: C.dark,
-                border: `1px solid ${C.border}`,
-                borderRadius: "12px",
+                background: "linear-gradient(135deg, rgba(201,168,76,0.06) 0%, rgba(201,168,76,0.02) 100%)",
+                border: `1px solid rgba(201,168,76,0.18)`,
+                borderRadius: "14px",
                 padding: "24px 22px",
                 position: "relative",
                 overflow: "hidden",
               }}>
+                {/* top accent line */}
                 <div style={{
-                  position: "absolute", top: 0, right: 0,
+                  position: "absolute", top: 0, left: 0, right: 0, height: "2px",
+                  background: `linear-gradient(90deg, ${C.gold}, transparent)`,
+                }} />
+                <div style={{
+                  position: "absolute", top: 8, right: 14,
                   fontFamily: "'Barlow Condensed', sans-serif",
-                  fontSize: "56px", fontWeight: 900,
-                  color: "rgba(201,168,76,0.06)", lineHeight: 1,
+                  fontSize: "52px", fontWeight: 900,
+                  color: "rgba(201,168,76,0.07)", lineHeight: 1,
                   letterSpacing: "-2px", userSelect: "none",
                 }}>
                   {step.n}
                 </div>
-                <div style={{ marginBottom: "14px" }}>{step.icon}</div>
+                <div style={{
+                  width: "36px", height: "36px", borderRadius: "10px",
+                  background: "rgba(201,168,76,0.1)",
+                  border: "1px solid rgba(201,168,76,0.2)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  marginBottom: "14px",
+                }}>
+                  {step.icon}
+                </div>
                 <div style={{ fontSize: "14px", fontWeight: 700, color: C.white, marginBottom: "6px" }}>
                   {step.title}
                 </div>
@@ -280,12 +334,12 @@ export default function Confirmation() {
         {/* CLOSING QUOTE */}
         <div style={{
           display: "grid", gridTemplateColumns: "1fr 1fr",
-          borderTop: `1px solid ${C.border}`,
+          borderTop: `1px solid rgba(201,168,76,0.15)`,
           paddingTop: "40px", gap: "0",
           marginBottom: "60px",
         }}>
           <div style={{
-            borderRight: `1px solid ${C.border}`, paddingRight: "44px",
+            borderRight: `1px solid rgba(201,168,76,0.15)`, paddingRight: "44px",
             fontSize: "15px", color: C.dimmed, lineHeight: 1.9,
             fontStyle: "italic",
           }}>
@@ -301,10 +355,10 @@ export default function Confirmation() {
 
       {/* ── FOOTER ── */}
       <footer style={{
-        borderTop: `1px solid ${C.border}`,
+        borderTop: `1px solid rgba(201,168,76,0.15)`,
         padding: "22px 48px",
         textAlign: "center",
-        background: C.bg,
+        background: "#0c0d0f",
       }}>
         <p style={{ fontSize: "13px", color: C.dimmed, margin: 0 }}>
           Dúvidas? Fale com a gente:{" "}
