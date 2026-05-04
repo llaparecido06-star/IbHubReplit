@@ -83,9 +83,7 @@ export default function Registration() {
             <span style={{ color: "#3a4050", fontSize: "32px", fontWeight: 300 }}>|</span>
             <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: "120px" }} />
           </div>
-          <div
-            style={{ fontSize: "12px", color: C.dimmed, letterSpacing: "0.06em", marginBottom: "44px", lineHeight: 1.4 }}
-            className="mb-[33px] border-t-[#ffffff] border-r-[#ffffff] border-b-[#ffffff] border-l-[#ffffff]">
+          <div style={{ fontSize: "12px", color: C.white, letterSpacing: "0.06em", marginBottom: "44px", marginTop: "-2px", lineHeight: 1.4 }}>
             INTELIGÊNCIA ESTRATÉGICA PARA O<br />MERCADO DE VINHOS
           </div>
 
