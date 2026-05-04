@@ -37,16 +37,16 @@ const IconBriefcase = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.dimmed} strokeWidth="1.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
 );
 const IconTarget = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
 );
 const IconChart = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
 );
 const IconGlobe = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg>
+  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg>
 );
 const IconUsers = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
 );
 
 export default function Registration() {
@@ -71,7 +71,7 @@ export default function Registration() {
         {/* LEFT */}
         <div style={{
           background: C.bg,
-          padding: "40px 56px 44px",
+          padding: "48px 64px 52px",
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",
@@ -79,16 +79,16 @@ export default function Registration() {
           zIndex: 1,
         }}>
           {/* Logos */}
-          <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "6px" }}>
-            <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="ibhub" style={{ height: "36px" }} />
-            <span style={{ color: "#3a4050", fontSize: "24px", fontWeight: 300 }}>|</span>
-            <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: "40px" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "8px" }}>
+            <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="ibhub" style={{ height: "44px" }} />
+            <span style={{ color: "#3a4050", fontSize: "28px", fontWeight: 300 }}>|</span>
+            <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: "48px" }} />
           </div>
-          <div style={{ fontSize: "11px", color: C.dimmed, letterSpacing: "0.06em", marginBottom: "40px", lineHeight: 1.4 }}>
+          <div style={{ fontSize: "12px", color: C.dimmed, letterSpacing: "0.06em", marginBottom: "44px", lineHeight: 1.4 }}>
             INTELIGÊNCIA ESTRATÉGICA PARA O<br />MERCADO DE VINHOS
           </div>
 
-          <div style={{ fontSize: "13px", color: C.gold, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 600, marginBottom: "14px" }}>
+          <div style={{ fontSize: "14px", color: C.gold, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 600, marginBottom: "14px" }}>
             ENCONTRO EXCLUSIVO PARA A COMUNIDADE
           </div>
 
@@ -166,7 +166,7 @@ export default function Registration() {
         {/* LEFT — ebook pitch */}
         <div style={{
           background: C.bg,
-          padding: "56px 60px",
+          padding: "64px 64px",
           borderRight: `1px solid ${C.border}`,
           display: "flex",
           flexDirection: "column",
@@ -174,62 +174,59 @@ export default function Registration() {
         }}>
           <h2 style={{
             fontFamily: "'Barlow Condensed', sans-serif",
-            fontWeight: 900, fontSize: "36px", textTransform: "uppercase",
-            letterSpacing: "0.02em", lineHeight: 1.12, marginBottom: "32px",
+            fontWeight: 900, fontSize: "40px", textTransform: "uppercase",
+            letterSpacing: "0.02em", lineHeight: 1.1, marginBottom: "40px",
           }}>
             PARTICIPE E RECEBA<br />
             <span style={{ color: C.gold }}>O MATERIAL PREPARATÓRIO</span>
           </h2>
 
-          <div style={{ display: "flex", gap: "28px", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "32px", alignItems: "center" }}>
             {/* 3D ebook */}
-            <div style={{
-              flexShrink: 0,
-              perspective: "600px",
-            }}>
+            <div style={{ flexShrink: 0, perspective: "800px" }}>
               <div style={{
-                width: "130px",
-                minHeight: "175px",
+                width: "160px",
+                minHeight: "220px",
                 background: "linear-gradient(155deg, #12161f 0%, #1a2030 50%, #151a26 100%)",
                 border: "1px solid rgba(201,168,76,0.35)",
-                borderRadius: "4px 8px 8px 4px",
-                padding: "16px 12px",
-                boxShadow: "8px 10px 30px rgba(0,0,0,0.7), inset -2px 0 6px rgba(201,168,76,0.08)",
+                borderRadius: "4px 10px 10px 4px",
+                padding: "20px 16px",
+                boxShadow: "10px 14px 40px rgba(0,0,0,0.75), inset -2px 0 8px rgba(201,168,76,0.08)",
                 display: "flex", flexDirection: "column", justifyContent: "space-between",
-                transform: "rotateY(-8deg)",
+                transform: "rotateY(-6deg)",
                 transformOrigin: "left center",
                 position: "relative",
               }}>
                 <div style={{
-                  position: "absolute", left: 0, top: 0, bottom: 0, width: "6px",
-                  background: "linear-gradient(180deg, rgba(201,168,76,0.4), rgba(201,168,76,0.15))",
+                  position: "absolute", left: 0, top: 0, bottom: 0, width: "7px",
+                  background: "linear-gradient(180deg, rgba(201,168,76,0.5), rgba(201,168,76,0.2))",
                   borderRadius: "4px 0 0 4px",
                 }} />
                 <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "5px", marginBottom: "8px", paddingLeft: "4px" }}>
-                    <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="" style={{ height: "10px" }} />
-                    <span style={{ color: "#555", fontSize: "8px" }}>|</span>
-                    <img src={`${BASE}idealbi-logo2-transparent.png`} alt="" style={{ height: "10px" }} />
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "10px", paddingLeft: "6px" }}>
+                    <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="" style={{ height: "12px" }} />
+                    <span style={{ color: "#555", fontSize: "9px" }}>|</span>
+                    <img src={`${BASE}idealbi-logo2-transparent.png`} alt="" style={{ height: "12px" }} />
                   </div>
                   <div style={{
-                    fontSize: "13px", fontWeight: 800, color: "#fff", lineHeight: 1.2,
+                    fontSize: "16px", fontWeight: 800, color: "#fff", lineHeight: 1.2,
                     fontFamily: "'Barlow Condensed', sans-serif", textTransform: "uppercase",
-                    paddingLeft: "4px",
+                    paddingLeft: "6px",
                   }}>
                     O FUTURO NO<br />MERCADO DE<br />VINHOS
                   </div>
                 </div>
                 <div>
-                  <div style={{ display: "flex", gap: "2.5px", alignItems: "flex-end", height: "28px", marginBottom: "8px", paddingLeft: "4px" }}>
-                    {[5,9,7,12,8,13,10,16,11].map((h, i) => (
-                      <div key={i} style={{ flex: 1, height: `${h}px`, background: `linear-gradient(180deg, ${C.goldL}, ${C.gold})`, borderRadius: "1px" }} />
+                  <div style={{ display: "flex", gap: "3px", alignItems: "flex-end", height: "34px", marginBottom: "10px", paddingLeft: "6px" }}>
+                    {[6,10,8,14,10,15,12,18,13].map((h, i) => (
+                      <div key={i} style={{ flex: 1, height: `${h}px`, background: `linear-gradient(180deg, ${C.goldL}, ${C.gold})`, borderRadius: "1.5px" }} />
                     ))}
                   </div>
                   <div style={{
                     background: `linear-gradient(90deg, ${C.gold}, ${C.goldL})`,
-                    borderRadius: "3px", padding: "3px 8px",
-                    fontSize: "8px", fontWeight: 700, color: "#0a0800",
-                    display: "inline-block", marginLeft: "4px",
+                    borderRadius: "3px", padding: "3px 10px",
+                    fontSize: "9px", fontWeight: 700, color: "#0a0800",
+                    display: "inline-block", marginLeft: "6px",
                   }}>
                     PARTE 1
                   </div>
@@ -237,21 +234,20 @@ export default function Registration() {
               </div>
             </div>
 
-            <div style={{ fontSize: "15px", color: C.muted, lineHeight: 1.8 }}>
-              <p style={{ margin: "0 0 12px" }}>
+            <div style={{ fontSize: "16px", color: C.muted, lineHeight: 1.8 }}>
+              <p style={{ margin: "0 0 14px" }}>
                 Ao se inscrever, você recebe a <strong style={{ color: C.white, fontWeight: 600 }}>Parte 1 do Ralo-X do Mercado de Vinhos 2026</strong>.
               </p>
-              <p style={{ margin: "0 0 16px" }}>
+              <p style={{ margin: "0 0 18px" }}>
                 Um material estratégico com a base da nossa leitura de mercado.
               </p>
               <div style={{
                 borderLeft: `3px solid ${C.gold}`,
-                paddingLeft: "14px",
-                background: "rgba(201,168,76,0.03)",
-                borderRadius: "0 6px 6px 0",
-                padding: "12px 14px 12px 14px",
+                background: "rgba(201,168,76,0.04)",
+                borderRadius: "0 8px 8px 0",
+                padding: "14px 16px",
               }}>
-                <p style={{ margin: 0, fontWeight: 700, color: C.white, fontSize: "15px", lineHeight: 1.65 }}>
+                <p style={{ margin: 0, fontWeight: 700, color: C.white, fontSize: "16px", lineHeight: 1.65 }}>
                   Mas o mais importante não está nele.<br />
                   <span style={{ fontWeight: 400, color: C.muted }}>A aplicação prática será revelada no encontro.</span>
                 </p>
@@ -347,20 +343,20 @@ export default function Registration() {
         background: C.dark,
         borderTop: `1px solid ${C.border}`,
         borderBottom: `1px solid ${C.border}`,
-        padding: "52px 56px 60px",
+        padding: "72px 64px 80px",
       }}>
         <h2 style={{
           fontFamily: "'Barlow Condensed', sans-serif",
-          fontWeight: 800, fontSize: "20px",
+          fontWeight: 800, fontSize: "28px",
           textTransform: "uppercase", letterSpacing: "0.2em",
-          textAlign: "center", color: C.white, marginBottom: "44px",
+          textAlign: "center", color: C.white, marginBottom: "56px",
         }}>
           POR QUE PARTICIPAR?
         </h2>
 
         <div style={{
           display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
-          gap: "28px", maxWidth: "1060px", margin: "0 auto",
+          gap: "40px", maxWidth: "1100px", margin: "0 auto",
         }}>
           {[
             { icon: <IconTarget />, title: "Conteúdo prático e direto ao ponto",  body: "Nada de teoria. Só o que realmente importa." },
@@ -368,20 +364,20 @@ export default function Registration() {
             { icon: <IconGlobe />,  title: "Visão estratégica do mercado",         body: "Entenda o todo para agir melhor no detalhe." },
             { icon: <IconUsers />,  title: "Comunidade que pensa à frente",        body: "Conecte-se com quem está construindo o futuro do vinho." },
           ].map((item, i) => (
-            <div key={i}>
+            <div key={i} style={{ textAlign: "center" }}>
               <div style={{
-                width: "52px", height: "52px", borderRadius: "50%",
-                border: `1px solid rgba(201,168,76,0.35)`,
-                background: "rgba(201,168,76,0.05)",
+                width: "64px", height: "64px", borderRadius: "50%",
+                border: `1.5px solid rgba(201,168,76,0.4)`,
+                background: "rgba(201,168,76,0.06)",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                marginBottom: "14px",
+                margin: "0 auto 18px",
               }}>
                 {item.icon}
               </div>
-              <div style={{ fontSize: "15px", fontWeight: 700, color: C.white, lineHeight: 1.45, marginBottom: "6px" }}>
+              <div style={{ fontSize: "16px", fontWeight: 700, color: C.white, lineHeight: 1.45, marginBottom: "8px" }}>
                 {item.title}
               </div>
-              <div style={{ fontSize: "13px", color: C.dimmed, lineHeight: 1.6 }}>
+              <div style={{ fontSize: "14px", color: C.dimmed, lineHeight: 1.65 }}>
                 {item.body}
               </div>
             </div>
@@ -390,8 +386,8 @@ export default function Registration() {
       </section>
 
       {/* ═══ FOOTER ═══ */}
-      <footer style={{ textAlign: "center", padding: "24px 32px", background: C.bg, borderTop: `1px solid ${C.border}` }}>
-        <p style={{ fontSize: "13px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: C.dimmed }}>
+      <footer style={{ textAlign: "center", padding: "28px 32px", background: C.bg, borderTop: `1px solid ${C.border}` }}>
+        <p style={{ fontSize: "14px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: C.dimmed }}>
           VAGAS LIMITADAS. GARANTA SUA PARTICIPAÇÃO.
         </p>
       </footer>
