@@ -25,9 +25,14 @@ export function UnreadProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
 
   /**
-   * Accurate count: fetches all conversation_ids the user participates in,
-   * then counts messages with read_at IS NULL and sender != user.
-   * Two queries total instead of N+1.
+   * Badge count = number of CONVERSATIONS with at least one unread message,
+   * NOT the total number of unread messages.
+   *
+   * Example: if 3 conversations each have 10 unread messages, badge = 3, not 30.
+   *
+   * Two queries total:
+   *  1. conversation_participants → get the user's conversation IDs.
+   *  2. messages → get conversation_ids of unread messages; deduplicate with Set.
    */
   const refreshUnread = useCallback(async (userId: string) => {
     try {
@@ -42,14 +47,20 @@ export function UnreadProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const { count } = await supabase
+      // Fetch only the conversation_id column (no body/payload) for unread messages.
+      // Using Set deduplication we get the count of unique conversations with unread msgs.
+      const { data: unreadMsgs } = await supabase
         .from("messages")
-        .select("id", { count: "exact", head: true })
+        .select("conversation_id")
         .in("conversation_id", convIds)
         .neq("sender_id", userId)
         .is("read_at", null);
 
-      setUnreadCount(count ?? 0);
+      const unreadConvCount = new Set(
+        (unreadMsgs ?? []).map((m: any) => m.conversation_id as string),
+      ).size;
+
+      setUnreadCount(unreadConvCount);
     } catch {
       // silently ignore — badge simply won't update on network error
     }
@@ -82,8 +93,9 @@ export function UnreadProvider({ children }: { children: React.ReactNode }) {
           // Ignore own messages
           if (msg.sender_id === user.id) return;
 
-          // Optimistic increment, then reconcile with DB.
-          setUnreadCount((prev) => prev + 1);
+          // Refresh from DB — no optimistic +1 here because the badge counts
+          // unique *conversations* with unread messages, not total messages.
+          // Adding +1 per message would inflate the count (e.g. 22 instead of 3).
           refreshUnread(user.id);
         },
       )
