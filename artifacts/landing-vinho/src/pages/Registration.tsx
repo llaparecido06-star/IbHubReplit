@@ -210,26 +210,40 @@ export default function Registration() {
             <span style={{ color: C.gold }}>O MATERIAL PREPARATÓRIO</span>
           </h2>
 
-          <div style={{ display: "flex", gap: "32px", alignItems: "flex-start" }}>
-            {/* Ebook cover */}
-            <div style={{ flexShrink: 0 }}>
-              <img
-                src={`${BASE}ebook-parte1.png`}
-                alt="O Futuro no Mercado de Vinhos — Parte 1"
-                style={{
-                  width: "200px",
-                  display: "block",
-                  filter: "drop-shadow(16px 24px 48px rgba(0,0,0,0.9))",
-                }}
-              />
+          {/* Ebook cover — destaque centralizado */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "36px" }}>
+            <div style={{ perspective: "900px" }}>
+              <div style={{ position: "relative", display: "inline-block" }}>
+                {/* glow */}
+                <div style={{
+                  position: "absolute",
+                  inset: "-30px -20px",
+                  background: `radial-gradient(ellipse at 50% 65%, rgba(201,168,76,0.28) 0%, transparent 65%)`,
+                  filter: "blur(24px)",
+                  zIndex: 0,
+                }} />
+                <img
+                  src={`${BASE}ebook-parte1.png`}
+                  alt="O Futuro no Mercado de Vinhos — Parte 1"
+                  style={{
+                    width: "320px",
+                    display: "block",
+                    position: "relative",
+                    zIndex: 1,
+                    transform: "rotateY(-12deg) rotateX(3deg)",
+                    transformOrigin: "center center",
+                    filter: "drop-shadow(24px 36px 64px rgba(0,0,0,1))",
+                  }}
+                />
+              </div>
             </div>
 
-            <div style={{ fontSize: "15px", color: C.muted, lineHeight: 1.8 }}>
-              <p style={{ margin: "0 0 14px" }}>
+            <div style={{ fontSize: "15px", color: C.muted, lineHeight: 1.8, width: "100%" }}>
+              <p style={{ margin: "0 0 12px" }}>
                 Ao se inscrever, você recebe a{" "}
                 <strong style={{ color: C.white, fontWeight: 600 }}>Parte 1 do Ralo-X do Mercado de Vinhos 2026</strong>.
               </p>
-              <p style={{ margin: "0 0 18px" }}>
+              <p style={{ margin: "0 0 16px" }}>
                 Um material estratégico com a base da nossa leitura de mercado.
               </p>
               <div style={{
