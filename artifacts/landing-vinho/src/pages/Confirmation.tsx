@@ -1,32 +1,31 @@
 const BASE = import.meta.env.BASE_URL;
 
 const C = {
-  bg:        "#0a0b0d",
-  card:      "#12171f",
-  cardBorder:"#1c2a3a",
-  orange:    "#e89a18",
+  bg:        "#0a0b0e",
+  section:   "#0d1117",
+  card:      "#111820",
+  border:    "#1a2840",
+  orange:    "#e89918",
   white:     "#ffffff",
-  muted:     "#8a9ab0",
-  dimmed:    "#5a6a7a",
+  muted:     "#8595a8",
+  dimmed:    "#4a5a6a",
 };
 
 export default function Confirmation() {
   return (
     <div style={{ background: C.bg, color: C.white, fontFamily: "'Inter', sans-serif", minHeight: "100vh" }}>
 
-      {/* ── LOGO BAR ── */}
-      <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 32px" }}>
-        <div style={{ paddingTop: "28px", paddingBottom: "20px", borderBottom: `1px solid ${C.cardBorder}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "22px", letterSpacing: "0.02em", color: C.white }}>ibhub</span>
-            <span style={{ color: "#2a4060", fontSize: "20px", fontWeight: 300 }}>|</span>
-            <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: "16px", letterSpacing: "0.06em", color: C.orange }}>IDEAL.BI</span>
-          </div>
-          <div style={{ fontSize: "10px", color: C.dimmed, letterSpacing: "0.14em", textTransform: "uppercase", marginTop: "4px" }}>
-            INTELIGÊNCIA ESTRATÉGICA PARA O MERCADO DE VINHOS
-          </div>
+      {/* ── HEADER ── */}
+      <header style={{
+        maxWidth: "1060px", margin: "0 auto", padding: "24px 32px",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        borderBottom: `1px solid ${C.border}`,
+      }}>
+        <div style={{ background: "#ffffff", borderRadius: "8px", padding: "8px 14px", display: "inline-flex", alignItems: "center" }}>
+          <img src={`${BASE}ibhub-logo.png`} alt="ibhub" style={{ height: "28px", display: "block" }} />
         </div>
-      </div>
+        <img src={`${BASE}idealbi-logo-transparent.png`} alt="IDEAL.BI" style={{ height: "52px", display: "block" }} />
+      </header>
 
       {/* ── HEADER ── */}
       <div style={{ maxWidth: "860px", margin: "0 auto", padding: "52px 32px 40px", textAlign: "center" }}>
@@ -47,7 +46,7 @@ export default function Confirmation() {
 
       {/* ── EBOOK BOX ── */}
       <div style={{ maxWidth: "860px", margin: "0 auto", padding: "0 32px 32px" }}>
-        <div style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: "12px", padding: "36px 40px" }}>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "12px", padding: "36px 40px" }}>
 
           <p style={{ fontSize: "11px", color: C.dimmed, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, marginBottom: "8px" }}>
             Você acabou de receber:
@@ -93,17 +92,17 @@ export default function Confirmation() {
 
       {/* ── EVENT META ROW ── */}
       <div style={{ maxWidth: "860px", margin: "0 auto", padding: "0 32px 32px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1px 1fr 1px 1fr", alignItems: "center", borderTop: `1px solid ${C.cardBorder}`, borderBottom: `1px solid ${C.cardBorder}`, padding: "24px 0", textAlign: "center" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1px 1fr 1px 1fr", alignItems: "center", borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, padding: "24px 0", textAlign: "center" }}>
           <div>
             <div style={{ fontSize: "10px", color: C.dimmed, textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700, marginBottom: "6px" }}>Data</div>
             <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: "22px", fontWeight: 800, color: C.white }}>18 de maio</div>
           </div>
-          <div style={{ background: C.cardBorder, height: "40px" }} />
+          <div style={{ background: C.border, height: "40px" }} />
           <div>
             <div style={{ fontSize: "10px", color: C.dimmed, textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700, marginBottom: "6px" }}>HORÁRIO</div>
             <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: "22px", fontWeight: 800, color: C.white }}>20h00</div>
           </div>
-          <div style={{ background: C.cardBorder, height: "40px" }} />
+          <div style={{ background: C.border, height: "40px" }} />
           <div>
             <div style={{ fontSize: "10px", color: C.dimmed, textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700, marginBottom: "6px" }}>evento fechado</div>
             <div style={{ fontSize: "14px", fontWeight: 600, color: C.muted, lineHeight: 1.4 }}>Para membros da<br />comunidade</div>
@@ -129,7 +128,7 @@ export default function Confirmation() {
             { n: "2.", title: "Leia o material", body: "Com calma e atenção." },
             { n: "3.", title: "Esteja presente no dia 18", body: "A Parte 2 será liberada exclusivamente ao vivo." },
           ].map((step, i) => (
-            <div key={i} style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: "10px", padding: "22px 18px" }}>
+            <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "10px", padding: "22px 18px" }}>
               <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: "28px", fontWeight: 900, color: C.orange, marginBottom: "8px", lineHeight: 1 }}>{step.n}</div>
               <div style={{ fontSize: "14px", fontWeight: 700, color: C.white, marginBottom: "6px" }}>{step.title}</div>
               <div style={{ fontSize: "13px", color: C.dimmed, lineHeight: 1.6 }}>{step.body}</div>
@@ -140,8 +139,8 @@ export default function Confirmation() {
 
       {/* ── CLOSING QUOTE ── */}
       <div style={{ maxWidth: "860px", margin: "0 auto", padding: "0 32px 60px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0", borderTop: `1px solid ${C.cardBorder}`, paddingTop: "36px" }}>
-          <div style={{ borderRight: `1px solid ${C.cardBorder}`, paddingRight: "36px", fontSize: "15px", color: C.dimmed, lineHeight: 1.8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0", borderTop: `1px solid ${C.border}`, paddingTop: "36px" }}>
+          <div style={{ borderRight: `1px solid ${C.border}`, paddingRight: "36px", fontSize: "15px", color: C.dimmed, lineHeight: 1.8 }}>
             Quem só consome informação<br />continua no mesmo lugar.
           </div>
           <div style={{ paddingLeft: "36px", fontSize: "15px", color: C.muted, lineHeight: 1.8 }}>
@@ -152,7 +151,7 @@ export default function Confirmation() {
       </div>
 
       {/* ── FOOTER ── */}
-      <footer style={{ borderTop: `1px solid ${C.cardBorder}`, background: C.bg, padding: "24px 32px", textAlign: "center" }}>
+      <footer style={{ borderTop: `1px solid ${C.border}`, background: C.bg, padding: "24px 32px", textAlign: "center" }}>
         <p style={{ fontSize: "12px", color: C.dimmed }}>
           Dúvidas? Fale com a gente:{" "}
           <a href="mailto:atendimento@idealbi.com.br" style={{ color: C.orange, textDecoration: "none" }}>
