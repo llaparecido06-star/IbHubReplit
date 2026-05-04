@@ -1,0 +1,137 @@
+import { Router } from "express";
+import pg from "pg";
+import { z } from "zod";
+import { Resend } from "resend";
+import { logger } from "../lib/logger.js";
+
+const router = Router();
+
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+const registrationSchema = z.object({
+  name: z.string().min(2).max(200).transform((s) => s.trim()),
+  email: z.string().email().max(320).transform((s) => s.toLowerCase().trim()),
+  whatsapp: z.string().min(8).max(30).transform((s) => s.trim()),
+  company: z.string().max(200).transform((s) => s.trim()).optional().nullable(),
+});
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+router.post("/event-registrations", async (req, res) => {
+  try {
+    const parsed = registrationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const issues = parsed.error.issues.map((i) => ({
+        field: i.path.join("."),
+        message: i.message,
+      }));
+      res.status(400).json({ error: "VALIDATION_ERROR", issues });
+      return;
+    }
+
+    const { name, email, whatsapp, company } = parsed.data;
+
+    const result = await pool.query(
+      `INSERT INTO event_registrations (name, email, whatsapp, company)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (email) DO NOTHING
+       RETURNING id`,
+      [name, email, whatsapp, company || null],
+    );
+
+    if (result.rows.length === 0) {
+      res.status(409).json({ error: "ALREADY_REGISTERED", message: "Este e-mail já está inscrito." });
+      return;
+    }
+
+    try {
+      const emailResult = await resend.emails.send({
+        from: "ibhub <onboarding@resend.dev>",
+        to: email,
+        subject: "Inscrição confirmada — O Futuro no Mercado de Vinhos",
+        html: buildConfirmationEmail(name),
+      });
+      if (emailResult.error) {
+        logger.error({ emailError: emailResult.error }, "Resend API returned error");
+      }
+    } catch (emailErr) {
+      logger.error({ emailErr }, "Failed to send confirmation email");
+    }
+
+    res.status(201).json({ success: true, id: result.rows[0].id });
+  } catch (err) {
+    logger.error({ err }, "Unhandled error in event registration");
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+function buildConfirmationEmail(rawName: string): string {
+  const name = escapeHtml(rawName);
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#0c0d0f;font-family:'Inter',Arial,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;padding:40px 32px;">
+    <div style="text-align:center;margin-bottom:32px;">
+      <h1 style="color:#c9a84c;font-size:24px;font-weight:800;margin:0 0 8px;text-transform:uppercase;letter-spacing:0.04em;">
+        Inscrição Confirmada!
+      </h1>
+      <div style="width:60px;height:3px;background:#c9a84c;margin:0 auto 24px;border-radius:2px;"></div>
+    </div>
+
+    <p style="color:#ffffff;font-size:16px;line-height:1.6;margin:0 0 16px;">
+      Olá <strong>${name}</strong>,
+    </p>
+    <p style="color:#9aa0a8;font-size:15px;line-height:1.7;margin:0 0 16px;">
+      Sua inscrição para o encontro <strong style="color:#ffffff;">O Futuro no Mercado de Vinhos</strong> foi realizada com sucesso!
+    </p>
+
+    <div style="background:#111318;border:1px solid #2a2f3a;border-radius:8px;padding:24px;margin:24px 0;">
+      <p style="color:#c9a84c;font-size:13px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin:0 0 16px;">
+        Detalhes do Evento
+      </p>
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <td style="color:#5a6270;font-size:13px;padding:4px 0;">Data</td>
+          <td style="color:#ffffff;font-size:14px;font-weight:600;padding:4px 0;text-align:right;">18 de Maio, Segunda-feira</td>
+        </tr>
+        <tr>
+          <td style="color:#5a6270;font-size:13px;padding:4px 0;">Horário</td>
+          <td style="color:#ffffff;font-size:14px;font-weight:600;padding:4px 0;text-align:right;">20h00 (60 minutos)</td>
+        </tr>
+        <tr>
+          <td style="color:#5a6270;font-size:13px;padding:4px 0;">Formato</td>
+          <td style="color:#ffffff;font-size:14px;font-weight:600;padding:4px 0;text-align:right;">Evento Fechado</td>
+        </tr>
+      </table>
+    </div>
+
+    <p style="color:#9aa0a8;font-size:14px;line-height:1.7;margin:0 0 8px;">
+      Em breve você receberá o <strong style="color:#ffffff;">material preparatório (Parte 1 do Ralo-X do Mercado de Vinhos 2026)</strong>.
+    </p>
+    <p style="color:#9aa0a8;font-size:14px;line-height:1.7;margin:0 0 24px;">
+      Fique atento ao seu e-mail para mais informações.
+    </p>
+
+    <div style="border-top:1px solid #2a2f3a;padding-top:24px;text-align:center;">
+      <p style="color:#5a6270;font-size:12px;margin:0;">
+        ibhub | IDEAL.BI — Inteligência Estratégica para o Mercado de Vinhos
+      </p>
+      <p style="color:#5a6270;font-size:12px;margin:4px 0 0;">
+        atendimento@idealbi.com.br
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+export default router;

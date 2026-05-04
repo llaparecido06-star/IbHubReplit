@@ -11,6 +11,7 @@ import communityRouter from "./community";
 import profileRouter from "./profile";
 import wineImportsRouter from "./wineImports";
 import messagesRouter from "./messages";
+import eventRegistrationsRouter from "./eventRegistrations";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(communityRouter);
 router.use(profileRouter);
 router.use(wineImportsRouter);
 router.use(messagesRouter);
+router.use(eventRegistrationsRouter);
 
 export default router;

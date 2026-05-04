@@ -52,11 +52,45 @@ const IconUsers = () => (
 export default function Registration() {
   const [, setLocation] = useLocation();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => setLocation("/confirmacao"), 600);
+    setError("");
+
+    const form = e.target as HTMLFormElement;
+    const formData = new FormData(form);
+
+    try {
+      const res = await fetch("/api/event-registrations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.get("name"),
+          email: formData.get("email"),
+          whatsapp: formData.get("whatsapp"),
+          company: formData.get("company"),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data.error === "ALREADY_REGISTERED") {
+          setError("Este e-mail já está inscrito.");
+        } else {
+          setError(data.message || "Erro ao processar inscrição.");
+        }
+        setLoading(false);
+        return;
+      }
+
+      setLocation("/confirmacao");
+    } catch {
+      setError("Erro de conexão. Tente novamente.");
+      setLoading(false);
+    }
   };
 
   return (
@@ -280,10 +314,10 @@ export default function Registration() {
 
           <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             {[
-              { ph: "Nome completo",               icon: <IconUser />,      type: "text",  req: true  },
-              { ph: "E-mail",                       icon: <IconMail />,      type: "email", req: true  },
-              { ph: "WhatsApp",                     icon: <IconPhone />,     type: "text",  req: true  },
-              { ph: "Atuação / Empresa (opcional)", icon: <IconBriefcase />, type: "text",  req: false },
+              { ph: "Nome completo",               icon: <IconUser />,      type: "text",  req: true,  name: "name"    },
+              { ph: "E-mail",                       icon: <IconMail />,      type: "email", req: true,  name: "email"   },
+              { ph: "WhatsApp",                     icon: <IconPhone />,     type: "text",  req: true,  name: "whatsapp"},
+              { ph: "Atuação / Empresa (opcional)", icon: <IconBriefcase />, type: "text",  req: false, name: "company" },
             ].map((f, i) => (
               <div key={i} style={{
                 display: "flex", alignItems: "center", gap: "12px",
@@ -293,6 +327,7 @@ export default function Registration() {
               }}>
                 {f.icon}
                 <input
+                  name={f.name}
                   type={f.type}
                   required={f.req}
                   placeholder={f.ph}
@@ -329,6 +364,12 @@ export default function Registration() {
             >
               {loading ? "PROCESSANDO..." : <>QUERO PARTICIPAR E RECEBER<br />O MATERIAL PREPARATÓRIO</>}
             </button>
+
+            {error && (
+              <p style={{ fontSize: "14px", color: "#e05252", textAlign: "center", marginTop: "4px", marginBottom: "0" }}>
+                {error}
+              </p>
+            )}
 
             <p style={{ fontSize: "13px", color: C.dimmed, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: "5px", marginTop: "6px" }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.dimmed} strokeWidth="1.5"><rect x="5" y="11" width="14" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
