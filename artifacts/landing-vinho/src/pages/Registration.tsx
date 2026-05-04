@@ -202,39 +202,33 @@ export default function Registration() {
         {/* LEFT — ebook pitch */}
         <div style={{
           background: C.bg,
-          padding: "64px 64px",
-          borderRight: `1px solid ${C.border}`,
+          padding: "56px 44px 56px 56px",
           display: "flex", flexDirection: "column", justifyContent: "center",
         }}>
+          {/* título alinhado com a borda esquerda do ebook */}
           <h2 style={{
             fontFamily: "'Barlow Condensed', sans-serif",
             fontWeight: 900, fontSize: "38px", textTransform: "uppercase",
-            letterSpacing: "0.02em", lineHeight: 1.1, marginBottom: "36px",
+            letterSpacing: "0.02em", lineHeight: 1.1, marginBottom: "28px",
           }}>
             PARTICIPE E RECEBA<br />
             <span style={{ color: C.gold }}>O MATERIAL PREPARATÓRIO</span>
           </h2>
 
-          {/* Ebook cover — esquerda, texto ao lado */}
-          <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: "40px" }}>
-            <div style={{ perspective: "900px" }}>
+          {/* Ebook cover + texto lado a lado */}
+          <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: "36px" }}>
+            <div style={{ perspective: "900px", flexShrink: 0 }}>
               <div style={{ position: "relative", display: "inline-block" }}>
-                {/* glow */}
                 <div style={{
-                  position: "absolute",
-                  inset: "-30px -20px",
+                  position: "absolute", inset: "-30px -20px",
                   background: `radial-gradient(ellipse at 50% 65%, rgba(201,168,76,0.28) 0%, transparent 65%)`,
-                  filter: "blur(24px)",
-                  zIndex: 0,
+                  filter: "blur(24px)", zIndex: 0,
                 }} />
                 <img
                   src={`${BASE}ebook-parte1.png`}
                   alt="O Futuro no Mercado de Vinhos — Parte 1"
                   style={{
-                    width: "320px",
-                    display: "block",
-                    position: "relative",
-                    zIndex: 1,
+                    width: "200px", display: "block", position: "relative", zIndex: 1,
                     transform: "rotateY(-12deg) rotateX(3deg)",
                     transformOrigin: "center center",
                     filter: "drop-shadow(24px 36px 64px rgba(0,0,0,1))",
