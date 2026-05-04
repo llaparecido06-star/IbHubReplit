@@ -264,7 +264,7 @@ export default function Registration() {
         {/* RIGHT — form */}
         <div
           style={{
-            background: "#0f1219",
+            background: "#0c0d0f",
             padding: "56px 60px",
             display: "flex", flexDirection: "column", justifyContent: "center",
             position: "relative",
