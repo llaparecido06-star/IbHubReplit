@@ -376,53 +376,67 @@ export default function Registration() {
       </section>
       {/* ═══ POR QUE PARTICIPAR? ═══ */}
       <section style={{
-        background: C.dark,
-        borderTop: `1px solid ${C.border}`,
-        borderBottom: `1px solid ${C.border}`,
-        padding: "72px 64px 80px",
+        background: `radial-gradient(ellipse 90% 60% at 50% 100%, rgba(201,168,76,0.06) 0%, transparent 70%), #0c0d0f`,
+        borderTop: `1px solid rgba(201,168,76,0.15)`,
+        padding: "80px 64px 96px",
+        position: "relative",
       }}>
-        <div style={{ textAlign: "center", marginBottom: "56px" }}>
+        <div style={{ textAlign: "center", marginBottom: "64px" }}>
+          <p style={{
+            fontSize: "11px", letterSpacing: "0.25em", textTransform: "uppercase",
+            color: C.gold, fontWeight: 600, marginBottom: "16px",
+          }}>
+            BENEFÍCIOS EXCLUSIVOS
+          </p>
           <h2 style={{
             fontFamily: "'Barlow Condensed', sans-serif",
-            fontWeight: 800, fontSize: "30px",
-            textTransform: "uppercase", letterSpacing: "0.18em",
-            color: C.white, marginBottom: "14px",
+            fontWeight: 900, fontSize: "36px",
+            textTransform: "uppercase", letterSpacing: "0.12em",
+            color: C.white, marginBottom: "20px",
           }}>
             POR QUE PARTICIPAR?
           </h2>
-          <div style={{ width: "48px", height: "3px", background: `linear-gradient(90deg, ${C.gold}, ${C.goldL})`, borderRadius: "2px", margin: "0 auto" }} />
+          <div style={{ width: "56px", height: "2px", background: `linear-gradient(90deg, transparent, ${C.gold}, ${C.goldL}, transparent)`, margin: "0 auto" }} />
         </div>
 
         <div style={{
           display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
-          gap: "32px", maxWidth: "1100px", margin: "0 auto",
+          gap: "24px", maxWidth: "1140px", margin: "0 auto",
         }}>
           {[
-            { icon: <IconTarget />, title: "Conteúdo prático e direto ao ponto",  body: "Nada de teoria. Só o que realmente importa." },
-            { icon: <IconChart />,  title: "Baseado em dados e inteligência real", body: "Informação confiável para decisões melhores." },
-            { icon: <IconGlobe />,  title: "Visão estratégica do mercado",         body: "Entenda o todo para agir melhor no detalhe." },
+            { icon: <IconTarget />, title: "Conteúdo prático e direto ao ponto",  body: "Nada de teoria. Só o que realmente importa para o seu negócio." },
+            { icon: <IconChart />,  title: "Baseado em dados e inteligência real", body: "Informação confiável para tomar decisões melhores." },
+            { icon: <IconGlobe />,  title: "Visão estratégica do mercado",         body: "Entenda o todo para agir melhor em cada detalhe." },
             { icon: <IconUsers />,  title: "Comunidade que pensa à frente",        body: "Conecte-se com quem está construindo o futuro do vinho." },
           ].map((item, i) => (
             <div key={i} style={{
               textAlign: "center",
-              background: "rgba(255,255,255,0.02)",
-              border: `1px solid ${C.border}`,
-              borderRadius: "12px",
-              padding: "32px 20px",
+              background: "linear-gradient(160deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)",
+              border: `1px solid rgba(201,168,76,0.18)`,
+              borderRadius: "16px",
+              padding: "36px 24px 32px",
+              position: "relative",
+              overflow: "hidden",
+              transition: "border-color 0.2s",
             }}>
+              {/* subtle top accent per card */}
               <div style={{
-                width: "60px", height: "60px", borderRadius: "50%",
-                border: `1.5px solid rgba(201,168,76,0.35)`,
-                background: "rgba(201,168,76,0.06)",
+                position: "absolute", top: 0, left: "20%", right: "20%", height: "1px",
+                background: `linear-gradient(90deg, transparent, rgba(201,168,76,0.5), transparent)`,
+              }} />
+              <div style={{
+                width: "56px", height: "56px", borderRadius: "14px",
+                border: `1px solid rgba(201,168,76,0.3)`,
+                background: "linear-gradient(135deg, rgba(201,168,76,0.1) 0%, rgba(201,168,76,0.03) 100%)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 margin: "0 auto 20px",
               }}>
                 {item.icon}
               </div>
-              <div style={{ fontSize: "15px", fontWeight: 700, color: C.white, lineHeight: 1.45, marginBottom: "10px" }}>
+              <div style={{ fontSize: "14px", fontWeight: 700, color: C.white, lineHeight: 1.4, marginBottom: "12px" }}>
                 {item.title}
               </div>
-              <div style={{ fontSize: "13px", color: C.dimmed, lineHeight: 1.7 }}>
+              <div style={{ fontSize: "12px", color: C.dimmed, lineHeight: 1.75 }}>
                 {item.body}
               </div>
             </div>
