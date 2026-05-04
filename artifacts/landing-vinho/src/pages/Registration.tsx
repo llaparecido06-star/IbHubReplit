@@ -96,7 +96,7 @@ export default function Registration() {
   };
 
   return (
-    <div style={{ background: C.bg, color: C.white, fontFamily: "'Inter', sans-serif" }}>
+    <div style={{ background: C.bg, color: C.white, fontFamily: "'Inter', sans-serif", overflowX: "hidden" }}>
 
       {/* ═══ HERO ═══ */}
       <section style={{
@@ -104,6 +104,7 @@ export default function Registration() {
         gridTemplateColumns: isMobile ? "1fr" : "44% 56%",
         minHeight: isMobile ? "auto" : "760px",
         position: isMobile ? "relative" : "static",
+        overflow: "hidden",
       }}>
         {/* Mobile background image — sits behind content */}
         {isMobile && (
@@ -140,8 +141,11 @@ export default function Registration() {
             <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: isMobile ? "80px" : "110px" }} />
           </div>
           <div style={{
-            fontSize: "10px", color: C.dimmed, letterSpacing: "0.14em",
-            marginBottom: isMobile ? "28px" : "44px", textTransform: "uppercase", fontWeight: 500,
+            fontSize: "10px", color: C.dimmed,
+            letterSpacing: isMobile ? "0.04em" : "0.14em",
+            marginBottom: isMobile ? "24px" : "44px",
+            textTransform: "uppercase", fontWeight: 500,
+            lineHeight: 1.5,
           }}>
             Inteligência Estratégica para o Mercado de Vinhos
           </div>
@@ -157,7 +161,7 @@ export default function Registration() {
             alignSelf: "flex-start",
           }}>
             <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: C.gold, boxShadow: `0 0 8px ${C.gold}` }} />
-            <span style={{ fontSize: "11px", color: C.gold, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700 }}>
+            <span style={{ fontSize: "11px", color: C.gold, letterSpacing: isMobile ? "0.06em" : "0.16em", textTransform: "uppercase", fontWeight: 700 }}>
               Encontro exclusivo para a comunidade
             </span>
           </div>
@@ -165,18 +169,18 @@ export default function Registration() {
           <h1 style={{
             fontFamily: "'Barlow Condensed', sans-serif",
             fontWeight: 900,
-            fontSize: isMobile ? "clamp(44px, 12vw, 64px)" : "clamp(52px, 5.5vw, 76px)",
-            lineHeight: 0.92,
+            fontSize: isMobile ? "clamp(38px, 10vw, 54px)" : "clamp(52px, 5.5vw, 76px)",
+            lineHeight: 0.95,
             textTransform: "uppercase",
-            margin: "0 0 20px",
+            margin: "0 0 18px",
             whiteSpace: isMobile ? "normal" : "nowrap",
           }}>
             <span style={{ color: C.white }}>O FUTURO NO</span><br />
             <span style={{ color: C.gold }}>MERCADO DE VINHOS</span>
           </h1>
 
-          <p style={{ fontSize: "15px", color: C.muted, lineHeight: 1.75, margin: "0 0 24px", maxWidth: "380px" }}>
-            O que está acontecendo no mercado hoje<br />e como isso impacta suas decisões.
+          <p style={{ fontSize: "15px", color: C.muted, lineHeight: 1.75, margin: "0 0 24px", maxWidth: isMobile ? "100%" : "380px" }}>
+            O que está acontecendo no mercado hoje{!isMobile && <br />} e como isso impacta suas decisões.
           </p>
 
           {/* CTA scroll */}
