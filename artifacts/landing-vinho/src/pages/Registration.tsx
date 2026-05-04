@@ -197,13 +197,14 @@ export default function Registration() {
       {/* ═══ PARTICIPE + FORM ═══ */}
       <section style={{
         display: "grid", gridTemplateColumns: "1fr 1fr",
-        borderTop: `1px solid ${C.border}`,
-        background: C.bg,
+        borderTop: `1px solid rgba(201,168,76,0.15)`,
+        background: `radial-gradient(ellipse 70% 80% at 25% 50%, rgba(201,168,76,0.05) 0%, transparent 65%), #0c0d0f`,
         alignItems: "center",
+        position: "relative",
       }}>
         {/* LEFT — ebook pitch */}
         <div style={{
-          background: C.bg,
+          background: "transparent",
           padding: "56px 44px 56px 56px",
           display: "flex", flexDirection: "column", justifyContent: "center",
         }}>
@@ -265,7 +266,7 @@ export default function Registration() {
 
         {/* RIGHT — card de inscrição */}
         <div style={{
-          background: C.bg,
+          background: "transparent",
           padding: "48px 56px 48px 32px",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
