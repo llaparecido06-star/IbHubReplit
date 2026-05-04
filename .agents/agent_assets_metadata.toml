@@ -24,3 +24,9 @@ id = "4cENLbdXG8Lt52U9KDAUJ"
 uri = "file://artifacts/landing-vinho/public/ebook-cover.png"
 type = "image"
 title = "Dark premium ebook cover"
+
+[[generated]]
+id = "b8G47qYzYky8Xx1ghDxsE"
+uri = "file://attached_assets/generated_images/generated_image.png"
+type = "image"
+title = "generated_image"
