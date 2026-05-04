@@ -18,6 +18,7 @@
       "bundleIdentifier": "br.com.ibhub",
       "usesAppleSignIn": true,
       "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "O ibhub usa a câmera para enviar fotos e vídeos nas conversas.",
         "NSMicrophoneUsageDescription": "O ibhub usa o microfone para gravar mensagens de voz.",
         "NSPhotoLibraryUsageDescription": "O ibhub acessa sua galeria para compartilhar fotos e vídeos.",
