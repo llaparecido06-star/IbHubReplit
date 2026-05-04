@@ -95,7 +95,7 @@ export default function Registration() {
   return (
     <div style={{ background: C.bg, color: C.white, fontFamily: "'Inter', sans-serif" }}>
       {/* ═══ HERO ═══ */}
-      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", minHeight: "680px" }}>
+      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", minHeight: "760px" }}>
 
         {/* LEFT */}
         <div style={{
@@ -166,24 +166,26 @@ export default function Registration() {
         </div>
 
         {/* RIGHT — wine */}
-        <div style={{ position: "relative", overflow: "hidden", background: "#080605" }}>
+        <div style={{ position: "relative", overflow: "hidden", background: "#06080a" }}>
           <img
             src={`${BASE}hero-wine2.png`}
             alt="Taça de vinho"
             style={{
               width: "100%", height: "100%",
-              objectFit: "cover", objectPosition: "center center",
+              objectFit: "cover", objectPosition: "42% center",
               display: "block",
-              filter: "brightness(0.75) contrast(1.1)",
+              filter: "brightness(0.85) contrast(1.08)",
             }}
           />
+          {/* left fade — menos agressivo para mostrar mais da imagem */}
           <div style={{
             position: "absolute", inset: 0,
-            background: "linear-gradient(90deg, #0c0d0f 0%, rgba(12,13,15,0.2) 30%, transparent 60%)",
+            background: "linear-gradient(90deg, #0c0d0f 0%, rgba(12,13,15,0.5) 18%, rgba(12,13,15,0.1) 35%, transparent 55%)",
           }} />
+          {/* bottom fade suave */}
           <div style={{
             position: "absolute", inset: 0,
-            background: "linear-gradient(180deg, transparent 60%, rgba(12,13,15,0.6) 100%)",
+            background: "linear-gradient(180deg, transparent 70%, rgba(12,13,15,0.4) 100%)",
           }} />
         </div>
       </section>
