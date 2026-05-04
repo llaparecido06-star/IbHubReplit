@@ -114,6 +114,17 @@ export default function AdminPlanBuilder() {
     void loadMarketPerms();
   }, [loadPlans, loadMarketPerms]);
 
+  // Realtime: refresh market permissions whenever a category is added/updated/deleted
+  useEffect(() => {
+    const channel = supabase
+      .channel("plan-builder-market-perms")
+      .on("postgres_changes", { event: "*", schema: "public", table: "market_permissions" }, () => {
+        void loadMarketPerms();
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [loadMarketPerms]);
+
   const openEdit = (plan: Plan) => {
     setEditPlan(plan);
     setModal(planToModal(plan));
