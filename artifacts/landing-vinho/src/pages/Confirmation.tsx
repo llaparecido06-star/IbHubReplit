@@ -1,14 +1,18 @@
 const BASE = import.meta.env.BASE_URL;
 
 const C = {
-  bg:        "#0a0b0e",
-  section:   "#0d1117",
-  card:      "#111820",
-  border:    "#1a2840",
-  orange:    "#e89918",
-  white:     "#ffffff",
-  muted:     "#8595a8",
-  dimmed:    "#4a5a6a",
+  bg:      "#0c0d0f",
+  dark:    "#111318",
+  gold:    "#c9a84c",
+  goldL:   "#e0b84a",
+  white:   "#ffffff",
+  muted:   "#9aa0a8",
+  dimmed:  "#5a6270",
+  border:  "#2a2f3a",
+  inputBg: "#0a0c10",
+  red:     "#e05252",
+  redBg:   "rgba(220,38,38,0.07)",
+  redBorder: "rgba(220,38,38,0.2)",
 };
 
 export default function Confirmation() {
@@ -17,61 +21,90 @@ export default function Confirmation() {
 
       {/* ── HEADER ── */}
       <header style={{
-        maxWidth: "1060px", margin: "0 auto", padding: "24px 32px",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "24px 48px",
+        display: "flex", alignItems: "center", gap: "18px",
         borderBottom: `1px solid ${C.border}`,
       }}>
-        <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="ibhub" style={{ height: "26px", display: "block" }} />
-        <span style={{ color: "#3a4050", fontSize: "20px", fontWeight: 300 }}>|</span>
-        <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: "26px", display: "block" }} />
+        <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="ibhub" style={{ height: "44px" }} />
+        <span style={{ color: "#3a4050", fontSize: "28px", fontWeight: 300 }}>|</span>
+        <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: "120px" }} />
       </header>
 
-      {/* ── HEADER ── */}
-      <div style={{ maxWidth: "860px", margin: "0 auto", padding: "52px 32px 40px", textAlign: "center" }}>
-        <div style={{ display: "inline-block", border: `1px solid rgba(232,154,24,0.4)`, borderRadius: "4px", padding: "5px 16px", fontSize: "10px", fontWeight: 700, letterSpacing: "0.16em", color: C.orange, textTransform: "uppercase", marginBottom: "28px" }}>
+      {/* ── HERO ── */}
+      <div style={{ maxWidth: "860px", margin: "0 auto", padding: "56px 48px 40px", textAlign: "center" }}>
+        <div style={{ fontSize: "11px", color: C.dimmed, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "28px" }}>
           INTELIGÊNCIA ESTRATÉGICA PARA O MERCADO DE VINHOS
         </div>
 
-        <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: "clamp(40px, 7vw, 70px)", lineHeight: 1.05, textTransform: "uppercase", color: C.white, marginBottom: "10px" }}>
+        <h1 style={{
+          fontFamily: "'Barlow Condensed', sans-serif",
+          fontWeight: 900,
+          fontSize: "clamp(48px, 7vw, 76px)",
+          lineHeight: 1,
+          textTransform: "uppercase",
+          color: C.white,
+          marginBottom: "12px",
+        }}>
           INSCRIÇÃO CONFIRMADA!
         </h1>
-        <p style={{ fontSize: "18px", color: C.dimmed, marginBottom: "28px" }}>Você já está dentro.</p>
 
-        <p style={{ fontSize: "15px", color: C.muted, lineHeight: 1.7 }}>
+        <p style={{ fontSize: "20px", color: C.gold, fontWeight: 600, marginBottom: "28px" }}>
+          Você já está dentro.
+        </p>
+
+        <p style={{ fontSize: "15px", color: C.muted, lineHeight: 1.75, maxWidth: "520px", margin: "0 auto" }}>
           O material preparatório foi enviado para o seu e-mail.<br />
-          <span style={{ fontSize: "13px", color: C.dimmed }}>Verifique sua caixa de entrada (e o spam, se necessário).</span>
+          <span style={{ fontSize: "13px", color: C.dimmed }}>
+            Verifique sua caixa de entrada (e o spam, se necessário).
+          </span>
         </p>
       </div>
 
       {/* ── EBOOK BOX ── */}
-      <div style={{ maxWidth: "860px", margin: "0 auto", padding: "0 32px 32px" }}>
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "12px", padding: "36px 40px" }}>
-
-          <p style={{ fontSize: "11px", color: C.dimmed, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, marginBottom: "8px" }}>
+      <div style={{ maxWidth: "860px", margin: "0 auto", padding: "0 48px 28px" }}>
+        <div style={{
+          background: C.dark,
+          border: `1px solid ${C.border}`,
+          borderRadius: "12px",
+          padding: "40px 44px",
+        }}>
+          <p style={{ fontSize: "11px", color: C.dimmed, textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700, marginBottom: "10px" }}>
             Você acabou de receber:
           </p>
-          <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "24px", textTransform: "uppercase", letterSpacing: "0.03em", color: C.white, marginBottom: "8px" }}>
+          <h2 style={{
+            fontFamily: "'Barlow Condensed', sans-serif",
+            fontWeight: 900, fontSize: "28px",
+            textTransform: "uppercase", letterSpacing: "0.02em",
+            color: C.gold, marginBottom: "10px",
+          }}>
             O FUTURO NO MERCADO DE VINHOS – PARTE 1
           </h2>
-          <p style={{ fontSize: "14px", color: C.muted, marginBottom: "24px", lineHeight: 1.6 }}>
+          <p style={{ fontSize: "15px", color: C.muted, marginBottom: "32px", lineHeight: 1.65 }}>
             Esse material mostra como estamos lendo o mercado hoje.
           </p>
 
           {/* Warning */}
-          <div style={{ borderLeft: `3px solid ${C.orange}`, paddingLeft: "18px", marginBottom: "32px" }}>
-            <p style={{ fontSize: "14px", color: "#f5c060", fontWeight: 600, lineHeight: 1.75 }}>
+          <div style={{
+            borderLeft: `3px solid ${C.gold}`,
+            background: "rgba(201,168,76,0.04)",
+            borderRadius: "0 8px 8px 0",
+            padding: "18px 20px",
+            marginBottom: "36px",
+          }}>
+            <p style={{ fontSize: "15px", fontWeight: 700, color: C.white, lineHeight: 1.8, margin: 0 }}>
               Mas presta atenção nisso:<br />
-              O que você recebeu <strong>NÃO</strong> é a parte mais importante.<br />
+              O que você recebeu <span style={{ color: C.gold }}>NÃO</span> é a parte mais importante.<br />
               O material mostra o cenário.<br />
-              <span style={{ color: C.muted, fontWeight: 400 }}>Mas não mostra como usar isso na prática.</span>
+              <span style={{ fontWeight: 400, color: C.muted }}>Mas não mostra como usar isso na prática.</span>
             </p>
           </div>
 
-          {/* Part 2 — 2 cols */}
+          {/* Part 2 */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px", alignItems: "start" }}>
-            <p style={{ fontSize: "16px", fontWeight: 700, color: C.white, lineHeight: 1.55 }}>
-              No dia 18 de maio,<br />vamos liberar a{" "}
-              <span style={{ color: C.orange }}>PARTE 2:</span>
+            <p style={{ fontSize: "17px", fontWeight: 700, color: C.white, lineHeight: 1.6, margin: 0 }}>
+              No dia 18 de maio,<br />
+              vamos liberar a{" "}
+              <span style={{ color: C.gold }}>PARTE 2:</span>
             </p>
             <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "12px" }}>
               {[
@@ -79,8 +112,8 @@ export default function Confirmation() {
                 "Onde está o dinheiro de verdade",
                 "Como operar com mais clareza no mercado",
               ].map((item, i) => (
-                <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "10px", fontSize: "13px", color: "#c5d0dc", lineHeight: 1.5 }}>
-                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: C.orange, marginTop: "5px", flexShrink: 0 }} />
+                <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "10px", fontSize: "14px", color: C.muted, lineHeight: 1.55 }}>
+                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: C.gold, marginTop: "6px", flexShrink: 0 }} />
                   {item}
                 </li>
               ))}
@@ -89,36 +122,62 @@ export default function Confirmation() {
         </div>
       </div>
 
-      {/* ── EVENT META ROW ── */}
-      <div style={{ maxWidth: "860px", margin: "0 auto", padding: "0 32px 32px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1px 1fr 1px 1fr", alignItems: "center", borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, padding: "24px 0", textAlign: "center" }}>
-          <div>
-            <div style={{ fontSize: "10px", color: C.dimmed, textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700, marginBottom: "6px" }}>Data</div>
-            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: "22px", fontWeight: 800, color: C.white }}>18 de maio</div>
-          </div>
-          <div style={{ background: C.border, height: "40px" }} />
-          <div>
-            <div style={{ fontSize: "10px", color: C.dimmed, textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700, marginBottom: "6px" }}>HORÁRIO</div>
-            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: "22px", fontWeight: 800, color: C.white }}>20h00</div>
-          </div>
-          <div style={{ background: C.border, height: "40px" }} />
-          <div>
-            <div style={{ fontSize: "10px", color: C.dimmed, textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700, marginBottom: "6px" }}>evento fechado</div>
-            <div style={{ fontSize: "14px", fontWeight: 600, color: C.muted, lineHeight: 1.4 }}>Para membros da<br />comunidade</div>
-          </div>
+      {/* ── EVENT META ── */}
+      <div style={{ maxWidth: "860px", margin: "0 auto", padding: "0 48px 28px" }}>
+        <div style={{
+          display: "grid", gridTemplateColumns: "1fr 1px 1fr 1px 1fr",
+          alignItems: "center",
+          border: `1px solid ${C.border}`,
+          borderRadius: "10px",
+          overflow: "hidden",
+        }}>
+          {[
+            { label: "Data", value: "18 de maio", sub: "Segunda-feira" },
+            null,
+            { label: "HORÁRIO", value: "20h00", sub: "Duração: 60 minutos" },
+            null,
+            { label: "evento fechado", value: "Membros", sub: "da comunidade" },
+          ].map((col, i) =>
+            col === null ? (
+              <div key={i} style={{ background: C.border, height: "60px" }} />
+            ) : (
+              <div key={i} style={{ textAlign: "center", padding: "24px 16px" }}>
+                <div style={{ fontSize: "10px", color: C.dimmed, textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700, marginBottom: "8px" }}>
+                  {col.label}
+                </div>
+                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: "24px", fontWeight: 800, color: C.white, lineHeight: 1 }}>
+                  {col.value}
+                </div>
+                <div style={{ fontSize: "11px", color: C.dimmed, marginTop: "4px" }}>{col.sub}</div>
+              </div>
+            )
+          )}
         </div>
       </div>
 
       {/* ── IMPORTANTE ── */}
-      <div style={{ maxWidth: "860px", margin: "0 auto", padding: "0 32px 32px" }}>
-        <div style={{ background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.22)", borderRadius: "8px", padding: "18px 24px", fontSize: "14px", fontWeight: 700, color: "#fca5a5", textAlign: "center", letterSpacing: "0.01em" }}>
+      <div style={{ maxWidth: "860px", margin: "0 auto", padding: "0 48px 32px" }}>
+        <div style={{
+          background: C.redBg,
+          border: `1px solid ${C.redBorder}`,
+          borderRadius: "8px",
+          padding: "18px 24px",
+          fontSize: "14px", fontWeight: 700,
+          color: "#fca5a5",
+          textAlign: "center", letterSpacing: "0.01em",
+        }}>
           IMPORTANTE: Se você não participar ao vivo, vai perder a parte mais importante.
         </div>
       </div>
 
       {/* ── STEPS ── */}
-      <div style={{ maxWidth: "860px", margin: "0 auto", padding: "0 32px 52px" }}>
-        <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "20px", textTransform: "uppercase", letterSpacing: "0.04em", color: C.white, marginBottom: "24px" }}>
+      <div style={{ maxWidth: "860px", margin: "0 auto", padding: "0 48px 40px" }}>
+        <h3 style={{
+          fontFamily: "'Barlow Condensed', sans-serif",
+          fontWeight: 800, fontSize: "22px",
+          textTransform: "uppercase", letterSpacing: "0.06em",
+          color: C.white, marginBottom: "24px",
+        }}>
           Agora faça o seguinte:
         </h3>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
@@ -127,33 +186,62 @@ export default function Confirmation() {
             { n: "2.", title: "Leia o material", body: "Com calma e atenção." },
             { n: "3.", title: "Esteja presente no dia 18", body: "A Parte 2 será liberada exclusivamente ao vivo." },
           ].map((step, i) => (
-            <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "10px", padding: "22px 18px" }}>
-              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: "28px", fontWeight: 900, color: C.orange, marginBottom: "8px", lineHeight: 1 }}>{step.n}</div>
-              <div style={{ fontSize: "14px", fontWeight: 700, color: C.white, marginBottom: "6px" }}>{step.title}</div>
-              <div style={{ fontSize: "13px", color: C.dimmed, lineHeight: 1.6 }}>{step.body}</div>
+            <div key={i} style={{
+              background: C.dark,
+              border: `1px solid ${C.border}`,
+              borderRadius: "10px",
+              padding: "24px 20px",
+            }}>
+              <div style={{
+                fontFamily: "'Barlow Condensed', sans-serif",
+                fontSize: "32px", fontWeight: 900,
+                color: C.gold, marginBottom: "10px", lineHeight: 1,
+              }}>
+                {step.n}
+              </div>
+              <div style={{ fontSize: "14px", fontWeight: 700, color: C.white, marginBottom: "6px" }}>
+                {step.title}
+              </div>
+              <div style={{ fontSize: "13px", color: C.dimmed, lineHeight: 1.65 }}>
+                {step.body}
+              </div>
             </div>
           ))}
         </div>
       </div>
 
       {/* ── CLOSING QUOTE ── */}
-      <div style={{ maxWidth: "860px", margin: "0 auto", padding: "0 32px 60px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0", borderTop: `1px solid ${C.border}`, paddingTop: "36px" }}>
-          <div style={{ borderRight: `1px solid ${C.border}`, paddingRight: "36px", fontSize: "15px", color: C.dimmed, lineHeight: 1.8 }}>
+      <div style={{ maxWidth: "860px", margin: "0 auto", padding: "0 48px 60px" }}>
+        <div style={{
+          display: "grid", gridTemplateColumns: "1fr 1fr",
+          borderTop: `1px solid ${C.border}`,
+          paddingTop: "40px", gap: "0",
+        }}>
+          <div style={{
+            borderRight: `1px solid ${C.border}`,
+            paddingRight: "40px",
+            fontSize: "15px", color: C.dimmed, lineHeight: 1.85,
+          }}>
             Quem só consome informação<br />continua no mesmo lugar.
           </div>
-          <div style={{ paddingLeft: "36px", fontSize: "15px", color: C.muted, lineHeight: 1.8 }}>
-            Quem entende como usar<br />começa a operar diferente.<br />
-            <strong style={{ color: C.white }}>Nos vemos no dia 18!</strong>
+          <div style={{ paddingLeft: "40px", fontSize: "15px", color: C.muted, lineHeight: 1.85 }}>
+            Quem entende como usar<br />
+            começa a operar diferente.<br />
+            <strong style={{ color: C.white, fontWeight: 700 }}>Nos vemos no dia 18!</strong>
           </div>
         </div>
       </div>
 
       {/* ── FOOTER ── */}
-      <footer style={{ borderTop: `1px solid ${C.border}`, background: C.bg, padding: "24px 32px", textAlign: "center" }}>
-        <p style={{ fontSize: "12px", color: C.dimmed }}>
+      <footer style={{
+        borderTop: `1px solid ${C.border}`,
+        padding: "24px 48px",
+        textAlign: "center",
+        background: C.bg,
+      }}>
+        <p style={{ fontSize: "13px", color: C.dimmed, margin: 0 }}>
           Dúvidas? Fale com a gente:{" "}
-          <a href="mailto:atendimento@idealbi.com.br" style={{ color: C.orange, textDecoration: "none" }}>
+          <a href="mailto:atendimento@idealbi.com.br" style={{ color: C.gold, textDecoration: "none", fontWeight: 600 }}>
             atendimento@idealbi.com.br
           </a>
         </p>
