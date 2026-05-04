@@ -491,7 +491,7 @@ export default function Registration() {
         </div>
       </section>
       {/* ═══ FOOTER ═══ */}
-      <footer style={{ textAlign: "center", padding: "28px 32px", background: C.bg, borderTop: `1px solid ${C.border}` }}>
+      <footer style={{ textAlign: "center", padding: "28px 32px", background: "#0c0d0f", borderTop: `1px solid rgba(201,168,76,0.15)` }}>
         <p style={{ fontSize: "13px", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: C.dimmed, margin: "0 0 8px" }}>
           VAGAS LIMITADAS. GARANTA SUA PARTICIPAÇÃO.
         </p>
