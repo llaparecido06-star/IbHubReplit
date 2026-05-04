@@ -1,9 +1,5 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ShieldCheck, Target, Database, TrendingUp, Users } from "lucide-react";
 
 export default function Registration() {
   const [, setLocation] = useLocation();
@@ -12,179 +8,262 @@ export default function Registration() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Simulate processing
     setTimeout(() => {
       setLocation("/confirmacao");
-    }, 800);
+    }, 600);
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground selection:bg-primary/30 font-sans">
-      <main className="max-w-6xl mx-auto px-6 pt-20 pb-24 md:pt-32 md:pb-32">
-        {/* Header Section */}
-        <div className="text-center mb-16 animate-in fade-in slide-in-from-bottom-8 duration-1000">
-          <div className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-xs font-semibold text-primary uppercase tracking-widest mb-8">
-            INTELIGÊNCIA ESTRATÉGICA PARA O MERCADO DE VINHOS
+    <div className="min-h-screen font-sans" style={{ background: "#070e17", color: "#e8edf3" }}>
+
+      {/* ─── HERO ─── */}
+      <section style={{ paddingTop: "60px", paddingBottom: "48px", textAlign: "center", maxWidth: "880px", margin: "0 auto", padding: "60px 24px 48px" }}>
+
+        {/* Badge */}
+        <div style={{
+          display: "inline-block",
+          border: "1px solid rgba(59,130,246,0.5)",
+          borderRadius: "4px",
+          padding: "6px 16px",
+          fontSize: "11px",
+          fontWeight: 700,
+          letterSpacing: "0.14em",
+          color: "#60a5fa",
+          marginBottom: "20px",
+          textTransform: "uppercase",
+        }}>
+          INTELIGÊNCIA ESTRATÉGICA PARA O MERCADO DE VINHOS
+        </div>
+
+        {/* Sub-badge line */}
+        <div style={{ fontSize: "13px", letterSpacing: "0.12em", color: "#94a3b8", textTransform: "uppercase", marginBottom: "28px", fontWeight: 500 }}>
+          ENCONTRO EXCLUSIVO PARA A COMUNIDADE
+        </div>
+
+        {/* Main title */}
+        <h1 style={{
+          fontSize: "clamp(40px, 7vw, 72px)",
+          fontWeight: 900,
+          lineHeight: 1.05,
+          letterSpacing: "-0.01em",
+          color: "#ffffff",
+          marginBottom: "20px",
+        }}>
+          O FUTURO NO<br />MERCADO DE VINHOS
+        </h1>
+
+        {/* Subtitle */}
+        <p style={{ fontSize: "17px", color: "#94a3b8", lineHeight: 1.6, maxWidth: "520px", margin: "0 auto 40px" }}>
+          O que está acontecendo no mercado hoje<br />e como isso impacta suas decisões.
+        </p>
+
+        {/* Event meta row */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "0",
+          flexWrap: "wrap",
+          fontSize: "12px",
+          fontWeight: 700,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: "#cbd5e1",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 24px" }}>
+            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#3b82f6", display: "inline-block", flexShrink: 0 }} />
+            18 DE MAIO<br />SEGUNDA-FEIRA
           </div>
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold tracking-tight mb-6 max-w-4xl mx-auto leading-[1.1]">
-            O FUTURO NO MERCADO DE VINHOS
-          </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-            O que está acontecendo no mercado hoje e como isso impacta suas decisões.
+          <div style={{ width: "1px", height: "32px", background: "#1e3a5f" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 24px" }}>
+            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#3b82f6", display: "inline-block", flexShrink: 0 }} />
+            20H00<br />DURAÇÃO: 60 MINUTOS
+          </div>
+          <div style={{ width: "1px", height: "32px", background: "#1e3a5f" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 24px" }}>
+            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#3b82f6", display: "inline-block", flexShrink: 0 }} />
+            EVENTO FECHADO<br />APENAS PARA MEMBROS DA COMUNIDADE
+          </div>
+        </div>
+      </section>
+
+      {/* ─── MAIN CONTENT ─── */}
+      <section style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 24px 72px", display: "grid", gridTemplateColumns: "1fr 420px", gap: "48px", alignItems: "start" }}>
+
+        {/* LEFT */}
+        <div>
+          <h2 style={{ fontSize: "22px", fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "#ffffff", marginBottom: "24px", lineHeight: 1.3 }}>
+            PARTICIPE E RECEBA<br />O MATERIAL PREPARATÓRIO
+          </h2>
+
+          <div style={{ fontSize: "15px", color: "#94a3b8", lineHeight: 1.8, marginBottom: "32px" }}>
+            <p style={{ marginBottom: "12px" }}>
+              Ao se inscrever, você recebe a <strong style={{ color: "#e2e8f0" }}>Parte 1 do Raio-X do Mercado de Vinhos 2026</strong>.
+            </p>
+            <p style={{ marginBottom: "20px" }}>
+              Um material estratégico com a base da nossa leitura de mercado.
+            </p>
+            <p style={{
+              borderLeft: "3px solid #3b82f6",
+              paddingLeft: "16px",
+              color: "#e2e8f0",
+              fontWeight: 600,
+              lineHeight: 1.7,
+            }}>
+              Mas o mais importante<br />não está nele.<br />
+              A aplicação prática será<br />revelada no encontro.
+            </p>
+          </div>
+
+          {/* Ebook image */}
+          <div style={{
+            borderRadius: "12px",
+            overflow: "hidden",
+            border: "1px solid rgba(255,255,255,0.08)",
+            boxShadow: "0 24px 48px rgba(0,0,0,0.5)",
+            maxWidth: "380px",
+          }}>
+            <img
+              src={`${import.meta.env.BASE_URL}ebook-cover.png`}
+              alt="Raio-X do Mercado de Vinhos 2026 – Parte 1"
+              style={{ width: "100%", display: "block" }}
+            />
+          </div>
+        </div>
+
+        {/* RIGHT — Form card */}
+        <div style={{
+          background: "#0d1b2e",
+          border: "1px solid #1e3a5f",
+          borderRadius: "12px",
+          padding: "36px 32px",
+          position: "sticky",
+          top: "24px",
+          boxShadow: "0 32px 64px rgba(0,0,0,0.4)",
+        }}>
+          {/* Top accent line */}
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "3px", background: "linear-gradient(90deg, #1d4ed8, #3b82f6, #1d4ed8)", borderRadius: "12px 12px 0 0" }} />
+
+          <h3 style={{ fontSize: "18px", fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "#ffffff", marginBottom: "6px" }}>
+            GARANTA SUA VAGA
+          </h3>
+          <p style={{ fontSize: "13px", color: "#64748b", marginBottom: "28px", lineHeight: 1.5 }}>
+            Preencha seus dados para se inscrever<br />e receber o material preparatório.
           </p>
-        </div>
 
-        {/* Event Meta */}
-        <div className="flex flex-col md:flex-row items-center justify-center gap-6 md:gap-12 mb-24 text-sm font-medium tracking-wide text-muted-foreground animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-150 fill-mode-forwards">
-          <div className="flex items-center gap-2 text-foreground">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary"></span>
-            18 DE MAIO / SEGUNDA-FEIRA
-          </div>
-          <div className="hidden md:block w-px h-4 bg-border"></div>
-          <div className="flex items-center gap-2 text-foreground">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary"></span>
-            20H00 / DURAÇÃO: 60 MINUTOS
-          </div>
-          <div className="hidden md:block w-px h-4 bg-border"></div>
-          <div className="flex items-center gap-2 text-foreground">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary"></span>
-            EVENTO FECHADO / APENAS PARA MEMBROS DA COMUNIDADE
-          </div>
-        </div>
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            <input
+              required
+              placeholder="Nome completo"
+              style={inputStyle}
+              onFocus={e => (e.target.style.borderColor = "#3b82f6")}
+              onBlur={e => (e.target.style.borderColor = "#1e3a5f")}
+            />
+            <input
+              type="email"
+              required
+              placeholder="E-mail"
+              style={inputStyle}
+              onFocus={e => (e.target.style.borderColor = "#3b82f6")}
+              onBlur={e => (e.target.style.borderColor = "#1e3a5f")}
+            />
+            <input
+              required
+              placeholder="WhatsApp"
+              style={inputStyle}
+              onFocus={e => (e.target.style.borderColor = "#3b82f6")}
+              onBlur={e => (e.target.style.borderColor = "#1e3a5f")}
+            />
+            <input
+              placeholder="Atuação / Empresa (opcional)"
+              style={inputStyle}
+              onFocus={e => (e.target.style.borderColor = "#3b82f6")}
+              onBlur={e => (e.target.style.borderColor = "#1e3a5f")}
+            />
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-start animate-in fade-in slide-in-from-bottom-12 duration-1000 delay-300 fill-mode-forwards">
-          {/* Left Content */}
-          <div className="lg:col-span-7 space-y-10">
-            <div>
-              <h2 className="text-2xl md:text-3xl font-bold mb-6">
-                PARTICIPE E RECEBA O MATERIAL PREPARATÓRIO
-              </h2>
-              <div className="prose prose-invert prose-lg text-muted-foreground">
-                <p>
-                  Ao se inscrever, você receberá imediatamente a <strong>Parte 1 do Raio-X do Mercado de Vinhos 2026</strong>.
-                </p>
-                <p>
-                  Um material estratégico com a base da nossa leitura de mercado.
-                </p>
-                <p className="text-foreground font-semibold border-l-2 border-primary pl-4 my-6">
-                  Mas o mais importante não está nele. A aplicação prática será revelada no encontro.
-                </p>
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                marginTop: "8px",
+                background: loading ? "#1d4ed8aa" : "#2563eb",
+                color: "#ffffff",
+                border: "none",
+                borderRadius: "6px",
+                padding: "16px 12px",
+                fontSize: "13px",
+                fontWeight: 800,
+                letterSpacing: "0.05em",
+                textTransform: "uppercase",
+                cursor: loading ? "not-allowed" : "pointer",
+                lineHeight: 1.4,
+                textAlign: "center",
+                boxShadow: "0 4px 24px rgba(37,99,235,0.4)",
+                transition: "background 0.2s, box-shadow 0.2s",
+              }}
+              onMouseEnter={e => { if (!loading) (e.target as HTMLButtonElement).style.background = "#1d4ed8"; }}
+              onMouseLeave={e => { if (!loading) (e.target as HTMLButtonElement).style.background = "#2563eb"; }}
+            >
+              {loading ? "PROCESSANDO..." : "QUERO PARTICIPAR E RECEBER\nO MATERIAL PREPARATÓRIO"}
+            </button>
+
+            <p style={{ fontSize: "12px", color: "#475569", textAlign: "center", marginTop: "4px" }}>
+              🔒 Seus dados estão seguros conosco.
+            </p>
+          </form>
+        </div>
+      </section>
+
+      {/* ─── POR QUE PARTICIPAR ─── */}
+      <section style={{ background: "#0a1421", borderTop: "1px solid #0f2040", borderBottom: "1px solid #0f2040", padding: "64px 24px" }}>
+        <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
+          <h2 style={{ textAlign: "center", fontSize: "20px", fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: "#ffffff", marginBottom: "48px" }}>
+            POR QUE PARTICIPAR?
+          </h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "24px" }}>
+            {[
+              { title: "Conteúdo prático e direto ao ponto", body: "Nada de teoria. Só o que realmente importa." },
+              { title: "Baseado em dados e inteligência real", body: "Informação confiável para decisões melhores." },
+              { title: "Visão estratégica do mercado", body: "Entenda o todo para agir melhor no detalhe." },
+              { title: "Comunidade que pensa à frente", body: "Conecte-se com quem está construindo o futuro do vinho." },
+            ].map((item, i) => (
+              <div key={i} style={{
+                background: "#0d1b2e",
+                border: "1px solid #1e3a5f",
+                borderRadius: "10px",
+                padding: "28px 20px",
+              }}>
+                <div style={{ fontSize: "13px", fontWeight: 700, color: "#ffffff", marginBottom: "10px", lineHeight: 1.4 }}>
+                  {item.title}
+                </div>
+                <div style={{ fontSize: "13px", color: "#64748b", lineHeight: 1.6 }}>
+                  {item.body}
+                </div>
               </div>
-            </div>
-
-            <div className="relative group rounded-xl overflow-hidden border border-white/10 shadow-2xl shadow-primary/5 bg-card/50 p-2">
-              <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-              <img 
-                src="/ebook-cover.png" 
-                alt="Capa do material O Futuro no Mercado de Vinhos - Parte 1" 
-                className="w-full h-auto rounded-lg shadow-inner object-cover max-h-[500px] object-top"
-              />
-            </div>
-          </div>
-
-          {/* Right Form Card */}
-          <div className="lg:col-span-5">
-            <div className="sticky top-8 bg-card border border-border rounded-2xl p-8 shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary/40 via-primary to-primary/40"></div>
-              
-              <h3 className="text-xl font-bold mb-2">GARANTA SUA VAGA</h3>
-              <p className="text-sm text-muted-foreground mb-8">
-                Preencha seus dados para se inscrever e receber o material preparatório.
-              </p>
-
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome completo</Label>
-                  <Input id="name" required placeholder="Seu nome" className="bg-background/50 h-12" />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="email">E-mail</Label>
-                  <Input id="email" type="email" required placeholder="seu@email.com" className="bg-background/50 h-12" />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="whatsapp">WhatsApp</Label>
-                  <Input id="whatsapp" required placeholder="(00) 00000-0000" className="bg-background/50 h-12" />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="company">Atuação / Empresa (opcional)</Label>
-                  <Input id="company" placeholder="Sua empresa ou cargo" className="bg-background/50 h-12" />
-                </div>
-
-                <Button 
-                  type="submit" 
-                  size="lg" 
-                  className="w-full h-14 text-[15px] font-bold mt-4 shadow-[0_0_40px_-10px_rgba(37,99,235,0.5)] hover:shadow-[0_0_60px_-10px_rgba(37,99,235,0.7)] transition-all duration-300"
-                  disabled={loading}
-                >
-                  {loading ? "PROCESSANDO..." : "QUERO PARTICIPAR E RECEBER O MATERIAL PREPARATÓRIO"}
-                </Button>
-
-                <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground pt-4">
-                  <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                  <span>Seus dados estão seguros conosco.</span>
-                </div>
-              </form>
-            </div>
+            ))}
           </div>
         </div>
+      </section>
 
-        {/* Features Grid */}
-        <div className="mt-32 pt-20 border-t border-white/5 animate-in fade-in duration-1000 delay-500 fill-mode-forwards">
-          <h2 className="text-3xl font-bold text-center mb-16">POR QUE PARTICIPAR?</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            <div className="bg-card/40 border border-white/5 p-6 rounded-xl hover:bg-card transition-colors">
-              <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-6">
-                <Target className="w-6 h-6 text-primary" />
-              </div>
-              <h4 className="font-bold mb-3 text-lg">Conteúdo prático e direto ao ponto</h4>
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                Nada de teoria. Só o que realmente importa.
-              </p>
-            </div>
-
-            <div className="bg-card/40 border border-white/5 p-6 rounded-xl hover:bg-card transition-colors">
-              <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-6">
-                <Database className="w-6 h-6 text-primary" />
-              </div>
-              <h4 className="font-bold mb-3 text-lg">Baseado em dados e inteligência real</h4>
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                Informação confiável para decisões melhores.
-              </p>
-            </div>
-
-            <div className="bg-card/40 border border-white/5 p-6 rounded-xl hover:bg-card transition-colors">
-              <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-6">
-                <TrendingUp className="w-6 h-6 text-primary" />
-              </div>
-              <h4 className="font-bold mb-3 text-lg">Visão estratégica do mercado</h4>
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                Entenda o todo para agir melhor no detalhe.
-              </p>
-            </div>
-
-            <div className="bg-card/40 border border-white/5 p-6 rounded-xl hover:bg-card transition-colors">
-              <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-6">
-                <Users className="w-6 h-6 text-primary" />
-              </div>
-              <h4 className="font-bold mb-3 text-lg">Comunidade que pensa à frente</h4>
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                Conecte-se com quem está construindo o futuro do vinho.
-              </p>
-            </div>
-          </div>
-        </div>
-
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-card border-t border-border py-12 text-center mt-12">
-        <p className="text-sm font-bold tracking-widest text-muted-foreground">
-          VAGAS LIMITADAS. GARANTE SUA PARTICIPAÇÃO.
+      {/* ─── FOOTER ─── */}
+      <footer style={{ textAlign: "center", padding: "28px 24px", background: "#070e17" }}>
+        <p style={{ fontSize: "13px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#475569" }}>
+          VAGAS LIMITADAS. GARANTA SUA PARTICIPAÇÃO.
         </p>
       </footer>
     </div>
   );
 }
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  background: "#070e17",
+  border: "1px solid #1e3a5f",
+  borderRadius: "6px",
+  padding: "13px 14px",
+  fontSize: "14px",
+  color: "#e2e8f0",
+  outline: "none",
+  transition: "border-color 0.2s",
+  boxSizing: "border-box",
+};
