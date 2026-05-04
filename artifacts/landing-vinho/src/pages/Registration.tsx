@@ -99,65 +99,112 @@ export default function Registration() {
 
         {/* LEFT */}
         <div style={{
-          background: `radial-gradient(ellipse 80% 60% at 0% 50%, rgba(201,168,76,0.06) 0%, transparent 70%), ${C.bg}`,
-          padding: "52px 64px 56px",
+          background: `radial-gradient(ellipse 100% 70% at -10% 60%, rgba(201,168,76,0.09) 0%, transparent 65%),
+                       radial-gradient(ellipse 60% 40% at 50% 0%, rgba(201,168,76,0.04) 0%, transparent 70%),
+                       ${C.bg}`,
+          padding: "44px 64px 56px",
           display: "flex", flexDirection: "column", justifyContent: "flex-start",
           position: "relative", zIndex: 1,
         }}>
+          {/* thin gold line top */}
+          <div style={{
+            position: "absolute", top: 0, left: 0, right: 0, height: "1px",
+            background: `linear-gradient(90deg, rgba(201,168,76,0.6) 0%, rgba(201,168,76,0.15) 60%, transparent 100%)`,
+          }} />
+
           {/* Logos */}
-          <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "4px" }}>
-            <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="ibhub" style={{ height: "44px" }} />
-            <span style={{ color: C.border, fontSize: "28px", fontWeight: 300 }}>|</span>
-            <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: "120px" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: "20px", marginBottom: "6px" }}>
+            <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="ibhub" style={{ height: "40px" }} />
+            <div style={{ width: "1px", height: "32px", background: `linear-gradient(180deg, transparent, rgba(201,168,76,0.5), transparent)` }} />
+            <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: "110px" }} />
           </div>
-          <div style={{ fontSize: "11px", color: C.dimmed, letterSpacing: "0.1em", marginBottom: "40px", lineHeight: 1.4, textTransform: "uppercase" }}>
-            INTELIGÊNCIA ESTRATÉGICA PARA O MERCADO DE VINHOS
+          <div style={{
+            fontSize: "10px", color: C.dimmed, letterSpacing: "0.14em",
+            marginBottom: "44px", textTransform: "uppercase", fontWeight: 500,
+          }}>
+            Inteligência Estratégica para o Mercado de Vinhos
           </div>
 
-          <div style={{ fontSize: "13px", color: C.gold, letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 600, marginBottom: "16px" }}>
-            ENCONTRO EXCLUSIVO PARA A COMUNIDADE
+          {/* Eyebrow pill */}
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: "8px",
+            background: "rgba(201,168,76,0.08)",
+            border: `1px solid rgba(201,168,76,0.28)`,
+            borderRadius: "100px",
+            padding: "6px 14px",
+            marginBottom: "22px",
+            alignSelf: "flex-start",
+          }}>
+            <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: C.gold, boxShadow: `0 0 8px ${C.gold}` }} />
+            <span style={{ fontSize: "11px", color: C.gold, letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 700 }}>
+              Encontro exclusivo para a comunidade
+            </span>
           </div>
 
           <h1 style={{
             fontFamily: "'Barlow Condensed', sans-serif",
             fontWeight: 900,
-            fontSize: "clamp(50px, 5.5vw, 74px)",
-            lineHeight: 0.93,
+            fontSize: "clamp(52px, 5.5vw, 76px)",
+            lineHeight: 0.92,
             textTransform: "uppercase",
-            margin: "0 0 20px",
+            margin: "0 0 22px",
             whiteSpace: "nowrap",
           }}>
             <span style={{ color: C.white }}>O FUTURO NO</span><br />
             <span style={{ color: C.gold }}>MERCADO DE VINHOS</span>
           </h1>
 
-          <p style={{ fontSize: "16px", color: C.muted, lineHeight: 1.7, margin: "0 0 20px", maxWidth: "420px" }}>
+          <p style={{ fontSize: "15px", color: C.muted, lineHeight: 1.75, margin: "0 0 28px", maxWidth: "380px" }}>
             O que está acontecendo no mercado hoje<br />e como isso impacta suas decisões.
           </p>
 
-          <div style={{ width: "40px", height: "3px", background: `linear-gradient(90deg, ${C.gold}, ${C.goldL})`, borderRadius: "2px", marginBottom: "36px" }} />
+          {/* CTA scroll */}
+          <a
+            href="#inscricao"
+            onClick={e => { e.preventDefault(); document.getElementById("inscricao")?.scrollIntoView({ behavior: "smooth" }); }}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: "10px",
+              background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldL} 100%)`,
+              color: "#0a0800", borderRadius: "10px",
+              padding: "14px 24px",
+              fontSize: "12px", fontWeight: 900,
+              letterSpacing: "0.08em", textTransform: "uppercase",
+              textDecoration: "none", alignSelf: "flex-start",
+              boxShadow: "0 4px 24px rgba(201,168,76,0.35)",
+              marginBottom: "40px",
+              transition: "transform 0.15s, box-shadow 0.15s",
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 32px rgba(201,168,76,0.5)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 24px rgba(201,168,76,0.35)"; }}
+          >
+            Garantir minha vaga
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </a>
 
-          {/* Event meta */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0", maxWidth: "460px" }}>
+          {/* Event meta — status bar */}
+          <div style={{
+            display: "flex", gap: "0",
+            background: "rgba(255,255,255,0.03)",
+            border: `1px solid rgba(201,168,76,0.15)`,
+            borderRadius: "12px",
+            overflow: "hidden",
+            maxWidth: "420px",
+          }}>
             {[
-              { icon: <IconCalendar />, top: "18 DE MAIO", bot: "SEGUNDA-FEIRA" },
-              { icon: <IconClock />,    top: "20H00",      bot: "DURAÇÃO: 60 MIN" },
-              { icon: <IconLock />,     top: "EVENTO FECHADO", bot: "APENAS MEMBROS" },
+              { icon: <IconCalendar />, top: "18 DE MAIO",      bot: "Segunda-feira"  },
+              { icon: <IconClock />,    top: "20H00",           bot: "Duração: 60 min"},
+              { icon: <IconLock />,     top: "Evento fechado",  bot: "Apenas membros" },
             ].map((col, i) => (
-              <div key={i}>
-                <div style={{
-                  width: "40px", height: "40px", borderRadius: "50%",
-                  border: `1px solid rgba(201,168,76,0.25)`,
-                  background: "rgba(201,168,76,0.05)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  marginBottom: "10px",
-                }}>
-                  {col.icon}
-                </div>
-                <div style={{ fontSize: "13px", fontWeight: 800, letterSpacing: "0.05em", color: C.white, marginBottom: "3px" }}>
+              <div key={i} style={{
+                flex: 1, padding: "16px 14px",
+                borderRight: i < 2 ? `1px solid rgba(201,168,76,0.1)` : "none",
+                display: "flex", flexDirection: "column", gap: "6px",
+              }}>
+                <div style={{ color: C.gold, opacity: 0.8 }}>{col.icon}</div>
+                <div style={{ fontSize: "12px", fontWeight: 800, letterSpacing: "0.04em", color: C.white }}>
                   {col.top}
                 </div>
-                <div style={{ fontSize: "11px", color: C.dimmed, letterSpacing: "0.02em", lineHeight: 1.4 }}>
+                <div style={{ fontSize: "10px", color: C.dimmed, letterSpacing: "0.02em" }}>
                   {col.bot}
                 </div>
               </div>
@@ -195,7 +242,7 @@ export default function Registration() {
         </div>
       </section>
       {/* ═══ PARTICIPE + FORM ═══ */}
-      <section style={{
+      <section id="inscricao" style={{
         display: "grid", gridTemplateColumns: "1fr 1fr",
         borderTop: `1px solid rgba(201,168,76,0.15)`,
         background: `radial-gradient(ellipse 70% 80% at 25% 50%, rgba(201,168,76,0.05) 0%, transparent 65%), #0c0d0f`,
