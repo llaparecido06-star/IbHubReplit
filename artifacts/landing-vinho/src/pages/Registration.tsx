@@ -103,14 +103,26 @@ export default function Registration() {
         display: "grid",
         gridTemplateColumns: isMobile ? "1fr" : "44% 56%",
         minHeight: isMobile ? "auto" : "760px",
+        position: isMobile ? "relative" : "static",
       }}>
+        {/* Mobile background image — sits behind content */}
+        {isMobile && (
+          <div style={{ position: "absolute", inset: 0, zIndex: 0 }}>
+            <img
+              src={`${BASE}hero-wine2.png`}
+              alt=""
+              style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "62% 20%", display: "block", filter: "brightness(0.75) contrast(1.06)" }}
+            />
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(12,13,15,0.55) 0%, rgba(12,13,15,0.7) 50%, rgba(12,13,15,0.97) 85%)" }} />
+          </div>
+        )}
 
         {/* LEFT — content */}
         <div style={{
-          background: `radial-gradient(ellipse 100% 70% at -10% 60%, rgba(201,168,76,0.09) 0%, transparent 65%),
+          background: isMobile ? "transparent" : `radial-gradient(ellipse 100% 70% at -10% 60%, rgba(201,168,76,0.09) 0%, transparent 65%),
                        radial-gradient(ellipse 60% 40% at 50% 0%, rgba(201,168,76,0.04) 0%, transparent 70%),
                        ${C.bg}`,
-          padding: isMobile ? "36px 24px 40px" : "44px 64px 56px",
+          padding: isMobile ? "36px 24px 48px" : "44px 64px 56px",
           display: "flex", flexDirection: "column", justifyContent: "flex-start",
           position: "relative", zIndex: 1,
           order: isMobile ? 1 : 0,
@@ -239,39 +251,33 @@ export default function Registration() {
           </div>
         </div>
 
-        {/* RIGHT — wine image */}
-        <div style={{
-          position: "relative", overflow: "hidden", background: "#06080a",
-          height: isMobile ? "280px" : "auto",
-          order: isMobile ? 0 : 1,
-        }}>
-          <img
-            src={`${BASE}hero-wine2.png`}
-            alt="Taça de vinho"
-            style={{
-              width: "100%", height: "100%",
-              objectFit: "cover", objectPosition: isMobile ? "62% 20%" : "62% center",
-              display: "block",
-              filter: "brightness(0.88) contrast(1.06)",
-            }}
-          />
-          <div style={{
-            position: "absolute", inset: 0,
-            background: isMobile
-              ? "linear-gradient(180deg, transparent 40%, #0c0d0f 100%)"
-              : "linear-gradient(90deg, #0c0d0f 0%, rgba(12,13,15,0.92) 8%, rgba(12,13,15,0.6) 20%, rgba(12,13,15,0.2) 38%, transparent 58%)",
-          }} />
-          {!isMobile && (
+        {/* RIGHT — wine image (desktop only) */}
+        {!isMobile && (
+          <div style={{ position: "relative", overflow: "hidden", background: "#06080a" }}>
+            <img
+              src={`${BASE}hero-wine2.png`}
+              alt="Taça de vinho"
+              style={{
+                width: "100%", height: "100%",
+                objectFit: "cover", objectPosition: "62% center",
+                display: "block",
+                filter: "brightness(0.88) contrast(1.06)",
+              }}
+            />
+            <div style={{
+              position: "absolute", inset: 0,
+              background: "linear-gradient(90deg, #0c0d0f 0%, rgba(12,13,15,0.92) 8%, rgba(12,13,15,0.6) 20%, rgba(12,13,15,0.2) 38%, transparent 58%)",
+            }} />
             <div style={{
               position: "absolute", inset: 0,
               background: "linear-gradient(270deg, #0c0d0f 0%, rgba(12,13,15,0.5) 8%, transparent 22%)",
             }} />
-          )}
-          <div style={{
-            position: "absolute", inset: 0,
-            background: "linear-gradient(180deg, transparent 60%, rgba(12,13,15,0.65) 100%)",
-          }} />
-        </div>
+            <div style={{
+              position: "absolute", inset: 0,
+              background: "linear-gradient(180deg, transparent 60%, rgba(12,13,15,0.65) 100%)",
+            }} />
+          </div>
+        )}
       </section>
 
       {/* ═══ PARTICIPE + FORM ═══ */}
