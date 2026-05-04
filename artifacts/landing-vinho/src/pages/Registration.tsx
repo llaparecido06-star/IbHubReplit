@@ -94,7 +94,6 @@ export default function Registration() {
 
   return (
     <div style={{ background: C.bg, color: C.white, fontFamily: "'Inter', sans-serif" }}>
-
       {/* ═══ HERO ═══ */}
       <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", minHeight: "680px" }}>
 
@@ -188,7 +187,6 @@ export default function Registration() {
           }} />
         </div>
       </section>
-
       {/* ═══ PARTICIPE + FORM ═══ */}
       <section style={{
         display: "grid", gridTemplateColumns: "1fr 1fr",
@@ -262,12 +260,14 @@ export default function Registration() {
         </div>
 
         {/* RIGHT — form */}
-        <div style={{
-          background: "#0f1219",
-          padding: "56px 60px",
-          display: "flex", flexDirection: "column", justifyContent: "center",
-          position: "relative",
-        }}>
+        <div
+          style={{
+            background: "#0f1219",
+            padding: "56px 60px",
+            display: "flex", flexDirection: "column", justifyContent: "center",
+            position: "relative",
+          }}
+          className="bg-[#0c0d0f]">
           {/* top accent */}
           <div style={{
             position: "absolute", top: 0, left: "10%", right: "10%", height: "2px",
@@ -352,7 +352,6 @@ export default function Registration() {
           </form>
         </div>
       </section>
-
       {/* ═══ POR QUE PARTICIPAR? ═══ */}
       <section style={{
         background: C.dark,
@@ -408,7 +407,6 @@ export default function Registration() {
           ))}
         </div>
       </section>
-
       {/* ═══ FOOTER ═══ */}
       <footer style={{ textAlign: "center", padding: "28px 32px", background: C.bg, borderTop: `1px solid ${C.border}` }}>
         <p style={{ fontSize: "13px", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: C.dimmed, margin: "0 0 8px" }}>
