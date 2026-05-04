@@ -172,20 +172,20 @@ export default function Registration() {
             alt="Taça de vinho"
             style={{
               width: "100%", height: "100%",
-              objectFit: "cover", objectPosition: "42% center",
+              objectFit: "cover", objectPosition: "55% center",
               display: "block",
               filter: "brightness(0.85) contrast(1.08)",
             }}
           />
-          {/* left fade — menos agressivo para mostrar mais da imagem */}
+          {/* left fade — transição premium que dissolve a foto no fundo do texto */}
           <div style={{
             position: "absolute", inset: 0,
-            background: "linear-gradient(90deg, #0c0d0f 0%, rgba(12,13,15,0.5) 18%, rgba(12,13,15,0.1) 35%, transparent 55%)",
+            background: "linear-gradient(90deg, #0c0d0f 0%, rgba(12,13,15,0.85) 12%, rgba(12,13,15,0.45) 28%, rgba(12,13,15,0.1) 45%, transparent 65%)",
           }} />
           {/* bottom fade suave */}
           <div style={{
             position: "absolute", inset: 0,
-            background: "linear-gradient(180deg, transparent 70%, rgba(12,13,15,0.4) 100%)",
+            background: "linear-gradient(180deg, transparent 65%, rgba(12,13,15,0.55) 100%)",
           }} />
         </div>
       </section>
