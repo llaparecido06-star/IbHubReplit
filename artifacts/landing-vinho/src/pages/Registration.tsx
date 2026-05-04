@@ -211,55 +211,17 @@ export default function Registration() {
           </h2>
 
           <div style={{ display: "flex", gap: "32px", alignItems: "flex-start" }}>
-            {/* 3D ebook */}
-            <div style={{ flexShrink: 0, perspective: "800px" }}>
-              <div style={{
-                width: "150px", minHeight: "210px",
-                background: "linear-gradient(155deg, #12161f 0%, #1a2030 50%, #151a26 100%)",
-                border: "1px solid rgba(201,168,76,0.3)",
-                borderRadius: "4px 10px 10px 4px",
-                padding: "18px 14px",
-                boxShadow: "12px 16px 48px rgba(0,0,0,0.8), inset -2px 0 8px rgba(201,168,76,0.06)",
-                display: "flex", flexDirection: "column", justifyContent: "space-between",
-                transform: "rotateY(-8deg)",
-                transformOrigin: "left center",
-                position: "relative",
-              }}>
-                <div style={{
-                  position: "absolute", left: 0, top: 0, bottom: 0, width: "6px",
-                  background: `linear-gradient(180deg, ${C.gold}, rgba(201,168,76,0.3))`,
-                  borderRadius: "4px 0 0 4px",
-                }} />
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "5px", marginBottom: "10px", paddingLeft: "6px" }}>
-                    <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="" style={{ height: "11px" }} />
-                    <span style={{ color: "#444", fontSize: "8px" }}>|</span>
-                    <img src={`${BASE}idealbi-logo2-transparent.png`} alt="" style={{ height: "11px" }} />
-                  </div>
-                  <div style={{
-                    fontSize: "15px", fontWeight: 800, color: C.white, lineHeight: 1.2,
-                    fontFamily: "'Barlow Condensed', sans-serif", textTransform: "uppercase",
-                    paddingLeft: "6px",
-                  }}>
-                    O FUTURO NO<br />MERCADO DE<br />VINHOS
-                  </div>
-                </div>
-                <div>
-                  <div style={{ display: "flex", gap: "3px", alignItems: "flex-end", height: "30px", marginBottom: "10px", paddingLeft: "6px" }}>
-                    {[5,9,7,13,9,14,11,17,12].map((h, i) => (
-                      <div key={i} style={{ flex: 1, height: `${h}px`, background: `linear-gradient(180deg, ${C.goldL}, ${C.gold})`, borderRadius: "1.5px" }} />
-                    ))}
-                  </div>
-                  <div style={{
-                    background: `linear-gradient(90deg, ${C.gold}, ${C.goldL})`,
-                    borderRadius: "3px", padding: "3px 8px",
-                    fontSize: "8px", fontWeight: 700, color: "#0a0800",
-                    display: "inline-block", marginLeft: "6px",
-                  }}>
-                    PARTE 1
-                  </div>
-                </div>
-              </div>
+            {/* Ebook cover */}
+            <div style={{ flexShrink: 0 }}>
+              <img
+                src={`${BASE}ebook-parte1.png`}
+                alt="O Futuro no Mercado de Vinhos — Parte 1"
+                style={{
+                  width: "200px",
+                  display: "block",
+                  filter: "drop-shadow(16px 24px 48px rgba(0,0,0,0.9))",
+                }}
+              />
             </div>
 
             <div style={{ fontSize: "15px", color: C.muted, lineHeight: 1.8 }}>
