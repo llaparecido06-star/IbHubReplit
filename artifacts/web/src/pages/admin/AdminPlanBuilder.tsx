@@ -5,10 +5,14 @@ import { supabase } from "@/lib/supabase";
 const GOLD = "#c9a84c";
 const NAVY = "#0d1b2a";
 
+// Only features that are actively gated in the app code.
+// Add here when a new feature gate is implemented.
 const ALL_FEATURES = [
-  "Chat ilimitado", "Criar Grupos", "Ver Visitantes do Perfil", "Smart Match B2B",
-  "Relatórios Detalhados", "Exportar CSV", "Criar Página Empresa", "Publicar Vagas",
-  "Marketplace B2B", "Impulsionar Posts", "Upload Certificados", "Masterclasses",
+  "Criar Grupos",
+  "Relatórios Detalhados",
+  "Criar Página Empresa",
+  "Publicar Vagas",
+  "Upload Certificados",
 ];
 
 const DELIVERY_STRATEGIES = [
