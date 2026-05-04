@@ -114,13 +114,11 @@ export default function Registration() {
           {/* Logo bar */}
           <div style={{ paddingTop: "32px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
-              {/* ibhub logo on white bg */}
-              <div style={{ background: "#ffffff", borderRadius: "6px", padding: "5px 10px" }}>
-                <img src={`${BASE}ibhub-logo.png`} alt="ibhub" style={{ height: "22px", display: "block" }} />
-              </div>
+              {/* ibhub logo */}
+              <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="ibhub" style={{ height: "26px", display: "block" }} />
               <span style={{ color: "#3a4050", fontSize: "20px", fontWeight: 300 }}>|</span>
               {/* IDEAL.BI logo */}
-              <img src={`${BASE}idealbi-logo-transparent.png`} alt="IDEAL.BI" style={{ height: "28px", display: "block" }} />
+              <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: "26px", display: "block" }} />
             </div>
             <div style={{ fontSize: "10px", color: C.muted, letterSpacing: "0.05em", lineHeight: 1.4 }}>
               INTELIGÊNCIA ESTRATÉGICA PARA O<br />MERCADO DE VINHOS
@@ -207,60 +205,68 @@ export default function Registration() {
       ══════════════════════════════════════════════════════ */}
       <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
 
-        {/* ── LEFT — beige/cream panel ── */}
+        {/* ── LEFT — black panel ── */}
         <div style={{
-          background: "linear-gradient(160deg, #c8b88a 0%, #a89460 40%, #7a6838 100%)",
+          background: "#0d0f14",
           padding: "52px 48px",
+          borderRight: `1px solid ${C.border}`,
         }}>
           <h2 style={{
             fontFamily: "'Barlow Condensed', sans-serif",
-            fontWeight: 900, fontSize: "30px", textTransform: "uppercase",
-            letterSpacing: "0.02em", lineHeight: 1.15, marginBottom: "6px",
+            fontWeight: 900, fontSize: "32px", textTransform: "uppercase",
+            letterSpacing: "0.02em", lineHeight: 1.1, marginBottom: "28px",
           }}>
-            <span style={{ color: "#1a1208" }}>PARTICIPE E RECEBA<br /></span>
-            <span style={{ color: "#0a0b0d" }}>O MATERIAL PREPARATÓRIO</span>
+            <span style={{ color: C.white }}>PARTICIPE E RECEBA<br /></span>
+            <span style={{ color: C.gold }}>O MATERIAL PREPARATÓRIO</span>
           </h2>
 
           {/* Ebook row */}
-          <div style={{ display: "flex", gap: "20px", alignItems: "flex-start", margin: "28px 0" }}>
+          <div style={{ display: "flex", gap: "20px", alignItems: "flex-start" }}>
             {/* Ebook cover — styled */}
             <div style={{
-              width: "90px", flexShrink: 0,
+              width: "100px", flexShrink: 0,
               background: "linear-gradient(160deg, #0f1420 0%, #1a2030 100%)",
-              border: "1px solid rgba(201,168,76,0.4)",
+              border: "1px solid rgba(201,168,76,0.35)",
               borderRadius: "6px", padding: "14px 10px",
-              boxShadow: "4px 8px 20px rgba(0,0,0,0.5)",
-              minHeight: "118px",
+              boxShadow: "6px 10px 28px rgba(0,0,0,0.7)",
+              minHeight: "130px",
               display: "flex", flexDirection: "column", justifyContent: "space-between",
             }}>
               <div>
-                <div style={{ fontSize: "6px", color: "#aaa", letterSpacing: "0.08em", marginBottom: "4px" }}>ibhub | IDEALBI</div>
-                <div style={{ fontSize: "9px", fontWeight: 800, color: "#fff", lineHeight: 1.3, fontFamily: "'Barlow Condensed', sans-serif", textTransform: "uppercase" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "4px", marginBottom: "6px" }}>
+                  <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="ibhub" style={{ height: "8px" }} />
+                  <span style={{ color: "#555", fontSize: "7px" }}>|</span>
+                  <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: "8px" }} />
+                </div>
+                <div style={{ fontSize: "10px", fontWeight: 800, color: "#fff", lineHeight: 1.3, fontFamily: "'Barlow Condensed', sans-serif", textTransform: "uppercase" }}>
                   O FUTURO NO<br />MERCADO DE<br />VINHOS
                 </div>
               </div>
-              <div style={{ display: "flex", gap: "2px", alignItems: "flex-end", height: "24px", marginTop: "8px" }}>
-                {[6,10,7,13,9,14,11,16,12].map((h, i) => (
-                  <div key={i} style={{ flex: 1, height: `${h}px`, background: C.gold, borderRadius: "1px", opacity: 0.85 }} />
-                ))}
-              </div>
-              <div style={{ marginTop: "6px", background: C.gold, borderRadius: "3px", padding: "2px 6px", fontSize: "7px", fontWeight: 700, color: "#000", display: "inline-block" }}>
-                PARTE 1
+              <div>
+                <div style={{ display: "flex", gap: "2px", alignItems: "flex-end", height: "26px", marginBottom: "6px" }}>
+                  {[6,10,7,13,9,14,11,16,12].map((h, i) => (
+                    <div key={i} style={{ flex: 1, height: `${h}px`, background: C.gold, borderRadius: "1px", opacity: 0.85 }} />
+                  ))}
+                </div>
+                <div style={{ background: C.gold, borderRadius: "3px", padding: "2px 6px", fontSize: "7px", fontWeight: 700, color: "#000", display: "inline-block" }}>
+                  PARTE 1
+                </div>
               </div>
             </div>
 
             {/* Text */}
-            <div style={{ fontSize: "13px", color: "#2a1e08", lineHeight: 1.7 }}>
+            <div style={{ fontSize: "13px", color: C.muted, lineHeight: 1.75 }}>
               <p style={{ margin: "0 0 10px" }}>
-                Ao se inscrever, você recebe a <strong>Parte 1 do Ralo-X do Mercado de Vinhos 2026</strong>.
+                Ao se inscrever, você recebe a{" "}
+                <strong style={{ color: C.white }}>Parte 1 do Ralo-X do Mercado de Vinhos 2026.</strong>
               </p>
               <p style={{ margin: "0 0 14px" }}>
                 Um material estratégico com a base da nossa leitura de mercado.
               </p>
-              <div style={{ borderLeft: "3px solid #5a3a08", paddingLeft: "12px" }}>
-                <p style={{ margin: 0, fontWeight: 700, color: "#1a0e02" }}>
+              <div style={{ borderLeft: `3px solid ${C.gold}`, paddingLeft: "12px" }}>
+                <p style={{ margin: 0, fontWeight: 700, color: C.white, lineHeight: 1.65 }}>
                   Mas o mais importante não está nele.<br />
-                  <span style={{ fontWeight: 400, color: "#3a2808" }}>A aplicação prática será revelada no encontro.</span>
+                  <span style={{ fontWeight: 400, color: C.muted }}>A aplicação prática será revelada no encontro.</span>
                 </p>
               </div>
             </div>

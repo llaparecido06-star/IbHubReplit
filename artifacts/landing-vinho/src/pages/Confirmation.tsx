@@ -21,10 +21,9 @@ export default function Confirmation() {
         display: "flex", alignItems: "center", justifyContent: "space-between",
         borderBottom: `1px solid ${C.border}`,
       }}>
-        <div style={{ background: "#ffffff", borderRadius: "8px", padding: "8px 14px", display: "inline-flex", alignItems: "center" }}>
-          <img src={`${BASE}ibhub-logo.png`} alt="ibhub" style={{ height: "28px", display: "block" }} />
-        </div>
-        <img src={`${BASE}idealbi-logo-transparent.png`} alt="IDEAL.BI" style={{ height: "52px", display: "block" }} />
+        <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="ibhub" style={{ height: "26px", display: "block" }} />
+        <span style={{ color: "#3a4050", fontSize: "20px", fontWeight: 300 }}>|</span>
+        <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: "26px", display: "block" }} />
       </header>
 
       {/* ── HEADER ── */}
