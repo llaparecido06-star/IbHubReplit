@@ -267,7 +267,7 @@ export default function Registration() {
             display: "flex", flexDirection: "column", justifyContent: "center",
             position: "relative",
           }}
-          className="bg-[#0c0d0f]">
+          className="bg-[#0c0d0f] border-t-[#ffffff] border-r-[#ffffff] border-b-[#ffffff] border-l-[#ffffff]">
           {/* top accent */}
           <div style={{
             position: "absolute", top: 0, left: "10%", right: "10%", height: "2px",
