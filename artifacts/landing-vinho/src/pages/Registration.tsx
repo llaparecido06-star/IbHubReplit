@@ -95,7 +95,7 @@ export default function Registration() {
   return (
     <div style={{ background: C.bg, color: C.white, fontFamily: "'Inter', sans-serif" }}>
       {/* ═══ HERO ═══ */}
-      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", minHeight: "760px" }}>
+      <section style={{ display: "grid", gridTemplateColumns: "44% 56%", minHeight: "760px" }}>
 
         {/* LEFT */}
         <div style={{
@@ -172,20 +172,25 @@ export default function Registration() {
             alt="Taça de vinho"
             style={{
               width: "100%", height: "100%",
-              objectFit: "cover", objectPosition: "55% center",
+              objectFit: "cover", objectPosition: "62% center",
               display: "block",
-              filter: "brightness(0.85) contrast(1.08)",
+              filter: "brightness(0.88) contrast(1.06)",
             }}
           />
-          {/* left fade — transição premium que dissolve a foto no fundo do texto */}
+          {/* left fade — dissolve completamente na borda, sem divisória */}
           <div style={{
             position: "absolute", inset: 0,
-            background: "linear-gradient(90deg, #0c0d0f 0%, rgba(12,13,15,0.85) 12%, rgba(12,13,15,0.45) 28%, rgba(12,13,15,0.1) 45%, transparent 65%)",
+            background: "linear-gradient(90deg, #0c0d0f 0%, rgba(12,13,15,0.92) 8%, rgba(12,13,15,0.6) 20%, rgba(12,13,15,0.2) 38%, transparent 58%)",
           }} />
-          {/* bottom fade suave */}
+          {/* right fade — foto termina antes da borda direita */}
           <div style={{
             position: "absolute", inset: 0,
-            background: "linear-gradient(180deg, transparent 65%, rgba(12,13,15,0.55) 100%)",
+            background: "linear-gradient(270deg, #0c0d0f 0%, rgba(12,13,15,0.5) 8%, transparent 22%)",
+          }} />
+          {/* bottom fade */}
+          <div style={{
+            position: "absolute", inset: 0,
+            background: "linear-gradient(180deg, transparent 60%, rgba(12,13,15,0.65) 100%)",
           }} />
         </div>
       </section>
