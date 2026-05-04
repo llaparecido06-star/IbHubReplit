@@ -82,7 +82,7 @@ export default function Registration() {
           <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "6px" }}>
             <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="ibhub" style={{ height: "36px" }} />
             <span style={{ color: "#3a4050", fontSize: "24px", fontWeight: 300 }}>|</span>
-            <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: "34px" }} />
+            <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: "40px" }} />
           </div>
           <div style={{ fontSize: "11px", color: C.dimmed, letterSpacing: "0.06em", marginBottom: "40px", lineHeight: 1.4 }}>
             INTELIGÊNCIA ESTRATÉGICA PARA O<br />MERCADO DE VINHOS
@@ -95,20 +95,21 @@ export default function Registration() {
           <h1 style={{
             fontFamily: "'Barlow Condensed', sans-serif",
             fontWeight: 900,
-            fontSize: "clamp(56px, 6vw, 80px)",
+            fontSize: "clamp(48px, 5.5vw, 72px)",
             lineHeight: 0.95,
             textTransform: "uppercase",
-            margin: "0 0 20px",
+            margin: "0 0 18px",
+            whiteSpace: "nowrap",
           }}>
             <span style={{ color: C.white }}>O FUTURO NO</span><br />
             <span style={{ color: C.gold }}>MERCADO DE VINHOS</span>
           </h1>
 
-          <p style={{ fontSize: "16px", color: C.muted, lineHeight: 1.65, margin: "0 0 18px", maxWidth: "420px" }}>
+          <p style={{ fontSize: "17px", color: C.muted, lineHeight: 1.65, margin: "0 0 16px", maxWidth: "420px" }}>
             O que está acontecendo no mercado hoje<br />e como isso impacta suas decisões.
           </p>
 
-          <div style={{ width: "44px", height: "3px", background: C.gold, borderRadius: "2px", marginBottom: "36px" }} />
+          <div style={{ width: "44px", height: "3px", background: C.gold, borderRadius: "2px", marginBottom: "32px" }} />
 
           {/* Event meta */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0", maxWidth: "480px" }}>
@@ -162,63 +163,95 @@ export default function Registration() {
         gridTemplateColumns: "1fr 1fr",
         borderTop: `1px solid ${C.border}`,
       }}>
-        {/* LEFT */}
+        {/* LEFT — ebook pitch */}
         <div style={{
           background: C.bg,
-          padding: "48px 56px",
+          padding: "56px 60px",
           borderRight: `1px solid ${C.border}`,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
         }}>
           <h2 style={{
             fontFamily: "'Barlow Condensed', sans-serif",
-            fontWeight: 900, fontSize: "32px", textTransform: "uppercase",
-            letterSpacing: "0.02em", lineHeight: 1.15, marginBottom: "28px",
+            fontWeight: 900, fontSize: "36px", textTransform: "uppercase",
+            letterSpacing: "0.02em", lineHeight: 1.12, marginBottom: "32px",
           }}>
             PARTICIPE E RECEBA<br />
             <span style={{ color: C.gold }}>O MATERIAL PREPARATÓRIO</span>
           </h2>
 
-          <div style={{ display: "flex", gap: "22px", alignItems: "flex-start" }}>
-            {/* Ebook cover */}
+          <div style={{ display: "flex", gap: "28px", alignItems: "center" }}>
+            {/* 3D ebook */}
             <div style={{
-              width: "110px", flexShrink: 0,
-              background: "linear-gradient(160deg, #10141c 0%, #181e2a 100%)",
-              border: "1px solid rgba(201,168,76,0.3)",
-              borderRadius: "6px", padding: "14px 10px",
-              boxShadow: "6px 8px 24px rgba(0,0,0,0.65)",
-              minHeight: "145px",
-              display: "flex", flexDirection: "column", justifyContent: "space-between",
+              flexShrink: 0,
+              perspective: "600px",
             }}>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: "4px", marginBottom: "6px" }}>
-                  <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="" style={{ height: "9px" }} />
-                  <span style={{ color: "#555", fontSize: "7px" }}>|</span>
-                  <img src={`${BASE}idealbi-logo2-transparent.png`} alt="" style={{ height: "9px" }} />
+              <div style={{
+                width: "130px",
+                minHeight: "175px",
+                background: "linear-gradient(155deg, #12161f 0%, #1a2030 50%, #151a26 100%)",
+                border: "1px solid rgba(201,168,76,0.35)",
+                borderRadius: "4px 8px 8px 4px",
+                padding: "16px 12px",
+                boxShadow: "8px 10px 30px rgba(0,0,0,0.7), inset -2px 0 6px rgba(201,168,76,0.08)",
+                display: "flex", flexDirection: "column", justifyContent: "space-between",
+                transform: "rotateY(-8deg)",
+                transformOrigin: "left center",
+                position: "relative",
+              }}>
+                <div style={{
+                  position: "absolute", left: 0, top: 0, bottom: 0, width: "6px",
+                  background: "linear-gradient(180deg, rgba(201,168,76,0.4), rgba(201,168,76,0.15))",
+                  borderRadius: "4px 0 0 4px",
+                }} />
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "5px", marginBottom: "8px", paddingLeft: "4px" }}>
+                    <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="" style={{ height: "10px" }} />
+                    <span style={{ color: "#555", fontSize: "8px" }}>|</span>
+                    <img src={`${BASE}idealbi-logo2-transparent.png`} alt="" style={{ height: "10px" }} />
+                  </div>
+                  <div style={{
+                    fontSize: "13px", fontWeight: 800, color: "#fff", lineHeight: 1.2,
+                    fontFamily: "'Barlow Condensed', sans-serif", textTransform: "uppercase",
+                    paddingLeft: "4px",
+                  }}>
+                    O FUTURO NO<br />MERCADO DE<br />VINHOS
+                  </div>
                 </div>
-                <div style={{ fontSize: "11px", fontWeight: 800, color: "#fff", lineHeight: 1.25, fontFamily: "'Barlow Condensed', sans-serif", textTransform: "uppercase" }}>
-                  O FUTURO NO<br />MERCADO DE<br />VINHOS
-                </div>
-              </div>
-              <div>
-                <div style={{ display: "flex", gap: "2px", alignItems: "flex-end", height: "24px", marginBottom: "6px" }}>
-                  {[5,8,6,11,8,12,9,14,10].map((h, i) => (
-                    <div key={i} style={{ flex: 1, height: `${h}px`, background: C.gold, borderRadius: "1px", opacity: 0.85 }} />
-                  ))}
-                </div>
-                <div style={{ background: C.gold, borderRadius: "3px", padding: "2px 6px", fontSize: "7px", fontWeight: 700, color: "#000", display: "inline-block" }}>
-                  PARTE 1
+                <div>
+                  <div style={{ display: "flex", gap: "2.5px", alignItems: "flex-end", height: "28px", marginBottom: "8px", paddingLeft: "4px" }}>
+                    {[5,9,7,12,8,13,10,16,11].map((h, i) => (
+                      <div key={i} style={{ flex: 1, height: `${h}px`, background: `linear-gradient(180deg, ${C.goldL}, ${C.gold})`, borderRadius: "1px" }} />
+                    ))}
+                  </div>
+                  <div style={{
+                    background: `linear-gradient(90deg, ${C.gold}, ${C.goldL})`,
+                    borderRadius: "3px", padding: "3px 8px",
+                    fontSize: "8px", fontWeight: 700, color: "#0a0800",
+                    display: "inline-block", marginLeft: "4px",
+                  }}>
+                    PARTE 1
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div style={{ fontSize: "15px", color: C.muted, lineHeight: 1.75 }}>
-              <p style={{ margin: "0 0 10px" }}>
-                Ao se inscrever, você recebe a <strong style={{ color: C.white }}>Parte 1 do Ralo-X do Mercado de Vinhos 2026</strong>.
+            <div style={{ fontSize: "15px", color: C.muted, lineHeight: 1.8 }}>
+              <p style={{ margin: "0 0 12px" }}>
+                Ao se inscrever, você recebe a <strong style={{ color: C.white, fontWeight: 600 }}>Parte 1 do Ralo-X do Mercado de Vinhos 2026</strong>.
               </p>
-              <p style={{ margin: "0 0 14px" }}>
+              <p style={{ margin: "0 0 16px" }}>
                 Um material estratégico com a base da nossa leitura de mercado.
               </p>
-              <div style={{ borderLeft: `3px solid ${C.gold}`, paddingLeft: "12px" }}>
-                <p style={{ margin: 0, fontWeight: 700, color: C.white, fontSize: "15px", lineHeight: 1.6 }}>
+              <div style={{
+                borderLeft: `3px solid ${C.gold}`,
+                paddingLeft: "14px",
+                background: "rgba(201,168,76,0.03)",
+                borderRadius: "0 6px 6px 0",
+                padding: "12px 14px 12px 14px",
+              }}>
+                <p style={{ margin: 0, fontWeight: 700, color: C.white, fontSize: "15px", lineHeight: 1.65 }}>
                   Mas o mais importante não está nele.<br />
                   <span style={{ fontWeight: 400, color: C.muted }}>A aplicação prática será revelada no encontro.</span>
                 </p>
@@ -230,11 +263,14 @@ export default function Registration() {
         {/* RIGHT — form */}
         <div style={{
           background: "#10131a",
-          padding: "48px 56px",
+          padding: "56px 60px",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
         }}>
           <h3 style={{
             fontFamily: "'Barlow Condensed', sans-serif",
-            fontWeight: 900, fontSize: "28px",
+            fontWeight: 900, fontSize: "30px",
             textTransform: "uppercase", letterSpacing: "0.03em",
             color: C.white, marginBottom: "6px", textAlign: "center",
           }}>
@@ -244,7 +280,7 @@ export default function Registration() {
             Preencha seus dados para se inscrever<br />e receber o material preparatório.
           </p>
 
-          <div style={{ height: "2px", background: C.gold, marginBottom: "24px" }} />
+          <div style={{ height: "2px", background: `linear-gradient(90deg, transparent, ${C.gold}, transparent)`, marginBottom: "24px" }} />
 
           <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             {[
@@ -254,9 +290,10 @@ export default function Registration() {
               { ph: "Atuação / Empresa (opcional)", icon: <IconBriefcase />, type: "text",  req: false },
             ].map((f, i) => (
               <div key={i} style={{
-                display: "flex", alignItems: "center", gap: "10px",
+                display: "flex", alignItems: "center", gap: "12px",
                 background: C.inputBg, border: `1px solid ${C.border}`,
-                borderRadius: "6px", padding: "13px 14px",
+                borderRadius: "6px", padding: "14px 16px",
+                transition: "border-color 0.2s",
               }}>
                 {f.icon}
                 <input
@@ -277,24 +314,27 @@ export default function Registration() {
               type="submit"
               disabled={loading}
               style={{
-                marginTop: "10px",
+                marginTop: "12px",
                 background: loading ? "#7a5e20" : `linear-gradient(135deg, ${C.gold}, ${C.goldL})`,
                 color: "#0a0800",
-                border: "none", borderRadius: "6px",
-                padding: "16px",
-                fontSize: "13px", fontWeight: 800,
+                border: "none", borderRadius: "8px",
+                padding: "18px",
+                fontSize: "14px", fontWeight: 800,
                 letterSpacing: "0.06em", textTransform: "uppercase",
                 cursor: loading ? "not-allowed" : "pointer",
                 textAlign: "center",
                 lineHeight: 1.5,
-                boxShadow: "0 4px 24px rgba(201,168,76,0.35)",
+                boxShadow: "0 6px 28px rgba(201,168,76,0.4)",
                 fontFamily: "'Inter', sans-serif",
+                transition: "transform 0.15s, box-shadow 0.15s",
               }}
+              onMouseEnter={e => { if (!loading) { (e.target as HTMLElement).style.transform = "translateY(-1px)"; (e.target as HTMLElement).style.boxShadow = "0 8px 32px rgba(201,168,76,0.5)"; }}}
+              onMouseLeave={e => { (e.target as HTMLElement).style.transform = "translateY(0)"; (e.target as HTMLElement).style.boxShadow = "0 6px 28px rgba(201,168,76,0.4)"; }}
             >
               {loading ? "PROCESSANDO..." : <>QUERO PARTICIPAR E RECEBER<br />O MATERIAL PREPARATÓRIO</>}
             </button>
 
-            <p style={{ fontSize: "13px", color: C.dimmed, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: "5px", marginTop: "4px" }}>
+            <p style={{ fontSize: "13px", color: C.dimmed, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: "5px", marginTop: "6px" }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.dimmed} strokeWidth="1.5"><rect x="5" y="11" width="14" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
               Seus dados estão seguros conosco.
             </p>
