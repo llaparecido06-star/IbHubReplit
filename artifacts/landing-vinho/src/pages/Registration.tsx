@@ -198,6 +198,8 @@ export default function Registration() {
       <section style={{
         display: "grid", gridTemplateColumns: "1fr 1fr",
         borderTop: `1px solid ${C.border}`,
+        background: C.bg,
+        alignItems: "center",
       }}>
         {/* LEFT — ebook pitch */}
         <div style={{
@@ -260,96 +262,114 @@ export default function Registration() {
           </div>
         </div>
 
-        {/* RIGHT — form */}
-        <div
-          style={{
-            background: "#0c0d0f",
-            padding: "56px 60px",
-            display: "flex", flexDirection: "column", justifyContent: "center",
-            position: "relative",
-          }}>
-          {/* top accent */}
+        {/* RIGHT — card de inscrição */}
+        <div style={{
+          background: C.bg,
+          padding: "48px 56px 48px 32px",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          {/* card */}
           <div style={{
-            position: "absolute", top: 0, left: "10%", right: "10%", height: "2px",
-            background: `linear-gradient(90deg, transparent, ${C.gold}, transparent)`,
-          }} />
-
-          <h3 style={{
-            fontFamily: "'Barlow Condensed', sans-serif",
-            fontWeight: 900, fontSize: "32px",
-            textTransform: "uppercase", letterSpacing: "0.03em",
-            color: C.white, marginBottom: "6px", textAlign: "center",
+            position: "relative",
+            width: "100%", maxWidth: "440px",
+            background: "linear-gradient(160deg, #161a24 0%, #111318 100%)",
+            border: `1.5px solid rgba(201,168,76,0.5)`,
+            borderRadius: "18px",
+            padding: "40px 36px 32px",
+            boxShadow: "0 0 0 1px rgba(201,168,76,0.08), 0 8px 48px rgba(0,0,0,0.6), 0 0 80px rgba(201,168,76,0.07)",
           }}>
-            GARANTA SUA VAGA
-          </h3>
-          <p style={{ fontSize: "14px", color: C.muted, marginBottom: "28px", lineHeight: 1.55, textAlign: "center" }}>
-            Preencha seus dados para se inscrever<br />e receber o material preparatório.
-          </p>
+            {/* gold top bar */}
+            <div style={{
+              position: "absolute", top: 0, left: "15%", right: "15%", height: "3px",
+              background: `linear-gradient(90deg, transparent, ${C.gold}, ${C.goldL}, ${C.gold}, transparent)`,
+              borderRadius: "0 0 4px 4px",
+            }} />
 
-          <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            {[
-              { ph: "Nome completo",               icon: <IconUser />,      type: "text",  req: true,  name: "name"    },
-              { ph: "E-mail",                       icon: <IconMail />,      type: "email", req: true,  name: "email"   },
-              { ph: "WhatsApp",                     icon: <IconPhone />,     type: "text",  req: true,  name: "whatsapp"},
-              { ph: "Atuação / Empresa (opcional)", icon: <IconBriefcase />, type: "text",  req: false, name: "company" },
-            ].map((f, i) => (
-              <div key={i} style={{
-                display: "flex", alignItems: "center", gap: "12px",
-                background: C.inputBg, border: `1px solid ${C.border}`,
-                borderRadius: "8px", padding: "14px 16px",
-                transition: "border-color 0.2s",
-              }}>
-                {f.icon}
-                <input
-                  name={f.name}
-                  type={f.type}
-                  required={f.req}
-                  placeholder={f.ph}
-                  style={{
-                    flex: 1, background: "transparent", border: "none",
-                    fontSize: "15px", color: C.white, outline: "none",
-                  }}
-                  onFocus={e => { (e.target.parentElement as HTMLElement).style.borderColor = C.gold; }}
-                  onBlur={e  => { (e.target.parentElement as HTMLElement).style.borderColor = C.border; }}
-                />
-              </div>
-            ))}
-
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                marginTop: "14px",
-                background: loading ? "#6a5018" : `linear-gradient(135deg, ${C.gold} 0%, ${C.goldL} 100%)`,
-                color: "#0a0800",
-                border: "none", borderRadius: "10px",
-                padding: "19px",
-                fontSize: "13px", fontWeight: 800,
-                letterSpacing: "0.07em", textTransform: "uppercase",
-                cursor: loading ? "not-allowed" : "pointer",
-                textAlign: "center", lineHeight: 1.5,
-                boxShadow: loading ? "none" : "0 6px 32px rgba(201,168,76,0.35)",
-                fontFamily: "'Inter', sans-serif",
-                transition: "transform 0.15s, box-shadow 0.15s",
-              }}
-              onMouseEnter={e => { if (!loading) { (e.target as HTMLElement).style.transform = "translateY(-2px)"; (e.target as HTMLElement).style.boxShadow = "0 10px 36px rgba(201,168,76,0.5)"; }}}
-              onMouseLeave={e => { (e.target as HTMLElement).style.transform = "translateY(0)"; (e.target as HTMLElement).style.boxShadow = "0 6px 32px rgba(201,168,76,0.35)"; }}
-            >
-              {loading ? "PROCESSANDO..." : <>QUERO PARTICIPAR E RECEBER<br />O MATERIAL PREPARATÓRIO</>}
-            </button>
-
-            {error && (
-              <p style={{ fontSize: "13px", color: "#e05252", textAlign: "center", margin: "4px 0 0", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e05252" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                {error}
-              </p>
-            )}
-
-            <p style={{ fontSize: "12px", color: C.dimmed, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: "5px", marginTop: "8px" }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.dimmed} strokeWidth="1.5"><rect x="5" y="11" width="14" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              Seus dados estão seguros conosco.
+            <h3 style={{
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontWeight: 900, fontSize: "34px",
+              textTransform: "uppercase", letterSpacing: "0.04em",
+              color: C.white, marginBottom: "6px", textAlign: "center",
+            }}>
+              GARANTA SUA VAGA
+            </h3>
+            <p style={{ fontSize: "13px", color: C.muted, marginBottom: "28px", lineHeight: 1.6, textAlign: "center" }}>
+              Preencha seus dados para se inscrever<br />e receber o material preparatório.
             </p>
-          </form>
+
+            <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {[
+                { ph: "Nome completo",               icon: <IconUser />,      type: "text",  req: true,  name: "name"    },
+                { ph: "E-mail",                       icon: <IconMail />,      type: "email", req: true,  name: "email"   },
+                { ph: "WhatsApp",                     icon: <IconPhone />,     type: "text",  req: true,  name: "whatsapp"},
+                { ph: "Atuação / Empresa (opcional)", icon: <IconBriefcase />, type: "text",  req: false, name: "company" },
+              ].map((f, i) => (
+                <div key={i} style={{
+                  display: "flex", alignItems: "center", gap: "12px",
+                  background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`,
+                  borderRadius: "10px", padding: "13px 16px",
+                  transition: "border-color 0.2s, background 0.2s",
+                }}>
+                  {f.icon}
+                  <input
+                    name={f.name}
+                    type={f.type}
+                    required={f.req}
+                    placeholder={f.ph}
+                    style={{
+                      flex: 1, background: "transparent", border: "none",
+                      fontSize: "14px", color: C.white, outline: "none",
+                    }}
+                    onFocus={e => {
+                      const p = e.target.parentElement as HTMLElement;
+                      p.style.borderColor = C.gold;
+                      p.style.background = "rgba(201,168,76,0.04)";
+                    }}
+                    onBlur={e => {
+                      const p = e.target.parentElement as HTMLElement;
+                      p.style.borderColor = C.border;
+                      p.style.background = "rgba(255,255,255,0.04)";
+                    }}
+                  />
+                </div>
+              ))}
+
+              <button
+                type="submit"
+                disabled={loading}
+                style={{
+                  marginTop: "16px",
+                  background: loading ? "#6a5018" : `linear-gradient(135deg, ${C.gold} 0%, ${C.goldL} 60%, ${C.gold} 100%)`,
+                  color: "#0a0800",
+                  border: "none", borderRadius: "12px",
+                  padding: "20px 16px",
+                  fontSize: "13px", fontWeight: 900,
+                  letterSpacing: "0.08em", textTransform: "uppercase",
+                  cursor: loading ? "not-allowed" : "pointer",
+                  textAlign: "center", lineHeight: 1.5,
+                  boxShadow: loading ? "none" : "0 4px 24px rgba(201,168,76,0.4), 0 0 0 1px rgba(201,168,76,0.2)",
+                  fontFamily: "'Inter', sans-serif",
+                  transition: "transform 0.15s, box-shadow 0.15s",
+                }}
+                onMouseEnter={e => { if (!loading) { (e.target as HTMLElement).style.transform = "translateY(-2px)"; (e.target as HTMLElement).style.boxShadow = "0 8px 32px rgba(201,168,76,0.55), 0 0 0 1px rgba(201,168,76,0.3)"; }}}
+                onMouseLeave={e => { (e.target as HTMLElement).style.transform = "translateY(0)"; (e.target as HTMLElement).style.boxShadow = "0 4px 24px rgba(201,168,76,0.4), 0 0 0 1px rgba(201,168,76,0.2)"; }}
+              >
+                {loading ? "PROCESSANDO..." : <>QUERO PARTICIPAR E RECEBER<br />O MATERIAL PREPARATÓRIO</>}
+              </button>
+
+              {error && (
+                <p style={{ fontSize: "13px", color: "#e05252", textAlign: "center", margin: "4px 0 0", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e05252" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  {error}
+                </p>
+              )}
+
+              <p style={{ fontSize: "12px", color: C.dimmed, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: "5px", marginTop: "12px" }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.dimmed} strokeWidth="1.5"><rect x="5" y="11" width="14" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Seus dados estão seguros conosco.
+              </p>
+            </form>
+          </div>
         </div>
       </section>
       {/* ═══ POR QUE PARTICIPAR? ═══ */}
