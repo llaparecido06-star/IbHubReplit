@@ -85,7 +85,7 @@ export default function Registration() {
               src={`${BASE}idealbi-logo2-transparent.png`}
               alt="IDEAL.BI"
               style={{ height: "48px" }}
-              className="ml-[0px] mr-[0px] pl-[150px] pr-[150px] mt-[0px] mb-[0px] pt-[0px] pb-[0px]" />
+              className="ml-[0px] mr-[0px] mt-[0px] mb-[0px] pt-[0px] pb-[0px] pl-[200px] pr-[200px]" />
           </div>
           <div style={{ fontSize: "12px", color: C.dimmed, letterSpacing: "0.06em", marginBottom: "44px", lineHeight: 1.4 }}>
             INTELIGÊNCIA ESTRATÉGICA PARA O<br />MERCADO DE VINHOS
