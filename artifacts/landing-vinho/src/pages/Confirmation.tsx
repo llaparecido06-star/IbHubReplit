@@ -378,10 +378,15 @@ export default function Confirmation() {
             marginBottom: isMobile ? "24px" : "0",
             fontSize: "15px", color: C.dimmed, lineHeight: 1.9,
             fontStyle: "italic",
+            textAlign: isMobile ? "center" : "left",
           }}>
             "Quem só consome informação<br />continua no mesmo lugar."
           </div>
-          <div style={{ paddingLeft: isMobile ? "0" : "44px", fontSize: "15px", color: C.muted, lineHeight: 1.9 }}>
+          <div style={{
+            paddingLeft: isMobile ? "0" : "44px",
+            fontSize: "15px", color: C.muted, lineHeight: 1.9,
+            textAlign: isMobile ? "center" : "left",
+          }}>
             Quem entende como usar<br />
             começa a operar diferente.<br />
             <strong style={{ color: C.white, fontWeight: 700, fontStyle: "normal" }}>Nos vemos no dia 18!</strong>
