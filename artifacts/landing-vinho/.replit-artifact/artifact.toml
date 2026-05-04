@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/landing-vinho/"
+title = "Landing Page — O Futuro no Mercado de Vinhos"
+version = "1.0.0"
+id = "artifacts/landing-vinho"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/landing-vinho/" ]
+localPort = 22832
+
+[services.development]
+run = "pnpm --filter @workspace/landing-vinho run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/landing-vinho", "run", "build" ]
+publicDir = "artifacts/landing-vinho/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22832"
+BASE_PATH = "/landing-vinho/"
