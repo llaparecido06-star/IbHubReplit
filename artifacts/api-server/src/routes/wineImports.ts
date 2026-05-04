@@ -207,7 +207,31 @@ router.get("/wine-imports/search", async (req: Request, res: Response) => {
     return res.json({ data: [], credits_remaining: credits.credits_remaining, credits_total: credits.credits_total });
   }
 
-  const brandName = await extractBrandName(q);
+  // direct=true skips AI extraction (used when user clicks a DB suggestion)
+  const direct = req.query.direct === "true";
+
+  let brandName: string | null = null;
+
+  if (direct) {
+    brandName = q;
+  } else {
+    brandName = await extractBrandName(q);
+
+    // Fallback: if AI doesn't recognise the term, try it directly in the DB.
+    // If records are found we treat the query as a valid brand name.
+    if (!brandName) {
+      const fallbackPattern = `%${q}%`;
+      const { data: fallbackCheck } = await supabaseAdmin
+        .from("wine_imports")
+        .select("id")
+        .or(`marca_completa.ilike.${fallbackPattern},marca_relatorio.ilike.${fallbackPattern}`)
+        .limit(1);
+
+      if (fallbackCheck && fallbackCheck.length > 0) {
+        brandName = q; // treat original query as the brand name
+      }
+    }
+  }
 
   if (!brandName) {
     return res.status(422).json({

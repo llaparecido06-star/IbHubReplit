@@ -830,7 +830,7 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
     return () => { if (suggestTimer.current) clearTimeout(suggestTimer.current); };
   }, [query]);
 
-  const handleSearch = async (overrideQ?: string) => {
+  const handleSearch = async (overrideQ?: string, opts?: { direct?: boolean }) => {
     const q = (overrideQ ?? query).trim();
     if (!q || searching || exhausted) return;
     setSuggestions([]);
@@ -838,8 +838,9 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
     setResult(null);
     setBrandExtracted(null);
     try {
+      const directParam = opts?.direct ? "&direct=true" : "";
       const res = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/wine-imports/search?q=${encodeURIComponent(q)}`,
+        `${process.env.EXPO_PUBLIC_API_URL}/wine-imports/search?q=${encodeURIComponent(q)}${directParam}`,
         { headers: authHeader() }
       );
       if (res.status === 402) {
@@ -1008,7 +1009,7 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
             {suggestions.map((s, i) => (
               <TouchableOpacity
                 key={s}
-                onPress={() => { setQuery(s); handleSearch(s); }}
+                onPress={() => { setQuery(s); handleSearch(s, { direct: true }); }}
                 activeOpacity={0.7}
                 style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: i < suggestions.length - 1 ? 1 : 0, borderBottomColor: colors.border }}
               >
