@@ -39,8 +39,8 @@ const EnvSchema = z.object({
   // OpenAI (optional)
   OPENAI_API_KEY: z.string().min(1).optional(),
 
-  // Resend (email)
-  RESEND_API_KEY: z.string().min(1).optional(),
+  // Brevo (email)
+  BREVO_API_KEY: z.string().min(1).optional(),
 });
 
 export type AppConfig = z.infer<typeof EnvSchema>;

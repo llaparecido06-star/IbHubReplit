@@ -1,13 +1,13 @@
 import { Router } from "express";
 import pg from "pg";
 import { z } from "zod";
-import { Resend } from "resend";
+import { BrevoClient } from "@getbrevo/brevo";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-const resend = new Resend(process.env.RESEND_API_KEY);
+const brevo = new BrevoClient({ apiKey: process.env.BREVO_API_KEY });
 
 const registrationSchema = z.object({
   name: z.string().min(2).max(200).transform((s) => s.trim()),
@@ -52,17 +52,14 @@ router.post("/event-registrations", async (req, res) => {
     }
 
     try {
-      const emailResult = await resend.emails.send({
-        from: "ibhub <onboarding@resend.dev>",
-        to: email,
+      await brevo.transactionalEmails.sendTransacEmail({
+        sender: { name: "ibhub | IDEAL.BI", email: "atendimento@idealbi.com.br" },
+        to: [{ email, name }],
         subject: "Inscrição confirmada — O Futuro no Mercado de Vinhos",
-        html: buildConfirmationEmail(name),
+        htmlContent: buildConfirmationEmail(name),
       });
-      if (emailResult.error) {
-        logger.error({ emailError: emailResult.error }, "Resend API returned error");
-      }
     } catch (emailErr) {
-      logger.error({ emailErr }, "Failed to send confirmation email");
+      logger.error({ emailErr }, "Failed to send confirmation email via Brevo");
     }
 
     res.status(201).json({ success: true, id: result.rows[0].id });
