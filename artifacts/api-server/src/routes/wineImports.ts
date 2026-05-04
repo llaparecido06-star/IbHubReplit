@@ -255,7 +255,28 @@ router.get("/wine-imports/search", async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Erro ao buscar dados" });
   }
 
-  const rows = data ?? [];
+  let rows = data ?? [];
+
+  // Fallback: if AI extracted a brand but nothing matched, try progressively shorter
+  // prefixes of the original query (word by word) until we get a hit.
+  // This handles cases where AI hallucinates a wrong brand name.
+  if (rows.length === 0 && !direct && brandName !== q) {
+    const words = q.split(/\s+/).filter(Boolean);
+    for (let len = words.length - 1; len >= 2; len--) {
+      const prefix = words.slice(0, len).join(" ");
+      const prefixPattern = `%${prefix}%`;
+      const { data: prefixData } = await supabaseAdmin
+        .from("wine_imports")
+        .select("id, marca_completa, marca_relatorio, pais_de_origem, distribuidor")
+        .or(`marca_completa.ilike.${prefixPattern},marca_relatorio.ilike.${prefixPattern}`)
+        .order("marca_completa")
+        .limit(50);
+      if (prefixData && prefixData.length > 0) {
+        rows = prefixData as typeof rows;
+        break;
+      }
+    }
+  }
 
   // Build deduplicated distributor list (case-insensitive on trimmed name)
   // and try to resolve a company_pages link for each distributor name.
