@@ -828,6 +828,22 @@ function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idea
     return () => document.removeEventListener("mousedown", handler);
   }, [menuOpen]);
 
+  // Close picker when tapping/clicking outside (needed on touch devices)
+  useEffect(() => {
+    if (!showPicker) return;
+    const handler = (e: MouseEvent | TouchEvent) => {
+      if (reactionRef.current && !reactionRef.current.contains(e.target as Node)) {
+        setShowPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler as EventListener);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler as EventListener);
+    };
+  }, [showPicker]);
+
   const handleDelete = async () => {
     setMenuOpen(false);
     if (!window.confirm("Excluir esta publicação? Esta ação não pode ser desfeita.")) return;
@@ -1041,7 +1057,14 @@ function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idea
         >
           {showPicker && <ReactionPicker onSelect={handleReaction} onMouseEnter={openPicker} onMouseLeave={schedulePicker} />}
           <button
-            onClick={handleLikeBtn}
+            onClick={() => {
+              // On touch devices hover doesn't work — tap opens the picker instead of quick-like
+              if (window.matchMedia("(pointer: coarse)").matches && !showPicker) {
+                openPicker();
+              } else {
+                handleLikeBtn();
+              }
+            }}
             style={{
               width: "100%", display: "flex", alignItems: "center", justifyContent: "center",
               gap: 6, padding: "10px 8px",
