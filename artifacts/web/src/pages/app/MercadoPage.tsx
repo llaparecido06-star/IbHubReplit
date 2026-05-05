@@ -581,18 +581,21 @@ const CommentIcon = ({ color }: { color?: string }) => (
   </svg>
 );
 
-function ReactionPicker({ onSelect }: { onSelect: (r: MarketReactionType) => void }) {
+function ReactionPicker({ onSelect, onMouseEnter, onMouseLeave }: { onSelect: (r: MarketReactionType) => void; onMouseEnter?: () => void; onMouseLeave?: () => void }) {
   return (
-    <div style={{
-      position: "absolute", bottom: "calc(100% + 8px)", left: 0,
-      backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 30,
-      boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-      display: "flex", gap: 4, padding: "6px 10px", zIndex: 99,
-    }}>
+    <div
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      style={{
+        position: "absolute", bottom: "calc(100% + 4px)", left: 0,
+        backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 30,
+        boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+        display: "flex", gap: 4, padding: "6px 10px", zIndex: 99,
+      }}>
       {REACTIONS.map(r => (
         <button
           key={r.type}
-          onClick={() => onSelect(r.type)}
+          onClick={(e) => { e.stopPropagation(); onSelect(r.type); }}
           title={r.label}
           style={{
             background: "none", border: "none", cursor: "pointer",
@@ -804,6 +807,15 @@ function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idea
   const menuRef = useRef<HTMLDivElement>(null);
   const [, setLocation] = useLocation();
   const reactionRef = useRef<HTMLDivElement>(null);
+  const pickerHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const openPicker = () => {
+    if (pickerHideTimer.current) clearTimeout(pickerHideTimer.current);
+    setShowPicker(true);
+  };
+  const schedulePicker = () => {
+    pickerHideTimer.current = setTimeout(() => setShowPicker(false), 200);
+  };
 
   useEffect(() => { setPost(initialPost); }, [initialPost]);
 
@@ -1024,10 +1036,10 @@ function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idea
         <div
           ref={reactionRef}
           style={{ flex: 1, position: "relative" }}
-          onMouseEnter={() => setShowPicker(true)}
-          onMouseLeave={() => setShowPicker(false)}
+          onMouseEnter={openPicker}
+          onMouseLeave={schedulePicker}
         >
-          {showPicker && <ReactionPicker onSelect={handleReaction} />}
+          {showPicker && <ReactionPicker onSelect={handleReaction} onMouseEnter={openPicker} onMouseLeave={schedulePicker} />}
           <button
             onClick={handleLikeBtn}
             style={{
