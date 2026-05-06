@@ -35,6 +35,7 @@ interface Plan {
   delivery_strategy?: string | null;
   stripe_price_id?: string | null;
   ai_search_credits?: number | null;
+  reveal_credits?: number | null;
 }
 
 interface MarketPermission {
@@ -48,7 +49,7 @@ interface MarketPermission {
 interface ModalState {
   name: string; subtitle: string; description: string;
   price: string; originalPrice: string; stripeId: string;
-  aiCredits: string; delivery: string; features: string[];
+  aiCredits: string; revealCredits: string; delivery: string; features: string[];
 }
 
 function centsToStr(c: number) {
@@ -71,6 +72,7 @@ function planToModal(p: Plan): ModalState {
     originalPrice: p.original_price_cents ? String(p.original_price_cents / 100) : "",
     stripeId: p.stripe_price_id ?? "",
     aiCredits: String(p.ai_search_credits ?? 0),
+    revealCredits: String(p.reveal_credits ?? 0),
     delivery: p.delivery_strategy ?? "NONE",
     features: [...(p.features ?? [])],
   };
@@ -90,7 +92,7 @@ export default function AdminPlanBuilder() {
   const [editPlan, setEditPlan] = useState<Plan | null>(null);
   const [modal, setModal] = useState<ModalState>({
     name: "", subtitle: "", description: "", price: "0", originalPrice: "",
-    stripeId: "", aiCredits: "0", delivery: "NONE", features: [],
+    stripeId: "", aiCredits: "0", revealCredits: "0", delivery: "NONE", features: [],
   });
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -134,7 +136,7 @@ export default function AdminPlanBuilder() {
 
   const openNew = () => {
     setEditPlan(null);
-    setModal({ name: "", subtitle: "", description: "", price: "0", originalPrice: "", stripeId: "", aiCredits: "0", delivery: "NONE", features: [] });
+    setModal({ name: "", subtitle: "", description: "", price: "0", originalPrice: "", stripeId: "", aiCredits: "0", revealCredits: "0", delivery: "NONE", features: [] });
     setSaveMsg(null);
     setShowModal(true);
   };
@@ -174,6 +176,7 @@ export default function AdminPlanBuilder() {
       original_price_cents: orig > curr ? orig : null,
       stripe_price_id: modal.stripeId.trim() || null,
       ai_search_credits: parseInt(modal.aiCredits) || 0,
+      reveal_credits: parseInt(modal.revealCredits) || 0,
       delivery_strategy: modal.delivery,
       features: modal.features,
       is_active: true,
@@ -269,7 +272,10 @@ export default function AdminPlanBuilder() {
 
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
                     {plan.ai_search_credits != null && plan.ai_search_credits > 0 && (
-                      <span style={{ fontSize: 11, backgroundColor: `${GOLD}18`, color: GOLD, padding: "2px 8px", borderRadius: 5, fontWeight: 700 }}>⚡ {plan.ai_search_credits} consultas IA</span>
+                      <span style={{ fontSize: 11, backgroundColor: `${GOLD}18`, color: GOLD, padding: "2px 8px", borderRadius: 5, fontWeight: 700 }}>⚡ {plan.ai_search_credits} IA</span>
+                    )}
+                    {plan.reveal_credits != null && plan.reveal_credits > 0 && (
+                      <span style={{ fontSize: 11, backgroundColor: "#f0fdf4", color: "#059669", padding: "2px 8px", borderRadius: 5, fontWeight: 700 }}>🔓 {plan.reveal_credits} especiais</span>
                     )}
                     {(plan.features ?? []).filter(f => !f.startsWith("mercado:")).length > 0 && (
                       <span style={{ fontSize: 11, backgroundColor: "#f0f4ff", color: "#4f46e5", padding: "2px 8px", borderRadius: 5 }}>
@@ -343,8 +349,11 @@ export default function AdminPlanBuilder() {
 
             {/* ── Ideal.BI ── */}
             <div style={{ borderBottom: "1px solid #e8eaed", paddingBottom: 18, marginBottom: 18 }}>
-              {sectionLabel("Ideal.BI — Busca com IA")}
-              {inp("CONSULTAS IA / MÊS", "aiCredits", "0", "0 = sem acesso. Renovado todo dia 1º do mês.")}
+              {sectionLabel("Ideal.BI — Créditos Mensais")}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>{inp("⚡ CONSULTAS DE IA / MÊS", "aiCredits", "0", "0 = sem acesso. Renovado dia 1º.")}</div>
+                <div>{inp("🔓 CONSULTAS ESPECIAIS / MÊS", "revealCredits", "0", "Revelar dados financeiros (FOB, CX9L).")}</div>
+              </div>
             </div>
 
             {/* ── Estratégia de Slides ── */}

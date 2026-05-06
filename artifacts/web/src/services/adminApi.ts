@@ -479,6 +479,22 @@ export async function addUserCredits(userId: string, amount: number): Promise<Us
   return body as UserCredits;
 }
 
+export async function getUserRevealCredits(userId: string): Promise<UserCredits> {
+  const res = await adminFetch(`/admin/users/${userId}/reveal-credits`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json() as Promise<UserCredits>;
+}
+
+export async function addUserRevealCredits(userId: string, amount: number): Promise<UserCredits> {
+  const res = await adminFetch(`/admin/users/${userId}/reveal-credits`, {
+    method: "POST",
+    body: JSON.stringify({ amount }),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+  return body as UserCredits;
+}
+
 export function relativeTime(isoString: string): string {
   const diff = Date.now() - new Date(isoString).getTime();
   const seconds = Math.floor(diff / 1000);

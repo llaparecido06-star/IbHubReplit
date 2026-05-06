@@ -10,6 +10,8 @@ import {
   resetUserPassword,
   getUserCredits,
   addUserCredits,
+  getUserRevealCredits,
+  addUserRevealCredits,
 } from "@/services/adminApi";
 import { supabase } from "@/lib/supabase";
 
@@ -41,6 +43,8 @@ export default function AdminCRM() {
   const [planOptions, setPlanOptions] = useState<PlanOption[]>([]);
   const [userCredits, setUserCredits] = useState<UserCredits | null>(null);
   const [creditsToAdd, setCreditsToAdd] = useState("");
+  const [userRevealCredits, setUserRevealCredits] = useState<UserCredits | null>(null);
+  const [revealCreditsToAdd, setRevealCreditsToAdd] = useState("");
 
   useEffect(() => {
     supabase.from("plans").select("id, name").eq("is_active", true).order("sort_order", { ascending: true })
@@ -78,6 +82,8 @@ export default function AdminCRM() {
       setResetLinkMsg(null);
       setUserCredits(null);
       setCreditsToAdd("");
+      setUserRevealCredits(null);
+      setRevealCreditsToAdd("");
     } else {
       setSelectedUser(user);
       setPlanEdit(user.plan);
@@ -85,7 +91,10 @@ export default function AdminCRM() {
       setResetLinkMsg(null);
       setUserCredits(null);
       setCreditsToAdd("");
+      setUserRevealCredits(null);
+      setRevealCreditsToAdd("");
       getUserCredits(user.id).then(setUserCredits).catch(() => {});
+      getUserRevealCredits(user.id).then(setUserRevealCredits).catch(() => {});
     }
   };
 
@@ -156,6 +165,22 @@ export default function AdminCRM() {
       setUserCredits(updated);
       setCreditsToAdd("");
       alert(`${amount > 0 ? `+${amount}` : amount} crédito${Math.abs(amount) === 1 ? "" : "s"} aplicado${Math.abs(amount) === 1 ? "" : "s"}. Agora: ${updated.credits_remaining}/${updated.credits_total}`);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Erro ao ajustar créditos.");
+    }
+  };
+
+  const handleAddRevealCredits = async (user: AdminUser) => {
+    const amount = parseInt(revealCreditsToAdd, 10);
+    if (isNaN(amount) || amount === 0) {
+      alert("Insira uma quantidade válida (diferente de zero).");
+      return;
+    }
+    try {
+      const updated = await addUserRevealCredits(user.id, amount);
+      setUserRevealCredits(updated);
+      setRevealCreditsToAdd("");
+      alert(`${amount > 0 ? `+${amount}` : amount} consulta${Math.abs(amount) === 1 ? "" : "s"} especial${Math.abs(amount) === 1 ? "" : "is"} aplicada${Math.abs(amount) === 1 ? "" : "s"}. Agora: ${updated.credits_remaining}/${updated.credits_total}`);
     } catch (e) {
       alert(e instanceof Error ? e.message : "Erro ao ajustar créditos.");
     }
@@ -274,28 +299,70 @@ export default function AdminCRM() {
                           >{savingPlan ? "Salvando..." : "Salvar Plano"}</button>
                         </div>
 
+                        {/* ── Créditos Ideal.BI ── */}
                         <div style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 12, padding: 16 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Créditos de IA</div>
-                          <div style={{ fontSize: 12, color: "#8a93a2", marginBottom: 12 }}>
-                            {userCredits
-                              ? `Disponível: ${userCredits.credits_remaining} / ${userCredits.credits_total} este mês`
-                              : "Carregando..."}
+                          <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase" as const, letterSpacing: 0.8, marginBottom: 10 }}>Ideal.BI — Créditos</div>
+
+                          {/* Consultas de IA */}
+                          <div style={{ marginBottom: 14 }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                              <div>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>⚡ Consultas de IA</div>
+                                <div style={{ fontSize: 11, color: "#8a93a2" }}>
+                                  {userCredits
+                                    ? `Disponível: ${userCredits.credits_remaining} / ${userCredits.credits_total} este mês`
+                                    : "Carregando..."}
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                              <input
+                                type="number"
+                                value={creditsToAdd}
+                                onChange={(e) => setCreditsToAdd(e.target.value)}
+                                placeholder="Ex: 5 ou -2"
+                                style={{ width: 110, padding: "8px 10px", border: "1px solid #e8eaed", borderRadius: 8, fontSize: 14, outline: "none" }}
+                              />
+                              <button
+                                onClick={() => handleAddCredits(user)}
+                                disabled={!creditsToAdd || creditsToAdd === "0"}
+                                style={{ padding: "8px 16px", backgroundColor: GOLD, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: !creditsToAdd || creditsToAdd === "0" ? 0.5 : 1 }}
+                              >Aplicar</button>
+                            </div>
                           </div>
-                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                            <input
-                              type="number"
-                              value={creditsToAdd}
-                              onChange={(e) => setCreditsToAdd(e.target.value)}
-                              placeholder="Ex: 5 ou -2"
-                              style={{ width: 110, padding: "8px 10px", border: "1px solid #e8eaed", borderRadius: 8, fontSize: 14, outline: "none" }}
-                            />
-                            <button
-                              onClick={() => handleAddCredits(user)}
-                              disabled={!creditsToAdd || creditsToAdd === "0"}
-                              style={{ padding: "8px 16px", backgroundColor: GOLD, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: !creditsToAdd || creditsToAdd === "0" ? 0.5 : 1 }}
-                            >Aplicar</button>
+
+                          {/* Divider */}
+                          <div style={{ borderTop: "1px solid #f0f0ee", marginBottom: 14 }} />
+
+                          {/* Consultas Especiais (Revelar Dados) */}
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                              <div>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>🔓 Consultas Especiais</div>
+                                <div style={{ fontSize: 11, color: "#8a93a2" }}>
+                                  {userRevealCredits
+                                    ? `Disponível: ${userRevealCredits.credits_remaining} / ${userRevealCredits.credits_total} este mês`
+                                    : "Carregando..."}
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                              <input
+                                type="number"
+                                value={revealCreditsToAdd}
+                                onChange={(e) => setRevealCreditsToAdd(e.target.value)}
+                                placeholder="Ex: 3 ou -1"
+                                style={{ width: 110, padding: "8px 10px", border: "1px solid #e8eaed", borderRadius: 8, fontSize: 14, outline: "none" }}
+                              />
+                              <button
+                                onClick={() => handleAddRevealCredits(user)}
+                                disabled={!revealCreditsToAdd || revealCreditsToAdd === "0"}
+                                style={{ padding: "8px 16px", backgroundColor: NAVY, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: !revealCreditsToAdd || revealCreditsToAdd === "0" ? 0.5 : 1 }}
+                              >Aplicar</button>
+                            </div>
                           </div>
-                          <div style={{ fontSize: 11, color: "#aaa", marginTop: 6 }}>Positivo = acrescentar · Negativo = remover</div>
+
+                          <div style={{ fontSize: 11, color: "#aaa", marginTop: 10 }}>Positivo = acrescentar · Negativo = remover</div>
                         </div>
 
                         <div style={{ backgroundColor: "#fff", border: "1px solid #fca5a5", borderRadius: 12, padding: 16 }}>

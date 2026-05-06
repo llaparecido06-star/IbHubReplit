@@ -927,4 +927,86 @@ router.post("/admin/users/:id/credits", async (req: Request, res: Response): Pro
   res.json({ ok: true, credits_remaining, credits_total });
 });
 
+// ─── GET /admin/users/:id/reveal-credits ──────────────────────────────────────
+/** Returns the current reveal (financial data) credits for a user. Admin-only. */
+router.get("/admin/users/:id/reveal-credits", async (req: Request, res: Response): Promise<void> => {
+  const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(
+    (req.headers.authorization ?? "").replace("Bearer ", ""),
+  );
+  if (authErr || !user) { res.status(401).json({ error: "Não autenticado." }); return; }
+
+  const { data: profile } = await supabaseAdmin
+    .from("profiles").select("is_admin").eq("id", user.id).maybeSingle() as { data: { is_admin: boolean } | null };
+  if (!profile?.is_admin) { res.status(403).json({ error: "Acesso negado." }); return; }
+
+  const { data } = await supabaseAdmin
+    .from("bi_reveal_credits")
+    .select("credits_remaining, credits_total")
+    .eq("user_id", req.params.id)
+    .maybeSingle() as { data: { credits_remaining: number; credits_total: number } | null };
+
+  res.json({ credits_remaining: data?.credits_remaining ?? 0, credits_total: data?.credits_total ?? 0 });
+});
+
+// ─── POST /admin/users/:id/reveal-credits ─────────────────────────────────────
+/**
+ * Manually adjusts reveal (financial data) credits for a user.
+ * Body: { amount: number } — positive = grant, negative = deduct.
+ * Admin-only.
+ */
+router.post("/admin/users/:id/reveal-credits", async (req: Request, res: Response): Promise<void> => {
+  const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(
+    (req.headers.authorization ?? "").replace("Bearer ", ""),
+  );
+  if (authErr || !user) { res.status(401).json({ error: "Não autenticado." }); return; }
+
+  const { data: profile } = await supabaseAdmin
+    .from("profiles").select("is_admin").eq("id", user.id).maybeSingle() as { data: { is_admin: boolean } | null };
+  if (!profile?.is_admin) { res.status(403).json({ error: "Acesso negado." }); return; }
+
+  const { amount } = req.body as { amount?: number };
+  if (typeof amount !== "number" || !Number.isInteger(amount) || amount === 0) {
+    res.status(400).json({ error: "amount deve ser um inteiro diferente de zero." });
+    return;
+  }
+
+  const targetId = req.params.id as string;
+  const now = new Date().toISOString();
+  const period = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`;
+
+  const { data: existing } = await supabaseAdmin
+    .from("bi_reveal_credits")
+    .select("credits_remaining, credits_total")
+    .eq("user_id", targetId)
+    .maybeSingle() as { data: { credits_remaining: number; credits_total: number } | null };
+
+  let credits_remaining: number;
+  let credits_total: number;
+
+  if (!existing) {
+    credits_remaining = Math.max(0, amount);
+    credits_total     = Math.max(0, amount);
+    await supabaseAdmin.from("bi_reveal_credits").insert({
+      user_id: targetId, credits_remaining, credits_total, period_start: period,
+    });
+  } else {
+    credits_remaining = Math.max(0, existing.credits_remaining + amount);
+    credits_total     = Math.max(0, existing.credits_total + amount);
+    await supabaseAdmin.from("bi_reveal_credits")
+      .update({ credits_remaining, credits_total, updated_at: now })
+      .eq("user_id", targetId);
+  }
+
+  if (amount > 0) {
+    void sendPushToUser({
+      userId: targetId,
+      title: "🎁 Consultas especiais adicionadas!",
+      body: `+${amount} consulta${amount === 1 ? "" : "s"} especial${amount === 1 ? "" : "is"} adicionada${amount === 1 ? "" : "s"} à sua conta.`,
+      data: { type: "credits_granted", deepLink: "/(tabs)/mercado" },
+    });
+  }
+
+  res.json({ ok: true, credits_remaining, credits_total });
+});
+
 export default router;
