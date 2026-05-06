@@ -16,6 +16,7 @@ import {
   fetchConnectionsList,
   fetchFollowersList,
   fetchFollowingList,
+  respondToConnectionWeb,
   toggleLikePost,
   changeReactionPost,
   toggleBookmarkPost,
@@ -198,6 +199,7 @@ function PostCard({ post, currentUserId, onLike, onReact, onBookmark, onDelete, 
   const [editContent, setEditContent] = useState(post.content ?? "");
   const [editSaving, setEditSaving] = useState(false);
   const pickerTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pickerAreaRef = useRef<HTMLDivElement>(null);
 
   const content = post.content ?? "";
   const displayContent = content.length > 300 ? content.slice(0, 300).trimEnd() + "…" : content;
@@ -214,8 +216,24 @@ function PostCard({ post, currentUserId, onLike, onReact, onBookmark, onDelete, 
     setShowPicker(true);
   };
   const closePicker = () => {
-    pickerTimeout.current = setTimeout(() => setShowPicker(false), 150);
+    pickerTimeout.current = setTimeout(() => setShowPicker(false), 200);
   };
+
+  // Close picker when tapping/clicking outside (needed on touch/mobile devices)
+  useEffect(() => {
+    if (!showPicker) return;
+    const handler = (e: MouseEvent | TouchEvent) => {
+      if (pickerAreaRef.current && !pickerAreaRef.current.contains(e.target as Node)) {
+        setShowPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler as EventListener);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler as EventListener);
+    };
+  }, [showPicker]);
 
   const authorName = post.author?.full_name ?? "Usuário";
   const authorAvatar = post.author?.avatar_url;
@@ -373,7 +391,7 @@ function PostCard({ post, currentUserId, onLike, onReact, onBookmark, onDelete, 
       {/* Action bar */}
       <div style={{ display: "flex", padding: "2px 0" }}>
         {/* Curtir + reaction picker */}
-        <div style={{ flex: 1, position: "relative" }}>
+        <div ref={pickerAreaRef} style={{ flex: 1, position: "relative" }} onMouseEnter={openPicker} onMouseLeave={closePicker}>
           {showPicker && (
             <div
               onMouseEnter={openPicker}
@@ -390,7 +408,7 @@ function PostCard({ post, currentUserId, onLike, onReact, onBookmark, onDelete, 
                 <button
                   key={r.type}
                   title={r.label}
-                  onClick={() => { onReact(post.id, r.type); setShowPicker(false); }}
+                  onClick={(e) => { e.stopPropagation(); onReact(post.id, r.type); setShowPicker(false); }}
                   style={{
                     background: "none", border: "none", cursor: "pointer",
                     fontSize: 22, padding: "2px 4px", borderRadius: 8,
@@ -406,9 +424,14 @@ function PostCard({ post, currentUserId, onLike, onReact, onBookmark, onDelete, 
             </div>
           )}
           <button
-            onClick={() => onLike(post.id)}
-            onMouseEnter={openPicker}
-            onMouseLeave={closePicker}
+            onClick={() => {
+              // On touch devices hover doesn't work — tap opens the picker instead of quick-like
+              if (window.matchMedia("(pointer: coarse)").matches && !showPicker) {
+                openPicker();
+              } else {
+                onLike(post.id);
+              }
+            }}
             style={{
               width: "100%", display: "flex", alignItems: "center", justifyContent: "center",
               gap: 6, padding: "10px 8px", background: "none", border: "none",
@@ -579,11 +602,13 @@ export default function PerfilUsuarioPage() {
   const [tab, setTab] = useState<"publicacoes" | "anuncios" | "adega" | "sobre">("publicacoes");
 
   /* Connection / follow state */
-  const [connectionStatus, setConnectionStatus] = useState<"none" | "pending" | "connected">("none");
+  const [connectionStatus, setConnectionStatus] = useState<"none" | "pending_sent" | "pending_received" | "connected">("none");
+  const [pendingConnectionId, setPendingConnectionId] = useState<string | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [connectLoading, setConnectLoading] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [msgLoading, setMsgLoading] = useState(false);
+  const [acceptLoading, setAcceptLoading] = useState(false);
 
   const [selectedWine, setSelectedWine] = useState<WineEntry | null>(null);
 
@@ -613,7 +638,17 @@ export default function PerfilUsuarioPage() {
       currentUserId ? checkWebConnectionStatus(targetId, currentUserId) : Promise.resolve("none" as const),
       currentUserId ? checkWebFollowStatus(targetId, currentUserId) : Promise.resolve(false),
       fetchUserOpportunities(targetId, "marketplace"),
-    ]).then(([prof, s, p, w, connStatus, following, ann]) => {
+      // Also fetch the pending connectionId so we can accept/reject from the profile page
+      currentUserId ? (async () => {
+        const { data } = await (await import("@/lib/supabase")).supabase
+          .from("connections")
+          .select("id")
+          .or(`and(requester_id.eq.${currentUserId},receiver_id.eq.${targetId}),and(requester_id.eq.${targetId},receiver_id.eq.${currentUserId})`)
+          .eq("status", "pending")
+          .maybeSingle();
+        return (data as any)?.id ?? null;
+      })() : Promise.resolve(null),
+    ]).then(([prof, s, p, w, connStatus, following, ann, pendingId]) => {
       setUserProfile(prof);
       setStats(s);
       setPosts(p);
@@ -621,6 +656,7 @@ export default function PerfilUsuarioPage() {
       setConnectionStatus(connStatus);
       setIsFollowing(following);
       setAnuncios(ann.filter(a => a.is_active));
+      setPendingConnectionId(pendingId as string | null);
       setLoading(false);
     });
   }, [targetId, currentUserId]);
@@ -628,10 +664,31 @@ export default function PerfilUsuarioPage() {
   const handleConnect = async () => {
     if (!currentUserId || connectLoading || connectionStatus !== "none") return;
     setConnectLoading(true);
-    setConnectionStatus("pending");
+    setConnectionStatus("pending_sent");
     if (!isFollowing) setIsFollowing(true);
     await sendWebConnectionRequest(targetId!, currentUserId);
     setConnectLoading(false);
+  };
+
+  const handleAcceptConnection = async () => {
+    if (!pendingConnectionId || acceptLoading) return;
+    setAcceptLoading(true);
+    const ok = await respondToConnectionWeb(pendingConnectionId, "accepted");
+    if (ok) {
+      setConnectionStatus("connected");
+      setIsFollowing(true);
+      setStats(s => ({ ...s, connections: s.connections + 1 }));
+    }
+    setAcceptLoading(false);
+  };
+
+  const handleRejectConnection = async () => {
+    if (!pendingConnectionId || acceptLoading) return;
+    setAcceptLoading(true);
+    await respondToConnectionWeb(pendingConnectionId, "rejected");
+    setConnectionStatus("none");
+    setPendingConnectionId(null);
+    setAcceptLoading(false);
   };
 
   const handleFollow = async () => {
@@ -753,10 +810,10 @@ export default function PerfilUsuarioPage() {
   const tab2Label = isCompany ? "Portifólio" : "Adega";
 
   /* Connect button state */
-  const connectBtnLabel = connectionStatus === "connected" ? "✓ Conectado" : connectionStatus === "pending" ? "Solicitado" : "Conectar";
+  const connectBtnLabel = connectionStatus === "pending_sent" ? "Solicitado" : "Conectar";
   const connectBtnDisabled = connectionStatus !== "none" || connectLoading;
-  const connectBtnBg = connectionStatus === "connected" ? "#e8f5e9" : connectionStatus === "pending" ? BG : GOLD;
-  const connectBtnColor = connectionStatus === "connected" ? "#16a34a" : connectionStatus === "pending" ? MUTED : WHITE;
+  const connectBtnBg = connectionStatus === "pending_sent" ? BG : GOLD;
+  const connectBtnColor = connectionStatus === "pending_sent" ? MUTED : WHITE;
 
   return (
     <AppShell>
@@ -815,24 +872,46 @@ export default function PerfilUsuarioPage() {
                   {isFollowing ? "Seguindo" : "Seguir"}
                 </button>
 
-                {/* 2. Conectar (hidden when already connected, or viewer/profile is a company) */}
-                {!activeCompany && !isCompany && connectionStatus !== "connected" && (
-                  <button
-                    onClick={handleConnect}
-                    disabled={connectBtnDisabled}
-                    style={{
-                      padding: "9px 18px", border: "none", borderRadius: 10,
-                      fontSize: 13, fontWeight: 700, cursor: connectBtnDisabled ? "default" : "pointer",
-                      backgroundColor: connectBtnBg, color: connectBtnColor,
-                    }}
-                  >
-                    {connectLoading ? "…" : connectBtnLabel}
-                  </button>
-                )}
-                {connectionStatus === "connected" && (
-                  <div style={{ padding: "9px 18px", borderRadius: 10, fontSize: 13, fontWeight: 700, backgroundColor: "#e8f5e9", color: "#16a34a" }}>
-                    ✓ Conectado
-                  </div>
+                {/* 2. Connection actions — depends on current status */}
+                {!activeCompany && !isCompany && (
+                  <>
+                    {connectionStatus === "connected" && (
+                      <div style={{ padding: "9px 18px", borderRadius: 10, fontSize: 13, fontWeight: 700, backgroundColor: "#e8f5e9", color: "#16a34a" }}>
+                        ✓ Conectado
+                      </div>
+                    )}
+                    {connectionStatus === "pending_received" && (
+                      <>
+                        <button
+                          onClick={handleAcceptConnection}
+                          disabled={acceptLoading}
+                          style={{ padding: "9px 18px", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: acceptLoading ? "default" : "pointer", backgroundColor: GOLD, color: WHITE, opacity: acceptLoading ? 0.7 : 1 }}
+                        >
+                          {acceptLoading ? "…" : "Aceitar"}
+                        </button>
+                        <button
+                          onClick={handleRejectConnection}
+                          disabled={acceptLoading}
+                          style={{ padding: "9px 18px", border: `1.5px solid ${BORDER}`, borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: acceptLoading ? "default" : "pointer", backgroundColor: WHITE, color: MUTED }}
+                        >
+                          Recusar
+                        </button>
+                      </>
+                    )}
+                    {(connectionStatus === "none" || connectionStatus === "pending_sent") && (
+                      <button
+                        onClick={handleConnect}
+                        disabled={connectBtnDisabled}
+                        style={{
+                          padding: "9px 18px", border: "none", borderRadius: 10,
+                          fontSize: 13, fontWeight: 700, cursor: connectBtnDisabled ? "default" : "pointer",
+                          backgroundColor: connectBtnBg, color: connectBtnColor,
+                        }}
+                      >
+                        {connectLoading ? "…" : connectBtnLabel}
+                      </button>
+                    )}
+                  </>
                 )}
 
               </div>

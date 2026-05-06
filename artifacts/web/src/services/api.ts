@@ -539,14 +539,59 @@ export async function fetchPendingConnectionsSent(userId: string): Promise<Conne
   } catch (e) { console.warn("fetchPendingConnectionsSent:", e); return []; }
 }
 
-export async function respondToConnectionWeb(connectionId: string, status: "accepted" | "rejected"): Promise<boolean> {
+export async function respondToConnectionWeb(connectionId: string, action: "accepted" | "rejected"): Promise<boolean> {
   try {
-    const { error } = await supabase
+    if (action === "rejected") {
+      const { error } = await supabase.from("connections").delete().eq("id", connectionId);
+      return !error;
+    }
+
+    // Load the connection to know both sides
+    const { data: conn } = await supabase
       .from("connections")
-      .update({ status })
-      .eq("id", connectionId);
-    return !error;
-  } catch { return false; }
+      .select("requester_id, receiver_id")
+      .eq("id", connectionId)
+      .maybeSingle();
+    if (!conn) return false;
+    const { requester_id, receiver_id } = conn as { requester_id: string; receiver_id: string };
+
+    // 1. Mark accepted
+    const { error } = await supabase.from("connections").update({ status: "accepted" }).eq("id", connectionId);
+    if (error) return false;
+
+    // 2. Auto-follow: receiver follows requester back (requester already follows receiver from sendWebConnectionRequest)
+    await supabase.from("follows").upsert(
+      { follower_id: receiver_id, following_id: requester_id },
+      { onConflict: "follower_id,following_id" },
+    );
+
+    // 3. Notify the requester that their request was accepted
+    await supabase.from("notifications").insert({
+      user_id:  requester_id,
+      actor_id: receiver_id,
+      type:     "connection_accepted",
+      message:  "aceitou seu pedido de conexão",
+    });
+
+    // 4. Unlock any existing direct conversation between the two users
+    const { data: convs } = await supabase
+      .from("conversation_participants")
+      .select("conversation_id")
+      .eq("user_id", requester_id);
+    if (convs && convs.length > 0) {
+      const convIds = (convs as { conversation_id: string }[]).map(c => c.conversation_id);
+      await supabase
+        .from("conversation_participants")
+        .update({ accepted: true })
+        .in("conversation_id", convIds)
+        .eq("user_id", receiver_id);
+    }
+
+    return true;
+  } catch (e) {
+    console.warn("respondToConnectionWeb:", e);
+    return false;
+  }
 }
 
 export async function fetchConnectedUsersWeb(userId: string): Promise<ConnectionProfile[]> {
@@ -737,6 +782,13 @@ export async function sendWebConnectionRequest(targetId: string, currentUserId: 
       { follower_id: currentUserId, following_id: targetId },
       { onConflict: "follower_id,following_id" },
     );
+    // Notify the receiver so it shows in their notification bell
+    await supabase.from("notifications").insert({
+      user_id:  targetId,
+      actor_id: currentUserId,
+      type:     "connection",
+      message:  "enviou um pedido de conexão",
+    });
   } catch (e) {
     console.warn("sendWebConnectionRequest:", e);
   }
@@ -745,18 +797,19 @@ export async function sendWebConnectionRequest(targetId: string, currentUserId: 
 export async function checkWebConnectionStatus(
   targetId: string,
   currentUserId: string,
-): Promise<"none" | "pending" | "connected"> {
+): Promise<"none" | "pending_sent" | "pending_received" | "connected"> {
   try {
     const { data } = await supabase
       .from("connections")
-      .select("id, status")
+      .select("id, status, requester_id")
       .or(
         `and(requester_id.eq.${currentUserId},receiver_id.eq.${targetId}),and(requester_id.eq.${targetId},receiver_id.eq.${currentUserId})`
       )
       .maybeSingle();
     if (!data) return "none";
     if ((data as any).status === "accepted") return "connected";
-    return "pending";
+    // Distinguish direction so the UI can show Accept/Reject when current user is the receiver
+    return (data as any).requester_id === currentUserId ? "pending_sent" : "pending_received";
   } catch (e) {
     console.warn("checkWebConnectionStatus:", e);
     return "none";
