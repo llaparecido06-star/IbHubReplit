@@ -65,6 +65,31 @@ function isCourtesyActive(prof: CallerProfile): boolean {
 }
 
 /**
+ * Checks whether a user has access to a plan feature without sending any HTTP response.
+ * Use this when you want to conditionally include or redact fields based on entitlement,
+ * rather than rejecting the whole request.
+ * Returns `true` if the user is entitled (is_admin, active courtesy, or feature in plan).
+ */
+export async function checkPlanFeature(
+  userId: string,
+  featureKey: string,
+): Promise<boolean> {
+  const prof = await loadCallerProfile(userId);
+  if (!prof) return false;
+  if (prof.is_admin) return true;
+  if (isCourtesyActive(prof)) return true;
+  if (prof.stripe_subscription_status === "past_due") return false;
+
+  const { data: planRow } = await supabaseAdmin
+    .from("plans")
+    .select("features")
+    .eq("id", prof.plan ?? "gratuito")
+    .maybeSingle();
+  const planFeatures: string[] = (planRow as { features?: string[] } | null)?.features ?? [];
+  return planFeatures.includes(featureKey);
+}
+
+/**
  * Server-side admin gate. Only users with is_admin = true may proceed.
  * Returns `true` if access is granted.
  * Returns `false` and sends a 403 response if access is denied.

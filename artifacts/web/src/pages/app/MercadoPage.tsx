@@ -589,6 +589,7 @@ function CarregarMaisBtn({ onClick, loading }: { onClick: () => void; loading: b
   );
 }
 
+
 /* ─── Shared search bar ──────────────────────────────────────────── */
 function BiSearchBar({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
   return (
@@ -608,6 +609,8 @@ function BiSearchBar({ value, onChange, placeholder }: { value: string; onChange
 }
 
 /* ─── Importadores Search ────────────────────────────────────────── */
+const SEARCH_PAGE_SIZE = 5;
+
 function ImportadoresSearch() {
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
@@ -687,6 +690,7 @@ function ImportadoresSearch() {
 }
 
 /* ─── Exportadores Search ────────────────────────────────────────── */
+
 function ExportadoresSearch({ hasAccess }: { hasAccess: boolean }) {
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
@@ -725,8 +729,11 @@ function ExportadoresSearch({ hasAccess }: { hasAccess: boolean }) {
       .finally(() => setLoadingMore(false));
   };
 
+  const hasPremium = hasAccess;
+
+
   const toggleCard = (id: string) => {
-    if (!hasAccess) { setUpgradeHint(prev => prev === id ? null : id); return; }
+    if (!hasPremium) { setUpgradeHint(prev => prev === id ? null : id); return; }
     setUpgradeHint(null);
     setExpanded(prev => {
       const next = new Set(prev);
@@ -751,7 +758,7 @@ function ExportadoresSearch({ hasAccess }: { hasAccess: boolean }) {
         <>
           {items.map(m => {
             const isOpen   = expanded.has(m.id);
-            const showHint = upgradeHint === m.id && !hasAccess;
+            const showHint = upgradeHint === m.id && !hasPremium;
             return (
               <div key={m.id} style={{ backgroundColor: WHITE, border: `1px solid ${isOpen ? GOLD : BORDER}`, borderRadius: 14, overflow: "hidden", transition: "border-color 0.15s" }}>
                 {/* Crédito normal — always visible */}
@@ -778,7 +785,7 @@ function ExportadoresSearch({ hasAccess }: { hasAccess: boolean }) {
                       display: "flex", alignItems: "center", gap: 4,
                       transition: "all 0.15s",
                     }}
-                    title={hasAccess ? (isOpen ? "Ocultar dados" : "Ver dados comerciais") : "Requer plano Ideal.BI"}
+                    title={hasPremium ? (isOpen ? "Ocultar dados" : "Ver dados comerciais") : "Requer plano Ideal.BI"}
                   >
                     {isOpen ? "▲ Ocultar" : "🔒 Ver dados comerciais"}
                   </button>
