@@ -443,8 +443,9 @@ router.patch("/market/bi/importadores/:id", async (req: Request, res: Response):
   if (segmentos?.trim()) updates.segmentos = segmentos.trim();
   if (estado?.trim()) updates.estado = estado.trim();
   if (!Object.keys(updates).length) { res.status(400).json({ error: "Nenhum campo enviado" }); return; }
-  const { data, error } = await supabaseAdmin.from("bi_importadores").update(updates).eq("id", req.params.id).select().single();
+  const { data, error } = await supabaseAdmin.from("bi_importadores").update(updates).eq("id", req.params.id).select().maybeSingle();
   if (error) { res.status(500).json({ error: error.message }); return; }
+  if (!data) { res.status(404).json({ error: "Importador não encontrado" }); return; }
   res.json(data);
 });
 
@@ -494,8 +495,9 @@ router.patch("/market/bi/exportadores/:id", async (req: Request, res: Response):
   strings.forEach(k => { if (typeof body[k] === "string" && (body[k] as string).trim()) updates[k] = (body[k] as string).trim(); });
   numbers.forEach(k => { if (typeof body[k] === "number") updates[k] = body[k] as number; });
   if (!Object.keys(updates).length) { res.status(400).json({ error: "Nenhum campo enviado" }); return; }
-  const { data, error } = await supabaseAdmin.from("bi_exportadores").update(updates).eq("id", req.params.id).select().single();
+  const { data, error } = await supabaseAdmin.from("bi_exportadores").update(updates).eq("id", req.params.id).select().maybeSingle();
   if (error) { res.status(500).json({ error: error.message }); return; }
+  if (!data) { res.status(404).json({ error: "Exportador não encontrado" }); return; }
   res.json(data);
 });
 
@@ -540,8 +542,9 @@ router.patch("/market/bi/produtores/:id", async (req: Request, res: Response): P
   if (tipos?.trim()) updates.tipos = tipos.trim();
   if (fundado !== undefined) updates.fundado = fundado;
   if (!Object.keys(updates).length) { res.status(400).json({ error: "Nenhum campo enviado" }); return; }
-  const { data, error } = await supabaseAdmin.from("bi_produtores").update(updates).eq("id", req.params.id).select().single();
+  const { data, error } = await supabaseAdmin.from("bi_produtores").update(updates).eq("id", req.params.id).select().maybeSingle();
   if (error) { res.status(500).json({ error: error.message }); return; }
+  if (!data) { res.status(404).json({ error: "Produtor não encontrado" }); return; }
   res.json(data);
 });
 

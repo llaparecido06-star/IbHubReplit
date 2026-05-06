@@ -410,6 +410,7 @@ export default function AdminSlidesMercado() {
   const [biModal, setBiModal] = useState<{ kind: BiKind; row: BiRow | null } | null>(null);
   const [biSaving, setBiSaving] = useState(false);
   const [biDeletingId, setBiDeletingId] = useState<string | null>(null);
+  const [biLoadError, setBiLoadError] = useState<string | null>(null);
   // form fields
   const [biName, setBiName] = useState("");
   const [biPais, setBiPais] = useState("");
@@ -426,6 +427,7 @@ export default function AdminSlidesMercado() {
 
   const loadBi = useCallback(async () => {
     setLoadingBi(true);
+    setBiLoadError(null);
     try {
       const [ir, er, pr] = await Promise.all([
         biApiFetch("/market/bi/importadores?limit=200", "GET") as Promise<{ items: BiImp[] }>,
@@ -435,8 +437,8 @@ export default function AdminSlidesMercado() {
       setBiImps(ir.items);
       setBiExps(er.items);
       setBiProds(pr.items);
-    } catch {
-      // silent — admin will see empty list
+    } catch (e) {
+      setBiLoadError(e instanceof Error ? e.message : "Erro ao carregar empresas. Verifique a conexão com a API.");
     }
     setLoadingBi(false);
   }, []);
@@ -738,6 +740,11 @@ export default function AdminSlidesMercado() {
 
           {loadingBi ? (
             <div style={{ textAlign: "center", padding: 60, color: "#aaa" }}>⏳ Carregando...</div>
+          ) : biLoadError ? (
+            <div style={{ padding: "16px 20px", backgroundColor: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 10, color: "#dc2626", fontSize: 13 }}>
+              ⚠️ {biLoadError}
+              <button onClick={() => void loadBi()} style={{ marginLeft: 16, padding: "4px 12px", backgroundColor: "#dc2626", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>Tentar novamente</button>
+            </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {/* Importadores */}
