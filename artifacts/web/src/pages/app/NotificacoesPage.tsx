@@ -83,8 +83,10 @@ function NotifRow({ notif, onRead, onAccept, onReject }: {
 
   const handleClick = () => {
     if (!notif.read) onRead(notif.id);
-    if (notif.post_id) setLocation(`/app/posts/${notif.post_id}`);
-    else if (notif.type === "connection" && notif.actor?.id) setLocation(`/app/usuario/${notif.actor.id}`);
+    if (notif.post_id) {
+      const commentParam = notif.comment_id ? `?commentId=${notif.comment_id}` : "";
+      setLocation(`/app/posts/${notif.post_id}${commentParam}`);
+    } else if (notif.type === "connection" && notif.actor?.id) setLocation(`/app/usuario/${notif.actor.id}`);
   };
 
   return (

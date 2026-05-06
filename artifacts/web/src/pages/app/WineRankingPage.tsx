@@ -113,8 +113,8 @@ export default function WineRankingPage() {
             {([["score", "🏆 Maior Pontuação"], ["count", "📊 Mais Avaliados"], ["alpha", "🔤 Alfabética"]] as const).map(([key, label]) => (
               <button key={key} onClick={() => setSortBy(key)} style={{
                 padding: "6px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-                background: sortBy === key ? GOLD : WHITE, color: sortBy === key ? WHITE : MUTED,
-                border: `1px solid ${sortBy === key ? GOLD : BORDER}`,
+                background: sortBy === key ? NAVY : WHITE, color: sortBy === key ? WHITE : MUTED,
+                border: `1px solid ${sortBy === key ? NAVY : BORDER}`,
               }}>{label}</button>
             ))}
           </div>

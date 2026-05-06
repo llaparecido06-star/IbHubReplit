@@ -2045,8 +2045,8 @@ export default function MercadoPage() {
                 return (
                   <button key={p.key} onClick={() => setPeriod(p.key)} style={{
                     flex: 1, padding: "8px 0", borderRadius: 20,
-                    border: `1px solid ${active ? GOLD : BORDER}`,
-                    backgroundColor: active ? GOLD : WHITE,
+                    border: `1px solid ${active ? NAVY : BORDER}`,
+                    backgroundColor: active ? NAVY : WHITE,
                     color: active ? WHITE : "#555",
                     fontSize: 13, fontWeight: active ? 700 : 500,
                     cursor: "pointer", fontFamily: "inherit",

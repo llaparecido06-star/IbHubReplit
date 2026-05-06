@@ -348,8 +348,8 @@ export function GruposContent() {
         {CATEGORIES.map(cat => (
           <button key={cat} onClick={() => setActiveCategory(cat)} style={{
             padding: "6px 16px", borderRadius: 20, fontSize: 13, fontWeight: activeCategory === cat ? 700 : 500,
-            border: `1px solid ${activeCategory === cat ? GOLD : BORDER}`,
-            backgroundColor: activeCategory === cat ? GOLD : WHITE,
+            border: `1px solid ${activeCategory === cat ? NAVY : BORDER}`,
+            backgroundColor: activeCategory === cat ? NAVY : WHITE,
             color: activeCategory === cat ? WHITE : MUTED,
             cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit",
           }}>

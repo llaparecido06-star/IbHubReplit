@@ -676,8 +676,8 @@ export default function AdegaPage() {
               style={{
                 padding: "6px 14px",
                 borderRadius: 20,
-                border: `1px solid ${filter === f.key ? GOLD : "#e8eaed"}`,
-                backgroundColor: filter === f.key ? GOLD : "#fff",
+                border: `1px solid ${filter === f.key ? NAVY : "#e8eaed"}`,
+                backgroundColor: filter === f.key ? NAVY : "#fff",
                 color: filter === f.key ? "#fff" : "#555",
                 fontSize: 12,
                 fontWeight: filter === f.key ? 700 : 500,

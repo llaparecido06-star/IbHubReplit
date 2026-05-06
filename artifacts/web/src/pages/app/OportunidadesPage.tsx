@@ -47,8 +47,8 @@ const chip = (label: string, active: boolean, onClick: () => void) => (
     style={{
       padding: "6px 14px",
       borderRadius: 20,
-      border: `1px solid ${active ? GOLD : "#e8eaed"}`,
-      backgroundColor: active ? GOLD : "#fff",
+      border: `1px solid ${active ? NAVY : "#e8eaed"}`,
+      backgroundColor: active ? NAVY : "#fff",
       color: active ? "#fff" : "#555",
       fontSize: 12,
       fontWeight: active ? 700 : 500,
@@ -328,7 +328,7 @@ export default function OportunidadesPage() {
                   style={{
                     flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
                     padding: "8px 4px", borderRadius: 10, border: "none",
-                    backgroundColor: tab === t.key ? GOLD : BG,
+                    backgroundColor: tab === t.key ? NAVY : BG,
                     color: tab === t.key ? WHITE : MUTED,
                     fontWeight: tab === t.key ? 700 : 500, fontSize: 13,
                     cursor: "pointer", fontFamily: "inherit",
