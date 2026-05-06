@@ -14,6 +14,8 @@ import {
   fetchMarketComments, addMarketComment, uploadMarketPostImage,
   uploadMarketPostVideo, voteOnMarketPoll, toggleMarketCommentLike,
   deleteMarketPost, updateMarketPost,
+  BiImportador, BiExportador, BiProdutor,
+  fetchBiImportadores, fetchBiExportadores, fetchBiProdutores,
 } from "@/services/api";
 import { formatRelativeDate as timeAgo } from "@/utils/dateUtils";
 
@@ -512,49 +514,59 @@ function ApresentacoesPanel({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
-/* ─── Ideal.BI Mock Data ─────────────────────────────────────── */
-interface ImportadorMock { id: string; name: string; pais: string; segmentos: string; estado: string; }
-interface ExportadorMock { id: string; name: string; paisDestino: string; produtos: string; caixas: string; valorVendido: string; precoMedio: string; }
-interface ProdutorMock   { id: string; name: string; regiao: string; tipos: string; fundado: string; }
+/* ─── Ideal.BI — helpers ─────────────────────────────────────── */
 
-const IMPORTADORES_MOCK: ImportadorMock[] = [
-  { id: "i1",  name: "Wine & Co Importações",  pais: "França",         segmentos: "Vinhos Tranquilos, Espumantes",       estado: "SP" },
-  { id: "i2",  name: "Summit Wines",            pais: "Argentina",      segmentos: "Malbec, Cabernet Sauvignon",          estado: "RS" },
-  { id: "i3",  name: "Expand Wines",            pais: "Portugal",       segmentos: "Vinhos Verdes, Porto",                estado: "RJ" },
-  { id: "i4",  name: "Aquila Importações",      pais: "Espanha",        segmentos: "Rioja, Cava, Alvarinho",              estado: "SP" },
-  { id: "i5",  name: "Eurovin Importadora",     pais: "Itália",         segmentos: "Barolo, Prosecco, Amarone",           estado: "SP" },
-  { id: "i6",  name: "Decanter Importações",    pais: "Alemanha",       segmentos: "Riesling, Gewurztraminer",            estado: "PR" },
-  { id: "i7",  name: "Grand Cru Seleções",      pais: "França",         segmentos: "Bordeaux, Borgonha, Champagne",       estado: "SP" },
-  { id: "i8",  name: "Vinho e Arte",            pais: "Nova Zelândia",  segmentos: "Sauvignon Blanc, Pinot Noir",         estado: "SP" },
-  { id: "i9",  name: "Andina Wines",            pais: "Chile",          segmentos: "Carmenère, Cabernet, Chardonnay",     estado: "MG" },
-  { id: "i10", name: "New World Importações",   pais: "EUA",            segmentos: "Zinfandel, Cabernet, Chardonnay",    estado: "RJ" },
-];
+const PAGE_SIZE = 20;
 
-const EXPORTADORES_MOCK: ExportadorMock[] = [
-  { id: "e1",  name: "Wines of Brasil",        paisDestino: "EUA, China, UK",            produtos: "Espumantes, Vinhos Finos",        caixas: "48.200", valorVendido: "R$ 8,2M",  precoMedio: "R$ 170,14" },
-  { id: "e2",  name: "UVIBRA",                  paisDestino: "Múltiplos países",           produtos: "Vinhos Tranquilos, Sucos",        caixas: "32.800", valorVendido: "R$ 5,1M",  precoMedio: "R$ 155,49" },
-  { id: "e3",  name: "Aurora Cooperativa",      paisDestino: "China, EUA, Japão",         produtos: "Espumantes, Sucos",               caixas: "28.400", valorVendido: "R$ 4,3M",  precoMedio: "R$ 151,41" },
-  { id: "e4",  name: "Miolo Wine Group",        paisDestino: "UK, EUA, China",            produtos: "Vinhos Premium, Varietais",       caixas: "22.100", valorVendido: "R$ 6,7M",  precoMedio: "R$ 303,17" },
-  { id: "e5",  name: "Casa Valduga",            paisDestino: "Suíça, Bélgica, UK",        produtos: "Espumantes Brut, Tranquilos",     caixas: "18.600", valorVendido: "R$ 5,2M",  precoMedio: "R$ 279,57" },
-  { id: "e6",  name: "Salton",                  paisDestino: "Argentina, EUA, Paraguai",  produtos: "Vinhos Finos, Espumantes",        caixas: "15.200", valorVendido: "R$ 2,8M",  precoMedio: "R$ 184,21" },
-  { id: "e7",  name: "Garibaldi Cooperativa",   paisDestino: "Japão, Suíça, Canadá",      produtos: "Espumantes Moscatel, Brut",       caixas: "12.800", valorVendido: "R$ 3,1M",  precoMedio: "R$ 242,19" },
-  { id: "e8",  name: "Don Giovanni",            paisDestino: "Países Baixos, UK",         produtos: "Vinhos Varietais, Corte",         caixas: "10.400", valorVendido: "R$ 1,9M",  precoMedio: "R$ 182,69" },
-  { id: "e9",  name: "Pizzato Vinhos",          paisDestino: "China, Alemanha, EUA",      produtos: "Merlot, Chardonnay, Pinot Noir",  caixas: "8.100",  valorVendido: "R$ 2,4M",  precoMedio: "R$ 296,30" },
-  { id: "e10", name: "Boscato",                 paisDestino: "Canadá, EUA, Europa",       produtos: "Vinhos Premiados, Varietais",     caixas: "5.600",  valorVendido: "R$ 1,8M",  precoMedio: "R$ 321,43" },
-];
+function fmtCents(cents: number): string {
+  const val = cents / 100;
+  if (val >= 1_000_000) return `R$ ${(val / 1_000_000).toFixed(1)}M`;
+  if (val >= 1_000) return `R$ ${(val / 1_000).toFixed(0)}K`;
+  return `R$ ${val.toFixed(2)}`;
+}
 
-const PRODUTORES_MOCK: ProdutorMock[] = [
-  { id: "p1",  name: "Miolo Wine Group",      regiao: "Serra Gaúcha",        tipos: "Espumantes, Vinhos Finos, Varietais",   fundado: "1989" },
-  { id: "p2",  name: "Casa Valduga",          regiao: "Vale dos Vinhedos",   tipos: "Espumantes Brut, Tranquilos",           fundado: "1875" },
-  { id: "p3",  name: "Aurora Cooperativa",    regiao: "Bento Gonçalves",     tipos: "Espumantes, Sucos, Graspa",             fundado: "1931" },
-  { id: "p4",  name: "Salton",                regiao: "Bento Gonçalves",     tipos: "Vinhos Finos, Espumantes, Destilados",  fundado: "1910" },
-  { id: "p5",  name: "Pizzato Vinhos",        regiao: "Vale dos Vinhedos",   tipos: "Merlot, Chardonnay, Pinot Noir",        fundado: "1999" },
-  { id: "p6",  name: "Garibaldi Cooperativa", regiao: "Garibaldi",           tipos: "Espumantes Moscatel, Brut",             fundado: "1931" },
-  { id: "p7",  name: "Boscato",              regiao: "Serra Gaúcha",        tipos: "Tintos Encorpados, Chardonnay",         fundado: "2000" },
-  { id: "p8",  name: "Don Giovanni",          regiao: "Serra Gaúcha",        tipos: "Varietais, Corte, Reserva",             fundado: "1979" },
-  { id: "p9",  name: "Lidio Carraro",         regiao: "Vale dos Vinhedos",   tipos: "Merlot, Cabernet, Vinho Natural",       fundado: "1988" },
-  { id: "p10", name: "Família Bebber",        regiao: "Planalto Catarinense",tipos: "Pinot Noir, Chardonnay, Espumante",     fundado: "2000" },
-];
+function fmtCaixas(n: number): string {
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
+function BiLoadingSkeleton() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {[1, 2, 3].map(i => (
+        <div key={i} style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 16px", height: 72, opacity: 0.5 + i * 0.1 }} />
+      ))}
+    </div>
+  );
+}
+
+function BiEmptyState({ q, label }: { q: string; label: string }) {
+  return (
+    <div style={{ textAlign: "center", padding: 40, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14 }}>
+      <div style={{ fontSize: 32, marginBottom: 8 }}>🔍</div>
+      <div style={{ fontSize: 14, color: MUTED }}>
+        {q ? `Nenhum ${label} encontrado para "${q}"` : `Nenhum ${label} encontrado`}
+      </div>
+    </div>
+  );
+}
+
+function CarregarMaisBtn({ onClick, loading }: { onClick: () => void; loading: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={loading}
+      style={{
+        width: "100%", padding: "12px", borderRadius: 10,
+        border: `1px solid ${BORDER}`, backgroundColor: WHITE,
+        color: NAVY, fontSize: 13, fontWeight: 700, cursor: loading ? "default" : "pointer",
+        fontFamily: "inherit", opacity: loading ? 0.6 : 1,
+      }}
+    >
+      {loading ? "Carregando…" : "Carregar mais"}
+    </button>
+  );
+}
 
 /* ─── Shared search bar ──────────────────────────────────────────── */
 function BiSearchBar({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
@@ -577,47 +589,73 @@ function BiSearchBar({ value, onChange, placeholder }: { value: string; onChange
 /* ─── Importadores Search ────────────────────────────────────────── */
 function ImportadoresSearch() {
   const [q, setQ] = useState("");
-  const filtered = IMPORTADORES_MOCK.filter(m =>
-    !q.trim() ||
-    m.name.toLowerCase().includes(q.toLowerCase()) ||
-    m.pais.toLowerCase().includes(q.toLowerCase()) ||
-    m.segmentos.toLowerCase().includes(q.toLowerCase())
-  );
+  const [debouncedQ, setDebouncedQ] = useState("");
+  const [items, setItems] = useState<BiImportador[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [offset, setOffset] = useState(0);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(q.trim()), 350);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  useEffect(() => {
+    setLoading(true);
+    setOffset(0);
+    fetchBiImportadores(debouncedQ, PAGE_SIZE, 0)
+      .then(r => { setItems(r.items); setTotal(r.total); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [debouncedQ]);
+
+  const loadMore = () => {
+    const next = offset + PAGE_SIZE;
+    setLoadingMore(true);
+    fetchBiImportadores(debouncedQ, PAGE_SIZE, next)
+      .then(r => { setItems(prev => [...prev, ...r.items]); setOffset(next); })
+      .catch(() => {})
+      .finally(() => setLoadingMore(false));
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <BiSearchBar value={q} onChange={setQ} placeholder="Buscar importador por nome, país ou segmento…" />
-      <div style={{ fontSize: 12, color: MUTED }}>
-        {filtered.length} importador{filtered.length !== 1 ? "es" : ""} encontrado{filtered.length !== 1 ? "s" : ""}
-      </div>
-      {filtered.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 40, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14 }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>🔍</div>
-          <div style={{ fontSize: 14, color: MUTED }}>Nenhum importador encontrado para "{q}"</div>
+      {!loading && (
+        <div style={{ fontSize: 12, color: MUTED }}>
+          {total} importador{total !== 1 ? "es" : ""} encontrado{total !== 1 ? "s" : ""}
         </div>
+      )}
+      {loading ? <BiLoadingSkeleton /> : items.length === 0 ? (
+        <BiEmptyState q={debouncedQ} label="importador" />
       ) : (
-        filtered.map(m => (
-          <div
-            key={m.id}
-            onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = GOLD; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = BORDER; }}
-            style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 14, transition: "border-color 0.15s" }}
-          >
-            <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
-              📦
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 4 }}>{m.name}</div>
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
-                <span style={{ fontSize: 12, color: MUTED }}>🌍 {m.pais}</span>
-                <span style={{ fontSize: 12, color: MUTED }}>📍 {m.estado}</span>
+        <>
+          {items.map(m => (
+            <div
+              key={m.id}
+              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = GOLD; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = BORDER; }}
+              style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 14, transition: "border-color 0.15s" }}
+            >
+              <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
+                📦
               </div>
-              <div style={{ fontSize: 12, color: MUTED }}>{m.segmentos}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 4 }}>{m.name}</div>
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, color: MUTED }}>🌍 {m.pais}</span>
+                  <span style={{ fontSize: 12, color: MUTED }}>📍 {m.estado}</span>
+                </div>
+                <div style={{ fontSize: 12, color: MUTED }}>{m.segmentos}</div>
+              </div>
+              <span style={{ fontSize: 10, fontWeight: 700, color: GOLD, backgroundColor: `${GOLD}18`, padding: "3px 8px", borderRadius: 20, flexShrink: 0, alignSelf: "flex-start" }}>
+                IMPORTADOR
+              </span>
             </div>
-            <span style={{ fontSize: 10, fontWeight: 700, color: GOLD, backgroundColor: `${GOLD}18`, padding: "3px 8px", borderRadius: 20, flexShrink: 0, alignSelf: "flex-start" }}>
-              IMPORTADOR
-            </span>
-          </div>
-        ))
+          ))}
+          {items.length < total && <CarregarMaisBtn onClick={loadMore} loading={loadingMore} />}
+        </>
       )}
     </div>
   );
@@ -626,15 +664,38 @@ function ImportadoresSearch() {
 /* ─── Exportadores Search ────────────────────────────────────────── */
 function ExportadoresSearch({ hasAccess }: { hasAccess: boolean }) {
   const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
+  const [items, setItems] = useState<BiExportador[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [offset, setOffset] = useState(0);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [upgradeHint, setUpgradeHint] = useState<string | null>(null);
 
-  const filtered = EXPORTADORES_MOCK.filter(m =>
-    !q.trim() ||
-    m.name.toLowerCase().includes(q.toLowerCase()) ||
-    m.paisDestino.toLowerCase().includes(q.toLowerCase()) ||
-    m.produtos.toLowerCase().includes(q.toLowerCase())
-  );
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(q.trim()), 350);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  useEffect(() => {
+    setLoading(true);
+    setOffset(0);
+    setExpanded(new Set());
+    fetchBiExportadores(debouncedQ, PAGE_SIZE, 0)
+      .then(r => { setItems(r.items); setTotal(r.total); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [debouncedQ]);
+
+  const loadMore = () => {
+    const next = offset + PAGE_SIZE;
+    setLoadingMore(true);
+    fetchBiExportadores(debouncedQ, PAGE_SIZE, next)
+      .then(r => { setItems(prev => [...prev, ...r.items]); setOffset(next); })
+      .catch(() => {})
+      .finally(() => setLoadingMore(false));
+  };
 
   const toggleCard = (id: string) => {
     if (!hasAccess) { setUpgradeHint(prev => prev === id ? null : id); return; }
@@ -649,89 +710,87 @@ function ExportadoresSearch({ hasAccess }: { hasAccess: boolean }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <BiSearchBar value={q} onChange={setQ} placeholder="Buscar exportador por nome, destino ou produto…" />
-      <div style={{ fontSize: 12, color: MUTED }}>
-        {filtered.length} exportador{filtered.length !== 1 ? "es" : ""} encontrado{filtered.length !== 1 ? "s" : ""}
-      </div>
-      {filtered.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 40, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14 }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>🔍</div>
-          <div style={{ fontSize: 14, color: MUTED }}>Nenhum exportador encontrado para "{q}"</div>
+      {!loading && (
+        <div style={{ fontSize: 12, color: MUTED }}>
+          {total} exportador{total !== 1 ? "es" : ""} encontrado{total !== 1 ? "s" : ""}
         </div>
+      )}
+      {loading ? <BiLoadingSkeleton /> : items.length === 0 ? (
+        <BiEmptyState q={debouncedQ} label="exportador" />
       ) : (
-        filtered.map(m => {
-          const isOpen   = expanded.has(m.id);
-          const showHint = upgradeHint === m.id && !hasAccess;
-          return (
-            <div key={m.id} style={{ backgroundColor: WHITE, border: `1px solid ${isOpen ? GOLD : BORDER}`, borderRadius: 14, overflow: "hidden", transition: "border-color 0.15s" }}>
-              {/* Crédito normal — always visible */}
-              <div style={{ padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 14 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
-                  🌐
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>{m.name}</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: GOLD, backgroundColor: `${GOLD}18`, padding: "2px 7px", borderRadius: 20 }}>EXPORTADOR</span>
+        <>
+          {items.map(m => {
+            const isOpen   = expanded.has(m.id);
+            const showHint = upgradeHint === m.id && !hasAccess;
+            return (
+              <div key={m.id} style={{ backgroundColor: WHITE, border: `1px solid ${isOpen ? GOLD : BORDER}`, borderRadius: 14, overflow: "hidden", transition: "border-color 0.15s" }}>
+                {/* Crédito normal — always visible */}
+                <div style={{ padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 14 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
+                    🌐
                   </div>
-                  <div style={{ fontSize: 12, color: MUTED, marginBottom: 2 }}>🌐 {m.paisDestino}</div>
-                  <div style={{ fontSize: 12, color: MUTED }}>{m.produtos}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>{m.name}</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: GOLD, backgroundColor: `${GOLD}18`, padding: "2px 7px", borderRadius: 20 }}>EXPORTADOR</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: MUTED, marginBottom: 2 }}>🌐 {m.pais_destino}</div>
+                    <div style={{ fontSize: 12, color: MUTED }}>{m.produtos}</div>
+                  </div>
+                  <button
+                    onClick={() => toggleCard(m.id)}
+                    style={{
+                      padding: "6px 12px", borderRadius: 8, flexShrink: 0,
+                      border: `1px solid ${isOpen ? GOLD : BORDER}`,
+                      backgroundColor: isOpen ? `${GOLD}15` : "transparent",
+                      color: isOpen ? GOLD : MUTED,
+                      fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                      display: "flex", alignItems: "center", gap: 4,
+                      transition: "all 0.15s",
+                    }}
+                    title={hasAccess ? (isOpen ? "Ocultar dados" : "Ver dados comerciais") : "Requer plano Ideal.BI"}
+                  >
+                    {isOpen ? "▲ Ocultar" : "🔒 Ver dados comerciais"}
+                  </button>
                 </div>
-                {/* Crédito especial button */}
-                <button
-                  onClick={() => toggleCard(m.id)}
-                  style={{
-                    padding: "6px 12px", borderRadius: 8, flexShrink: 0,
-                    border: `1px solid ${isOpen ? GOLD : BORDER}`,
-                    backgroundColor: isOpen ? `${GOLD}15` : "transparent",
-                    color: isOpen ? GOLD : MUTED,
-                    fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                    display: "flex", alignItems: "center", gap: 4,
-                    transition: "all 0.15s",
-                  }}
-                  title={hasAccess ? (isOpen ? "Ocultar dados" : "Ver dados comerciais") : "Requer plano Ideal.BI"}
-                >
-                  {isOpen ? "▲ Ocultar" : "🔒 Ver dados comerciais"}
-                </button>
+
+                {/* Upgrade hint */}
+                {showHint && (
+                  <div style={{ margin: "0 16px 14px", padding: "12px 14px", backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}40`, borderRadius: 10 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 }}>🔒 Crédito Especial — Acesso Ideal.BI</div>
+                    <div style={{ fontSize: 12, color: MUTED, marginBottom: 8 }}>
+                      Assine um plano com acesso Ideal.BI para ver caixas exportadas, valor vendido e preço médio por caixa.
+                    </div>
+                    <a href="/assinar" style={{ fontSize: 12, fontWeight: 700, color: GOLD, textDecoration: "none" }}>Ver planos →</a>
+                  </div>
+                )}
+
+                {/* Crédito especial — expanded */}
+                {isOpen && (
+                  <div style={{ borderTop: `1px solid ${GOLD}40`, padding: "14px 16px", backgroundColor: `${GOLD}06` }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase" as const, letterSpacing: 0.7, marginBottom: 12 }}>
+                      📊 Crédito Especial — Dados Comerciais
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                      {([
+                        { label: "Caixas Exportadas", value: fmtCaixas(m.caixas_exportadas), icon: "📦" },
+                        { label: "Valor Vendido",      value: fmtCents(m.valor_vendido_cents), icon: "💰" },
+                        { label: "Preço Médio/Cx",     value: fmtCents(m.preco_medio_cents),   icon: "📈" },
+                      ] as const).map(kpi => (
+                        <div key={kpi.label} style={{ textAlign: "center", padding: "12px 8px", backgroundColor: WHITE, borderRadius: 10, border: `1px solid ${BORDER}` }}>
+                          <div style={{ fontSize: 20, marginBottom: 4 }}>{kpi.icon}</div>
+                          <div style={{ fontSize: 15, fontWeight: 900, color: NAVY }}>{kpi.value}</div>
+                          <div style={{ fontSize: 10, color: MUTED, marginTop: 3 }}>{kpi.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-
-              {/* Upgrade hint */}
-              {showHint && (
-                <div style={{ margin: "0 16px 14px", padding: "12px 14px", backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}40`, borderRadius: 10 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 }}>🔒 Crédito Especial — Acesso Ideal.BI</div>
-                  <div style={{ fontSize: 12, color: MUTED, marginBottom: 8 }}>
-                    Assine um plano com acesso Ideal.BI para ver caixas exportadas, valor vendido e preço médio por caixa.
-                  </div>
-                  <a href="/assinar" style={{ fontSize: 12, fontWeight: 700, color: GOLD, textDecoration: "none" }}>Ver planos →</a>
-                </div>
-              )}
-
-              {/* Crédito especial — expanded */}
-              {isOpen && (
-                <div style={{ borderTop: `1px solid ${GOLD}40`, padding: "14px 16px", backgroundColor: `${GOLD}06` }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase" as const, letterSpacing: 0.7, marginBottom: 12 }}>
-                    📊 Crédito Especial — Dados Comerciais
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-                    {([
-                      { label: "Caixas Exportadas", value: m.caixas,       icon: "📦" },
-                      { label: "Valor Vendido",      value: m.valorVendido, icon: "💰" },
-                      { label: "Preço Médio/Cx",     value: m.precoMedio,   icon: "📈" },
-                    ] as const).map(kpi => (
-                      <div key={kpi.label} style={{ textAlign: "center", padding: "12px 8px", backgroundColor: WHITE, borderRadius: 10, border: `1px solid ${BORDER}` }}>
-                        <div style={{ fontSize: 20, marginBottom: 4 }}>{kpi.icon}</div>
-                        <div style={{ fontSize: 15, fontWeight: 900, color: NAVY }}>{kpi.value}</div>
-                        <div style={{ fontSize: 10, color: MUTED, marginTop: 3 }}>{kpi.label}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ fontSize: 11, color: MUTED, marginTop: 10, textAlign: "center" as const }}>
-                    * Dados de referência — base mockada. Integração com dados reais em breve.
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })
+            );
+          })}
+          {items.length < total && <CarregarMaisBtn onClick={loadMore} loading={loadingMore} />}
+        </>
       )}
     </div>
   );
@@ -740,47 +799,73 @@ function ExportadoresSearch({ hasAccess }: { hasAccess: boolean }) {
 /* ─── Produtores Nacionais Search ─────────────────────────────────── */
 function ProdutoresSearch() {
   const [q, setQ] = useState("");
-  const filtered = PRODUTORES_MOCK.filter(m =>
-    !q.trim() ||
-    m.name.toLowerCase().includes(q.toLowerCase()) ||
-    m.regiao.toLowerCase().includes(q.toLowerCase()) ||
-    m.tipos.toLowerCase().includes(q.toLowerCase())
-  );
+  const [debouncedQ, setDebouncedQ] = useState("");
+  const [items, setItems] = useState<BiProdutor[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [offset, setOffset] = useState(0);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(q.trim()), 350);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  useEffect(() => {
+    setLoading(true);
+    setOffset(0);
+    fetchBiProdutores(debouncedQ, PAGE_SIZE, 0)
+      .then(r => { setItems(r.items); setTotal(r.total); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [debouncedQ]);
+
+  const loadMore = () => {
+    const next = offset + PAGE_SIZE;
+    setLoadingMore(true);
+    fetchBiProdutores(debouncedQ, PAGE_SIZE, next)
+      .then(r => { setItems(prev => [...prev, ...r.items]); setOffset(next); })
+      .catch(() => {})
+      .finally(() => setLoadingMore(false));
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <BiSearchBar value={q} onChange={setQ} placeholder="Buscar produtor por nome, região ou tipo de vinho…" />
-      <div style={{ fontSize: 12, color: MUTED }}>
-        {filtered.length} produtor{filtered.length !== 1 ? "es" : ""} encontrado{filtered.length !== 1 ? "s" : ""}
-      </div>
-      {filtered.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 40, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14 }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>🔍</div>
-          <div style={{ fontSize: 14, color: MUTED }}>Nenhum produtor encontrado para "{q}"</div>
+      {!loading && (
+        <div style={{ fontSize: 12, color: MUTED }}>
+          {total} produtor{total !== 1 ? "es" : ""} encontrado{total !== 1 ? "s" : ""}
         </div>
+      )}
+      {loading ? <BiLoadingSkeleton /> : items.length === 0 ? (
+        <BiEmptyState q={debouncedQ} label="produtor" />
       ) : (
-        filtered.map(m => (
-          <div
-            key={m.id}
-            onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = GOLD; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = BORDER; }}
-            style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 14, transition: "border-color 0.15s" }}
-          >
-            <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
-              🍇
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 4 }}>{m.name}</div>
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
-                <span style={{ fontSize: 12, color: MUTED }}>📍 {m.regiao}</span>
-                <span style={{ fontSize: 12, color: MUTED }}>🏛 Desde {m.fundado}</span>
+        <>
+          {items.map(m => (
+            <div
+              key={m.id}
+              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = GOLD; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = BORDER; }}
+              style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 14, transition: "border-color 0.15s" }}
+            >
+              <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
+                🍇
               </div>
-              <div style={{ fontSize: 12, color: MUTED }}>{m.tipos}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 4 }}>{m.name}</div>
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, color: MUTED }}>📍 {m.regiao}</span>
+                  {m.fundado && <span style={{ fontSize: 12, color: MUTED }}>🏛 Desde {m.fundado}</span>}
+                </div>
+                <div style={{ fontSize: 12, color: MUTED }}>{m.tipos}</div>
+              </div>
+              <span style={{ fontSize: 10, fontWeight: 700, color: "#722f37", backgroundColor: "#f9f0f1", padding: "3px 8px", borderRadius: 20, flexShrink: 0, alignSelf: "flex-start" }}>
+                PRODUTOR
+              </span>
             </div>
-            <span style={{ fontSize: 10, fontWeight: 700, color: "#722f37", backgroundColor: "#f9f0f1", padding: "3px 8px", borderRadius: 20, flexShrink: 0, alignSelf: "flex-start" }}>
-              PRODUTOR
-            </span>
-          </div>
-        ))
+          ))}
+          {items.length < total && <CarregarMaisBtn onClick={loadMore} loading={loadingMore} />}
+        </>
       )}
     </div>
   );

@@ -4317,3 +4317,65 @@ export async function sendMentionNotifications(
     }
   } catch { /* best-effort */ }
 }
+
+/* ─── Ideal.BI — BI Search ────────────────────────────────────────────────── */
+
+export interface BiImportador {
+  id: string;
+  name: string;
+  pais: string;
+  segmentos: string;
+  estado: string;
+  created_at: string;
+}
+
+export interface BiExportador {
+  id: string;
+  name: string;
+  pais_destino: string;
+  produtos: string;
+  caixas_exportadas: number;
+  valor_vendido_cents: number;
+  preco_medio_cents: number;
+  created_at: string;
+}
+
+export interface BiProdutor {
+  id: string;
+  name: string;
+  regiao: string;
+  tipos: string;
+  fundado: number | null;
+  created_at: string;
+}
+
+export interface BiSearchResult<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+async function biGet<T>(path: string, q: string, limit: number, offset: number): Promise<BiSearchResult<T>> {
+  const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
+  const session = await getCachedSession();
+  const token = session?.access_token;
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset), ...(q ? { q } : {}) });
+  const res = await fetch(`${apiBase}/${path}?${params}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error(`BI fetch failed: ${res.status}`);
+  return res.json() as Promise<BiSearchResult<T>>;
+}
+
+export function fetchBiImportadores(q: string, limit = 20, offset = 0) {
+  return biGet<BiImportador>("market/bi/importadores", q, limit, offset);
+}
+
+export function fetchBiExportadores(q: string, limit = 20, offset = 0) {
+  return biGet<BiExportador>("market/bi/exportadores", q, limit, offset);
+}
+
+export function fetchBiProdutores(q: string, limit = 20, offset = 0) {
+  return biGet<BiProdutor>("market/bi/produtores", q, limit, offset);
+}

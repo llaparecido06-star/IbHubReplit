@@ -298,4 +298,110 @@ router.post("/market/comments/:id/like", async (req: Request, res: Response): Pr
   }
 });
 
+/* ─── Ideal.BI — Busca Importadores ──────────────────────────────────────── */
+
+/**
+ * GET /market/bi/importadores
+ * Returns paginated list of wine importers.
+ * Query: q (search), limit (default 20, max 100), offset (default 0)
+ * Requires mercado:idealbi plan feature.
+ */
+router.get("/market/bi/importadores", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+
+  const allowed = await requirePlanFeature(req, res, userId, "mercado:idealbi");
+  if (!allowed) return;
+
+  const q = (req.query.q as string | undefined)?.trim() ?? "";
+  const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+  const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+
+  let query = supabaseAdmin
+    .from("bi_importadores")
+    .select("id, name, pais, segmentos, estado, created_at", { count: "exact" })
+    .order("name", { ascending: true })
+    .range(offset, offset + limit - 1);
+
+  if (q) {
+    query = query.or(`name.ilike.%${q}%,pais.ilike.%${q}%,segmentos.ilike.%${q}%,estado.ilike.%${q}%`);
+  }
+
+  const { data, error, count } = await query;
+  if (error) { res.status(500).json({ error: error.message }); return; }
+
+  res.json({ items: data ?? [], total: count ?? 0, limit, offset });
+});
+
+/* ─── Ideal.BI — Busca Exportadores ──────────────────────────────────────── */
+
+/**
+ * GET /market/bi/exportadores
+ * Returns paginated list of wine exporters.
+ * Commercial data (caixas, valor, preço) is included only for users with mercado:idealbi feature.
+ * Query: q (search), limit (default 20, max 100), offset (default 0)
+ * Requires mercado:idealbi plan feature.
+ */
+router.get("/market/bi/exportadores", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+
+  const allowed = await requirePlanFeature(req, res, userId, "mercado:idealbi");
+  if (!allowed) return;
+
+  const q = (req.query.q as string | undefined)?.trim() ?? "";
+  const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+  const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+
+  let query = supabaseAdmin
+    .from("bi_exportadores")
+    .select("id, name, pais_destino, produtos, caixas_exportadas, valor_vendido_cents, preco_medio_cents, created_at", { count: "exact" })
+    .order("caixas_exportadas", { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (q) {
+    query = query.or(`name.ilike.%${q}%,pais_destino.ilike.%${q}%,produtos.ilike.%${q}%`);
+  }
+
+  const { data, error, count } = await query;
+  if (error) { res.status(500).json({ error: error.message }); return; }
+
+  res.json({ items: data ?? [], total: count ?? 0, limit, offset });
+});
+
+/* ─── Ideal.BI — Busca Produtores Nacionais ──────────────────────────────── */
+
+/**
+ * GET /market/bi/produtores
+ * Returns paginated list of national wine producers.
+ * Query: q (search), limit (default 20, max 100), offset (default 0)
+ * Requires mercado:idealbi plan feature.
+ */
+router.get("/market/bi/produtores", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+
+  const allowed = await requirePlanFeature(req, res, userId, "mercado:idealbi");
+  if (!allowed) return;
+
+  const q = (req.query.q as string | undefined)?.trim() ?? "";
+  const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+  const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+
+  let query = supabaseAdmin
+    .from("bi_produtores")
+    .select("id, name, regiao, tipos, fundado, created_at", { count: "exact" })
+    .order("name", { ascending: true })
+    .range(offset, offset + limit - 1);
+
+  if (q) {
+    query = query.or(`name.ilike.%${q}%,regiao.ilike.%${q}%,tipos.ilike.%${q}%`);
+  }
+
+  const { data, error, count } = await query;
+  if (error) { res.status(500).json({ error: error.message }); return; }
+
+  res.json({ items: data ?? [], total: count ?? 0, limit, offset });
+});
+
 export default router;
