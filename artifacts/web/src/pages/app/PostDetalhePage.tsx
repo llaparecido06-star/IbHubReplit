@@ -42,8 +42,48 @@ function Avatar({ url, name, size = 40 }: { url?: string | null; name?: string |
   );
 }
 
+type MentionMap = Record<string, { id: string; isCompany: boolean }>;
 
-function CommentItem({ comment, depth = 0, onReply, currentUserId }: { comment: AppComment; depth?: number; onReply: (id: string, name: string) => void; currentUserId?: string }) {
+function renderMentionText(
+  text: string,
+  mentionMap: MentionMap,
+  navigate: (path: string) => void,
+): React.ReactNode {
+  const parts = text.split(/(@[\w.]+)/g);
+  return parts.map((part, i) => {
+    if (/^@[\w.]+$/.test(part)) {
+      const entry = mentionMap[part.slice(1).toLowerCase()];
+      if (entry) {
+        const path = entry.isCompany ? `/app/empresa/${entry.id}` : `/app/usuario/${entry.id}`;
+        return (
+          <span
+            key={i}
+            onClick={e => { e.stopPropagation(); navigate(path); }}
+            style={{ color: GOLD, fontWeight: 700, cursor: "pointer" }}
+          >
+            {part}
+          </span>
+        );
+      }
+    }
+    return <React.Fragment key={i}>{part}</React.Fragment>;
+  });
+}
+
+async function buildMentionMap(texts: string[]): Promise<MentionMap> {
+  const handles = [...new Set((texts.join(" ").match(/@([\w.]+)/g) ?? []).map(m => m.slice(1).toLowerCase()))];
+  if (!handles.length) return {};
+  const [{ data: profiles }, { data: companies }] = await Promise.all([
+    supabase.from("profiles").select("id, username").in("username", handles),
+    supabase.from("company_pages").select("id, slug").in("slug", handles),
+  ]);
+  const map: MentionMap = {};
+  for (const p of (profiles ?? [])) if ((p as any).username) map[(p as any).username.toLowerCase()] = { id: (p as any).id, isCompany: false };
+  for (const c of (companies ?? [])) if ((c as any).slug) map[(c as any).slug.toLowerCase()] = { id: (c as any).id, isCompany: true };
+  return map;
+}
+
+function CommentItem({ comment, depth = 0, onReply, currentUserId, mentionMap }: { comment: AppComment; depth?: number; onReply: (id: string, name: string) => void; currentUserId?: string; mentionMap: MentionMap }) {
   const [, setLocation] = useLocation();
   const [liked, setLiked] = useState(!!comment.is_liked);
   const [likesCount, setLikesCount] = useState(comment.likes_count ?? 0);
@@ -73,7 +113,9 @@ function CommentItem({ comment, depth = 0, onReply, currentUserId }: { comment: 
           <div onClick={goToAuthor} style={{ fontWeight: 700, fontSize: 13, color: NAVY, marginBottom: 4, cursor: comment.author?.id ? "pointer" : "default", display: "inline-block" }}>
             {comment.author?.full_name ?? "Usuário"}
           </div>
-          <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.5 }}>{comment.content}</div>
+          <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+            {renderMentionText(comment.content, mentionMap, setLocation)}
+          </div>
           <div style={{ display: "flex", gap: 16, marginTop: 8, alignItems: "center" }}>
             <span style={{ fontSize: 11, color: MUTED }}>{relativeDate(comment.created_at)}</span>
             <button
@@ -93,7 +135,7 @@ function CommentItem({ comment, depth = 0, onReply, currentUserId }: { comment: 
         </div>
       </div>
       {(comment.replies ?? []).map(r => (
-        <CommentItem key={r.id} comment={r} depth={depth + 1} onReply={onReply} currentUserId={currentUserId} />
+        <CommentItem key={r.id} comment={r} depth={depth + 1} onReply={onReply} currentUserId={currentUserId} mentionMap={mentionMap} />
       ))}
     </div>
   );
@@ -108,6 +150,7 @@ export default function PostDetalhePage() {
 
   const [post, setPost] = useState<Post | null>(null);
   const [comments, setComments] = useState<AppComment[]>([]);
+  const [mentionMap, setMentionMap] = useState<MentionMap>({});
   const [loading, setLoading] = useState(true);
   const [commentText, setCommentText] = useState("");
   const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
@@ -126,6 +169,11 @@ export default function PostDetalhePage() {
   }, [postId, profile?.id, companyId]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const texts = comments.flatMap(c => [c.content, ...(c.replies ?? []).map(r => r.content)]);
+    buildMentionMap(texts).then(setMentionMap);
+  }, [comments]);
 
   useEffect(() => {
     if (!postId || !profile?.id) return;
@@ -390,7 +438,7 @@ export default function PostDetalhePage() {
           {comments.length === 0 ? (
             <p style={{ color: MUTED, textAlign: "center", padding: "20px 0", fontSize: 14 }}>Seja o primeiro a comentar!</p>
           ) : (
-            comments.map(c => <CommentItem key={c.id} comment={c} onReply={handleReply} currentUserId={profile?.id} />)
+            comments.map(c => <CommentItem key={c.id} comment={c} onReply={handleReply} currentUserId={profile?.id} mentionMap={mentionMap} />)
           )}
         </div>
       </div>

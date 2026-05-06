@@ -36,6 +36,49 @@ import { formatRelativeDate } from "@/utils/dateUtils";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
+type MentionMap = Record<string, { id: string; isCompany: boolean }>;
+
+async function buildMentionMap(texts: string[]): Promise<MentionMap> {
+  const handles = [...new Set((texts.join(" ").match(/@([\w.]+)/g) ?? []).map(m => m.slice(1).toLowerCase()))];
+  if (!handles.length) return {};
+  const [{ data: profiles }, { data: companies }] = await Promise.all([
+    supabase.from("profiles").select("id, username").in("username", handles),
+    supabase.from("company_pages").select("id, slug").in("slug", handles),
+  ]);
+  const map: MentionMap = {};
+  for (const p of (profiles ?? [])) if ((p as any).username) map[(p as any).username.toLowerCase()] = { id: (p as any).id, isCompany: false };
+  for (const c of (companies ?? [])) if ((c as any).slug) map[(c as any).slug.toLowerCase()] = { id: (c as any).id, isCompany: true };
+  return map;
+}
+
+function MentionText({ text, mentionMap, style }: { text: string; mentionMap: MentionMap; style?: object }) {
+  const colors = useColors();
+  const router = useRouter();
+  const parts = text.split(/(@[\w.]+)/g);
+  return (
+    <Text style={style}>
+      {parts.map((part, i) => {
+        if (/^@[\w.]+$/.test(part)) {
+          const entry = mentionMap[part.slice(1).toLowerCase()];
+          if (entry) {
+            const path = entry.isCompany ? `/empresa/${entry.id}` : `/profile/${entry.id}`;
+            return (
+              <Text
+                key={i}
+                style={{ color: colors.gold, fontWeight: "700" }}
+                onPress={() => router.push(path as any)}
+              >
+                {part}
+              </Text>
+            );
+          }
+        }
+        return <Text key={i}>{part}</Text>;
+      })}
+    </Text>
+  );
+}
+
 type FlatItem = AppComment & { isReply: boolean; depth: number };
 
 function flattenComments(roots: AppComment[]): FlatItem[] {
@@ -71,6 +114,7 @@ export default function PostDetailScreen() {
 
   const [post, setPost] = useState<Post | null>(null);
   const [comments, setComments] = useState<AppComment[]>([]); // threaded roots
+  const [mentionMap, setMentionMap] = useState<MentionMap>({});
   const [comment, setComment] = useState("");
   const [replyTo, setReplyTo] = useState<{ id: string; name: string; commentId: string } | null>(null);
   const [loadingPost, setLoadingPost] = useState(true);
@@ -98,6 +142,11 @@ export default function PostDetailScreen() {
   }, [id, user?.id]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const texts = comments.flatMap(c => [c.content, ...(c.replies ?? []).map(r => r.content)]);
+    buildMentionMap(texts).then(setMentionMap);
+  }, [comments]);
 
   // Realtime: new comments from other users appear instantly
   useEffect(() => {
@@ -430,7 +479,7 @@ export default function PostDetailScreen() {
                 {item.company_page ? item.company_page.name : (item.author?.full_name ?? "Usuário")}
               </Text>
             </TouchableOpacity>
-            <Text style={[styles.commentContent, { color: colors.foreground }]}>{item.content}</Text>
+            <MentionText text={item.content} mentionMap={mentionMap} style={[styles.commentContent, { color: colors.foreground }]} />
           </View>
 
           <View style={styles.commentActions}>
