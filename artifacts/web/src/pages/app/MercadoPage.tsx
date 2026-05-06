@@ -1145,7 +1145,7 @@ function MarcaCompletaSearch({ userId, credits, creditsTotal, setCredits, setCre
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   type WineDistribuidor = { name: string; company_page_id: string | null };
-  type WineResult = { marcaCompleta: string; marcaRelatorio?: string; paisDeOrigem?: string; distribuidor: string; distribuidores: WineDistribuidor[] };
+  type WineResult = { marcaCompleta: string; exportador?: string; paisDeOrigem?: string; distribuidor: string; distribuidores: WineDistribuidor[] };
   const [result, setResult] = useState<WineResult | null | "not_found" | "out_of_scope">(null);
   const [brandExtracted, setBrandExtracted] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -1200,7 +1200,7 @@ function MarcaCompletaSearch({ userId, credits, creditsTotal, setCredits, setCre
       if (res.status === 422) { setResult("out_of_scope"); setSearching(false); return; }
       if (!res.ok) throw new Error("server error");
       const json = await res.json() as {
-        data: { marca_completa: string; marca_relatorio: string | null; pais_de_origem: string | null; distribuidor: string | null }[];
+        data: { marca_completa: string; exportador: string | null; pais_de_origem: string | null; distribuidor: string | null }[];
         distribuidores?: WineDistribuidor[];
         brand_extracted: string | null;
         credits_remaining: number;
@@ -1222,7 +1222,7 @@ function MarcaCompletaSearch({ userId, credits, creditsTotal, setCredits, setCre
             if (!seen.has(k)) { seen.add(k); distribuidores.push({ name: n, company_page_id: null }); }
           }
         }
-        setResult({ marcaCompleta: f.marca_completa, marcaRelatorio: f.marca_relatorio ?? undefined, paisDeOrigem: f.pais_de_origem ?? undefined, distribuidor: distribuidores[0]?.name ?? (f.distribuidor ?? "—"), distribuidores });
+        setResult({ marcaCompleta: f.marca_completa, exportador: f.exportador ?? undefined, paisDeOrigem: f.pais_de_origem ?? undefined, distribuidor: distribuidores[0]?.name ?? (f.distribuidor ?? "—"), distribuidores });
       } else {
         setResult("not_found");
       }
@@ -1330,8 +1330,8 @@ function MarcaCompletaSearch({ userId, credits, creditsTotal, setCredits, setCre
           </div>
 
           {([
-            ...(result.marcaRelatorio && result.marcaRelatorio !== result.marcaCompleta ? [{ icon: "🏷️", label: "Marca no Relatório", value: result.marcaRelatorio }] : []),
-            ...(result.paisDeOrigem ? [{ icon: "🌍", label: "País de Origem / Exportador", value: result.paisDeOrigem }] : []),
+            ...(result.exportador ? [{ icon: "🏢", label: "Exportador", value: result.exportador }] : []),
+            ...(result.paisDeOrigem ? [{ icon: "🌍", label: "País de Origem", value: result.paisDeOrigem }] : []),
           ] as { icon: string; label: string; value: string }[]).map(row => (
             <div key={row.label} style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
               <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{row.icon}</div>

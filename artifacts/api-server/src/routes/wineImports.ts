@@ -423,7 +423,7 @@ router.get("/wine-imports/search", async (req: Request, res: Response) => {
       const { data: fallbackCheck } = await supabaseAdmin
         .from("wine_imports")
         .select("id")
-        .or(`marca_completa.ilike.${fallbackPattern},marca_relatorio.ilike.${fallbackPattern}`)
+        .ilike("marca_completa", fallbackPattern)
         .limit(1);
 
       if (fallbackCheck && fallbackCheck.length > 0) {
@@ -444,8 +444,8 @@ router.get("/wine-imports/search", async (req: Request, res: Response) => {
   const pattern = `%${brandName}%`;
   const { data, error } = await supabaseAdmin
     .from("wine_imports")
-    .select("id, marca_completa, marca_relatorio, pais_de_origem, distribuidor")
-    .or(`marca_completa.ilike.${pattern},marca_relatorio.ilike.${pattern}`)
+    .select("id, marca_completa, exportador, pais_de_origem, distribuidor")
+    .ilike("marca_completa", pattern)
     .order("marca_completa")
     .limit(50);
 
@@ -466,8 +466,8 @@ router.get("/wine-imports/search", async (req: Request, res: Response) => {
       const prefixPattern = `%${prefix}%`;
       const { data: prefixData } = await supabaseAdmin
         .from("wine_imports")
-        .select("id, marca_completa, marca_relatorio, pais_de_origem, distribuidor")
-        .or(`marca_completa.ilike.${prefixPattern},marca_relatorio.ilike.${prefixPattern}`)
+        .select("id, marca_completa, exportador, pais_de_origem, distribuidor")
+        .ilike("marca_completa", prefixPattern)
         .order("marca_completa")
         .limit(50);
       if (prefixData && prefixData.length > 0) {
