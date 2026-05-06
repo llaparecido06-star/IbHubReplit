@@ -399,12 +399,12 @@ router.get("/market/bi/produtores", async (req: Request, res: Response): Promise
 
   let query = supabaseAdmin
     .from("bi_produtores")
-    .select("id, name, regiao, tipos, fundado, created_at", { count: "exact" })
+    .select("id, name, name_fantasia, regiao, estado, tipos, fundado, created_at", { count: "exact" })
     .order("name", { ascending: true })
     .range(offset, offset + limit - 1);
 
   if (q) {
-    query = query.or(`name.ilike.%${q}%,regiao.ilike.%${q}%,tipos.ilike.%${q}%`);
+    query = query.or(`name.ilike.%${q}%,name_fantasia.ilike.%${q}%,regiao.ilike.%${q}%,estado.ilike.%${q}%,tipos.ilike.%${q}%`);
   }
 
   const { data, error, count } = await query;
@@ -518,13 +518,14 @@ router.post("/market/bi/produtores", async (req: Request, res: Response): Promis
   if (!userId) return;
   const allowed = await requireAdmin(req, res, userId);
   if (!allowed) return;
-  const { name, regiao, tipos, fundado } = req.body as { name?: string; regiao?: string; tipos?: string; fundado?: number | null };
+  const { name, name_fantasia, regiao, estado, tipos, fundado } = req.body as { name?: string; name_fantasia?: string | null; regiao?: string; estado?: string | null; tipos?: string; fundado?: number | null };
   if (!name?.trim() || !regiao?.trim() || !tipos?.trim()) {
     res.status(400).json({ error: "name, regiao e tipos são obrigatórios" }); return;
   }
   const { data, error } = await supabaseAdmin.from("bi_produtores").insert({
-    name: name.trim(), regiao: regiao.trim(), tipos: tipos.trim(),
-    fundado: fundado ?? null,
+    name: name.trim(), name_fantasia: name_fantasia?.trim() || null,
+    regiao: regiao.trim(), estado: estado?.trim() || null,
+    tipos: tipos.trim(), fundado: fundado ?? null,
   }).select().single();
   if (error) { res.status(500).json({ error: error.message }); return; }
   res.status(201).json(data);
@@ -535,10 +536,12 @@ router.patch("/market/bi/produtores/:id", async (req: Request, res: Response): P
   if (!userId) return;
   const allowed = await requireAdmin(req, res, userId);
   if (!allowed) return;
-  const { name, regiao, tipos, fundado } = req.body as { name?: string; regiao?: string; tipos?: string; fundado?: number | null };
+  const { name, name_fantasia, regiao, estado, tipos, fundado } = req.body as { name?: string; name_fantasia?: string | null; regiao?: string; estado?: string | null; tipos?: string; fundado?: number | null };
   const updates: Record<string, string | number | null> = {};
   if (name?.trim()) updates.name = name.trim();
+  if (name_fantasia !== undefined) updates.name_fantasia = name_fantasia?.trim() || null;
   if (regiao?.trim()) updates.regiao = regiao.trim();
+  if (estado !== undefined) updates.estado = estado?.trim() || null;
   if (tipos?.trim()) updates.tipos = tipos.trim();
   if (fundado !== undefined) updates.fundado = fundado;
   if (!Object.keys(updates).length) { res.status(400).json({ error: "Nenhum campo enviado" }); return; }

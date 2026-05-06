@@ -4343,7 +4343,9 @@ export interface BiExportador {
 export interface BiProdutor {
   id: string;
   name: string;
+  name_fantasia: string | null;
   regiao: string;
+  estado: string | null;
   tipos: string;
   fundado: number | null;
   created_at: string;

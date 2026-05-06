@@ -33,7 +33,9 @@ export type BiExportador = typeof biExportadoresTable.$inferSelect;
 export const biProdutoresTable = pgTable("bi_produtores", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
+  nameFantasia: text("name_fantasia"),
   regiao: text("regiao").notNull(),
+  estado: text("estado"),
   tipos: text("tipos").notNull(),
   fundado: integer("fundado"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

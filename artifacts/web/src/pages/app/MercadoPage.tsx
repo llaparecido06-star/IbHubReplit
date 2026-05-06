@@ -887,9 +887,10 @@ function ProdutoresSearch() {
                 🍇
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 4 }}>{m.name}</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 2 }}>{m.name}</div>
+                {m.name_fantasia && <div style={{ fontSize: 12, color: MUTED, marginBottom: 4 }}>{m.name_fantasia}</div>}
                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, color: MUTED }}>📍 {m.regiao}</span>
+                  <span style={{ fontSize: 12, color: MUTED }}>📍 {m.regiao}{m.estado ? ` — ${m.estado}` : ""}</span>
                   {m.fundado && <span style={{ fontSize: 12, color: MUTED }}>🏛 Desde {m.fundado}</span>}
                 </div>
                 <div style={{ fontSize: 12, color: MUTED }}>{m.tipos}</div>

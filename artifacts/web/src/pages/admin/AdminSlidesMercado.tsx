@@ -61,7 +61,7 @@ type BiKind = "Importadores" | "Exportadores" | "Produtores";
 
 interface BiImp { id: string; name: string; pais: string; segmentos: string; estado: string; created_at: string; }
 interface BiExp { id: string; name: string; pais_destino: string; produtos: string; caixas_exportadas: number; valor_vendido_cents: number; preco_medio_cents: number; created_at: string; }
-interface BiProd { id: string; name: string; regiao: string; tipos: string; fundado: number | null; created_at: string; }
+interface BiProd { id: string; name: string; name_fantasia: string | null; regiao: string; estado: string | null; tipos: string; fundado: number | null; created_at: string; }
 type BiRow = BiImp | BiExp | BiProd;
 
 async function biApiFetch(path: string, method: string, body?: object): Promise<unknown> {
@@ -422,6 +422,8 @@ export default function AdminSlidesMercado() {
   const [biValor, setBiValor] = useState("");
   const [biPreco, setBiPreco] = useState("");
   const [biRegiao, setBiRegiao] = useState("");
+  const [biEstadoProd, setBiEstadoProd] = useState("");
+  const [biNomeFantasia, setBiNomeFantasia] = useState("");
   const [biTipos, setBiTipos] = useState("");
   const [biFundado, setBiFundado] = useState("");
 
@@ -459,7 +461,11 @@ export default function AdminSlidesMercado() {
       setBiPreco(r ? (r.preco_medio_cents / 100).toFixed(2) : "");
     } else {
       const r = row as BiProd | null;
-      setBiRegiao(r?.regiao ?? ""); setBiTipos(r?.tipos ?? ""); setBiFundado(r?.fundado?.toString() ?? "");
+      setBiNomeFantasia(r?.name_fantasia ?? "");
+      setBiRegiao(r?.regiao ?? "");
+      setBiEstadoProd(r?.estado ?? "");
+      setBiTipos(r?.tipos ?? "");
+      setBiFundado(r?.fundado?.toString() ?? "");
     }
   };
 
@@ -485,8 +491,15 @@ export default function AdminSlidesMercado() {
         if (id) await biApiFetch(`/market/bi/exportadores/${id}`, "PATCH", body);
         else await biApiFetch("/market/bi/exportadores", "POST", body);
       } else {
-        const body = { name: biName.trim(), regiao: biRegiao.trim(), tipos: biTipos.trim(), fundado: biFundado ? parseInt(biFundado) : null };
-        if (!body.name || !body.regiao || !body.tipos) { alert("Nome, região e tipos são obrigatórios"); setBiSaving(false); return; }
+        const body = {
+          name: biName.trim(),
+          name_fantasia: biNomeFantasia.trim() || null,
+          regiao: biRegiao.trim(),
+          estado: biEstadoProd.trim() || null,
+          tipos: biTipos.trim(),
+          fundado: biFundado ? parseInt(biFundado) : null,
+        };
+        if (!body.name || !body.regiao || !body.tipos) { alert("Razão Social, região e tipos são obrigatórios"); setBiSaving(false); return; }
         if (id) await biApiFetch(`/market/bi/produtores/${id}`, "PATCH", body);
         else await biApiFetch("/market/bi/produtores", "POST", body);
       }
@@ -788,8 +801,9 @@ export default function AdminSlidesMercado() {
                   <div style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: `${GOLD}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>🍷</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{r.name}</div>
+                    {r.name_fantasia && <div style={{ fontSize: 12, color: GOLD, fontStyle: "italic" }}>{r.name_fantasia}</div>}
                     <div style={{ fontSize: 12, color: "#8a93a2" }}>
-                      {r.regiao}{r.fundado ? ` · Fund. ${r.fundado}` : ""} · {r.tipos}
+                      📍 {r.regiao}{r.estado ? ` — ${r.estado}` : ""}{r.fundado ? ` · Fund. ${r.fundado}` : ""} · {r.tipos}
                     </div>
                   </div>
                   <button onClick={() => openBiModal("Produtores", r)} style={{ padding: "6px 12px", backgroundColor: `${GOLD}15`, color: GOLD, border: `1px solid ${GOLD}44`, borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>✏️ Editar</button>
@@ -925,7 +939,7 @@ export default function AdminSlidesMercado() {
               <button onClick={() => setBiModal(null)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#aaa" }}>✕</button>
             </div>
 
-            {inp("Nome *", biName, setBiName, { placeholder: "Nome da empresa" })}
+            {inp(biModal.kind === "Produtores" ? "Razão Social *" : "Nome *", biName, setBiName, { placeholder: biModal.kind === "Produtores" ? "Razão Social completa" : "Nome da empresa" })}
 
             {biModal.kind === "Importadores" && <>
               {inp("País de origem *", biPais, setBiPais, { placeholder: "Ex: Argentina" })}
@@ -942,7 +956,9 @@ export default function AdminSlidesMercado() {
             </>}
 
             {biModal.kind === "Produtores" && <>
+              {inp("Nome Fantasia", biNomeFantasia, setBiNomeFantasia, { placeholder: "Ex: Vinícola Miolo (opcional)" })}
               {inp("Região *", biRegiao, setBiRegiao, { placeholder: "Ex: Serra Gaúcha" })}
+              {inp("Estado (UF) *", biEstadoProd, setBiEstadoProd, { placeholder: "Ex: RS" })}
               {inp("Tipos de vinho *", biTipos, setBiTipos, { placeholder: "Ex: Espumantes, Merlot, Chardonnay" })}
               {inp("Ano de fundação", biFundado, setBiFundado, { placeholder: "Ex: 1989 (opcional)", type: "number" })}
             </>}
