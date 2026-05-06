@@ -21,6 +21,7 @@ import { formatRelativeDate as timeAgo } from "@/utils/dateUtils";
 
 const GOLD   = "#c9a84c";
 const NAVY   = "#0d1b2a";
+const WINE   = "#722f37";
 const MUTED  = "#7a8494";
 const BORDER = "#e8e8e3";
 const WHITE  = "#fff";
@@ -833,33 +834,35 @@ function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, set
           {items.map(m => (
             <div
               key={m.id}
-              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = GOLD; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = BORDER; }}
-              style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 16px", transition: "border-color 0.15s" }}
+              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = GOLD; (e.currentTarget as HTMLDivElement).style.boxShadow = `0 4px 18px rgba(201,168,76,0.10)`; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = BORDER; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 10px rgba(0,0,0,0.04)"; }}
+              style={{ backgroundColor: WHITE, border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "16px 18px", transition: "border-color 0.15s, box-shadow 0.15s", boxShadow: "0 2px 10px rgba(0,0,0,0.04)" }}
             >
               {/* Header row */}
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: m.exportadores.length > 0 ? 12 : 0 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>📦</div>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: m.exportadores.length > 0 ? 14 : 0 }}>
+                <div style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: `${GOLD}14`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>📦</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 5 }}>{m.name}</div>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: NAVY, backgroundColor: `${GOLD}18`, border: `1px solid ${GOLD}40`, borderRadius: 20, padding: "2px 10px" }}>
-                    {m.segmentos}
-                  </span>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 6 }}>{m.name}</div>
+                  {m.segmentos && (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: NAVY, backgroundColor: `${GOLD}12`, border: `1px solid ${GOLD}35`, borderRadius: 20, padding: "3px 12px" }}>
+                      {m.segmentos}
+                    </span>
+                  )}
                 </div>
-                <span style={{ fontSize: 10, fontWeight: 700, color: GOLD, backgroundColor: `${GOLD}18`, padding: "3px 8px", borderRadius: 20, flexShrink: 0, alignSelf: "flex-start" }}>IMPORTADOR</span>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: GOLD, backgroundColor: `${GOLD}15`, border: `1px solid ${GOLD}35`, padding: "3px 10px", borderRadius: 20, flexShrink: 0, alignSelf: "flex-start", textTransform: "uppercase" as const }}>Importador</span>
               </div>
               {/* Exportadores list */}
               {m.exportadores.length > 0 && (
-                <div style={{ marginLeft: 58, display: "flex", flexDirection: "column", gap: 6 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>
+                <div style={{ marginLeft: 62, borderTop: `1px solid ${BORDER}`, paddingTop: 12, display: "flex", flexDirection: "column", gap: 7 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase" as const, letterSpacing: 0.6, marginBottom: 2 }}>
                     Importa de
                   </div>
                   {m.exportadores.map((e, i) => (
                     <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-                      <span style={{ fontSize: 14 }}>🌍</span>
-                      <span style={{ fontWeight: 600, color: NAVY }}>{e.exportador}</span>
-                      <span style={{ color: MUTED }}>·</span>
-                      <span style={{ color: MUTED }}>{e.pais}</span>
+                      <span style={{ fontSize: 15 }}>🌍</span>
+                      <span style={{ fontWeight: 700, color: NAVY }}>{e.exportador}</span>
+                      <span style={{ width: 3, height: 3, borderRadius: "50%", backgroundColor: MUTED, flexShrink: 0, display: "inline-block" }} />
+                      <span style={{ color: MUTED, fontSize: 12 }}>{e.pais}</span>
                     </div>
                   ))}
                 </div>
@@ -1115,29 +1118,31 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
             const impLoading = importadoresLoading.has(m.id);
             const revealed   = revealedMap[m.name];
             return (
-              <div key={m.id} style={{ backgroundColor: WHITE, border: `1px solid ${isOpen ? GOLD : BORDER}`, borderRadius: 14, overflow: "hidden", transition: "border-color 0.15s" }}>
-                <div style={{ padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 14 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🌐</div>
+              <div key={m.id} style={{ backgroundColor: WHITE, border: `1.5px solid ${isOpen ? GOLD : BORDER}`, borderRadius: 16, overflow: "hidden", transition: "border-color 0.15s, box-shadow 0.15s", boxShadow: isOpen ? `0 4px 18px rgba(201,168,76,0.10)` : "0 2px 10px rgba(0,0,0,0.04)" }}>
+                <div style={{ padding: "16px 18px", display: "flex", alignItems: "flex-start", gap: 14 }}>
+                  <div style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: `${GOLD}14`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🌐</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>{m.name}</span>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: GOLD, backgroundColor: `${GOLD}18`, padding: "2px 7px", borderRadius: 20 }}>EXPORTADOR</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: GOLD, backgroundColor: `${GOLD}15`, border: `1px solid ${GOLD}35`, padding: "3px 10px", borderRadius: 20, textTransform: "uppercase" as const }}>Exportador</span>
                     </div>
                     {m.origem_exportador && (
-                      <div style={{ fontSize: 12, color: MUTED }}>🌍 {m.origem_exportador}</div>
+                      <div style={{ fontSize: 12, color: MUTED, display: "flex", alignItems: "center", gap: 5 }}>
+                        <span style={{ fontSize: 14 }}>🌍</span> {m.origem_exportador}
+                      </div>
                     )}
                   </div>
                   <button
                     onClick={() => { toggleCard(m.id); if (hasAccess && !expanded.has(m.id)) void loadImportadores(m.name, m.id); }}
                     style={{
-                      padding: "6px 12px", borderRadius: 8, flexShrink: 0,
-                      border: `1px solid ${isOpen ? GOLD : BORDER}`,
+                      padding: "7px 14px", borderRadius: 10, flexShrink: 0,
+                      border: `1.5px solid ${isOpen ? GOLD : BORDER}`,
                       backgroundColor: isOpen ? `${GOLD}15` : "transparent",
                       color: isOpen ? GOLD : MUTED,
                       fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
                       display: "flex", alignItems: "center", gap: 4, transition: "all 0.15s",
                     }}
-                  >{isOpen ? "▲ Ocultar" : "📊 Ver dados"}</button>
+                  >{isOpen ? "▲ Fechar" : "📊 Ver dados"}</button>
                 </div>
 
                 {showHint && (
@@ -1417,42 +1422,57 @@ function MarcaCompletaSearch({ userId, credits, creditsTotal, setCredits, setCre
 
       {!searching && result && result !== "not_found" && result !== "out_of_scope" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ backgroundColor: GOLD, borderRadius: 14, padding: "16px 20px" }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.75)", letterSpacing: 0.8, textTransform: "uppercase" as const, marginBottom: 4 }}>
-              {brandExtracted && brandExtracted.toLowerCase() !== result.marcaCompleta.toLowerCase() ? `IA identificou: ${brandExtracted}` : "Resultado encontrado"}
+          {/* ── Premium header card ── */}
+          <div style={{ backgroundColor: NAVY, borderRadius: 16, padding: "20px 22px", position: "relative", overflow: "hidden" }}>
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${GOLD}, ${GOLD}88)`, borderRadius: "16px 16px 0 0" }} />
+            <div style={{ fontSize: 10, fontWeight: 700, color: `${GOLD}cc`, letterSpacing: 1.2, textTransform: "uppercase" as const, marginBottom: 6 }}>
+              {brandExtracted && brandExtracted.toLowerCase() !== result.marcaCompleta.toLowerCase()
+                ? `IA identificou · ${brandExtracted}`
+                : "Rótulo encontrado"}
             </div>
-            <div style={{ fontSize: 20, fontWeight: 900, color: WHITE, lineHeight: 1.3, marginBottom: 8 }}>{result.marcaCompleta}</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }}>✓ 1 consulta utilizada · {credits} restante{credits !== 1 ? "s" : ""}</div>
+            <div style={{ fontSize: 21, fontWeight: 900, color: WHITE, lineHeight: 1.25, marginBottom: 10, letterSpacing: -0.2 }}>{result.marcaCompleta}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: GOLD, backgroundColor: `${GOLD}22`, border: `1px solid ${GOLD}44`, borderRadius: 20, padding: "3px 10px" }}>
+                ✓ 1 consulta usada
+              </span>
+              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.45)" }}>
+                {credits} crédito{credits !== 1 ? "s" : ""} restante{credits !== 1 ? "s" : ""}
+              </span>
+            </div>
           </div>
 
+          {/* ── Detail rows ── */}
           {([
             ...(result.exportador ? [{ icon: "🏢", label: "Exportador", value: result.exportador }] : []),
             ...(result.paisDeOrigem ? [{ icon: "🌍", label: "País de Origem", value: result.paisDeOrigem }] : []),
           ] as { icon: string; label: string; value: string }[]).map(row => (
-            <div key={row.label} style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{row.icon}</div>
+            <div key={row.label} style={{ backgroundColor: WHITE, border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "14px 18px", display: "flex", alignItems: "center", gap: 14, boxShadow: "0 2px 10px rgba(0,0,0,0.04)" }}>
+              <div style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: `${GOLD}14`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{row.icon}</div>
               <div>
-                <div style={{ fontSize: 12, color: MUTED, fontWeight: 600 }}>{row.label}</div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginTop: 2 }}>{row.value}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase" as const, letterSpacing: 0.6, marginBottom: 3 }}>{row.label}</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>{row.value}</div>
               </div>
             </div>
           ))}
 
+          {/* ── Importadores / distribuidores ── */}
           {result.distribuidores.length > 0 && (
-            <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 20px", display: "flex", alignItems: "flex-start", gap: 14 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>📦</div>
+            <div style={{ backgroundColor: WHITE, border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "14px 18px", display: "flex", alignItems: "flex-start", gap: 14, boxShadow: "0 2px 10px rgba(0,0,0,0.04)" }}>
+              <div style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: `${GOLD}14`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>📦</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 12, color: MUTED, fontWeight: 600 }}>
-                  {result.distribuidores.length > 1 ? `Quem importa no Brasil (${result.distribuidores.length})` : "Importador no Brasil"}
+                <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase" as const, letterSpacing: 0.6, marginBottom: 8 }}>
+                  {result.distribuidores.length > 1 ? `Importadores no Brasil (${result.distribuidores.length})` : "Importador no Brasil"}
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                   {result.distribuidores.map((d, idx) => (
                     d.company_page_id ? (
-                      <Link key={`${d.name}-${idx}`} href={`/app/empresa/${d.company_page_id}`} style={{ fontSize: 15, fontWeight: 800, color: GOLD, textDecoration: "underline", display: "inline-flex", alignItems: "center", gap: 6 }}>
-                        {d.name} <span style={{ fontSize: 11 }}>↗</span>
+                      <Link key={`${d.name}-${idx}`} href={`/app/empresa/${d.company_page_id}`}
+                        style={{ fontSize: 14, fontWeight: 800, color: GOLD, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6, borderBottom: `1px solid ${GOLD}30`, paddingBottom: 4 }}>
+                        {d.name}
+                        <span style={{ fontSize: 10, backgroundColor: `${GOLD}18`, border: `1px solid ${GOLD}40`, borderRadius: 10, padding: "1px 6px", fontWeight: 700 }}>Ver página ↗</span>
                       </Link>
                     ) : (
-                      <span key={`${d.name}-${idx}`} style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>{d.name}</span>
+                      <span key={`${d.name}-${idx}`} style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{d.name}</span>
                     )
                   ))}
                 </div>
@@ -1611,31 +1631,31 @@ function ProdutoresSearch({ userId, credits, creditsTotal, creditsLoading, setCr
           {items.map(m => (
             <div
               key={m.id}
-              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = GOLD; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = BORDER; }}
-              style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 14, transition: "border-color 0.15s" }}
+              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = GOLD; (e.currentTarget as HTMLDivElement).style.boxShadow = `0 4px 18px rgba(201,168,76,0.10)`; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = BORDER; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 10px rgba(0,0,0,0.04)"; }}
+              style={{ backgroundColor: WHITE, border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "16px 18px", display: "flex", alignItems: "flex-start", gap: 14, transition: "border-color 0.15s, box-shadow 0.15s", boxShadow: "0 2px 10px rgba(0,0,0,0.04)" }}
             >
-              <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
+              <div style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: `${WINE}12`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>
                 🍇
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 1 }}>{m.name}</div>
-                {m.name_fantasia && <div style={{ fontSize: 12, color: MUTED, marginBottom: 6 }}>{m.name_fantasia}</div>}
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 2 }}>{m.name}</div>
+                {m.name_fantasia && <div style={{ fontSize: 12, color: MUTED, marginBottom: 8 }}>{m.name_fantasia}</div>}
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {m.regiao && (
-                    <span style={{ fontSize: 11, fontWeight: 600, color: NAVY, backgroundColor: `${GOLD}18`, border: `1px solid ${GOLD}40`, borderRadius: 20, padding: "2px 9px" }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: NAVY, backgroundColor: `${GOLD}12`, border: `1px solid ${GOLD}35`, borderRadius: 20, padding: "3px 12px" }}>
                       📍 {m.regiao}
                     </span>
                   )}
                   {m.estado && (
-                    <span style={{ fontSize: 11, fontWeight: 600, color: NAVY, backgroundColor: `${GOLD}18`, border: `1px solid ${GOLD}40`, borderRadius: 20, padding: "2px 9px" }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: MUTED, backgroundColor: "#f5f5f3", border: `1px solid ${BORDER}`, borderRadius: 20, padding: "3px 12px" }}>
                       {m.estado}
                     </span>
                   )}
                 </div>
               </div>
-              <span style={{ fontSize: 10, fontWeight: 700, color: "#722f37", backgroundColor: "#f9f0f1", padding: "3px 8px", borderRadius: 20, flexShrink: 0, alignSelf: "flex-start" }}>
-                PRODUTOR
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: WINE, backgroundColor: `${WINE}12`, border: `1px solid ${WINE}35`, padding: "3px 10px", borderRadius: 20, flexShrink: 0, alignSelf: "flex-start", textTransform: "uppercase" as const }}>
+                Produtor
               </span>
             </div>
           ))}
