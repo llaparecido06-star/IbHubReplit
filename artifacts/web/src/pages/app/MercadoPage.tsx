@@ -1281,7 +1281,7 @@ function MarcaCompletaSearch({ userId, credits, creditsTotal, setCredits, setCre
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const handleSearch = async (overrideQ?: string) => {
+  const handleSearch = async (overrideQ?: string, isDirect = false) => {
     const q = (overrideQ ?? query).trim();
     if (!q || searching || exhausted) return;
     setShowSuggestions(false);
@@ -1290,7 +1290,8 @@ function MarcaCompletaSearch({ userId, credits, creditsTotal, setCredits, setCre
     setBrandExtracted(null);
     try {
       const headers = await getAuthHeader();
-      const res = await fetch(`${apiBase}/wine-imports/search?q=${encodeURIComponent(q)}`, { headers });
+      const url = `${apiBase}/wine-imports/search?q=${encodeURIComponent(q)}${isDirect ? "&direct=true" : ""}`;
+      const res = await fetch(url, { headers });
       if (res.status === 402) { setCredits(0); setResult("not_found"); setSearching(false); return; }
       if (res.status === 422) { setResult("out_of_scope"); setSearching(false); return; }
       if (!res.ok) throw new Error("server error");
@@ -1352,11 +1353,11 @@ function MarcaCompletaSearch({ userId, credits, creditsTotal, setCredits, setCre
                 key={s}
                 id={`marca-suggest-${i}`}
                 onMouseDown={e => e.preventDefault()}
-                onClick={() => { setQuery(s); setShowSuggestions(false); void handleSearch(s); }}
+                onClick={() => { setQuery(s); setShowSuggestions(false); void handleSearch(s, true); }}
                 onKeyDown={e => {
                   if (e.key === "ArrowDown") { document.getElementById(`marca-suggest-${i + 1}`)?.focus(); e.preventDefault(); }
                   if (e.key === "ArrowUp")   { i === 0 ? (document.querySelector("input") as HTMLInputElement)?.focus() : document.getElementById(`marca-suggest-${i - 1}`)?.focus(); e.preventDefault(); }
-                  if (e.key === "Enter")     { setQuery(s); setShowSuggestions(false); void handleSearch(s); }
+                  if (e.key === "Enter")     { setQuery(s); setShowSuggestions(false); void handleSearch(s, true); }
                   if (e.key === "Escape")    { setShowSuggestions(false); }
                 }}
                 style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "11px 16px", textAlign: "left", background: "none", border: "none", borderBottom: i < suggestions.length - 1 ? `1px solid ${BORDER}` : "none", cursor: "pointer", fontSize: 14, color: NAVY, fontFamily: "inherit" }}
