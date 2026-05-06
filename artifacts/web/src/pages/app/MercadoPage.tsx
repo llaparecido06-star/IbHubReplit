@@ -1121,27 +1121,6 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
                         </div>
                       )}
 
-                      {revealed && revealed.distribuidores.length > 0 && (
-                        <div style={{ marginBottom: 4 }}>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase" as const, letterSpacing: 0.7, marginBottom: 8 }}>
-                            📦 Por Distribuidor
-                          </div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                            {revealed.distribuidores.map((d, i) => (
-                              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", backgroundColor: WHITE, borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 12 }}>
-                                <span style={{ fontWeight: 600, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                  {d.distribuidor ?? "—"}
-                                </span>
-                                <span style={{ color: MUTED, marginLeft: 8, flexShrink: 0, fontSize: 11 }}>
-                                  {d.fob_usd ? `US$ ${parseFloat(d.fob_usd).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "–"}
-                                  {" · "}
-                                  {d.cx9l ? `${parseFloat(d.cx9l).toLocaleString("pt-BR")} CX` : "–"}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </div>
                 )}
