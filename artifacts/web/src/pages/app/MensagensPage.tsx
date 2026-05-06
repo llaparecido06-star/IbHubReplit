@@ -242,8 +242,10 @@ export default function MensagensPage() {
   const [uploading, setUploading]         = useState(false);
   const [isRecording, setIsRecording]     = useState(false);
 
-  const bottomRef  = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const bottomRef          = useRef<HTMLDivElement>(null);
+  const fileInputRef       = useRef<HTMLInputElement>(null);
+  const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const seenMsgIds         = useRef<Set<string>>(new Set());
 
   // Parse ?conv=<id> from URL to auto-open a specific conversation
   const convIdFromUrl = new URLSearchParams(searchStr).get("conv");
@@ -278,11 +280,73 @@ export default function MensagensPage() {
   }, [userId, authLoading, activeCompany?.id]);
 
   const loadMessages = useCallback(async (convo: WebConversation) => {
+    // Tear down any existing realtime channel before switching conversations
+    if (realtimeChannelRef.current) {
+      supabase.removeChannel(realtimeChannelRef.current);
+      realtimeChannelRef.current = null;
+    }
+    seenMsgIds.current = new Set();
     setSelected(convo);
     const msgs = await fetchWebMessages(convo.id);
+    msgs.forEach(m => seenMsgIds.current.add(m.id));
     setMessages(msgs);
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
   }, []);
+
+  // Realtime subscription for the open 1:1 conversation
+  useEffect(() => {
+    if (!selected?.id || !userId) return;
+
+    const ch = supabase
+      .channel(`web-dm:${selected.id}:${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${selected.id}` },
+        async (payload) => {
+          const raw = payload.new as Record<string, unknown>;
+          const rawId = raw.id as string;
+          // Skip messages we already rendered (our own optimistic sends or re-delivered)
+          if (seenMsgIds.current.has(rawId)) return;
+          seenMsgIds.current.add(rawId);
+          // Our own sends are already optimistic — don't duplicate
+          if (raw.sender_id === userId) return;
+          // Fetch sender profile for the avatar / name
+          const { data: sp } = await supabase
+            .from("profiles")
+            .select("id, full_name, avatar_url")
+            .eq("id", raw.sender_id as string)
+            .maybeSingle();
+          const msg: WebMessage = {
+            id: rawId,
+            conversation_id: raw.conversation_id as string,
+            sender_id: raw.sender_id as string,
+            content: (raw.content as string) ?? "",
+            message_type: (raw.message_type as string | null) ?? null,
+            media_url: (raw.media_url as string | null) ?? null,
+            created_at: raw.created_at as string,
+            sender: sp
+              ? { id: sp.id as string, full_name: (sp.full_name as string | null) ?? "", avatar_url: sp.avatar_url as string | null }
+              : undefined,
+          };
+          setMessages(prev => [...prev, msg]);
+          // Keep the conversation list preview fresh
+          setConversations(prev => prev.map(c =>
+            c.id === (raw.conversation_id as string)
+              ? { ...c, last_message: (raw.content as string) ?? "", last_message_at: raw.created_at as string }
+              : c,
+          ));
+          setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
+        },
+      )
+      .subscribe();
+
+    realtimeChannelRef.current = ch;
+
+    return () => {
+      supabase.removeChannel(ch);
+      realtimeChannelRef.current = null;
+    };
+  }, [selected?.id, userId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
