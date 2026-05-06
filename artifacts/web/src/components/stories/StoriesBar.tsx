@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { fetchWebStories, markStoryViewed, createWebStory, WebStoryGroup, WebStory } from "@/services/api";
+import { fetchWebStories, markStoryViewed, WebStoryGroup, WebStory } from "@/services/api";
 
 const GOLD = "#c9a84c";
 const NAVY = "#0d1b2a";
@@ -148,54 +148,11 @@ function StoryViewer({
   );
 }
 
-/* ─── Create Story Modal ─── */
-function CreateStoryModal({ userId, onClose, onCreated }: { userId: string; onClose: () => void; onCreated: () => void }) {
-  const [text, setText] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleCreate = async () => {
-    if (!text.trim() && !imageUrl.trim()) { setError("Adicione um texto ou URL de imagem."); return; }
-    setError("");
-    setSubmitting(true);
-    const story = await createWebStory({ user_id: userId, text: text.trim() || undefined, image_url: imageUrl.trim() || undefined });
-    setSubmitting(false);
-    if (story) { onCreated(); onClose(); }
-    else setError("Erro ao publicar. Tente novamente.");
-  };
-
-  return (
-    <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.7)", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ backgroundColor: "#fff", borderRadius: 18, padding: 28, width: "min(440px, 94vw)" }}>
-        <h3 style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 6 }}>📸 Criar Momento</h3>
-        <p style={{ color: MUTED, fontSize: 13, marginBottom: 18 }}>Compartilhe um momento com a comunidade do vinho. Fica ativo por 24 horas.</p>
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 13, fontWeight: 600, color: NAVY, display: "block", marginBottom: 6 }}>URL da imagem (opcional)</label>
-          <input value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="https://..." style={{ width: "100%", padding: "10px 13px", borderRadius: 9, border: `1.5px solid ${BORDER}`, fontSize: 14, boxSizing: "border-box" }} />
-        </div>
-        <div style={{ marginBottom: 18 }}>
-          <label style={{ fontSize: 13, fontWeight: 600, color: NAVY, display: "block", marginBottom: 6 }}>Texto do momento</label>
-          <textarea value={text} onChange={e => setText(e.target.value)} placeholder="O que você está apreciando? 🍷" rows={4} style={{ width: "100%", padding: "10px 13px", borderRadius: 9, border: `1.5px solid ${BORDER}`, fontSize: 14, fontFamily: "inherit", resize: "none", boxSizing: "border-box" }} />
-        </div>
-        {error && <p style={{ color: "#dc3545", fontSize: 13, marginBottom: 12 }}>{error}</p>}
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button onClick={onClose} style={{ padding: "10px 20px", borderRadius: 9, border: `1.5px solid ${BORDER}`, backgroundColor: "#fff", color: NAVY, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>Cancelar</button>
-          <button onClick={handleCreate} disabled={submitting} style={{ padding: "10px 24px", borderRadius: 9, border: "none", backgroundColor: GOLD, color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
-            {submitting ? "Publicando..." : "Publicar momento"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ─── Main StoriesBar ─── */
 export default function StoriesBar({ userId }: { userId?: string }) {
   const [groups, setGroups] = useState<WebStoryGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewer, setViewer] = useState<{ groupIdx: number; storyIdx: number } | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
 
   const load = useCallback(() => {
     if (!userId) return;
@@ -204,24 +161,12 @@ export default function StoriesBar({ userId }: { userId?: string }) {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading || (groups.length === 0 && !userId)) return null;
+  if (loading || groups.length === 0) return null;
 
   return (
     <>
       <div style={{ backgroundColor: "#fff", borderRadius: 14, border: `1px solid ${BORDER}`, padding: "14px 16px", marginBottom: 16, overflowX: "auto" }}>
         <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-          {userId && (
-            <button
-              onClick={() => setShowCreate(true)}
-              style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", flexShrink: 0, width: 58 }}
-            >
-              <div style={{ width: 56, height: 56, borderRadius: "50%", border: `2px dashed ${GOLD}`, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: `${GOLD}12` }}>
-                <span style={{ fontSize: 22 }}>＋</span>
-              </div>
-              <span style={{ fontSize: 11, color: MUTED, textAlign: "center", width: 58, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Seu momento</span>
-            </button>
-          )}
-
           {groups.map((group, gIdx) => (
             <button
               key={group.userId}
@@ -244,12 +189,6 @@ export default function StoriesBar({ userId }: { userId?: string }) {
             </button>
           ))}
 
-          {groups.length === 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, color: MUTED, fontSize: 13, paddingLeft: 4, paddingTop: 4 }}>
-              <span>🍷</span>
-              <span>Nenhum momento ativo. Seja o primeiro!</span>
-            </div>
-          )}
         </div>
       </div>
 
@@ -260,14 +199,6 @@ export default function StoriesBar({ userId }: { userId?: string }) {
           startStory={viewer.storyIdx}
           viewerId={userId}
           onClose={() => setViewer(null)}
-        />
-      )}
-
-      {showCreate && userId && (
-        <CreateStoryModal
-          userId={userId}
-          onClose={() => setShowCreate(false)}
-          onCreated={() => { load(); }}
         />
       )}
     </>
