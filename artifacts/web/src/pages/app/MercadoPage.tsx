@@ -833,18 +833,35 @@ function ImportadoresSearch({ userId }: { userId: string }) {
               key={m.id}
               onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = GOLD; }}
               onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = BORDER; }}
-              style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 14, transition: "border-color 0.15s" }}
+              style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 16px", transition: "border-color 0.15s" }}
             >
-              <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>📦</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 4 }}>{m.name}</div>
-                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, color: MUTED }}>🌍 {m.pais}</span>
-                  <span style={{ fontSize: 12, color: MUTED }}>📍 {m.estado}</span>
+              {/* Header row */}
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: m.exportadores.length > 0 ? 12 : 0 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>📦</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 5 }}>{m.name}</div>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: NAVY, backgroundColor: `${GOLD}18`, border: `1px solid ${GOLD}40`, borderRadius: 20, padding: "2px 10px" }}>
+                    {m.segmentos}
+                  </span>
                 </div>
-                <div style={{ fontSize: 12, color: MUTED }}>{m.segmentos}</div>
+                <span style={{ fontSize: 10, fontWeight: 700, color: GOLD, backgroundColor: `${GOLD}18`, padding: "3px 8px", borderRadius: 20, flexShrink: 0, alignSelf: "flex-start" }}>IMPORTADOR</span>
               </div>
-              <span style={{ fontSize: 10, fontWeight: 700, color: GOLD, backgroundColor: `${GOLD}18`, padding: "3px 8px", borderRadius: 20, flexShrink: 0, alignSelf: "flex-start" }}>IMPORTADOR</span>
+              {/* Exportadores list */}
+              {m.exportadores.length > 0 && (
+                <div style={{ marginLeft: 58, display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>
+                    Importa de
+                  </div>
+                  {m.exportadores.map((e, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                      <span style={{ fontSize: 14 }}>🌍</span>
+                      <span style={{ fontWeight: 600, color: NAVY }}>{e.exportador}</span>
+                      <span style={{ color: MUTED }}>·</span>
+                      <span style={{ color: MUTED }}>{e.pais}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
           {items.length < total && <CarregarMaisBtn onClick={loadMore} loading={loadingMore} />}

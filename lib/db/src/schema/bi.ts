@@ -7,7 +7,6 @@ export const biImportadoresTable = pgTable("bi_importadores", {
   name: text("name").notNull(),
   pais: text("pais").notNull(),
   segmentos: text("segmentos").notNull(),
-  estado: text("estado").notNull(),
   exportador: text("exportador"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

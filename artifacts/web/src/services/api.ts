@@ -4323,11 +4323,8 @@ export async function sendMentionNotifications(
 export interface BiImportador {
   id: string;
   name: string;
-  pais: string;
   segmentos: string;
-  estado: string;
-  exportador: string | null;
-  created_at: string;
+  exportadores: Array<{ exportador: string; pais: string }>;
 }
 
 export interface BiExportador {

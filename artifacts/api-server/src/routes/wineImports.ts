@@ -184,18 +184,36 @@ router.get("/wine-imports/bi-search/importadores", async (req: Request, res: Res
     if (consumed) credits = { ...credits, ...consumed };
   }
 
+  type RawRow = { id: string; name: string; pais: string; segmentos: string; exportador: string | null };
+  type GroupedItem = { id: string; name: string; segmentos: string; exportadores: { exportador: string; pais: string }[] };
+
   let query = supabaseAdmin
     .from("bi_importadores")
-    .select("id, name, pais, estado, segmentos, created_at", { count: "exact" })
-    .order("name", { ascending: true })
-    .range(offset, offset + limit - 1);
+    .select("id, name, pais, segmentos, exportador")
+    .order("name", { ascending: true });
 
-  if (q) query = query.or(`name.ilike.%${q}%,pais.ilike.%${q}%,estado.ilike.%${q}%,segmentos.ilike.%${q}%`);
+  if (q) query = query.or(`name.ilike.%${q}%,pais.ilike.%${q}%,segmentos.ilike.%${q}%,exportador.ilike.%${q}%`);
 
-  const { data, error, count } = await query;
+  const { data, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
 
-  return res.json({ items: data ?? [], total: count ?? 0, limit, offset, credits_remaining: credits.credits_remaining, credits_total: credits.credits_total });
+  // Group rows by distribuidor name — one importador may import from many exportadores
+  const grouped = new Map<string, GroupedItem>();
+  for (const row of (data ?? []) as RawRow[]) {
+    const key = row.name.trim();
+    if (!grouped.has(key)) {
+      grouped.set(key, { id: row.id, name: row.name, segmentos: row.segmentos ?? "", exportadores: [] });
+    }
+    if (row.exportador) {
+      grouped.get(key)!.exportadores.push({ exportador: row.exportador, pais: row.pais ?? "" });
+    }
+  }
+
+  const allGroups = Array.from(grouped.values());
+  const total = allGroups.length;
+  const items = allGroups.slice(offset, offset + limit);
+
+  return res.json({ items, total, limit, offset, credits_remaining: credits.credits_remaining, credits_total: credits.credits_total });
 });
 
 router.get("/wine-imports/bi-search/exportadores", async (req: Request, res: Response) => {
