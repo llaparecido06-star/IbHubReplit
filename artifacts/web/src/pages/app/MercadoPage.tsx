@@ -608,57 +608,145 @@ function BiSearchBar({ value, onChange, placeholder }: { value: string; onChange
   );
 }
 
+/* ─── Shared Credits Hook ────────────────────────────────────────── */
+function useCredits(userId: string) {
+  const [credits, setCredits] = useState<number | null>(null);
+  const [creditsTotal, setCreditsTotal] = useState(3);
+  const [creditsLoading, setCreditsLoading] = useState(true);
+  const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
+
+  const refresh = async () => {
+    try {
+      const session = await getCachedSession();
+      const headers: HeadersInit = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+      const res = await fetch(`${apiBase}/wine-imports/credits`, { headers });
+      if (!res.ok) return;
+      const json = await res.json() as { credits_remaining: number; credits_total: number };
+      setCredits(json.credits_remaining);
+      setCreditsTotal(json.credits_total);
+    } catch {} finally { setCreditsLoading(false); }
+  };
+
+  useEffect(() => { void refresh(); }, [userId]);
+  return { credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal };
+}
+
+/* ─── Shared Credits Bar ─────────────────────────────────────────── */
+function CreditsBar({ credits, creditsTotal, loading }: { credits: number | null; creditsTotal: number; loading: boolean }) {
+  const color = (credits ?? 3) >= 2 ? "#16a34a" : (credits ?? 3) === 1 ? "#d97706" : "#dc2626";
+  const bg    = (credits ?? 3) >= 2 ? "#dcfce7" : (credits ?? 3) === 1 ? "#fef3c7" : "#fef2f2";
+  return (
+    <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "10px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+      <span style={{ fontSize: 16 }}>{loading ? "⏳" : "🔑"}</span>
+      <div style={{ flex: 1 }}>
+        <span style={{ fontSize: 12, color: MUTED, fontWeight: 600 }}>Consultas disponíveis — </span>
+        {loading ? (
+          <span style={{ fontSize: 12, color: MUTED }}>Carregando…</span>
+        ) : (
+          <>
+            <span style={{ fontSize: 14, fontWeight: 900, color: NAVY }}>{credits}</span>
+            <span style={{ fontSize: 12, color: MUTED }}> de {creditsTotal}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, marginLeft: 8, padding: "2px 8px", borderRadius: 20, backgroundColor: bg, color }}>
+              {(credits ?? 0) >= 2 ? "OK" : (credits ?? 0) === 1 ? "Última" : "Esgotado"}
+            </span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Importadores Search ────────────────────────────────────────── */
 const SEARCH_PAGE_SIZE = 5;
 
-function ImportadoresSearch() {
+function ImportadoresSearch({ userId }: { userId: string }) {
   const [q, setQ] = useState("");
-  const [debouncedQ, setDebouncedQ] = useState("");
+  const [submittedQ, setSubmittedQ] = useState<string | null>(null);
   const [items, setItems] = useState<BiImportador[]>([]);
   const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [offset, setOffset] = useState(0);
   const [error, setError] = useState<null | "paywall" | "error">(null);
+  const [searched, setSearched] = useState(false);
+  const { credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal } = useCredits(userId);
+  const exhausted = credits === 0;
+  const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
 
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedQ(q.trim()), 350);
-    return () => clearTimeout(t);
-  }, [q]);
-
-  useEffect(() => {
-    setLoading(true);
+  const doSearch = async (searchQ: string, fromOffset = 0, append = false) => {
+    if (append) setLoadingMore(true); else setLoading(true);
     setError(null);
-    setOffset(0);
-    fetchBiImportadores(debouncedQ, PAGE_SIZE, 0)
-      .then(r => { setItems(r.items); setTotal(r.total); })
-      .catch(e => { setError(e instanceof BiAccessError ? "paywall" : "error"); setItems([]); })
-      .finally(() => setLoading(false));
-  }, [debouncedQ]);
-
-  const loadMore = () => {
-    const next = offset + PAGE_SIZE;
-    setLoadingMore(true);
-    fetchBiImportadores(debouncedQ, PAGE_SIZE, next)
-      .then(r => { setItems(prev => [...prev, ...r.items]); setOffset(next); })
-      .catch(() => {})
-      .finally(() => setLoadingMore(false));
+    try {
+      const session = await getCachedSession();
+      const token = session?.access_token;
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(fromOffset), ...(searchQ ? { q: searchQ } : {}) });
+      const res = await fetch(`${apiBase}/wine-imports/bi-search/importadores?${params}`, { headers });
+      if (res.status === 401 || res.status === 403) { setError("paywall"); return; }
+      if (res.status === 402) { setCredits(0); setError("error"); return; }
+      if (!res.ok) { setError("error"); return; }
+      const data = await res.json() as { items: BiImportador[]; total: number; credits_remaining: number; credits_total: number };
+      if (append) {
+        setItems(prev => [...prev, ...data.items]);
+        setOffset(fromOffset);
+      } else {
+        setItems(data.items);
+        setTotal(data.total);
+        setOffset(0);
+        setSearched(true);
+      }
+      if (data.credits_remaining !== undefined) setCredits(data.credits_remaining);
+      if (data.credits_total !== undefined) setCreditsTotal(data.credits_total);
+    } catch { setError("error"); }
+    finally { setLoading(false); setLoadingMore(false); }
   };
+
+  const handleSubmit = () => {
+    const sq = q.trim();
+    if (exhausted) return;
+    setSubmittedQ(sq);
+    setSearched(false);
+    void doSearch(sq, 0, false);
+  };
+
+  const loadMore = () => { void doSearch(submittedQ ?? "", offset + PAGE_SIZE, true); };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <BiSearchBar value={q} onChange={setQ} placeholder="Buscar importador por nome, país ou segmento…" />
-      {!loading && !error && (
-        <div style={{ fontSize: 12, color: MUTED }}>
-          {total} importador{total !== 1 ? "es" : ""} encontrado{total !== 1 ? "s" : ""}
+      <CreditsBar credits={credits} creditsTotal={creditsTotal} loading={creditsLoading} />
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ flex: 1, backgroundColor: WHITE, border: `1.5px solid ${BORDER}`, borderRadius: 12, padding: "4px 4px 4px 14px", display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 16 }}>📦</span>
+          <input
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") handleSubmit(); }}
+            placeholder={exhausted ? "Consultas esgotadas" : "Nome do importador, país ou segmento…"}
+            disabled={exhausted}
+            style={{ flex: 1, padding: "10px 0", border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", backgroundColor: "transparent", color: NAVY }}
+          />
+          {q && <button onClick={() => { setQ(""); setSearched(false); setItems([]); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, padding: "0 8px" }}>×</button>}
+        </div>
+        <button
+          onClick={handleSubmit}
+          disabled={exhausted || !q.trim()}
+          style={{ padding: "0 18px", borderRadius: 12, border: "none", backgroundColor: exhausted || !q.trim() ? BORDER : NAVY, color: WHITE, fontWeight: 700, fontSize: 13, cursor: exhausted || !q.trim() ? "default" : "pointer", fontFamily: "inherit", flexShrink: 0 }}
+        >
+          {loading ? "…" : "Buscar"}
+        </button>
+      </div>
+      {!searched && !loading && (
+        <div style={{ backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "12px 16px", fontSize: 13, color: MUTED }}>
+          🔑 Digite o nome de um importador e clique em <strong>Buscar</strong> — cada consulta consome 1 crédito.
         </div>
       )}
       {loading ? <BiLoadingSkeleton /> : error ? (
         <BiErrorState paywall={error === "paywall"} />
-      ) : items.length === 0 ? (
-        <BiEmptyState q={debouncedQ} label="importador" />
-      ) : (
+      ) : searched && items.length === 0 ? (
+        <BiEmptyState q={submittedQ ?? ""} label="importador" />
+      ) : searched ? (
         <>
+          <div style={{ fontSize: 12, color: MUTED }}>{total} importador{total !== 1 ? "es" : ""} encontrado{total !== 1 ? "s" : ""}</div>
           {items.map(m => (
             <div
               key={m.id}
@@ -666,9 +754,7 @@ function ImportadoresSearch() {
               onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = BORDER; }}
               style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 14, transition: "border-color 0.15s" }}
             >
-              <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
-                📦
-              </div>
+              <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>📦</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 4 }}>{m.name}</div>
                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
@@ -677,63 +763,129 @@ function ImportadoresSearch() {
                 </div>
                 <div style={{ fontSize: 12, color: MUTED }}>{m.segmentos}</div>
               </div>
-              <span style={{ fontSize: 10, fontWeight: 700, color: GOLD, backgroundColor: `${GOLD}18`, padding: "3px 8px", borderRadius: 20, flexShrink: 0, alignSelf: "flex-start" }}>
-                IMPORTADOR
-              </span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: GOLD, backgroundColor: `${GOLD}18`, padding: "3px 8px", borderRadius: 20, flexShrink: 0, alignSelf: "flex-start" }}>IMPORTADOR</span>
             </div>
           ))}
           {items.length < total && <CarregarMaisBtn onClick={loadMore} loading={loadingMore} />}
         </>
+      ) : null}
+    </div>
+  );
+}
+
+/* ─── Exportadores + Marca Completa (aba unificada) ──────────────── */
+
+type ExportSubMode = "exportador" | "marca";
+
+function ExportadoresMarcaSearch({ userId, hasAccess }: { userId: string; hasAccess: boolean }) {
+  const [mode, setMode] = useState<ExportSubMode>("exportador");
+  const { credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal } = useCredits(userId);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <CreditsBar credits={credits} creditsTotal={creditsTotal} loading={creditsLoading} />
+      {/* Sub-mode chips */}
+      <div style={{ display: "flex", gap: 8 }}>
+        {([
+          { key: "exportador" as ExportSubMode, icon: "🌐", label: "Buscar Exportador" },
+          { key: "marca"      as ExportSubMode, icon: "🔍", label: "Buscar por Rótulo" },
+        ]).map(m => {
+          const active = mode === m.key;
+          return (
+            <button
+              key={m.key}
+              onClick={() => setMode(m.key)}
+              style={{
+                display: "flex", alignItems: "center", gap: 5, padding: "7px 16px", borderRadius: 20,
+                border: `1px solid ${active ? NAVY : BORDER}`,
+                backgroundColor: active ? NAVY : WHITE,
+                color: active ? WHITE : MUTED,
+                fontWeight: active ? 700 : 500, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+                transition: "all 0.15s",
+              }}
+            >{m.icon} {m.label}</button>
+          );
+        })}
+      </div>
+
+      {mode === "exportador" && (
+        <ExportadorList
+          userId={userId}
+          hasAccess={hasAccess}
+          credits={credits}
+          setCredits={setCredits}
+          setCreditsTotal={setCreditsTotal}
+        />
+      )}
+      {mode === "marca" && (
+        <MarcaCompletaSearch
+          userId={userId}
+          credits={credits}
+          creditsTotal={creditsTotal}
+          setCredits={setCredits}
+          setCreditsTotal={setCreditsTotal}
+        />
       )}
     </div>
   );
 }
 
-/* ─── Exportadores Search ────────────────────────────────────────── */
-
-function ExportadoresSearch({ hasAccess }: { hasAccess: boolean }) {
+/* ─── Exportador list (sub-component) ───────────────────────────── */
+function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTotal }: {
+  userId: string; hasAccess: boolean;
+  credits: number | null;
+  setCredits: (n: number) => void;
+  setCreditsTotal: (n: number) => void;
+}) {
   const [q, setQ] = useState("");
-  const [debouncedQ, setDebouncedQ] = useState("");
+  const [submittedQ, setSubmittedQ] = useState<string | null>(null);
   const [items, setItems] = useState<BiExportador[]>([]);
   const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [offset, setOffset] = useState(0);
+  const [error, setError] = useState<null | "paywall" | "error">(null);
+  const [searched, setSearched] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [upgradeHint, setUpgradeHint] = useState<string | null>(null);
+  const [importadoresMap, setImportadoresMap] = useState<Record<string, { name: string; company_page_id: string | null }[]>>({});
+  const [importadoresLoading, setImportadoresLoading] = useState<Set<string>>(new Set());
+  const exhausted = credits === 0;
+  const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
 
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedQ(q.trim()), 350);
-    return () => clearTimeout(t);
-  }, [q]);
-
-  const [error, setError] = useState<null | "paywall" | "error">(null);
-
-  useEffect(() => {
-    setLoading(true);
+  const doSearch = async (searchQ: string, fromOffset = 0, append = false) => {
+    if (append) setLoadingMore(true); else setLoading(true);
     setError(null);
-    setOffset(0);
-    setExpanded(new Set());
-    fetchBiExportadores(debouncedQ, PAGE_SIZE, 0)
-      .then(r => { setItems(r.items); setTotal(r.total); })
-      .catch(e => { setError(e instanceof BiAccessError ? "paywall" : "error"); setItems([]); })
-      .finally(() => setLoading(false));
-  }, [debouncedQ]);
-
-  const loadMore = () => {
-    const next = offset + PAGE_SIZE;
-    setLoadingMore(true);
-    fetchBiExportadores(debouncedQ, PAGE_SIZE, next)
-      .then(r => { setItems(prev => [...prev, ...r.items]); setOffset(next); })
-      .catch(() => {})
-      .finally(() => setLoadingMore(false));
+    try {
+      const session = await getCachedSession();
+      const token = session?.access_token;
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(fromOffset), ...(searchQ ? { q: searchQ } : {}) });
+      const res = await fetch(`${apiBase}/wine-imports/bi-search/exportadores?${params}`, { headers });
+      if (res.status === 401 || res.status === 403) { setError("paywall"); return; }
+      if (res.status === 402) { setCredits(0); setError("error"); return; }
+      if (!res.ok) { setError("error"); return; }
+      const data = await res.json() as { items: BiExportador[]; total: number; credits_remaining: number; credits_total: number };
+      if (append) { setItems(prev => [...prev, ...data.items]); setOffset(fromOffset); }
+      else { setItems(data.items); setTotal(data.total); setOffset(0); setSearched(true); setExpanded(new Set()); }
+      if (data.credits_remaining !== undefined) setCredits(data.credits_remaining);
+      if (data.credits_total !== undefined) setCreditsTotal(data.credits_total);
+    } catch { setError("error"); }
+    finally { setLoading(false); setLoadingMore(false); }
   };
 
-  const hasPremium = hasAccess;
+  const handleSubmit = () => {
+    if (exhausted) return;
+    const sq = q.trim();
+    setSubmittedQ(sq);
+    setSearched(false);
+    void doSearch(sq, 0, false);
+  };
 
+  const loadMore = () => void doSearch(submittedQ ?? "", offset + PAGE_SIZE, true);
 
   const toggleCard = (id: string) => {
-    if (!hasPremium) { setUpgradeHint(prev => prev === id ? null : id); return; }
+    if (!hasAccess) { setUpgradeHint(prev => prev === id ? null : id); return; }
     setUpgradeHint(null);
     setExpanded(prev => {
       const next = new Set(prev);
@@ -742,30 +894,62 @@ function ExportadoresSearch({ hasAccess }: { hasAccess: boolean }) {
     });
   };
 
+  const loadImportadores = async (exportadorName: string, exportadorId: string) => {
+    if (importadoresMap[exportadorId]) return;
+    setImportadoresLoading(prev => new Set(prev).add(exportadorId));
+    try {
+      const session = await getCachedSession();
+      const headers: HeadersInit = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+      const res = await fetch(`${apiBase}/wine-imports/exportador-importadores?nome=${encodeURIComponent(exportadorName)}`, { headers });
+      if (!res.ok) return;
+      const data = await res.json() as { importadores: { name: string; company_page_id: string | null }[] };
+      setImportadoresMap(prev => ({ ...prev, [exportadorId]: data.importadores }));
+    } catch {}
+    finally { setImportadoresLoading(prev => { const s = new Set(prev); s.delete(exportadorId); return s; }); }
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <BiSearchBar value={q} onChange={setQ} placeholder="Buscar exportador por nome, destino ou produto…" />
-      {!loading && !error && (
-        <div style={{ fontSize: 12, color: MUTED }}>
-          {total} exportador{total !== 1 ? "es" : ""} encontrado{total !== 1 ? "s" : ""}
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ flex: 1, backgroundColor: WHITE, border: `1.5px solid ${BORDER}`, borderRadius: 12, padding: "4px 4px 4px 14px", display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 16 }}>🌐</span>
+          <input
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") handleSubmit(); }}
+            placeholder={exhausted ? "Consultas esgotadas" : "Nome do exportador, país ou produto…"}
+            disabled={exhausted}
+            style={{ flex: 1, padding: "10px 0", border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", backgroundColor: "transparent", color: NAVY }}
+          />
+          {q && <button onClick={() => { setQ(""); setSearched(false); setItems([]); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, padding: "0 8px" }}>×</button>}
+        </div>
+        <button
+          onClick={handleSubmit}
+          disabled={exhausted || !q.trim()}
+          style={{ padding: "0 18px", borderRadius: 12, border: "none", backgroundColor: exhausted || !q.trim() ? BORDER : NAVY, color: WHITE, fontWeight: 700, fontSize: 13, cursor: exhausted || !q.trim() ? "default" : "pointer", fontFamily: "inherit", flexShrink: 0 }}
+        >{loading ? "…" : "Buscar"}</button>
+      </div>
+
+      {!searched && !loading && (
+        <div style={{ backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "12px 16px", fontSize: 13, color: MUTED }}>
+          🌐 Busque por nome de exportador para ver país de destino, volume, valor FOB e quem importa seus produtos no Brasil. Cada consulta consome 1 crédito.
         </div>
       )}
-      {loading ? <BiLoadingSkeleton /> : error ? (
-        <BiErrorState paywall={error === "paywall"} />
-      ) : items.length === 0 ? (
-        <BiEmptyState q={debouncedQ} label="exportador" />
-      ) : (
+
+      {loading ? <BiLoadingSkeleton /> : error ? <BiErrorState paywall={error === "paywall"} /> : searched && items.length === 0 ? (
+        <BiEmptyState q={submittedQ ?? ""} label="exportador" />
+      ) : searched ? (
         <>
+          <div style={{ fontSize: 12, color: MUTED }}>{total} exportador{total !== 1 ? "es" : ""} encontrado{total !== 1 ? "s" : ""}</div>
           {items.map(m => {
             const isOpen   = expanded.has(m.id);
-            const showHint = upgradeHint === m.id && !hasPremium;
+            const showHint = upgradeHint === m.id && !hasAccess;
+            const imps     = importadoresMap[m.id];
+            const impLoading = importadoresLoading.has(m.id);
             return (
               <div key={m.id} style={{ backgroundColor: WHITE, border: `1px solid ${isOpen ? GOLD : BORDER}`, borderRadius: 14, overflow: "hidden", transition: "border-color 0.15s" }}>
-                {/* Crédito normal — always visible */}
                 <div style={{ padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 14 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
-                    🌐
-                  </div>
+                  <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🌐</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>{m.name}</span>
@@ -775,52 +959,62 @@ function ExportadoresSearch({ hasAccess }: { hasAccess: boolean }) {
                     <div style={{ fontSize: 12, color: MUTED }}>{m.produtos}</div>
                   </div>
                   <button
-                    onClick={() => toggleCard(m.id)}
+                    onClick={() => { toggleCard(m.id); if (hasAccess && !expanded.has(m.id)) void loadImportadores(m.name, m.id); }}
                     style={{
                       padding: "6px 12px", borderRadius: 8, flexShrink: 0,
                       border: `1px solid ${isOpen ? GOLD : BORDER}`,
                       backgroundColor: isOpen ? `${GOLD}15` : "transparent",
                       color: isOpen ? GOLD : MUTED,
                       fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                      display: "flex", alignItems: "center", gap: 4,
-                      transition: "all 0.15s",
+                      display: "flex", alignItems: "center", gap: 4, transition: "all 0.15s",
                     }}
-                    title={hasPremium ? (isOpen ? "Ocultar dados" : "Ver dados comerciais") : "Requer plano Ideal.BI"}
-                  >
-                    {isOpen ? "▲ Ocultar" : "🔒 Ver dados comerciais"}
-                  </button>
+                  >{isOpen ? "▲ Ocultar" : "🔒 Ver dados"}</button>
                 </div>
 
-                {/* Upgrade hint */}
                 {showHint && (
                   <div style={{ margin: "0 16px 14px", padding: "12px 14px", backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}40`, borderRadius: 10 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 }}>🔒 Crédito Especial — Acesso Ideal.BI</div>
-                    <div style={{ fontSize: 12, color: MUTED, marginBottom: 8 }}>
-                      Assine um plano com acesso Ideal.BI para ver caixas exportadas, valor vendido e preço médio por caixa.
-                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 }}>🔒 Requer Acesso Ideal.BI</div>
+                    <div style={{ fontSize: 12, color: MUTED, marginBottom: 8 }}>Assine um plano com acesso Ideal.BI para ver dados comerciais e importadores.</div>
                     <a href="/assinar" style={{ fontSize: 12, fontWeight: 700, color: GOLD, textDecoration: "none" }}>Ver planos →</a>
                   </div>
                 )}
 
-                {/* Crédito especial — expanded */}
                 {isOpen && (
                   <div style={{ borderTop: `1px solid ${GOLD}40`, padding: "14px 16px", backgroundColor: `${GOLD}06` }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase" as const, letterSpacing: 0.7, marginBottom: 12 }}>
-                      📊 Crédito Especial — Dados Comerciais
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                    {/* KPIs */}
+                    <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase" as const, letterSpacing: 0.7, marginBottom: 10 }}>📊 Dados Comerciais</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
                       {([
-                        { label: "Caixas Exportadas", value: fmtCaixas(m.caixas_exportadas), icon: "📦" },
-                        { label: "Valor Vendido",      value: fmtCents(m.valor_vendido_cents), icon: "💰" },
-                        { label: "Preço Médio/Cx",     value: fmtCents(m.preco_medio_cents),   icon: "📈" },
+                        { label: "Vol. CX9L",       value: fmtCaixas(m.caixas_exportadas), icon: "📦" },
+                        { label: "Valor FOB US$",    value: fmtCents(m.valor_vendido_cents), icon: "💵" },
+                        { label: "Preço Médio CX",   value: fmtCents(m.preco_medio_cents),   icon: "📈" },
                       ] as const).map(kpi => (
-                        <div key={kpi.label} style={{ textAlign: "center", padding: "12px 8px", backgroundColor: WHITE, borderRadius: 10, border: `1px solid ${BORDER}` }}>
-                          <div style={{ fontSize: 20, marginBottom: 4 }}>{kpi.icon}</div>
-                          <div style={{ fontSize: 15, fontWeight: 900, color: NAVY }}>{kpi.value}</div>
-                          <div style={{ fontSize: 10, color: MUTED, marginTop: 3 }}>{kpi.label}</div>
+                        <div key={kpi.label} style={{ textAlign: "center", padding: "10px 6px", backgroundColor: WHITE, borderRadius: 10, border: `1px solid ${BORDER}` }}>
+                          <div style={{ fontSize: 18, marginBottom: 3 }}>{kpi.icon}</div>
+                          <div style={{ fontSize: 14, fontWeight: 900, color: NAVY }}>{kpi.value}</div>
+                          <div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>{kpi.label}</div>
                         </div>
                       ))}
                     </div>
+                    {/* Importadores */}
+                    <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase" as const, letterSpacing: 0.7, marginBottom: 8 }}>📦 Quem importa no Brasil</div>
+                    {impLoading ? (
+                      <div style={{ fontSize: 12, color: MUTED }}>Buscando importadores…</div>
+                    ) : !imps || imps.length === 0 ? (
+                      <div style={{ fontSize: 12, color: MUTED }}>Nenhum importador vinculado na base de dados.</div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {imps.map((d, i) => (
+                          d.company_page_id ? (
+                            <Link key={i} href={`/app/empresa/${d.company_page_id}`} style={{ fontSize: 14, fontWeight: 700, color: GOLD, textDecoration: "underline", display: "flex", alignItems: "center", gap: 6 }}>
+                              {d.name} <span style={{ fontSize: 11 }}>↗</span>
+                            </Link>
+                          ) : (
+                            <span key={i} style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>📦 {d.name}</span>
+                          )
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -828,61 +1022,326 @@ function ExportadoresSearch({ hasAccess }: { hasAccess: boolean }) {
           })}
           {items.length < total && <CarregarMaisBtn onClick={loadMore} loading={loadingMore} />}
         </>
+      ) : null}
+    </div>
+  );
+}
+
+/* ─── Marca Completa Search (sub-component) ──────────────────────── */
+function MarcaCompletaSearch({ userId, credits, creditsTotal, setCredits, setCreditsTotal }: {
+  userId: string;
+  credits: number | null;
+  creditsTotal: number;
+  setCredits: (n: number) => void;
+  setCreditsTotal: (n: number) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  type WineDistribuidor = { name: string; company_page_id: string | null };
+  type WineResult = { marcaCompleta: string; marcaRelatorio?: string; paisDeOrigem?: string; distribuidor: string; distribuidores: WineDistribuidor[] };
+  const [result, setResult] = useState<WineResult | null | "not_found" | "out_of_scope">(null);
+  const [brandExtracted, setBrandExtracted] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const exhausted = credits === 0;
+  const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
+
+  const getAuthHeader = async (): Promise<HeadersInit> => {
+    const session = await getCachedSession();
+    return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+  };
+
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    suggestTimer.current = setTimeout(async () => {
+      try {
+        const headers = await getAuthHeader();
+        const res = await fetch(`${apiBase}/wine-imports/suggestions?q=${encodeURIComponent(q)}`, { headers });
+        if (!res.ok) return;
+        const json = await res.json() as { suggestions: string[] };
+        const list = json.suggestions ?? [];
+        setSuggestions(list);
+        setShowSuggestions(list.length > 0);
+      } catch {}
+    }, 300);
+    return () => { if (suggestTimer.current) clearTimeout(suggestTimer.current); };
+  }, [query]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setShowSuggestions(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const handleSearch = async (overrideQ?: string) => {
+    const q = (overrideQ ?? query).trim();
+    if (!q || searching || exhausted) return;
+    setShowSuggestions(false);
+    setSearching(true);
+    setResult(null);
+    setBrandExtracted(null);
+    try {
+      const headers = await getAuthHeader();
+      const res = await fetch(`${apiBase}/wine-imports/search?q=${encodeURIComponent(q)}`, { headers });
+      if (res.status === 402) { setCredits(0); setResult("not_found"); setSearching(false); return; }
+      if (res.status === 422) { setResult("out_of_scope"); setSearching(false); return; }
+      if (!res.ok) throw new Error("server error");
+      const json = await res.json() as {
+        data: { marca_completa: string; marca_relatorio: string | null; pais_de_origem: string | null; distribuidor: string | null }[];
+        distribuidores?: WineDistribuidor[];
+        brand_extracted: string | null;
+        credits_remaining: number;
+        credits_total: number;
+      };
+      setCredits(json.credits_remaining);
+      setCreditsTotal(json.credits_total);
+      if (json.brand_extracted) setBrandExtracted(json.brand_extracted);
+      const rows = json.data ?? [];
+      if (rows.length > 0) {
+        const f = rows[0];
+        let distribuidores: WineDistribuidor[] = (json.distribuidores ?? []).map(d => ({ name: d.name, company_page_id: d.company_page_id ?? null }));
+        if (distribuidores.length === 0) {
+          const seen = new Set<string>();
+          for (const r of rows) {
+            const n = (r.distribuidor ?? "").trim();
+            if (!n) continue;
+            const k = n.toLowerCase();
+            if (!seen.has(k)) { seen.add(k); distribuidores.push({ name: n, company_page_id: null }); }
+          }
+        }
+        setResult({ marcaCompleta: f.marca_completa, marcaRelatorio: f.marca_relatorio ?? undefined, paisDeOrigem: f.pais_de_origem ?? undefined, distribuidor: distribuidores[0]?.name ?? (f.distribuidor ?? "—"), distribuidores });
+      } else {
+        setResult("not_found");
+      }
+    } catch { setResult("not_found"); }
+    setSearching(false);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div ref={containerRef} style={{ position: "relative" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", backgroundColor: WHITE, border: `1.5px solid ${showSuggestions ? GOLD : BORDER}`, borderRadius: 12, padding: "4px 4px 4px 14px", transition: "border-color 0.15s" }}>
+          <span style={{ fontSize: 16, flexShrink: 0 }}>🔍</span>
+          <input
+            value={query}
+            onChange={e => { setQuery(e.target.value); setResult(null); }}
+            onKeyDown={e => {
+              if (e.key === "Escape") setShowSuggestions(false);
+              if (e.key === "Enter" && !showSuggestions) void handleSearch();
+              if (e.key === "ArrowDown" && showSuggestions) { document.getElementById("marca-suggest-0")?.focus(); }
+            }}
+            onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+            placeholder={exhausted ? "Limite de consultas esgotado" : "Digite o nome de um rótulo de vinho…"}
+            disabled={exhausted}
+            style={{ flex: 1, padding: "10px 0", border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", backgroundColor: "transparent", color: NAVY }}
+          />
+          {searching && <div style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${GOLD}`, borderTopColor: "transparent", animation: "spin 0.7s linear infinite", flexShrink: 0, marginRight: 4 }} />}
+        </div>
+        {showSuggestions && suggestions.length > 0 && !exhausted && (
+          <div style={{ position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 200, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 6px 20px rgba(0,0,0,0.10)", overflow: "hidden" }}>
+            {suggestions.map((s, i) => (
+              <button
+                key={s}
+                id={`marca-suggest-${i}`}
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => { setQuery(s); setShowSuggestions(false); void handleSearch(s); }}
+                onKeyDown={e => {
+                  if (e.key === "ArrowDown") { document.getElementById(`marca-suggest-${i + 1}`)?.focus(); e.preventDefault(); }
+                  if (e.key === "ArrowUp")   { i === 0 ? (document.querySelector("input") as HTMLInputElement)?.focus() : document.getElementById(`marca-suggest-${i - 1}`)?.focus(); e.preventDefault(); }
+                  if (e.key === "Enter")     { setQuery(s); setShowSuggestions(false); void handleSearch(s); }
+                  if (e.key === "Escape")    { setShowSuggestions(false); }
+                }}
+                style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "11px 16px", textAlign: "left", background: "none", border: "none", borderBottom: i < suggestions.length - 1 ? `1px solid ${BORDER}` : "none", cursor: "pointer", fontSize: 14, color: NAVY, fontFamily: "inherit" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = `${GOLD}12`; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent"; }}
+              >
+                <span style={{ fontSize: 15, flexShrink: 0 }}>🍷</span>
+                <span style={{ flex: 1 }}>{s}</span>
+                <span style={{ fontSize: 11, color: MUTED, fontWeight: 600 }}>1 crédito</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {!result && !searching && (
+        <div style={{ backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "12px 16px" }}>
+          <div style={{ fontSize: 13, color: NAVY, fontWeight: 600, marginBottom: 4 }}>🔍 Busca por Rótulo</div>
+          <div style={{ fontSize: 13, color: MUTED, lineHeight: 1.6 }}>
+            Digite o nome de um rótulo para ver sugestões. Selecione ou pressione Enter para consultar o exportador e o importador no Brasil — cada consulta consome 1 crédito.
+          </div>
+        </div>
+      )}
+
+      {searching && (
+        <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>🤖</div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>Consultando base de dados…</div>
+        </div>
+      )}
+
+      {!searching && result === "out_of_scope" && (
+        <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 24, textAlign: "center" }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Consulta fora do escopo</div>
+          <div style={{ fontSize: 14, color: MUTED }}>Por favor, pesquise pelo nome de uma marca específica de vinho.</div>
+        </div>
+      )}
+
+      {!searching && result === "not_found" && (
+        <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 24, textAlign: "center" }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>📭</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Marca não encontrada</div>
+          <div style={{ fontSize: 14, color: MUTED, lineHeight: 1.6 }}>
+            {brandExtracted ? `A IA identificou "${brandExtracted}", mas ela ainda não está na base de dados.` : "Não encontramos esse vinho. Tente outro nome ou variação."}
+          </div>
+        </div>
+      )}
+
+      {exhausted && !searching && result === null && (
+        <div style={{ backgroundColor: "#fef2f2", border: "1px solid #fecaca", borderRadius: 14, padding: 24, textAlign: "center" }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>❌</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "#991b1b", marginBottom: 8 }}>Créditos esgotados</div>
+          <div style={{ fontSize: 14, color: "#dc2626", lineHeight: 1.6 }}>Novos créditos são liberados mensalmente.</div>
+        </div>
+      )}
+
+      {!searching && result && result !== "not_found" && result !== "out_of_scope" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ backgroundColor: GOLD, borderRadius: 14, padding: "16px 20px" }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.75)", letterSpacing: 0.8, textTransform: "uppercase" as const, marginBottom: 4 }}>
+              {brandExtracted && brandExtracted.toLowerCase() !== result.marcaCompleta.toLowerCase() ? `IA identificou: ${brandExtracted}` : "Resultado encontrado"}
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: WHITE, lineHeight: 1.3, marginBottom: 8 }}>{result.marcaCompleta}</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }}>✓ 1 consulta utilizada · {credits} restante{credits !== 1 ? "s" : ""}</div>
+          </div>
+
+          {([
+            ...(result.marcaRelatorio && result.marcaRelatorio !== result.marcaCompleta ? [{ icon: "🏷️", label: "Marca no Relatório", value: result.marcaRelatorio }] : []),
+            ...(result.paisDeOrigem ? [{ icon: "🌍", label: "País de Origem / Exportador", value: result.paisDeOrigem }] : []),
+          ] as { icon: string; label: string; value: string }[]).map(row => (
+            <div key={row.label} style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{row.icon}</div>
+              <div>
+                <div style={{ fontSize: 12, color: MUTED, fontWeight: 600 }}>{row.label}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginTop: 2 }}>{row.value}</div>
+              </div>
+            </div>
+          ))}
+
+          {result.distribuidores.length > 0 && (
+            <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 20px", display: "flex", alignItems: "flex-start", gap: 14 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>📦</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, color: MUTED, fontWeight: 600 }}>
+                  {result.distribuidores.length > 1 ? `Quem importa no Brasil (${result.distribuidores.length})` : "Importador no Brasil"}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+                  {result.distribuidores.map((d, idx) => (
+                    d.company_page_id ? (
+                      <Link key={`${d.name}-${idx}`} href={`/app/empresa/${d.company_page_id}`} style={{ fontSize: 15, fontWeight: 800, color: GOLD, textDecoration: "underline", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        {d.name} <span style={{ fontSize: 11 }}>↗</span>
+                      </Link>
+                    ) : (
+                      <span key={`${d.name}-${idx}`} style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>{d.name}</span>
+                    )
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
 /* ─── Produtores Nacionais Search ─────────────────────────────────── */
-function ProdutoresSearch() {
+function ProdutoresSearch({ userId }: { userId: string }) {
   const [q, setQ] = useState("");
-  const [debouncedQ, setDebouncedQ] = useState("");
+  const [submittedQ, setSubmittedQ] = useState<string | null>(null);
   const [items, setItems] = useState<BiProdutor[]>([]);
   const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [offset, setOffset] = useState(0);
-
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedQ(q.trim()), 350);
-    return () => clearTimeout(t);
-  }, [q]);
-
   const [error, setError] = useState<null | "paywall" | "error">(null);
+  const [searched, setSearched] = useState(false);
+  const { credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal } = useCredits(userId);
+  const exhausted = credits === 0;
+  const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
 
-  useEffect(() => {
-    setLoading(true);
+  const doSearch = async (searchQ: string, fromOffset = 0, append = false) => {
+    if (append) setLoadingMore(true); else setLoading(true);
     setError(null);
-    setOffset(0);
-    fetchBiProdutores(debouncedQ, PAGE_SIZE, 0)
-      .then(r => { setItems(r.items); setTotal(r.total); })
-      .catch(e => { setError(e instanceof BiAccessError ? "paywall" : "error"); setItems([]); })
-      .finally(() => setLoading(false));
-  }, [debouncedQ]);
-
-  const loadMore = () => {
-    const next = offset + PAGE_SIZE;
-    setLoadingMore(true);
-    fetchBiProdutores(debouncedQ, PAGE_SIZE, next)
-      .then(r => { setItems(prev => [...prev, ...r.items]); setOffset(next); })
-      .catch(() => {})
-      .finally(() => setLoadingMore(false));
+    try {
+      const session = await getCachedSession();
+      const token = session?.access_token;
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(fromOffset), ...(searchQ ? { q: searchQ } : {}) });
+      const res = await fetch(`${apiBase}/wine-imports/bi-search/produtores?${params}`, { headers });
+      if (res.status === 401 || res.status === 403) { setError("paywall"); return; }
+      if (res.status === 402) { setCredits(0); setError("error"); return; }
+      if (!res.ok) { setError("error"); return; }
+      const data = await res.json() as { items: BiProdutor[]; total: number; credits_remaining: number; credits_total: number };
+      if (append) { setItems(prev => [...prev, ...data.items]); setOffset(fromOffset); }
+      else { setItems(data.items); setTotal(data.total); setOffset(0); setSearched(true); }
+      if (data.credits_remaining !== undefined) setCredits(data.credits_remaining);
+      if (data.credits_total !== undefined) setCreditsTotal(data.credits_total);
+    } catch { setError("error"); }
+    finally { setLoading(false); setLoadingMore(false); }
   };
+
+  const handleSubmit = () => {
+    if (exhausted) return;
+    const sq = q.trim();
+    setSubmittedQ(sq);
+    setSearched(false);
+    void doSearch(sq, 0, false);
+  };
+
+  const loadMore = () => void doSearch(submittedQ ?? "", offset + PAGE_SIZE, true);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <BiSearchBar value={q} onChange={setQ} placeholder="Buscar produtor por nome, região ou tipo de vinho…" />
-      {!loading && !error && (
-        <div style={{ fontSize: 12, color: MUTED }}>
-          {total} produtor{total !== 1 ? "es" : ""} encontrado{total !== 1 ? "s" : ""}
+      <CreditsBar credits={credits} creditsTotal={creditsTotal} loading={creditsLoading} />
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ flex: 1, backgroundColor: WHITE, border: `1.5px solid ${BORDER}`, borderRadius: 12, padding: "4px 4px 4px 14px", display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 16 }}>🍇</span>
+          <input
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") handleSubmit(); }}
+            placeholder={exhausted ? "Consultas esgotadas" : "Nome do produtor, região, estado ou tipo…"}
+            disabled={exhausted}
+            style={{ flex: 1, padding: "10px 0", border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", backgroundColor: "transparent", color: NAVY }}
+          />
+          {q && <button onClick={() => { setQ(""); setSearched(false); setItems([]); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, padding: "0 8px" }}>×</button>}
+        </div>
+        <button
+          onClick={handleSubmit}
+          disabled={exhausted || !q.trim()}
+          style={{ padding: "0 18px", borderRadius: 12, border: "none", backgroundColor: exhausted || !q.trim() ? BORDER : NAVY, color: WHITE, fontWeight: 700, fontSize: 13, cursor: exhausted || !q.trim() ? "default" : "pointer", fontFamily: "inherit", flexShrink: 0 }}
+        >{loading ? "…" : "Buscar"}</button>
+      </div>
+      {!searched && !loading && (
+        <div style={{ backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "12px 16px", fontSize: 13, color: MUTED }}>
+          🍇 Busque vinícolas e produtores nacionais por nome, região ou estado. Cada consulta consome 1 crédito.
         </div>
       )}
       {loading ? <BiLoadingSkeleton /> : error ? (
         <BiErrorState paywall={error === "paywall"} />
-      ) : items.length === 0 ? (
-        <BiEmptyState q={debouncedQ} label="produtor" />
-      ) : (
+      ) : searched && items.length === 0 ? (
+        <BiEmptyState q={submittedQ ?? ""} label="produtor" />
+      ) : searched ? (
         <>
+          <div style={{ fontSize: 12, color: MUTED }}>{total} produtor{total !== 1 ? "es" : ""} encontrado{total !== 1 ? "s" : ""}</div>
           {items.map(m => (
             <div
               key={m.id}
@@ -909,7 +1368,7 @@ function ProdutoresSearch() {
           ))}
           {items.length < total && <CarregarMaisBtn onClick={loadMore} loading={loadingMore} />}
         </>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -1537,353 +1996,13 @@ function LockedBlock({ title }: { title: string }) {
   );
 }
 
-/* ─── Ideal.BI Busca com IA ─────────────────────────────────── */
-function IdealBISearch({ userId }: { userId: string }) {
-  const [query, setQuery] = useState("");
-  const [credits, setCredits] = useState<number | null>(null);
-  const [creditsTotal, setCreditsTotal] = useState(3);
-  const [creditsLoading, setCreditsLoading] = useState(true);
-  const [searching, setSearching] = useState(false);
-  type WineDistribuidor = { name: string; company_page_id: string | null };
-  type WineResult = {
-    marcaCompleta: string;
-    marcaRelatorio?: string;
-    paisDeOrigem?: string;
-    distribuidor: string;
-    distribuidores: WineDistribuidor[];
-  };
-  const [result, setResult] = useState<WineResult | null | "not_found" | "out_of_scope">(null);
-  const [brandExtracted, setBrandExtracted] = useState<string | null>(null);
 
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const exhausted = credits === 0;
-  const creditColor = (credits ?? 3) >= 2 ? "#16a34a" : (credits ?? 3) === 1 ? "#d97706" : "#dc2626";
-  const creditBg    = (credits ?? 3) >= 2 ? "#dcfce7" : (credits ?? 3) === 1 ? "#fef3c7" : "#fef2f2";
-
-  const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
-    ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
-
-  const getAuthHeader = async (): Promise<HeadersInit> => {
-    const session = await getCachedSession();
-    return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
-  };
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const headers = await getAuthHeader();
-        const res = await fetch(`${apiBase}/wine-imports/credits`, { headers });
-        if (!res.ok) return;
-        const json = await res.json() as { credits_remaining: number; credits_total: number };
-        setCredits(json.credits_remaining);
-        setCreditsTotal(json.credits_total);
-      } catch { } finally { setCreditsLoading(false); }
-    })();
-  }, [userId]);
-
-  /* Fetch autocomplete suggestions as user types */
-  useEffect(() => {
-    const q = query.trim();
-    if (q.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
-    if (suggestTimer.current) clearTimeout(suggestTimer.current);
-    suggestTimer.current = setTimeout(async () => {
-      try {
-        const headers = await getAuthHeader();
-        const res = await fetch(`${apiBase}/wine-imports/suggestions?q=${encodeURIComponent(q)}`, { headers });
-        if (!res.ok) return;
-        const json = await res.json() as { suggestions: string[] };
-        const list = json.suggestions ?? [];
-        setSuggestions(list);
-        setShowSuggestions(list.length > 0);
-      } catch {}
-    }, 300);
-    return () => { if (suggestTimer.current) clearTimeout(suggestTimer.current); };
-  }, [query]);
-
-  /* Close dropdown on outside click */
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setShowSuggestions(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const handleSearch = async (overrideQ?: string) => {
-    const q = (overrideQ ?? query).trim();
-    if (!q || searching || exhausted) return;
-    setShowSuggestions(false);
-    setSearching(true);
-    setResult(null);
-    setBrandExtracted(null);
-    try {
-      const headers = await getAuthHeader();
-      const res = await fetch(`${apiBase}/wine-imports/search?q=${encodeURIComponent(q)}`, { headers });
-      if (res.status === 402) { setCredits(0); setResult("not_found"); setSearching(false); return; }
-      if (res.status === 422) { setResult("out_of_scope"); setSearching(false); return; }
-      if (!res.ok) throw new Error("server error");
-      const json = await res.json() as {
-        data: { marca_completa: string; marca_relatorio: string | null; pais_de_origem: string | null; distribuidor: string | null }[];
-        distribuidores?: { name: string; company_page_id: string | null }[];
-        brand_extracted: string | null;
-        credits_remaining: number;
-        credits_total: number;
-      };
-      setCredits(json.credits_remaining);
-      setCreditsTotal(json.credits_total);
-      if (json.brand_extracted) setBrandExtracted(json.brand_extracted);
-      const rows = json.data ?? [];
-      if (rows.length > 0) {
-        const f = rows[0];
-        let distribuidores: WineDistribuidor[] = (json.distribuidores ?? []).map(d => ({
-          name: d.name,
-          company_page_id: d.company_page_id ?? null,
-        }));
-        if (distribuidores.length === 0) {
-          const seen = new Set<string>();
-          for (const r of rows) {
-            const n = (r.distribuidor ?? "").trim();
-            if (!n) continue;
-            const k = n.toLowerCase();
-            if (!seen.has(k)) { seen.add(k); distribuidores.push({ name: n, company_page_id: null }); }
-          }
-        }
-        setResult({
-          marcaCompleta: f.marca_completa,
-          marcaRelatorio: f.marca_relatorio ?? undefined,
-          paisDeOrigem: f.pais_de_origem ?? undefined,
-          distribuidor: distribuidores[0]?.name ?? (f.distribuidor ?? "—"),
-          distribuidores,
-        });
-      } else {
-        setResult("not_found");
-      }
-    } catch { setResult("not_found"); }
-    setSearching(false);
-  };
-
-  return (
-    <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 16, paddingBottom: 80 }}>
-
-      {/* Credits card */}
-      <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "16px 20px", display: "flex", alignItems: "center", gap: 14 }}>
-        <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
-          {creditsLoading ? (
-            <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${GOLD}`, borderTopColor: "transparent", animation: "spin 0.7s linear infinite" }} />
-          ) : "🤖"}
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 12, color: MUTED, fontWeight: 600, marginBottom: 2 }}>Consultas de IA</div>
-          {creditsLoading ? (
-            <div style={{ fontSize: 14, color: MUTED }}>Carregando...</div>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 18, fontWeight: 900, color: NAVY }}>{credits}</span>
-              <span style={{ fontSize: 13, color: MUTED }}>de {creditsTotal} restantes</span>
-              <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 20, backgroundColor: creditBg, color: creditColor }}>
-                {(credits ?? 0) >= 2 ? "OK" : (credits ?? 0) === 1 ? "Última" : "Esgotado"}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Search bar with label autocomplete */}
-      <div ref={containerRef} style={{ position: "relative" }}>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", backgroundColor: WHITE, border: `1.5px solid ${showSuggestions ? GOLD : BORDER}`, borderRadius: 12, padding: "4px 4px 4px 14px", transition: "border-color 0.15s" }}>
-          <span style={{ fontSize: 16, flexShrink: 0 }}>🔍</span>
-          <input
-            value={query}
-            onChange={e => { setQuery(e.target.value); setResult(null); }}
-            onKeyDown={e => {
-              if (e.key === "Escape") setShowSuggestions(false);
-              if (e.key === "ArrowDown" && showSuggestions && suggestions.length > 0) {
-                const first = document.getElementById("suggest-0");
-                first?.focus();
-              }
-            }}
-            onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
-            placeholder={exhausted ? "Limite de consultas esgotado" : "Digite o nome de um rótulo de vinho…"}
-            disabled={exhausted}
-            style={{
-              flex: 1, padding: "10px 0", border: "none", outline: "none",
-              fontSize: 14, fontFamily: "inherit",
-              backgroundColor: "transparent", color: NAVY,
-            }}
-          />
-          {searching && (
-            <div style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${GOLD}`, borderTopColor: "transparent", animation: "spin 0.7s linear infinite", flexShrink: 0, marginRight: 8 }} />
-          )}
-        </div>
-
-        {/* Dropdown suggestions */}
-        {showSuggestions && suggestions.length > 0 && !exhausted && (
-          <div style={{ position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 200, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 6px 20px rgba(0,0,0,0.10)", overflow: "hidden" }}>
-            {suggestions.map((s, i) => (
-              <button
-                key={s}
-                id={`suggest-${i}`}
-                onMouseDown={e => e.preventDefault()}
-                onClick={() => { setQuery(s); setShowSuggestions(false); handleSearch(s); }}
-                onKeyDown={e => {
-                  if (e.key === "ArrowDown") { document.getElementById(`suggest-${i + 1}`)?.focus(); e.preventDefault(); }
-                  if (e.key === "ArrowUp")   { i === 0 ? (document.querySelector("input") as HTMLInputElement)?.focus() : document.getElementById(`suggest-${i - 1}`)?.focus(); e.preventDefault(); }
-                  if (e.key === "Enter")     { setQuery(s); setShowSuggestions(false); handleSearch(s); }
-                  if (e.key === "Escape")    { setShowSuggestions(false); }
-                }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 10, width: "100%",
-                  padding: "11px 16px", textAlign: "left", background: "none", border: "none",
-                  borderBottom: i < suggestions.length - 1 ? `1px solid ${BORDER}` : "none",
-                  cursor: "pointer", fontSize: 14, color: NAVY, fontFamily: "inherit",
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = `${GOLD}12`; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent"; }}
-              >
-                <span style={{ fontSize: 15, flexShrink: 0 }}>🍷</span>
-                <span style={{ flex: 1 }}>{s}</span>
-                <span style={{ fontSize: 11, color: MUTED, fontWeight: 600 }}>1 crédito</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Info hint */}
-      {!result && !searching && (
-        <div style={{ backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "14px 16px" }}>
-          <div style={{ fontSize: 13, color: NAVY, fontWeight: 600, marginBottom: 4 }}>🍷 Como funciona</div>
-          <div style={{ fontSize: 13, color: MUTED, lineHeight: 1.6 }}>
-            Digite o nome de um rótulo para ver sugestões da base de dados. Selecione um rótulo para consultar o importador — cada consulta consome 1 crédito.
-          </div>
-        </div>
-      )}
-
-      {/* Loading */}
-      {searching && (
-        <div style={{ textAlign: "center", padding: "40px 0", color: MUTED }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>🤖</div>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>Consultando base de dados…</div>
-          <div style={{ fontSize: 12, marginTop: 4 }}>A IA está identificando a marca e buscando distribuidores</div>
-        </div>
-      )}
-
-      {/* Out of scope */}
-      {!searching && result === "out_of_scope" && (
-        <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 24, textAlign: "center" }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Consulta fora do escopo</div>
-          <div style={{ fontSize: 14, color: MUTED, lineHeight: 1.6 }}>Por favor, pesquise pelo nome de uma marca específica de vinho.</div>
-        </div>
-      )}
-
-      {/* Not found */}
-      {!searching && result === "not_found" && (
-        <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 24, textAlign: "center" }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>📭</div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Marca não encontrada</div>
-          <div style={{ fontSize: 14, color: MUTED, lineHeight: 1.6 }}>
-            {brandExtracted
-              ? `A IA identificou a marca "${brandExtracted}", mas ela ainda não está na base de dados.`
-              : "Não encontramos esse vinho. Tente outro nome ou variação."}
-          </div>
-        </div>
-      )}
-
-      {/* No credits */}
-      {exhausted && !searching && result === null && (
-        <div style={{ backgroundColor: "#fef2f2", border: "1px solid #fecaca", borderRadius: 14, padding: 24, textAlign: "center" }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>❌</div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: "#991b1b", marginBottom: 8 }}>Créditos esgotados</div>
-          <div style={{ fontSize: 14, color: "#dc2626", lineHeight: 1.6 }}>Você usou todas as consultas disponíveis. Novos créditos são liberados mensalmente.</div>
-        </div>
-      )}
-
-      {/* Result */}
-      {!searching && result && result !== "not_found" && result !== "out_of_scope" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {/* Brand header card (gold) */}
-          <div style={{ backgroundColor: GOLD, borderRadius: 14, padding: "16px 20px" }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.75)", letterSpacing: 0.8, textTransform: "uppercase" as const, marginBottom: 4 }}>
-              {brandExtracted && brandExtracted.toLowerCase() !== result.marcaCompleta.toLowerCase()
-                ? `IA identificou: ${brandExtracted}`
-                : "Resultado encontrado"}
-            </div>
-            <div style={{ fontSize: 20, fontWeight: 900, color: WHITE, lineHeight: 1.3, marginBottom: 8 }}>{result.marcaCompleta}</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }}>
-              ✓ 1 consulta utilizada · {credits} restante{credits !== 1 ? "s" : ""}
-            </div>
-          </div>
-
-          {/* Data KPI cards */}
-          {([
-            ...(result.marcaRelatorio && result.marcaRelatorio !== result.marcaCompleta
-              ? [{ icon: "🏷️", label: "Marca no Relatório", value: result.marcaRelatorio }]
-              : []),
-            ...(result.paisDeOrigem
-              ? [{ icon: "🌍", label: "País de Origem", value: result.paisDeOrigem }]
-              : []),
-          ] as { icon: string; label: string; value: string }[]).map(row => (
-            <div key={row.label} style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
-                {row.icon}
-              </div>
-              <div>
-                <div style={{ fontSize: 12, color: MUTED, fontWeight: 600 }}>{row.label}</div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginTop: 2 }}>{row.value}</div>
-              </div>
-            </div>
-          ))}
-
-          {/* Distribuidores BR — pode ter 2+ */}
-          {result.distribuidores.length > 0 && (
-            <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 20px", display: "flex", alignItems: "flex-start", gap: 14 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
-                📦
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 12, color: MUTED, fontWeight: 600 }}>
-                  {result.distribuidores.length > 1
-                    ? `Distribuído no Brasil por (${result.distribuidores.length})`
-                    : "Distribuidor BR"}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
-                  {result.distribuidores.map((d, idx) => (
-                    d.company_page_id ? (
-                      <Link
-                        key={`${d.name}-${idx}`}
-                        href={`/app/empresa/${d.company_page_id}`}
-                        style={{ fontSize: 15, fontWeight: 800, color: GOLD, textDecoration: "underline", display: "inline-flex", alignItems: "center", gap: 6 }}
-                      >
-                        {d.name}
-                        <span style={{ fontSize: 11 }}>↗</span>
-                      </Link>
-                    ) : (
-                      <span key={`${d.name}-${idx}`} style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>{d.name}</span>
-                    )
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-type SearchSection = "importadores" | "exportadores" | "produtores" | "ia";
+type SearchSection = "exportadores_marca" | "produtores" | "importadores";
 
 function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) {
   const { hasFeature } = usePermissions();
   const [subTab, setSubTab] = useState<"feed" | "search">("feed");
-  const [searchSection, setSearchSection] = useState<SearchSection>("ia");
+  const [searchSection, setSearchSection] = useState<SearchSection>("exportadores_marca");
   const [posts, setPosts] = useState<MarketPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -2031,16 +2150,15 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
         ))}
       </div>
 
-      {/* Search section — 4 category chips + content */}
+      {/* Search section — 3 category chips + content */}
       {subTab === "search" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {/* Category chips */}
           <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
             {([
-              { key: "ia",           label: "Marca Completa",       icon: "🔍" },
-              { key: "exportadores", label: "Exportadores",         icon: "🌐" },
-              { key: "produtores",   label: "Produtores Nacionais", icon: "🍇" },
-              { key: "importadores", label: "Importadores",         icon: "📦" },
+              { key: "exportadores_marca", label: "Exportadores + Marca", icon: "🌐" },
+              { key: "produtores",         label: "Produtores Nacionais", icon: "🍇" },
+              { key: "importadores",       label: "Importadores",         icon: "📦" },
             ] as { key: SearchSection; label: string; icon: string }[]).map(s => {
               const active = searchSection === s.key;
               return (
@@ -2066,10 +2184,9 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
           </div>
 
           {/* Section content */}
-          {searchSection === "importadores" && <ImportadoresSearch />}
-          {searchSection === "exportadores" && <ExportadoresSearch hasAccess={hasAccess} />}
-          {searchSection === "produtores"   && <ProdutoresSearch />}
-          {searchSection === "ia"           && <IdealBISearch userId={userId} />}
+          {searchSection === "exportadores_marca" && <ExportadoresMarcaSearch userId={userId} hasAccess={hasAccess} />}
+          {searchSection === "produtores"         && <ProdutoresSearch userId={userId} />}
+          {searchSection === "importadores"       && <ImportadoresSearch userId={userId} />}
         </div>
       )}
 

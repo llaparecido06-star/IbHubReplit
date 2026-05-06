@@ -147,6 +147,121 @@ async function extractBrandName(userQuery: string): Promise<string | null> {
   return result;
 }
 
+/**
+ * GET /wine-imports/bi-search/importadores?q=&limit=&offset=
+ * GET /wine-imports/bi-search/exportadores?q=&limit=&offset=
+ * GET /wine-imports/bi-search/produtores?q=&limit=&offset=
+ * Credit-gated search for BI tables. Consumes 1 credit per search (not per "load more").
+ * "Load more" calls pass offset>0 and do NOT consume credits.
+ */
+async function consumeCredit(userId: string): Promise<{ credits_remaining: number; credits_total: number } | null> {
+  const current = await getOrCreateCredits(userId);
+  if (current.credits_remaining <= 0) return null;
+  const newRemaining = current.credits_remaining - 1;
+  await supabaseAdmin
+    .from("ai_search_credits")
+    .update({ credits_remaining: newRemaining, updated_at: new Date().toISOString() })
+    .eq("user_id", userId);
+  return { credits_remaining: newRemaining, credits_total: current.credits_total };
+}
+
+router.get("/wine-imports/bi-search/importadores", async (req: Request, res: Response) => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+
+  const q = (req.query.q as string | undefined)?.trim() ?? "";
+  const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+  const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+
+  let credits = await getOrCreateCredits(userId);
+
+  // Only consume a credit on the initial search (offset === 0)
+  if (offset === 0) {
+    if (credits.credits_remaining <= 0) {
+      return res.status(402).json({ error: "Sem créditos", credits_remaining: 0, credits_total: credits.credits_total });
+    }
+    const consumed = await consumeCredit(userId);
+    if (consumed) credits = { ...credits, ...consumed };
+  }
+
+  let query = supabaseAdmin
+    .from("bi_importadores")
+    .select("id, name, pais, estado, segmentos, created_at", { count: "exact" })
+    .order("name", { ascending: true })
+    .range(offset, offset + limit - 1);
+
+  if (q) query = query.or(`name.ilike.%${q}%,pais.ilike.%${q}%,estado.ilike.%${q}%,segmentos.ilike.%${q}%`);
+
+  const { data, error, count } = await query;
+  if (error) return res.status(500).json({ error: error.message });
+
+  return res.json({ items: data ?? [], total: count ?? 0, limit, offset, credits_remaining: credits.credits_remaining, credits_total: credits.credits_total });
+});
+
+router.get("/wine-imports/bi-search/exportadores", async (req: Request, res: Response) => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+
+  const q = (req.query.q as string | undefined)?.trim() ?? "";
+  const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+  const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+
+  let credits = await getOrCreateCredits(userId);
+
+  if (offset === 0) {
+    if (credits.credits_remaining <= 0) {
+      return res.status(402).json({ error: "Sem créditos", credits_remaining: 0, credits_total: credits.credits_total });
+    }
+    const consumed = await consumeCredit(userId);
+    if (consumed) credits = { ...credits, ...consumed };
+  }
+
+  let query = supabaseAdmin
+    .from("bi_exportadores")
+    .select("id, name, pais_destino, produtos, caixas_exportadas, valor_vendido_cents, preco_medio_cents, created_at", { count: "exact" })
+    .order("name", { ascending: true })
+    .range(offset, offset + limit - 1);
+
+  if (q) query = query.or(`name.ilike.%${q}%,pais_destino.ilike.%${q}%,produtos.ilike.%${q}%`);
+
+  const { data, error, count } = await query;
+  if (error) return res.status(500).json({ error: error.message });
+
+  return res.json({ items: data ?? [], total: count ?? 0, limit, offset, credits_remaining: credits.credits_remaining, credits_total: credits.credits_total });
+});
+
+router.get("/wine-imports/bi-search/produtores", async (req: Request, res: Response) => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+
+  const q = (req.query.q as string | undefined)?.trim() ?? "";
+  const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+  const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+
+  let credits = await getOrCreateCredits(userId);
+
+  if (offset === 0) {
+    if (credits.credits_remaining <= 0) {
+      return res.status(402).json({ error: "Sem créditos", credits_remaining: 0, credits_total: credits.credits_total });
+    }
+    const consumed = await consumeCredit(userId);
+    if (consumed) credits = { ...credits, ...consumed };
+  }
+
+  let query = supabaseAdmin
+    .from("bi_produtores")
+    .select("id, name, name_fantasia, regiao, estado, tipos, fundado, created_at", { count: "exact" })
+    .order("name", { ascending: true })
+    .range(offset, offset + limit - 1);
+
+  if (q) query = query.or(`name.ilike.%${q}%,name_fantasia.ilike.%${q}%,regiao.ilike.%${q}%,estado.ilike.%${q}%,tipos.ilike.%${q}%`);
+
+  const { data, error, count } = await query;
+  if (error) return res.status(500).json({ error: error.message });
+
+  return res.json({ items: data ?? [], total: count ?? 0, limit, offset, credits_remaining: credits.credits_remaining, credits_total: credits.credits_total });
+});
+
 router.get("/wine-imports/suggestions", async (req: Request, res: Response) => {
   const userId = await resolveUserId(req, res);
   if (!userId) return;
@@ -179,6 +294,70 @@ router.get("/wine-imports/suggestions", async (req: Request, res: Response) => {
   }
 
   return res.json({ suggestions });
+});
+
+/**
+ * GET /wine-imports/exportador-importadores?nome=X
+ * Returns distinct importadores (distribuidores) that import wines
+ * from the given exportador name, based on the wine_imports table.
+ * No credit consumed — read-only cross-reference.
+ */
+router.get("/wine-imports/exportador-importadores", async (req: Request, res: Response) => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+
+  const nome = (req.query.nome as string | undefined)?.trim();
+  if (!nome || nome.length < 2) {
+    return res.json({ importadores: [] });
+  }
+
+  const pattern = `%${nome}%`;
+  const { data, error } = await supabaseAdmin
+    .from("wine_imports")
+    .select("distribuidor, exportador")
+    .or(`exportador.ilike.${pattern}`)
+    .not("distribuidor", "is", null)
+    .limit(200);
+
+  if (error) {
+    return res.status(500).json({ importadores: [] });
+  }
+
+  const seen = new Set<string>();
+  const importadores: { name: string; company_page_id: string | null }[] = [];
+  for (const r of (data ?? []) as { distribuidor: string | null }[]) {
+    const raw = (r.distribuidor ?? "").trim();
+    if (!raw) continue;
+    const key = raw.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      importadores.push({ name: raw, company_page_id: null });
+    }
+  }
+
+  // Resolve company_pages links
+  if (importadores.length > 0) {
+    try {
+      const lookups = await Promise.all(
+        importadores.slice(0, 20).map(async (d) => {
+          const { data } = await supabaseAdmin
+            .from("company_pages")
+            .select("id")
+            .ilike("name", d.name)
+            .limit(1)
+            .maybeSingle();
+          return { key: d.name.toLowerCase(), id: (data as { id?: string } | null)?.id ?? null };
+        })
+      );
+      const pageMap = new Map(lookups.filter(l => l.id).map(l => [l.key, l.id!]));
+      for (const d of importadores) {
+        const link = pageMap.get(d.name.toLowerCase());
+        if (link) d.company_page_id = link;
+      }
+    } catch {}
+  }
+
+  return res.json({ importadores });
 });
 
 router.get("/wine-imports/credits", async (req: Request, res: Response) => {
