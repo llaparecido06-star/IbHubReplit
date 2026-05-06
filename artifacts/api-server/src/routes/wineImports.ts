@@ -318,9 +318,9 @@ router.get("/wine-imports/suggestions", async (req: Request, res: Response) => {
 
 /**
  * GET /wine-imports/exportador-importadores?nome=X
- * Returns distinct importadores (distribuidores) that import wines
- * from the given exportador name, based on the wine_imports table.
- * No credit consumed — read-only cross-reference.
+ * Returns distinct distribuidores (importadores no Brasil) for the given
+ * exportador name, sourced from bi_exportadores.distribuidor.
+ * No credit consumed — read-only, open information.
  */
 router.get("/wine-imports/exportador-importadores", async (req: Request, res: Response) => {
   const userId = await resolveUserId(req, res);
@@ -331,21 +331,22 @@ router.get("/wine-imports/exportador-importadores", async (req: Request, res: Re
     return res.json({ importadores: [] });
   }
 
-  const pattern = `%${nome}%`;
   const { data, error } = await supabaseAdmin
-    .from("wine_imports")
-    .select("importador, distribuidor")
-    .ilike("exportador", pattern)
+    .from("bi_exportadores")
+    .select("distribuidor")
+    .ilike("name", nome)
+    .not("distribuidor", "is", null)
     .limit(200);
 
   if (error) {
+    req.log.error({ err: error }, "exportador-importadores query failed");
     return res.status(500).json({ importadores: [] });
   }
 
   const seen = new Set<string>();
   const importadores: { name: string; company_page_id: string | null }[] = [];
-  for (const r of (data ?? []) as { importador: string | null; distribuidor: string | null }[]) {
-    const raw = ((r.importador ?? r.distribuidor) ?? "").trim();
+  for (const r of (data ?? []) as { distribuidor: string | null }[]) {
+    const raw = (r.distribuidor ?? "").trim();
     if (!raw) continue;
     const key = raw.toLowerCase();
     if (!seen.has(key)) {
