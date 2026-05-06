@@ -1755,7 +1755,7 @@ type SearchSection = "importadores" | "exportadores" | "produtores" | "ia";
 function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) {
   const { hasFeature } = usePermissions();
   const [subTab, setSubTab] = useState<"feed" | "search">("feed");
-  const [searchSection, setSearchSection] = useState<SearchSection>("importadores");
+  const [searchSection, setSearchSection] = useState<SearchSection>("exportadores");
   const [posts, setPosts] = useState<MarketPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -1909,10 +1909,10 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
           {/* Category chips */}
           <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
             {([
-              { key: "importadores", label: "Importadores",       icon: "📦" },
-              { key: "exportadores", label: "Exportadores",       icon: "🌐" },
+              { key: "exportadores", label: "Exportadores",        icon: "🌐" },
               { key: "produtores",   label: "Produtores Nacionais", icon: "🍇" },
-              { key: "ia",           label: "Busca IA",           icon: "🤖" },
+              { key: "importadores", label: "Importadores",        icon: "📦" },
+              { key: "ia",           label: "Marca Completa",      icon: "🔍" },
             ] as { key: SearchSection; label: string; icon: string }[]).map(s => {
               const active = searchSection === s.key;
               return (
