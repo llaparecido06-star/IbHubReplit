@@ -518,16 +518,26 @@ function ApresentacoesPanel({ isAdmin }: { isAdmin: boolean }) {
 
 const PAGE_SIZE = 20;
 
-function fmtCents(cents: number): string {
-  const val = cents / 100;
-  if (val >= 1_000_000) return `R$ ${(val / 1_000_000).toFixed(1)}M`;
-  if (val >= 1_000) return `R$ ${(val / 1_000).toFixed(0)}K`;
-  return `R$ ${val.toFixed(2)}`;
+function fmtFobUsd(v: string | null | undefined): string {
+  if (!v) return "–";
+  const n = parseFloat(v);
+  if (isNaN(n)) return "–";
+  if (n >= 1_000_000) return `US$ ${(n / 1_000_000).toFixed(2)}M`;
+  return `US$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function fmtCaixas(n: number): string {
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
+function fmtCx9lQty(v: string | null | undefined): string {
+  if (!v) return "–";
+  const n = parseFloat(v);
+  if (isNaN(n)) return "–";
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+function fmtUsdCx(v: string | null | undefined): string {
+  if (!v) return "–";
+  const n = parseFloat(v);
+  if (isNaN(n)) return "–";
+  return `US$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function BiLoadingSkeleton() {
@@ -850,8 +860,29 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
   const [upgradeHint, setUpgradeHint] = useState<string | null>(null);
   const [importadoresMap, setImportadoresMap] = useState<Record<string, { name: string; company_page_id: string | null }[]>>({});
   const [importadoresLoading, setImportadoresLoading] = useState<Set<string>>(new Set());
+  type RevealedData = { fob_usd: string | null; cx9l: string | null; usd_por_cx9l: string | null };
+  const [revealedMap, setRevealedMap] = useState<Record<string, RevealedData>>({});
+  const [revealCredits, setRevealCredits] = useState<number | null>(null);
+  const [revealCreditsTotal, setRevealCreditsTotal] = useState(0);
+  const [revealingId, setRevealingId] = useState<string | null>(null);
+  const [revealError, setRevealError] = useState<string | null>(null);
   const exhausted = credits === 0;
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const session = await getCachedSession();
+        const headers: HeadersInit = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+        const res = await fetch(`${apiBase}/wine-imports/bi/reveal-credits`, { headers });
+        if (!res.ok) return;
+        const data = await res.json() as { credits_remaining: number; credits_total: number };
+        setRevealCredits(data.credits_remaining);
+        setRevealCreditsTotal(data.credits_total);
+      } catch {}
+    };
+    void load();
+  }, [apiBase]);
 
   const doSearch = async (searchQ: string, fromOffset = 0, append = false) => {
     if (append) setLoadingMore(true); else setLoading(true);
@@ -887,6 +918,7 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
   const toggleCard = (id: string) => {
     if (!hasAccess) { setUpgradeHint(prev => prev === id ? null : id); return; }
     setUpgradeHint(null);
+    setRevealError(null);
     setExpanded(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
@@ -908,6 +940,26 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
     finally { setImportadoresLoading(prev => { const s = new Set(prev); s.delete(exportadorId); return s; }); }
   };
 
+  const revealData = async (id: string) => {
+    setRevealingId(id);
+    setRevealError(null);
+    try {
+      const session = await getCachedSession();
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      };
+      const res = await fetch(`${apiBase}/wine-imports/bi/exportadores/${id}/reveal`, { method: "POST", headers });
+      if (res.status === 402) { setRevealCredits(0); setRevealError("Sem créditos de revelação disponíveis."); return; }
+      if (!res.ok) { setRevealError("Erro ao revelar dados. Tente novamente."); return; }
+      const data = await res.json() as { fob_usd: string | null; cx9l: string | null; usd_por_cx9l: string | null; credits_remaining: number | null; credits_total: number };
+      setRevealedMap(prev => ({ ...prev, [id]: { fob_usd: data.fob_usd, cx9l: data.cx9l, usd_por_cx9l: data.usd_por_cx9l } }));
+      if (data.credits_remaining !== null) setRevealCredits(data.credits_remaining);
+      if (data.credits_total) setRevealCreditsTotal(data.credits_total);
+    } catch { setRevealError("Erro de conexão. Tente novamente."); }
+    finally { setRevealingId(null); }
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", gap: 8 }}>
@@ -917,7 +969,7 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
             value={q}
             onChange={e => setQ(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") handleSubmit(); }}
-            placeholder={exhausted ? "Consultas esgotadas" : "Nome do exportador, país ou produto…"}
+            placeholder={exhausted ? "Consultas esgotadas" : "Nome do exportador ou país de origem…"}
             disabled={exhausted}
             style={{ flex: 1, padding: "10px 0", border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", backgroundColor: "transparent", color: NAVY }}
           />
@@ -932,7 +984,7 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
 
       {!searched && !loading && (
         <div style={{ backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "12px 16px", fontSize: 13, color: MUTED }}>
-          🌐 Busque por nome de exportador para ver país de destino, volume, valor FOB e quem importa seus produtos no Brasil. Cada consulta consome 1 crédito.
+          🌐 Busque por nome do exportador ou país de origem. Os dados financeiros (FOB US$, CX9L e preço/CX) ficam bloqueados — use créditos de revelação para desbloqueá-los individualmente.
         </div>
       )}
 
@@ -940,12 +992,25 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
         <BiEmptyState q={submittedQ ?? ""} label="exportador" />
       ) : searched ? (
         <>
-          <div style={{ fontSize: 12, color: MUTED }}>{total} exportador{total !== 1 ? "es" : ""} encontrado{total !== 1 ? "s" : ""}</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+            <div style={{ fontSize: 12, color: MUTED }}>{total} exportador{total !== 1 ? "es" : ""} encontrado{total !== 1 ? "s" : ""}</div>
+            {revealCredits !== null && (
+              <div style={{ fontSize: 11, color: MUTED, backgroundColor: `${GOLD}08`, border: `1px solid ${GOLD}25`, borderRadius: 8, padding: "4px 10px" }}>
+                🔓 Revelação: <strong style={{ color: revealCredits === 0 ? "#dc2626" : NAVY }}>{revealCredits}/{revealCreditsTotal}</strong>
+              </div>
+            )}
+          </div>
+          {revealError && (
+            <div style={{ fontSize: 12, color: "#dc2626", backgroundColor: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, padding: "8px 12px" }}>
+              ⚠️ {revealError}
+            </div>
+          )}
           {items.map(m => {
-            const isOpen   = expanded.has(m.id);
-            const showHint = upgradeHint === m.id && !hasAccess;
-            const imps     = importadoresMap[m.id];
+            const isOpen     = expanded.has(m.id);
+            const showHint   = upgradeHint === m.id && !hasAccess;
+            const imps       = importadoresMap[m.id];
             const impLoading = importadoresLoading.has(m.id);
+            const revealed   = revealedMap[m.id];
             return (
               <div key={m.id} style={{ backgroundColor: WHITE, border: `1px solid ${isOpen ? GOLD : BORDER}`, borderRadius: 14, overflow: "hidden", transition: "border-color 0.15s" }}>
                 <div style={{ padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 14 }}>
@@ -955,8 +1020,9 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
                       <span style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>{m.name}</span>
                       <span style={{ fontSize: 10, fontWeight: 700, color: GOLD, backgroundColor: `${GOLD}18`, padding: "2px 7px", borderRadius: 20 }}>EXPORTADOR</span>
                     </div>
-                    <div style={{ fontSize: 12, color: MUTED, marginBottom: 2 }}>🌐 {m.pais_destino}</div>
-                    <div style={{ fontSize: 12, color: MUTED }}>{m.produtos}</div>
+                    {m.origem_exportador && (
+                      <div style={{ fontSize: 12, color: MUTED }}>🌍 {m.origem_exportador}</div>
+                    )}
                   </div>
                   <button
                     onClick={() => { toggleCard(m.id); if (hasAccess && !expanded.has(m.id)) void loadImportadores(m.name, m.id); }}
@@ -968,7 +1034,7 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
                       fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
                       display: "flex", alignItems: "center", gap: 4, transition: "all 0.15s",
                     }}
-                  >{isOpen ? "▲ Ocultar" : "🔒 Ver dados"}</button>
+                  >{isOpen ? "▲ Ocultar" : "📊 Ver dados"}</button>
                 </div>
 
                 {showHint && (
@@ -981,22 +1047,49 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
 
                 {isOpen && (
                   <div style={{ borderTop: `1px solid ${GOLD}40`, padding: "14px 16px", backgroundColor: `${GOLD}06` }}>
-                    {/* KPIs */}
-                    <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase" as const, letterSpacing: 0.7, marginBottom: 10 }}>📊 Dados Comerciais</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase" as const, letterSpacing: 0.7, marginBottom: 10 }}>📊 Dados Financeiros</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: revealed ? 16 : 12 }}>
                       {([
-                        { label: "Vol. CX9L",       value: fmtCaixas(m.caixas_exportadas), icon: "📦" },
-                        { label: "Valor FOB US$",    value: fmtCents(m.valor_vendido_cents), icon: "💵" },
-                        { label: "Preço Médio CX",   value: fmtCents(m.preco_medio_cents),   icon: "📈" },
-                      ] as const).map(kpi => (
+                        { label: "FOB US$",    value: revealed ? fmtFobUsd(revealed.fob_usd)        : null, icon: "💵" },
+                        { label: "Vol. CX9L",  value: revealed ? fmtCx9lQty(revealed.cx9l)           : null, icon: "📦" },
+                        { label: "US$ / CX9L", value: revealed ? fmtUsdCx(revealed.usd_por_cx9l)     : null, icon: "📈" },
+                      ]).map(kpi => (
                         <div key={kpi.label} style={{ textAlign: "center", padding: "10px 6px", backgroundColor: WHITE, borderRadius: 10, border: `1px solid ${BORDER}` }}>
                           <div style={{ fontSize: 18, marginBottom: 3 }}>{kpi.icon}</div>
-                          <div style={{ fontSize: 14, fontWeight: 900, color: NAVY }}>{kpi.value}</div>
+                          {kpi.value != null ? (
+                            <div style={{ fontSize: 13, fontWeight: 900, color: NAVY }}>{kpi.value}</div>
+                          ) : (
+                            <div style={{ fontSize: 20, fontWeight: 900, color: MUTED, letterSpacing: 3 }}>••••</div>
+                          )}
                           <div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>{kpi.label}</div>
                         </div>
                       ))}
                     </div>
-                    {/* Importadores */}
+
+                    {!revealed && (
+                      <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                        <button
+                          onClick={() => void revealData(m.id)}
+                          disabled={revealingId === m.id || revealCredits === 0}
+                          style={{
+                            padding: "8px 22px", borderRadius: 8, border: "none",
+                            backgroundColor: revealCredits === 0 ? "#e5e7eb" : NAVY,
+                            color: revealCredits === 0 ? MUTED : WHITE,
+                            fontSize: 13, fontWeight: 700,
+                            cursor: revealingId === m.id || revealCredits === 0 ? "default" : "pointer",
+                            fontFamily: "inherit", opacity: revealingId === m.id ? 0.7 : 1,
+                          }}
+                        >
+                          {revealingId === m.id ? "Revelando…" : revealCredits === 0 ? "🔒 Sem créditos de revelação" : "🔓 Revelar dados financeiros (1 crédito)"}
+                        </button>
+                        {revealCredits !== null && revealCredits > 0 && (
+                          <div style={{ fontSize: 11, color: MUTED }}>
+                            {revealCredits} crédito{revealCredits === 1 ? "" : "s"} disponível{revealCredits === 1 ? "" : "is"} este mês
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase" as const, letterSpacing: 0.7, marginBottom: 8 }}>📦 Quem importa no Brasil</div>
                     {impLoading ? (
                       <div style={{ fontSize: 12, color: MUTED }}>Buscando importadores…</div>

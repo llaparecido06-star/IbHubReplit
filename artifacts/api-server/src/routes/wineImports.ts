@@ -218,11 +218,11 @@ router.get("/wine-imports/bi-search/exportadores", async (req: Request, res: Res
 
   let query = supabaseAdmin
     .from("bi_exportadores")
-    .select("id, name, pais_destino, produtos, caixas_exportadas, valor_vendido_cents, preco_medio_cents, created_at", { count: "exact" })
+    .select("id, name, origem_exportador, created_at", { count: "exact" })
     .order("name", { ascending: true })
     .range(offset, offset + limit - 1);
 
-  if (q) query = query.or(`name.ilike.%${q}%,pais_destino.ilike.%${q}%,produtos.ilike.%${q}%`);
+  if (q) query = query.or(`name.ilike.%${q}%,origem_exportador.ilike.%${q}%`);
 
   const { data, error, count } = await query;
   if (error) return res.status(500).json({ error: error.message });
@@ -314,9 +314,8 @@ router.get("/wine-imports/exportador-importadores", async (req: Request, res: Re
   const pattern = `%${nome}%`;
   const { data, error } = await supabaseAdmin
     .from("wine_imports")
-    .select("distribuidor, exportador")
-    .or(`exportador.ilike.${pattern}`)
-    .not("distribuidor", "is", null)
+    .select("importador, distribuidor")
+    .ilike("exportador", pattern)
     .limit(200);
 
   if (error) {
@@ -325,8 +324,8 @@ router.get("/wine-imports/exportador-importadores", async (req: Request, res: Re
 
   const seen = new Set<string>();
   const importadores: { name: string; company_page_id: string | null }[] = [];
-  for (const r of (data ?? []) as { distribuidor: string | null }[]) {
-    const raw = (r.distribuidor ?? "").trim();
+  for (const r of (data ?? []) as { importador: string | null; distribuidor: string | null }[]) {
+    const raw = ((r.importador ?? r.distribuidor) ?? "").trim();
     if (!raw) continue;
     const key = raw.toLowerCase();
     if (!seen.has(key)) {
@@ -525,6 +524,121 @@ router.get("/wine-imports/search", async (req: Request, res: Response) => {
     credits_remaining: credits.credits_remaining,
     credits_total: credits.credits_total,
   });
+});
+
+/* ─── Reveal Credit System ───────────────────────────────────────────────── */
+
+const REVEAL_CREDITS_FALLBACK: Record<string, number> = {
+  gratuito: 0, free: 0, basico: 0, profissional: 0,
+  premium: 3, empresa: 5, empresas: 5, business: 5,
+  executivo: 15, exclusive: 15,
+};
+
+async function getRevealPlanCredits(userId: string): Promise<number> {
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("plan, reveal_credits_override")
+    .eq("id", userId)
+    .single();
+  const overrideVal = (profile as { reveal_credits_override?: number | null } | null)?.reveal_credits_override;
+  if (overrideVal != null) return overrideVal;
+  const planId = ((profile as { plan?: string | null } | null)?.plan ?? "free").toLowerCase();
+  const { data: planRow } = await supabaseAdmin
+    .from("plans")
+    .select("reveal_credits")
+    .eq("id", planId)
+    .maybeSingle();
+  const rc = (planRow as { reveal_credits?: number } | null)?.reveal_credits;
+  if (typeof rc === "number") return rc;
+  return REVEAL_CREDITS_FALLBACK[planId] ?? 0;
+}
+
+async function getOrCreateRevealCredits(userId: string): Promise<{ credits_remaining: number; credits_total: number; period_start: string }> {
+  const period = currentPeriodStart();
+  const { data: existing } = await supabaseAdmin
+    .from("bi_reveal_credits")
+    .select("credits_remaining, credits_total, period_start")
+    .eq("user_id", userId)
+    .single();
+  if (!existing) {
+    const total = await getRevealPlanCredits(userId);
+    await supabaseAdmin.from("bi_reveal_credits").insert({
+      user_id: userId, credits_remaining: total, credits_total: total, period_start: period,
+    });
+    return { credits_remaining: total, credits_total: total, period_start: period };
+  }
+  const row = existing as { credits_remaining: number; credits_total: number; period_start: string };
+  if (row.period_start < period) {
+    const total = await getRevealPlanCredits(userId);
+    await supabaseAdmin.from("bi_reveal_credits")
+      .update({ credits_remaining: total, credits_total: total, period_start: period, updated_at: new Date().toISOString() })
+      .eq("user_id", userId);
+    return { credits_remaining: total, credits_total: total, period_start: period };
+  }
+  return row;
+}
+
+/**
+ * GET /wine-imports/bi/reveal-credits
+ * Returns user's monthly reveal-credit balance for financial data.
+ */
+router.get("/wine-imports/bi/reveal-credits", async (req: Request, res: Response) => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+  const credits = await getOrCreateRevealCredits(userId);
+  return res.json(credits);
+});
+
+/**
+ * POST /wine-imports/bi/exportadores/:id/reveal
+ * Consumes 1 reveal credit to return fob_usd / cx9l / usd_por_cx9l.
+ * If the same record was already revealed this month, it's free.
+ * Admins bypass the credit check entirely.
+ */
+router.post("/wine-imports/bi/exportadores/:id/reveal", async (req: Request, res: Response) => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+
+  const { id } = req.params;
+
+  const { data: record, error: fetchError } = await supabaseAdmin
+    .from("bi_exportadores")
+    .select("id, fob_usd, cx9l, usd_por_cx9l")
+    .eq("id", id)
+    .maybeSingle();
+  if (fetchError || !record) return res.status(404).json({ error: "Exportador não encontrado" });
+
+  const { data: profile } = await supabaseAdmin.from("profiles").select("role").eq("id", userId).single();
+  const isAdmin = (profile as { role?: string } | null)?.role === "admin";
+  if (isAdmin) {
+    return res.json({ fob_usd: record.fob_usd, cx9l: record.cx9l, usd_por_cx9l: record.usd_por_cx9l, already_revealed: true, credits_remaining: null, credits_total: 0 });
+  }
+
+  const { data: logEntry } = await supabaseAdmin
+    .from("bi_reveal_log")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("record_type", "exportador")
+    .eq("record_id", id)
+    .maybeSingle();
+
+  if (logEntry) {
+    const credits = await getOrCreateRevealCredits(userId);
+    return res.json({ fob_usd: record.fob_usd, cx9l: record.cx9l, usd_por_cx9l: record.usd_por_cx9l, already_revealed: true, credits_remaining: credits.credits_remaining, credits_total: credits.credits_total });
+  }
+
+  const credits = await getOrCreateRevealCredits(userId);
+  if (credits.credits_remaining <= 0) {
+    return res.status(402).json({ error: "Sem créditos de revelação", credits_remaining: 0, credits_total: credits.credits_total });
+  }
+
+  const newRemaining = credits.credits_remaining - 1;
+  await supabaseAdmin.from("bi_reveal_credits")
+    .update({ credits_remaining: newRemaining, updated_at: new Date().toISOString() })
+    .eq("user_id", userId);
+  await supabaseAdmin.from("bi_reveal_log").insert({ user_id: userId, record_type: "exportador", record_id: id });
+
+  return res.json({ fob_usd: record.fob_usd, cx9l: record.cx9l, usd_por_cx9l: record.usd_por_cx9l, already_revealed: false, credits_remaining: newRemaining, credits_total: credits.credits_total });
 });
 
 export default router;

@@ -364,12 +364,12 @@ router.get("/market/bi/exportadores", async (req: Request, res: Response): Promi
 
   let query = supabaseAdmin
     .from("bi_exportadores")
-    .select("id, name, pais_destino, produtos, caixas_exportadas, valor_vendido_cents, preco_medio_cents, created_at", { count: "exact" })
-    .order("caixas_exportadas", { ascending: false })
+    .select("id, name, origem_exportador, created_at", { count: "exact" })
+    .order("name", { ascending: true })
     .range(offset, offset + limit - 1);
 
   if (q) {
-    query = query.or(`name.ilike.%${q}%,pais_destino.ilike.%${q}%,produtos.ilike.%${q}%`);
+    query = query.or(`name.ilike.%${q}%,origem_exportador.ilike.%${q}%`);
   }
 
   const { data, error, count } = await query;
@@ -466,18 +466,16 @@ router.post("/market/bi/exportadores", async (req: Request, res: Response): Prom
   if (!userId) return;
   const allowed = await requireAdmin(req, res, userId);
   if (!allowed) return;
-  const { name, pais_destino, produtos, caixas_exportadas, valor_vendido_cents, preco_medio_cents } = req.body as {
-    name?: string; pais_destino?: string; produtos?: string;
-    caixas_exportadas?: number; valor_vendido_cents?: number; preco_medio_cents?: number;
+  const { name, origem_exportador, fob_usd, cx9l, usd_por_cx9l } = req.body as {
+    name?: string; origem_exportador?: string;
+    fob_usd?: number | null; cx9l?: number | null; usd_por_cx9l?: number | null;
   };
-  if (!name?.trim() || !pais_destino?.trim() || !produtos?.trim()) {
-    res.status(400).json({ error: "name, pais_destino e produtos são obrigatórios" }); return;
+  if (!name?.trim() || !origem_exportador?.trim()) {
+    res.status(400).json({ error: "name e origem_exportador são obrigatórios" }); return;
   }
   const { data, error } = await supabaseAdmin.from("bi_exportadores").insert({
-    name: name.trim(), pais_destino: pais_destino.trim(), produtos: produtos.trim(),
-    caixas_exportadas: caixas_exportadas ?? 0,
-    valor_vendido_cents: valor_vendido_cents ?? 0,
-    preco_medio_cents: preco_medio_cents ?? 0,
+    name: name.trim(), origem_exportador: origem_exportador.trim(),
+    fob_usd: fob_usd ?? null, cx9l: cx9l ?? null, usd_por_cx9l: usd_por_cx9l ?? null,
   }).select().single();
   if (error) { res.status(500).json({ error: error.message }); return; }
   res.status(201).json(data);
@@ -488,12 +486,13 @@ router.patch("/market/bi/exportadores/:id", async (req: Request, res: Response):
   if (!userId) return;
   const allowed = await requireAdmin(req, res, userId);
   if (!allowed) return;
-  const body = req.body as Record<string, string | number | undefined>;
-  const updates: Record<string, string | number> = {};
-  const strings = ["name", "pais_destino", "produtos"] as const;
-  const numbers = ["caixas_exportadas", "valor_vendido_cents", "preco_medio_cents"] as const;
-  strings.forEach(k => { if (typeof body[k] === "string" && (body[k] as string).trim()) updates[k] = (body[k] as string).trim(); });
-  numbers.forEach(k => { if (typeof body[k] === "number") updates[k] = body[k] as number; });
+  const body = req.body as Record<string, string | number | null | undefined>;
+  const updates: Record<string, string | number | null> = {};
+  if (typeof body.name === "string" && body.name.trim()) updates.name = body.name.trim();
+  if (typeof body.origem_exportador === "string" && body.origem_exportador.trim()) updates.origem_exportador = body.origem_exportador.trim();
+  if (body.fob_usd !== undefined) updates.fob_usd = typeof body.fob_usd === "number" ? body.fob_usd : null;
+  if (body.cx9l !== undefined) updates.cx9l = typeof body.cx9l === "number" ? body.cx9l : null;
+  if (body.usd_por_cx9l !== undefined) updates.usd_por_cx9l = typeof body.usd_por_cx9l === "number" ? body.usd_por_cx9l : null;
   if (!Object.keys(updates).length) { res.status(400).json({ error: "Nenhum campo enviado" }); return; }
   const { data, error } = await supabaseAdmin.from("bi_exportadores").update(updates).eq("id", req.params.id).select().maybeSingle();
   if (error) { res.status(500).json({ error: error.message }); return; }

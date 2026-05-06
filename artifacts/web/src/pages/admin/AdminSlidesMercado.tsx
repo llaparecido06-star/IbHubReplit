@@ -60,7 +60,7 @@ interface MarketPermission {
 type BiKind = "Importadores" | "Exportadores" | "Produtores";
 
 interface BiImp { id: string; name: string; pais: string; segmentos: string; estado: string; created_at: string; }
-interface BiExp { id: string; name: string; pais_destino: string; produtos: string; caixas_exportadas: number; valor_vendido_cents: number; preco_medio_cents: number; created_at: string; }
+interface BiExp { id: string; name: string; origem_exportador: string; fob_usd: string | null; cx9l: string | null; usd_por_cx9l: string | null; created_at: string; }
 interface BiProd { id: string; name: string; name_fantasia: string | null; regiao: string; estado: string | null; tipos: string; fundado: number | null; created_at: string; }
 type BiRow = BiImp | BiExp | BiProd;
 
@@ -455,10 +455,10 @@ export default function AdminSlidesMercado() {
       setBiPais(r?.pais ?? ""); setBiSegmentos(r?.segmentos ?? ""); setBiEstado(r?.estado ?? "");
     } else if (kind === "Exportadores") {
       const r = row as BiExp | null;
-      setBiPaisDestino(r?.pais_destino ?? ""); setBiProdutos(r?.produtos ?? "");
-      setBiCaixas(r?.caixas_exportadas?.toString() ?? "");
-      setBiValor(r ? (r.valor_vendido_cents / 100).toFixed(2) : "");
-      setBiPreco(r ? (r.preco_medio_cents / 100).toFixed(2) : "");
+      setBiPaisDestino(r?.origem_exportador ?? "");
+      setBiCaixas(r?.cx9l ?? "");
+      setBiValor(r?.fob_usd ?? "");
+      setBiPreco(r?.usd_por_cx9l ?? "");
     } else {
       const r = row as BiProd | null;
       setBiNomeFantasia(r?.name_fantasia ?? "");
@@ -482,12 +482,13 @@ export default function AdminSlidesMercado() {
         else await biApiFetch("/market/bi/importadores", "POST", body);
       } else if (kind === "Exportadores") {
         const body = {
-          name: biName.trim(), pais_destino: biPaisDestino.trim(), produtos: biProdutos.trim(),
-          caixas_exportadas: parseInt(biCaixas) || 0,
-          valor_vendido_cents: Math.round((parseFloat(biValor) || 0) * 100),
-          preco_medio_cents: Math.round((parseFloat(biPreco) || 0) * 100),
+          name: biName.trim(),
+          origem_exportador: biPaisDestino.trim(),
+          fob_usd: parseFloat(biValor) || null,
+          cx9l: parseFloat(biCaixas) || null,
+          usd_por_cx9l: parseFloat(biPreco) || null,
         };
-        if (!body.name || !body.pais_destino || !body.produtos) { alert("Nome, país de destino e produtos são obrigatórios"); setBiSaving(false); return; }
+        if (!body.name || !body.origem_exportador) { alert("Nome e país de origem são obrigatórios"); setBiSaving(false); return; }
         if (id) await biApiFetch(`/market/bi/exportadores/${id}`, "PATCH", body);
         else await biApiFetch("/market/bi/exportadores", "POST", body);
       } else {
@@ -784,9 +785,10 @@ export default function AdminSlidesMercado() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{r.name}</div>
                     <div style={{ fontSize: 12, color: "#8a93a2" }}>
-                      Destino: {r.pais_destino} · {r.caixas_exportadas.toLocaleString("pt-BR")} cx · R$ {(r.valor_vendido_cents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      {r.origem_exportador ? `🌍 ${r.origem_exportador}` : "—"}
+                      {r.fob_usd ? ` · FOB US$ ${parseFloat(r.fob_usd).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : ""}
+                      {r.cx9l ? ` · ${parseFloat(r.cx9l).toLocaleString("pt-BR")} CX9L` : ""}
                     </div>
-                    <div style={{ fontSize: 11, color: "#aaa" }}>{r.produtos}</div>
                   </div>
                   <button onClick={() => openBiModal("Exportadores", r)} style={{ padding: "6px 12px", backgroundColor: `${GOLD}15`, color: GOLD, border: `1px solid ${GOLD}44`, borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>✏️ Editar</button>
                   <button onClick={() => handleDeleteBi("Exportadores", r)} disabled={biDeletingId === r.id} style={btnDanger}>{biDeletingId === r.id ? "..." : "🗑"}</button>
@@ -948,11 +950,10 @@ export default function AdminSlidesMercado() {
             </>}
 
             {biModal.kind === "Exportadores" && <>
-              {inp("País de destino *", biPaisDestino, setBiPaisDestino, { placeholder: "Ex: EUA, Portugal" })}
-              {inp("Produtos *", biProdutos, setBiProdutos, { placeholder: "Ex: Espumantes, Vinhos Finos" })}
-              {inp("Caixas exportadas", biCaixas, setBiCaixas, { placeholder: "Ex: 50000", type: "number" })}
-              {inp("Valor total (R$)", biValor, setBiValor, { placeholder: "Ex: 820000.00", type: "number" })}
-              {inp("Preço médio por caixa (R$)", biPreco, setBiPreco, { placeholder: "Ex: 164.00", type: "number" })}
+              {inp("País de origem *", biPaisDestino, setBiPaisDestino, { placeholder: "Ex: AFRICA DO SUL" })}
+              {inp("FOB US$", biValor, setBiValor, { placeholder: "Ex: 22914.71", type: "number" })}
+              {inp("Vol. CX9L", biCaixas, setBiCaixas, { placeholder: "Ex: 530.00", type: "number" })}
+              {inp("US$ / CX9L", biPreco, setBiPreco, { placeholder: "Ex: 43.24", type: "number" })}
             </>}
 
             {biModal.kind === "Produtores" && <>

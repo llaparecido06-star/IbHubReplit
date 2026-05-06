@@ -4332,11 +4332,10 @@ export interface BiImportador {
 export interface BiExportador {
   id: string;
   name: string;
-  pais_destino: string;
-  produtos: string;
-  caixas_exportadas: number;
-  valor_vendido_cents: number;
-  preco_medio_cents: number;
+  origem_exportador: string;
+  fob_usd: string | null;
+  cx9l: string | null;
+  usd_por_cx9l: string | null;
   created_at: string;
 }
 
