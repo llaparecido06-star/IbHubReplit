@@ -81,10 +81,11 @@ function PersonCard({ p, isEmpresa = false, currentUserId }: { p: PersonResult; 
   const [, setLocation] = useLocation();
   const [sent, setSent] = useState(false);
   const plan = PLAN_LABELS[p.plan ?? ""];
+  const isSelf = p.id === currentUserId;
 
   const handleConnect = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (sent) return;
+    if (sent || isSelf) return;
     await sendWebConnectionRequest(p.id, currentUserId);
     setSent(true);
   };
@@ -100,7 +101,7 @@ function PersonCard({ p, isEmpresa = false, currentUserId }: { p: PersonResult; 
         {p.headline && <div style={{ fontSize: 12, color: MUTED, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.headline}</div>}
         {p.username && <div style={{ fontSize: 11, color: MUTED }}>@{p.username}</div>}
       </div>
-      {!isEmpresa && (
+      {!isEmpresa && !isSelf && (
         <button
           onClick={handleConnect}
           disabled={sent}

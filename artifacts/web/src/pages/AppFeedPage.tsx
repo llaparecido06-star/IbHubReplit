@@ -682,7 +682,7 @@ function PostCard({
 function WelcomeCard({ suggestions, onConnect, onFollow, viewingAsCompany }: {
   suggestions: SuggestedProfile[];
   onConnect: (id: string) => void;
-  onFollow?: (id: string) => void;
+  onFollow?: (id: string, isCurrentlyFollowing: boolean) => void;
   viewingAsCompany?: boolean;
 }) {
   return (
@@ -709,7 +709,7 @@ function SuggestionCard({
 }: {
   profile: SuggestedProfile;
   onConnect: (id: string) => void;
-  onFollow?: (id: string) => void;
+  onFollow?: (id: string, isCurrentlyFollowing: boolean) => void;
   viewingAsCompany?: boolean;
   compact?: boolean;
 }) {
@@ -726,8 +726,9 @@ function SuggestionCard({
   };
 
   const handleFollow = () => {
+    const wasFollowing = following;
     setFollowing(prev => !prev);
-    onFollow?.(profile.id);
+    onFollow?.(profile.id, wasFollowing);
   };
 
   return (
@@ -840,7 +841,7 @@ function PostTrigger({
 function SuggestionsPanel({ suggestions, onConnect, onFollow, viewingAsCompany }: {
   suggestions: SuggestedProfile[];
   onConnect: (id: string) => void;
-  onFollow?: (id: string) => void;
+  onFollow?: (id: string, isCurrentlyFollowing: boolean) => void;
   viewingAsCompany?: boolean;
 }) {
   const [, setLocation] = useLocation();
@@ -887,7 +888,7 @@ function SuggestionsPanel({ suggestions, onConnect, onFollow, viewingAsCompany }
 function ConnectBtn({ profile, onConnect, onFollow, viewingAsCompany }: {
   profile: SuggestedProfile;
   onConnect: (id: string) => void;
-  onFollow?: (id: string) => void;
+  onFollow?: (id: string, isCurrentlyFollowing: boolean) => void;
   viewingAsCompany?: boolean;
 }) {
   const [status, setStatus] = useState(profile.connection_status);
@@ -901,8 +902,9 @@ function ConnectBtn({ profile, onConnect, onFollow, viewingAsCompany }: {
   };
 
   const handleFollow = () => {
+    const wasFollowing = following;
     setFollowing(prev => !prev);
-    onFollow?.(profile.id);
+    onFollow?.(profile.id, wasFollowing);
   };
 
   if (useFollowMode) {
@@ -1149,12 +1151,18 @@ export default function AppFeedPage() {
     await sendWebConnectionRequest(targetId, userId);
   }, [userId]);
 
-  const handleFollowSuggestion = useCallback(async (targetId: string) => {
+  const handleFollowSuggestion = useCallback(async (targetId: string, isCurrentlyFollowing: boolean) => {
     if (!userId) return;
-    await supabase.from("follows").upsert(
-      { follower_id: userId, following_id: targetId },
-      { onConflict: "follower_id, following_id" },
-    );
+    if (isCurrentlyFollowing) {
+      await supabase.from("follows").delete()
+        .eq("follower_id", userId)
+        .eq("following_id", targetId);
+    } else {
+      await supabase.from("follows").upsert(
+        { follower_id: userId, following_id: targetId },
+        { onConflict: "follower_id,following_id" },
+      );
+    }
   }, [userId]);
 
   const handleDeletePost = useCallback(async (postId: string) => {

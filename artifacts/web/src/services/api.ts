@@ -445,14 +445,24 @@ export async function fetchConnectionsList(userId: string): Promise<ProfilePerso
   try {
     const { data } = await supabase
       .from("connections")
-      .select("requester_id, receiver_id")
+      .select("requester_id, receiver_id, created_at")
       .or(`requester_id.eq.${userId},receiver_id.eq.${userId}`)
-      .eq("status", "accepted");
+      .eq("status", "accepted")
+      .order("created_at", { ascending: false });
     if (!data) return [];
     const ids = data.map((c: any) => c.requester_id === userId ? c.receiver_id : c.requester_id);
     if (!ids.length) return [];
-    const { data: profiles } = await supabase.from("profiles").select("id, full_name, username, avatar_url, position, company").in("id", ids);
-    return (profiles ?? []).map((p: any) => ({ id: p.id, full_name: p.full_name, username: p.username, avatar_url: p.avatar_url, headline: [p.position, p.company].filter(Boolean).join(" · ") || null }));
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, full_name, username, avatar_url, position, company")
+      .in("id", ids);
+    const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+    // Preserve the order from connections (most recent first)
+    return ids.map(id => {
+      const p = profileMap.get(id);
+      if (!p) return null;
+      return { id: p.id, full_name: p.full_name, username: p.username, avatar_url: p.avatar_url, headline: [p.position, p.company].filter(Boolean).join(" · ") || null };
+    }).filter(Boolean) as ProfilePerson[];
   } catch (e) {
     console.warn("fetchConnectionsList:", e);
     return [];
@@ -461,11 +471,24 @@ export async function fetchConnectionsList(userId: string): Promise<ProfilePerso
 
 export async function fetchFollowersList(userId: string): Promise<ProfilePerson[]> {
   try {
-    const { data } = await supabase.from("follows").select("follower_id").eq("following_id", userId).limit(50);
+    const { data } = await supabase
+      .from("follows")
+      .select("follower_id, created_at")
+      .eq("following_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(200);
     if (!data || !data.length) return [];
     const ids = data.map((f: any) => f.follower_id);
-    const { data: profiles } = await supabase.from("profiles").select("id, full_name, username, avatar_url, position, company").in("id", ids);
-    return (profiles ?? []).map((p: any) => ({ id: p.id, full_name: p.full_name, username: p.username, avatar_url: p.avatar_url, headline: [p.position, p.company].filter(Boolean).join(" · ") || null }));
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, full_name, username, avatar_url, position, company")
+      .in("id", ids);
+    const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+    return ids.map(id => {
+      const p = profileMap.get(id);
+      if (!p) return null;
+      return { id: p.id, full_name: p.full_name, username: p.username, avatar_url: p.avatar_url, headline: [p.position, p.company].filter(Boolean).join(" · ") || null };
+    }).filter(Boolean) as ProfilePerson[];
   } catch (e) {
     console.warn("fetchFollowersList:", e);
     return [];
@@ -474,11 +497,24 @@ export async function fetchFollowersList(userId: string): Promise<ProfilePerson[
 
 export async function fetchFollowingList(userId: string): Promise<ProfilePerson[]> {
   try {
-    const { data } = await supabase.from("follows").select("following_id").eq("follower_id", userId).limit(50);
+    const { data } = await supabase
+      .from("follows")
+      .select("following_id, created_at")
+      .eq("follower_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(200);
     if (!data || !data.length) return [];
     const ids = data.map((f: any) => f.following_id);
-    const { data: profiles } = await supabase.from("profiles").select("id, full_name, username, avatar_url, position, company").in("id", ids);
-    return (profiles ?? []).map((p: any) => ({ id: p.id, full_name: p.full_name, username: p.username, avatar_url: p.avatar_url, headline: [p.position, p.company].filter(Boolean).join(" · ") || null }));
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, full_name, username, avatar_url, position, company")
+      .in("id", ids);
+    const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+    return ids.map(id => {
+      const p = profileMap.get(id);
+      if (!p) return null;
+      return { id: p.id, full_name: p.full_name, username: p.username, avatar_url: p.avatar_url, headline: [p.position, p.company].filter(Boolean).join(" · ") || null };
+    }).filter(Boolean) as ProfilePerson[];
   } catch (e) {
     console.warn("fetchFollowingList:", e);
     return [];
