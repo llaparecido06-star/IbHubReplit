@@ -598,7 +598,9 @@ function ImportadoresSearch() {
         filtered.map(m => (
           <div
             key={m.id}
-            style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 14 }}
+            onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = GOLD; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = BORDER; }}
+            style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 14, transition: "border-color 0.15s" }}
           >
             <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
               📦
@@ -688,7 +690,7 @@ function ExportadoresSearch({ hasAccess }: { hasAccess: boolean }) {
                   }}
                   title={hasAccess ? (isOpen ? "Ocultar dados" : "Ver dados comerciais") : "Requer plano Ideal.BI"}
                 >
-                  {isOpen ? "▲ Ocultar" : "📊 Ver dados"}
+                  {isOpen ? "▲ Ocultar" : "🔒 Ver dados comerciais"}
                 </button>
               </div>
 
@@ -759,7 +761,9 @@ function ProdutoresSearch() {
         filtered.map(m => (
           <div
             key={m.id}
-            style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 14 }}
+            onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = GOLD; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = BORDER; }}
+            style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 14, transition: "border-color 0.15s" }}
           >
             <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
               🍇
