@@ -729,8 +729,10 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
       setNotifItems(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
       await markWebNotificationRead(notif.id);
     }
-    if (notif.post_id) setLocation(`/app/posts/${notif.post_id}`);
-    else if (notif.type === "connection" && notif.actor?.id) setLocation(`/app/usuario/${notif.actor.id}`);
+    if (notif.post_id) {
+      const commentParam = notif.comment_id ? `?commentId=${notif.comment_id}` : "";
+      setLocation(`/app/posts/${notif.post_id}${commentParam}`);
+    } else if (notif.type === "connection" && notif.actor?.id) setLocation(`/app/usuario/${notif.actor.id}`);
     else setLocation("/app/notificacoes");
     setNotifOpen(false);
   };

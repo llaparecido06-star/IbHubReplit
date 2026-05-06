@@ -3286,6 +3286,7 @@ export interface WebNotification {
   actor_id?: string | null;
   type: string;
   post_id?: string | null;
+  comment_id?: string | null;
   message?: string | null;
   read: boolean;
   created_at: string;
@@ -3317,7 +3318,7 @@ export async function fetchWebNotifications(
   try {
     let query = supabase
       .from("notifications")
-      .select("id, user_id, actor_id, type, post_id, message, read, created_at, target_company_id")
+      .select("id, user_id, actor_id, type, post_id, comment_id, message, read, created_at, target_company_id")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(60);
@@ -4286,7 +4287,7 @@ export async function sendMentionNotifications(
     for (const p of (people ?? [])) {
       if ((p as any).id === actorId) continue;
       mentionedUserIds.push((p as any).id);
-      notifs.push({ user_id: (p as any).id, actor_id: actorId, type: "mention", message: `mencionou você em um ${where}`, post_id: postId ?? null });
+      notifs.push({ user_id: (p as any).id, actor_id: actorId, type: "mention", message: `mencionou você em um ${where}`, post_id: postId ?? null, comment_id: commentId ?? null });
     }
     for (const c of (companies ?? [])) {
       const { data: admins } = await supabase
@@ -4296,7 +4297,7 @@ export async function sendMentionNotifications(
       for (const a of (admins ?? [])) {
         if ((a as any).user_id === actorId) continue;
         mentionedUserIds.push((a as any).user_id);
-        notifs.push({ user_id: (a as any).user_id, actor_id: actorId, type: "mention", message: `mencionou ${(c as any).name || "sua empresa"} em um ${where}`, post_id: postId ?? null });
+        notifs.push({ user_id: (a as any).user_id, actor_id: actorId, type: "mention", message: `mencionou ${(c as any).name || "sua empresa"} em um ${where}`, post_id: postId ?? null, comment_id: commentId ?? null });
       }
     }
 

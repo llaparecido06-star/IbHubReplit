@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { useRoute, useLocation } from "wouter";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useRoute, useLocation, useSearch } from "wouter";
 import VideoPlayer from "@/components/feed/VideoPlayer";
 import { PostActionsBar } from "@/components/feed/PostActionsBar";
 import { useAuth } from "@/context/AuthContext";
@@ -83,11 +83,27 @@ async function buildMentionMap(texts: string[]): Promise<MentionMap> {
   return map;
 }
 
-function CommentItem({ comment, depth = 0, onReply, currentUserId, mentionMap }: { comment: AppComment; depth?: number; onReply: (id: string, name: string) => void; currentUserId?: string; mentionMap: MentionMap }) {
+function CommentItem({ comment, depth = 0, onReply, currentUserId, mentionMap, highlighted = false, highlightRef }: {
+  comment: AppComment;
+  depth?: number;
+  onReply: (id: string, name: string) => void;
+  currentUserId?: string;
+  mentionMap: MentionMap;
+  highlighted?: boolean;
+  highlightRef?: React.RefObject<HTMLDivElement | null>;
+}) {
   const [, setLocation] = useLocation();
   const [liked, setLiked] = useState(!!comment.is_liked);
   const [likesCount, setLikesCount] = useState(comment.likes_count ?? 0);
   const [toggling, setToggling] = useState(false);
+  const [flash, setFlash] = useState(highlighted);
+
+  useEffect(() => {
+    if (!highlighted) return;
+    const timer = setTimeout(() => setFlash(false), 2000);
+    return () => clearTimeout(timer);
+  }, [highlighted]);
+
   const goToAuthor = () => {
     if (!comment.author?.id) return;
     comment.author.id === currentUserId ? setLocation("/app/perfil") : setLocation(`/app/usuario/${comment.author.id}`);
@@ -104,12 +120,19 @@ function CommentItem({ comment, depth = 0, onReply, currentUserId, mentionMap }:
   };
 
   return (
-    <div style={{ marginLeft: depth * 24, marginBottom: 10 }}>
+    <div ref={highlighted ? highlightRef : undefined} style={{ marginLeft: depth * 24, marginBottom: 10 }}>
       <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
         <div onClick={goToAuthor} style={{ cursor: comment.author?.id ? "pointer" : "default", flexShrink: 0 }}>
           <Avatar url={comment.author?.avatar_url} name={comment.author?.full_name} size={34} />
         </div>
-        <div style={{ flex: 1, backgroundColor: depth === 0 ? BG : "#fff", borderRadius: 10, padding: "10px 14px", border: `1px solid ${BORDER}` }}>
+        <div style={{
+          flex: 1,
+          backgroundColor: depth === 0 ? BG : "#fff",
+          borderRadius: 10,
+          padding: "10px 14px",
+          border: flash ? `2px solid ${GOLD}` : `1px solid ${BORDER}`,
+          transition: "border-color 0.4s",
+        }}>
           <div onClick={goToAuthor} style={{ fontWeight: 700, fontSize: 13, color: NAVY, marginBottom: 4, cursor: comment.author?.id ? "pointer" : "default", display: "inline-block" }}>
             {comment.author?.full_name ?? "Usuário"}
           </div>
@@ -144,9 +167,12 @@ function CommentItem({ comment, depth = 0, onReply, currentUserId, mentionMap }:
 export default function PostDetalhePage() {
   const [, params] = useRoute("/app/posts/:id");
   const [, setLocation] = useLocation();
+  const search = useSearch();
   const { profile, activeCompany } = useAuth();
   const postId = params?.id;
   const companyId = activeCompany?.id ?? null;
+  const highlightCommentId = new URLSearchParams(search).get("commentId") ?? undefined;
+  const highlightRef = useRef<HTMLDivElement | null>(null);
 
   const [post, setPost] = useState<Post | null>(null);
   const [comments, setComments] = useState<AppComment[]>([]);
@@ -174,6 +200,15 @@ export default function PostDetalhePage() {
     const texts = comments.flatMap(c => [c.content, ...(c.replies ?? []).map(r => r.content)]);
     buildMentionMap(texts).then(setMentionMap);
   }, [comments]);
+
+  // Scroll to highlighted comment after comments load
+  useEffect(() => {
+    if (!highlightCommentId || !comments.length || loading) return;
+    const timer = setTimeout(() => {
+      highlightRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [highlightCommentId, comments.length, loading]);
 
   useEffect(() => {
     if (!postId || !profile?.id) return;
@@ -438,7 +473,17 @@ export default function PostDetalhePage() {
           {comments.length === 0 ? (
             <p style={{ color: MUTED, textAlign: "center", padding: "20px 0", fontSize: 14 }}>Seja o primeiro a comentar!</p>
           ) : (
-            comments.map(c => <CommentItem key={c.id} comment={c} onReply={handleReply} currentUserId={profile?.id} mentionMap={mentionMap} />)
+            comments.map(c => (
+              <CommentItem
+                key={c.id}
+                comment={c}
+                onReply={handleReply}
+                currentUserId={profile?.id}
+                mentionMap={mentionMap}
+                highlighted={c.id === highlightCommentId}
+                highlightRef={c.id === highlightCommentId ? highlightRef : undefined}
+              />
+            ))
           )}
         </div>
       </div>

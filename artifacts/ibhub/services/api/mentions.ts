@@ -70,7 +70,7 @@ export async function sendMentionNotifications(
     for (const p of (people ?? [])) {
       if (p.id === actorId) continue;
       mentionedUserIds.push(p.id);
-      notifs.push({ user_id: p.id, actor_id: actorId, type: "mention", message: `mencionou você em um ${where}`, post_id: postId ?? null });
+      notifs.push({ user_id: p.id, actor_id: actorId, type: "mention", message: `mencionou você em um ${where}`, post_id: postId ?? null, comment_id: commentId ?? null });
     }
     for (const c of (companies ?? [])) {
       // For companies, notify their admins
@@ -81,7 +81,7 @@ export async function sendMentionNotifications(
       for (const a of (admins ?? [])) {
         if (a.user_id === actorId) continue;
         mentionedUserIds.push(a.user_id);
-        notifs.push({ user_id: a.user_id, actor_id: actorId, type: "mention", message: `mencionou ${c.name || "sua empresa"} em um ${where}`, post_id: postId ?? null });
+        notifs.push({ user_id: a.user_id, actor_id: actorId, type: "mention", message: `mencionou ${c.name || "sua empresa"} em um ${where}`, post_id: postId ?? null, comment_id: commentId ?? null });
       }
     }
 

@@ -291,7 +291,8 @@ export default function NotificationsScreen() {
     } else if (notif.type === "company_follow" && (notif as any).target_company_id) {
       router.push(`/empresa/${(notif as any).target_company_id}` as any);
     } else if (notif.post_id) {
-      router.push(`/post/${notif.post_id}` as any);
+      const params = notif.comment_id ? `?commentId=${notif.comment_id}` : "";
+      router.push(`/post/${notif.post_id}${params}` as any);
     } else if (notif.actor?.id) {
       router.push(`/profile/${notif.actor.id}` as any);
     }
