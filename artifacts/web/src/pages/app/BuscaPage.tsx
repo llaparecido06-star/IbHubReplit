@@ -105,7 +105,7 @@ function PersonCard({ p, isEmpresa = false, currentUserId }: { p: PersonResult; 
         <button
           onClick={handleConnect}
           disabled={sent}
-          style={{ padding: "6px 14px", background: sent ? "#e8f5e9" : GOLD, color: sent ? "#16a34a" : WHITE, border: "none", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: sent ? "default" : "pointer", flexShrink: 0, fontFamily: "inherit" }}
+          style={{ padding: "6px 14px", background: sent ? "#e8f5e9" : NAVY, color: sent ? "#16a34a" : WHITE, border: "none", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: sent ? "default" : "pointer", flexShrink: 0, fontFamily: "inherit" }}
         >
           {sent ? "✓ Enviado" : "Conectar"}
         </button>
@@ -236,6 +236,19 @@ export default function BuscaPage() {
     const isAll = f === "todos";
     const lim = (full: number) => isAll ? Math.ceil(full / 2) : full;
 
+    const searchEmpresas = async (): Promise<{ data: CompanyResult[] }> => {
+      const [cRes, pRes] = await Promise.all([
+        supabase.from("company_pages").select("id, name, avatar_url, industry").ilike("name", `%${trimmed}%`).limit(lim(20)),
+        supabase.from("profiles").select("id, full_name, avatar_url, headline").or(`full_name.ilike.%${trimmed}%,headline.ilike.%${trimmed}%`).eq("profile_type", "empresa").limit(lim(10)),
+      ]);
+      const companies = (cRes.data ?? []) as CompanyResult[];
+      const profileEmpresas = (pRes.data ?? []).map((p: any): CompanyResult => ({
+        id: p.id, name: p.full_name ?? "?", avatar_url: p.avatar_url, industry: p.headline ?? null,
+      }));
+      const seen = new Set(companies.map(c => c.id));
+      return { data: [...companies, ...profileEmpresas.filter(p => !seen.has(p.id))] };
+    };
+
     const searchPostsViaApi = async (): Promise<{ data: any[] }> => {
       try {
         const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
@@ -273,14 +286,12 @@ export default function BuscaPage() {
     try {
       const [resP, resPub, resE, resV, resEv, resG] = await Promise.all([
         (isAll || f === "pessoas")
-          ? supabase.from("profiles").select("id, full_name, username, avatar_url, headline, plan").or(`full_name.ilike.%${trimmed}%,username.ilike.%${trimmed}%`).eq("profile_type", "pessoa").neq("id", myId).limit(lim(30))
+          ? supabase.from("profiles").select("id, full_name, username, avatar_url, headline, plan").or(`full_name.ilike.%${trimmed}%,username.ilike.%${trimmed}%,headline.ilike.%${trimmed}%`).eq("profile_type", "pessoa").neq("id", myId).limit(lim(30))
           : Promise.resolve({ data: [] }),
 
         (isAll || f === "publicacoes") ? searchPostsViaApi() : Promise.resolve({ data: [] }),
 
-        (isAll || f === "empresas")
-          ? supabase.from("company_pages").select("id, name, avatar_url, industry").ilike("name", `%${trimmed}%`).limit(lim(20))
-          : Promise.resolve({ data: [] }),
+        (isAll || f === "empresas") ? searchEmpresas() : Promise.resolve({ data: [] }),
 
         (isAll || f === "vagas")
           ? supabase.from("opportunities").select("id, title, description, company, location, contract_type, created_at").or(`title.ilike.%${trimmed}%,company.ilike.%${trimmed}%`).eq("type", "vaga").eq("is_active", true).order("created_at", { ascending: false }).limit(lim(20))
@@ -377,8 +388,8 @@ export default function BuscaPage() {
                   onClick={() => handleFilter(f.key)}
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
-                    padding: "5px 12px", borderRadius: 20, border: `1.5px solid ${active ? GOLD : BORDER}`,
-                    background: active ? GOLD : WHITE, color: active ? WHITE : NAVY,
+                    padding: "5px 12px", borderRadius: 20, border: `1.5px solid ${active ? NAVY : BORDER}`,
+                    background: active ? NAVY : WHITE, color: active ? WHITE : NAVY,
                     fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
                     fontFamily: "inherit", flexShrink: 0, transition: "all 0.15s",
                   }}

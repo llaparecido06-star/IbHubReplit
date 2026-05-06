@@ -780,9 +780,9 @@ function SuggestionCard({
           style={{
             width: "100%", padding: "7px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700,
             cursor: status === "none" ? "pointer" : "default",
-            backgroundColor: status === "none" ? `${GOLD}15` : "#f5f5f0",
-            color: status === "none" ? GOLD : MUTED,
-            border: `1px solid ${status === "none" ? GOLD + "50" : BORDER}`,
+            backgroundColor: status === "none" ? NAVY : "#f5f5f0",
+            color: status === "none" ? WHITE : MUTED,
+            border: `1px solid ${status === "none" ? NAVY : BORDER}`,
           }}
         >
           {status === "pending" ? "Pendente" : status === "connected" ? "Conectado" : "Conectar"}
@@ -933,9 +933,9 @@ function ConnectBtn({ profile, onConnect, onFollow, viewingAsCompany }: {
         flexShrink: 0,
         fontSize: 12, fontWeight: 700, padding: "5px 12px", borderRadius: 8,
         cursor: status === "none" ? "pointer" : "default",
-        backgroundColor: status === "none" ? `${GOLD}15` : "#f5f5f0",
-        color: status === "none" ? GOLD : MUTED,
-        border: `1px solid ${status === "none" ? GOLD + "50" : BORDER}`,
+        backgroundColor: status === "none" ? NAVY : "#f5f5f0",
+        color: status === "none" ? WHITE : MUTED,
+        border: `1px solid ${status === "none" ? NAVY : BORDER}`,
       }}
     >
       {status === "pending" ? "Pendente" : status === "connected" ? "Conectado" : "Conectar"}
