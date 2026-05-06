@@ -413,4 +413,147 @@ router.get("/market/bi/produtores", async (req: Request, res: Response): Promise
   res.json({ items: data ?? [], total: count ?? 0, limit, offset });
 });
 
+/* ─── Ideal.BI Admin — Importadores (POST / PATCH / DELETE) ─────────────── */
+
+router.post("/market/bi/importadores", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+  const allowed = await requireAdmin(req, res, userId);
+  if (!allowed) return;
+  const { name, pais, segmentos, estado } = req.body as Record<string, string | undefined>;
+  if (!name?.trim() || !pais?.trim() || !segmentos?.trim() || !estado?.trim()) {
+    res.status(400).json({ error: "name, pais, segmentos e estado são obrigatórios" }); return;
+  }
+  const { data, error } = await supabaseAdmin.from("bi_importadores")
+    .insert({ name: name.trim(), pais: pais.trim(), segmentos: segmentos.trim(), estado: estado.trim() })
+    .select().single();
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.status(201).json(data);
+});
+
+router.patch("/market/bi/importadores/:id", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+  const allowed = await requireAdmin(req, res, userId);
+  if (!allowed) return;
+  const { name, pais, segmentos, estado } = req.body as Record<string, string | undefined>;
+  const updates: Record<string, string> = {};
+  if (name?.trim()) updates.name = name.trim();
+  if (pais?.trim()) updates.pais = pais.trim();
+  if (segmentos?.trim()) updates.segmentos = segmentos.trim();
+  if (estado?.trim()) updates.estado = estado.trim();
+  if (!Object.keys(updates).length) { res.status(400).json({ error: "Nenhum campo enviado" }); return; }
+  const { data, error } = await supabaseAdmin.from("bi_importadores").update(updates).eq("id", req.params.id).select().single();
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.json(data);
+});
+
+router.delete("/market/bi/importadores/:id", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+  const allowed = await requireAdmin(req, res, userId);
+  if (!allowed) return;
+  const { error } = await supabaseAdmin.from("bi_importadores").delete().eq("id", req.params.id);
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.status(204).end();
+});
+
+/* ─── Ideal.BI Admin — Exportadores (POST / PATCH / DELETE) ─────────────── */
+
+router.post("/market/bi/exportadores", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+  const allowed = await requireAdmin(req, res, userId);
+  if (!allowed) return;
+  const { name, pais_destino, produtos, caixas_exportadas, valor_vendido_cents, preco_medio_cents } = req.body as {
+    name?: string; pais_destino?: string; produtos?: string;
+    caixas_exportadas?: number; valor_vendido_cents?: number; preco_medio_cents?: number;
+  };
+  if (!name?.trim() || !pais_destino?.trim() || !produtos?.trim()) {
+    res.status(400).json({ error: "name, pais_destino e produtos são obrigatórios" }); return;
+  }
+  const { data, error } = await supabaseAdmin.from("bi_exportadores").insert({
+    name: name.trim(), pais_destino: pais_destino.trim(), produtos: produtos.trim(),
+    caixas_exportadas: caixas_exportadas ?? 0,
+    valor_vendido_cents: valor_vendido_cents ?? 0,
+    preco_medio_cents: preco_medio_cents ?? 0,
+  }).select().single();
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.status(201).json(data);
+});
+
+router.patch("/market/bi/exportadores/:id", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+  const allowed = await requireAdmin(req, res, userId);
+  if (!allowed) return;
+  const body = req.body as Record<string, string | number | undefined>;
+  const updates: Record<string, string | number> = {};
+  const strings = ["name", "pais_destino", "produtos"] as const;
+  const numbers = ["caixas_exportadas", "valor_vendido_cents", "preco_medio_cents"] as const;
+  strings.forEach(k => { if (typeof body[k] === "string" && (body[k] as string).trim()) updates[k] = (body[k] as string).trim(); });
+  numbers.forEach(k => { if (typeof body[k] === "number") updates[k] = body[k] as number; });
+  if (!Object.keys(updates).length) { res.status(400).json({ error: "Nenhum campo enviado" }); return; }
+  const { data, error } = await supabaseAdmin.from("bi_exportadores").update(updates).eq("id", req.params.id).select().single();
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.json(data);
+});
+
+router.delete("/market/bi/exportadores/:id", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+  const allowed = await requireAdmin(req, res, userId);
+  if (!allowed) return;
+  const { error } = await supabaseAdmin.from("bi_exportadores").delete().eq("id", req.params.id);
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.status(204).end();
+});
+
+/* ─── Ideal.BI Admin — Produtores (POST / PATCH / DELETE) ───────────────── */
+
+router.post("/market/bi/produtores", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+  const allowed = await requireAdmin(req, res, userId);
+  if (!allowed) return;
+  const { name, regiao, tipos, fundado } = req.body as { name?: string; regiao?: string; tipos?: string; fundado?: number | null };
+  if (!name?.trim() || !regiao?.trim() || !tipos?.trim()) {
+    res.status(400).json({ error: "name, regiao e tipos são obrigatórios" }); return;
+  }
+  const { data, error } = await supabaseAdmin.from("bi_produtores").insert({
+    name: name.trim(), regiao: regiao.trim(), tipos: tipos.trim(),
+    fundado: fundado ?? null,
+  }).select().single();
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.status(201).json(data);
+});
+
+router.patch("/market/bi/produtores/:id", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+  const allowed = await requireAdmin(req, res, userId);
+  if (!allowed) return;
+  const { name, regiao, tipos, fundado } = req.body as { name?: string; regiao?: string; tipos?: string; fundado?: number | null };
+  const updates: Record<string, string | number | null> = {};
+  if (name?.trim()) updates.name = name.trim();
+  if (regiao?.trim()) updates.regiao = regiao.trim();
+  if (tipos?.trim()) updates.tipos = tipos.trim();
+  if (fundado !== undefined) updates.fundado = fundado;
+  if (!Object.keys(updates).length) { res.status(400).json({ error: "Nenhum campo enviado" }); return; }
+  const { data, error } = await supabaseAdmin.from("bi_produtores").update(updates).eq("id", req.params.id).select().single();
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.json(data);
+});
+
+router.delete("/market/bi/produtores/:id", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+  const allowed = await requireAdmin(req, res, userId);
+  if (!allowed) return;
+  const { error } = await supabaseAdmin.from("bi_produtores").delete().eq("id", req.params.id);
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.status(204).end();
+});
+
 export default router;
+

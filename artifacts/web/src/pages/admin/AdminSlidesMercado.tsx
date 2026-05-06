@@ -7,7 +7,7 @@ const NAVY = "#0d1b2a";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "/api";
 
-const MAIN_TABS = ["Apresentações", "Dados de Mercado", "Categorias"] as const;
+const MAIN_TABS = ["Apresentações", "Dados de Mercado", "Categorias", "Empresas BI"] as const;
 type MainTab = typeof MAIN_TABS[number];
 type Period = "mes" | "trimestre" | "ano";
 const PERIODS: { key: Period; label: string }[] = [
@@ -53,6 +53,28 @@ interface MarketPermission {
   icon: string;
   sort_order: number;
   section_type: string;
+}
+
+// ── Ideal.BI Admin types ───────────────────────────────────────────────────────
+
+type BiKind = "Importadores" | "Exportadores" | "Produtores";
+
+interface BiImp { id: string; name: string; pais: string; segmentos: string; estado: string; created_at: string; }
+interface BiExp { id: string; name: string; pais_destino: string; produtos: string; caixas_exportadas: number; valor_vendido_cents: number; preco_medio_cents: number; created_at: string; }
+interface BiProd { id: string; name: string; regiao: string; tipos: string; fundado: number | null; created_at: string; }
+type BiRow = BiImp | BiExp | BiProd;
+
+async function biApiFetch(path: string, method: string, body?: object): Promise<unknown> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token ?? "";
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+  if (!res.ok) { const txt = await res.text(); throw new Error(txt); }
+  if (res.status === 204) return null;
+  return res.json() as Promise<unknown>;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -378,6 +400,116 @@ export default function AdminSlidesMercado() {
     setDeletingPermId(null);
   };
 
+  // ── Empresas BI ───────────────────────────────────────────────────────────
+
+  const [biTab, setBiTab] = useState<BiKind>("Importadores");
+  const [biImps, setBiImps] = useState<BiImp[]>([]);
+  const [biExps, setBiExps] = useState<BiExp[]>([]);
+  const [biProds, setBiProds] = useState<BiProd[]>([]);
+  const [loadingBi, setLoadingBi] = useState(false);
+  const [biModal, setBiModal] = useState<{ kind: BiKind; row: BiRow | null } | null>(null);
+  const [biSaving, setBiSaving] = useState(false);
+  const [biDeletingId, setBiDeletingId] = useState<string | null>(null);
+  // form fields
+  const [biName, setBiName] = useState("");
+  const [biPais, setBiPais] = useState("");
+  const [biSegmentos, setBiSegmentos] = useState("");
+  const [biEstado, setBiEstado] = useState("");
+  const [biPaisDestino, setBiPaisDestino] = useState("");
+  const [biProdutos, setBiProdutos] = useState("");
+  const [biCaixas, setBiCaixas] = useState("");
+  const [biValor, setBiValor] = useState("");
+  const [biPreco, setBiPreco] = useState("");
+  const [biRegiao, setBiRegiao] = useState("");
+  const [biTipos, setBiTipos] = useState("");
+  const [biFundado, setBiFundado] = useState("");
+
+  const loadBi = useCallback(async () => {
+    setLoadingBi(true);
+    try {
+      const [ir, er, pr] = await Promise.all([
+        biApiFetch("/market/bi/importadores?limit=200", "GET") as Promise<{ items: BiImp[] }>,
+        biApiFetch("/market/bi/exportadores?limit=200", "GET") as Promise<{ items: BiExp[] }>,
+        biApiFetch("/market/bi/produtores?limit=200", "GET") as Promise<{ items: BiProd[] }>,
+      ]);
+      setBiImps(ir.items);
+      setBiExps(er.items);
+      setBiProds(pr.items);
+    } catch {
+      // silent — admin will see empty list
+    }
+    setLoadingBi(false);
+  }, []);
+
+  useEffect(() => { if (tab === "Empresas BI") void loadBi(); }, [tab, loadBi]);
+
+  const openBiModal = (kind: BiKind, row: BiRow | null) => {
+    setBiModal({ kind, row });
+    setBiName(row?.name ?? "");
+    if (kind === "Importadores") {
+      const r = row as BiImp | null;
+      setBiPais(r?.pais ?? ""); setBiSegmentos(r?.segmentos ?? ""); setBiEstado(r?.estado ?? "");
+    } else if (kind === "Exportadores") {
+      const r = row as BiExp | null;
+      setBiPaisDestino(r?.pais_destino ?? ""); setBiProdutos(r?.produtos ?? "");
+      setBiCaixas(r?.caixas_exportadas?.toString() ?? "");
+      setBiValor(r ? (r.valor_vendido_cents / 100).toFixed(2) : "");
+      setBiPreco(r ? (r.preco_medio_cents / 100).toFixed(2) : "");
+    } else {
+      const r = row as BiProd | null;
+      setBiRegiao(r?.regiao ?? ""); setBiTipos(r?.tipos ?? ""); setBiFundado(r?.fundado?.toString() ?? "");
+    }
+  };
+
+  const handleSaveBi = async () => {
+    if (!biModal) return;
+    const { kind, row } = biModal;
+    const id = (row as BiRow | null)?.id;
+    setBiSaving(true);
+    try {
+      if (kind === "Importadores") {
+        const body = { name: biName.trim(), pais: biPais.trim(), segmentos: biSegmentos.trim(), estado: biEstado.trim() };
+        if (!body.name || !body.pais || !body.segmentos || !body.estado) { alert("Todos os campos são obrigatórios"); setBiSaving(false); return; }
+        if (id) await biApiFetch(`/market/bi/importadores/${id}`, "PATCH", body);
+        else await biApiFetch("/market/bi/importadores", "POST", body);
+      } else if (kind === "Exportadores") {
+        const body = {
+          name: biName.trim(), pais_destino: biPaisDestino.trim(), produtos: biProdutos.trim(),
+          caixas_exportadas: parseInt(biCaixas) || 0,
+          valor_vendido_cents: Math.round((parseFloat(biValor) || 0) * 100),
+          preco_medio_cents: Math.round((parseFloat(biPreco) || 0) * 100),
+        };
+        if (!body.name || !body.pais_destino || !body.produtos) { alert("Nome, país de destino e produtos são obrigatórios"); setBiSaving(false); return; }
+        if (id) await biApiFetch(`/market/bi/exportadores/${id}`, "PATCH", body);
+        else await biApiFetch("/market/bi/exportadores", "POST", body);
+      } else {
+        const body = { name: biName.trim(), regiao: biRegiao.trim(), tipos: biTipos.trim(), fundado: biFundado ? parseInt(biFundado) : null };
+        if (!body.name || !body.regiao || !body.tipos) { alert("Nome, região e tipos são obrigatórios"); setBiSaving(false); return; }
+        if (id) await biApiFetch(`/market/bi/produtores/${id}`, "PATCH", body);
+        else await biApiFetch("/market/bi/produtores", "POST", body);
+      }
+      setBiModal(null);
+      void loadBi();
+    } catch (e) {
+      alert("Erro ao salvar: " + (e instanceof Error ? e.message : String(e)));
+    }
+    setBiSaving(false);
+  };
+
+  const handleDeleteBi = async (kind: BiKind, row: BiRow) => {
+    const lbl = kind === "Importadores" ? "importador" : kind === "Exportadores" ? "exportador" : "produtor";
+    if (!confirm(`Excluir ${lbl} "${row.name}"?`)) return;
+    setBiDeletingId(row.id);
+    try {
+      const seg = kind === "Importadores" ? "importadores" : kind === "Exportadores" ? "exportadores" : "produtores";
+      await biApiFetch(`/market/bi/${seg}/${row.id}`, "DELETE");
+      void loadBi();
+    } catch (e) {
+      alert("Erro ao excluir: " + (e instanceof Error ? e.message : String(e)));
+    }
+    setBiDeletingId(null);
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   const btnPrimary: React.CSSProperties = { padding: "8px 18px", backgroundColor: GOLD, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 };
@@ -588,6 +720,80 @@ export default function AdminSlidesMercado() {
         )}
       </div>
 
+      {/* ── Empresas BI ── */}
+      {tab === "Empresas BI" && (
+        <div>
+          {/* Sub-tabs + botão novo */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+            {(["Importadores", "Exportadores", "Produtores"] as BiKind[]).map(k => (
+              <button key={k} onClick={() => setBiTab(k)} style={{ padding: "7px 18px", border: `1px solid ${biTab === k ? GOLD : "#e8eaed"}`, borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: biTab === k ? 700 : 400, backgroundColor: biTab === k ? `${GOLD}12` : "#fff", color: biTab === k ? GOLD : "#555" }}>
+                {k}
+              </button>
+            ))}
+            <div style={{ flex: 1 }} />
+            <button onClick={() => openBiModal(biTab, null)} style={btnPrimary}>
+              + Novo {biTab === "Importadores" ? "Importador" : biTab === "Exportadores" ? "Exportador" : "Produtor"}
+            </button>
+          </div>
+
+          {loadingBi ? (
+            <div style={{ textAlign: "center", padding: 60, color: "#aaa" }}>⏳ Carregando...</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {/* Importadores */}
+              {biTab === "Importadores" && (biImps.length === 0 ? (
+                <div style={{ textAlign: "center", padding: 60, color: "#aaa" }}>Nenhum importador. Clique em "+ Novo Importador" para adicionar.</div>
+              ) : biImps.map(r => (
+                <div key={r.id} style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", gap: 16 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: `${GOLD}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>🌍</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{r.name}</div>
+                    <div style={{ fontSize: 12, color: "#8a93a2" }}>{r.pais} · {r.estado} · {r.segmentos}</div>
+                  </div>
+                  <button onClick={() => openBiModal("Importadores", r)} style={{ padding: "6px 12px", backgroundColor: `${GOLD}15`, color: GOLD, border: `1px solid ${GOLD}44`, borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>✏️ Editar</button>
+                  <button onClick={() => handleDeleteBi("Importadores", r)} disabled={biDeletingId === r.id} style={btnDanger}>{biDeletingId === r.id ? "..." : "🗑"}</button>
+                </div>
+              )))}
+
+              {/* Exportadores */}
+              {biTab === "Exportadores" && (biExps.length === 0 ? (
+                <div style={{ textAlign: "center", padding: 60, color: "#aaa" }}>Nenhum exportador. Clique em "+ Novo Exportador" para adicionar.</div>
+              ) : biExps.map(r => (
+                <div key={r.id} style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", gap: 16 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: `${GOLD}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>📦</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{r.name}</div>
+                    <div style={{ fontSize: 12, color: "#8a93a2" }}>
+                      Destino: {r.pais_destino} · {r.caixas_exportadas.toLocaleString("pt-BR")} cx · R$ {(r.valor_vendido_cents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#aaa" }}>{r.produtos}</div>
+                  </div>
+                  <button onClick={() => openBiModal("Exportadores", r)} style={{ padding: "6px 12px", backgroundColor: `${GOLD}15`, color: GOLD, border: `1px solid ${GOLD}44`, borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>✏️ Editar</button>
+                  <button onClick={() => handleDeleteBi("Exportadores", r)} disabled={biDeletingId === r.id} style={btnDanger}>{biDeletingId === r.id ? "..." : "🗑"}</button>
+                </div>
+              )))}
+
+              {/* Produtores */}
+              {biTab === "Produtores" && (biProds.length === 0 ? (
+                <div style={{ textAlign: "center", padding: 60, color: "#aaa" }}>Nenhum produtor. Clique em "+ Novo Produtor" para adicionar.</div>
+              ) : biProds.map(r => (
+                <div key={r.id} style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", gap: 16 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: `${GOLD}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>🍷</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{r.name}</div>
+                    <div style={{ fontSize: 12, color: "#8a93a2" }}>
+                      {r.regiao}{r.fundado ? ` · Fund. ${r.fundado}` : ""} · {r.tipos}
+                    </div>
+                  </div>
+                  <button onClick={() => openBiModal("Produtores", r)} style={{ padding: "6px 12px", backgroundColor: `${GOLD}15`, color: GOLD, border: `1px solid ${GOLD}44`, borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>✏️ Editar</button>
+                  <button onClick={() => handleDeleteBi("Produtores", r)} disabled={biDeletingId === r.id} style={btnDanger}>{biDeletingId === r.id ? "..." : "🗑"}</button>
+                </div>
+              )))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Modal: Apresentação ── */}
       {presModal && (
         <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
@@ -695,6 +901,49 @@ export default function AdminSlidesMercado() {
               <button onClick={() => setPermModal(false)} style={btnSecondary}>Cancelar</button>
               <button onClick={handleSavePerm} disabled={permSaving} style={{ ...btnPrimary, flex: 1, opacity: permSaving ? 0.6 : 1 }}>
                 {permSaving ? "Salvando..." : permEdit ? "Atualizar" : "Criar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Modal: Empresa BI ── */}
+      {biModal && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div style={{ backgroundColor: "#fff", borderRadius: 16, padding: 28, maxWidth: 480, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <h2 style={{ fontSize: 17, fontWeight: 800, color: NAVY, margin: 0 }}>
+                {biModal.row ? "Editar" : "Novo"}{" "}
+                {biModal.kind === "Importadores" ? "Importador" : biModal.kind === "Exportadores" ? "Exportador" : "Produtor"}
+              </h2>
+              <button onClick={() => setBiModal(null)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#aaa" }}>✕</button>
+            </div>
+
+            {inp("Nome *", biName, setBiName, { placeholder: "Nome da empresa" })}
+
+            {biModal.kind === "Importadores" && <>
+              {inp("País de origem *", biPais, setBiPais, { placeholder: "Ex: Argentina" })}
+              {inp("Segmentos *", biSegmentos, setBiSegmentos, { placeholder: "Ex: Vinhos Tranquilos, Espumantes" })}
+              {inp("Estado (UF) *", biEstado, setBiEstado, { placeholder: "Ex: SP" })}
+            </>}
+
+            {biModal.kind === "Exportadores" && <>
+              {inp("País de destino *", biPaisDestino, setBiPaisDestino, { placeholder: "Ex: EUA, Portugal" })}
+              {inp("Produtos *", biProdutos, setBiProdutos, { placeholder: "Ex: Espumantes, Vinhos Finos" })}
+              {inp("Caixas exportadas", biCaixas, setBiCaixas, { placeholder: "Ex: 50000", type: "number" })}
+              {inp("Valor total (R$)", biValor, setBiValor, { placeholder: "Ex: 820000.00", type: "number" })}
+              {inp("Preço médio por caixa (R$)", biPreco, setBiPreco, { placeholder: "Ex: 164.00", type: "number" })}
+            </>}
+
+            {biModal.kind === "Produtores" && <>
+              {inp("Região *", biRegiao, setBiRegiao, { placeholder: "Ex: Serra Gaúcha" })}
+              {inp("Tipos de vinho *", biTipos, setBiTipos, { placeholder: "Ex: Espumantes, Merlot, Chardonnay" })}
+              {inp("Ano de fundação", biFundado, setBiFundado, { placeholder: "Ex: 1989 (opcional)", type: "number" })}
+            </>}
+
+            <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+              <button onClick={() => setBiModal(null)} style={btnSecondary}>Cancelar</button>
+              <button onClick={handleSaveBi} disabled={biSaving} style={{ ...btnPrimary, flex: 1, opacity: biSaving ? 0.6 : 1 }}>
+                {biSaving ? "Salvando..." : biModal.row ? "Atualizar" : "Criar"}
               </button>
             </div>
           </div>
