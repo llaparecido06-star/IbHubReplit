@@ -347,7 +347,33 @@ function makeBiSuggestions(table: string, column: string) {
 }
 router.get("/wine-imports/bi-suggestions/exportadores", makeBiSuggestions("bi_exportadores", "name"));
 router.get("/wine-imports/bi-suggestions/importadores", makeBiSuggestions("bi_importadores", "name"));
-router.get("/wine-imports/bi-suggestions/produtores",   makeBiSuggestions("bi_produtores",   "name"));
+router.get("/wine-imports/bi-suggestions/produtores", async (req: Request, res: Response) => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+  const q = (req.query.q as string | undefined)?.trim();
+  if (!q || q.length < 2) return res.json({ suggestions: [] });
+  const { data, error } = await supabaseAdmin
+    .from("bi_produtores")
+    .select("name, name_fantasia")
+    .or(`name.ilike.%${q}%,name_fantasia.ilike.%${q}%`)
+    .order("name")
+    .limit(30);
+  if (error) return res.json({ suggestions: [] });
+  const seen = new Set<string>();
+  const suggestions: string[] = [];
+  for (const row of (data ?? []) as { name: string | null; name_fantasia: string | null }[]) {
+    for (const val of [row.name, row.name_fantasia]) {
+      const v = val?.trim();
+      if (v && v.toLowerCase().includes(q.toLowerCase()) && !seen.has(v.toLowerCase())) {
+        seen.add(v.toLowerCase());
+        suggestions.push(v);
+        if (suggestions.length >= 20) break;
+      }
+    }
+    if (suggestions.length >= 20) break;
+  }
+  return res.json({ suggestions });
+});
 
 /**
  * GET /wine-imports/exportador-importadores?nome=X

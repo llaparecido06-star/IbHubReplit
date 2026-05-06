@@ -1642,13 +1642,26 @@ function ProdutoresSearch({ userId }: { userId: string }) {
                 🍇
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 2 }}>{m.name}</div>
-                {m.name_fantasia && <div style={{ fontSize: 12, color: MUTED, marginBottom: 4 }}>{m.name_fantasia}</div>}
-                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, color: MUTED }}>📍 {m.regiao}{m.estado ? ` — ${m.estado}` : ""}</span>
-                  {m.fundado && <span style={{ fontSize: 12, color: MUTED }}>🏛 Desde {m.fundado}</span>}
+                <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 1 }}>{m.name}</div>
+                {m.name_fantasia && <div style={{ fontSize: 12, color: MUTED, marginBottom: 6 }}>{m.name_fantasia}</div>}
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+                  {m.regiao && (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: NAVY, backgroundColor: `${GOLD}18`, border: `1px solid ${GOLD}40`, borderRadius: 20, padding: "2px 9px" }}>
+                      📍 {m.regiao}
+                    </span>
+                  )}
+                  {m.estado && (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: NAVY, backgroundColor: `${GOLD}18`, border: `1px solid ${GOLD}40`, borderRadius: 20, padding: "2px 9px" }}>
+                      {m.estado}
+                    </span>
+                  )}
+                  {m.fundado && (
+                    <span style={{ fontSize: 11, color: MUTED, backgroundColor: `${BORDER}`, borderRadius: 20, padding: "2px 9px" }}>
+                      🏛 Desde {m.fundado}
+                    </span>
+                  )}
                 </div>
-                <div style={{ fontSize: 12, color: MUTED }}>{m.tipos}</div>
+                {m.tipos && <div style={{ fontSize: 12, color: MUTED }}>{m.tipos}</div>}
               </div>
               <span style={{ fontSize: 10, fontWeight: 700, color: "#722f37", backgroundColor: "#f9f0f1", padding: "3px 8px", borderRadius: 20, flexShrink: 0, alignSelf: "flex-start" }}>
                 PRODUTOR
