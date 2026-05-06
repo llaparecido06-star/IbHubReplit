@@ -682,6 +682,37 @@ function ImportadoresSearch({ userId }: { userId: string }) {
   const { credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal } = useCredits(userId);
   const exhausted = credits === 0;
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const val = q.trim();
+    if (val.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    suggestTimer.current = setTimeout(async () => {
+      try {
+        const session = await getCachedSession();
+        const headers: HeadersInit = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+        const res = await fetch(`${apiBase}/wine-imports/bi-suggestions/importadores?q=${encodeURIComponent(val)}`, { headers });
+        if (!res.ok) return;
+        const json = await res.json() as { suggestions: string[] };
+        const list = json.suggestions ?? [];
+        setSuggestions(list);
+        setShowSuggestions(list.length > 0);
+      } catch {}
+    }, 280);
+    return () => { if (suggestTimer.current) clearTimeout(suggestTimer.current); };
+  }, [q]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setShowSuggestions(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const doSearch = async (searchQ: string, fromOffset = 0, append = false) => {
     if (append) setLoadingMore(true); else setLoading(true);
@@ -711,9 +742,10 @@ function ImportadoresSearch({ userId }: { userId: string }) {
     finally { setLoading(false); setLoadingMore(false); }
   };
 
-  const handleSubmit = () => {
-    const sq = q.trim();
-    if (exhausted) return;
+  const handleSubmit = (overrideQ?: string) => {
+    const sq = (overrideQ ?? q).trim();
+    if (exhausted || !sq) return;
+    setShowSuggestions(false);
     setSubmittedQ(sq);
     setSearched(false);
     void doSearch(sq, 0, false);
@@ -724,26 +756,54 @@ function ImportadoresSearch({ userId }: { userId: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <CreditsBar credits={credits} creditsTotal={creditsTotal} loading={creditsLoading} />
-      <div style={{ display: "flex", gap: 8 }}>
-        <div style={{ flex: 1, backgroundColor: WHITE, border: `1.5px solid ${BORDER}`, borderRadius: 12, padding: "4px 4px 4px 14px", display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 16 }}>📦</span>
-          <input
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") handleSubmit(); }}
-            placeholder={exhausted ? "Consultas esgotadas" : "Nome do importador, país ou segmento…"}
-            disabled={exhausted}
-            style={{ flex: 1, padding: "10px 0", border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", backgroundColor: "transparent", color: NAVY }}
-          />
-          {q && <button onClick={() => { setQ(""); setSearched(false); setItems([]); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, padding: "0 8px" }}>×</button>}
+      <div ref={containerRef} style={{ position: "relative" }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ flex: 1, backgroundColor: WHITE, border: `1.5px solid ${showSuggestions ? GOLD : BORDER}`, borderRadius: 12, padding: "4px 4px 4px 14px", display: "flex", alignItems: "center", gap: 8, transition: "border-color 0.15s" }}>
+            <span style={{ fontSize: 16 }}>📦</span>
+            <input
+              value={q}
+              onChange={e => { setQ(e.target.value); }}
+              onKeyDown={e => {
+                if (e.key === "Enter" && !showSuggestions) handleSubmit();
+                if (e.key === "Escape") setShowSuggestions(false);
+                if (e.key === "ArrowDown" && showSuggestions) { document.getElementById("imp-suggest-0")?.focus(); e.preventDefault(); }
+              }}
+              placeholder={exhausted ? "Consultas esgotadas" : "Nome do importador, país ou segmento…"}
+              disabled={exhausted}
+              style={{ flex: 1, padding: "10px 0", border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", backgroundColor: "transparent", color: NAVY }}
+            />
+            {q && <button onClick={() => { setQ(""); setSearched(false); setItems([]); setSuggestions([]); setShowSuggestions(false); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, padding: "0 8px" }}>×</button>}
+          </div>
+          <button
+            onClick={() => handleSubmit()}
+            disabled={exhausted || !q.trim()}
+            style={{ padding: "0 18px", borderRadius: 12, border: "none", backgroundColor: exhausted || !q.trim() ? BORDER : NAVY, color: WHITE, fontWeight: 700, fontSize: 13, cursor: exhausted || !q.trim() ? "default" : "pointer", fontFamily: "inherit", flexShrink: 0 }}
+          >
+            {loading ? "…" : "Buscar"}
+          </button>
         </div>
-        <button
-          onClick={handleSubmit}
-          disabled={exhausted || !q.trim()}
-          style={{ padding: "0 18px", borderRadius: 12, border: "none", backgroundColor: exhausted || !q.trim() ? BORDER : NAVY, color: WHITE, fontWeight: 700, fontSize: 13, cursor: exhausted || !q.trim() ? "default" : "pointer", fontFamily: "inherit", flexShrink: 0 }}
-        >
-          {loading ? "…" : "Buscar"}
-        </button>
+        {showSuggestions && suggestions.length > 0 && !exhausted && (
+          <div style={{ position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 200, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 6px 20px rgba(0,0,0,0.10)", overflow: "hidden" }}>
+            {suggestions.map((s, i) => (
+              <button key={s} id={`imp-suggest-${i}`}
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => { setQ(s); setShowSuggestions(false); handleSubmit(s); }}
+                onKeyDown={e => {
+                  if (e.key === "ArrowDown") { document.getElementById(`imp-suggest-${i + 1}`)?.focus(); e.preventDefault(); }
+                  if (e.key === "ArrowUp")   { i === 0 ? (containerRef.current?.querySelector("input") as HTMLInputElement)?.focus() : document.getElementById(`imp-suggest-${i - 1}`)?.focus(); e.preventDefault(); }
+                  if (e.key === "Enter")     { setQ(s); setShowSuggestions(false); handleSubmit(s); }
+                  if (e.key === "Escape")    { setShowSuggestions(false); }
+                }}
+                style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "11px 16px", textAlign: "left", background: "none", border: "none", borderBottom: i < suggestions.length - 1 ? `1px solid ${BORDER}` : "none", cursor: "pointer", fontSize: 14, color: NAVY, fontFamily: "inherit" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = `${GOLD}12`; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent"; }}
+              >
+                <span style={{ fontSize: 15, flexShrink: 0 }}>📦</span>
+                <span style={{ flex: 1 }}>{s}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       {!searched && !loading && (
         <div style={{ backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "12px 16px", fontSize: 13, color: MUTED }}>
@@ -869,6 +929,37 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
   const [revealError, setRevealError] = useState<string | null>(null);
   const exhausted = credits === 0;
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const val = q.trim();
+    if (val.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    suggestTimer.current = setTimeout(async () => {
+      try {
+        const session = await getCachedSession();
+        const headers: HeadersInit = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+        const res = await fetch(`${apiBase}/wine-imports/bi-suggestions/exportadores?q=${encodeURIComponent(val)}`, { headers });
+        if (!res.ok) return;
+        const json = await res.json() as { suggestions: string[] };
+        const list = json.suggestions ?? [];
+        setSuggestions(list);
+        setShowSuggestions(list.length > 0);
+      } catch {}
+    }, 280);
+    return () => { if (suggestTimer.current) clearTimeout(suggestTimer.current); };
+  }, [q]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setShowSuggestions(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -906,9 +997,11 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
     finally { setLoading(false); setLoadingMore(false); }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = (overrideQ?: string) => {
     if (exhausted) return;
-    const sq = q.trim();
+    const sq = (overrideQ ?? q).trim();
+    if (!sq) return;
+    setShowSuggestions(false);
     setSubmittedQ(sq);
     setSearched(false);
     void doSearch(sq, 0, false);
@@ -970,24 +1063,52 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", gap: 8 }}>
-        <div style={{ flex: 1, backgroundColor: WHITE, border: `1.5px solid ${BORDER}`, borderRadius: 12, padding: "4px 4px 4px 14px", display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 16 }}>🌐</span>
-          <input
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") handleSubmit(); }}
-            placeholder={exhausted ? "Consultas esgotadas" : "Nome do exportador ou país de origem…"}
-            disabled={exhausted}
-            style={{ flex: 1, padding: "10px 0", border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", backgroundColor: "transparent", color: NAVY }}
-          />
-          {q && <button onClick={() => { setQ(""); setSearched(false); setItems([]); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, padding: "0 8px" }}>×</button>}
+      <div ref={containerRef} style={{ position: "relative" }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ flex: 1, backgroundColor: WHITE, border: `1.5px solid ${showSuggestions ? GOLD : BORDER}`, borderRadius: 12, padding: "4px 4px 4px 14px", display: "flex", alignItems: "center", gap: 8, transition: "border-color 0.15s" }}>
+            <span style={{ fontSize: 16 }}>🌐</span>
+            <input
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter" && !showSuggestions) handleSubmit();
+                if (e.key === "Escape") setShowSuggestions(false);
+                if (e.key === "ArrowDown" && showSuggestions) { document.getElementById("exp-suggest-0")?.focus(); e.preventDefault(); }
+              }}
+              placeholder={exhausted ? "Consultas esgotadas" : "Nome do exportador ou país de origem…"}
+              disabled={exhausted}
+              style={{ flex: 1, padding: "10px 0", border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", backgroundColor: "transparent", color: NAVY }}
+            />
+            {q && <button onClick={() => { setQ(""); setSearched(false); setItems([]); setSuggestions([]); setShowSuggestions(false); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, padding: "0 8px" }}>×</button>}
+          </div>
+          <button
+            onClick={() => handleSubmit()}
+            disabled={exhausted || !q.trim()}
+            style={{ padding: "0 18px", borderRadius: 12, border: "none", backgroundColor: exhausted || !q.trim() ? BORDER : NAVY, color: WHITE, fontWeight: 700, fontSize: 13, cursor: exhausted || !q.trim() ? "default" : "pointer", fontFamily: "inherit", flexShrink: 0 }}
+          >{loading ? "…" : "Buscar"}</button>
         </div>
-        <button
-          onClick={handleSubmit}
-          disabled={exhausted || !q.trim()}
-          style={{ padding: "0 18px", borderRadius: 12, border: "none", backgroundColor: exhausted || !q.trim() ? BORDER : NAVY, color: WHITE, fontWeight: 700, fontSize: 13, cursor: exhausted || !q.trim() ? "default" : "pointer", fontFamily: "inherit", flexShrink: 0 }}
-        >{loading ? "…" : "Buscar"}</button>
+        {showSuggestions && suggestions.length > 0 && !exhausted && (
+          <div style={{ position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 200, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 6px 20px rgba(0,0,0,0.10)", overflow: "hidden" }}>
+            {suggestions.map((s, i) => (
+              <button key={s} id={`exp-suggest-${i}`}
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => { setQ(s); setShowSuggestions(false); handleSubmit(s); }}
+                onKeyDown={e => {
+                  if (e.key === "ArrowDown") { document.getElementById(`exp-suggest-${i + 1}`)?.focus(); e.preventDefault(); }
+                  if (e.key === "ArrowUp")   { i === 0 ? (containerRef.current?.querySelector("input") as HTMLInputElement)?.focus() : document.getElementById(`exp-suggest-${i - 1}`)?.focus(); e.preventDefault(); }
+                  if (e.key === "Enter")     { setQ(s); setShowSuggestions(false); handleSubmit(s); }
+                  if (e.key === "Escape")    { setShowSuggestions(false); }
+                }}
+                style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "11px 16px", textAlign: "left", background: "none", border: "none", borderBottom: i < suggestions.length - 1 ? `1px solid ${BORDER}` : "none", cursor: "pointer", fontSize: 14, color: NAVY, fontFamily: "inherit" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = `${GOLD}12`; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent"; }}
+              >
+                <span style={{ fontSize: 15, flexShrink: 0 }}>🌐</span>
+                <span style={{ flex: 1 }}>{s}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {!searched && !loading && (
@@ -1216,7 +1337,7 @@ function MarcaCompletaSearch({ userId, credits, creditsTotal, setCredits, setCre
         if (distribuidores.length === 0) {
           const seen = new Set<string>();
           for (const r of rows) {
-            const n = (r.distribuidor ?? "").trim();
+            const n = (r.importador ?? "").trim();
             if (!n) continue;
             const k = n.toLowerCase();
             if (!seen.has(k)) { seen.add(k); distribuidores.push({ name: n, company_page_id: null }); }
@@ -1383,6 +1504,37 @@ function ProdutoresSearch({ userId }: { userId: string }) {
   const { credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal } = useCredits(userId);
   const exhausted = credits === 0;
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const val = q.trim();
+    if (val.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    suggestTimer.current = setTimeout(async () => {
+      try {
+        const session = await getCachedSession();
+        const headers: HeadersInit = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+        const res = await fetch(`${apiBase}/wine-imports/bi-suggestions/produtores?q=${encodeURIComponent(val)}`, { headers });
+        if (!res.ok) return;
+        const json = await res.json() as { suggestions: string[] };
+        const list = json.suggestions ?? [];
+        setSuggestions(list);
+        setShowSuggestions(list.length > 0);
+      } catch {}
+    }, 280);
+    return () => { if (suggestTimer.current) clearTimeout(suggestTimer.current); };
+  }, [q]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setShowSuggestions(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const doSearch = async (searchQ: string, fromOffset = 0, append = false) => {
     if (append) setLoadingMore(true); else setLoading(true);
@@ -1405,9 +1557,11 @@ function ProdutoresSearch({ userId }: { userId: string }) {
     finally { setLoading(false); setLoadingMore(false); }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = (overrideQ?: string) => {
     if (exhausted) return;
-    const sq = q.trim();
+    const sq = (overrideQ ?? q).trim();
+    if (!sq) return;
+    setShowSuggestions(false);
     setSubmittedQ(sq);
     setSearched(false);
     void doSearch(sq, 0, false);
@@ -1418,24 +1572,52 @@ function ProdutoresSearch({ userId }: { userId: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <CreditsBar credits={credits} creditsTotal={creditsTotal} loading={creditsLoading} />
-      <div style={{ display: "flex", gap: 8 }}>
-        <div style={{ flex: 1, backgroundColor: WHITE, border: `1.5px solid ${BORDER}`, borderRadius: 12, padding: "4px 4px 4px 14px", display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 16 }}>🍇</span>
-          <input
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") handleSubmit(); }}
-            placeholder={exhausted ? "Consultas esgotadas" : "Nome do produtor, região, estado ou tipo…"}
-            disabled={exhausted}
-            style={{ flex: 1, padding: "10px 0", border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", backgroundColor: "transparent", color: NAVY }}
-          />
-          {q && <button onClick={() => { setQ(""); setSearched(false); setItems([]); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, padding: "0 8px" }}>×</button>}
+      <div ref={containerRef} style={{ position: "relative" }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ flex: 1, backgroundColor: WHITE, border: `1.5px solid ${showSuggestions ? GOLD : BORDER}`, borderRadius: 12, padding: "4px 4px 4px 14px", display: "flex", alignItems: "center", gap: 8, transition: "border-color 0.15s" }}>
+            <span style={{ fontSize: 16 }}>🍇</span>
+            <input
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter" && !showSuggestions) handleSubmit();
+                if (e.key === "Escape") setShowSuggestions(false);
+                if (e.key === "ArrowDown" && showSuggestions) { document.getElementById("prod-suggest-0")?.focus(); e.preventDefault(); }
+              }}
+              placeholder={exhausted ? "Consultas esgotadas" : "Nome do produtor, região, estado ou tipo…"}
+              disabled={exhausted}
+              style={{ flex: 1, padding: "10px 0", border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", backgroundColor: "transparent", color: NAVY }}
+            />
+            {q && <button onClick={() => { setQ(""); setSearched(false); setItems([]); setSuggestions([]); setShowSuggestions(false); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, padding: "0 8px" }}>×</button>}
+          </div>
+          <button
+            onClick={() => handleSubmit()}
+            disabled={exhausted || !q.trim()}
+            style={{ padding: "0 18px", borderRadius: 12, border: "none", backgroundColor: exhausted || !q.trim() ? BORDER : NAVY, color: WHITE, fontWeight: 700, fontSize: 13, cursor: exhausted || !q.trim() ? "default" : "pointer", fontFamily: "inherit", flexShrink: 0 }}
+          >{loading ? "…" : "Buscar"}</button>
         </div>
-        <button
-          onClick={handleSubmit}
-          disabled={exhausted || !q.trim()}
-          style={{ padding: "0 18px", borderRadius: 12, border: "none", backgroundColor: exhausted || !q.trim() ? BORDER : NAVY, color: WHITE, fontWeight: 700, fontSize: 13, cursor: exhausted || !q.trim() ? "default" : "pointer", fontFamily: "inherit", flexShrink: 0 }}
-        >{loading ? "…" : "Buscar"}</button>
+        {showSuggestions && suggestions.length > 0 && !exhausted && (
+          <div style={{ position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 200, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 6px 20px rgba(0,0,0,0.10)", overflow: "hidden" }}>
+            {suggestions.map((s, i) => (
+              <button key={s} id={`prod-suggest-${i}`}
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => { setQ(s); setShowSuggestions(false); handleSubmit(s); }}
+                onKeyDown={e => {
+                  if (e.key === "ArrowDown") { document.getElementById(`prod-suggest-${i + 1}`)?.focus(); e.preventDefault(); }
+                  if (e.key === "ArrowUp")   { i === 0 ? (containerRef.current?.querySelector("input") as HTMLInputElement)?.focus() : document.getElementById(`prod-suggest-${i - 1}`)?.focus(); e.preventDefault(); }
+                  if (e.key === "Enter")     { setQ(s); setShowSuggestions(false); handleSubmit(s); }
+                  if (e.key === "Escape")    { setShowSuggestions(false); }
+                }}
+                style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "11px 16px", textAlign: "left", background: "none", border: "none", borderBottom: i < suggestions.length - 1 ? `1px solid ${BORDER}` : "none", cursor: "pointer", fontSize: 14, color: NAVY, fontFamily: "inherit" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = `${GOLD}12`; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent"; }}
+              >
+                <span style={{ fontSize: 15, flexShrink: 0 }}>🍇</span>
+                <span style={{ flex: 1 }}>{s}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       {!searched && !loading && (
         <div style={{ backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "12px 16px", fontSize: 13, color: MUTED }}>

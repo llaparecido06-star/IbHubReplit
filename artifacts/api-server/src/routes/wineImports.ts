@@ -317,6 +317,39 @@ router.get("/wine-imports/suggestions", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /wine-imports/bi-suggestions/exportadores?q=X
+ * GET /wine-imports/bi-suggestions/importadores?q=X
+ * GET /wine-imports/bi-suggestions/produtores?q=X
+ * Lightweight autocomplete — no credit consumed.
+ */
+function makeBiSuggestions(table: string, column: string) {
+  return async (req: Request, res: Response) => {
+    const userId = await resolveUserId(req, res);
+    if (!userId) return;
+    const q = (req.query.q as string | undefined)?.trim();
+    if (!q || q.length < 2) return res.json({ suggestions: [] });
+    const pattern = `%${q}%`;
+    const { data, error } = await supabaseAdmin
+      .from(table)
+      .select(column)
+      .ilike(column, pattern)
+      .order(column)
+      .limit(20);
+    if (error) return res.json({ suggestions: [] });
+    const seen = new Set<string>();
+    const suggestions: string[] = [];
+    for (const row of (data ?? []) as Record<string, string>[]) {
+      const name = row[column]?.trim();
+      if (name && !seen.has(name)) { seen.add(name); suggestions.push(name); }
+    }
+    return res.json({ suggestions });
+  };
+}
+router.get("/wine-imports/bi-suggestions/exportadores", makeBiSuggestions("bi_exportadores", "name"));
+router.get("/wine-imports/bi-suggestions/importadores", makeBiSuggestions("bi_importadores", "name"));
+router.get("/wine-imports/bi-suggestions/produtores",   makeBiSuggestions("bi_produtores",   "name"));
+
+/**
  * GET /wine-imports/exportador-importadores?nome=X
  * Returns distinct distribuidores (importadores no Brasil) for the given
  * exportador name, sourced from bi_exportadores.distribuidor.
