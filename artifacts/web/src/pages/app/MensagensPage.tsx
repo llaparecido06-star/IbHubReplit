@@ -778,7 +778,7 @@ export default function MensagensPage() {
               <button key={t} onClick={() => setChatTab(t)} style={{
                 padding: "7px 18px", borderRadius: 9, border: "none", cursor: "pointer",
                 fontFamily: "inherit", fontSize: 13, fontWeight: chatTab === t ? 700 : 500,
-                backgroundColor: chatTab === t ? GOLD : "transparent",
+                backgroundColor: chatTab === t ? NAVY : "transparent",
                 color: chatTab === t ? "#fff" : MUTED,
                 transition: "all 0.15s",
               }}>
