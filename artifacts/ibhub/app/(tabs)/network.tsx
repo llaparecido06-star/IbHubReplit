@@ -72,6 +72,11 @@ interface TooltipState {
   value: string;
 }
 
+type BiSearchMode = "exportador" | "marca" | "importadores" | "produtores";
+interface BiExpItem  { id: string; name: string; origem_exportador?: string | null; }
+interface BiImpItem  { id: string; name: string; segmentos?: string | null; exportadores: { exportador: string; pais: string }[]; }
+interface BiProdItem { id: string; name: string; name_fantasia?: string | null; regiao?: string | null; estado?: string | null; }
+
 // ─── Fallback data ─────────────────────────────────────────────────────────────
 
 const FALLBACK: Record<Period, API.MarketOverview> = {
@@ -770,9 +775,538 @@ function ApresentacoesView({ colors, bottomPad, session, isAdmin }: { colors: an
 
 // ─── Ideal.BI Busca com IA ────────────────────────────────────────────────────
 
+// ── BiMobileExportadorSearch ───────────────────────────────────────────────────
+function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useColors> }) {
+  const router = useRouter();
+  const { session } = useAuth();
+  const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
+  const authH = (): HeadersInit => session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+
+  const [q, setQ]                   = useState("");
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [searching, setSearching]   = useState(false);
+  const [items, setItems]           = useState<BiExpItem[]>([]);
+  const [total, setTotal]           = useState(0);
+  const [searched, setSearched]     = useState(false);
+  const [credits, setCredits]       = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [importadoresMap, setImportadoresMap] = useState<Record<string, { name: string; company_page_id: string | null }[]>>({});
+  const [impLoadingSet, setImpLoadingSet]     = useState<Set<string>>(new Set());
+  const [revealedMap, setRevealedMap]         = useState<Record<string, { fob_usd: string | null; cx9l: string | null; usd_por_cx9l: string | null }>>({});
+  const [revealCredits, setRevealCredits]     = useState<number | null>(null);
+  const [revealCreditsTotal, setRevealCreditsTotal] = useState(0);
+  const [revealingId, setRevealingId]         = useState<string | null>(null);
+  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const exhausted = credits !== null && credits <= 0;
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_URL}/wine-imports/bi/reveal-credits`, { headers: authH() });
+        if (!res.ok) return;
+        const data = await res.json() as { credits_remaining: number; credits_total: number };
+        setRevealCredits(data.credits_remaining);
+        setRevealCreditsTotal(data.credits_total);
+      } catch {}
+    })();
+  }, []);
+
+  useEffect(() => {
+    const val = q.trim();
+    if (val.length < 2) { setSuggestions([]); return; }
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    suggestTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_URL}/wine-imports/bi-suggestions/exportadores?q=${encodeURIComponent(val)}`, { headers: authH() });
+        if (!res.ok) return;
+        const json = await res.json() as { suggestions: string[] };
+        setSuggestions(json.suggestions ?? []);
+      } catch {}
+    }, 300);
+    return () => { if (suggestTimer.current) clearTimeout(suggestTimer.current); };
+  }, [q]);
+
+  const doSearch = async (sq: string) => {
+    if (!sq.trim() || searching) return;
+    setSuggestions([]); setSearching(true); setItems([]); setSearched(false);
+    try {
+      const params = new URLSearchParams({ q: sq, limit: "20", offset: "0" });
+      const res = await fetch(`${API_URL}/wine-imports/bi-search/exportadores?${params}`, { headers: authH() });
+      if (res.status === 402) { setCredits(0); }
+      else if (res.ok) {
+        const data = await res.json() as { items: BiExpItem[]; total: number; credits_remaining: number; credits_total: number };
+        setItems(data.items); setTotal(data.total); setSearched(true);
+        if (data.credits_remaining !== undefined) setCredits(data.credits_remaining);
+      }
+    } catch {}
+    setSearching(false);
+  };
+
+  const loadImps = async (name: string, id: string) => {
+    if (importadoresMap[id]) return;
+    setImpLoadingSet(prev => new Set(prev).add(id));
+    try {
+      const res = await fetch(`${API_URL}/wine-imports/exportador-importadores?nome=${encodeURIComponent(name)}`, { headers: authH() });
+      if (res.ok) {
+        const data = await res.json() as { importadores: { name: string; company_page_id: string | null }[] };
+        setImportadoresMap(prev => ({ ...prev, [id]: data.importadores }));
+      }
+    } catch {}
+    setImpLoadingSet(prev => { const s = new Set(prev); s.delete(id); return s; });
+  };
+
+  const revealData = async (name: string) => {
+    setRevealingId(name);
+    try {
+      const res = await fetch(`${API_URL}/wine-imports/bi/exportadores/reveal`, {
+        method: "POST",
+        headers: { ...(authH() as Record<string, string>), "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (res.status === 402) { setRevealCredits(0); }
+      else if (res.ok) {
+        const data = await res.json() as { totals: { fob_usd: string | null; cx9l: string | null; usd_por_cx9l: string | null }; credits_remaining: number | null; credits_total: number };
+        setRevealedMap(prev => ({ ...prev, [name]: data.totals }));
+        if (data.credits_remaining !== null) setRevealCredits(data.credits_remaining);
+        if (data.credits_total) setRevealCreditsTotal(data.credits_total);
+      }
+    } catch {}
+    setRevealingId(null);
+  };
+
+  return (
+    <View style={{ gap: 12, paddingHorizontal: 16, paddingBottom: 8 }}>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <View style={{ flex: 1, backgroundColor: "#fff", borderWidth: 1.5, borderColor: exhausted ? "#fca5a5" : colors.border, borderRadius: 14, flexDirection: "row", alignItems: "center", paddingLeft: 14, paddingRight: 4, paddingVertical: 4 }}>
+          <Text style={{ fontSize: 16, marginRight: 6 }}>🌐</Text>
+          <TextInput value={q} onChangeText={setQ}
+            placeholder={exhausted ? "Consultas esgotadas" : "Nome do exportador ou país de origem…"}
+            placeholderTextColor={colors.mutedForeground}
+            style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: 12 }}
+            editable={!exhausted} onSubmitEditing={() => doSearch(q)} returnKeyType="search" />
+          {!!q && <TouchableOpacity onPress={() => { setQ(""); setItems([]); setSearched(false); setSuggestions([]); }} style={{ padding: 8 }}>
+            <Feather name="x" size={16} color={colors.mutedForeground} />
+          </TouchableOpacity>}
+        </View>
+        <TouchableOpacity onPress={() => doSearch(q)} disabled={!q.trim() || searching || exhausted}
+          style={{ paddingHorizontal: 16, borderRadius: 14, justifyContent: "center", backgroundColor: !q.trim() || searching || exhausted ? colors.border : colors.navy }}>
+          {searching ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>Buscar</Text>}
+        </TouchableOpacity>
+      </View>
+
+      {suggestions.length > 0 && !searching && (
+        <View style={{ backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: colors.border, overflow: "hidden" }}>
+          {suggestions.map((s, i) => (
+            <TouchableOpacity key={s} onPress={() => { setQ(s); setSuggestions([]); void doSearch(s); }} activeOpacity={0.7}
+              style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: i < suggestions.length - 1 ? 1 : 0, borderBottomColor: colors.border }}>
+              <Text style={{ fontSize: 15 }}>🌐</Text>
+              <Text style={{ flex: 1, fontSize: 14, color: colors.navy, fontWeight: "500" }} numberOfLines={1}>{s}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {!searched && !searching && suggestions.length === 0 && (
+        <View style={{ backgroundColor: colors.gold + "10", borderWidth: 1, borderColor: colors.gold + "30", borderRadius: 12, padding: 14, gap: 4 }}>
+          <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>🌐 Como funciona</Text>
+          <Text style={{ fontSize: 13, color: colors.mutedForeground, lineHeight: 19 }}>
+            Busque por nome do exportador ou país de origem. Dados financeiros ficam bloqueados — use créditos de revelação para desbloqueá-los.
+          </Text>
+        </View>
+      )}
+
+      {searching && (
+        <View style={{ alignItems: "center", paddingVertical: 24 }}>
+          <ActivityIndicator size="large" color={colors.gold} />
+          <Text style={{ color: colors.mutedForeground, marginTop: 8, fontSize: 13 }}>Buscando exportadores…</Text>
+        </View>
+      )}
+
+      {searched && !searching && (<>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{total} exportador{total !== 1 ? "es" : ""} encontrado{total !== 1 ? "s" : ""}</Text>
+          {revealCredits !== null && (
+            <View style={{ backgroundColor: colors.gold + "10", borderWidth: 1, borderColor: colors.gold + "25", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
+              <Text style={{ fontSize: 11, color: colors.mutedForeground }}>
+                {"🔓 "}
+                <Text style={{ color: revealCredits === 0 ? "#dc2626" : colors.navy, fontWeight: "700" }}>{revealCredits}/{revealCreditsTotal}</Text>
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {items.length === 0 && (
+          <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 24, alignItems: "center" }}>
+            <Text style={{ fontSize: 32, marginBottom: 8 }}>🌐</Text>
+            <Text style={{ fontSize: 15, fontWeight: "800", color: colors.navy, marginBottom: 4 }}>Nenhum resultado</Text>
+            <Text style={{ fontSize: 13, color: colors.mutedForeground, textAlign: "center" }}>Tente buscar por outro nome ou país.</Text>
+          </View>
+        )}
+
+        {items.map(m => {
+          const isOpen    = expandedId === m.id;
+          const imps      = importadoresMap[m.id];
+          const impLoading = impLoadingSet.has(m.id);
+          const revealed  = revealedMap[m.name];
+          return (
+            <View key={m.id} style={{ backgroundColor: "#fff", borderWidth: 1.5, borderColor: isOpen ? colors.gold : colors.border, borderRadius: 16, overflow: "hidden" }}>
+              <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12, padding: 16 }}>
+                <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: colors.gold + "14", alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ fontSize: 22 }}>🌐</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+                    <Text style={{ fontSize: 15, fontWeight: "800", color: colors.navy }}>{m.name}</Text>
+                    <View style={{ backgroundColor: colors.gold + "15", borderWidth: 1, borderColor: colors.gold + "35", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 }}>
+                      <Text style={{ fontSize: 10, fontWeight: "700", color: colors.gold }}>EXPORTADOR</Text>
+                    </View>
+                  </View>
+                  {!!m.origem_exportador && <Text style={{ fontSize: 12, color: colors.mutedForeground }}>🌍 {m.origem_exportador}</Text>}
+                </View>
+                <TouchableOpacity
+                  onPress={() => { const next = isOpen ? null : m.id; setExpandedId(next); if (next) void loadImps(m.name, m.id); }}
+                  style={{ borderWidth: 1.5, borderColor: isOpen ? colors.gold : colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: isOpen ? colors.gold + "15" : "transparent" }}>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: isOpen ? colors.gold : colors.mutedForeground }}>{isOpen ? "▲ Fechar" : "📊 Ver"}</Text>
+                </TouchableOpacity>
+              </View>
+
+              {isOpen && (
+                <View style={{ borderTopWidth: 1, borderTopColor: colors.gold + "40", padding: 14, backgroundColor: colors.gold + "06" }}>
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: colors.gold, letterSpacing: 0.7, marginBottom: 8 }}>🇧🇷 Quem importa no Brasil</Text>
+                  {impLoading
+                    ? <ActivityIndicator size="small" color={colors.gold} />
+                    : !imps || imps.length === 0
+                      ? <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Nenhum importador vinculado na base de dados.</Text>
+                      : <View style={{ gap: 6 }}>
+                          {imps.map((d, i) => (
+                            <TouchableOpacity key={i} disabled={!d.company_page_id}
+                              onPress={() => d.company_page_id && router.push(`/empresa/${d.company_page_id}` as any)}
+                              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                              <Text style={{ fontSize: 16 }}>📦</Text>
+                              <Text style={{ fontSize: 14, fontWeight: "700", color: d.company_page_id ? colors.gold : colors.navy, textDecorationLine: d.company_page_id ? "underline" : "none" }}>{d.name}</Text>
+                              {!!d.company_page_id && <Feather name="external-link" size={12} color={colors.gold} />}
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                  }
+                  <View style={{ borderTopWidth: 1, borderTopColor: colors.border, marginTop: 14, paddingTop: 14 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: colors.gold, letterSpacing: 0.7, marginBottom: 10 }}>📊 Dados Financeiros</Text>
+                    <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+                      {([
+                        { label: "FOB US$",    value: revealed?.fob_usd,      icon: "💵" },
+                        { label: "Vol. CX9L",  value: revealed?.cx9l,         icon: "📦" },
+                        { label: "US$/CX9L",   value: revealed?.usd_por_cx9l, icon: "📈" },
+                      ]).map(kpi => (
+                        <View key={kpi.label} style={{ flex: 1, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, alignItems: "center" }}>
+                          <Text style={{ fontSize: 16, marginBottom: 2 }}>{kpi.icon}</Text>
+                          {kpi.value != null
+                            ? <Text style={{ fontSize: 12, fontWeight: "900", color: colors.navy }}>{kpi.value}</Text>
+                            : <Text style={{ fontSize: 16, fontWeight: "900", color: colors.mutedForeground, letterSpacing: 2 }}>••••</Text>}
+                          <Text style={{ fontSize: 9, color: colors.mutedForeground, marginTop: 2, textAlign: "center" }}>{kpi.label}</Text>
+                        </View>
+                      ))}
+                    </View>
+                    {!revealed && (
+                      <TouchableOpacity
+                        onPress={() => void revealData(m.name)}
+                        disabled={revealingId === m.name || revealCredits === 0}
+                        style={{ paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10, alignItems: "center", backgroundColor: revealCredits === 0 ? "#e5e7eb" : colors.navy, opacity: revealingId === m.name ? 0.7 : 1 }}>
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: revealCredits === 0 ? colors.mutedForeground : "#fff" }}>
+                          {revealingId === m.name ? "Revelando…" : revealCredits === 0 ? "🔒 Sem créditos" : "🔓 Revelar dados financeiros (1 crédito)"}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              )}
+            </View>
+          );
+        })}
+      </>)}
+    </View>
+  );
+}
+
+// ── BiMobileImportadoresSearch ─────────────────────────────────────────────────
+function BiMobileImportadoresSearch({ colors }: { colors: ReturnType<typeof useColors> }) {
+  const { session } = useAuth();
+  const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
+  const authH = (): HeadersInit => session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+
+  const [q, setQ]                   = useState("");
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [searching, setSearching]   = useState(false);
+  const [items, setItems]           = useState<BiImpItem[]>([]);
+  const [total, setTotal]           = useState(0);
+  const [searched, setSearched]     = useState(false);
+  const [credits, setCredits]       = useState<number | null>(null);
+  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const exhausted = credits !== null && credits <= 0;
+
+  useEffect(() => {
+    const val = q.trim();
+    if (val.length < 2) { setSuggestions([]); return; }
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    suggestTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_URL}/wine-imports/bi-suggestions/importadores?q=${encodeURIComponent(val)}`, { headers: authH() });
+        if (!res.ok) return;
+        const json = await res.json() as { suggestions: string[] };
+        setSuggestions(json.suggestions ?? []);
+      } catch {}
+    }, 300);
+    return () => { if (suggestTimer.current) clearTimeout(suggestTimer.current); };
+  }, [q]);
+
+  const doSearch = async (sq: string) => {
+    if (!sq.trim() || searching) return;
+    setSuggestions([]); setSearching(true); setItems([]); setSearched(false);
+    try {
+      const params = new URLSearchParams({ q: sq, limit: "20", offset: "0" });
+      const res = await fetch(`${API_URL}/wine-imports/bi-search/importadores?${params}`, { headers: authH() });
+      if (res.status === 402) { setCredits(0); }
+      else if (res.ok) {
+        const data = await res.json() as { items: BiImpItem[]; total: number; credits_remaining: number; credits_total: number };
+        setItems(data.items); setTotal(data.total); setSearched(true);
+        if (data.credits_remaining !== undefined) setCredits(data.credits_remaining);
+      }
+    } catch {}
+    setSearching(false);
+  };
+
+  return (
+    <View style={{ gap: 12, paddingHorizontal: 16, paddingBottom: 8 }}>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <View style={{ flex: 1, backgroundColor: "#fff", borderWidth: 1.5, borderColor: exhausted ? "#fca5a5" : colors.border, borderRadius: 14, flexDirection: "row", alignItems: "center", paddingLeft: 14, paddingRight: 4, paddingVertical: 4 }}>
+          <Text style={{ fontSize: 16, marginRight: 6 }}>📦</Text>
+          <TextInput value={q} onChangeText={setQ}
+            placeholder={exhausted ? "Consultas esgotadas" : "Nome do importador, país ou segmento…"}
+            placeholderTextColor={colors.mutedForeground}
+            style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: 12 }}
+            editable={!exhausted} onSubmitEditing={() => doSearch(q)} returnKeyType="search" />
+          {!!q && <TouchableOpacity onPress={() => { setQ(""); setItems([]); setSearched(false); setSuggestions([]); }} style={{ padding: 8 }}>
+            <Feather name="x" size={16} color={colors.mutedForeground} />
+          </TouchableOpacity>}
+        </View>
+        <TouchableOpacity onPress={() => doSearch(q)} disabled={!q.trim() || searching || exhausted}
+          style={{ paddingHorizontal: 16, borderRadius: 14, justifyContent: "center", backgroundColor: !q.trim() || searching || exhausted ? colors.border : colors.navy }}>
+          {searching ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>Buscar</Text>}
+        </TouchableOpacity>
+      </View>
+
+      {suggestions.length > 0 && !searching && (
+        <View style={{ backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: colors.border, overflow: "hidden" }}>
+          {suggestions.map((s, i) => (
+            <TouchableOpacity key={s} onPress={() => { setQ(s); setSuggestions([]); void doSearch(s); }} activeOpacity={0.7}
+              style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: i < suggestions.length - 1 ? 1 : 0, borderBottomColor: colors.border }}>
+              <Text style={{ fontSize: 15 }}>📦</Text>
+              <Text style={{ flex: 1, fontSize: 14, color: colors.navy, fontWeight: "500" }} numberOfLines={1}>{s}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {!searched && !searching && suggestions.length === 0 && (
+        <View style={{ backgroundColor: colors.gold + "10", borderWidth: 1, borderColor: colors.gold + "30", borderRadius: 12, padding: 14, gap: 4 }}>
+          <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>📦 Como funciona</Text>
+          <Text style={{ fontSize: 13, color: colors.mutedForeground, lineHeight: 19 }}>
+            Busque importadores por nome, país ou segmento. Cada consulta consome 1 crédito.
+          </Text>
+        </View>
+      )}
+
+      {searching && (
+        <View style={{ alignItems: "center", paddingVertical: 24 }}>
+          <ActivityIndicator size="large" color={colors.gold} />
+          <Text style={{ color: colors.mutedForeground, marginTop: 8, fontSize: 13 }}>Buscando importadores…</Text>
+        </View>
+      )}
+
+      {searched && !searching && (<>
+        <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{total} importador{total !== 1 ? "es" : ""} encontrado{total !== 1 ? "s" : ""}</Text>
+        {items.length === 0 && (
+          <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 24, alignItems: "center" }}>
+            <Text style={{ fontSize: 32, marginBottom: 8 }}>📦</Text>
+            <Text style={{ fontSize: 15, fontWeight: "800", color: colors.navy, marginBottom: 4 }}>Nenhum resultado</Text>
+            <Text style={{ fontSize: 13, color: colors.mutedForeground, textAlign: "center" }}>Tente buscar por outro nome.</Text>
+          </View>
+        )}
+        {items.map(m => (
+          <View key={m.id} style={{ backgroundColor: "#fff", borderWidth: 1.5, borderColor: colors.border, borderRadius: 16, padding: 16, flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
+            <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: colors.gold + "14", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 22 }}>📦</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: "800", color: colors.navy, marginBottom: 6 }}>{m.name}</Text>
+              {!!m.segmentos && (
+                <View style={{ backgroundColor: colors.gold + "12", borderWidth: 1, borderColor: colors.gold + "35", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 3, alignSelf: "flex-start", marginBottom: 8 }}>
+                  <Text style={{ fontSize: 11, fontWeight: "600", color: colors.navy }}>{m.segmentos}</Text>
+                </View>
+              )}
+              {m.exportadores.length > 0 && (
+                <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10, gap: 6 }}>
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, letterSpacing: 0.6 }}>IMPORTA DE</Text>
+                  {m.exportadores.map((e, i) => (
+                    <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <Text style={{ fontSize: 14 }}>🌍</Text>
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>{e.exportador}</Text>
+                      <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{e.pais}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+            <View style={{ backgroundColor: colors.gold + "15", borderWidth: 1, borderColor: colors.gold + "35", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 }}>
+              <Text style={{ fontSize: 10, fontWeight: "700", color: colors.gold }}>IMPORTADOR</Text>
+            </View>
+          </View>
+        ))}
+      </>)}
+    </View>
+  );
+}
+
+// ── BiMobileProdutoresSearch ───────────────────────────────────────────────────
+function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useColors> }) {
+  const { session } = useAuth();
+  const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
+  const authH = (): HeadersInit => session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+
+  const [q, setQ]                   = useState("");
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [searching, setSearching]   = useState(false);
+  const [items, setItems]           = useState<BiProdItem[]>([]);
+  const [total, setTotal]           = useState(0);
+  const [searched, setSearched]     = useState(false);
+  const [credits, setCredits]       = useState<number | null>(null);
+  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const exhausted = credits !== null && credits <= 0;
+
+  useEffect(() => {
+    const val = q.trim();
+    if (val.length < 2) { setSuggestions([]); return; }
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    suggestTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_URL}/wine-imports/bi-suggestions/produtores?q=${encodeURIComponent(val)}`, { headers: authH() });
+        if (!res.ok) return;
+        const json = await res.json() as { suggestions: string[] };
+        setSuggestions(json.suggestions ?? []);
+      } catch {}
+    }, 300);
+    return () => { if (suggestTimer.current) clearTimeout(suggestTimer.current); };
+  }, [q]);
+
+  const doSearch = async (sq: string) => {
+    if (!sq.trim() || searching) return;
+    setSuggestions([]); setSearching(true); setItems([]); setSearched(false);
+    try {
+      const params = new URLSearchParams({ q: sq, limit: "20", offset: "0" });
+      const res = await fetch(`${API_URL}/wine-imports/bi-search/produtores?${params}`, { headers: authH() });
+      if (res.status === 402) { setCredits(0); }
+      else if (res.ok) {
+        const data = await res.json() as { items: BiProdItem[]; total: number; credits_remaining: number; credits_total: number };
+        setItems(data.items); setTotal(data.total); setSearched(true);
+        if (data.credits_remaining !== undefined) setCredits(data.credits_remaining);
+      }
+    } catch {}
+    setSearching(false);
+  };
+
+  return (
+    <View style={{ gap: 12, paddingHorizontal: 16, paddingBottom: 8 }}>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <View style={{ flex: 1, backgroundColor: "#fff", borderWidth: 1.5, borderColor: exhausted ? "#fca5a5" : colors.border, borderRadius: 14, flexDirection: "row", alignItems: "center", paddingLeft: 14, paddingRight: 4, paddingVertical: 4 }}>
+          <Text style={{ fontSize: 16, marginRight: 6 }}>🍇</Text>
+          <TextInput value={q} onChangeText={setQ}
+            placeholder={exhausted ? "Consultas esgotadas" : "Nome do produtor, região, estado ou tipo…"}
+            placeholderTextColor={colors.mutedForeground}
+            style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: 12 }}
+            editable={!exhausted} onSubmitEditing={() => doSearch(q)} returnKeyType="search" />
+          {!!q && <TouchableOpacity onPress={() => { setQ(""); setItems([]); setSearched(false); setSuggestions([]); }} style={{ padding: 8 }}>
+            <Feather name="x" size={16} color={colors.mutedForeground} />
+          </TouchableOpacity>}
+        </View>
+        <TouchableOpacity onPress={() => doSearch(q)} disabled={!q.trim() || searching || exhausted}
+          style={{ paddingHorizontal: 16, borderRadius: 14, justifyContent: "center", backgroundColor: !q.trim() || searching || exhausted ? colors.border : colors.navy }}>
+          {searching ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>Buscar</Text>}
+        </TouchableOpacity>
+      </View>
+
+      {suggestions.length > 0 && !searching && (
+        <View style={{ backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: colors.border, overflow: "hidden" }}>
+          {suggestions.map((s, i) => (
+            <TouchableOpacity key={s} onPress={() => { setQ(s); setSuggestions([]); void doSearch(s); }} activeOpacity={0.7}
+              style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: i < suggestions.length - 1 ? 1 : 0, borderBottomColor: colors.border }}>
+              <Text style={{ fontSize: 15 }}>🍇</Text>
+              <Text style={{ flex: 1, fontSize: 14, color: colors.navy, fontWeight: "500" }} numberOfLines={1}>{s}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {!searched && !searching && suggestions.length === 0 && (
+        <View style={{ backgroundColor: colors.gold + "10", borderWidth: 1, borderColor: colors.gold + "30", borderRadius: 12, padding: 14, gap: 4 }}>
+          <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>🍇 Como funciona</Text>
+          <Text style={{ fontSize: 13, color: colors.mutedForeground, lineHeight: 19 }}>
+            Busque vinícolas e produtores nacionais por nome, região ou estado. Cada consulta consome 1 crédito.
+          </Text>
+        </View>
+      )}
+
+      {searching && (
+        <View style={{ alignItems: "center", paddingVertical: 24 }}>
+          <ActivityIndicator size="large" color={colors.gold} />
+          <Text style={{ color: colors.mutedForeground, marginTop: 8, fontSize: 13 }}>Buscando produtores…</Text>
+        </View>
+      )}
+
+      {searched && !searching && (<>
+        <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{total} produtor{total !== 1 ? "es" : ""} encontrado{total !== 1 ? "s" : ""}</Text>
+        {items.length === 0 && (
+          <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 24, alignItems: "center" }}>
+            <Text style={{ fontSize: 32, marginBottom: 8 }}>🍇</Text>
+            <Text style={{ fontSize: 15, fontWeight: "800", color: colors.navy, marginBottom: 4 }}>Nenhum resultado</Text>
+            <Text style={{ fontSize: 13, color: colors.mutedForeground, textAlign: "center" }}>Tente buscar por outro nome ou região.</Text>
+          </View>
+        )}
+        {items.map(m => (
+          <View key={m.id} style={{ backgroundColor: "#fff", borderWidth: 1.5, borderColor: colors.border, borderRadius: 16, padding: 16, flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
+            <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: "#72203712", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 22 }}>🍇</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: "800", color: colors.navy, marginBottom: 2 }}>{m.name}</Text>
+              {!!m.name_fantasia && <Text style={{ fontSize: 12, color: colors.mutedForeground, marginBottom: 8 }}>{m.name_fantasia}</Text>}
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                {!!m.regiao && (
+                  <View style={{ backgroundColor: colors.gold + "12", borderWidth: 1, borderColor: colors.gold + "35", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 3 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "600", color: colors.navy }}>📍 {m.regiao}</Text>
+                  </View>
+                )}
+                {!!m.estado && (
+                  <View style={{ backgroundColor: "#f5f4ef", borderWidth: 1, borderColor: colors.border, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 3 }}>
+                    <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{m.estado}</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+            <View style={{ backgroundColor: "#72203712", borderWidth: 1, borderColor: "#72203735", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 }}>
+              <Text style={{ fontSize: 10, fontWeight: "700", color: "#722f37" }}>PRODUTOR</Text>
+            </View>
+          </View>
+        ))}
+      </>)}
+    </View>
+  );
+}
+
+// ── IdealBISearchView (main) ───────────────────────────────────────────────────
 function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof useColors>; bottomPad: number }) {
   const router = useRouter();
   const { session } = useAuth();
+
+  const [searchMode, setSearchMode]     = useState<BiSearchMode>("exportador");
 
   const [query, setQuery]               = useState("");
   const [credits, setCredits]           = useState<number | null>(null);
@@ -905,6 +1439,31 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
+      {/* ── Search Mode Selector ── */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 }}>
+        {([
+          { key: "exportador",   icon: "🌐", label: "Exportadores" },
+          { key: "marca",        icon: "🔍", label: "Buscar Rótulo" },
+          { key: "importadores", icon: "📦", label: "Importadores"  },
+          { key: "produtores",   icon: "🍇", label: "Produtores"    },
+        ] as { key: BiSearchMode; icon: string; label: string }[]).map(m => {
+          const active = searchMode === m.key;
+          return (
+            <TouchableOpacity key={m.key} onPress={() => setSearchMode(m.key)}
+              style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: active ? colors.navy : colors.border, backgroundColor: active ? colors.navy : "#fff" }}>
+              <Text style={{ fontSize: 13 }}>{m.icon}</Text>
+              <Text style={{ fontSize: 13, fontWeight: active ? "700" : "500", color: active ? "#fff" : colors.mutedForeground }}>{m.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {searchMode === "exportador"   && <BiMobileExportadorSearch   colors={colors} />}
+      {searchMode === "importadores" && <BiMobileImportadoresSearch colors={colors} />}
+      {searchMode === "produtores"   && <BiMobileProdutoresSearch   colors={colors} />}
+
+      {searchMode === "marca" && (<>
       {/* ── Credits KPI card — same style as Visão Geral KPIs ── */}
       <View style={[styles.kpiList, { paddingTop: 12 }]}>
         <View style={[styles.kpiCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
@@ -1184,6 +1743,7 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
           </View>
         </View>
       )}
+      </>)}
     </ScrollView>
   );
 }
