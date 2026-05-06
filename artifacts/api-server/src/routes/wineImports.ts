@@ -216,18 +216,38 @@ router.get("/wine-imports/bi-search/exportadores", async (req: Request, res: Res
     if (consumed) credits = { ...credits, ...consumed };
   }
 
+  // Fetch all matching rows (financial data NOT sent — requires reveal credit)
+  // One exportador may have many rows (one per distribuidor), so we dedup by name
   let query = supabaseAdmin
     .from("bi_exportadores")
-    .select("id, name, origem_exportador, created_at", { count: "exact" })
-    .order("name", { ascending: true })
-    .range(offset, offset + limit - 1);
+    .select("id, name, origem_exportador")
+    .order("name", { ascending: true });
 
   if (q) query = query.or(`name.ilike.%${q}%,origem_exportador.ilike.%${q}%`);
 
-  const { data, error, count } = await query;
+  const { data, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
 
-  return res.json({ items: data ?? [], total: count ?? 0, limit, offset, credits_remaining: credits.credits_remaining, credits_total: credits.credits_total });
+  // Dedup by exportador name — keep first occurrence of each name
+  const seen = new Map<string, { id: string; name: string; origem_exportador: string }>();
+  for (const row of (data ?? []) as { id: string; name: string; origem_exportador: string | null }[]) {
+    const key = row.name.trim();
+    if (!seen.has(key)) seen.set(key, { id: row.id, name: row.name, origem_exportador: row.origem_exportador ?? "" });
+  }
+
+  const allGroups = Array.from(seen.values());
+  const total = allGroups.length;
+  const items = allGroups.slice(offset, offset + limit).map(g => ({
+    id: g.id,
+    name: g.name,
+    origem_exportador: g.origem_exportador,
+    distribuidor: null as string | null,
+    fob_usd: null as string | null,
+    cx9l: null as string | null,
+    usd_por_cx9l: null as string | null,
+  }));
+
+  return res.json({ items, total, limit, offset, credits_remaining: credits.credits_remaining, credits_total: credits.credits_total });
 });
 
 router.get("/wine-imports/bi-search/produtores", async (req: Request, res: Response) => {
@@ -595,36 +615,68 @@ router.get("/wine-imports/bi/reveal-credits", async (req: Request, res: Response
  * If the same record was already revealed this month, it's free.
  * Admins bypass the credit check entirely.
  */
-router.post("/wine-imports/bi/exportadores/:id/reveal", async (req: Request, res: Response) => {
+/**
+ * POST /wine-imports/bi/exportadores/reveal
+ * Body: { name: string }
+ * Consumes 1 reveal credit; free if already revealed this month or admin.
+ * Returns aggregated totals + per-distribuidor breakdown.
+ */
+router.post("/wine-imports/bi/exportadores/reveal", async (req: Request, res: Response) => {
   const userId = await resolveUserId(req, res);
   if (!userId) return;
 
-  const { id } = req.params;
+  const { name } = req.body as { name?: string };
+  if (!name?.trim()) return res.status(400).json({ error: "name é obrigatório" });
+  const exportadorName = name.trim();
 
-  const { data: record, error: fetchError } = await supabaseAdmin
+  // Fetch all rows for this exportador (one per distribuidor)
+  type ExpRow = { distribuidor: string | null; fob_usd: string | null; cx9l: string | null; usd_por_cx9l: string | null };
+  const { data: rows, error: fetchError } = await supabaseAdmin
     .from("bi_exportadores")
-    .select("id, fob_usd, cx9l, usd_por_cx9l")
-    .eq("id", id)
-    .maybeSingle();
-  if (fetchError || !record) return res.status(404).json({ error: "Exportador não encontrado" });
+    .select("distribuidor, fob_usd, cx9l, usd_por_cx9l")
+    .eq("name", exportadorName)
+    .order("fob_usd", { ascending: false, nullsFirst: false });
 
+  if (fetchError) return res.status(500).json({ error: fetchError.message });
+  if (!rows || rows.length === 0) return res.status(404).json({ error: "Exportador não encontrado" });
+
+  // Compute aggregated totals across all distribuidores
+  let fob_sum = 0, cx9l_sum = 0;
+  for (const r of rows as ExpRow[]) {
+    fob_sum  += r.fob_usd ? parseFloat(r.fob_usd) : 0;
+    cx9l_sum += r.cx9l   ? parseFloat(r.cx9l)     : 0;
+  }
+  const totals = {
+    fob_usd:      fob_sum  > 0                    ? fob_sum.toFixed(2)                   : null,
+    cx9l:         cx9l_sum > 0                    ? cx9l_sum.toFixed(2)                  : null,
+    usd_por_cx9l: fob_sum  > 0 && cx9l_sum > 0   ? (fob_sum / cx9l_sum).toFixed(2)      : null,
+  };
+  const distribuidores = (rows as ExpRow[]).map(r => ({
+    distribuidor: r.distribuidor,
+    fob_usd:      r.fob_usd,
+    cx9l:         r.cx9l,
+    usd_por_cx9l: r.usd_por_cx9l,
+  }));
+
+  // Admins bypass credit check
   const { data: profile } = await supabaseAdmin.from("profiles").select("role").eq("id", userId).single();
   const isAdmin = (profile as { role?: string } | null)?.role === "admin";
   if (isAdmin) {
-    return res.json({ fob_usd: record.fob_usd, cx9l: record.cx9l, usd_por_cx9l: record.usd_por_cx9l, already_revealed: true, credits_remaining: null, credits_total: 0 });
+    return res.json({ totals, distribuidores, already_revealed: true, credits_remaining: null, credits_total: 0 });
   }
 
+  // Check if already revealed this month (keyed by exportador name)
   const { data: logEntry } = await supabaseAdmin
     .from("bi_reveal_log")
     .select("id")
     .eq("user_id", userId)
     .eq("record_type", "exportador")
-    .eq("record_id", id)
+    .eq("record_key", exportadorName)
     .maybeSingle();
 
   if (logEntry) {
     const credits = await getOrCreateRevealCredits(userId);
-    return res.json({ fob_usd: record.fob_usd, cx9l: record.cx9l, usd_por_cx9l: record.usd_por_cx9l, already_revealed: true, credits_remaining: credits.credits_remaining, credits_total: credits.credits_total });
+    return res.json({ totals, distribuidores, already_revealed: true, credits_remaining: credits.credits_remaining, credits_total: credits.credits_total });
   }
 
   const credits = await getOrCreateRevealCredits(userId);
@@ -636,9 +688,11 @@ router.post("/wine-imports/bi/exportadores/:id/reveal", async (req: Request, res
   await supabaseAdmin.from("bi_reveal_credits")
     .update({ credits_remaining: newRemaining, updated_at: new Date().toISOString() })
     .eq("user_id", userId);
-  await supabaseAdmin.from("bi_reveal_log").insert({ user_id: userId, record_type: "exportador", record_id: id });
+  await supabaseAdmin.from("bi_reveal_log").insert({
+    user_id: userId, record_type: "exportador", record_key: exportadorName,
+  });
 
-  return res.json({ fob_usd: record.fob_usd, cx9l: record.cx9l, usd_por_cx9l: record.usd_por_cx9l, already_revealed: false, credits_remaining: newRemaining, credits_total: credits.credits_total });
+  return res.json({ totals, distribuidores, already_revealed: false, credits_remaining: newRemaining, credits_total: credits.credits_total });
 });
 
 export default router;

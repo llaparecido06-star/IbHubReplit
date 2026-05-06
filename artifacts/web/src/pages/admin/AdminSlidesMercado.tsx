@@ -59,8 +59,8 @@ interface MarketPermission {
 
 type BiKind = "Importadores" | "Exportadores" | "Produtores";
 
-interface BiImp { id: string; name: string; pais: string; segmentos: string; estado: string; created_at: string; }
-interface BiExp { id: string; name: string; origem_exportador: string; fob_usd: string | null; cx9l: string | null; usd_por_cx9l: string | null; created_at: string; }
+interface BiImp { id: string; name: string; pais: string; segmentos: string; estado: string; exportador: string | null; created_at: string; }
+interface BiExp { id: string; name: string; origem_exportador: string; distribuidor: string | null; fob_usd: string | null; cx9l: string | null; usd_por_cx9l: string | null; created_at: string; }
 interface BiProd { id: string; name: string; name_fantasia: string | null; regiao: string; estado: string | null; tipos: string; fundado: number | null; created_at: string; }
 type BiRow = BiImp | BiExp | BiProd;
 
@@ -417,6 +417,8 @@ export default function AdminSlidesMercado() {
   const [biSegmentos, setBiSegmentos] = useState("");
   const [biEstado, setBiEstado] = useState("");
   const [biPaisDestino, setBiPaisDestino] = useState("");
+  const [biDistribuidor, setBiDistribuidor] = useState("");
+  const [biExportadorImp, setBiExportadorImp] = useState("");
   const [biProdutos, setBiProdutos] = useState("");
   const [biCaixas, setBiCaixas] = useState("");
   const [biValor, setBiValor] = useState("");
@@ -452,10 +454,11 @@ export default function AdminSlidesMercado() {
     setBiName(row?.name ?? "");
     if (kind === "Importadores") {
       const r = row as BiImp | null;
-      setBiPais(r?.pais ?? ""); setBiSegmentos(r?.segmentos ?? ""); setBiEstado(r?.estado ?? "");
+      setBiPais(r?.pais ?? ""); setBiSegmentos(r?.segmentos ?? ""); setBiEstado(r?.estado ?? ""); setBiExportadorImp(r?.exportador ?? "");
     } else if (kind === "Exportadores") {
       const r = row as BiExp | null;
       setBiPaisDestino(r?.origem_exportador ?? "");
+      setBiDistribuidor(r?.distribuidor ?? "");
       setBiCaixas(r?.cx9l ?? "");
       setBiValor(r?.fob_usd ?? "");
       setBiPreco(r?.usd_por_cx9l ?? "");
@@ -476,14 +479,15 @@ export default function AdminSlidesMercado() {
     setBiSaving(true);
     try {
       if (kind === "Importadores") {
-        const body = { name: biName.trim(), pais: biPais.trim(), segmentos: biSegmentos.trim(), estado: biEstado.trim() };
-        if (!body.name || !body.pais || !body.segmentos || !body.estado) { alert("Todos os campos são obrigatórios"); setBiSaving(false); return; }
+        const body = { name: biName.trim(), pais: biPais.trim(), segmentos: biSegmentos.trim(), estado: biEstado.trim(), exportador: biExportadorImp.trim() || null };
+        if (!body.name || !body.pais || !body.segmentos) { alert("Nome, país e segmentos são obrigatórios"); setBiSaving(false); return; }
         if (id) await biApiFetch(`/market/bi/importadores/${id}`, "PATCH", body);
         else await biApiFetch("/market/bi/importadores", "POST", body);
       } else if (kind === "Exportadores") {
         const body = {
           name: biName.trim(),
           origem_exportador: biPaisDestino.trim(),
+          distribuidor: biDistribuidor.trim() || null,
           fob_usd: parseFloat(biValor) || null,
           cx9l: parseFloat(biCaixas) || null,
           usd_por_cx9l: parseFloat(biPreco) || null,
@@ -769,7 +773,10 @@ export default function AdminSlidesMercado() {
                   <div style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: `${GOLD}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>🌍</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{r.name}</div>
-                    <div style={{ fontSize: 12, color: "#8a93a2" }}>{r.pais} · {r.estado} · {r.segmentos}</div>
+                    <div style={{ fontSize: 12, color: "#8a93a2" }}>
+                      {r.pais}{r.estado ? ` · ${r.estado}` : ""} · {r.segmentos}
+                      {r.exportador ? ` · exp: ${r.exportador}` : ""}
+                    </div>
                   </div>
                   <button onClick={() => openBiModal("Importadores", r)} style={{ padding: "6px 12px", backgroundColor: `${GOLD}15`, color: GOLD, border: `1px solid ${GOLD}44`, borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>✏️ Editar</button>
                   <button onClick={() => handleDeleteBi("Importadores", r)} disabled={biDeletingId === r.id} style={btnDanger}>{biDeletingId === r.id ? "..." : "🗑"}</button>
@@ -786,6 +793,7 @@ export default function AdminSlidesMercado() {
                     <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{r.name}</div>
                     <div style={{ fontSize: 12, color: "#8a93a2" }}>
                       {r.origem_exportador ? `🌍 ${r.origem_exportador}` : "—"}
+                      {r.distribuidor ? ` · dist: ${r.distribuidor}` : ""}
                       {r.fob_usd ? ` · FOB US$ ${parseFloat(r.fob_usd).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : ""}
                       {r.cx9l ? ` · ${parseFloat(r.cx9l).toLocaleString("pt-BR")} CX9L` : ""}
                     </div>
@@ -946,11 +954,13 @@ export default function AdminSlidesMercado() {
             {biModal.kind === "Importadores" && <>
               {inp("País de origem *", biPais, setBiPais, { placeholder: "Ex: Argentina" })}
               {inp("Segmentos *", biSegmentos, setBiSegmentos, { placeholder: "Ex: Vinhos Tranquilos, Espumantes" })}
-              {inp("Estado (UF) *", biEstado, setBiEstado, { placeholder: "Ex: SP" })}
+              {inp("Exportador", biExportadorImp, setBiExportadorImp, { placeholder: "Ex: BODEGAS CARO (opcional)" })}
+              {inp("Estado (UF)", biEstado, setBiEstado, { placeholder: "Ex: SP (opcional)" })}
             </>}
 
             {biModal.kind === "Exportadores" && <>
               {inp("País de origem *", biPaisDestino, setBiPaisDestino, { placeholder: "Ex: AFRICA DO SUL" })}
+              {inp("Distribuidor", biDistribuidor, setBiDistribuidor, { placeholder: "Ex: Grand Cru (opcional)" })}
               {inp("FOB US$", biValor, setBiValor, { placeholder: "Ex: 22914.71", type: "number" })}
               {inp("Vol. CX9L", biCaixas, setBiCaixas, { placeholder: "Ex: 530.00", type: "number" })}
               {inp("US$ / CX9L", biPreco, setBiPreco, { placeholder: "Ex: 43.24", type: "number" })}

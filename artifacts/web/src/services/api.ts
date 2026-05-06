@@ -4326,6 +4326,7 @@ export interface BiImportador {
   pais: string;
   segmentos: string;
   estado: string;
+  exportador: string | null;
   created_at: string;
 }
 
@@ -4333,6 +4334,7 @@ export interface BiExportador {
   id: string;
   name: string;
   origem_exportador: string;
+  distribuidor: string | null;
   fob_usd: string | null;
   cx9l: string | null;
   usd_por_cx9l: string | null;

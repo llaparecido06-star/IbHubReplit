@@ -8,6 +8,7 @@ export const biImportadoresTable = pgTable("bi_importadores", {
   pais: text("pais").notNull(),
   segmentos: text("segmentos").notNull(),
   estado: text("estado").notNull(),
+  exportador: text("exportador"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export const insertBiImportadorSchema = createInsertSchema(biImportadoresTable).omit({ id: true, createdAt: true });
@@ -18,6 +19,7 @@ export const biExportadoresTable = pgTable("bi_exportadores", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   origemExportador: text("origem_exportador").notNull().default(""),
+  distribuidor: text("distribuidor"),
   fobUsd: numeric("fob_usd", { precision: 15, scale: 2 }),
   cx9l: numeric("cx9l", { precision: 12, scale: 2 }),
   usdPorCx9l: numeric("usd_por_cx9l", { precision: 10, scale: 2 }),

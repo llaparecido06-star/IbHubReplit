@@ -328,12 +328,12 @@ router.get("/market/bi/importadores", async (req: Request, res: Response): Promi
 
   let query = supabaseAdmin
     .from("bi_importadores")
-    .select("id, name, pais, segmentos, estado, created_at", { count: "exact" })
+    .select("id, name, pais, segmentos, estado, exportador, created_at", { count: "exact" })
     .order("name", { ascending: true })
     .range(offset, offset + limit - 1);
 
   if (q) {
-    query = query.or(`name.ilike.%${q}%,pais.ilike.%${q}%,segmentos.ilike.%${q}%,estado.ilike.%${q}%`);
+    query = query.or(`name.ilike.%${q}%,pais.ilike.%${q}%,segmentos.ilike.%${q}%,estado.ilike.%${q}%,exportador.ilike.%${q}%`);
   }
 
   const { data, error, count } = await query;
@@ -364,12 +364,12 @@ router.get("/market/bi/exportadores", async (req: Request, res: Response): Promi
 
   let query = supabaseAdmin
     .from("bi_exportadores")
-    .select("id, name, origem_exportador, created_at", { count: "exact" })
+    .select("id, name, origem_exportador, distribuidor, fob_usd, cx9l, usd_por_cx9l, created_at", { count: "exact" })
     .order("name", { ascending: true })
     .range(offset, offset + limit - 1);
 
   if (q) {
-    query = query.or(`name.ilike.%${q}%,origem_exportador.ilike.%${q}%`);
+    query = query.or(`name.ilike.%${q}%,origem_exportador.ilike.%${q}%,distribuidor.ilike.%${q}%`);
   }
 
   const { data, error, count } = await query;
@@ -420,12 +420,12 @@ router.post("/market/bi/importadores", async (req: Request, res: Response): Prom
   if (!userId) return;
   const allowed = await requireAdmin(req, res, userId);
   if (!allowed) return;
-  const { name, pais, segmentos, estado } = req.body as Record<string, string | undefined>;
-  if (!name?.trim() || !pais?.trim() || !segmentos?.trim() || !estado?.trim()) {
-    res.status(400).json({ error: "name, pais, segmentos e estado são obrigatórios" }); return;
+  const { name, pais, segmentos, estado, exportador } = req.body as Record<string, string | undefined>;
+  if (!name?.trim() || !pais?.trim() || !segmentos?.trim()) {
+    res.status(400).json({ error: "name, pais e segmentos são obrigatórios" }); return;
   }
   const { data, error } = await supabaseAdmin.from("bi_importadores")
-    .insert({ name: name.trim(), pais: pais.trim(), segmentos: segmentos.trim(), estado: estado.trim() })
+    .insert({ name: name.trim(), pais: pais.trim(), segmentos: segmentos.trim(), estado: estado?.trim() ?? "", exportador: exportador?.trim() || null })
     .select().single();
   if (error) { res.status(500).json({ error: error.message }); return; }
   res.status(201).json(data);
@@ -436,12 +436,13 @@ router.patch("/market/bi/importadores/:id", async (req: Request, res: Response):
   if (!userId) return;
   const allowed = await requireAdmin(req, res, userId);
   if (!allowed) return;
-  const { name, pais, segmentos, estado } = req.body as Record<string, string | undefined>;
-  const updates: Record<string, string> = {};
+  const { name, pais, segmentos, estado, exportador } = req.body as Record<string, string | undefined>;
+  const updates: Record<string, string | null> = {};
   if (name?.trim()) updates.name = name.trim();
   if (pais?.trim()) updates.pais = pais.trim();
   if (segmentos?.trim()) updates.segmentos = segmentos.trim();
   if (estado?.trim()) updates.estado = estado.trim();
+  if (exportador !== undefined) updates.exportador = exportador?.trim() || null;
   if (!Object.keys(updates).length) { res.status(400).json({ error: "Nenhum campo enviado" }); return; }
   const { data, error } = await supabaseAdmin.from("bi_importadores").update(updates).eq("id", req.params.id).select().maybeSingle();
   if (error) { res.status(500).json({ error: error.message }); return; }
@@ -466,8 +467,8 @@ router.post("/market/bi/exportadores", async (req: Request, res: Response): Prom
   if (!userId) return;
   const allowed = await requireAdmin(req, res, userId);
   if (!allowed) return;
-  const { name, origem_exportador, fob_usd, cx9l, usd_por_cx9l } = req.body as {
-    name?: string; origem_exportador?: string;
+  const { name, origem_exportador, distribuidor, fob_usd, cx9l, usd_por_cx9l } = req.body as {
+    name?: string; origem_exportador?: string; distribuidor?: string | null;
     fob_usd?: number | null; cx9l?: number | null; usd_por_cx9l?: number | null;
   };
   if (!name?.trim() || !origem_exportador?.trim()) {
@@ -475,6 +476,7 @@ router.post("/market/bi/exportadores", async (req: Request, res: Response): Prom
   }
   const { data, error } = await supabaseAdmin.from("bi_exportadores").insert({
     name: name.trim(), origem_exportador: origem_exportador.trim(),
+    distribuidor: typeof distribuidor === "string" ? distribuidor.trim() || null : null,
     fob_usd: fob_usd ?? null, cx9l: cx9l ?? null, usd_por_cx9l: usd_por_cx9l ?? null,
   }).select().single();
   if (error) { res.status(500).json({ error: error.message }); return; }
@@ -490,6 +492,7 @@ router.patch("/market/bi/exportadores/:id", async (req: Request, res: Response):
   const updates: Record<string, string | number | null> = {};
   if (typeof body.name === "string" && body.name.trim()) updates.name = body.name.trim();
   if (typeof body.origem_exportador === "string" && body.origem_exportador.trim()) updates.origem_exportador = body.origem_exportador.trim();
+  if (body.distribuidor !== undefined) updates.distribuidor = typeof body.distribuidor === "string" ? body.distribuidor.trim() || null : null;
   if (body.fob_usd !== undefined) updates.fob_usd = typeof body.fob_usd === "number" ? body.fob_usd : null;
   if (body.cx9l !== undefined) updates.cx9l = typeof body.cx9l === "number" ? body.cx9l : null;
   if (body.usd_por_cx9l !== undefined) updates.usd_por_cx9l = typeof body.usd_por_cx9l === "number" ? body.usd_por_cx9l : null;
