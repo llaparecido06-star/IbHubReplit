@@ -444,7 +444,7 @@ router.get("/wine-imports/search", async (req: Request, res: Response) => {
   const pattern = `%${brandName}%`;
   const { data, error } = await supabaseAdmin
     .from("wine_imports")
-    .select("id, marca_completa, exportador, pais_de_origem, distribuidor")
+    .select("id, marca_completa, exportador, pais_de_origem, importador")
     .ilike("marca_completa", pattern)
     .order("marca_completa")
     .limit(50);
@@ -466,7 +466,7 @@ router.get("/wine-imports/search", async (req: Request, res: Response) => {
       const prefixPattern = `%${prefix}%`;
       const { data: prefixData } = await supabaseAdmin
         .from("wine_imports")
-        .select("id, marca_completa, exportador, pais_de_origem, distribuidor")
+        .select("id, marca_completa, exportador, pais_de_origem, importador")
         .ilike("marca_completa", prefixPattern)
         .order("marca_completa")
         .limit(50);
@@ -481,8 +481,8 @@ router.get("/wine-imports/search", async (req: Request, res: Response) => {
   // Build deduplicated distributor list (case-insensitive on trimmed name)
   // and try to resolve a company_pages link for each distributor name.
   const distribuidoresMap = new Map<string, { name: string; company_page_id: string | null }>();
-  for (const r of rows as { distribuidor: string | null }[]) {
-    const raw = (r.distribuidor ?? "").trim();
+  for (const r of rows as { importador: string | null }[]) {
+    const raw = (r.importador ?? "").trim();
     if (!raw) continue;
     const key = raw.toLowerCase();
     if (!distribuidoresMap.has(key)) {

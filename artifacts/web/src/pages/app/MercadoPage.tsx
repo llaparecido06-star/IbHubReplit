@@ -1145,7 +1145,7 @@ function MarcaCompletaSearch({ userId, credits, creditsTotal, setCredits, setCre
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   type WineDistribuidor = { name: string; company_page_id: string | null };
-  type WineResult = { marcaCompleta: string; exportador?: string; paisDeOrigem?: string; distribuidor: string; distribuidores: WineDistribuidor[] };
+  type WineResult = { marcaCompleta: string; exportador?: string; paisDeOrigem?: string; importador: string; distribuidores: WineDistribuidor[] };
   const [result, setResult] = useState<WineResult | null | "not_found" | "out_of_scope">(null);
   const [brandExtracted, setBrandExtracted] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -1200,7 +1200,7 @@ function MarcaCompletaSearch({ userId, credits, creditsTotal, setCredits, setCre
       if (res.status === 422) { setResult("out_of_scope"); setSearching(false); return; }
       if (!res.ok) throw new Error("server error");
       const json = await res.json() as {
-        data: { marca_completa: string; exportador: string | null; pais_de_origem: string | null; distribuidor: string | null }[];
+        data: { marca_completa: string; exportador: string | null; pais_de_origem: string | null; importador: string | null }[];
         distribuidores?: WineDistribuidor[];
         brand_extracted: string | null;
         credits_remaining: number;
@@ -1222,7 +1222,7 @@ function MarcaCompletaSearch({ userId, credits, creditsTotal, setCredits, setCre
             if (!seen.has(k)) { seen.add(k); distribuidores.push({ name: n, company_page_id: null }); }
           }
         }
-        setResult({ marcaCompleta: f.marca_completa, exportador: f.exportador ?? undefined, paisDeOrigem: f.pais_de_origem ?? undefined, distribuidor: distribuidores[0]?.name ?? (f.distribuidor ?? "—"), distribuidores });
+        setResult({ marcaCompleta: f.marca_completa, exportador: f.exportador ?? undefined, paisDeOrigem: f.pais_de_origem ?? undefined, importador: distribuidores[0]?.name ?? (f.importador ?? "—"), distribuidores });
       } else {
         setResult("not_found");
       }
