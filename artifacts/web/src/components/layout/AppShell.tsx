@@ -737,9 +737,15 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
 
   useEffect(() => {
     if (!userId) return;
-    fetchProfileStats(userId).then(setStats);
+    fetchProfileStats(userId, true).then(setStats);
     fetchWebCompanyPages(userId).then(setCompanyPages);
   }, [userId]);
+
+  // Refresh stats on every navigation so counts stay current after follow/connect actions
+  useEffect(() => {
+    if (!userId) return;
+    fetchProfileStats(userId).then(setStats);
+  }, [userId, location]);
 
   const handleSignOut = async () => {
     await signOut();
