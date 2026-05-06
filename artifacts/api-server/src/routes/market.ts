@@ -298,6 +298,15 @@ router.post("/market/comments/:id/like", async (req: Request, res: Response): Pr
   }
 });
 
+/* ─── Ideal.BI — query sanitizer ────────────────────────────────────────── */
+/**
+ * Strip characters that break PostgREST's `.or()` filter DSL.
+ * Keeps letters (incl. accented), digits, spaces, and hyphens.
+ */
+function sanitizeBiQuery(raw: string): string {
+  return raw.replace(/[^a-zA-ZÀ-ÖØ-öø-ÿ0-9 \-]/g, "").slice(0, 100);
+}
+
 /* ─── Ideal.BI — Busca Importadores ──────────────────────────────────────── */
 
 /**
@@ -313,7 +322,7 @@ router.get("/market/bi/importadores", async (req: Request, res: Response): Promi
   const allowed = await requirePlanFeature(req, res, userId, "mercado:idealbi");
   if (!allowed) return;
 
-  const q = (req.query.q as string | undefined)?.trim() ?? "";
+  const q = sanitizeBiQuery((req.query.q as string | undefined)?.trim() ?? "");
   const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
   const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
@@ -349,7 +358,7 @@ router.get("/market/bi/exportadores", async (req: Request, res: Response): Promi
   const allowed = await requirePlanFeature(req, res, userId, "mercado:idealbi");
   if (!allowed) return;
 
-  const q = (req.query.q as string | undefined)?.trim() ?? "";
+  const q = sanitizeBiQuery((req.query.q as string | undefined)?.trim() ?? "");
   const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
   const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
@@ -384,7 +393,7 @@ router.get("/market/bi/produtores", async (req: Request, res: Response): Promise
   const allowed = await requirePlanFeature(req, res, userId, "mercado:idealbi");
   if (!allowed) return;
 
-  const q = (req.query.q as string | undefined)?.trim() ?? "";
+  const q = sanitizeBiQuery((req.query.q as string | undefined)?.trim() ?? "");
   const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
   const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 

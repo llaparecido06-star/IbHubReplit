@@ -4356,6 +4356,10 @@ export interface BiSearchResult<T> {
   offset: number;
 }
 
+export class BiAccessError extends Error {
+  constructor(message = "Acesso negado") { super(message); this.name = "BiAccessError"; }
+}
+
 async function biGet<T>(path: string, q: string, limit: number, offset: number): Promise<BiSearchResult<T>> {
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
   const session = await getCachedSession();
@@ -4364,6 +4368,7 @@ async function biGet<T>(path: string, q: string, limit: number, offset: number):
   const res = await fetch(`${apiBase}/${path}?${params}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
+  if (res.status === 401 || res.status === 403) throw new BiAccessError();
   if (!res.ok) throw new Error(`BI fetch failed: ${res.status}`);
   return res.json() as Promise<BiSearchResult<T>>;
 }

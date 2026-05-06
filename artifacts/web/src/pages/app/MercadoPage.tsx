@@ -14,7 +14,7 @@ import {
   fetchMarketComments, addMarketComment, uploadMarketPostImage,
   uploadMarketPostVideo, voteOnMarketPoll, toggleMarketCommentLike,
   deleteMarketPost, updateMarketPost,
-  BiImportador, BiExportador, BiProdutor,
+  BiImportador, BiExportador, BiProdutor, BiAccessError,
   fetchBiImportadores, fetchBiExportadores, fetchBiProdutores,
 } from "@/services/api";
 import { formatRelativeDate as timeAgo } from "@/utils/dateUtils";
@@ -551,6 +551,27 @@ function BiEmptyState({ q, label }: { q: string; label: string }) {
   );
 }
 
+function BiErrorState({ paywall }: { paywall: boolean }) {
+  if (paywall) {
+    return (
+      <div style={{ padding: "20px 16px", backgroundColor: `${GOLD}08`, border: `1px solid ${GOLD}40`, borderRadius: 14, textAlign: "center" }}>
+        <div style={{ fontSize: 28, marginBottom: 8 }}>🔒</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Acesso Ideal.BI necessário</div>
+        <div style={{ fontSize: 13, color: MUTED, marginBottom: 12 }}>
+          Esta busca está disponível apenas para assinantes com acesso Ideal.BI.
+        </div>
+        <a href="/assinar" style={{ fontSize: 13, fontWeight: 700, color: GOLD, textDecoration: "none" }}>Ver planos →</a>
+      </div>
+    );
+  }
+  return (
+    <div style={{ padding: "20px 16px", backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, textAlign: "center" }}>
+      <div style={{ fontSize: 28, marginBottom: 8 }}>⚠️</div>
+      <div style={{ fontSize: 14, color: MUTED }}>Não foi possível carregar os dados. Tente novamente.</div>
+    </div>
+  );
+}
+
 function CarregarMaisBtn({ onClick, loading }: { onClick: () => void; loading: boolean }) {
   return (
     <button
@@ -595,6 +616,7 @@ function ImportadoresSearch() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [offset, setOffset] = useState(0);
+  const [error, setError] = useState<null | "paywall" | "error">(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q.trim()), 350);
@@ -603,10 +625,11 @@ function ImportadoresSearch() {
 
   useEffect(() => {
     setLoading(true);
+    setError(null);
     setOffset(0);
     fetchBiImportadores(debouncedQ, PAGE_SIZE, 0)
       .then(r => { setItems(r.items); setTotal(r.total); })
-      .catch(() => {})
+      .catch(e => { setError(e instanceof BiAccessError ? "paywall" : "error"); setItems([]); })
       .finally(() => setLoading(false));
   }, [debouncedQ]);
 
@@ -622,12 +645,14 @@ function ImportadoresSearch() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <BiSearchBar value={q} onChange={setQ} placeholder="Buscar importador por nome, país ou segmento…" />
-      {!loading && (
+      {!loading && !error && (
         <div style={{ fontSize: 12, color: MUTED }}>
           {total} importador{total !== 1 ? "es" : ""} encontrado{total !== 1 ? "s" : ""}
         </div>
       )}
-      {loading ? <BiLoadingSkeleton /> : items.length === 0 ? (
+      {loading ? <BiLoadingSkeleton /> : error ? (
+        <BiErrorState paywall={error === "paywall"} />
+      ) : items.length === 0 ? (
         <BiEmptyState q={debouncedQ} label="importador" />
       ) : (
         <>
@@ -678,13 +703,16 @@ function ExportadoresSearch({ hasAccess }: { hasAccess: boolean }) {
     return () => clearTimeout(t);
   }, [q]);
 
+  const [error, setError] = useState<null | "paywall" | "error">(null);
+
   useEffect(() => {
     setLoading(true);
+    setError(null);
     setOffset(0);
     setExpanded(new Set());
     fetchBiExportadores(debouncedQ, PAGE_SIZE, 0)
       .then(r => { setItems(r.items); setTotal(r.total); })
-      .catch(() => {})
+      .catch(e => { setError(e instanceof BiAccessError ? "paywall" : "error"); setItems([]); })
       .finally(() => setLoading(false));
   }, [debouncedQ]);
 
@@ -710,12 +738,14 @@ function ExportadoresSearch({ hasAccess }: { hasAccess: boolean }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <BiSearchBar value={q} onChange={setQ} placeholder="Buscar exportador por nome, destino ou produto…" />
-      {!loading && (
+      {!loading && !error && (
         <div style={{ fontSize: 12, color: MUTED }}>
           {total} exportador{total !== 1 ? "es" : ""} encontrado{total !== 1 ? "s" : ""}
         </div>
       )}
-      {loading ? <BiLoadingSkeleton /> : items.length === 0 ? (
+      {loading ? <BiLoadingSkeleton /> : error ? (
+        <BiErrorState paywall={error === "paywall"} />
+      ) : items.length === 0 ? (
         <BiEmptyState q={debouncedQ} label="exportador" />
       ) : (
         <>
@@ -811,12 +841,15 @@ function ProdutoresSearch() {
     return () => clearTimeout(t);
   }, [q]);
 
+  const [error, setError] = useState<null | "paywall" | "error">(null);
+
   useEffect(() => {
     setLoading(true);
+    setError(null);
     setOffset(0);
     fetchBiProdutores(debouncedQ, PAGE_SIZE, 0)
       .then(r => { setItems(r.items); setTotal(r.total); })
-      .catch(() => {})
+      .catch(e => { setError(e instanceof BiAccessError ? "paywall" : "error"); setItems([]); })
       .finally(() => setLoading(false));
   }, [debouncedQ]);
 
@@ -832,12 +865,14 @@ function ProdutoresSearch() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <BiSearchBar value={q} onChange={setQ} placeholder="Buscar produtor por nome, região ou tipo de vinho…" />
-      {!loading && (
+      {!loading && !error && (
         <div style={{ fontSize: 12, color: MUTED }}>
           {total} produtor{total !== 1 ? "es" : ""} encontrado{total !== 1 ? "s" : ""}
         </div>
       )}
-      {loading ? <BiLoadingSkeleton /> : items.length === 0 ? (
+      {loading ? <BiLoadingSkeleton /> : error ? (
+        <BiErrorState paywall={error === "paywall"} />
+      ) : items.length === 0 ? (
         <BiEmptyState q={debouncedQ} label="produtor" />
       ) : (
         <>
