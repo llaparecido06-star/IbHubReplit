@@ -680,7 +680,11 @@ function CreditsBar({ credits, creditsTotal, loading }: { credits: number | null
 /* ─── Importadores Search ────────────────────────────────────────── */
 const SEARCH_PAGE_SIZE = 5;
 
-function ImportadoresSearch({ userId }: { userId: string }) {
+function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal }: {
+  userId: string;
+  credits: number | null; creditsTotal: number; creditsLoading: boolean;
+  setCredits: (n: number) => void; setCreditsTotal: (n: number) => void;
+}) {
   const [q, setQ] = useState("");
   const [submittedQ, setSubmittedQ] = useState<string | null>(null);
   const [items, setItems] = useState<BiImportador[]>([]);
@@ -690,7 +694,6 @@ function ImportadoresSearch({ userId }: { userId: string }) {
   const [offset, setOffset] = useState(0);
   const [error, setError] = useState<null | "paywall" | "credits" | "error">(null);
   const [searched, setSearched] = useState(false);
-  const { credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal } = useCredits(userId);
   const exhausted = credits !== null && credits <= 0;
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -766,7 +769,6 @@ function ImportadoresSearch({ userId }: { userId: string }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <CreditsBar credits={credits} creditsTotal={creditsTotal} loading={creditsLoading} />
       <div ref={containerRef} style={{ position: "relative" }}>
         <div style={{ display: "flex", gap: 8 }}>
           <div style={{ flex: 1, backgroundColor: WHITE, border: `1.5px solid ${showSuggestions ? GOLD : BORDER}`, borderRadius: 12, padding: "4px 4px 4px 14px", display: "flex", alignItems: "center", gap: 8, transition: "border-color 0.15s" }}>
@@ -871,62 +873,6 @@ function ImportadoresSearch({ userId }: { userId: string }) {
   );
 }
 
-/* ─── Exportadores + Marca Completa (aba unificada) ──────────────── */
-
-type ExportSubMode = "exportador" | "marca";
-
-function ExportadoresMarcaSearch({ userId, hasAccess }: { userId: string; hasAccess: boolean }) {
-  const [mode, setMode] = useState<ExportSubMode>("exportador");
-  const { credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal } = useCredits(userId);
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <CreditsBar credits={credits} creditsTotal={creditsTotal} loading={creditsLoading} />
-      {/* Sub-mode chips */}
-      <div style={{ display: "flex", gap: 8 }}>
-        {([
-          { key: "exportador" as ExportSubMode, icon: "🌐", label: "Buscar Exportador" },
-          { key: "marca"      as ExportSubMode, icon: "🔍", label: "Buscar por Rótulo" },
-        ]).map(m => {
-          const active = mode === m.key;
-          return (
-            <button
-              key={m.key}
-              onClick={() => setMode(m.key)}
-              style={{
-                display: "flex", alignItems: "center", gap: 5, padding: "7px 16px", borderRadius: 20,
-                border: `1px solid ${active ? NAVY : BORDER}`,
-                backgroundColor: active ? NAVY : WHITE,
-                color: active ? WHITE : MUTED,
-                fontWeight: active ? 700 : 500, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
-                transition: "all 0.15s",
-              }}
-            >{m.icon} {m.label}</button>
-          );
-        })}
-      </div>
-
-      {mode === "exportador" && (
-        <ExportadorList
-          userId={userId}
-          hasAccess={hasAccess}
-          credits={credits}
-          setCredits={setCredits}
-          setCreditsTotal={setCreditsTotal}
-        />
-      )}
-      {mode === "marca" && (
-        <MarcaCompletaSearch
-          userId={userId}
-          credits={credits}
-          creditsTotal={creditsTotal}
-          setCredits={setCredits}
-          setCreditsTotal={setCreditsTotal}
-        />
-      )}
-    </div>
-  );
-}
 
 /* ─── Exportador list (sub-component) ───────────────────────────── */
 function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTotal }: {
@@ -1519,7 +1465,11 @@ function MarcaCompletaSearch({ userId, credits, creditsTotal, setCredits, setCre
 }
 
 /* ─── Produtores Nacionais Search ─────────────────────────────────── */
-function ProdutoresSearch({ userId }: { userId: string }) {
+function ProdutoresSearch({ userId, credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal }: {
+  userId: string;
+  credits: number | null; creditsTotal: number; creditsLoading: boolean;
+  setCredits: (n: number) => void; setCreditsTotal: (n: number) => void;
+}) {
   const [q, setQ] = useState("");
   const [submittedQ, setSubmittedQ] = useState<string | null>(null);
   const [items, setItems] = useState<BiProdutor[]>([]);
@@ -1529,7 +1479,6 @@ function ProdutoresSearch({ userId }: { userId: string }) {
   const [offset, setOffset] = useState(0);
   const [error, setError] = useState<null | "paywall" | "credits" | "error">(null);
   const [searched, setSearched] = useState(false);
-  const { credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal } = useCredits(userId);
   const exhausted = credits !== null && credits <= 0;
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -1599,7 +1548,6 @@ function ProdutoresSearch({ userId }: { userId: string }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <CreditsBar credits={credits} creditsTotal={creditsTotal} loading={creditsLoading} />
       <div ref={containerRef} style={{ position: "relative" }}>
         <div style={{ display: "flex", gap: 8 }}>
           <div style={{ flex: 1, backgroundColor: WHITE, border: `1.5px solid ${showSuggestions ? GOLD : BORDER}`, borderRadius: 12, padding: "4px 4px 4px 14px", display: "flex", alignItems: "center", gap: 8, transition: "border-color 0.15s" }}>
@@ -2321,12 +2269,13 @@ function LockedBlock({ title }: { title: string }) {
 }
 
 
-type SearchSection = "exportadores_marca" | "produtores" | "importadores";
+type SearchMode = "exportador" | "marca" | "importadores" | "produtores";
 
 function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) {
   const { hasFeature } = usePermissions();
   const [subTab, setSubTab] = useState<"feed" | "search">("feed");
-  const [searchSection, setSearchSection] = useState<SearchSection>("exportadores_marca");
+  const [searchMode, setSearchMode] = useState<SearchMode>("exportador");
+  const { credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal } = useCredits(userId);
   const [posts, setPosts] = useState<MarketPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -2474,21 +2423,22 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
         ))}
       </div>
 
-      {/* Search section — 3 category chips + content */}
+      {/* Search section — flat 4 mode buttons */}
       {subTab === "search" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* Category chips */}
-          <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <CreditsBar credits={credits} creditsTotal={creditsTotal} loading={creditsLoading} />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {([
-              { key: "exportadores_marca", label: "Exportadores + Marca", icon: "🌐" },
-              { key: "produtores",         label: "Produtores Nacionais", icon: "🍇" },
-              { key: "importadores",       label: "Importadores",         icon: "📦" },
-            ] as { key: SearchSection; label: string; icon: string }[]).map(s => {
-              const active = searchSection === s.key;
+              { key: "exportador",   icon: "🌐", label: "Buscar Exportador" },
+              { key: "marca",        icon: "🔍", label: "Buscar por Rótulo" },
+              { key: "importadores", icon: "📦", label: "Buscar Importadores" },
+              { key: "produtores",   icon: "🍇", label: "Buscar Produtor Nacional" },
+            ] as { key: SearchMode; icon: string; label: string }[]).map(s => {
+              const active = searchMode === s.key;
               return (
                 <button
                   key={s.key}
-                  onClick={() => setSearchSection(s.key)}
+                  onClick={() => setSearchMode(s.key)}
                   style={{
                     display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
                     padding: "7px 16px", borderRadius: 20, flexShrink: 0,
@@ -2507,10 +2457,10 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
             })}
           </div>
 
-          {/* Section content */}
-          {searchSection === "exportadores_marca" && <ExportadoresMarcaSearch userId={userId} hasAccess={hasAccess} />}
-          {searchSection === "produtores"         && <ProdutoresSearch userId={userId} />}
-          {searchSection === "importadores"       && <ImportadoresSearch userId={userId} />}
+          {searchMode === "exportador"   && <ExportadorList userId={userId} hasAccess={hasAccess} credits={credits} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
+          {searchMode === "marca"        && <MarcaCompletaSearch userId={userId} credits={credits} creditsTotal={creditsTotal} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
+          {searchMode === "importadores" && <ImportadoresSearch userId={userId} credits={credits} creditsTotal={creditsTotal} creditsLoading={creditsLoading} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
+          {searchMode === "produtores"   && <ProdutoresSearch userId={userId} credits={credits} creditsTotal={creditsTotal} creditsLoading={creditsLoading} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
         </div>
       )}
 
