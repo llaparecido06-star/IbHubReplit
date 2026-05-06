@@ -4347,8 +4347,6 @@ export interface BiProdutor {
   name_fantasia: string | null;
   regiao: string;
   estado: string | null;
-  tipos: string;
-  fundado: number | null;
   created_at: string;
 }
 

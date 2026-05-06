@@ -35,8 +35,6 @@ export const biProdutoresTable = pgTable("bi_produtores", {
   nameFantasia: text("name_fantasia"),
   regiao: text("regiao").notNull(),
   estado: text("estado"),
-  tipos: text("tipos").notNull(),
-  fundado: integer("fundado"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export const insertBiProdutorSchema = createInsertSchema(biProdutoresTable).omit({ id: true, createdAt: true });

@@ -270,11 +270,11 @@ router.get("/wine-imports/bi-search/produtores", async (req: Request, res: Respo
 
   let query = supabaseAdmin
     .from("bi_produtores")
-    .select("id, name, name_fantasia, regiao, estado, tipos, fundado, created_at", { count: "exact" })
+    .select("id, name, name_fantasia, regiao, estado, created_at", { count: "exact" })
     .order("name", { ascending: true })
     .range(offset, offset + limit - 1);
 
-  if (q) query = query.or(`name.ilike.%${q}%,name_fantasia.ilike.%${q}%,regiao.ilike.%${q}%,estado.ilike.%${q}%,tipos.ilike.%${q}%`);
+  if (q) query = query.or(`name.ilike.%${q}%,name_fantasia.ilike.%${q}%,regiao.ilike.%${q}%,estado.ilike.%${q}%`);
 
   const { data, error, count } = await query;
   if (error) return res.status(500).json({ error: error.message });

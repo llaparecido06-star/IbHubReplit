@@ -561,8 +561,8 @@ function BiEmptyState({ q, label }: { q: string; label: string }) {
   );
 }
 
-function BiErrorState({ paywall }: { paywall: boolean }) {
-  if (paywall) {
+function BiErrorState({ kind }: { kind: "paywall" | "credits" | "error" }) {
+  if (kind === "paywall") {
     return (
       <div style={{ padding: "20px 16px", backgroundColor: `${GOLD}08`, border: `1px solid ${GOLD}40`, borderRadius: 14, textAlign: "center" }}>
         <div style={{ fontSize: 28, marginBottom: 8 }}>🔒</div>
@@ -571,6 +571,17 @@ function BiErrorState({ paywall }: { paywall: boolean }) {
           Esta busca está disponível apenas para assinantes com acesso Ideal.BI.
         </div>
         <a href="/assinar" style={{ fontSize: 13, fontWeight: 700, color: GOLD, textDecoration: "none" }}>Ver planos →</a>
+      </div>
+    );
+  }
+  if (kind === "credits") {
+    return (
+      <div style={{ padding: "20px 16px", backgroundColor: "#fef2f2", border: "1px solid #fecaca", borderRadius: 14, textAlign: "center" }}>
+        <div style={{ fontSize: 28, marginBottom: 8 }}>🔑</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Consultas esgotadas</div>
+        <div style={{ fontSize: 13, color: MUTED }}>
+          Seus créditos de consulta acabaram. Novos créditos são liberados diariamente.
+        </div>
       </div>
     );
   }
@@ -677,10 +688,10 @@ function ImportadoresSearch({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [offset, setOffset] = useState(0);
-  const [error, setError] = useState<null | "paywall" | "error">(null);
+  const [error, setError] = useState<null | "paywall" | "credits" | "error">(null);
   const [searched, setSearched] = useState(false);
   const { credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal } = useCredits(userId);
-  const exhausted = credits === 0;
+  const exhausted = credits !== null && credits <= 0;
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -724,7 +735,7 @@ function ImportadoresSearch({ userId }: { userId: string }) {
       const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(fromOffset), ...(searchQ ? { q: searchQ } : {}) });
       const res = await fetch(`${apiBase}/wine-imports/bi-search/importadores?${params}`, { headers });
       if (res.status === 401 || res.status === 403) { setError("paywall"); return; }
-      if (res.status === 402) { setCredits(0); setError("error"); return; }
+      if (res.status === 402) { setCredits(0); setError("credits"); return; }
       if (!res.ok) { setError("error"); return; }
       const data = await res.json() as { items: BiImportador[]; total: number; credits_remaining: number; credits_total: number };
       if (append) {
@@ -744,7 +755,7 @@ function ImportadoresSearch({ userId }: { userId: string }) {
 
   const handleSubmit = (overrideQ?: string) => {
     const sq = (overrideQ ?? q).trim();
-    if (exhausted || !sq) return;
+    if (creditsLoading || exhausted || !sq) return;
     setShowSuggestions(false);
     setSubmittedQ(sq);
     setSearched(false);
@@ -768,16 +779,16 @@ function ImportadoresSearch({ userId }: { userId: string }) {
                 if (e.key === "Escape") setShowSuggestions(false);
                 if (e.key === "ArrowDown" && showSuggestions) { document.getElementById("imp-suggest-0")?.focus(); e.preventDefault(); }
               }}
-              placeholder={exhausted ? "Consultas esgotadas" : "Nome do importador, país ou segmento…"}
-              disabled={exhausted}
+              placeholder={creditsLoading ? "Carregando…" : exhausted ? "Consultas esgotadas" : "Nome do importador, país ou segmento…"}
+              disabled={creditsLoading || exhausted}
               style={{ flex: 1, padding: "10px 0", border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", backgroundColor: "transparent", color: NAVY }}
             />
             {q && <button onClick={() => { setQ(""); setSearched(false); setItems([]); setSuggestions([]); setShowSuggestions(false); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, padding: "0 8px" }}>×</button>}
           </div>
           <button
             onClick={() => handleSubmit()}
-            disabled={exhausted || !q.trim()}
-            style={{ padding: "0 18px", borderRadius: 12, border: "none", backgroundColor: exhausted || !q.trim() ? BORDER : NAVY, color: WHITE, fontWeight: 700, fontSize: 13, cursor: exhausted || !q.trim() ? "default" : "pointer", fontFamily: "inherit", flexShrink: 0 }}
+            disabled={creditsLoading || exhausted || !q.trim()}
+            style={{ padding: "0 18px", borderRadius: 12, border: "none", backgroundColor: creditsLoading || exhausted || !q.trim() ? BORDER : NAVY, color: WHITE, fontWeight: 700, fontSize: 13, cursor: creditsLoading || exhausted || !q.trim() ? "default" : "pointer", fontFamily: "inherit", flexShrink: 0 }}
           >
             {loading ? "…" : "Buscar"}
           </button>
@@ -811,7 +822,7 @@ function ImportadoresSearch({ userId }: { userId: string }) {
         </div>
       )}
       {loading ? <BiLoadingSkeleton /> : error ? (
-        <BiErrorState paywall={error === "paywall"} />
+        <BiErrorState kind={error ?? "error"} />
       ) : searched && items.length === 0 ? (
         <BiEmptyState q={submittedQ ?? ""} label="importador" />
       ) : searched ? (
@@ -914,7 +925,7 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [offset, setOffset] = useState(0);
-  const [error, setError] = useState<null | "paywall" | "error">(null);
+  const [error, setError] = useState<null | "paywall" | "credits" | "error">(null);
   const [searched, setSearched] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [upgradeHint, setUpgradeHint] = useState<string | null>(null);
@@ -927,7 +938,7 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
   const [revealCreditsTotal, setRevealCreditsTotal] = useState(0);
   const [revealingId, setRevealingId] = useState<string | null>(null);
   const [revealError, setRevealError] = useState<string | null>(null);
-  const exhausted = credits === 0;
+  const exhausted = credits !== null && credits <= 0;
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -986,7 +997,7 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
       const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(fromOffset), ...(searchQ ? { q: searchQ } : {}) });
       const res = await fetch(`${apiBase}/wine-imports/bi-search/exportadores?${params}`, { headers });
       if (res.status === 401 || res.status === 403) { setError("paywall"); return; }
-      if (res.status === 402) { setCredits(0); setError("error"); return; }
+      if (res.status === 402) { setCredits(0); setError("credits"); return; }
       if (!res.ok) { setError("error"); return; }
       const data = await res.json() as { items: BiExportador[]; total: number; credits_remaining: number; credits_total: number };
       if (append) { setItems(prev => [...prev, ...data.items]); setOffset(fromOffset); }
@@ -998,7 +1009,7 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
   };
 
   const handleSubmit = (overrideQ?: string) => {
-    if (exhausted) return;
+    if (credits === null || exhausted) return;
     const sq = (overrideQ ?? q).trim();
     if (!sq) return;
     setShowSuggestions(false);
@@ -1117,7 +1128,7 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
         </div>
       )}
 
-      {loading ? <BiLoadingSkeleton /> : error ? <BiErrorState paywall={error === "paywall"} /> : searched && items.length === 0 ? (
+      {loading ? <BiLoadingSkeleton /> : error ? <BiErrorState kind={error ?? "error"} /> : searched && items.length === 0 ? (
         <BiEmptyState q={submittedQ ?? ""} label="exportador" />
       ) : searched ? (
         <>
@@ -1499,10 +1510,10 @@ function ProdutoresSearch({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [offset, setOffset] = useState(0);
-  const [error, setError] = useState<null | "paywall" | "error">(null);
+  const [error, setError] = useState<null | "paywall" | "credits" | "error">(null);
   const [searched, setSearched] = useState(false);
   const { credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal } = useCredits(userId);
-  const exhausted = credits === 0;
+  const exhausted = credits !== null && credits <= 0;
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -1546,7 +1557,7 @@ function ProdutoresSearch({ userId }: { userId: string }) {
       const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(fromOffset), ...(searchQ ? { q: searchQ } : {}) });
       const res = await fetch(`${apiBase}/wine-imports/bi-search/produtores?${params}`, { headers });
       if (res.status === 401 || res.status === 403) { setError("paywall"); return; }
-      if (res.status === 402) { setCredits(0); setError("error"); return; }
+      if (res.status === 402) { setCredits(0); setError("credits"); return; }
       if (!res.ok) { setError("error"); return; }
       const data = await res.json() as { items: BiProdutor[]; total: number; credits_remaining: number; credits_total: number };
       if (append) { setItems(prev => [...prev, ...data.items]); setOffset(fromOffset); }
@@ -1558,7 +1569,7 @@ function ProdutoresSearch({ userId }: { userId: string }) {
   };
 
   const handleSubmit = (overrideQ?: string) => {
-    if (exhausted) return;
+    if (creditsLoading || exhausted) return;
     const sq = (overrideQ ?? q).trim();
     if (!sq) return;
     setShowSuggestions(false);
@@ -1584,16 +1595,16 @@ function ProdutoresSearch({ userId }: { userId: string }) {
                 if (e.key === "Escape") setShowSuggestions(false);
                 if (e.key === "ArrowDown" && showSuggestions) { document.getElementById("prod-suggest-0")?.focus(); e.preventDefault(); }
               }}
-              placeholder={exhausted ? "Consultas esgotadas" : "Nome do produtor, região, estado ou tipo…"}
-              disabled={exhausted}
+              placeholder={creditsLoading ? "Carregando…" : exhausted ? "Consultas esgotadas" : "Nome do produtor, região, estado ou tipo…"}
+              disabled={creditsLoading || exhausted}
               style={{ flex: 1, padding: "10px 0", border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", backgroundColor: "transparent", color: NAVY }}
             />
             {q && <button onClick={() => { setQ(""); setSearched(false); setItems([]); setSuggestions([]); setShowSuggestions(false); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, padding: "0 8px" }}>×</button>}
           </div>
           <button
             onClick={() => handleSubmit()}
-            disabled={exhausted || !q.trim()}
-            style={{ padding: "0 18px", borderRadius: 12, border: "none", backgroundColor: exhausted || !q.trim() ? BORDER : NAVY, color: WHITE, fontWeight: 700, fontSize: 13, cursor: exhausted || !q.trim() ? "default" : "pointer", fontFamily: "inherit", flexShrink: 0 }}
+            disabled={creditsLoading || exhausted || !q.trim()}
+            style={{ padding: "0 18px", borderRadius: 12, border: "none", backgroundColor: creditsLoading || exhausted || !q.trim() ? BORDER : NAVY, color: WHITE, fontWeight: 700, fontSize: 13, cursor: creditsLoading || exhausted || !q.trim() ? "default" : "pointer", fontFamily: "inherit", flexShrink: 0 }}
           >{loading ? "…" : "Buscar"}</button>
         </div>
         {showSuggestions && suggestions.length > 0 && !exhausted && (
@@ -1625,7 +1636,7 @@ function ProdutoresSearch({ userId }: { userId: string }) {
         </div>
       )}
       {loading ? <BiLoadingSkeleton /> : error ? (
-        <BiErrorState paywall={error === "paywall"} />
+        <BiErrorState kind={error ?? "error"} />
       ) : searched && items.length === 0 ? (
         <BiEmptyState q={submittedQ ?? ""} label="produtor" />
       ) : searched ? (
@@ -1655,13 +1666,7 @@ function ProdutoresSearch({ userId }: { userId: string }) {
                       {m.estado}
                     </span>
                   )}
-                  {m.fundado && (
-                    <span style={{ fontSize: 11, color: MUTED, backgroundColor: `${BORDER}`, borderRadius: 20, padding: "2px 9px" }}>
-                      🏛 Desde {m.fundado}
-                    </span>
-                  )}
                 </div>
-                {m.tipos && <div style={{ fontSize: 12, color: MUTED }}>{m.tipos}</div>}
               </div>
               <span style={{ fontSize: 10, fontWeight: 700, color: "#722f37", backgroundColor: "#f9f0f1", padding: "3px 8px", borderRadius: 20, flexShrink: 0, alignSelf: "flex-start" }}>
                 PRODUTOR
