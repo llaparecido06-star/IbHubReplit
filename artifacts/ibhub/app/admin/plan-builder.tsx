@@ -58,6 +58,7 @@ interface Plan {
   delivery_strategy?: DeliveryStrategy;
   stripe_price_id?: string | null;
   ai_search_credits?: number | null;
+  reveal_credits?: number | null;
 }
 
 interface ModalState {
@@ -70,6 +71,7 @@ interface ModalState {
   delivery: DeliveryStrategy;
   stripeId: string;
   aiCredits: string;
+  revealCredits: string;
 }
 
 function centsToString(cents: number): string {
@@ -191,18 +193,29 @@ const PlanModal = memo(({
             </Section>
 
             {/* ── Ideal.BI ── */}
-            <Section label="Ideal.BI — Busca com IA">
-              <Field label="CONSULTAS IA / MÊS" hint="0 = sem acesso à Busca com IA. Renovado todo dia 1º do mês.">
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <View style={[s.input, { borderColor: colors.border, flex: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 12 }]}>
-                    <Feather name="zap" size={14} color={colors.gold} style={{ marginRight: 6 }} />
-                    <TextInput style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: Platform.OS === "ios" ? 12 : 10 }}
-                      placeholder="0" placeholderTextColor={colors.mutedForeground}
-                      value={state.aiCredits} onChangeText={v => onChange("aiCredits", v.replace(/[^0-9]/g, ""))} keyboardType="number-pad" />
-                    <Text style={{ fontSize: 13, color: colors.mutedForeground }}>consultas</Text>
-                  </View>
+            <Section label="Ideal.BI — Créditos Mensais">
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Field label="⚡ CONSULTAS IA / MÊS" hint="0 = sem IA.">
+                    <View style={[s.input, { borderColor: colors.border, flexDirection: "row", alignItems: "center", paddingHorizontal: 12 }]}>
+                      <Feather name="zap" size={14} color={colors.gold} style={{ marginRight: 6 }} />
+                      <TextInput style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: Platform.OS === "ios" ? 12 : 10 }}
+                        placeholder="0" placeholderTextColor={colors.mutedForeground}
+                        value={state.aiCredits} onChangeText={v => onChange("aiCredits", v.replace(/[^0-9]/g, ""))} keyboardType="number-pad" />
+                    </View>
+                  </Field>
                 </View>
-              </Field>
+                <View style={{ flex: 1 }}>
+                  <Field label="🔓 ESPECIAIS / MÊS" hint="0 = sem dados financeiros.">
+                    <View style={[s.input, { borderColor: colors.border, flexDirection: "row", alignItems: "center", paddingHorizontal: 12 }]}>
+                      <Feather name="unlock" size={14} color={colors.navy} style={{ marginRight: 6 }} />
+                      <TextInput style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: Platform.OS === "ios" ? 12 : 10 }}
+                        placeholder="0" placeholderTextColor={colors.mutedForeground}
+                        value={state.revealCredits} onChangeText={v => onChange("revealCredits", v.replace(/[^0-9]/g, ""))} keyboardType="number-pad" />
+                    </View>
+                  </Field>
+                </View>
+              </View>
             </Section>
 
             {/* ── Slides ── */}
@@ -331,7 +344,7 @@ export default function AdminPlanBuilderScreen() {
 
   const emptyModal = (): ModalState => ({
     name: "", subtitle: "", description: "", price: "0",
-    originalPrice: "", features: [], delivery: "NONE", stripeId: "", aiCredits: "0",
+    originalPrice: "", features: [], delivery: "NONE", stripeId: "", aiCredits: "0", revealCredits: "0",
   });
 
   const [modalState, setModalState] = useState<ModalState>(emptyModal());
@@ -388,6 +401,7 @@ export default function AdminPlanBuilderScreen() {
     delivery:      (plan.delivery_strategy ?? "NONE") as DeliveryStrategy,
     stripeId:      plan.stripe_price_id ?? "",
     aiCredits:     String(plan.ai_search_credits ?? 0),
+    revealCredits: String(plan.reveal_credits ?? 0),
   });
 
   const openEdit = (plan: Plan) => { setEditPlan(plan); setModalState(planToModal(plan)); setShowEditModal(true); };
@@ -415,6 +429,7 @@ export default function AdminPlanBuilderScreen() {
     delivery_strategy:     modalState.delivery,
     stripe_price_id:       modalState.stripeId.trim() || null,
     ai_search_credits:     Math.max(0, parseInt(modalState.aiCredits, 10) || 0),
+    reveal_credits:        Math.max(0, parseInt(modalState.revealCredits, 10) || 0),
   });
 
   const handleSaveEdit = async () => {
@@ -507,6 +522,7 @@ export default function AdminPlanBuilderScreen() {
             const generalFeats = plan.features.filter(f => !f.startsWith("mercado:"));
             const marketFeats  = plan.features.filter(f => f.startsWith("mercado:"));
             const aiCredits    = plan.ai_search_credits ?? 0;
+            const revealCredits = plan.reveal_credits ?? 0;
 
             return (
               <View key={plan.id} style={[s.planCard, { backgroundColor: "#fff", borderColor: colors.border, opacity: plan.is_active ? 1 : 0.6 }]}>
@@ -550,6 +566,15 @@ export default function AdminPlanBuilderScreen() {
                       {aiCredits > 0 ? `${aiCredits} consultas IA/mês` : "Sem busca IA"}
                     </Text>
                   </View>
+                  {/* Reveal Credits */}
+                  {revealCredits > 0 && (
+                    <View style={[s.badge, { backgroundColor: colors.navy + "12", borderColor: colors.navy + "30" }]}>
+                      <Feather name="unlock" size={11} color={colors.navy} />
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: colors.navy }}>
+                        {revealCredits} especiais/mês
+                      </Text>
+                    </View>
+                  )}
                   {/* Delivery */}
                   {plan.delivery_strategy && plan.delivery_strategy !== "NONE" && (
                     <View style={[s.badge, { backgroundColor: "#ede9fe", borderColor: "#ddd6fe" }]}>

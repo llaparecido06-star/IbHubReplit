@@ -23,8 +23,11 @@ import {
   changeUserPlan,
   getUserCredits,
   addUserCredits,
+  getUserRevealCredits,
+  addUserRevealCredits,
   type AdminUser,
   type UserCredits,
+  type UserRevealCredits,
 } from "@/services/admin-api";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/context/AuthContext";
@@ -64,6 +67,8 @@ export default function AdminCRMScreen() {
   const [planOptions, setPlanOptions] = useState<PlanOption[]>([]);
   const [userCredits, setUserCredits] = useState<UserCredits | null>(null);
   const [creditsToAdd, setCreditsToAdd] = useState("");
+  const [userRevealCredits, setUserRevealCredits] = useState<UserRevealCredits | null>(null);
+  const [revealCreditsToAdd, setRevealCreditsToAdd] = useState("");
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -104,13 +109,18 @@ export default function AdminCRMScreen() {
       setSelectedUser(null);
       setUserCredits(null);
       setCreditsToAdd("");
+      setUserRevealCredits(null);
+      setRevealCreditsToAdd("");
     } else {
       setSelectedUser(user);
       setPlanEdit(user.plan);
       setIsCourtesy(!!user.courtesy_until && new Date(user.courtesy_until) > new Date());
       setUserCredits(null);
       setCreditsToAdd("");
+      setUserRevealCredits(null);
+      setRevealCreditsToAdd("");
       getUserCredits(user.id).then(setUserCredits).catch(() => {});
+      getUserRevealCredits(user.id).then(setUserRevealCredits).catch(() => {});
     }
   };
 
@@ -234,6 +244,25 @@ export default function AdminCRMScreen() {
       Alert.alert(
         "Créditos atualizados",
         `${amount > 0 ? `+${amount}` : amount} crédito${Math.abs(amount) === 1 ? "" : "s"} aplicado${Math.abs(amount) === 1 ? "" : "s"}.\nAgora: ${updated.credits_remaining}/${updated.credits_total}`,
+      );
+    } catch (e: unknown) {
+      Alert.alert("Erro", e instanceof Error ? e.message : "Erro ao ajustar créditos.");
+    }
+  };
+
+  const handleAddRevealCredits = async (adminUser: AdminUser) => {
+    const amount = parseInt(revealCreditsToAdd, 10);
+    if (isNaN(amount) || amount === 0) {
+      Alert.alert("Valor inválido", "Insira um número diferente de zero.");
+      return;
+    }
+    try {
+      const updated = await addUserRevealCredits(adminUser.id, amount);
+      setUserRevealCredits(updated);
+      setRevealCreditsToAdd("");
+      Alert.alert(
+        "Créditos atualizados",
+        `${amount > 0 ? `+${amount}` : amount} consulta${Math.abs(amount) === 1 ? "" : "s"} especial${Math.abs(amount) === 1 ? "" : "is"} aplicada${Math.abs(amount) === 1 ? "" : "s"}.\nAgora: ${updated.credits_remaining}/${updated.credits_total}`,
       );
     } catch (e: unknown) {
       Alert.alert("Erro", e instanceof Error ? e.message : "Erro ao ajustar créditos.");
@@ -425,6 +454,38 @@ export default function AdminCRMScreen() {
                               onPress={() => handleAddCredits(user)}
                               disabled={!creditsToAdd || creditsToAdd === "0"}
                               style={[styles.savePlanBtn, { flex: 0, paddingHorizontal: 18, opacity: !creditsToAdd || creditsToAdd === "0" ? 0.4 : 1, backgroundColor: colors.gold }]}
+                            >
+                              <Text style={styles.savePlanBtnText}>Aplicar</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        {/* ── Consultas Especiais ─────────────────────── */}
+                        <View style={[styles.planSection, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                            <Text style={[styles.sectionTitle, { color: colors.navy }]}>🔓 Consultas Especiais</Text>
+                            <Text style={{ fontSize: 13, color: colors.mutedForeground }}>
+                              {userRevealCredits
+                                ? `${userRevealCredits.credits_remaining} / ${userRevealCredits.credits_total}`
+                                : "—"}
+                            </Text>
+                          </View>
+                          <Text style={{ fontSize: 11, color: colors.mutedForeground, marginBottom: 8 }}>
+                            Positivo = acrescentar · Negativo = remover
+                          </Text>
+                          <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                            <TextInput
+                              style={[styles.creditInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: "#fff" }]}
+                              keyboardType="numeric"
+                              placeholder="Ex: 5 ou -2"
+                              placeholderTextColor={colors.mutedForeground}
+                              value={revealCreditsToAdd}
+                              onChangeText={setRevealCreditsToAdd}
+                            />
+                            <TouchableOpacity
+                              onPress={() => handleAddRevealCredits(user)}
+                              disabled={!revealCreditsToAdd || revealCreditsToAdd === "0"}
+                              style={[styles.savePlanBtn, { flex: 0, paddingHorizontal: 18, opacity: !revealCreditsToAdd || revealCreditsToAdd === "0" ? 0.4 : 1, backgroundColor: colors.navy }]}
                             >
                               <Text style={styles.savePlanBtnText}>Aplicar</Text>
                             </TouchableOpacity>
