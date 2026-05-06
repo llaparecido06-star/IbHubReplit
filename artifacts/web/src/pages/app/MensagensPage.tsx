@@ -61,10 +61,16 @@ function parseAttachment(content: string): { url: string; label?: string } | nul
   return null;
 }
 
-const AUDIO_EXTS = ["mp3", "m4a", "mp4", "ogg", "wav", "aac", "webm"];
+const AUDIO_EXTS = ["mp3", "m4a", "ogg", "wav", "aac"];
 function isAudioUrl(url: string) {
   const ext = url.split("?")[0].split(".").pop()?.toLowerCase() ?? "";
   return AUDIO_EXTS.includes(ext);
+}
+
+const VIDEO_EXTS = ["mp4", "webm", "mov", "avi", "mpeg", "mpg", "mkv"];
+function isVideoUrl(url: string) {
+  const ext = url.split("?")[0].split(".").pop()?.toLowerCase() ?? "";
+  return VIDEO_EXTS.includes(ext);
 }
 
 type MessageKind = "audio" | "image" | "video" | "file" | "text";
@@ -87,6 +93,7 @@ function resolveAttachmentKind(kind: MessageKind | null, url: string): "audio" |
   }
   if (isAudioUrl(url)) return "audio";
   if (isImageUrl(url)) return "image";
+  if (isVideoUrl(url)) return "video";
   return "file";
 }
 
@@ -401,6 +408,8 @@ export default function MensagensPage() {
     setSending(true);
 
     let content = newMsg.trim();
+    // Capture the message_type for the attachment before clearAttach() runs
+    let attachMsgType: string | undefined;
 
     if (attachFile) {
       setUploading(true);
@@ -409,6 +418,10 @@ export default function MensagensPage() {
       // browsers), upload it under the inferred mime so the server
       // allowlist accepts it.
       const v = validateChatFile(attachFile);
+      const resolvedMime = v.ok ? v.mimeType : attachFile.type;
+      if (resolvedMime.startsWith("video/")) attachMsgType = "video";
+      else if (resolvedMime.startsWith("image/")) attachMsgType = "image";
+      else if (resolvedMime.startsWith("audio/")) attachMsgType = "audio";
       const uploadFile =
         v.ok && attachFile.type !== v.mimeType
           ? new File([attachFile], attachFile.name, { type: v.mimeType })
@@ -429,13 +442,18 @@ export default function MensagensPage() {
     }
 
     if (content) {
-      const ok = await sendWebMessage(selected.id, userId, content, { companyPageId: activeCompany?.id ?? null });
+      const isAttach = isAttachmentMsg(content);
+      const ok = await sendWebMessage(selected.id, userId, content, {
+        companyPageId: activeCompany?.id ?? null,
+        messageType: isAttach ? attachMsgType : undefined,
+      });
       if (ok) {
         setMessages(prev => [...prev, {
           id: `tmp-${Date.now()}`,
           conversation_id: selected.id,
           sender_id: userId,
           content,
+          message_type: isAttach ? (attachMsgType ?? null) : null,
           created_at: new Date().toISOString(),
           sender: { id: userId, full_name: profile?.full_name ?? "Eu", avatar_url: profile?.avatar_url },
         }]);
