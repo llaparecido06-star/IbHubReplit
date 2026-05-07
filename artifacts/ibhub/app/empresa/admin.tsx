@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
@@ -82,6 +83,7 @@ interface ApplicantsModalProps {
 
 function ApplicantsModal({ opportunity, visible, onClose }: ApplicantsModalProps) {
   const colors = useColors();
+  const { t } = useTranslation();
   const [applicants, setApplicants] = useState<API.CompanyAdminApplicant[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -117,7 +119,7 @@ function ApplicantsModal({ opportunity, visible, onClose }: ApplicantsModalProps
               {opportunity?.title}
             </Text>
             <Text style={[styles.modalSub, { color: colors.mutedForeground }]}>
-              {applicants.length} candidato{applicants.length !== 1 ? "s" : ""}
+              {t("empresa_admin_screen.applicants_count", { count: applicants.length })}
             </Text>
           </View>
         </View>
@@ -130,7 +132,7 @@ function ApplicantsModal({ opportunity, visible, onClose }: ApplicantsModalProps
           <View style={styles.center}>
             <Feather name="users" size={40} color={colors.border} />
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              Nenhum candidato ainda
+              {t("empresa_admin_screen.applicants_empty")}
             </Text>
           </View>
         ) : (
@@ -154,7 +156,7 @@ function ApplicantsModal({ opportunity, visible, onClose }: ApplicantsModalProps
                         </Text>
                       ) : null}
                       <Text style={[styles.applicantDate, { color: colors.mutedForeground }]}>
-                        Candidatou-se em {fmtDate(item.created_at)}
+                        {t("empresa_admin_screen.applied_on", { date: fmtDate(item.created_at) })}
                       </Text>
                     </View>
                   </View>
@@ -173,7 +175,7 @@ function ApplicantsModal({ opportunity, visible, onClose }: ApplicantsModalProps
                       onPress={() => handleStatusChange(item)}
                     >
                       <Text style={[styles.statusText, { color: statusMeta.color }]}>
-                        {statusMeta.label}
+                        {t(`empresa_admin_screen.status_${item.status}`, { defaultValue: statusMeta.label })}
                       </Text>
                       <Feather name="chevron-right" size={12} color={statusMeta.color} />
                     </TouchableOpacity>
@@ -186,17 +188,17 @@ function ApplicantsModal({ opportunity, visible, onClose }: ApplicantsModalProps
                           if (url) {
                             Linking.openURL(url);
                           } else {
-                            Alert.alert("Erro", "Não foi possível abrir o CV.");
+                            Alert.alert(t("empresa_admin_screen.cv_error_title"), t("empresa_admin_screen.cv_error_msg"));
                           }
                         }}
                       >
                         <Feather name="file-text" size={14} color={colors.gold} />
-                        <Text style={[styles.cvBtnText, { color: colors.gold }]}>Ver CV</Text>
+                        <Text style={[styles.cvBtnText, { color: colors.gold }]}>{t("empresa_admin_screen.see_cv")}</Text>
                       </TouchableOpacity>
                     ) : (
                       <View style={[styles.cvBtn, { backgroundColor: colors.border + "40", borderRadius: 8 }]}>
                         <Feather name="file-text" size={14} color={colors.mutedForeground} />
-                        <Text style={[styles.cvBtnText, { color: colors.mutedForeground }]}>Sem CV</Text>
+                        <Text style={[styles.cvBtnText, { color: colors.mutedForeground }]}>{t("empresa_admin_screen.no_cv")}</Text>
                       </View>
                     )}
                   </View>
@@ -220,6 +222,7 @@ interface AttendeesModalProps {
 
 function AttendeesModal({ event, visible, onClose }: AttendeesModalProps) {
   const colors = useColors();
+  const { t } = useTranslation();
   const [attendees, setAttendees] = useState<API.AppEventAttendee[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -244,7 +247,7 @@ function AttendeesModal({ event, visible, onClose }: AttendeesModalProps) {
               {event?.title}
             </Text>
             <Text style={[styles.modalSub, { color: colors.mutedForeground }]}>
-              {attendees.length}{event?.capacity ? ` / ${event.capacity}` : ""} inscritos
+              {t("empresa_admin_screen.attendees_count", { count: attendees.length })}{event?.capacity ? ` / ${event.capacity}` : ""}
             </Text>
           </View>
         </View>
@@ -257,7 +260,7 @@ function AttendeesModal({ event, visible, onClose }: AttendeesModalProps) {
           <View style={styles.center}>
             <Feather name="calendar" size={40} color={colors.border} />
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              Nenhum inscrito ainda
+              {t("empresa_admin_screen.attendees_empty")}
             </Text>
           </View>
         ) : (
@@ -301,6 +304,7 @@ interface EditOppModalProps {
 
 function EditOppModal({ opp, visible, onClose, onSaved }: EditOppModalProps) {
   const colors = useColors();
+  const { t } = useTranslation();
   const isMarket = opp?.type === "marketplace";
   const catOptions = isMarket ? MARKET_CATS : JOB_CATS;
 
@@ -336,7 +340,7 @@ function EditOppModal({ opp, visible, onClose, onSaved }: EditOppModalProps) {
     const expiresIso = trimmedExpiry ? ddmmyyyyToISO(trimmedExpiry) : null;
     if (trimmedExpiry && !expiresIso) {
       setSaving(false);
-      Alert.alert("Data inválida", "Use o formato DD/MM/AAAA.");
+      Alert.alert(t("empresa_admin_screen.invalid_date_title"), t("empresa_admin_screen.invalid_date_msg"));
       return;
     }
     const baseFields: Record<string, unknown> = {
@@ -360,7 +364,7 @@ function EditOppModal({ opp, visible, onClose, onSaved }: EditOppModalProps) {
       onSaved(baseFields as Partial<API.CompanyAdminOpportunity>);
       onClose();
     } else {
-      Alert.alert("Erro", "Não foi possível salvar. Tente novamente.");
+      Alert.alert(t("empresa_admin_screen.save_error_title"), t("empresa_admin_screen.save_error_msg"));
     }
   };
 
@@ -399,7 +403,7 @@ function EditOppModal({ opp, visible, onClose, onSaved }: EditOppModalProps) {
               <Feather name="x" size={22} color={colors.foreground} />
             </TouchableOpacity>
             <Text style={[styles.modalTitle, { color: colors.foreground, flex: 1, marginLeft: 12 }]}>
-              Editar {isMarket ? "Anúncio" : "Vaga"}
+              {isMarket ? t("empresa_admin_screen.edit_opp_title_ad") : t("empresa_admin_screen.edit_opp_title_job")}
             </Text>
             <TouchableOpacity
               style={[styles.saveBtn, { backgroundColor: colors.gold, opacity: saving ? 0.6 : 1 }]}
@@ -408,7 +412,7 @@ function EditOppModal({ opp, visible, onClose, onSaved }: EditOppModalProps) {
             >
               {saving
                 ? <ActivityIndicator size="small" color="#fff" />
-                : <Text style={styles.saveBtnText}>Salvar</Text>
+                : <Text style={styles.saveBtnText}>{t("empresa_admin_screen.save_btn")}</Text>
               }
             </TouchableOpacity>
           </View>
@@ -416,31 +420,31 @@ function EditOppModal({ opp, visible, onClose, onSaved }: EditOppModalProps) {
           <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
             <View style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
-                Título *
+                {t("empresa_admin_screen.field_title_label")}
               </Text>
               <TextInput
                 style={[styles.textInput, { backgroundColor: colors.secondary, color: colors.foreground, borderColor: colors.border }]}
                 value={title}
                 onChangeText={setTitle}
-                placeholder="Título do anúncio"
+                placeholder={t("empresa_admin_screen.field_title_placeholder_ad")}
                 placeholderTextColor={colors.mutedForeground}
               />
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Categoria</Text>
+              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("empresa_admin_screen.field_category")}</Text>
               {renderChips(catOptions, category, setCategory)}
             </View>
 
             <View style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
-                Descrição
+                {t("empresa_admin_screen.field_description")}
               </Text>
               <TextInput
                 style={[styles.textInput, styles.textArea, { backgroundColor: colors.secondary, color: colors.foreground, borderColor: colors.border }]}
                 value={desc}
                 onChangeText={setDesc}
-                placeholder="Descreva o anúncio..."
+                placeholder={t("empresa_admin_screen.field_description_placeholder_ad")}
                 placeholderTextColor={colors.mutedForeground}
                 multiline
                 numberOfLines={4}
@@ -450,17 +454,17 @@ function EditOppModal({ opp, visible, onClose, onSaved }: EditOppModalProps) {
             {!isMarket ? (
               <>
                 <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Tipo de contrato</Text>
+                  <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("empresa_admin_screen.field_contract_type")}</Text>
                   {renderChips(CONTRACT_TYPES, contract, setContract)}
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Empresa</Text>
+                  <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("empresa_admin_screen.field_company")}</Text>
                   <TextInput
                     style={[styles.textInput, { backgroundColor: colors.secondary, color: colors.foreground, borderColor: colors.border }]}
                     value={company}
                     onChangeText={setCompany}
-                    placeholder="Nome da empresa"
+                    placeholder={t("empresa_admin_screen.field_company_placeholder")}
                     placeholderTextColor={colors.mutedForeground}
                   />
                 </View>
@@ -469,35 +473,35 @@ function EditOppModal({ opp, visible, onClose, onSaved }: EditOppModalProps) {
 
             <View style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
-                {isMarket ? "Preço" : "Salário"}
+                {isMarket ? t("empresa_admin_screen.field_price") : t("empresa_admin_screen.field_salary")}
               </Text>
               <TextInput
                 style={[styles.textInput, { backgroundColor: colors.secondary, color: colors.foreground, borderColor: colors.border }]}
                 value={money}
                 onChangeText={setMoney}
-                placeholder={isMarket ? "Ex: R$ 150,00" : "Ex: R$ 3.500 - 5.000"}
+                placeholder={isMarket ? t("empresa_admin_screen.field_price_placeholder") : t("empresa_admin_screen.field_salary_placeholder")}
                 placeholderTextColor={colors.mutedForeground}
               />
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Localização</Text>
+              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("empresa_admin_screen.field_location")}</Text>
               <TextInput
                 style={[styles.textInput, { backgroundColor: colors.secondary, color: colors.foreground, borderColor: colors.border }]}
                 value={location}
                 onChangeText={setLocation}
-                placeholder="Ex: São Paulo, SP"
+                placeholder={t("empresa_admin_screen.field_location_placeholder")}
                 placeholderTextColor={colors.mutedForeground}
               />
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Expira em</Text>
+              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("empresa_admin_screen.field_expiry")}</Text>
               <TextInput
                 style={[styles.textInput, { backgroundColor: colors.secondary, color: colors.foreground, borderColor: colors.border }]}
                 value={expiry}
                 onChangeText={(v) => setExpiry(maskDate(v))}
-                placeholder="DD/MM/AAAA"
+                placeholder={t("empresa_admin_screen.field_expiry_placeholder")}
                 placeholderTextColor={colors.mutedForeground}
                 keyboardType="numeric"
                 maxLength={10}
@@ -505,12 +509,12 @@ function EditOppModal({ opp, visible, onClose, onSaved }: EditOppModalProps) {
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>E-mail de contato</Text>
+              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("empresa_admin_screen.field_email")}</Text>
               <TextInput
                 style={[styles.textInput, { backgroundColor: colors.secondary, color: colors.foreground, borderColor: colors.border }]}
                 value={contact}
                 onChangeText={setContact}
-                placeholder="contato@empresa.com"
+                placeholder={t("empresa_admin_screen.field_email_placeholder")}
                 placeholderTextColor={colors.mutedForeground}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -534,6 +538,7 @@ interface EditEventModalProps {
 
 function EditEventModal({ event, visible, onClose, onSaved }: EditEventModalProps) {
   const colors = useColors();
+  const { t } = useTranslation();
 
   const [title,    setTitle]    = useState("");
   const [desc,     setDesc]     = useState("");
@@ -565,7 +570,7 @@ function EditEventModal({ event, visible, onClose, onSaved }: EditEventModalProp
       onSaved({ ...fields });
       onClose();
     } else {
-      Alert.alert("Erro", "Não foi possível salvar. Tente novamente.");
+      Alert.alert(t("empresa_admin_screen.save_error_title"), t("empresa_admin_screen.save_error_msg"));
     }
   };
 
@@ -581,7 +586,7 @@ function EditEventModal({ event, visible, onClose, onSaved }: EditEventModalProp
               <Feather name="x" size={22} color={colors.foreground} />
             </TouchableOpacity>
             <Text style={[styles.modalTitle, { color: colors.foreground, flex: 1, marginLeft: 12 }]}>
-              Editar Evento
+              {t("empresa_admin_screen.edit_event_title")}
             </Text>
             <TouchableOpacity
               style={[styles.saveBtn, { backgroundColor: colors.gold, opacity: saving ? 0.6 : 1 }]}
@@ -590,30 +595,30 @@ function EditEventModal({ event, visible, onClose, onSaved }: EditEventModalProp
             >
               {saving
                 ? <ActivityIndicator size="small" color="#fff" />
-                : <Text style={styles.saveBtnText}>Salvar</Text>
+                : <Text style={styles.saveBtnText}>{t("empresa_admin_screen.save_btn")}</Text>
               }
             </TouchableOpacity>
           </View>
 
           <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Título *</Text>
+              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("empresa_admin_screen.field_event_title_label")}</Text>
               <TextInput
                 style={[styles.textInput, { backgroundColor: colors.secondary, color: colors.foreground, borderColor: colors.border }]}
                 value={title}
                 onChangeText={setTitle}
-                placeholder="Título do evento"
+                placeholder={t("empresa_admin_screen.field_event_title_placeholder")}
                 placeholderTextColor={colors.mutedForeground}
               />
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Descrição</Text>
+              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("empresa_admin_screen.field_description")}</Text>
               <TextInput
                 style={[styles.textInput, styles.textArea, { backgroundColor: colors.secondary, color: colors.foreground, borderColor: colors.border }]}
                 value={desc}
                 onChangeText={setDesc}
-                placeholder="Descreva o evento..."
+                placeholder={t("empresa_admin_screen.field_event_description_placeholder")}
                 placeholderTextColor={colors.mutedForeground}
                 multiline
                 numberOfLines={4}
@@ -621,23 +626,23 @@ function EditEventModal({ event, visible, onClose, onSaved }: EditEventModalProp
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Local / Link</Text>
+              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("empresa_admin_screen.field_event_location")}</Text>
               <TextInput
                 style={[styles.textInput, { backgroundColor: colors.secondary, color: colors.foreground, borderColor: colors.border }]}
                 value={location}
                 onChangeText={setLocation}
-                placeholder="Ex: São Paulo, SP ou link do evento"
+                placeholder={t("empresa_admin_screen.field_event_location_placeholder")}
                 placeholderTextColor={colors.mutedForeground}
               />
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Vagas (capacidade)</Text>
+              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("empresa_admin_screen.field_event_capacity")}</Text>
               <TextInput
                 style={[styles.textInput, { backgroundColor: colors.secondary, color: colors.foreground, borderColor: colors.border }]}
                 value={capacity}
                 onChangeText={setCapacity}
-                placeholder="Deixe em branco para ilimitado"
+                placeholder={t("empresa_admin_screen.field_event_capacity_placeholder")}
                 placeholderTextColor={colors.mutedForeground}
                 keyboardType="number-pad"
               />
@@ -653,6 +658,7 @@ function EditEventModal({ event, visible, onClose, onSaved }: EditEventModalProp
 
 export default function CompanyAdminScreen() {
   const colors = useColors();
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -708,11 +714,11 @@ export default function CompanyAdminScreen() {
 
   const handleDeleteOpp = (opp: API.CompanyAdminOpportunity) => {
     Alert.alert(
-      "Excluir anúncio",
-      `Deseja excluir "${opp.title}"?\n\nEsta ação não pode ser desfeita.`,
+      t("empresa_admin_screen.delete_opp_title"),
+      t("empresa_admin_screen.delete_opp_msg", { title: opp.title }),
       [
-        { text: "Cancelar", style: "cancel" },
-        { text: "Excluir", style: "destructive", onPress: async () => {
+        { text: t("empresa_admin_screen.cancel"), style: "cancel" },
+        { text: t("empresa_admin_screen.delete_btn"), style: "destructive", onPress: async () => {
           const ok = await API.deleteOpportunityById(opp.id);
           if (ok) {
             setVagas(prev    => prev.filter(v => v.id !== opp.id));
@@ -725,11 +731,11 @@ export default function CompanyAdminScreen() {
 
   const handleDeleteEvent = (event: API.CompanyAdminEvent) => {
     Alert.alert(
-      "Excluir evento",
-      `Deseja excluir "${event.title}"?\n\nEsta ação não pode ser desfeita.`,
+      t("empresa_admin_screen.delete_event_title"),
+      t("empresa_admin_screen.delete_event_msg", { title: event.title }),
       [
-        { text: "Cancelar", style: "cancel" },
-        { text: "Excluir", style: "destructive", onPress: async () => {
+        { text: t("empresa_admin_screen.cancel"), style: "cancel" },
+        { text: t("empresa_admin_screen.delete_btn"), style: "destructive", onPress: async () => {
           const ok = await API.deleteEventById(event.id);
           if (ok) setEventos(prev => prev.filter(e => e.id !== event.id));
         }},
@@ -750,23 +756,23 @@ export default function CompanyAdminScreen() {
   const openSoldMenu = (opp: API.CompanyAdminOpportunity) => {
     if (opp.sold) {
       Alert.alert(
-        "Vendido",
-        "Desmarcar como vendido?",
+        t("empresa_admin_screen.sold_title"),
+        t("empresa_admin_screen.sold_unmark_msg"),
         [
-          { text: "Cancelar", style: "cancel" },
-          { text: "Desmarcar", onPress: () => API.markOpportunitySold(opp.id, false, false).then(ok => {
+          { text: t("empresa_admin_screen.cancel"), style: "cancel" },
+          { text: t("empresa_admin_screen.sold_unmark_btn"), onPress: () => API.markOpportunitySold(opp.id, false, false).then(ok => {
             if (ok) setAnuncios(prev => prev.map(a => a.id === opp.id ? { ...a, sold: false, sold_via_ibhub: false } : a));
           })},
         ]
       );
     } else {
       Alert.alert(
-        "Marcar como vendido",
-        "Como foi a venda?",
+        t("empresa_admin_screen.mark_sold_title"),
+        t("empresa_admin_screen.mark_sold_msg"),
         [
-          { text: "Cancelar", style: "cancel" },
-          { text: "Vendido fora do ibhub", onPress: () => handleToggleSold(opp, false) },
-          { text: "Vendido pelo ibhub",    onPress: () => handleToggleSold(opp, true) },
+          { text: t("empresa_admin_screen.cancel"), style: "cancel" },
+          { text: t("empresa_admin_screen.sold_outside"), onPress: () => handleToggleSold(opp, false) },
+          { text: t("empresa_admin_screen.sold_via_ibhub"), onPress: () => handleToggleSold(opp, true) },
         ]
       );
     }
@@ -798,7 +804,7 @@ export default function CompanyAdminScreen() {
             <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>{item.location}</Text>
           ) : null}
           <Text style={[styles.cardDate, { color: colors.mutedForeground }]}>
-            Publicada em {fmtDate(item.created_at)}
+            {t("empresa_admin_screen.published_on", { date: fmtDate(item.created_at) })}
           </Text>
         </View>
         <TouchableOpacity
@@ -807,14 +813,14 @@ export default function CompanyAdminScreen() {
         >
           <View style={[styles.activeDot, { backgroundColor: item.is_active ? "#2ecc71" : colors.mutedForeground }]} />
           <Text style={[styles.activeBadgeText, { color: item.is_active ? "#2ecc71" : colors.mutedForeground }]}>
-            {item.is_active ? "Ativa" : "Inativa"}
+            {item.is_active ? t("empresa_admin_screen.active") : t("empresa_admin_screen.inactive")}
           </Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.statsRow}>
-        <StatBox icon="eye"   label="Views"      value={fmtCount(item.view_count ?? 0)}         color="#3498db" />
-        <StatBox icon="users" label="Candidatos"  value={fmtCount(item.applications_count ?? 0)} color={colors.gold} />
+        <StatBox icon="eye"   label={t("empresa_admin_screen.stat_views")}      value={fmtCount(item.view_count ?? 0)}         color="#3498db" />
+        <StatBox icon="users" label={t("empresa_admin_screen.stat_candidates")} value={fmtCount(item.applications_count ?? 0)} color={colors.gold} />
       </View>
 
       <TouchableOpacity
@@ -823,7 +829,7 @@ export default function CompanyAdminScreen() {
       >
         <Feather name="user-check" size={15} color="#fff" />
         <Text style={styles.ctaBtnText}>
-          Ver candidatos ({item.applications_count ?? 0})
+          {t("empresa_admin_screen.see_candidates", { count: item.applications_count ?? 0 })}
         </Text>
       </TouchableOpacity>
 
@@ -833,7 +839,7 @@ export default function CompanyAdminScreen() {
           onPress={() => setEditingOpp(item)}
         >
           <Feather name="edit-2" size={13} color={colors.mutedForeground} />
-          <Text style={[styles.actionBtnText, { color: colors.mutedForeground }]}>Editar</Text>
+          <Text style={[styles.actionBtnText, { color: colors.mutedForeground }]}>{t("empresa_admin_screen.edit_btn")}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionBtn, { borderColor: colors.border, flex: 1 }]}
@@ -841,7 +847,7 @@ export default function CompanyAdminScreen() {
         >
           <Feather name={item.is_active ? "pause-circle" : "play-circle"} size={13} color={colors.mutedForeground} />
           <Text style={[styles.actionBtnText, { color: colors.mutedForeground }]}>
-            {item.is_active ? "Encerrar" : "Reativar"}
+            {item.is_active ? t("empresa_admin_screen.close_btn") : t("empresa_admin_screen.reactivate_btn")}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -849,7 +855,7 @@ export default function CompanyAdminScreen() {
           onPress={() => handleDeleteOpp(item)}
         >
           <Feather name="trash-2" size={13} color="#e74c3c" />
-          <Text style={[styles.actionBtnText, { color: "#e74c3c" }]}>Excluir</Text>
+          <Text style={[styles.actionBtnText, { color: "#e74c3c" }]}>{t("empresa_admin_screen.delete_btn_label")}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -879,7 +885,7 @@ export default function CompanyAdminScreen() {
             <Text style={[styles.cardPrice, { color: colors.gold }]}>{item.price}</Text>
           ) : null}
           <Text style={[styles.cardDate, { color: colors.mutedForeground }]}>
-            Publicado em {fmtDate(item.created_at)}
+            {t("empresa_admin_screen.published_on_ad", { date: fmtDate(item.created_at) })}
           </Text>
         </View>
         <TouchableOpacity
@@ -888,15 +894,15 @@ export default function CompanyAdminScreen() {
         >
           <Feather name={item.sold ? "check-circle" : "circle"} size={12} color={item.sold ? "#2ecc71" : colors.mutedForeground} />
           <Text style={[styles.activeBadgeText, { color: item.sold ? "#2ecc71" : colors.mutedForeground }]}>
-            {item.sold ? (item.sold_via_ibhub ? "Vendido ibhub" : "Vendido") : "Disponível"}
+            {item.sold ? (item.sold_via_ibhub ? t("empresa_admin_screen.sold_ibhub_label") : t("empresa_admin_screen.sold_label")) : t("empresa_admin_screen.available")}
           </Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.statsRow}>
-        <StatBox icon="eye"   label="Views"      value={fmtCount(item.view_count ?? 0)}       color="#3498db" />
-        <StatBox icon="heart" label="Interesses" value={fmtCount(item.interests_count ?? 0)}  color="#e74c3c" />
-        <StatBox icon="tag"   label="Status"     value={item.is_active ? "Ativo" : "Inativo"} color={item.is_active ? "#2ecc71" : "#9ca3af"} />
+        <StatBox icon="eye"   label={t("empresa_admin_screen.stat_views")}     value={fmtCount(item.view_count ?? 0)}       color="#3498db" />
+        <StatBox icon="heart" label={t("empresa_admin_screen.stat_interests")} value={fmtCount(item.interests_count ?? 0)}  color="#e74c3c" />
+        <StatBox icon="tag"   label={t("empresa_admin_screen.stat_status")}    value={item.is_active ? t("empresa_admin_screen.event_active") : t("empresa_admin_screen.event_closed")} color={item.is_active ? "#2ecc71" : "#9ca3af"} />
       </View>
 
       <View style={styles.actionRow}>
@@ -905,7 +911,7 @@ export default function CompanyAdminScreen() {
           onPress={() => setEditingOpp(item)}
         >
           <Feather name="edit-2" size={13} color={colors.mutedForeground} />
-          <Text style={[styles.actionBtnText, { color: colors.mutedForeground }]}>Editar</Text>
+          <Text style={[styles.actionBtnText, { color: colors.mutedForeground }]}>{t("empresa_admin_screen.edit_btn")}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionBtn, { borderColor: colors.border, flex: 1 }]}
@@ -913,7 +919,7 @@ export default function CompanyAdminScreen() {
         >
           <Feather name={item.is_active ? "pause-circle" : "play-circle"} size={13} color={colors.mutedForeground} />
           <Text style={[styles.actionBtnText, { color: colors.mutedForeground }]}>
-            {item.is_active ? "Pausar" : "Reativar"}
+            {item.is_active ? t("empresa_admin_screen.pause_btn") : t("empresa_admin_screen.reactivate_btn")}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -921,7 +927,7 @@ export default function CompanyAdminScreen() {
           onPress={() => handleDeleteOpp(item)}
         >
           <Feather name="trash-2" size={13} color="#e74c3c" />
-          <Text style={[styles.actionBtnText, { color: "#e74c3c" }]}>Excluir</Text>
+          <Text style={[styles.actionBtnText, { color: "#e74c3c" }]}>{t("empresa_admin_screen.delete_btn_label")}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -945,7 +951,7 @@ export default function CompanyAdminScreen() {
               {item.location_type === "online" ? "Online" : item.location ?? ""}{item.start_date ? `  ·  ${fmtDate(item.start_date)}` : ""}
             </Text>
             <Text style={[styles.cardDate, { color: colors.mutedForeground }]}>
-              Criado em {fmtDate(item.created_at)}
+              {t("empresa_admin_screen.created_on", { date: fmtDate(item.created_at) })}
             </Text>
           </View>
           <TouchableOpacity
@@ -954,16 +960,16 @@ export default function CompanyAdminScreen() {
           >
             <View style={[styles.activeDot, { backgroundColor: item.is_active ? "#2ecc71" : colors.mutedForeground }]} />
             <Text style={[styles.activeBadgeText, { color: item.is_active ? "#2ecc71" : colors.mutedForeground }]}>
-              {item.is_active ? "Ativo" : "Encerrado"}
+              {item.is_active ? t("empresa_admin_screen.event_active") : t("empresa_admin_screen.event_closed")}
             </Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.statsRow}>
-          <StatBox icon="user-check" label="Inscritos" value={item.attendees_count ?? 0}                                  color={colors.gold} />
-          <StatBox icon="users"      label="Vagas"     value={item.capacity ? String(item.capacity) : "∞"}                color="#3498db" />
+          <StatBox icon="user-check" label={t("empresa_admin_screen.stat_enrolled")}  value={item.attendees_count ?? 0}                color={colors.gold} />
+          <StatBox icon="users"      label={t("empresa_admin_screen.stat_slots")}     value={item.capacity ? String(item.capacity) : "∞"} color="#3498db" />
           {pct !== null && (
-            <StatBox icon="percent"  label="Lotação"   value={`${pct}%`}                                                   color={pct > 80 ? "#e74c3c" : "#2ecc71"} />
+            <StatBox icon="percent"  label={t("empresa_admin_screen.stat_occupancy")} value={`${pct}%`}                                   color={pct > 80 ? "#e74c3c" : "#2ecc71"} />
           )}
         </View>
 
@@ -979,7 +985,7 @@ export default function CompanyAdminScreen() {
         >
           <Feather name="calendar" size={15} color="#fff" />
           <Text style={styles.ctaBtnText}>
-            Ver inscritos ({item.attendees_count ?? 0})
+            {t("empresa_admin_screen.see_enrolled", { count: item.attendees_count ?? 0 })}
           </Text>
         </TouchableOpacity>
 
@@ -989,7 +995,7 @@ export default function CompanyAdminScreen() {
             onPress={() => setEditingEvent(item)}
           >
             <Feather name="edit-2" size={13} color={colors.mutedForeground} />
-            <Text style={[styles.actionBtnText, { color: colors.mutedForeground }]}>Editar</Text>
+            <Text style={[styles.actionBtnText, { color: colors.mutedForeground }]}>{t("empresa_admin_screen.edit_btn")}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionBtn, { borderColor: colors.border, flex: 1 }]}
@@ -997,7 +1003,7 @@ export default function CompanyAdminScreen() {
           >
             <Feather name={item.is_active ? "pause-circle" : "play-circle"} size={13} color={colors.mutedForeground} />
             <Text style={[styles.actionBtnText, { color: colors.mutedForeground }]}>
-              {item.is_active ? "Encerrar" : "Reativar"}
+              {item.is_active ? t("empresa_admin_screen.close_btn") : t("empresa_admin_screen.reactivate_btn")}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -1005,7 +1011,7 @@ export default function CompanyAdminScreen() {
             onPress={() => handleDeleteEvent(item)}
           >
             <Feather name="trash-2" size={13} color="#e74c3c" />
-            <Text style={[styles.actionBtnText, { color: "#e74c3c" }]}>Excluir</Text>
+            <Text style={[styles.actionBtnText, { color: "#e74c3c" }]}>{t("empresa_admin_screen.delete_btn_label")}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1015,9 +1021,9 @@ export default function CompanyAdminScreen() {
   // ── Tabs ───────────────────────────────────────────────────────────────────
 
   const TABS: { key: AdminTab; label: string; icon: string; count: number }[] = [
-    { key: "vagas",    label: "Vagas",    icon: "briefcase", count: vagas.length },
-    { key: "anuncios", label: "Anúncios", icon: "tag",       count: anuncios.length },
-    { key: "eventos",  label: "Eventos",  icon: "calendar",  count: eventos.length },
+    { key: "vagas",    label: t("empresa_admin_screen.tab_vagas"),    icon: "briefcase", count: vagas.length },
+    { key: "anuncios", label: t("empresa_admin_screen.tab_anuncios"), icon: "tag",       count: anuncios.length },
+    { key: "eventos",  label: t("empresa_admin_screen.tab_eventos"),  icon: "calendar",  count: eventos.length },
   ];
 
   const currentData   = activeTab === "vagas" ? vagas   : activeTab === "anuncios" ? anuncios : eventos;
@@ -1033,7 +1039,7 @@ export default function CompanyAdminScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={[styles.headerTitle, { color: colors.navy }]}>
-            Gerenciar Anúncios
+            {t("empresa_admin_screen.header_title")}
           </Text>
           {companyName ? (
             <Text style={[styles.headerSub, { color: colors.mutedForeground }]} numberOfLines={1}>
@@ -1086,7 +1092,7 @@ export default function CompanyAdminScreen() {
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.gold} />
           <Text style={[styles.emptyText, { color: colors.mutedForeground, marginTop: 10 }]}>
-            Carregando dados...
+            {t("empresa_admin_screen.loading")}
           </Text>
         </View>
       ) : currentData.length === 0 ? (
@@ -1097,14 +1103,14 @@ export default function CompanyAdminScreen() {
             color={colors.border}
           />
           <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-            Nenhum{activeTab === "eventos" ? "" : "a"} {activeTab === "vagas" ? "vaga" : activeTab === "anuncios" ? "anúncio" : "evento"} ainda
+            {activeTab === "vagas" ? t("empresa_admin_screen.empty_vagas_title") : activeTab === "anuncios" ? t("empresa_admin_screen.empty_anuncios_title") : t("empresa_admin_screen.empty_eventos_title")}
           </Text>
           <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
             {activeTab === "vagas"
-              ? "Crie vagas e acompanhe os candidatos aqui."
+              ? t("empresa_admin_screen.empty_vagas_text")
               : activeTab === "anuncios"
-              ? "Publique anúncios no Mercado e acompanhe o desempenho."
-              : "Crie eventos e veja quem se inscreveu."}
+              ? t("empresa_admin_screen.empty_anuncios_text")
+              : t("empresa_admin_screen.empty_eventos_text")}
           </Text>
         </View>
       ) : (

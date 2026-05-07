@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Dimensions,
@@ -400,6 +401,7 @@ interface KPIInfoModal {
 }
 
 function KPICard({ kpi, colors }: { kpi: API.MarketKPI; colors: any }) {
+  const { t } = useTranslation();
   const isPos = kpi.change >= 0;
   const [modal, setModal] = useState<KPIInfoModal>({ visible: false, kpi: null });
 
@@ -420,7 +422,7 @@ function KPICard({ kpi, colors }: { kpi: API.MarketKPI; colors: any }) {
           <Text style={[styles.kpiChange, { color: isPos ? "#16a34a" : "#dc2626" }]}>
             {isPos ? "↑" : "↓"} {isPos ? "+" : ""}{kpi.change}%
           </Text>
-          <TouchableOpacity onPress={() => setModal({ visible: true, kpi })} accessibilityRole="button" accessibilityLabel="Informações">
+          <TouchableOpacity onPress={() => setModal({ visible: true, kpi })} accessibilityRole="button" accessibilityLabel={t("mercado_screen.kpi_info_label")}>
             <Feather name="info" size={13} color={colors.gold} />
           </TouchableOpacity>
         </View>
@@ -444,14 +446,14 @@ function KPICard({ kpi, colors }: { kpi: API.MarketKPI; colors: any }) {
             <View style={styles.kpiModalMeta}>
               <Feather name="database" size={12} color={colors.mutedForeground} />
               <Text style={[styles.kpiModalMetaText, { color: colors.mutedForeground }]}>
-                Fonte: {modal.kpi?.source ?? "IBRAVIN"}
+                {t("mercado_screen.kpi_fonte", { source: modal.kpi?.source ?? "IBRAVIN" })}
               </Text>
             </View>
             {modal.kpi?.updatedAt ? (
               <View style={styles.kpiModalMeta}>
                 <Feather name="clock" size={12} color={colors.mutedForeground} />
                 <Text style={[styles.kpiModalMetaText, { color: colors.mutedForeground }]}>
-                  Atualizado em {new Date(modal.kpi.updatedAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
+                  {t("mercado_screen.kpi_updated", { date: new Date(modal.kpi.updatedAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }) })}
                 </Text>
               </View>
             ) : null}
@@ -459,7 +461,7 @@ function KPICard({ kpi, colors }: { kpi: API.MarketKPI; colors: any }) {
               style={[styles.kpiModalCloseBtn, { backgroundColor: colors.navy }]}
               onPress={() => setModal({ visible: false, kpi: null })}
             >
-              <Text style={styles.kpiModalCloseBtnText}>Fechar</Text>
+              <Text style={styles.kpiModalCloseBtnText}>{t("mercado_screen.kpi_close")}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -485,6 +487,7 @@ function SlideViewerModal({
   colors: any;
   session: any;
 }) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [slides, setSlides]   = useState<API.PresentationSlide[]>([]);
   const [total, setTotal]     = useState(0);
@@ -515,13 +518,13 @@ function SlideViewerModal({
             <View style={[sliderStyles.lockIconBox, { backgroundColor: colors.gold + "15" }]}>
               <Feather name="lock" size={36} color={colors.gold} />
             </View>
-            <Text style={[sliderStyles.lockedTitle, { color: colors.navy }]}>Conteúdo em breve</Text>
+            <Text style={[sliderStyles.lockedTitle, { color: colors.navy }]}>{t("mercado_screen.slide_locked_title")}</Text>
             <Text style={[sliderStyles.lockedSub, { color: colors.mutedForeground }]}>
-              Este slide ainda não foi desbloqueado para o seu plano.
+              {t("mercado_screen.slide_locked_sub")}
             </Text>
             <View style={[sliderStyles.lockedBadge, { backgroundColor: colors.gold + "15" }]}>
               <Feather name="clock" size={13} color={colors.gold} />
-              <Text style={[sliderStyles.lockedBadgeText, { color: colors.gold }]}>Aguarde o desbloqueio</Text>
+              <Text style={[sliderStyles.lockedBadgeText, { color: colors.gold }]}>{t("mercado_screen.slide_locked_badge")}</Text>
             </View>
           </View>
         </View>
@@ -553,7 +556,7 @@ function SlideViewerModal({
         <View style={[sliderStyles.modalHeader, { backgroundColor: "rgba(0,0,0,0.7)", paddingTop: (insets.top || (Platform.OS === "ios" ? 52 : 20)) + 10 }]}>
           <TouchableOpacity onPress={onClose} style={sliderStyles.closeBtn} hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
             accessibilityRole="button"
-            accessibilityLabel="Fechar"
+            accessibilityLabel={t("mercado_screen.kpi_close")}
           >
             <Feather name="x" size={22} color="#fff" />
           </TouchableOpacity>
@@ -561,7 +564,7 @@ function SlideViewerModal({
             <Text style={sliderStyles.modalTitle} numberOfLines={1}>{presentation?.title}</Text>
             {total > 0 && (
               <Text style={sliderStyles.slideCounter}>
-                {unlocked} de {total} slides disponíveis
+                {t("mercado_screen.slides_available", { unlocked, total })}
               </Text>
             )}
           </View>
@@ -573,13 +576,13 @@ function SlideViewerModal({
         {loading ? (
           <View style={sliderStyles.loadingBox}>
             <ActivityIndicator size="large" color="#c9a84c" />
-            <Text style={{ color: "#fff", marginTop: 12, fontSize: 13 }}>Carregando slides...</Text>
+            <Text style={{ color: "#fff", marginTop: 12, fontSize: 13 }}>{t("mercado_screen.slides_loading")}</Text>
           </View>
         ) : slides.length === 0 ? (
           <View style={sliderStyles.loadingBox}>
             <Feather name="image" size={48} color="#4b5563" />
             <Text style={{ color: "#9ca3af", marginTop: 12, fontSize: 14, textAlign: "center" }}>
-              Nenhum slide disponível para esta apresentação.
+              {t("mercado_screen.slides_empty")}
             </Text>
           </View>
         ) : (
@@ -625,6 +628,7 @@ const sliderStyles = StyleSheet.create({
 // ─── Apresentações Tab ────────────────────────────────────────────────────────
 
 function ApresentacoesView({ colors, bottomPad, session, isAdmin }: { colors: any; bottomPad: number; session: any; isAdmin?: boolean }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const { hasFeature, isLoading: permLoading } = usePermissions();
   const hasAccess = hasFeature("mercado:apresentacoes") || !!isAdmin;
@@ -669,8 +673,8 @@ function ApresentacoesView({ colors, bottomPad, session, isAdmin }: { colors: an
   if (!hasAccess) {
     return (
       <PaywallScreen
-        featureName="Apresentações de Mercado"
-        description="Acesse relatórios e apresentações exclusivos do mercado vitivinícola, com slides desbloqueados progressivamente conforme seu plano."
+        featureName={t("mercado_screen.tab_apresentacoes")}
+        description={t("mercado_screen.apresentacoes_paywall_desc")}
         requiredPlan="Profissional"
       />
     );
@@ -691,10 +695,10 @@ function ApresentacoesView({ colors, bottomPad, session, isAdmin }: { colors: an
           <Feather name="monitor" size={36} color={colors.mutedForeground} />
         </View>
         <Text style={[styles.apresentacoesTitle, { color: colors.navy }]}>
-          Nenhuma apresentação disponível
+          {t("mercado_screen.apresentacoes_empty_title")}
         </Text>
         <Text style={[styles.apresentacoesSub, { color: colors.mutedForeground }]}>
-          As apresentações de mercado serão publicadas em breve.
+          {t("mercado_screen.apresentacoes_empty_sub")}
         </Text>
       </View>
     );
@@ -712,8 +716,8 @@ function ApresentacoesView({ colors, bottomPad, session, isAdmin }: { colors: an
           >
             <Feather name="settings" size={18} color={colors.gold} />
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>Gerenciar Apresentações</Text>
-              <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 2 }}>Criar, editar e fazer upload de slides</Text>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>{t("mercado_screen.manage_apresentacoes")}</Text>
+              <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 2 }}>{t("mercado_screen.manage_apresentacoes_sub")}</Text>
             </View>
             <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
           </TouchableOpacity>
@@ -745,13 +749,13 @@ function ApresentacoesView({ colors, bottomPad, session, isAdmin }: { colors: an
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
                       <Feather name="layers" size={13} color={colors.gold} />
                       <Text style={[styles.presentLink, { color: colors.gold }]}>
-                        {counts.unlocked} de {counts.total} slides disponíveis
+                        {t("mercado_screen.slides_available", { unlocked: counts.unlocked, total: counts.total })}
                       </Text>
                     </View>
                   ) : (
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
                       <Feather name="monitor" size={13} color={colors.gold} />
-                      <Text style={[styles.presentLink, { color: colors.gold }]}>Ver apresentação</Text>
+                      <Text style={[styles.presentLink, { color: colors.gold }]}>{t("mercado_screen.ver_apresentacao")}</Text>
                     </View>
                   )}
                   <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
@@ -777,6 +781,7 @@ function ApresentacoesView({ colors, bottomPad, session, isAdmin }: { colors: an
 
 // ── BiMobileExportadorSearch ───────────────────────────────────────────────────
 function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useColors> }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const { session } = useAuth();
   const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
@@ -851,14 +856,14 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
     try {
       const params = new URLSearchParams({ q: sq, limit: "20", offset: "0" });
       const res = await fetch(`${API_URL}/wine-imports/bi-search/exportadores?${params}`, { headers: authH() });
-      if (res.status === 402) { setCredits(0); setError("Consultas esgotadas. Faça upgrade para continuar."); }
-      else if (!res.ok) { setError("Erro ao buscar. Tente novamente."); }
+      if (res.status === 402) { setCredits(0); setError(t("mercado_screen.bi_error_exhausted")); }
+      else if (!res.ok) { setError(t("mercado_screen.bi_error_search")); }
       else {
         const data = await res.json() as { items: BiExpItem[]; total: number; credits_remaining: number; credits_total: number };
         setItems(data.items); setTotal(data.total); setSearched(true);
         if (data.credits_remaining !== undefined) setCredits(data.credits_remaining);
       }
-    } catch { setError("Erro de conexão. Verifique sua internet."); }
+    } catch { setError(t("mercado_screen.bi_error_connection")); }
     finally { setSearching(false); searchingRef.current = false; }
   };
 
@@ -900,7 +905,7 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
         <View style={{ flex: 1, backgroundColor: "#fff", borderWidth: 1.5, borderColor: exhausted ? "#fca5a5" : colors.border, borderRadius: 14, flexDirection: "row", alignItems: "center", paddingLeft: 14, paddingRight: 4, paddingVertical: 4 }}>
           <Text style={{ fontSize: 16, marginRight: 6 }}>🌐</Text>
           <TextInput value={q} onChangeText={setQ}
-            placeholder={exhausted ? "Consultas esgotadas" : "Nome do exportador ou país de origem…"}
+            placeholder={exhausted ? t("mercado_screen.bi_credits_exhausted") : t("mercado_screen.bi_exp_placeholder")}
             placeholderTextColor={colors.mutedForeground}
             style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: 12 }}
             editable={!exhausted} onSubmitEditing={() => doSearch(q)} returnKeyType="search" />
@@ -910,7 +915,7 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
         </View>
         <TouchableOpacity onPress={() => doSearch(q)} disabled={!q.trim() || searching || exhausted}
           style={{ paddingHorizontal: 16, borderRadius: 14, justifyContent: "center", backgroundColor: !q.trim() || searching || exhausted ? colors.border : colors.navy }}>
-          {searching ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>Buscar</Text>}
+          {searching ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>{t("mercado_screen.bi_search_btn")}</Text>}
         </TouchableOpacity>
       </View>
 
@@ -934,7 +939,7 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
         >
           <Feather name="edit-2" size={14} color={colors.navy} />
           <Text style={{ flex: 1, fontSize: 13, color: colors.navy }}>
-            Você quis dizer: <Text style={{ fontWeight: "700" }}>{suggestion}</Text>?
+            {t("mercado_screen.bi_did_you_mean", { suggestion })}
           </Text>
           <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
         </TouchableOpacity>
@@ -947,9 +952,9 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
       )}
       {!searched && !searching && suggestions.length === 0 && !error && (
         <View style={{ backgroundColor: colors.gold + "10", borderWidth: 1, borderColor: colors.gold + "30", borderRadius: 12, padding: 14, gap: 4 }}>
-          <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>🌐 Como funciona</Text>
+          <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>{t("mercado_screen.bi_exp_how_title")}</Text>
           <Text style={{ fontSize: 13, color: colors.mutedForeground, lineHeight: 19 }}>
-            Busque por nome do exportador ou país de origem. Dados financeiros ficam bloqueados — use créditos de revelação para desbloqueá-los.
+            {t("mercado_screen.bi_exp_how_text")}
           </Text>
         </View>
       )}
@@ -957,13 +962,13 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
       {searching && (
         <View style={{ alignItems: "center", paddingVertical: 24 }}>
           <ActivityIndicator size="large" color={colors.gold} />
-          <Text style={{ color: colors.mutedForeground, marginTop: 8, fontSize: 13 }}>Buscando exportadores…</Text>
+          <Text style={{ color: colors.mutedForeground, marginTop: 8, fontSize: 13 }}>{t("mercado_screen.bi_exp_searching")}</Text>
         </View>
       )}
 
       {searched && !searching && (<>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{total} exportador{total !== 1 ? "es" : ""} encontrado{total !== 1 ? "s" : ""}</Text>
+          <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{t("mercado_screen.bi_exp_count", { count: total })}</Text>
           {revealCredits !== null && (
             <View style={{ backgroundColor: colors.gold + "10", borderWidth: 1, borderColor: colors.gold + "25", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
               <Text style={{ fontSize: 11, color: colors.mutedForeground }}>
@@ -977,8 +982,8 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
         {items.length === 0 && (
           <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 24, alignItems: "center" }}>
             <Text style={{ fontSize: 32, marginBottom: 8 }}>🌐</Text>
-            <Text style={{ fontSize: 15, fontWeight: "800", color: colors.navy, marginBottom: 4 }}>Nenhum resultado</Text>
-            <Text style={{ fontSize: 13, color: colors.mutedForeground, textAlign: "center" }}>Tente buscar por outro nome ou país.</Text>
+            <Text style={{ fontSize: 15, fontWeight: "800", color: colors.navy, marginBottom: 4 }}>{t("mercado_screen.bi_no_results_title")}</Text>
+            <Text style={{ fontSize: 13, color: colors.mutedForeground, textAlign: "center" }}>{t("mercado_screen.bi_exp_no_result_sub")}</Text>
           </View>
         )}
 
@@ -1005,17 +1010,17 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
                 <TouchableOpacity
                   onPress={() => { const next = isOpen ? null : m.id; setExpandedId(next); if (next) void loadImps(m.name, m.id); }}
                   style={{ borderWidth: 1.5, borderColor: isOpen ? colors.gold : colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: isOpen ? colors.gold + "15" : "transparent" }}>
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: isOpen ? colors.gold : colors.mutedForeground }}>{isOpen ? "▲ Fechar" : "📊 Ver"}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: isOpen ? colors.gold : colors.mutedForeground }}>{isOpen ? t("mercado_screen.bi_exp_close") : t("mercado_screen.bi_exp_see")}</Text>
                 </TouchableOpacity>
               </View>
 
               {isOpen && (
                 <View style={{ borderTopWidth: 1, borderTopColor: colors.gold + "40", padding: 14, backgroundColor: colors.gold + "06" }}>
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: colors.gold, letterSpacing: 0.7, marginBottom: 8 }}>🇧🇷 Quem importa no Brasil</Text>
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: colors.gold, letterSpacing: 0.7, marginBottom: 8 }}>{t("mercado_screen.bi_exp_who_imports")}</Text>
                   {impLoading
                     ? <ActivityIndicator size="small" color={colors.gold} />
                     : !imps || imps.length === 0
-                      ? <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Nenhum importador vinculado na base de dados.</Text>
+                      ? <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{t("mercado_screen.bi_exp_no_importers")}</Text>
                       : <View style={{ gap: 6 }}>
                           {imps.map((d, i) => (
                             <TouchableOpacity key={i} disabled={!d.company_page_id}
@@ -1029,7 +1034,7 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
                         </View>
                   }
                   <View style={{ borderTopWidth: 1, borderTopColor: colors.border, marginTop: 14, paddingTop: 14 }}>
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: colors.gold, letterSpacing: 0.7, marginBottom: 10 }}>📊 Dados Financeiros</Text>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: colors.gold, letterSpacing: 0.7, marginBottom: 10 }}>{t("mercado_screen.bi_exp_financial")}</Text>
                     <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
                       {([
                         { label: "FOB US$",    value: revealed?.fob_usd,      icon: "💵" },
@@ -1051,7 +1056,7 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
                         disabled={revealingId === m.name || revealCredits === 0}
                         style={{ paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10, alignItems: "center", backgroundColor: revealCredits === 0 ? "#e5e7eb" : colors.navy, opacity: revealingId === m.name ? 0.7 : 1 }}>
                         <Text style={{ fontSize: 13, fontWeight: "700", color: revealCredits === 0 ? colors.mutedForeground : "#fff" }}>
-                          {revealingId === m.name ? "Revelando…" : revealCredits === 0 ? "🔒 Sem créditos" : "🔓 Revelar dados financeiros (1 crédito)"}
+                          {revealingId === m.name ? t("mercado_screen.bi_exp_revealing") : revealCredits === 0 ? t("mercado_screen.bi_exp_no_credits") : t("mercado_screen.bi_exp_reveal_btn")}
                         </Text>
                       </TouchableOpacity>
                     )}
@@ -1068,6 +1073,7 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
 
 // ── BiMobileImportadoresSearch ─────────────────────────────────────────────────
 function BiMobileImportadoresSearch({ colors }: { colors: ReturnType<typeof useColors> }) {
+  const { t } = useTranslation();
   const { session } = useAuth();
   const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
   const authH = (): HeadersInit => session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
@@ -1122,14 +1128,14 @@ function BiMobileImportadoresSearch({ colors }: { colors: ReturnType<typeof useC
     try {
       const params = new URLSearchParams({ q: sq, limit: "20", offset: "0" });
       const res = await fetch(`${API_URL}/wine-imports/bi-search/importadores?${params}`, { headers: authH() });
-      if (res.status === 402) { setCredits(0); setError("Consultas esgotadas. Faça upgrade para continuar."); }
-      else if (!res.ok) { setError("Erro ao buscar. Tente novamente."); }
+      if (res.status === 402) { setCredits(0); setError(t("mercado_screen.bi_error_exhausted")); }
+      else if (!res.ok) { setError(t("mercado_screen.bi_error_search")); }
       else {
         const data = await res.json() as { items: BiImpItem[]; total: number; credits_remaining: number; credits_total: number };
         setItems(data.items); setTotal(data.total); setSearched(true);
         if (data.credits_remaining !== undefined) setCredits(data.credits_remaining);
       }
-    } catch { setError("Erro de conexão. Verifique sua internet."); }
+    } catch { setError(t("mercado_screen.bi_error_connection")); }
     finally { setSearching(false); searchingRef.current = false; }
   };
 
@@ -1139,7 +1145,7 @@ function BiMobileImportadoresSearch({ colors }: { colors: ReturnType<typeof useC
         <View style={{ flex: 1, backgroundColor: "#fff", borderWidth: 1.5, borderColor: exhausted ? "#fca5a5" : colors.border, borderRadius: 14, flexDirection: "row", alignItems: "center", paddingLeft: 14, paddingRight: 4, paddingVertical: 4 }}>
           <Text style={{ fontSize: 16, marginRight: 6 }}>📦</Text>
           <TextInput value={q} onChangeText={setQ}
-            placeholder={exhausted ? "Consultas esgotadas" : "Nome do importador, país ou segmento…"}
+            placeholder={exhausted ? t("mercado_screen.bi_credits_exhausted") : t("mercado_screen.bi_imp_placeholder")}
             placeholderTextColor={colors.mutedForeground}
             style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: 12 }}
             editable={!exhausted} onSubmitEditing={() => doSearch(q)} returnKeyType="search" />
@@ -1149,7 +1155,7 @@ function BiMobileImportadoresSearch({ colors }: { colors: ReturnType<typeof useC
         </View>
         <TouchableOpacity onPress={() => doSearch(q)} disabled={!q.trim() || searching || exhausted}
           style={{ paddingHorizontal: 16, borderRadius: 14, justifyContent: "center", backgroundColor: !q.trim() || searching || exhausted ? colors.border : colors.navy }}>
-          {searching ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>Buscar</Text>}
+          {searching ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>{t("mercado_screen.bi_search_btn")}</Text>}
         </TouchableOpacity>
       </View>
 
@@ -1173,7 +1179,7 @@ function BiMobileImportadoresSearch({ colors }: { colors: ReturnType<typeof useC
         >
           <Feather name="edit-2" size={14} color={colors.navy} />
           <Text style={{ flex: 1, fontSize: 13, color: colors.navy }}>
-            Você quis dizer: <Text style={{ fontWeight: "700" }}>{suggestion}</Text>?
+            {t("mercado_screen.bi_did_you_mean", { suggestion })}
           </Text>
           <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
         </TouchableOpacity>
@@ -1186,9 +1192,9 @@ function BiMobileImportadoresSearch({ colors }: { colors: ReturnType<typeof useC
       )}
       {!searched && !searching && suggestions.length === 0 && !error && (
         <View style={{ backgroundColor: colors.gold + "10", borderWidth: 1, borderColor: colors.gold + "30", borderRadius: 12, padding: 14, gap: 4 }}>
-          <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>📦 Como funciona</Text>
+          <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>{t("mercado_screen.bi_imp_how_title")}</Text>
           <Text style={{ fontSize: 13, color: colors.mutedForeground, lineHeight: 19 }}>
-            Busque importadores por nome, país ou segmento. Cada consulta consome 1 crédito.
+            {t("mercado_screen.bi_imp_how_text")}
           </Text>
         </View>
       )}
@@ -1196,17 +1202,17 @@ function BiMobileImportadoresSearch({ colors }: { colors: ReturnType<typeof useC
       {searching && (
         <View style={{ alignItems: "center", paddingVertical: 24 }}>
           <ActivityIndicator size="large" color={colors.gold} />
-          <Text style={{ color: colors.mutedForeground, marginTop: 8, fontSize: 13 }}>Buscando importadores…</Text>
+          <Text style={{ color: colors.mutedForeground, marginTop: 8, fontSize: 13 }}>{t("mercado_screen.bi_imp_searching")}</Text>
         </View>
       )}
 
       {searched && !searching && (<>
-        <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{total} importador{total !== 1 ? "es" : ""} encontrado{total !== 1 ? "s" : ""}</Text>
+        <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{t("mercado_screen.bi_imp_count", { count: total })}</Text>
         {items.length === 0 && (
           <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 24, alignItems: "center" }}>
             <Text style={{ fontSize: 32, marginBottom: 8 }}>📦</Text>
-            <Text style={{ fontSize: 15, fontWeight: "800", color: colors.navy, marginBottom: 4 }}>Nenhum resultado</Text>
-            <Text style={{ fontSize: 13, color: colors.mutedForeground, textAlign: "center" }}>Tente buscar por outro nome.</Text>
+            <Text style={{ fontSize: 15, fontWeight: "800", color: colors.navy, marginBottom: 4 }}>{t("mercado_screen.bi_no_results_title")}</Text>
+            <Text style={{ fontSize: 13, color: colors.mutedForeground, textAlign: "center" }}>{t("mercado_screen.bi_imp_no_result_sub")}</Text>
           </View>
         )}
         {items.map(m => (
@@ -1223,7 +1229,7 @@ function BiMobileImportadoresSearch({ colors }: { colors: ReturnType<typeof useC
               )}
               {m.exportadores.length > 0 && (
                 <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10, gap: 6 }}>
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, letterSpacing: 0.6 }}>IMPORTA DE</Text>
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, letterSpacing: 0.6 }}>{t("mercado_screen.bi_imp_imports_from")}</Text>
                   {m.exportadores.map((e, i) => (
                     <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                       <Text style={{ fontSize: 14 }}>🌍</Text>
@@ -1246,6 +1252,7 @@ function BiMobileImportadoresSearch({ colors }: { colors: ReturnType<typeof useC
 
 // ── BiMobileProdutoresSearch ───────────────────────────────────────────────────
 function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useColors> }) {
+  const { t } = useTranslation();
   const { session } = useAuth();
   const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
   const authH = (): HeadersInit => session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
@@ -1300,14 +1307,14 @@ function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useCol
     try {
       const params = new URLSearchParams({ q: sq, limit: "20", offset: "0" });
       const res = await fetch(`${API_URL}/wine-imports/bi-search/produtores?${params}`, { headers: authH() });
-      if (res.status === 402) { setCredits(0); setError("Consultas esgotadas. Faça upgrade para continuar."); }
-      else if (!res.ok) { setError("Erro ao buscar. Tente novamente."); }
+      if (res.status === 402) { setCredits(0); setError(t("mercado_screen.bi_error_exhausted")); }
+      else if (!res.ok) { setError(t("mercado_screen.bi_error_search")); }
       else {
         const data = await res.json() as { items: BiProdItem[]; total: number; credits_remaining: number; credits_total: number };
         setItems(data.items); setTotal(data.total); setSearched(true);
         if (data.credits_remaining !== undefined) setCredits(data.credits_remaining);
       }
-    } catch { setError("Erro de conexão. Verifique sua internet."); }
+    } catch { setError(t("mercado_screen.bi_error_connection")); }
     finally { setSearching(false); searchingRef.current = false; }
   };
 
@@ -1317,7 +1324,7 @@ function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useCol
         <View style={{ flex: 1, backgroundColor: "#fff", borderWidth: 1.5, borderColor: exhausted ? "#fca5a5" : colors.border, borderRadius: 14, flexDirection: "row", alignItems: "center", paddingLeft: 14, paddingRight: 4, paddingVertical: 4 }}>
           <Text style={{ fontSize: 16, marginRight: 6 }}>🍇</Text>
           <TextInput value={q} onChangeText={setQ}
-            placeholder={exhausted ? "Consultas esgotadas" : "Nome do produtor, região, município ou estado…"}
+            placeholder={exhausted ? t("mercado_screen.bi_credits_exhausted") : t("mercado_screen.bi_prod_placeholder")}
             placeholderTextColor={colors.mutedForeground}
             style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: 12 }}
             editable={!exhausted} onSubmitEditing={() => doSearch(q)} returnKeyType="search" />
@@ -1327,7 +1334,7 @@ function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useCol
         </View>
         <TouchableOpacity onPress={() => doSearch(q)} disabled={!q.trim() || searching || exhausted}
           style={{ paddingHorizontal: 16, borderRadius: 14, justifyContent: "center", backgroundColor: !q.trim() || searching || exhausted ? colors.border : colors.navy }}>
-          {searching ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>Buscar</Text>}
+          {searching ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>{t("mercado_screen.bi_search_btn")}</Text>}
         </TouchableOpacity>
       </View>
 
@@ -1351,7 +1358,7 @@ function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useCol
         >
           <Feather name="edit-2" size={14} color={colors.navy} />
           <Text style={{ flex: 1, fontSize: 13, color: colors.navy }}>
-            Você quis dizer: <Text style={{ fontWeight: "700" }}>{suggestion}</Text>?
+            {t("mercado_screen.bi_did_you_mean", { suggestion })}
           </Text>
           <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
         </TouchableOpacity>
@@ -1364,9 +1371,9 @@ function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useCol
       )}
       {!searched && !searching && suggestions.length === 0 && !error && (
         <View style={{ backgroundColor: colors.gold + "10", borderWidth: 1, borderColor: colors.gold + "30", borderRadius: 12, padding: 14, gap: 4 }}>
-          <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>🍇 Como funciona</Text>
+          <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>{t("mercado_screen.bi_prod_how_title")}</Text>
           <Text style={{ fontSize: 13, color: colors.mutedForeground, lineHeight: 19 }}>
-            Busque vinícolas e produtores nacionais por nome, região, município ou estado. Cada consulta consome 1 crédito.
+            {t("mercado_screen.bi_prod_how_text")}
           </Text>
         </View>
       )}
@@ -1374,17 +1381,17 @@ function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useCol
       {searching && (
         <View style={{ alignItems: "center", paddingVertical: 24 }}>
           <ActivityIndicator size="large" color={colors.gold} />
-          <Text style={{ color: colors.mutedForeground, marginTop: 8, fontSize: 13 }}>Buscando produtores…</Text>
+          <Text style={{ color: colors.mutedForeground, marginTop: 8, fontSize: 13 }}>{t("mercado_screen.bi_prod_searching")}</Text>
         </View>
       )}
 
       {searched && !searching && (<>
-        <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{total} produtor{total !== 1 ? "es" : ""} encontrado{total !== 1 ? "s" : ""}</Text>
+        <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{t("mercado_screen.bi_prod_count", { count: total })}</Text>
         {items.length === 0 && (
           <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 24, alignItems: "center" }}>
             <Text style={{ fontSize: 32, marginBottom: 8 }}>🍇</Text>
-            <Text style={{ fontSize: 15, fontWeight: "800", color: colors.navy, marginBottom: 4 }}>Nenhum resultado</Text>
-            <Text style={{ fontSize: 13, color: colors.mutedForeground, textAlign: "center" }}>Tente buscar por outro nome ou região.</Text>
+            <Text style={{ fontSize: 15, fontWeight: "800", color: colors.navy, marginBottom: 4 }}>{t("mercado_screen.bi_no_results_title")}</Text>
+            <Text style={{ fontSize: 13, color: colors.mutedForeground, textAlign: "center" }}>{t("mercado_screen.bi_prod_no_result_sub")}</Text>
           </View>
         )}
         {items.map(m => (
@@ -1420,6 +1427,7 @@ function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useCol
 
 // ── IdealBISearchView (main) ───────────────────────────────────────────────────
 function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof useColors>; bottomPad: number }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const { session } = useAuth();
 
@@ -1576,10 +1584,10 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
       <ScrollView horizontal showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 }}>
         {([
-          { key: "exportador",   icon: "🌐", label: "Exportadores" },
-          { key: "marca",        icon: "🔍", label: "Buscar Rótulo" },
-          { key: "importadores", icon: "📦", label: "Importadores"  },
-          { key: "produtores",   icon: "🍇", label: "Produtores"    },
+          { key: "exportador",   icon: "🌐", label: t("mercado_screen.bi_search_exportadores") },
+          { key: "marca",        icon: "🔍", label: t("mercado_screen.bi_search_rotulo") },
+          { key: "importadores", icon: "📦", label: t("mercado_screen.bi_search_importadores") },
+          { key: "produtores",   icon: "🍇", label: t("mercado_screen.bi_search_produtores") },
         ] as { key: BiSearchMode; icon: string; label: string }[]).map(m => {
           const active = searchMode === m.key;
           return (
@@ -1608,9 +1616,9 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
               }
             </View>
             <View>
-              <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>Consultas Restantes</Text>
+              <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>{t("mercado_screen.bi_marca_credits_label")}</Text>
               <Text style={[styles.kpiPeriod, { color: colors.mutedForeground }]}>
-                Ideal.BI · Busca com IA · {creditsTotal}/mês
+                {t("mercado_screen.bi_marca_credits_period", { total: creditsTotal })}
               </Text>
               <Text style={[styles.kpiValue, { color: exhausted ? "#dc2626" : colors.navy }]}>
                 {creditsLoading ? "—" : String(credits ?? "—")}
@@ -1621,7 +1629,7 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
             {!creditsLoading && (
               <View style={{ backgroundColor: creditBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
                 <Text style={{ fontSize: 12, fontWeight: "700", color: creditColor }}>
-                  {exhausted ? "Esgotado" : credits === 1 ? "Crítico" : "Ativo"}
+                  {exhausted ? t("mercado_screen.bi_marca_exhausted_badge") : credits === 1 ? t("mercado_screen.bi_marca_critical_badge") : t("mercado_screen.bi_marca_active_badge")}
                 </Text>
               </View>
             )}
@@ -1635,9 +1643,9 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
           <View style={[styles.lockedIconBox, { backgroundColor: "#fef2f2" }]}>
             <Feather name="lock" size={22} color="#dc2626" />
           </View>
-          <Text style={[styles.lockedTitle, { color: colors.navy }]}>Limite de consultas esgotado</Text>
+          <Text style={[styles.lockedTitle, { color: colors.navy }]}>{t("mercado_screen.bi_marca_limit_title")}</Text>
           <Text style={[styles.lockedSub, { color: colors.mutedForeground }]}>
-            Faça o upgrade de plano para continuar descobrindo quem importa e exporta vinhos no mercado.
+            {t("mercado_screen.bi_marca_limit_sub")}
           </Text>
           <TouchableOpacity
             style={{ marginTop: 4, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.gold, paddingHorizontal: 22, paddingVertical: 11, borderRadius: 10 }}
@@ -1645,7 +1653,7 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
             activeOpacity={0.8}
           >
             <Feather name="zap" size={14} color="#fff" />
-            <Text style={{ color: "#fff", fontWeight: "800", fontSize: 14 }}>Fazer Upgrade</Text>
+            <Text style={{ color: "#fff", fontWeight: "800", fontSize: 14 }}>{t("mercado_screen.bi_marca_upgrade_btn")}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1654,7 +1662,7 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
       <View style={{ paddingHorizontal: 16, paddingTop: 12, gap: 10 }}>
         {/* Section label */}
         <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.8 }}>
-          Pesquisar vinho
+          {t("mercado_screen.bi_marca_search_label")}
         </Text>
 
         {/* Search input — ChatGPT style */}
@@ -1668,7 +1676,7 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder={exhausted ? "Limite de consultas esgotado" : "Ex: Casillero del Diablo Reserva…"}
+            placeholder={exhausted ? t("mercado_screen.bi_marca_placeholder_exhausted") : t("mercado_screen.bi_marca_placeholder_active")}
             placeholderTextColor={colors.mutedForeground}
             style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: 13 }}
             editable={!exhausted && !searching}
@@ -1708,7 +1716,7 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
                 <Text style={{ fontSize: 16 }}>🍷</Text>
                 <Text style={{ flex: 1, fontSize: 14, color: colors.navy, fontWeight: "500" }} numberOfLines={1}>{s}</Text>
                 <View style={{ backgroundColor: colors.gold + "22", borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 }}>
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: colors.gold }}>1 crédito</Text>
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: colors.gold }}>{t("mercado_screen.bi_marca_credit_chip")}</Text>
                 </View>
               </TouchableOpacity>
             ))}
@@ -1724,7 +1732,7 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
           >
             <Feather name="edit-2" size={14} color={colors.navy} />
             <Text style={{ flex: 1, fontSize: 13, color: colors.navy }}>
-              Você quis dizer: <Text style={{ fontWeight: "700" }}>{suggestion}</Text>?
+              {t("mercado_screen.bi_did_you_mean", { suggestion })}
             </Text>
             <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
           </TouchableOpacity>
@@ -1732,9 +1740,9 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
         {/* Info hint when idle */}
         {!result && !searching && suggestions.length === 0 && (
           <View style={{ backgroundColor: colors.gold + "10", borderWidth: 1, borderColor: colors.gold + "30", borderRadius: 12, padding: 14, gap: 4 }}>
-            <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>🍷 Como funciona</Text>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>{t("mercado_screen.bi_marca_how_title")}</Text>
             <Text style={{ fontSize: 13, color: colors.mutedForeground, lineHeight: 19 }}>
-              Digite o nome de um rótulo para ver sugestões da base de dados. Selecione para consultar o importador — cada consulta consome 1 crédito.
+              {t("mercado_screen.bi_marca_how_text")}
             </Text>
           </View>
         )}
@@ -1749,10 +1757,10 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
                 <ActivityIndicator size="small" color={colors.gold} />
               </View>
               <View>
-                <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>Inteligência Artificial</Text>
-                <Text style={[styles.kpiValue, { fontSize: 16, color: colors.navy }]}>Identificando a marca…</Text>
+                <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>{t("mercado_screen.bi_marca_ai_label")}</Text>
+                <Text style={[styles.kpiValue, { fontSize: 16, color: colors.navy }]}>{t("mercado_screen.bi_marca_ai_searching")}</Text>
                 <Text style={[styles.kpiPeriod, { color: colors.mutedForeground }]}>
-                  Consultando importadores e distribuidores
+                  {t("mercado_screen.bi_marca_ai_subtitle")}
                 </Text>
               </View>
             </View>
@@ -1766,9 +1774,9 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
           <View style={[styles.lockedIconBox, { backgroundColor: colors.gold + "15" }]}>
             <Feather name="alert-circle" size={22} color={colors.gold} />
           </View>
-          <Text style={[styles.lockedTitle, { color: colors.navy }]}>Pesquise pelo nome da marca</Text>
+          <Text style={[styles.lockedTitle, { color: colors.navy }]}>{t("mercado_screen.bi_marca_scope_title")}</Text>
           <Text style={[styles.lockedSub, { color: colors.mutedForeground }]}>
-            Esta busca aceita apenas nomes de marcas específicas. Digite o nome da marca que deseja consultar — por exemplo: "Casillero del Diablo" ou "Veuve Clicquot".
+            {t("mercado_screen.bi_marca_scope_sub")}
           </Text>
         </View>
       )}
@@ -1780,12 +1788,12 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
             <Feather name="search" size={22} color={colors.gold} />
           </View>
           <Text style={[styles.lockedTitle, { color: colors.navy }]}>
-            {brandExtracted ? `"${brandExtracted}" não encontrado` : "Vinho não encontrado"}
+            {brandExtracted ? t("mercado_screen.bi_marca_not_found_brand", { brand: brandExtracted }) : t("mercado_screen.bi_marca_not_found_generic")}
           </Text>
           <Text style={[styles.lockedSub, { color: colors.mutedForeground }]}>
             {brandExtracted
-              ? `A IA identificou a marca "${brandExtracted}", mas ela ainda não está na base de dados. Tente outro nome ou variação.`
-              : "Não encontramos esse vinho na base de dados. Tente outro nome ou variação."}
+              ? t("mercado_screen.bi_marca_not_found_sub_brand", { brand: brandExtracted })
+              : t("mercado_screen.bi_marca_not_found_sub_generic")}
           </Text>
         </View>
       )}
@@ -1798,8 +1806,8 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
           <View style={[styles.kpiCard, { backgroundColor: colors.gold, borderColor: colors.gold, flexDirection: "column", alignItems: "flex-start", gap: 2 }]}>
             <Text style={{ fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.75)", letterSpacing: 0.8, textTransform: "uppercase" }}>
               {brandExtracted && !result.marcaCompleta.toLowerCase().includes(brandExtracted.toLowerCase())
-                ? `IA identificou: ${brandExtracted}`
-                : "Resultado encontrado"}
+                ? t("mercado_screen.bi_marca_ai_identified", { brand: brandExtracted })
+                : t("mercado_screen.bi_marca_result_found")}
             </Text>
             <Text style={{ fontSize: 18, fontWeight: "900", color: "#fff", lineHeight: 24 }}>
               {result.marcaCompleta}
@@ -1807,7 +1815,7 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
               <Feather name="check-circle" size={12} color="rgba(255,255,255,0.8)" />
               <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.8)" }}>
-                1 consulta utilizada · {credits} restante{credits !== 1 ? "s" : ""}
+                {t("mercado_screen.bi_marca_credits_used", { count: credits ?? 0, remaining: credits ?? 0 })}
               </Text>
             </View>
           </View>
@@ -1815,10 +1823,10 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
           {/* Data KPI cards */}
           {([
             ...(result.marcaRelatorio && result.marcaRelatorio !== result.marcaCompleta
-              ? [{ icon: "tag",     label: "Marca no Relatório", value: result.marcaRelatorio }]
+              ? [{ icon: "tag",     label: t("mercado_screen.bi_marca_report_label"), value: result.marcaRelatorio }]
               : []),
             ...(result.paisDeOrigem
-              ? [{ icon: "globe",   label: "País de Origem",     value: result.paisDeOrigem  }]
+              ? [{ icon: "globe",   label: t("mercado_screen.bi_marca_origin_label"), value: result.paisDeOrigem  }]
               : []),
           ] as { icon: any; label: string; value: string }[]).map(row => (
             <View key={row.label} style={[styles.kpiCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
@@ -1844,8 +1852,8 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>
                     {result.distribuidores.length > 1
-                      ? `Distribuído no Brasil por (${result.distribuidores.length})`
-                      : "Distribuidor BR"}
+                      ? t("mercado_screen.bi_marca_distributor_multi", { count: result.distribuidores.length })
+                      : t("mercado_screen.bi_marca_distributor_single")}
                   </Text>
                   <View style={{ marginTop: 4, gap: 4 }}>
                     {result.distribuidores.map((d, idx) => (
@@ -1881,9 +1889,9 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
                 <Feather name="info" size={20} color={colors.gold} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>Como funciona</Text>
+                <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>{t("mercado_screen.bi_marca_how_empty")}</Text>
                 <Text style={{ fontSize: 13, fontWeight: "600", color: colors.navy, marginTop: 2, lineHeight: 18 }}>
-                  Digite o nome de um vinho para descobrir exportadores e distribuidores no Brasil.
+                  {t("mercado_screen.bi_marca_how_empty_text")}
                 </Text>
               </View>
             </View>
@@ -1924,6 +1932,7 @@ function MarketCommentItem({
   depth?: number;
   onReply: (comment: API.MarketComment) => void;
 }) {
+  const { t } = useTranslation();
   const isReply = depth > 0;
   const authorName  = comment.author?.full_name ?? "Usuário";
   const authorPos   = comment.author?.position;
@@ -1979,7 +1988,7 @@ function MarketCommentItem({
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 5, marginLeft: 4 }}>
             <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{timeStr}</Text>
             <TouchableOpacity onPress={() => onReply(comment)}>
-              <Text style={{ fontSize: 11, fontWeight: "700", color: colors.gold }}>Responder</Text>
+              <Text style={{ fontSize: 11, fontWeight: "700", color: colors.gold }}>{t("mercado_screen.comment_reply_btn")}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleLikeComment}
@@ -2023,6 +2032,7 @@ function MarketCommentsList({ postId, userId, colors, onCommentsCountChange }: {
   colors: ReturnType<typeof useColors>;
   onCommentsCountChange?: (delta: number) => void;
 }) {
+  const { t } = useTranslation();
   const [comments,    setComments]    = useState<API.MarketComment[]>([]);
   const [loading,     setLoading]     = useState(true);
   const [text,        setText]        = useState("");
@@ -2042,10 +2052,10 @@ function MarketCommentsList({ postId, userId, colors, onCommentsCountChange }: {
   const cancelReply = () => { setReplyTo(null); };
 
   const send = async () => {
-    const t = text.trim();
-    if (!t || !userId) return;
+    const txt = text.trim();
+    if (!txt || !userId) return;
     setSending(true);
-    const c = await API.addMarketComment(postId, userId, t, replyTo?.id ?? null);
+    const c = await API.addMarketComment(postId, userId, txt, replyTo?.id ?? null);
     if (c) {
       if (replyTo) {
         // Append the reply to the correct parent
@@ -2070,7 +2080,7 @@ function MarketCommentsList({ postId, userId, colors, onCommentsCountChange }: {
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
         <Text style={{ fontSize: 11, color: colors.mutedForeground, fontWeight: "600" }}>
-          {loading ? "Carregando..." : `${comments.reduce((a, c) => a + 1 + (c.replies?.length ?? 0), 0)} comentários`}
+          {loading ? t("mercado_screen.comments_loading") : t("mercado_screen.comments_count", { count: comments.reduce((a, c) => a + 1 + (c.replies?.length ?? 0), 0) })}
         </Text>
         <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
       </View>
@@ -2097,7 +2107,7 @@ function MarketCommentsList({ postId, userId, colors, onCommentsCountChange }: {
           <Feather name="corner-down-right" size={14} color={colors.gold} />
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 11, color: colors.gold, fontWeight: "700" }}>
-              Respondendo a {replyTo.author?.full_name ?? "Usuário"}
+              {t("mercado_screen.comment_reply_to", { name: replyTo.author?.full_name ?? "Usuário" })}
             </Text>
             <Text style={{ fontSize: 11, color: colors.mutedForeground }} numberOfLines={1}>{replyTo.content}</Text>
           </View>
@@ -2116,7 +2126,7 @@ function MarketCommentsList({ postId, userId, colors, onCommentsCountChange }: {
           ref={inputRef}
           value={text}
           onChangeText={setText}
-          placeholder={replyTo ? `Responder a ${replyTo.author?.full_name ?? "Usuário"}...` : "Comentar no fórum..."}
+          placeholder={replyTo ? t("mercado_screen.comments_reply_placeholder", { name: replyTo.author?.full_name ?? "Usuário" }) : t("mercado_screen.comments_forum_placeholder")}
           placeholderTextColor={colors.mutedForeground}
           multiline
           style={{
@@ -2170,6 +2180,7 @@ function LikersModal({
   onClose: () => void;
   colors: ReturnType<typeof useColors>;
 }) {
+  const { t } = useTranslation();
   const [likers,   setLikers]   = useState<API.MarketPostLiker[]>([]);
   const [loading,  setLoading]  = useState(false);
 
@@ -2185,11 +2196,11 @@ function LikersModal({
         <View style={{ backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: "60%" }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
             <Text style={{ fontWeight: "700", fontSize: 16, color: colors.navy }}>
-              Reações {likers.length > 0 ? `(${likers.length})` : ""}
+              {t("mercado_screen.likers_title")} {likers.length > 0 ? `(${likers.length})` : ""}
             </Text>
             <TouchableOpacity onPress={onClose}
             accessibilityRole="button"
-            accessibilityLabel="Fechar"
+            accessibilityLabel={t("mercado_screen.kpi_close")}
           >
               <Feather name="x" size={20} color={colors.mutedForeground} />
             </TouchableOpacity>
@@ -2198,7 +2209,7 @@ function LikersModal({
             <ActivityIndicator color={colors.gold} style={{ marginVertical: 24 }} />
           ) : likers.length === 0 ? (
             <Text style={{ color: colors.mutedForeground, textAlign: "center", marginVertical: 24 }}>
-              Nenhuma reação ainda.
+              {t("mercado_screen.likers_empty")}
             </Text>
           ) : (
             <ScrollView showsVerticalScrollIndicator={false}>
@@ -2229,6 +2240,7 @@ function MarketPollMobile({ post: initialPost, userId, colors, onPollVote }: {
   post: API.MarketPost; userId: string; colors: any;
   onPollVote: (opts: API.MarketPollOption[], votes: string[]) => void;
 }) {
+  const { t } = useTranslation();
   const [post, setPost]             = useState(initialPost);
   const [voting, setVoting]         = useState(false);
   const [showVoters, setShowVoters] = useState(false);
@@ -2268,7 +2280,7 @@ function MarketPollMobile({ post: initialPost, userId, colors, onPollVote }: {
     <>
       <View style={{ paddingHorizontal: 14, paddingBottom: 12, gap: 8 }}>
         {allowMultiple ? (
-          <Text style={{ fontSize: 11, color: colors.mutedForeground, marginBottom: 2 }}>Múltipla escolha — toque para selecionar/desselecionar</Text>
+          <Text style={{ fontSize: 11, color: colors.mutedForeground, marginBottom: 2 }}>{t("mercado_screen.poll_multiple_hint")}</Text>
         ) : null}
         {opts.map(opt => {
           const pct   = total > 0 ? Math.round((opt.votes_count / total) * 100) : 0;
@@ -2304,10 +2316,10 @@ function MarketPollMobile({ post: initialPost, userId, colors, onPollVote }: {
           );
         })}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{total} voto{total !== 1 ? "s" : ""}</Text>
+          <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{t("mercado_screen.poll_votes", { count: total })}</Text>
           {total > 0 && hasVoted && (
             <TouchableOpacity onPress={handleShowVoters}>
-              <Text style={{ fontSize: 11, color: colors.navy, fontWeight: "600" }}>Ver votos</Text>
+              <Text style={{ fontSize: 11, color: colors.navy, fontWeight: "600" }}>{t("mercado_screen.poll_see_votes")}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -2325,13 +2337,13 @@ function MarketPollMobile({ post: initialPost, userId, colors, onPollVote }: {
               <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border }} />
             </View>
             <Text style={{ fontSize: 16, fontWeight: "700", color: colors.navy, paddingHorizontal: 20, marginBottom: 4 }}>
-              Votos · {total} {total === 1 ? "voto" : "votos"}
+              {t("mercado_screen.poll_votes_modal_title", { count: total, total })}
             </Text>
             <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8 }}>
               {loadingVoters ? (
-                <Text style={{ color: colors.mutedForeground, fontSize: 14 }}>Carregando…</Text>
+                <Text style={{ color: colors.mutedForeground, fontSize: 14 }}>{t("mercado_screen.poll_votes_loading")}</Text>
               ) : voters.length === 0 ? (
-                <Text style={{ color: colors.mutedForeground, fontSize: 14 }}>Nenhum voto ainda.</Text>
+                <Text style={{ color: colors.mutedForeground, fontSize: 14 }}>{t("mercado_screen.poll_votes_empty")}</Text>
               ) : (
                 opts.map(opt => {
                   const optVoters = voters.filter(v => v.optionId === opt.id);
@@ -2373,6 +2385,7 @@ function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors,
   canSwipeBackVideo: boolean;
   playToken: number;
 }) {
+  const { t } = useTranslation();
   const [post,           setPost]           = useState<API.MarketPost>(initialPost);
   const [showComments,   setShowComments]   = useState(false);
   const [showLikers,     setShowLikers]     = useState(false);
@@ -2420,10 +2433,10 @@ function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors,
             <Text style={{ fontWeight: "800", fontSize: 15, color: colors.navy }}>Ideal.BI</Text>
             <View style={{ backgroundColor: colors.gold + "20", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, flexDirection: "row", alignItems: "center", gap: 3 }}>
               <Feather name="radio" size={9} color={colors.gold} />
-              <Text style={{ fontSize: 10, fontWeight: "700", color: colors.gold }}>Feed Exclusivo</Text>
+              <Text style={{ fontSize: 10, fontWeight: "700", color: colors.gold }}>{t("mercado_screen.idealbi_post_badge")}</Text>
             </View>
           </View>
-          <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>Inteligência de Mercado do Vinho</Text>
+          <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>{t("mercado_screen.idealbi_post_subtitle")}</Text>
           <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 1 }}>{dateStr}</Text>
         </View>
       </View>
@@ -2464,7 +2477,7 @@ function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors,
             ))}
           </View>
           <Text style={{ fontSize: 12, color: colors.mutedForeground }}>
-            {post.likes_count} {post.likes_count === 1 ? "pessoa reagiu" : "pessoas reagiram"} · ver quem reagiu
+            {t("mercado_screen.post_react", { count: post.likes_count })} · {t("mercado_screen.post_see_reactions")}
           </Text>
         </TouchableOpacity>
       )}
@@ -2499,7 +2512,7 @@ function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors,
             : (
               <>
                 <AntDesign name="heart" size={22} color={post.user_liked ? "#dc2626" : colors.mutedForeground} />
-                <Text style={{ fontSize: 13, fontWeight: "500", color: colors.mutedForeground }}>Reagir</Text>
+                <Text style={{ fontSize: 13, fontWeight: "500", color: colors.mutedForeground }}>{t("mercado_screen.post_react_btn")}</Text>
               </>
             )
           }
@@ -2512,7 +2525,7 @@ function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors,
         >
           <MaterialCommunityIcons name="comment-outline" size={22} color={showComments ? colors.navy : colors.mutedForeground} />
           <Text style={{ fontSize: 13, fontWeight: "500", color: showComments ? colors.navy : colors.mutedForeground }}>
-            {totalComments > 0 ? `${totalComments} ${totalComments === 1 ? "comentário" : "comentários"}` : "Comentar"}
+            {totalComments > 0 ? t("mercado_screen.post_comment", { count: totalComments }) : t("mercado_screen.post_comment_btn")}
           </Text>
         </TouchableOpacity>
       </View>
@@ -2544,6 +2557,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
   userId: string; isAdmin: boolean;
   colors: ReturnType<typeof useColors>; bottomPad: number;
 }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const { hasFeature: permHasFeature } = usePermissions();
   const [idealbiSubTab, setIdealbiSubTab] = useState<IdealBISubTab>("feed");
@@ -2683,8 +2697,8 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
   };
 
   const handlePost = async () => {
-    const t = newContent.trim();
-    if (!t || !isAdmin || posting) return;
+    const txt = newContent.trim();
+    if (!txt || !isAdmin || posting) return;
     setPosting(true);
 
     let imageUrl: string | null = null;
@@ -2720,7 +2734,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
       }
     }
 
-    const post = await API.createMarketPost(userId, t, imageUrl, videoUrl, finalPollOptions, pollAllowMultiple);
+    const post = await API.createMarketPost(userId, txt, imageUrl, videoUrl, finalPollOptions, pollAllowMultiple);
     if (post) { setPosts(prev => [post, ...prev]); resetForm(); }
     setPosting(false);
   };
@@ -2731,15 +2745,15 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
         <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: "#c9a84c18", alignItems: "center", justifyContent: "center" }}>
           <Text style={{ fontSize: 36 }}>📡</Text>
         </View>
-        <Text style={{ fontSize: 20, fontWeight: "800", color: colors.navy, textAlign: "center" }}>Ideal.BI Exclusivo</Text>
+        <Text style={{ fontSize: 20, fontWeight: "800", color: colors.navy, textAlign: "center" }}>{t("mercado_screen.idealbi_paywall_title")}</Text>
         <Text style={{ fontSize: 14, color: colors.mutedForeground, textAlign: "center", lineHeight: 21 }}>
-          Análises e insights exclusivos do mercado do vinho publicados pela Ideal.BI. Disponível nos planos com acesso ao feed.
+          {t("mercado_screen.idealbi_paywall_desc")}
         </Text>
         <TouchableOpacity
           style={{ backgroundColor: colors.gold, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 12, alignItems: "center", marginTop: 8 }}
           onPress={() => router.push("/subscription")}
         >
-          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Ver Planos</Text>
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>{t("mercado_screen.locked_see_plans")}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -2747,13 +2761,13 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
 
   const AdminHeader = isAdmin ? (
     <View style={{ marginHorizontal: 16, marginBottom: 14, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: "#fff", padding: 14, gap: 10 }}>
-      <Text style={{ fontSize: 14, fontWeight: "700", color: colors.navy }}>📡 Nova publicação Ideal.BI</Text>
+      <Text style={{ fontSize: 14, fontWeight: "700", color: colors.navy }}>{t("mercado_screen.admin_post_title")}</Text>
       <TextInput
         ref={postInputRef}
         value={newContent}
         onChangeText={setNewContent}
         onFocus={handleInputFocus(postInputRef)}
-        placeholder="Escreva um insight ou análise..."
+        placeholder={t("mercado_screen.admin_post_placeholder")}
         placeholderTextColor={colors.mutedForeground}
         multiline
         style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, fontSize: 14, color: colors.foreground, minHeight: 80, textAlignVertical: "top" }}
@@ -2780,7 +2794,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
       {/* Poll builder */}
       {pollMode ? (
         <View style={{ borderRadius: 10, borderWidth: 1, borderColor: colors.border, padding: 12, backgroundColor: "#fafaf8", gap: 8 }}>
-          <Text style={{ fontSize: 12, fontWeight: "700", color: colors.gold }}>📊 Opções da enquete</Text>
+          <Text style={{ fontSize: 12, fontWeight: "700", color: colors.gold }}>{t("mercado_screen.admin_poll_options_title")}</Text>
           {pollOptions.map((opt, i) => (
             <View key={i} style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
               <TextInput
@@ -2791,7 +2805,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
                   focusedInputRef.current = pollOptionRefs.current[i];
                   setTimeout(ensureFocusedInputVisible, 50);
                 }}
-                placeholder={`Opção ${i + 1}`}
+                placeholder={t("mercado_screen.admin_poll_option_placeholder", { n: i + 1 })}
                 placeholderTextColor={colors.mutedForeground}
                 style={{ flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, fontSize: 13, color: colors.foreground }}
               />
@@ -2804,7 +2818,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
           ))}
           {pollOptions.length < 5 ? (
             <TouchableOpacity onPress={() => setPollOptions(prev => [...prev, ""])}>
-              <Text style={{ fontSize: 12, color: colors.gold, fontWeight: "600" }}>+ Adicionar opção</Text>
+              <Text style={{ fontSize: 12, color: colors.gold, fontWeight: "600" }}>{t("mercado_screen.admin_poll_add_option")}</Text>
             </TouchableOpacity>
           ) : null}
           <TouchableOpacity
@@ -2813,7 +2827,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
           >
             <AntDesign name={pollAllowMultiple ? ("checksquare" as any) : ("checksquareo" as any)} size={18} color={pollAllowMultiple ? colors.gold : colors.mutedForeground} />
             <Text style={{ fontSize: 12, color: pollAllowMultiple ? colors.gold : colors.mutedForeground, fontWeight: pollAllowMultiple ? "700" : "400" }}>
-              Permitir múltipla escolha
+              {t("mercado_screen.admin_poll_allow_multiple")}
             </Text>
           </TouchableOpacity>
         </View>
@@ -2823,18 +2837,18 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
       <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
         <TouchableOpacity onPress={() => pickMedia("image")} style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
           <Feather name="image" size={14} color={colors.mutedForeground} />
-          <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Imagem</Text>
+          <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{t("mercado_screen.admin_media_image")}</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => pickMedia("video")} style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
           <Feather name="video" size={14} color={colors.mutedForeground} />
-          <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Vídeo</Text>
+          <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{t("mercado_screen.admin_media_video")}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => setPollMode(v => !v)}
           style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: pollMode ? colors.gold : colors.border, backgroundColor: pollMode ? colors.gold + "15" : "transparent" }}
         >
           <Feather name="bar-chart-2" size={14} color={pollMode ? colors.gold : colors.mutedForeground} />
-          <Text style={{ fontSize: 12, color: pollMode ? colors.gold : colors.mutedForeground, fontWeight: pollMode ? "700" : "400" }}>Enquete</Text>
+          <Text style={{ fontSize: 12, color: pollMode ? colors.gold : colors.mutedForeground, fontWeight: pollMode ? "700" : "400" }}>{t("mercado_screen.admin_media_poll")}</Text>
         </TouchableOpacity>
       </View>
 
@@ -2843,7 +2857,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
         onPress={handlePost}
         disabled={posting || !newContent.trim()}
       >
-        <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>{posting ? "Publicando..." : "Publicar"}</Text>
+        <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>{posting ? t("mercado_screen.admin_posting") : t("mercado_screen.admin_publish_btn")}</Text>
       </TouchableOpacity>
     </View>
   ) : null;
@@ -2895,7 +2909,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
             <View style={{ alignItems: "center", paddingTop: 60, gap: 12 }}>
               <Text style={{ fontSize: 36 }}>📡</Text>
               <Text style={{ fontSize: 15, color: colors.mutedForeground, textAlign: "center" }}>
-                {"Nenhuma publicação ainda.\nFique ligado para novidades da Ideal.BI."}
+                {t("mercado_screen.idealbi_empty")}
               </Text>
             </View>
           )}
@@ -2944,6 +2958,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 function LockedSection({ title, icon, colors }: { title: string; icon: string; colors: any }) {
+  const { t } = useTranslation();
   const router = useRouter();
   return (
     <View style={[styles.lockedCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
@@ -2952,11 +2967,11 @@ function LockedSection({ title, icon, colors }: { title: string; icon: string; c
       </View>
       <Text style={[styles.lockedTitle, { color: colors.navy }]}>{title}</Text>
       <Text style={[styles.lockedSub, { color: colors.mutedForeground }]}>
-        Esta seção não está incluída no seu plano atual.
+        {t("mercado_screen.locked_not_in_plan")}
       </Text>
       <View style={[styles.lockedBadge, { backgroundColor: colors.gold + "18" }]}>
         <Feather name="lock" size={12} color={colors.gold} />
-        <Text style={[styles.lockedBadgeText, { color: colors.gold }]}>Recurso dos planos pagos</Text>
+        <Text style={[styles.lockedBadgeText, { color: colors.gold }]}>{t("mercado_screen.locked_paid_feature")}</Text>
       </View>
       <TouchableOpacity
         style={{ marginTop: 12, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.gold, paddingHorizontal: 22, paddingVertical: 11, borderRadius: 10 }}
@@ -2964,13 +2979,14 @@ function LockedSection({ title, icon, colors }: { title: string; icon: string; c
         activeOpacity={0.8}
       >
         <Feather name="zap" size={14} color="#fff" />
-        <Text style={{ color: "#fff", fontWeight: "800", fontSize: 14 }}>Ver Planos e Assinar</Text>
+        <Text style={{ color: "#fff", fontWeight: "800", fontSize: 14 }}>{t("mercado_screen.locked_see_plans")}</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
 export default function MercadoScreen() {
+  const { t } = useTranslation();
   const colors  = useColors();
   const insets  = useSafeAreaInsets();
   const { user, profile, session } = useAuth();
@@ -3003,16 +3019,16 @@ export default function MercadoScreen() {
   }, [hasFeature]);
 
   const periods: { key: Period; label: string }[] = [
-    { key: "mes",       label: "Último Mês"      },
-    { key: "trimestre", label: "Trimestre (YTD)" },
-    { key: "ano",       label: "Último Ano"      },
+    { key: "mes",       label: t("mercado_screen.period_mes")       },
+    { key: "trimestre", label: t("mercado_screen.period_trimestre") },
+    { key: "ano",       label: t("mercado_screen.period_ano")       },
   ];
 
-  const handleShare = async (t: API.MarketTendencia) => {
+  const handleShare = async (tend: API.MarketTendencia) => {
     try {
       await Share.share({
-        title: t.title,
-        message: `${t.title}\n\n${t.pos ? "+" : ""}${t.change}% — ${t.desc}`,
+        title: tend.title,
+        message: `${tend.title}\n\n${tend.pos ? "+" : ""}${tend.change}% — ${tend.desc}`,
       });
     } catch (_) {}
   };
@@ -3028,26 +3044,26 @@ export default function MercadoScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         <View>
-          <Text style={[styles.headerTitle,    { color: colors.navy }]}>Mercado</Text>
-          <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>Inteligência de mercado do vinho</Text>
+          <Text style={[styles.headerTitle,    { color: colors.navy }]}>{t("mercado_screen.header_title")}</Text>
+          <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>{t("mercado_screen.header_subtitle")}</Text>
         </View>
       </View>
 
       {/* Main Tabs */}
       <View style={[styles.mainTabRow, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         {([
-          { key: "visao",         label: "Visão Geral",   icon: "bar-chart-2" },
-          { key: "apresentacoes", label: "Apresentações", icon: "monitor"     },
-          { key: "idealbi",       label: "Ideal.BI",      icon: "radio"       },
-        ] as { key: MercadoTab; label: string; icon: any }[]).map(t => (
+          { key: "visao",         label: t("mercado_screen.tab_visao"),         icon: "bar-chart-2" },
+          { key: "apresentacoes", label: t("mercado_screen.tab_apresentacoes"), icon: "monitor"     },
+          { key: "idealbi",       label: t("mercado_screen.tab_idealbi"),       icon: "radio"       },
+        ] as { key: MercadoTab; label: string; icon: any }[]).map(tab => (
           <TouchableOpacity
-            key={t.key}
-            style={[styles.mainTabBtn, mainTab === t.key && [styles.mainTabBtnActive, { backgroundColor: "#fff", borderColor: colors.border }]]}
-            onPress={() => setMainTab(t.key)}
+            key={tab.key}
+            style={[styles.mainTabBtn, mainTab === tab.key && [styles.mainTabBtnActive, { backgroundColor: "#fff", borderColor: colors.border }]]}
+            onPress={() => setMainTab(tab.key)}
           >
-            <Feather name={t.icon} size={14} color={mainTab === t.key ? colors.navy : colors.mutedForeground} />
-            <Text style={[styles.mainTabText, { color: mainTab === t.key ? colors.navy : colors.mutedForeground, fontWeight: mainTab === t.key ? "700" : "500" }]}>
-              {t.label}
+            <Feather name={tab.icon} size={14} color={mainTab === tab.key ? colors.navy : colors.mutedForeground} />
+            <Text style={[styles.mainTabText, { color: mainTab === tab.key ? colors.navy : colors.mutedForeground, fontWeight: mainTab === tab.key ? "700" : "500" }]}>
+              {tab.label}
             </Text>
           </TouchableOpacity>
         ))}
@@ -3092,7 +3108,7 @@ export default function MercadoScreen() {
                   ))}
                 </View>
               ) : (
-                <LockedSection title="KPIs de Mercado" icon="activity" colors={colors} />
+                <LockedSection title={t("mercado_screen.section_kpis")} icon="activity" colors={colors} />
               )}
 
               {/* Área: Exportações vs Importações */}
@@ -3100,78 +3116,78 @@ export default function MercadoScreen() {
                 <>
                   <View style={[styles.chartCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
                     <View style={styles.chartHeader}>
-                      <Text style={[styles.chartTitle, { color: colors.navy }]}>Evolução de Exportações {"&"} Importações</Text>
+                      <Text style={[styles.chartTitle, { color: colors.navy }]}>{t("mercado_screen.chart_area_title")}</Text>
                     </View>
                     <AreaChart data={data.chart_area} />
                     <View style={styles.legend}>
                       <View style={styles.legendItem}>
                         <View style={[styles.legendDot, { backgroundColor: colors.gold }]} />
-                        <Text style={[styles.legendText, { color: colors.mutedForeground }]}>Exportações</Text>
+                        <Text style={[styles.legendText, { color: colors.mutedForeground }]}>{t("mercado_screen.legend_exportacoes")}</Text>
                       </View>
                       <View style={styles.legendItem}>
                         <View style={[styles.legendDot, { backgroundColor: "#ef4444" }]} />
-                        <Text style={[styles.legendText, { color: colors.mutedForeground }]}>Importações</Text>
+                        <Text style={[styles.legendText, { color: colors.mutedForeground }]}>{t("mercado_screen.legend_importacoes")}</Text>
                       </View>
                       <TouchableOpacity style={styles.fonteBtn}>
                         <Feather name="info" size={11} color={colors.mutedForeground} />
-                        <Text style={[styles.fonteText, { color: colors.mutedForeground }]}>Fonte</Text>
+                        <Text style={[styles.fonteText, { color: colors.mutedForeground }]}>{t("mercado_screen.fonte_label")}</Text>
                       </TouchableOpacity>
                     </View>
                     <Text style={[styles.chartHint, { color: colors.mutedForeground }]}>
-                      Toque num ponto para ver o valor exato
+                      {t("mercado_screen.chart_area_hint")}
                     </Text>
                   </View>
 
                   {/* Barras: Produção Nacional */}
                   <View style={[styles.chartCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
                     <View style={styles.chartHeader}>
-                      <Text style={[styles.chartTitle, { color: colors.navy }]}>Produção Nacional por Período</Text>
+                      <Text style={[styles.chartTitle, { color: colors.navy }]}>{t("mercado_screen.chart_bar_title")}</Text>
                     </View>
                     <BarChart data={data.chart_bar} />
                     <TouchableOpacity style={[styles.fonteBtn, { alignSelf: "flex-end" }]}>
                       <Feather name="info" size={11} color={colors.mutedForeground} />
-                      <Text style={[styles.fonteText, { color: colors.mutedForeground }]}>Fonte</Text>
+                      <Text style={[styles.fonteText, { color: colors.mutedForeground }]}>{t("mercado_screen.fonte_label")}</Text>
                     </TouchableOpacity>
                     <Text style={[styles.chartHint, { color: colors.mutedForeground }]}>
-                      Toque numa barra para ver o valor
+                      {t("mercado_screen.chart_bar_hint")}
                     </Text>
                   </View>
                 </>
               ) : (
-                <LockedSection title="Gráficos" icon="bar-chart-2" colors={colors} />
+                <LockedSection title={t("mercado_screen.section_graficos")} icon="bar-chart-2" colors={colors} />
               )}
 
               {/* Tendências */}
               {can("tendencias") ? (
                 <View style={styles.section}>
-                  <Text style={[styles.sectionTitle, { color: colors.navy }]}>Tendências</Text>
-                  {data.tendencias.map(t => (
-                    <View key={t.title} style={[styles.tendCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                  <Text style={[styles.sectionTitle, { color: colors.navy }]}>{t("mercado_screen.section_tendencias")}</Text>
+                  {data.tendencias.map(tend => (
+                    <View key={tend.title} style={[styles.tendCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
                       <View style={styles.tendHeader}>
-                        <Text style={[styles.tendTitle, { color: colors.navy }]}>{t.title}</Text>
-                        <Text style={[styles.tendChange, { color: t.pos ? "#16a34a" : "#dc2626" }]}>
-                          {t.pos ? "+" : ""}{t.change}%
+                        <Text style={[styles.tendTitle, { color: colors.navy }]}>{tend.title}</Text>
+                        <Text style={[styles.tendChange, { color: tend.pos ? "#16a34a" : "#dc2626" }]}>
+                          {tend.pos ? "+" : ""}{tend.change}%
                         </Text>
                       </View>
-                      <Text style={[styles.tendDesc, { color: colors.mutedForeground }]}>{t.desc}</Text>
+                      <Text style={[styles.tendDesc, { color: colors.mutedForeground }]}>{tend.desc}</Text>
                       <View style={styles.tendFooter}>
                         <TouchableOpacity style={styles.fonteBtn}>
                           <Feather name="info" size={11} color={colors.mutedForeground} />
-                          <Text style={[styles.fonteText, { color: colors.mutedForeground }]}>Fonte</Text>
+                          <Text style={[styles.fonteText, { color: colors.mutedForeground }]}>{t("mercado_screen.fonte_label")}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={[styles.shareBtn, { backgroundColor: colors.gold + "15" }]}
-                          onPress={() => handleShare(t)}
+                          onPress={() => handleShare(tend)}
                         >
                           <Feather name="share-2" size={13} color={colors.gold} />
-                          <Text style={[styles.shareText, { color: colors.gold }]}>Partilhar</Text>
+                          <Text style={[styles.shareText, { color: colors.gold }]}>{t("mercado_screen.share_btn")}</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
                   ))}
                 </View>
               ) : (
-                <LockedSection title="Tendências" icon="trending-up" colors={colors} />
+                <LockedSection title={t("mercado_screen.section_tendencias")} icon="trending-up" colors={colors} />
               )}
 
               {/* Regiões Produtoras */}
@@ -3179,7 +3195,7 @@ export default function MercadoScreen() {
               <View style={styles.section}>
                 <View style={styles.sectionTitleRow}>
                   <Text style={{ fontSize: 18, marginRight: 6 }}>🍇</Text>
-                  <Text style={[styles.sectionTitle, { color: colors.navy }]}>Regiões Produtoras</Text>
+                  <Text style={[styles.sectionTitle, { color: colors.navy }]}>{t("mercado_screen.section_regioes")}</Text>
                 </View>
                 <View style={[styles.tableCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
                   {data.regioes.map((r, idx) => (
@@ -3207,12 +3223,12 @@ export default function MercadoScreen() {
                   ))}
                   <TouchableOpacity style={[styles.fonteBtn, { alignSelf: "flex-end", padding: 10 }]}>
                     <Feather name="info" size={11} color={colors.mutedForeground} />
-                    <Text style={[styles.fonteText, { color: colors.mutedForeground }]}>Fonte</Text>
+                    <Text style={[styles.fonteText, { color: colors.mutedForeground }]}>{t("mercado_screen.fonte_label")}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
               ) : (
-                <LockedSection title="Regiões Produtoras" icon="map-pin" colors={colors} />
+                <LockedSection title={t("mercado_screen.section_regioes")} icon="map-pin" colors={colors} />
               )}
 
               {/* Variedades em Destaque */}
@@ -3220,7 +3236,7 @@ export default function MercadoScreen() {
                 <View style={styles.section}>
                   <View style={styles.sectionTitleRow}>
                     <MaterialCommunityIcons name="glass-wine" size={18} color={colors.navy} style={{ marginRight: 6 }} />
-                    <Text style={[styles.sectionTitle, { color: colors.navy }]}>Variedades em Destaque</Text>
+                    <Text style={[styles.sectionTitle, { color: colors.navy }]}>{t("mercado_screen.section_variedades")}</Text>
                   </View>
                   <View style={[styles.tableCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
                     {data.variedades.map((v, idx) => {
@@ -3254,13 +3270,13 @@ export default function MercadoScreen() {
                   </View>
                 </View>
               ) : (
-                <LockedSection title="Variedades em Destaque" icon="git-merge" colors={colors} />
+                <LockedSection title={t("mercado_screen.section_variedades")} icon="git-merge" colors={colors} />
               )}
 
               {/* Última atualização */}
               {data.updated_at ? (
                 <Text style={[styles.updatedAt, { color: colors.mutedForeground }]}>
-                  Atualizado em {new Date(data.updated_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
+                  {t("mercado_screen.updated_at", { date: new Date(data.updated_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }) })}
                 </Text>
               ) : null}
             </>
