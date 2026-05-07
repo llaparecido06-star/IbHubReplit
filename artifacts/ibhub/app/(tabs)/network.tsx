@@ -797,6 +797,8 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
   const [revealCreditsTotal, setRevealCreditsTotal] = useState(0);
   const [revealingId, setRevealingId]         = useState<string | null>(null);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchingRef = useRef(false);
+  const [error, setError] = useState<string | null>(null);
   const exhausted = credits !== null && credits <= 0;
 
   useEffect(() => {
@@ -813,8 +815,8 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
 
   useEffect(() => {
     const val = q.trim();
-    if (val.length < 2) { setSuggestions([]); return; }
     if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    if (val.length < 2) { setSuggestions([]); return; }
     suggestTimer.current = setTimeout(async () => {
       try {
         const res = await fetch(`${API_URL}/wine-imports/bi-suggestions/exportadores?q=${encodeURIComponent(val)}`, { headers: authH() });
@@ -827,19 +829,21 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
   }, [q]);
 
   const doSearch = async (sq: string) => {
-    if (!sq.trim() || searching) return;
-    setSuggestions([]); setSearching(true); setItems([]); setSearched(false);
+    if (!sq.trim() || searchingRef.current) return;
+    searchingRef.current = true;
+    setSuggestions([]); setSearching(true); setItems([]); setSearched(false); setError(null);
     try {
       const params = new URLSearchParams({ q: sq, limit: "20", offset: "0" });
       const res = await fetch(`${API_URL}/wine-imports/bi-search/exportadores?${params}`, { headers: authH() });
-      if (res.status === 402) { setCredits(0); }
-      else if (res.ok) {
+      if (res.status === 402) { setCredits(0); setError("Consultas esgotadas. Faça upgrade para continuar."); }
+      else if (!res.ok) { setError("Erro ao buscar. Tente novamente."); }
+      else {
         const data = await res.json() as { items: BiExpItem[]; total: number; credits_remaining: number; credits_total: number };
         setItems(data.items); setTotal(data.total); setSearched(true);
         if (data.credits_remaining !== undefined) setCredits(data.credits_remaining);
       }
-    } catch {}
-    setSearching(false);
+    } catch { setError("Erro de conexão. Verifique sua internet."); }
+    finally { setSearching(false); searchingRef.current = false; }
   };
 
   const loadImps = async (name: string, id: string) => {
@@ -906,7 +910,13 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
         </View>
       )}
 
-      {!searched && !searching && suggestions.length === 0 && (
+      {!!error && (
+        <View style={{ backgroundColor: "#fef2f2", borderWidth: 1, borderColor: "#fca5a5", borderRadius: 12, padding: 14, flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Feather name="alert-circle" size={16} color="#dc2626" />
+          <Text style={{ flex: 1, fontSize: 13, color: "#dc2626" }}>{error}</Text>
+        </View>
+      )}
+      {!searched && !searching && suggestions.length === 0 && !error && (
         <View style={{ backgroundColor: colors.gold + "10", borderWidth: 1, borderColor: colors.gold + "30", borderRadius: 12, padding: 14, gap: 4 }}>
           <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>🌐 Como funciona</Text>
           <Text style={{ fontSize: 13, color: colors.mutedForeground, lineHeight: 19 }}>
@@ -1041,12 +1051,14 @@ function BiMobileImportadoresSearch({ colors }: { colors: ReturnType<typeof useC
   const [searched, setSearched]     = useState(false);
   const [credits, setCredits]       = useState<number | null>(null);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchingRef = useRef(false);
+  const [error, setError] = useState<string | null>(null);
   const exhausted = credits !== null && credits <= 0;
 
   useEffect(() => {
     const val = q.trim();
-    if (val.length < 2) { setSuggestions([]); return; }
     if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    if (val.length < 2) { setSuggestions([]); return; }
     suggestTimer.current = setTimeout(async () => {
       try {
         const res = await fetch(`${API_URL}/wine-imports/bi-suggestions/importadores?q=${encodeURIComponent(val)}`, { headers: authH() });
@@ -1059,19 +1071,21 @@ function BiMobileImportadoresSearch({ colors }: { colors: ReturnType<typeof useC
   }, [q]);
 
   const doSearch = async (sq: string) => {
-    if (!sq.trim() || searching) return;
-    setSuggestions([]); setSearching(true); setItems([]); setSearched(false);
+    if (!sq.trim() || searchingRef.current) return;
+    searchingRef.current = true;
+    setSuggestions([]); setSearching(true); setItems([]); setSearched(false); setError(null);
     try {
       const params = new URLSearchParams({ q: sq, limit: "20", offset: "0" });
       const res = await fetch(`${API_URL}/wine-imports/bi-search/importadores?${params}`, { headers: authH() });
-      if (res.status === 402) { setCredits(0); }
-      else if (res.ok) {
+      if (res.status === 402) { setCredits(0); setError("Consultas esgotadas. Faça upgrade para continuar."); }
+      else if (!res.ok) { setError("Erro ao buscar. Tente novamente."); }
+      else {
         const data = await res.json() as { items: BiImpItem[]; total: number; credits_remaining: number; credits_total: number };
         setItems(data.items); setTotal(data.total); setSearched(true);
         if (data.credits_remaining !== undefined) setCredits(data.credits_remaining);
       }
-    } catch {}
-    setSearching(false);
+    } catch { setError("Erro de conexão. Verifique sua internet."); }
+    finally { setSearching(false); searchingRef.current = false; }
   };
 
   return (
@@ -1106,7 +1120,13 @@ function BiMobileImportadoresSearch({ colors }: { colors: ReturnType<typeof useC
         </View>
       )}
 
-      {!searched && !searching && suggestions.length === 0 && (
+      {!!error && (
+        <View style={{ backgroundColor: "#fef2f2", borderWidth: 1, borderColor: "#fca5a5", borderRadius: 12, padding: 14, flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Feather name="alert-circle" size={16} color="#dc2626" />
+          <Text style={{ flex: 1, fontSize: 13, color: "#dc2626" }}>{error}</Text>
+        </View>
+      )}
+      {!searched && !searching && suggestions.length === 0 && !error && (
         <View style={{ backgroundColor: colors.gold + "10", borderWidth: 1, borderColor: colors.gold + "30", borderRadius: 12, padding: 14, gap: 4 }}>
           <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>📦 Como funciona</Text>
           <Text style={{ fontSize: 13, color: colors.mutedForeground, lineHeight: 19 }}>
@@ -1180,12 +1200,14 @@ function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useCol
   const [searched, setSearched]     = useState(false);
   const [credits, setCredits]       = useState<number | null>(null);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchingRef = useRef(false);
+  const [error, setError] = useState<string | null>(null);
   const exhausted = credits !== null && credits <= 0;
 
   useEffect(() => {
     const val = q.trim();
-    if (val.length < 2) { setSuggestions([]); return; }
     if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    if (val.length < 2) { setSuggestions([]); return; }
     suggestTimer.current = setTimeout(async () => {
       try {
         const res = await fetch(`${API_URL}/wine-imports/bi-suggestions/produtores?q=${encodeURIComponent(val)}`, { headers: authH() });
@@ -1198,19 +1220,21 @@ function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useCol
   }, [q]);
 
   const doSearch = async (sq: string) => {
-    if (!sq.trim() || searching) return;
-    setSuggestions([]); setSearching(true); setItems([]); setSearched(false);
+    if (!sq.trim() || searchingRef.current) return;
+    searchingRef.current = true;
+    setSuggestions([]); setSearching(true); setItems([]); setSearched(false); setError(null);
     try {
       const params = new URLSearchParams({ q: sq, limit: "20", offset: "0" });
       const res = await fetch(`${API_URL}/wine-imports/bi-search/produtores?${params}`, { headers: authH() });
-      if (res.status === 402) { setCredits(0); }
-      else if (res.ok) {
+      if (res.status === 402) { setCredits(0); setError("Consultas esgotadas. Faça upgrade para continuar."); }
+      else if (!res.ok) { setError("Erro ao buscar. Tente novamente."); }
+      else {
         const data = await res.json() as { items: BiProdItem[]; total: number; credits_remaining: number; credits_total: number };
         setItems(data.items); setTotal(data.total); setSearched(true);
         if (data.credits_remaining !== undefined) setCredits(data.credits_remaining);
       }
-    } catch {}
-    setSearching(false);
+    } catch { setError("Erro de conexão. Verifique sua internet."); }
+    finally { setSearching(false); searchingRef.current = false; }
   };
 
   return (
@@ -1245,7 +1269,13 @@ function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useCol
         </View>
       )}
 
-      {!searched && !searching && suggestions.length === 0 && (
+      {!!error && (
+        <View style={{ backgroundColor: "#fef2f2", borderWidth: 1, borderColor: "#fca5a5", borderRadius: 12, padding: 14, flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Feather name="alert-circle" size={16} color="#dc2626" />
+          <Text style={{ flex: 1, fontSize: 13, color: "#dc2626" }}>{error}</Text>
+        </View>
+      )}
+      {!searched && !searching && suggestions.length === 0 && !error && (
         <View style={{ backgroundColor: colors.gold + "10", borderWidth: 1, borderColor: colors.gold + "30", borderRadius: 12, padding: 14, gap: 4 }}>
           <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>🍇 Como funciona</Text>
           <Text style={{ fontSize: 13, color: colors.mutedForeground, lineHeight: 19 }}>
