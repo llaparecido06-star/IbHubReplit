@@ -1,5 +1,6 @@
 import { useRouter, useFocusEffect, Router } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
@@ -76,6 +77,7 @@ export default function OportunidadesScreen() {
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
   const { profile, user, activeCompany } = useAuth();
+  const { t } = useTranslation();
 
   const [tab, setTab]       = useState<OporTab>("market");
   const [search, setSearch] = useState("");
@@ -105,9 +107,9 @@ export default function OportunidadesScreen() {
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
 
   const TABS: { key: OporTab; label: string; icon: any }[] = [
-    { key: "market",  label: "Market",  icon: "shopping-bag" },
-    { key: "vagas",   label: "Vagas",   icon: "briefcase" },
-    { key: "eventos", label: "Eventos", icon: "calendar" },
+    { key: "market",  label: t("opportunities_screen.tab_market_short"),  icon: "shopping-bag" },
+    { key: "vagas",   label: t("opportunities_screen.tab_vagas"),   icon: "briefcase" },
+    { key: "eventos", label: t("opportunities_screen.tab_eventos"), icon: "calendar" },
   ];
 
   const loadData = useCallback(async () => {
@@ -152,21 +154,21 @@ export default function OportunidadesScreen() {
   const handleCreate = () => {
     if (!isEmpresa) {
       Alert.alert(
-        "Funcionalidade Exclusiva para Empresas",
+        t("opportunities_screen.empresa_only_title"),
         tab === "eventos"
-          ? "Somente empresas podem criar eventos. Selecione ou crie uma página de empresa para continuar."
-          : "Para anunciar vagas ou produtos no Market, selecione ou crie uma página de empresa.",
+          ? t("opportunities_screen.empresa_only_eventos")
+          : t("opportunities_screen.empresa_only_market"),
         [
-          { text: "Agora não", style: "cancel" },
-          { text: "Criar página de empresa", onPress: () => router.push("/manage-business-page" as any) },
+          { text: t("opportunities_screen.empresa_only_cancel"), style: "cancel" },
+          { text: t("opportunities_screen.create_company_page"), onPress: () => router.push("/manage-business-page" as any) },
         ],
       );
       return;
     }
     if (!canPublish) {
       Alert.alert(
-        "Sem permissão",
-        "Seu papel de Visualizador não permite publicar conteúdo nessa empresa. Fale com o proprietário para alterar seu acesso.",
+        t("opportunities_screen.no_permission_title"),
+        t("opportunities_screen.no_permission_msg"),
         [{ text: "OK" }],
       );
       return;
@@ -262,11 +264,11 @@ export default function OportunidadesScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.navy }]}>Oportunidades</Text>
+        <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("opportunities_screen.title")}</Text>
         {showCriarBtn ? (
           <TouchableOpacity style={[styles.criarBtn, { backgroundColor: colors.gold }]} onPress={handleCreate}>
             <Feather name="plus" size={15} color="#fff" />
-            <Text style={styles.criarBtnText}>{tab === "eventos" ? "Evento" : "Publicar"}</Text>
+            <Text style={styles.criarBtnText}>{tab === "eventos" ? t("opportunities_screen.create_btn_event") : t("opportunities_screen.create_btn_publish")}</Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
@@ -274,7 +276,7 @@ export default function OportunidadesScreen() {
             onPress={handleCreate}
           >
             <Feather name="lock" size={14} color={colors.mutedForeground} />
-            <Text style={[styles.criarBtnText, { color: colors.mutedForeground }]}>Empresas</Text>
+            <Text style={[styles.criarBtnText, { color: colors.mutedForeground }]}>{t("opportunities_screen.create_companies_label")}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -285,7 +287,7 @@ export default function OportunidadesScreen() {
           <Feather name="search" size={15} color={colors.mutedForeground} />
           <TextInput
             style={[styles.searchInput, { color: colors.foreground }]}
-            placeholder="Buscar..."
+            placeholder={t("opportunities_screen.search_placeholder")}
             placeholderTextColor={colors.mutedForeground}
             value={search}
             onChangeText={setSearch}
@@ -342,13 +344,13 @@ export default function OportunidadesScreen() {
         {!loading && loadError ? (
           <View style={{ alignItems: "center", marginTop: 48, rowGap: 12 }}>
             <Text style={{ color: colors.mutedForeground, fontSize: 15, textAlign: "center" }}>
-              Não foi possível carregar o conteúdo.{"\n"}Verifique sua conexão e tente novamente.
+              {t("opportunities_screen.load_error")}
             </Text>
             <TouchableOpacity
               onPress={() => { setLoading(true); loadData(); }}
               style={{ paddingHorizontal: 20, paddingVertical: 10, backgroundColor: colors.gold, borderRadius: 8 }}
             >
-              <Text style={{ color: "#fff", fontWeight: "600" }}>Tentar novamente</Text>
+              <Text style={{ color: "#fff", fontWeight: "600" }}>{t("opportunities_screen.retry")}</Text>
             </TouchableOpacity>
           </View>
         ) : null}
@@ -379,12 +381,12 @@ export default function OportunidadesScreen() {
               <View style={styles.badgesRow}>
                 {novo && (
                   <View style={[styles.badge, { backgroundColor: "#dcfce7" }]}>
-                    <Text style={[styles.badgeText, { color: "#16a34a" }]}>Novo</Text>
+                    <Text style={[styles.badgeText, { color: "#16a34a" }]}>{t("opportunities_screen.new_badge")}</Text>
                   </View>
                 )}
                 {urgente && (
                   <View style={[styles.badge, { backgroundColor: "#fef2f2" }]}>
-                    <Text style={[styles.badgeText, { color: "#dc2626" }]}>Urgente</Text>
+                    <Text style={[styles.badgeText, { color: "#dc2626" }]}>{t("opportunities_screen.urgent")}</Text>
                   </View>
                 )}
                 {item.category ? (
@@ -426,7 +428,7 @@ export default function OportunidadesScreen() {
                   <View style={styles.metaCounter}>
                     <Feather name="eye" size={12} color={colors.mutedForeground} />
                     <Text style={[styles.metaCounterText, { color: colors.mutedForeground }]}>
-                      {item.interests_count} {item.interests_count === 1 ? "interessado" : "interessados"}
+                      {item.interests_count === 1 ? t("opportunities_screen.interested_one", { count: item.interests_count }) : t("opportunities_screen.interested_plural", { count: item.interests_count })}
                     </Text>
                   </View>
                 ) : null}
@@ -442,7 +444,7 @@ export default function OportunidadesScreen() {
                 <View style={styles.expiryRow}>
                   <Feather name="clock" size={13} color={urgente ? "#dc2626" : colors.mutedForeground} />
                   <Text style={[styles.expiryText, { color: urgente ? "#dc2626" : colors.mutedForeground }]}>
-                    Expira: {new Date(item.expires_at).toLocaleDateString("pt-BR")}
+                    {t("opportunities_screen.expires")} {new Date(item.expires_at).toLocaleDateString()}
                   </Text>
                 </View>
               ) : null}
@@ -467,13 +469,13 @@ export default function OportunidadesScreen() {
               <View style={styles.badgesRow}>
                 {nova && (
                   <View style={[styles.badge, { backgroundColor: "#dcfce7" }]}>
-                    <Text style={[styles.badgeText, { color: "#16a34a" }]}>Nova</Text>
+                    <Text style={[styles.badgeText, { color: "#16a34a" }]}>{t("opportunities_screen.badge_nova")}</Text>
                   </View>
                 )}
                 {item.location ? (
                   <View style={[styles.badge, { backgroundColor: isRemote ? "#ede9fe" : "#f0f9ff" }]}>
                     <Text style={[styles.badgeText, { color: isRemote ? "#7c3aed" : "#0369a1" }]}>
-                      {isRemote ? "Remoto" : "Presencial"}
+                      {isRemote ? t("opportunities_screen.remote") : t("opportunities_screen.presential")}
                     </Text>
                   </View>
                 ) : null}
@@ -491,7 +493,7 @@ export default function OportunidadesScreen() {
                 {item.is_applied ? (
                   <View style={[styles.appliedTag, { backgroundColor: colors.gold + "18" }]}>
                     <Feather name="check-circle" size={12} color={colors.gold} />
-                    <Text style={[styles.appliedTagText, { color: colors.gold }]}>Candidatado</Text>
+                    <Text style={[styles.appliedTagText, { color: colors.gold }]}>{t("opportunities_screen.badge_applied")}</Text>
                   </View>
                 ) : (
                   <TouchableOpacity
@@ -533,7 +535,7 @@ export default function OportunidadesScreen() {
                   <View style={styles.metaCounter}>
                     <Feather name="users" size={12} color={colors.mutedForeground} />
                     <Text style={[styles.metaCounterText, { color: colors.mutedForeground }]}>
-                      {item.applications_count} {item.applications_count === 1 ? "candidato" : "candidatos"}
+                      {item.applications_count === 1 ? t("opportunities_screen.candidate_one", { count: item.applications_count }) : t("opportunities_screen.candidate_plural", { count: item.applications_count })}
                     </Text>
                   </View>
                 ) : null}
@@ -549,7 +551,7 @@ export default function OportunidadesScreen() {
                 <View style={styles.expiryRow}>
                   <Feather name="clock" size={13} color={colors.mutedForeground} />
                   <Text style={[styles.expiryText, { color: colors.mutedForeground }]}>
-                    Expira: {new Date(item.expires_at).toLocaleDateString("pt-BR")}
+                    {t("opportunities_screen.expires")} {new Date(item.expires_at).toLocaleDateString()}
                   </Text>
                 </View>
               ) : null}
@@ -571,7 +573,7 @@ export default function OportunidadesScreen() {
               activeOpacity={0.7}
             >
               <Text style={[styles.pastHeaderText, { color: colors.mutedForeground }]}>
-                Eventos passados ({pastEvents.length})
+                {t("opportunities_screen.past_events", { count: pastEvents.length })}
               </Text>
               <Feather name={pastCollapsed ? "chevron-down" : "chevron-up"} size={16} color={colors.mutedForeground} />
             </TouchableOpacity>
@@ -585,16 +587,16 @@ export default function OportunidadesScreen() {
         {!loading && tab === "market" && filteredMarket.length === 0 && (
           <View style={styles.empty}>
             <Feather name="shopping-bag" size={40} color={colors.mutedForeground} />
-            <Text style={[styles.emptyTitle, { color: colors.navy }]}>Nenhum anúncio encontrado</Text>
+            <Text style={[styles.emptyTitle, { color: colors.navy }]}>{t("opportunities_screen.no_market")}</Text>
             <Text style={[styles.emptyHint, { color: colors.mutedForeground }]}>
-              {search ? "Tente outro termo de busca." : "Seja o primeiro a anunciar algo na rede! Se você tem uma empresa, publique seus produtos e serviços aqui."}
+              {search ? t("opportunities_screen.empty_market_search_hint") : t("opportunities_screen.empty_market_hint")}
             </Text>
             {!isEmpresa && !search && (
               <TouchableOpacity
                 style={[styles.emptyCTA, { backgroundColor: colors.gold }]}
                 onPress={() => router.push("/manage-business-page" as any)}
               >
-                <Text style={styles.emptyCTAText}>Criar página de empresa</Text>
+                <Text style={styles.emptyCTAText}>{t("opportunities_screen.create_company_page")}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -603,19 +605,19 @@ export default function OportunidadesScreen() {
           <View style={styles.empty}>
             <Feather name="briefcase" size={40} color={colors.mutedForeground} />
             <Text style={[styles.emptyTitle, { color: colors.navy }]}>
-              {search ? "Nenhuma vaga encontrada" : "Boa sorte na busca!"}
+              {search ? t("opportunities_screen.empty_vagas_search_title") : t("opportunities_screen.empty_vagas_title")}
             </Text>
             <Text style={[styles.emptyHint, { color: colors.mutedForeground }]}>
               {search
-                ? "Tente outro termo ou remova os filtros."
-                : "Se você tem uma empresa, crie sua página e publique vagas para encontrar os melhores talentos do setor."}
+                ? t("opportunities_screen.empty_vagas_search_hint")
+                : t("opportunities_screen.empty_vagas_hint")}
             </Text>
             {!isEmpresa && !search && (
               <TouchableOpacity
                 style={[styles.emptyCTA, { backgroundColor: colors.gold }]}
                 onPress={() => router.push("/manage-business-page" as any)}
               >
-                <Text style={styles.emptyCTAText}>Criar página de empresa</Text>
+                <Text style={styles.emptyCTAText}>{t("opportunities_screen.create_company_page")}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -623,18 +625,18 @@ export default function OportunidadesScreen() {
         {!loading && tab === "eventos" && upcomingEvents.length === 0 && pastEvents.length === 0 && (
           <View style={styles.empty}>
             <Feather name="calendar" size={40} color={colors.mutedForeground} />
-            <Text style={[styles.emptyTitle, { color: colors.navy }]}>Nenhum evento encontrado</Text>
+            <Text style={[styles.emptyTitle, { color: colors.navy }]}>{t("opportunities_screen.empty_eventos_title")}</Text>
             <Text style={[styles.emptyHint, { color: colors.mutedForeground }]}>
               {isEmpresa
-                ? "Seja o primeiro a criar um evento e conecte profissionais do setor!"
-                : "Os eventos são publicados por empresas e produtores do setor. Em breve haverá novidades!"}
+                ? t("opportunities_screen.empty_eventos_hint_company")
+                : t("opportunities_screen.empty_eventos_hint_user")}
             </Text>
             {isEmpresa && (
               <TouchableOpacity
                 style={[styles.emptyCTA, { backgroundColor: colors.gold }]}
                 onPress={() => router.push("/new-event" as any)}
               >
-                <Text style={styles.emptyCTAText}>Criar evento</Text>
+                <Text style={styles.emptyCTAText}>{t("opportunities_screen.create_event_btn")}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -657,7 +659,7 @@ export default function OportunidadesScreen() {
           >
               <View style={styles.sheetHandle} />
               <View style={styles.filterHeader}>
-                <Text style={[styles.filterTitle, { color: colors.navy }]}>Filtros</Text>
+                <Text style={[styles.filterTitle, { color: colors.navy }]}>{t("opportunities_screen.filter_title")}</Text>
                 <TouchableOpacity onPress={closeFilter}
             accessibilityRole="button"
             accessibilityLabel="Fechar"
@@ -670,12 +672,12 @@ export default function OportunidadesScreen() {
               {tab === "market" && (
                 <>
                   <View style={styles.filterSection}>
-                    <Text style={[styles.filterSectionLabel, { color: colors.navy }]}>Ordenar por</Text>
+                    <Text style={[styles.filterSectionLabel, { color: colors.navy }]}>{t("opportunities_screen.filter_sort_label")}</Text>
                     <View style={styles.filterChips}>
                       {([
-                        { key: "recente", label: "Mais recente" },
-                        { key: "expirando", label: "Expirando logo" },
-                        { key: "mais-visualizados", label: "Mais visualizados" },
+                        { key: "recente", label: t("opportunities_screen.filter_sort_recent") },
+                        { key: "expirando", label: t("opportunities_screen.filter_sort_expiring") },
+                        { key: "mais-visualizados", label: t("opportunities_screen.filter_sort_viewed") },
                       ] as { key: MarketSort; label: string }[]).map((opt) => (
                         <TouchableOpacity
                           key={opt.key}
@@ -690,7 +692,7 @@ export default function OportunidadesScreen() {
                     </View>
                   </View>
                   <View style={styles.filterSection}>
-                    <Text style={[styles.filterSectionLabel, { color: colors.navy }]}>Categoria</Text>
+                    <Text style={[styles.filterSectionLabel, { color: colors.navy }]}>{t("opportunities_screen.filter_category_label")}</Text>
                     <View style={styles.filterChips}>
                       {MARKET_CATS.map((cat) => (
                         <TouchableOpacity
@@ -712,7 +714,7 @@ export default function OportunidadesScreen() {
               {tab === "vagas" && (
                 <>
                   <View style={styles.filterSection}>
-                    <Text style={[styles.filterSectionLabel, { color: colors.navy }]}>Modalidade</Text>
+                    <Text style={[styles.filterSectionLabel, { color: colors.navy }]}>{t("opportunities_screen.filter_modalidade_label")}</Text>
                     <View style={styles.filterChips}>
                       {MODALIDADES.map((m) => (
                         <TouchableOpacity
@@ -728,7 +730,7 @@ export default function OportunidadesScreen() {
                     </View>
                   </View>
                   <View style={styles.filterSection}>
-                    <Text style={[styles.filterSectionLabel, { color: colors.navy }]}>Tipo de contrato</Text>
+                    <Text style={[styles.filterSectionLabel, { color: colors.navy }]}>{t("opportunities_screen.filter_contract_label")}</Text>
                     <View style={styles.filterChips}>
                       {CONTRATOS.map((c) => (
                         <TouchableOpacity
@@ -749,7 +751,7 @@ export default function OportunidadesScreen() {
               {/* Eventos filters */}
               {tab === "eventos" && (
                 <View style={styles.filterSection}>
-                  <Text style={[styles.filterSectionLabel, { color: colors.navy }]}>Tipo de evento</Text>
+                  <Text style={[styles.filterSectionLabel, { color: colors.navy }]}>{t("opportunities_screen.filter_event_type_label")}</Text>
                   <View style={styles.filterChips}>
                     {EVENTO_TIPOS.map((t) => (
                       <TouchableOpacity
@@ -777,13 +779,13 @@ export default function OportunidadesScreen() {
                     closeFilter();
                   }}
                 >
-                  <Text style={[styles.filterResetText, { color: colors.mutedForeground }]}>Limpar</Text>
+                  <Text style={[styles.filterResetText, { color: colors.mutedForeground }]}>{t("opportunities_screen.filter_clear")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.filterApplyBtn, { backgroundColor: colors.gold }]}
                   onPress={closeFilter}
                 >
-                  <Text style={styles.filterApplyText}>Aplicar</Text>
+                  <Text style={styles.filterApplyText}>{t("opportunities_screen.filter_apply")}</Text>
                 </TouchableOpacity>
               </View>
           </Animated.View>
@@ -794,10 +796,11 @@ export default function OportunidadesScreen() {
 }
 
 function EventoCard({ item, colors, router, past }: { item: AppEvent; colors: ReturnType<typeof useColors>; router: Router; past?: boolean }) {
-  const dateStr = new Date(item.start_date).toLocaleDateString("pt-BR", {
+  const { t } = useTranslation();
+  const dateStr = new Date(item.start_date).toLocaleDateString(undefined, {
     day: "2-digit", month: "short", year: "numeric",
   });
-  const timeStr = new Date(item.start_date).toLocaleTimeString("pt-BR", {
+  const timeStr = new Date(item.start_date).toLocaleTimeString(undefined, {
     hour: "2-digit", minute: "2-digit",
   });
   const locationStr = item.location_type === "online" ? "Online" : (item.location ?? "");
@@ -819,23 +822,23 @@ function EventoCard({ item, colors, router, past }: { item: AppEvent; colors: Re
       <View style={styles.badgesRow}>
         {hoje && (
           <View style={[styles.badge, { backgroundColor: "#fef9c3" }]}>
-            <Text style={[styles.badgeText, { color: "#a16207" }]}>Hoje</Text>
+            <Text style={[styles.badgeText, { color: "#a16207" }]}>{t("opportunities_screen.badge_today")}</Text>
           </View>
         )}
         {semana && (
           <View style={[styles.badge, { backgroundColor: "#ede9fe" }]}>
-            <Text style={[styles.badgeText, { color: "#6d28d9" }]}>Esta semana</Text>
+            <Text style={[styles.badgeText, { color: "#6d28d9" }]}>{t("opportunities_screen.badge_thisweek")}</Text>
           </View>
         )}
         {confirmei && (
           <View style={[styles.badge, { backgroundColor: colors.gold + "22" }]}>
             <Feather name="check-circle" size={11} color={colors.gold} />
-            <Text style={[styles.badgeText, { color: colors.gold, marginLeft: 3 }]}>Confirmei</Text>
+            <Text style={[styles.badgeText, { color: colors.gold, marginLeft: 3 }]}>{t("opportunities_screen.badge_confirmed")}</Text>
           </View>
         )}
         <View style={[styles.badge, { backgroundColor: item.entry_type === "gratuito" ? "#dcfce7" : "#fef9c3" }]}>
           <Text style={[styles.badgeText, { color: item.entry_type === "gratuito" ? "#16a34a" : "#a16207" }]}>
-            {item.entry_type === "gratuito" ? "Gratuito" : "Pago"}
+            {item.entry_type === "gratuito" ? t("opportunities_screen.free") : t("event_screen.entry_paid")}
           </Text>
         </View>
       </View>
@@ -864,7 +867,7 @@ function EventoCard({ item, colors, router, past }: { item: AppEvent; colors: Re
           <View style={styles.eventoMetaItem}>
             <Feather name="users" size={13} color={colors.mutedForeground} />
             <Text style={[styles.eventoMetaText, { color: colors.mutedForeground }]}>
-              {count} {count === 1 ? "confirmado" : "confirmados"}
+              {count === 1 ? t("opportunities_screen.confirmed_one", { count }) : t("opportunities_screen.confirmed_plural", { count })}
             </Text>
           </View>
         )}

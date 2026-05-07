@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
@@ -27,22 +28,9 @@ const PRODUCT_CATEGORIES = ["Vinho Tinto", "Vinho Branco", "Vinho Rosé", "Espum
 type WineStatus = "adega" | "consumido" | "presenteado" | "wishlist";
 type FilterKey  = "todos" | WineStatus;
 
-const FILTER_OPTIONS: { key: FilterKey; label: string }[] = [
-  { key: "todos",       label: "Todos" },
-  { key: "adega",       label: "Na Adega" },
-  { key: "consumido",   label: "Consumido" },
-  { key: "presenteado", label: "Presenteado" },
-  { key: "wishlist",    label: "Lista de Desejos" },
-];
-
-const STATUS_OPTIONS: { key: WineStatus; label: string }[] = [
-  { key: "adega",       label: "Na Adega" },
-  { key: "consumido",   label: "Consumido" },
-  { key: "presenteado", label: "Presenteado" },
-  { key: "wishlist",    label: "Lista de Desejos" },
-];
 
 function PortfolioManagerTab({ companyId }: { companyId: string }) {
+  const { t } = useTranslation();
   const colors = useColors();
   const [products, setProducts] = useState<API.CompanyProduct[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -66,7 +54,7 @@ function PortfolioManagerTab({ companyId }: { companyId: string }) {
   };
 
   const handleSave = async () => {
-    if (!pName.trim()) { Alert.alert("Atenção", "Informe o nome do produto."); return; }
+    if (!pName.trim()) { Alert.alert(t("common.attention"), t("empresa_screen.product_name_required")); return; }
     setSaving(true);
     if (editingId) {
       const updated = await API.updateCompanyProduct(editingId, { name: pName.trim(), description: pDesc.trim() || null, category: pCat, price: pPrice.trim() || null });
@@ -79,9 +67,9 @@ function PortfolioManagerTab({ companyId }: { companyId: string }) {
   };
 
   const handleDelete = (id: string, name: string) => {
-    Alert.alert("Remover produto", `Remover "${name}" do portifólio?`, [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Remover", style: "destructive", onPress: async () => {
+    Alert.alert(t("empresa_screen.remove_product_title"), `${name}?`, [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("empresa_screen.remove"), style: "destructive", onPress: async () => {
         await API.deleteCompanyProduct(id);
         setProducts(prev => prev.filter(p => p.id !== id));
       }},
@@ -95,21 +83,21 @@ function PortfolioManagerTab({ companyId }: { companyId: string }) {
       <Modal visible={showForm} animationType="slide" presentationStyle="formSheet" onRequestClose={() => { setShowForm(false); resetForm(); }}>
         <View style={[{ flex: 1, backgroundColor: colors.background }]}>
           <View style={[{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: "#fff" }]}>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: colors.navy }}>{editingId ? "Editar Produto" : "Novo Produto"}</Text>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: colors.navy }}>{editingId ? t("empresa_screen.product_form_edit") : t("empresa_screen.new_product")}</Text>
             <TouchableOpacity onPress={() => { setShowForm(false); resetForm(); }}>
               <Feather name="x" size={22} color={colors.navy} />
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }} showsVerticalScrollIndicator={false}>
-            <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Nome *</Text>
-            <TextInput value={pName} onChangeText={setPName} placeholder="Nome do produto" placeholderTextColor={colors.mutedForeground}
+            <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{t("empresa_screen.field_name_label")} *</Text>
+            <TextInput value={pName} onChangeText={setPName} placeholder={t("empresa_screen.name_placeholder")} placeholderTextColor={colors.mutedForeground}
               style={[styles.fInput, { borderColor: colors.border, color: colors.foreground }]} />
 
-            <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Descrição</Text>
-            <TextInput value={pDesc} onChangeText={setPDesc} placeholder="Descrição" placeholderTextColor={colors.mutedForeground} multiline numberOfLines={3}
+            <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{t("empresa_screen.field_desc_label")}</Text>
+            <TextInput value={pDesc} onChangeText={setPDesc} placeholder={t("empresa_screen.desc_placeholder")} placeholderTextColor={colors.mutedForeground} multiline numberOfLines={3}
               style={[styles.fInput, styles.fTextarea, { borderColor: colors.border, color: colors.foreground }]} />
 
-            <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Categoria</Text>
+            <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{t("empresa_screen.field_cat_label")}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.statusChips]}>
               {PRODUCT_CATEGORIES.map(cat => (
                 <TouchableOpacity key={cat} onPress={() => setPCat(cat)}
@@ -119,13 +107,13 @@ function PortfolioManagerTab({ companyId }: { companyId: string }) {
               ))}
             </ScrollView>
 
-            <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Preço sugerido (ex: R$ 89,90)</Text>
+            <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{t("empresa_screen.field_price_label")} (ex: R$ 89,90)</Text>
             <TextInput value={pPrice} onChangeText={setPPrice} placeholder="R$ 0,00" placeholderTextColor={colors.mutedForeground} keyboardType="decimal-pad"
               style={[styles.fInput, { borderColor: colors.border, color: colors.foreground }]} />
 
             <TouchableOpacity style={[styles.saveBtn, { backgroundColor: pName.trim() && !saving ? colors.gold : "#ccc" }]} onPress={handleSave} disabled={!pName.trim() || saving}>
               {saving ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="check" size={18} color="#fff" />}
-              <Text style={styles.saveBtnText}>{saving ? "Salvando..." : editingId ? "Salvar Alterações" : "Adicionar Produto"}</Text>
+              <Text style={styles.saveBtnText}>{saving ? t("common.saving") : editingId ? t("manage_business.save_btn") : t("empresa_screen.product_form_add")}</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -133,17 +121,17 @@ function PortfolioManagerTab({ companyId }: { companyId: string }) {
 
       <TouchableOpacity style={[styles.addBtn, { backgroundColor: colors.gold, alignSelf: "flex-end", margin: 16 }]} onPress={() => { resetForm(); setShowForm(true); }}>
         <Feather name="plus" size={15} color="#fff" />
-        <Text style={styles.addBtnText}>Adicionar</Text>
+        <Text style={styles.addBtnText}>{t("common.add")}</Text>
       </TouchableOpacity>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32, gap: 10 }}>
         {products.length === 0 ? (
           <View style={styles.empty}>
             <Feather name="package" size={36} color={colors.border} />
-            <Text style={[styles.emptyTitle, { color: colors.mutedForeground }]}>Nenhum produto no portifólio</Text>
+            <Text style={[styles.emptyTitle, { color: colors.mutedForeground }]}>{t("empresa_screen.portfolio_empty_manager")}</Text>
             <TouchableOpacity style={[styles.emptyBtn, { backgroundColor: colors.gold }]} onPress={() => { resetForm(); setShowForm(true); }}>
               <Feather name="plus" size={16} color="#fff" />
-              <Text style={styles.emptyBtnText}>Adicionar Produto</Text>
+              <Text style={styles.emptyBtnText}>{t("empresa_screen.product_form_add")}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -187,12 +175,28 @@ function StarRating({ value, onChange }: { value: number; onChange: (v: number) 
 }
 
 export default function WineCellarScreen() {
+  const { t } = useTranslation();
   const colors  = useColors();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
   const { user, profile, activeCompany } = useAuth();
   const isCompany = !!activeCompany || profile?.profile_type === "empresa";
   const companyId = activeCompany?.id ?? null;
+
+  const FILTER_OPTIONS: { key: FilterKey; label: string }[] = [
+    { key: "todos",       label: t("wine_cellar_screen.filter_all") },
+    { key: "adega",       label: t("wine_cellar_screen.filter_cellar") },
+    { key: "consumido",   label: t("wine_cellar_screen.filter_consumed") },
+    { key: "presenteado", label: t("wine_cellar_screen.filter_gifted") },
+    { key: "wishlist",    label: t("wine_cellar_screen.filter_wishlist") },
+  ];
+
+  const STATUS_OPTIONS: { key: WineStatus; label: string }[] = [
+    { key: "adega",       label: t("wine_cellar_screen.status_cellar") },
+    { key: "consumido",   label: t("wine_cellar_screen.status_consumed") },
+    { key: "presenteado", label: t("wine_cellar_screen.status_gifted") },
+    { key: "wishlist",    label: t("wine_cellar_screen.status_wishlist") },
+  ];
 
   const [screenTab, setScreenTab] = useState<"adega" | "portfolio">("adega");
 
@@ -362,20 +366,20 @@ export default function WineCellarScreen() {
   const canSave = wName.trim().length > 0 && wGrape.trim().length > 0 && wVintage.trim().length > 0 && wEan.trim().length > 0;
 
   const handleAdd = () => {
-    if (!wName.trim()) { Alert.alert("Atenção", "Informe o nome do vinho."); return; }
-    if (!wGrape.trim()) { Alert.alert("Atenção", "Informe a uva/casta do vinho."); return; }
-    if (!wVintage.trim()) { Alert.alert("Atenção", "Informe a safra do vinho."); return; }
-    if (!wEan.trim()) { Alert.alert("Atenção", "Informe o EAN/código de barras do vinho."); return; }
+    if (!wName.trim()) { Alert.alert(t("common.attention"), t("wine_cellar_screen.error_name")); return; }
+    if (!wGrape.trim()) { Alert.alert(t("common.attention"), t("wine_cellar_screen.error_grape")); return; }
+    if (!wVintage.trim()) { Alert.alert(t("common.attention"), t("wine_cellar_screen.error_vintage")); return; }
+    if (!wEan.trim()) { Alert.alert(t("common.attention"), t("wine_cellar_screen.error_ean")); return; }
     if (!user?.id) return;
 
     const buyDate = parseDateBR(wBuyDate);
     const drinkBy = parseDateBR(wDrinkBy);
 
     if (wBuyDate.trim() && !buyDate) {
-      Alert.alert("Data inválida", "Informe a data de compra no formato dd/mm/aaaa."); return;
+      Alert.alert(t("wine_cellar_screen.error_date_invalid"), t("wine_cellar_screen.error_buy_date")); return;
     }
     if (wDrinkBy.trim() && !drinkBy) {
-      Alert.alert("Data inválida", "Informe 'beber até' no formato dd/mm/aaaa."); return;
+      Alert.alert(t("wine_cellar_screen.error_date_invalid"), t("wine_cellar_screen.error_drink_by")); return;
     }
 
     const payload = {
@@ -406,12 +410,12 @@ export default function WineCellarScreen() {
 
   const handleDelete = (id: string, name: string) => {
     Alert.alert(
-      "Remover vinho",
-      `Remover "${name}" da adega?`,
+      t("wine_cellar_screen.delete_title"),
+      t("wine_cellar_screen.delete_msg", { name }),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Remover",
+          text: t("empresa_screen.remove"),
           style: "destructive",
           onPress: () => executeDelete(id),
         },
@@ -459,21 +463,21 @@ export default function WineCellarScreen() {
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <Text style={[styles.headerTitle, { color: colors.navy }]} numberOfLines={1}>
-              {screenTab === "portfolio" ? "Portifólio" : "Adega"}
+              {screenTab === "portfolio" ? t("wine_cellar_screen.title_portfolio") : t("wine_cellar_screen.title_cellar")}
             </Text>
             <Text style={[styles.headerSub, { color: colors.mutedForeground }]} numberOfLines={1}>
-              {screenTab === "portfolio" ? "Produtos da empresa" : "Gerencie sua adega pessoal"}
+              {screenTab === "portfolio" ? t("wine_cellar_screen.sub_portfolio") : t("wine_cellar_screen.sub_cellar")}
             </Text>
           </View>
           {screenTab === "adega" && (
             <View style={{ flexDirection: "row", gap: 8, flexShrink: 0 }}>
               <TouchableOpacity style={[styles.headerBtn, { backgroundColor: colors.navy + "14", borderWidth: 1, borderColor: colors.navy + "20" }]} onPress={() => router.push("/wine-ranking" as any)}>
                 <Feather name="bar-chart-2" size={15} color={colors.navy} />
-                <Text style={[styles.headerBtnText, { color: colors.navy }]}>Ranking</Text>
+                <Text style={[styles.headerBtnText, { color: colors.navy }]}>{t("wine_cellar_screen.ranking_btn")}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.headerBtn, { backgroundColor: colors.gold }]} onPress={() => setShowForm(true)}>
                 <Feather name="plus" size={15} color="#fff" />
-                <Text style={styles.headerBtnText}>Adicionar</Text>
+                <Text style={styles.headerBtnText}>{t("common.add")}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -483,10 +487,10 @@ export default function WineCellarScreen() {
       {/* Screen tabs (only for company accounts) */}
       {isCompany && (
         <View style={{ flexDirection: "row", backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border }}>
-          {([{ key: "adega", label: "🍷 Adega" }, { key: "portfolio", label: "📦 Portifólio" }] as const).map(t => (
-            <Pressable key={t.key} onPress={() => setScreenTab(t.key)}
-              style={{ flex: 1, alignItems: "center", paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: screenTab === t.key ? colors.gold : "transparent" }}>
-              <Text style={{ fontSize: 14, fontWeight: "700", color: screenTab === t.key ? colors.gold : colors.mutedForeground }}>{t.label}</Text>
+          {([{ key: "adega", label: `🍷 ${t("wine_cellar_screen.title_cellar")}` }, { key: "portfolio", label: `📦 ${t("wine_cellar_screen.title_portfolio")}` }] as const).map(tab => (
+            <Pressable key={tab.key} onPress={() => setScreenTab(tab.key)}
+              style={{ flex: 1, alignItems: "center", paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: screenTab === tab.key ? colors.gold : "transparent" }}>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: screenTab === tab.key ? colors.gold : colors.mutedForeground }}>{tab.label}</Text>
             </Pressable>
           ))}
         </View>
@@ -501,7 +505,7 @@ export default function WineCellarScreen() {
             <View style={styles.empty}>
               <Feather name="briefcase" size={36} color={colors.border} />
               <Text style={[styles.emptyTitle, { color: colors.mutedForeground, textAlign: "center" }]}>
-                Selecione uma empresa no seu perfil para gerenciar o portifólio.
+                {t("wine_cellar_screen.portfolio_no_company")}
               </Text>
             </View>
           )}
@@ -514,9 +518,9 @@ export default function WineCellarScreen() {
         {/* KPI cards */}
         <View style={styles.kpiRow}>
           {[
-            { icon: "wind",         label: "Na Adega",        val: counts.adega,    color: colors.gold },
-            { icon: "check-circle", label: "Consumidos",      val: counts.consumido, color: "#16a34a" },
-            { icon: "star",         label: "Lista de Desejos", val: counts.wishlist,  color: "#f59e0b" },
+            { icon: "wind",         label: t("wine_cellar_screen.kpi_cellar"),   val: counts.adega,    color: colors.gold },
+            { icon: "check-circle", label: t("wine_cellar_screen.kpi_consumed"), val: counts.consumido, color: "#16a34a" },
+            { icon: "star",         label: t("wine_cellar_screen.kpi_wishlist"), val: counts.wishlist,  color: "#f59e0b" },
           ].map((k) => (
             <View key={k.label} style={[styles.kpiCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
               <Feather name={k.icon as any} size={22} color={k.color} />
@@ -531,7 +535,7 @@ export default function WineCellarScreen() {
           <View style={[styles.valueBanner, { backgroundColor: colors.gold + "14", borderColor: colors.gold + "40" }]}>
             <Feather name="trending-up" size={16} color={colors.gold} />
             <Text style={[styles.valueBannerText, { color: colors.navy }]}>
-              Valor estimado da adega:{" "}
+              {t("wine_cellar_screen.value_banner")}{" "}
               <Text style={{ fontWeight: "800", color: colors.gold }}>
                 R$ {cellarValue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
@@ -545,8 +549,8 @@ export default function WineCellarScreen() {
             <Feather name="clock" size={15} color="#b45309" />
             <Text style={[styles.windowBannerText, { color: "#b45309" }]}>
               {winesNearWindow.length === 1
-                ? `"${winesNearWindow[0].name}" está na janela ideal de consumo!`
-                : `${winesNearWindow.length} vinhos na janela ideal de consumo — hora de abrir!`}
+                ? t("wine_cellar_screen.drink_window_one", { name: winesNearWindow[0].name })
+                : t("wine_cellar_screen.drink_window_many", { count: winesNearWindow.length })}
             </Text>
           </View>
         )}
@@ -557,7 +561,7 @@ export default function WineCellarScreen() {
             <Feather name="search" size={15} color={colors.mutedForeground} />
             <TextInput
               style={[styles.searchInput, { color: colors.foreground }]}
-              placeholder="Buscar vinhos..."
+              placeholder={t("wine_cellar_screen.search_placeholder")}
               placeholderTextColor={colors.mutedForeground}
               value={search}
               onChangeText={setSearch}
@@ -600,13 +604,13 @@ export default function WineCellarScreen() {
         {filtered.length === 0 ? (
           <View style={styles.empty}>
             <Feather name="wind" size={40} color={colors.border} />
-            <Text style={[styles.emptyTitle, { color: colors.mutedForeground }]}>Sua adega está vazia</Text>
+            <Text style={[styles.emptyTitle, { color: colors.mutedForeground }]}>{t("wine_cellar_screen.empty_title")}</Text>
             <TouchableOpacity
               style={[styles.emptyBtn, { backgroundColor: colors.gold }]}
               onPress={() => setShowForm(true)}
             >
               <Feather name="plus" size={16} color="#fff" />
-              <Text style={styles.emptyBtnText}>Adicionar primeiro vinho</Text>
+              <Text style={styles.emptyBtnText}>{t("wine_cellar_screen.add_first")}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -662,79 +666,79 @@ export default function WineCellarScreen() {
       <Modal visible={showForm} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { resetForm(); setShowForm(false); }}>
         <View style={[styles.formContainer, { backgroundColor: colors.background }]}>
           <View style={[styles.formHeader, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
-            <Text style={[styles.formTitle, { color: colors.navy }]}>{editingId ? "Editar Vinho" : "Adicionar Vinho"}</Text>
+            <Text style={[styles.formTitle, { color: colors.navy }]}>{editingId ? t("wine_cellar_screen.form_title_edit") : t("wine_cellar_screen.form_title_add")}</Text>
             <TouchableOpacity onPress={() => { resetForm(); setShowForm(false); }}>
               <Feather name="x" size={22} color={colors.navy} />
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={styles.formScroll} showsVerticalScrollIndicator={false}>
             {/* Required fields notice */}
-            <Text style={[styles.fLabel, { color: colors.mutedForeground, marginBottom: -4 }]}>Campos obrigatórios: Nome, Uva, Safra e EAN</Text>
+            <Text style={[styles.fLabel, { color: colors.mutedForeground, marginBottom: -4 }]}>{t("wine_cellar_screen.required_notice")}</Text>
             <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: wName.trim() ? colors.gold : colors.border, color: colors.foreground }]}
-              placeholder="Nome do vinho *" placeholderTextColor={colors.mutedForeground} value={wName} onChangeText={setWName} />
+              placeholder={t("wine_cellar_screen.field_name")} placeholderTextColor={colors.mutedForeground} value={wName} onChangeText={setWName} />
             <View style={styles.fRow}>
               <TextInput style={[styles.fInput, styles.fHalf, { backgroundColor: "#fff", borderColor: wGrape.trim() ? colors.gold : colors.border, color: colors.foreground }]}
-                placeholder="Uva/Casta *" placeholderTextColor={colors.mutedForeground} value={wGrape} onChangeText={setWGrape} />
+                placeholder={t("wine_cellar_screen.field_grape")} placeholderTextColor={colors.mutedForeground} value={wGrape} onChangeText={setWGrape} />
               <TextInput style={[styles.fInput, styles.fHalf, { backgroundColor: "#fff", borderColor: wVintage.trim() ? colors.gold : colors.border, color: colors.foreground }]}
-                placeholder="Safra *" placeholderTextColor={colors.mutedForeground} value={wVintage} onChangeText={setWVintage} keyboardType="numeric" />
+                placeholder={t("wine_cellar_screen.field_vintage")} placeholderTextColor={colors.mutedForeground} value={wVintage} onChangeText={setWVintage} keyboardType="numeric" />
             </View>
             <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: wEan.trim() ? colors.gold : colors.border, color: colors.foreground }]}
-              placeholder="EAN / Código de barras (ex: 7896123456789) *" placeholderTextColor={colors.mutedForeground}
+              placeholder={t("wine_cellar_screen.field_ean")} placeholderTextColor={colors.mutedForeground}
               value={wEan} onChangeText={setWEan} keyboardType="numeric" />
             <View style={styles.fRow}>
               <TextInput style={[styles.fInput, styles.fHalf, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                placeholder="Produtor" placeholderTextColor={colors.mutedForeground} value={wProducer} onChangeText={setWProducer} />
+                placeholder={t("wine_cellar_screen.field_producer")} placeholderTextColor={colors.mutedForeground} value={wProducer} onChangeText={setWProducer} />
               <TextInput style={[styles.fInput, styles.fHalf, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                placeholder="País" placeholderTextColor={colors.mutedForeground} value={wCountry} onChangeText={setWCountry} />
+                placeholder={t("wine_cellar_screen.field_country")} placeholderTextColor={colors.mutedForeground} value={wCountry} onChangeText={setWCountry} />
             </View>
             <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-              placeholder="Região" placeholderTextColor={colors.mutedForeground} value={wRegion} onChangeText={setWRegion} />
+              placeholder={t("wine_cellar_screen.field_region")} placeholderTextColor={colors.mutedForeground} value={wRegion} onChangeText={setWRegion} />
             <View style={styles.fRow}>
               <View style={{ flex: 1, gap: 4 }}>
-                <Text style={[styles.fLabel, { color: colors.mutedForeground }]}>Quantidade</Text>
+                <Text style={[styles.fLabel, { color: colors.mutedForeground }]}>{t("wine_cellar_screen.field_qty")}</Text>
                 <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
                   value={wQty} onChangeText={setWQty} keyboardType="numeric" />
               </View>
               <TextInput style={[styles.fInput, styles.fHalf, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground, alignSelf: "flex-end" }]}
-                placeholder="Preço de compra" placeholderTextColor={colors.mutedForeground} value={wPrice} onChangeText={setWPrice} keyboardType="decimal-pad" />
+                placeholder={t("wine_cellar_screen.field_price")} placeholderTextColor={colors.mutedForeground} value={wPrice} onChangeText={setWPrice} keyboardType="decimal-pad" />
             </View>
             <View style={styles.fRow}>
               <View style={{ flex: 1, gap: 4 }}>
-                <Text style={[styles.fLabel, { color: colors.mutedForeground }]}>Data de compra</Text>
+                <Text style={[styles.fLabel, { color: colors.mutedForeground }]}>{t("wine_cellar_screen.field_buy_date")}</Text>
                 <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                  placeholder="dd/mm/aaaa" placeholderTextColor={colors.mutedForeground} value={wBuyDate} onChangeText={setWBuyDate} />
+                  placeholder={t("common.date_placeholder")} placeholderTextColor={colors.mutedForeground} value={wBuyDate} onChangeText={setWBuyDate} />
               </View>
               <View style={{ flex: 1, gap: 4 }}>
-                <Text style={[styles.fLabel, { color: colors.mutedForeground }]}>Beber até</Text>
+                <Text style={[styles.fLabel, { color: colors.mutedForeground }]}>{t("wine_cellar_screen.field_drink_by")}</Text>
                 <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                  placeholder="dd/mm/aaaa" placeholderTextColor={colors.mutedForeground} value={wDrinkBy} onChangeText={setWDrinkBy} />
+                  placeholder={t("common.date_placeholder")} placeholderTextColor={colors.mutedForeground} value={wDrinkBy} onChangeText={setWDrinkBy} />
               </View>
             </View>
             <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-              placeholder="Local de armazenamento" placeholderTextColor={colors.mutedForeground} value={wStorage} onChangeText={setWStorage} />
+              placeholder={t("wine_cellar_screen.field_storage")} placeholderTextColor={colors.mutedForeground} value={wStorage} onChangeText={setWStorage} />
             <TextInput style={[styles.fInput, styles.fTextarea, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-              placeholder="Notas de degustação" placeholderTextColor={colors.mutedForeground} value={wNotes} onChangeText={setWNotes} multiline textAlignVertical="top" />
+              placeholder={t("wine_cellar_screen.field_notes")} placeholderTextColor={colors.mutedForeground} value={wNotes} onChangeText={setWNotes} multiline textAlignVertical="top" />
             {/* Sensory Tasting Fields */}
             <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, gap: 8 }}>
-              <Text style={[styles.fLabel, { color: colors.foreground, fontWeight: "700" }]}>Avaliação Sensorial</Text>
+              <Text style={[styles.fLabel, { color: colors.foreground, fontWeight: "700" }]}>{t("wine_cellar_screen.sensory_title")}</Text>
               <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                placeholder="Aroma (ex: frutado, floral, amadeirado)" placeholderTextColor={colors.mutedForeground} value={wAroma} onChangeText={setWAroma} />
+                placeholder={t("wine_cellar_screen.field_aroma")} placeholderTextColor={colors.mutedForeground} value={wAroma} onChangeText={setWAroma} />
               <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                placeholder="Sabor / Paladar (ex: encorpado, taninos macios)" placeholderTextColor={colors.mutedForeground} value={wSabor} onChangeText={setWSabor} />
+                placeholder={t("wine_cellar_screen.field_sabor")} placeholderTextColor={colors.mutedForeground} value={wSabor} onChangeText={setWSabor} />
               <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                placeholder="Harmonização (ex: carnes vermelhas, queijos)" placeholderTextColor={colors.mutedForeground} value={wHarmonizacao} onChangeText={setWHarmonizacao} />
+                placeholder={t("wine_cellar_screen.field_harmonizacao")} placeholderTextColor={colors.mutedForeground} value={wHarmonizacao} onChangeText={setWHarmonizacao} />
               <TextInput style={[styles.fInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                placeholder="Pontuação 0–100" placeholderTextColor={colors.mutedForeground} value={wScore100}
+                placeholder={t("wine_cellar_screen.field_score")} placeholderTextColor={colors.mutedForeground} value={wScore100}
                 onChangeText={(v) => setWScore100(v.replace(/\D/g, "").slice(0, 3))} keyboardType="numeric" />
             </View>
             {/* Rating */}
             <View style={{ gap: 6 }}>
-              <Text style={[styles.fLabel, { color: colors.foreground }]}>Avaliação:</Text>
+              <Text style={[styles.fLabel, { color: colors.foreground }]}>{t("wine_cellar_screen.rating_label")}</Text>
               <StarRating value={wRating} onChange={setWRating} />
             </View>
             {/* Status */}
             <View style={{ gap: 6 }}>
-              <Text style={[styles.fLabel, { color: colors.foreground }]}>Status:</Text>
+              <Text style={[styles.fLabel, { color: colors.foreground }]}>{t("wine_cellar_screen.status_label")}</Text>
               <View style={styles.statusChips}>
                 {STATUS_OPTIONS.map((s) => (
                   <TouchableOpacity
@@ -751,7 +755,7 @@ export default function WineCellarScreen() {
             <TouchableOpacity style={styles.toggleRow} onPress={() => setWPrivate(!wPrivate)}>
               <Feather name={wPrivate ? "eye-off" : "eye"} size={16} color={colors.mutedForeground} />
               <Text style={[styles.toggleText, { color: colors.foreground }]}>
-                {wPrivate ? "Apenas para você" : "Visível para conexões"}
+                {wPrivate ? t("wine_cellar_screen.private_label") : t("wine_cellar_screen.public_label")}
               </Text>
             </TouchableOpacity>
             {/* Save button */}
@@ -765,7 +769,7 @@ export default function WineCellarScreen() {
               ) : (
                 <Feather name="check" size={18} color="#fff" />
               )}
-              <Text style={styles.saveBtnText}>{saving ? "Salvando..." : editingId ? "Salvar Alterações" : "Salvar Vinho"}</Text>
+              <Text style={styles.saveBtnText}>{saving ? t("wine_cellar_screen.saving") : editingId ? t("wine_cellar_screen.save_changes_btn") : t("wine_cellar_screen.save_btn")}</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>

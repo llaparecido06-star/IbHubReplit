@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useRouter, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -103,6 +104,7 @@ function toLocalProduct(p: CompanyProduct): LocalProduct {
 // ── EmpresaTabPage ─────────────────────────────────────────────────────────────
 // Full empresa profile rendered as a tab (no back button, tab bar visible).
 function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; topPad: number; bottomPad: number }) {
+  const { t } = useTranslation();
   const colors  = useColors();
   const router  = useRouter();
   const { user, activeCompany, setActiveCompany } = useAuth();
@@ -251,23 +253,23 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
       if (editingProduct) {
         const ok = await updateCompanyProduct(editingProduct.id, { name: pName.trim(), description: pDesc || null, price: pPrice || null, category: pCat, ...(imageUrl !== undefined ? { image_url: imageUrl } : {}) });
         if (ok) setProducts(prev => prev.map(p => p.id === editingProduct.id ? { ...p, name: pName, desc: pDesc, price: pPrice, cat: pCat, image_url: imageUrl !== undefined ? imageUrl : p.image_url } : p));
-        else Alert.alert("Erro", "Não foi possível atualizar o produto.");
+        else Alert.alert(t("common.error"), t("profile.empresa_update_error"));
       } else {
         const created = await createCompanyProduct({ company_id: companyId, name: pName.trim(), description: pDesc || null, price: pPrice || null, category: pCat, image_url: imageUrl ?? null });
         if (created) setProducts(prev => [toLocalProduct(created), ...prev]);
-        else Alert.alert("Erro", "Não foi possível criar o produto.");
+        else Alert.alert(t("common.error"), t("profile.empresa_product_create_error"));
       }
       resetForm(); setShowProductForm(false);
-    } catch (e: unknown) { Alert.alert("Erro", friendlyErrorMessage(e)); } finally { setSavingProduct(false); }
+    } catch (e: unknown) { Alert.alert(t("common.error"), friendlyErrorMessage(e)); } finally { setSavingProduct(false); }
   };
 
   const handleDeleteProduct = (productId: string) => {
-    Alert.alert("Remover produto", "Deseja remover este produto?", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Remover", style: "destructive", onPress: async () => {
+    Alert.alert(t("profile.empresa_remove_product_title"), t("profile.empresa_remove_product_msg"), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("common.remove"), style: "destructive", onPress: async () => {
         setDeletingId(productId);
-        try { const ok = await deleteCompanyProduct(productId); if (ok) setProducts(prev => prev.filter(x => x.id !== productId)); else Alert.alert("Erro", "Não foi possível remover."); }
-        catch (e: unknown) { Alert.alert("Erro", friendlyErrorMessage(e)); } finally { setDeletingId(null); }
+        try { const ok = await deleteCompanyProduct(productId); if (ok) setProducts(prev => prev.filter(x => x.id !== productId)); else Alert.alert(t("common.error"), t("profile.empresa_remove_error")); }
+        catch (e: unknown) { Alert.alert(t("common.error"), friendlyErrorMessage(e)); } finally { setDeletingId(null); }
       }},
     ]);
   };
@@ -380,16 +382,16 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
         {/* ── Tabs ── */}
         <View style={{ flexDirection: "row", borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: "#fff" }}>
           {([
-            { key: "publicacoes" as EmpresaTabKey, label: "PUBLICAÇÕES" },
-            { key: "portfolio"   as EmpresaTabKey, label: "PORTIFÓLIO" },
-            ...(isManager ? [{ key: "painel" as EmpresaTabKey, label: "PAINEL" }] : []),
-          ]).map(t => (
+            { key: "publicacoes" as EmpresaTabKey, label: t("profile.empresa_tab_posts").toUpperCase() },
+            { key: "portfolio"   as EmpresaTabKey, label: t("profile.empresa_tab_portfolio").toUpperCase() },
+            ...(isManager ? [{ key: "painel" as EmpresaTabKey, label: t("profile.empresa_tab_panel").toUpperCase() }] : []),
+          ]).map(tab => (
             <TouchableOpacity
-              key={t.key}
-              style={{ flex: 1, alignItems: "center", paddingVertical: 14, borderBottomWidth: activeTab === t.key ? 2 : 0, borderBottomColor: colors.gold }}
-              onPress={() => setActiveTab(t.key)}
+              key={tab.key}
+              style={{ flex: 1, alignItems: "center", paddingVertical: 14, borderBottomWidth: activeTab === tab.key ? 2 : 0, borderBottomColor: colors.gold }}
+              onPress={() => setActiveTab(tab.key)}
             >
-              <Text style={{ fontSize: 11, fontWeight: "800", letterSpacing: 0.5, color: activeTab === t.key ? colors.gold : colors.mutedForeground }}>{t.label}</Text>
+              <Text style={{ fontSize: 11, fontWeight: "800", letterSpacing: 0.5, color: activeTab === tab.key ? colors.gold : colors.mutedForeground }}>{tab.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -401,7 +403,7 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
              posts.length === 0 ? (
               <View style={{ alignItems: "center", paddingVertical: 48, gap: 10 }}>
                 <Feather name="file-text" size={32} color={colors.mutedForeground} />
-                <Text style={{ fontSize: 13, color: colors.mutedForeground }}>Nenhuma publicação ainda</Text>
+                <Text style={{ fontSize: 13, color: colors.mutedForeground }}>{t("profile.empresa_no_posts")}</Text>
               </View>
             ) : posts.map(post => (
               <PostCard
@@ -428,7 +430,7 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
             ) : null}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: "#fff" }}>
               <Feather name="search" size={14} color={colors.mutedForeground} />
-              <TextInput style={{ flex: 1, fontSize: 14, color: colors.foreground }} placeholder="Buscar produto..." placeholderTextColor={colors.mutedForeground} value={productSearch} onChangeText={setProductSearch} />
+              <TextInput style={{ flex: 1, fontSize: 14, color: colors.foreground }} placeholder={t("profile.empresa_search_product")} placeholderTextColor={colors.mutedForeground} value={productSearch} onChangeText={setProductSearch} />
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
               {EMPRESA_SORT_OPTIONS.map(s => (
@@ -437,7 +439,7 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
                 </TouchableOpacity>
               ))}
               <View style={{ width: 1, marginHorizontal: 4, backgroundColor: colors.border }} />
-              {([{ key: "todos" as const, label: "Todos" }, ...EMPRESA_PRODUCT_CATS.filter(c => catCounts[c.key])]).map(c => (
+              {([{ key: "todos" as const, label: t("common.all") }, ...EMPRESA_PRODUCT_CATS.filter(c => catCounts[c.key])]).map(c => (
                 <TouchableOpacity key={c.key} style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, backgroundColor: filterCat === c.key ? colors.navy + "18" : "#fff", borderColor: colors.border }} onPress={() => setFilterCat(c.key as any)}>
                   <Text style={{ fontSize: 13, color: colors.navy }}>{c.label}{c.key !== "todos" && catCounts[c.key] ? ` (${catCounts[c.key]})` : ""}</Text>
                 </TouchableOpacity>
@@ -447,7 +449,7 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
              filteredProducts.length === 0 ? (
               <View style={{ alignItems: "center", paddingVertical: 40, gap: 10 }}>
                 <Feather name="package" size={32} color={colors.border} />
-                <Text style={{ fontSize: 14, color: colors.mutedForeground }}>Nenhum produto cadastrado</Text>
+                <Text style={{ fontSize: 14, color: colors.mutedForeground }}>{t("profile.empresa_no_products")}</Text>
               </View>
             ) : filteredProducts.map(p => (
               <TouchableOpacity key={p.id} style={{ flexDirection: "row", borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: "hidden", backgroundColor: "#fff" }}
@@ -464,14 +466,14 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
                   {isManager ? (
                     <View style={{ flexDirection: "row", gap: 16, paddingHorizontal: 10, paddingBottom: 10, paddingTop: 4 }}>
                       <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5 }} onPress={() => openEdit(p)}>
-                        <Feather name="edit-2" size={14} color={colors.navy} /><Text style={{ fontSize: 13, color: colors.navy }}>Editar</Text>
+                        <Feather name="edit-2" size={14} color={colors.navy} /><Text style={{ fontSize: 13, color: colors.navy }}>{t("common.edit")}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5, opacity: deletingId === p.id ? 0.5 : 1 }} onPress={() => handleDeleteProduct(p.id)} disabled={!!deletingId}>
                         {deletingId === p.id ? <ActivityIndicator size={14} color="#dc2626" /> : <Feather name="trash-2" size={14} color="#dc2626" />}
-                        <Text style={{ fontSize: 13, color: "#dc2626" }}>{deletingId === p.id ? "Removendo..." : "Remover"}</Text>
+                        <Text style={{ fontSize: 13, color: "#dc2626" }}>{deletingId === p.id ? t("profile.empresa_removing") : t("common.remove")}</Text>
                       </TouchableOpacity>
                     </View>
-                  ) : <Text style={{ fontSize: 13, color: colors.gold, marginTop: 4, paddingHorizontal: 10 }}>Ver detalhes →</Text>}
+                  ) : <Text style={{ fontSize: 13, color: colors.gold, marginTop: 4, paddingHorizontal: 10 }}>{t("profile.empresa_view_details")}</Text>}
                 </View>
               </TouchableOpacity>
             ))}
@@ -484,7 +486,7 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
             <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 12, backgroundColor: colors.navy }}
               onPress={() => router.push(`/manage-business-page?id=${companyId}` as any)}>
               <Feather name="settings" size={16} color="#fff" />
-              <Text style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: "700" }}>Gerenciar Página da Empresa</Text>
+              <Text style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: "700" }}>{t("profile.empresa_manage_page")}</Text>
               <Feather name="chevron-right" size={16} color="#fff" />
             </TouchableOpacity>
 
@@ -492,20 +494,20 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
             <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: "#fff" }}
               onPress={() => setActiveCompany(null)}>
               <Feather name="user" size={16} color={colors.navy} />
-              <Text style={{ flex: 1, color: colors.navy, fontSize: 14, fontWeight: "700" }}>Voltar ao perfil pessoal</Text>
+              <Text style={{ flex: 1, color: colors.navy, fontSize: 14, fontWeight: "700" }}>{t("profile.back_personal")}</Text>
               <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
             </TouchableOpacity>
 
             <View style={{ borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 16, gap: 14, backgroundColor: "#fff" }}>
-              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.navy }}>Resumo da Empresa</Text>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.navy }}>{t("profile.empresa_summary")}</Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                 {[
-                  { label: "Seguidores",    value: followersCount,   icon: "users" },
-                  { label: "Publicações",   value: posts.length,     icon: "file-text" },
-                  { label: "Visitas (7d)",  value: viewsCount,       icon: "eye" },
-                  { label: "Engajamento",   value: engagementCount,  icon: "heart" },
-                  { label: "Vagas abertas", value: vacanciesCount,   icon: "briefcase" },
-                  { label: "Marketplace",   value: marketCount,      icon: "shopping-bag" },
+                  { label: t("profile.empresa_stat_followers"),   value: followersCount,   icon: "users" },
+                  { label: t("profile.empresa_stat_posts"),        value: posts.length,     icon: "file-text" },
+                  { label: t("profile.empresa_stat_views"),        value: viewsCount,       icon: "eye" },
+                  { label: t("profile.empresa_stat_engagement"),   value: engagementCount,  icon: "heart" },
+                  { label: t("profile.empresa_stat_vacancies"),    value: vacanciesCount,   icon: "briefcase" },
+                  { label: t("profile.empresa_stat_marketplace"),  value: marketCount,      icon: "shopping-bag" },
                 ].map(stat => (
                   <View key={stat.label} style={{ width: "46%", padding: 14, alignItems: "center", gap: 6, backgroundColor: colors.background, borderRadius: 10 }}>
                     <Feather name={stat.icon as any} size={20} color={colors.gold} />
@@ -523,13 +525,13 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
       <Modal visible={showProductForm} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowProductForm(false)}>
         <View style={{ flex: 1, backgroundColor: colors.background }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: "#fff" }}>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: colors.navy }}>{editingProduct ? "Editar Produto" : "Adicionar Produto"}</Text>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: colors.navy }}>{editingProduct ? t("profile.empresa_edit_product") : t("profile.empresa_add_product")}</Text>
             <TouchableOpacity onPress={() => setShowProductForm(false)} accessibilityRole="button" accessibilityLabel="Fechar"><Feather name="x" size={22} color={colors.navy} /></TouchableOpacity>
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, rowGap: 14 }}>
-            <TextInput style={{ borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }} placeholder="Nome do produto" placeholderTextColor={colors.mutedForeground} value={pName} onChangeText={setPName} />
-            <TextInput style={{ borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, height: 80, textAlignVertical: "top", backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }} placeholder="Descrição" placeholderTextColor={colors.mutedForeground} value={pDesc} onChangeText={setPDesc} multiline textAlignVertical="top" />
-            <TextInput style={{ borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }} placeholder="Preço (ex: R$ 150,00)" placeholderTextColor={colors.mutedForeground} value={pPrice} onChangeText={setPPrice} />
+            <TextInput style={{ borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }} placeholder={t("profile.empresa_product_name")} placeholderTextColor={colors.mutedForeground} value={pName} onChangeText={setPName} />
+            <TextInput style={{ borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, height: 80, textAlignVertical: "top", backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }} placeholder={t("profile.empresa_product_desc")} placeholderTextColor={colors.mutedForeground} value={pDesc} onChangeText={setPDesc} multiline textAlignVertical="top" />
+            <TextInput style={{ borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }} placeholder={t("profile.empresa_product_price")} placeholderTextColor={colors.mutedForeground} value={pPrice} onChangeText={setPPrice} />
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {EMPRESA_PRODUCT_CATS.map(c => (
                 <TouchableOpacity key={c.key} style={{ borderWidth: 1, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: pCat === c.key ? colors.gold : "#fff", borderColor: pCat === c.key ? colors.gold : colors.border }} onPress={() => setPCat(c.key)}>
@@ -539,14 +541,14 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
             </View>
             <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14 }} onPress={pickImage} disabled={uploadingImg}>
               {pImg ? <Image source={{ uri: pImg }} style={{ width: 36, height: 36, borderRadius: 6 }} /> : <Feather name="image" size={16} color={colors.mutedForeground} />}
-              <Text style={{ fontSize: 14, color: colors.mutedForeground }}>{pImg ? "Trocar foto" : "Adicionar foto"}</Text>
+              <Text style={{ fontSize: 14, color: colors.mutedForeground }}>{pImg ? t("profile.empresa_change_photo") : t("profile.empresa_add_photo")}</Text>
             </TouchableOpacity>
             <View style={{ flexDirection: "row", gap: 12 }}>
               <TouchableOpacity style={{ flex: 1, alignItems: "center", paddingVertical: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.border }} onPress={() => { resetForm(); setShowProductForm(false); }}>
-                <Text style={{ fontSize: 15, color: colors.foreground }}>Cancelar</Text>
+                <Text style={{ fontSize: 15, color: colors.foreground }}>{t("common.cancel")}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={{ flex: 1, alignItems: "center", paddingVertical: 14, borderRadius: 10, backgroundColor: savingProduct ? colors.gold + "88" : colors.gold }} onPress={handleSaveProduct} disabled={savingProduct}>
-                <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>{savingProduct ? "Salvando..." : "Salvar"}</Text>
+                <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>{savingProduct ? t("common.saving") : t("common.save")}</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -580,15 +582,15 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.2)", justifyContent: "flex-start", alignItems: "flex-end", paddingTop: topPad + 60, paddingRight: 16 }} onPress={() => setShowFab(false)}>
           <View style={{ borderRadius: 14, overflow: "hidden", elevation: 8, shadowOpacity: 0.15, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, minWidth: 180, backgroundColor: "#fff" }}>
             <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14 }} onPress={() => { setShowFab(false); router.push("/create-post" as any); }}>
-              <Feather name="file-text" size={16} color={colors.navy} /><Text style={{ fontSize: 14, fontWeight: "500", color: colors.navy }}>Nova Publicação</Text>
+              <Feather name="file-text" size={16} color={colors.navy} /><Text style={{ fontSize: 14, fontWeight: "500", color: colors.navy }}>{t("profile.create_post")}</Text>
             </TouchableOpacity>
             <View style={{ height: 1, backgroundColor: colors.border }} />
             <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14 }} onPress={() => { setShowFab(false); resetForm(); setShowProductForm(true); }}>
-              <Feather name="package" size={16} color={colors.navy} /><Text style={{ fontSize: 14, fontWeight: "500", color: colors.navy }}>Novo Produto</Text>
+              <Feather name="package" size={16} color={colors.navy} /><Text style={{ fontSize: 14, fontWeight: "500", color: colors.navy }}>{t("profile.empresa_add_product")}</Text>
             </TouchableOpacity>
             <View style={{ height: 1, backgroundColor: colors.border }} />
             <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14 }} onPress={() => { setShowFab(false); setActiveCompany(null); }}>
-              <Feather name="user" size={16} color={colors.navy} /><Text style={{ fontSize: 14, fontWeight: "500", color: colors.navy }}>Perfil pessoal</Text>
+              <Feather name="user" size={16} color={colors.navy} /><Text style={{ fontSize: 14, fontWeight: "500", color: colors.navy }}>{t("profile.back_personal")}</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -598,6 +600,7 @@ function EmpresaTabPage({ companyId, topPad, bottomPad }: { companyId: string; t
 }
 
 export default function ProfileScreen() {
+  const { t } = useTranslation();
   const colors  = useColors();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
@@ -757,15 +760,15 @@ export default function ProfileScreen() {
 
   const handleDeletePost = (id: string) => {
     setShowPostMenu(null);
-    Alert.alert("Excluir publicação", "Deseja excluir esta publicação?", [
-      { text: "Cancelar", style: "cancel" },
+    Alert.alert(t("feed.delete_post"), t("feed.delete_post_msg"), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Excluir", style: "destructive", onPress: async () => {
+        text: t("feed.delete_btn"), style: "destructive", onPress: async () => {
           const ok = await deletePost(id);
           if (ok) {
             setPosts((p) => p.filter((x) => x.id !== id));
           } else {
-            Alert.alert("Erro", "Não foi possível excluir a publicação. Tente novamente.");
+            Alert.alert(t("common.error"), t("common.generic_error"));
           }
         }
       },
@@ -773,9 +776,9 @@ export default function ProfileScreen() {
   };
 
   const handleSignOut = () => {
-    Alert.alert("Sair", "Deseja realmente sair?", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Sair", style: "destructive", onPress: signOut },
+    Alert.alert(t("settings.sign_out_title"), t("settings.sign_out_msg"), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("settings.sign_out_title"), style: "destructive", onPress: signOut },
     ]);
   };
 
@@ -787,14 +790,14 @@ export default function ProfileScreen() {
       router.push(`/empresa/${companyPages[0].id}` as any);
     } else {
       Alert.alert(
-        "Suas páginas",
-        "Selecione qual página abrir:",
+        t("profile.your_pages"),
+        t("profile.select_page"),
         [
           ...companyPages.map((p) => ({
             text: p.name,
             onPress: () => router.push(`/empresa/${p.id}` as any),
           })),
-          { text: "Cancelar", style: "cancel" as const },
+          { text: t("common.cancel"), style: "cancel" as const },
         ],
       );
     }
@@ -848,13 +851,13 @@ export default function ProfileScreen() {
         setPosts((prev) =>
           prev.map((p) => p.id === post.id ? { ...p, is_liked: wasLiked, likes_count: prevCount } : p)
         );
-        Alert.alert("Erro", "Não foi possível curtir. Tente novamente.");
+        Alert.alert(t("common.error"), t("common.error_msg"));
       }
     } catch (e: unknown) {
       setPosts((prev) =>
         prev.map((p) => p.id === post.id ? { ...p, is_liked: wasLiked, likes_count: prevCount } : p)
       );
-      Alert.alert("Erro de Conexão", friendlyErrorMessage(e));
+      Alert.alert(t("common.connection_error"), friendlyErrorMessage(e));
     }
   };
 
@@ -885,7 +888,7 @@ export default function ProfileScreen() {
       setPosts((prev) =>
         prev.map((p) => p.id === targetId ? { ...p, comments_count: p.comments_count - 1 } : p)
       );
-      Alert.alert("Erro de Conexão", friendlyErrorMessage(e));
+      Alert.alert(t("common.conn_error"), friendlyErrorMessage(e));
     }
   };
 
@@ -906,8 +909,8 @@ export default function ProfileScreen() {
     <Modal visible={showQrModal} transparent animationType="fade" onRequestClose={() => setShowQrModal(false)}>
       <Pressable style={styles.qrOverlay} onPress={() => setShowQrModal(false)}>
         <Pressable style={[styles.qrCard, { backgroundColor: "#fff" }]} onPress={() => {}}>
-          <Text style={[styles.qrTitle, { color: colors.navy }]}>Meu QR Code</Text>
-          <Text style={[styles.qrSub, { color: colors.mutedForeground }]}>Mostre para conectar rapidamente</Text>
+          <Text style={[styles.qrTitle, { color: colors.navy }]}>{t("profile.qr_code")}</Text>
+          <Text style={[styles.qrSub, { color: colors.mutedForeground }]}>{t("profile.qr_sub")}</Text>
           <View style={styles.qrBox}>
             <QRCode
               value={`${WEB_BASE}/u/${user?.id ?? ""}`}
@@ -923,14 +926,14 @@ export default function ProfileScreen() {
             onPress={async () => {
               setShowQrModal(false);
               const profileLink = `${WEB_BASE}/u/${user?.id ?? ""}`;
-              await Share.share({ message: `Conecte-se comigo na ibhub!\n${profileLink}` });
+              await Share.share({ message: t("profile.share_msg", { link: profileLink }) });
             }}
           >
             <Feather name="share-2" size={16} color="#fff" />
-            <Text style={styles.qrShareBtnText}>Compartilhar perfil</Text>
+            <Text style={styles.qrShareBtnText}>{t("profile.share")}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={{ marginTop: 8 }} onPress={() => setShowQrModal(false)}>
-            <Text style={{ color: colors.mutedForeground, fontSize: 14 }}>Fechar</Text>
+            <Text style={{ color: colors.mutedForeground, fontSize: 14 }}>{t("common.close")}</Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>
@@ -964,7 +967,7 @@ export default function ProfileScreen() {
               onPress={() => router.push("/edit-profile" as any)}
             >
               <Feather name="edit-2" size={14} color={colors.navy} />
-              <Text style={[styles.editBtnText, { color: colors.navy }]}>Editar perfil</Text>
+              <Text style={[styles.editBtnText, { color: colors.navy }]}>{t("profile.edit")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -975,10 +978,10 @@ export default function ProfileScreen() {
         {/* Stats */}
         <View style={[styles.statsRow, { borderColor: colors.border }]}>
           {[
-            { label: "Publicações", value: posts.length,            onPress: undefined },
-            { label: "Seguidores",  value: liveStats.followers,    onPress: () => setStatModal("followers") },
-            { label: "Seguindo",    value: liveStats.following,    onPress: () => setStatModal("following") },
-            { label: "Conexões",    value: liveStats.connections,  onPress: () => router.push("/conexoes" as any) },
+            { label: t("profile.tab_posts"),  value: posts.length,           onPress: undefined },
+            { label: t("profile.followers"),  value: liveStats.followers,    onPress: () => setStatModal("followers") },
+            { label: t("profile.following"),  value: liveStats.following,    onPress: () => setStatModal("following") },
+            { label: t("profile.connections"), value: liveStats.connections, onPress: () => router.push("/conexoes" as any) },
           ].map((s, i, arr) => (
             <React.Fragment key={s.label}>
               <TouchableOpacity style={styles.stat} onPress={s.onPress} disabled={!s.onPress}>
@@ -1004,13 +1007,13 @@ export default function ProfileScreen() {
             </Text>
             <TouchableOpacity style={styles.certsBtn} onPress={() => router.push("/certifications" as any)}>
               <Feather name="shield" size={13} color={colors.gold} />
-              <Text style={[styles.certsBtnText, { color: colors.gold }]}>Certificações</Text>
+              <Text style={[styles.certsBtnText, { color: colors.gold }]}>{t("profile.certifications")}</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <TouchableOpacity style={styles.certsBtn} onPress={() => router.push("/certifications" as any)}>
             <Feather name="shield" size={13} color={colors.gold} />
-            <Text style={[styles.certsBtnText, { color: colors.gold }]}>Certificações</Text>
+            <Text style={[styles.certsBtnText, { color: colors.gold }]}>{t("profile.certifications")}</Text>
           </TouchableOpacity>
         )}
 
@@ -1020,7 +1023,7 @@ export default function ProfileScreen() {
             <Feather name="eye" size={14} color={colors.gold} />
             <Text style={[styles.viewsBannerText, { color: colors.navy }]}>
               <Text style={{ fontWeight: "800", color: colors.gold }}>{profileViews}</Text>
-              {" "}pessoa{profileViews !== 1 ? "s" : ""} visualizaram seu perfil esta semana
+              {" "}{profileViews === 1 ? t("profile.profile_views", { count: profileViews }).replace(`${profileViews} `, "") : t("profile.profile_views_plural", { count: profileViews }).replace(`${profileViews} `, "")}
             </Text>
           </View>
         )}
@@ -1033,16 +1036,16 @@ export default function ProfileScreen() {
             activeOpacity={0.8}
           >
             <View style={styles.completionHeader}>
-              <Text style={[styles.completionTitle, { color: colors.navy }]}>Completar perfil — {completion}%</Text>
+              <Text style={[styles.completionTitle, { color: colors.navy }]}>{t("profile.completeness")} — {completion}%</Text>
               <Feather name="chevron-right" size={15} color={colors.gold} />
             </View>
             <View style={[styles.completionTrack, { backgroundColor: colors.border }]}>
               <View style={[styles.completionFill, { width: `${completion}%` as any, backgroundColor: colors.gold }]} />
             </View>
             <Text style={[styles.completionHint, { color: colors.mutedForeground }]}>
-              {completion < 50 ? "Adicione bio, foto e áreas de atuação para ter mais visibilidade." :
-               completion < 80 ? "Quase lá! Adicione certificações, empresa ou cargo." :
-               "Adicione uma certificação ou área de atuação para completar 100%."}
+              {completion < 50 ? t("profile.completeness_hint_low") :
+               completion < 80 ? t("profile.completeness_hint_mid") :
+               t("profile.completeness_hint_high")}
             </Text>
           </TouchableOpacity>
         )}
@@ -1065,10 +1068,10 @@ export default function ProfileScreen() {
               <Feather name="briefcase" size={18} color="#fff" />
             </View>
             <Text style={[styles.actionCardLabel, { color: colors.navy }]}>
-              {companyPages.length === 0 ? "Empresa" : "Empresa"}
+              {t("profile.company_card_label")}
             </Text>
             <Text style={[styles.actionCardSub, { color: colors.mutedForeground }]}>
-              {companyPages.length === 0 ? "Criar página" : "Minha página"}
+              {companyPages.length === 0 ? t("profile.company_create") : t("profile.company_my_page")}
             </Text>
           </TouchableOpacity>
 
@@ -1076,9 +1079,9 @@ export default function ProfileScreen() {
             <View style={[styles.actionCardIcon, { backgroundColor: colors.navy }]}>
               <Feather name="users" size={18} color="#fff" />
             </View>
-            <Text style={[styles.actionCardLabel, { color: colors.navy }]}>Conexões</Text>
+            <Text style={[styles.actionCardLabel, { color: colors.navy }]}>{t("profile.connections")}</Text>
             <Text style={[styles.actionCardSub, { color: colors.mutedForeground }]}>
-              {profile?.connections_count ?? 0} contatos
+              {profile?.connections_count ?? 0} {t("profile.contacts")}
             </Text>
           </TouchableOpacity>
 
@@ -1086,8 +1089,8 @@ export default function ProfileScreen() {
             <View style={[styles.actionCardIcon, { backgroundColor: "#6366f1" }]}>
               <Feather name="maximize" size={18} color="#fff" />
             </View>
-            <Text style={[styles.actionCardLabel, { color: colors.navy }]}>QR Code</Text>
-            <Text style={[styles.actionCardSub, { color: colors.mutedForeground }]}>Compartilhar</Text>
+            <Text style={[styles.actionCardLabel, { color: colors.navy }]}>{t("profile.qr_code")}</Text>
+            <Text style={[styles.actionCardSub, { color: colors.mutedForeground }]}>{t("profile.share")}</Text>
           </TouchableOpacity>
         </View>
 
@@ -1097,12 +1100,12 @@ export default function ProfileScreen() {
             {/* Top row: code + share */}
             <View style={styles.referralTopRow}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.referralTitle, { color: colors.navy }]}>Seu código de convite</Text>
+                <Text style={[styles.referralTitle, { color: colors.navy }]}>{t("profile.referral_code")}</Text>
                 <Text style={[styles.referralCode, { color: colors.gold }]}>{referralCode}</Text>
               </View>
               <TouchableOpacity
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                onPress={() => Share.share({ message: `Junte-se à ibhub — Rede do Vinho!\nCadastre-se com meu convite e entre para a maior rede do vinho:\nhttps://www.ibhub.com.br/cadastro?ref=${referralCode}` })} accessibilityRole="button" accessibilityLabel="Compartilhar">
+                onPress={() => Share.share({ message: t("profile.referral_share_msg", { code: referralCode }) })} accessibilityRole="button" accessibilityLabel={t("profile.share")}>
                 <Feather name="share-2" size={18} color={colors.gold} />
               </TouchableOpacity>
             </View>
@@ -1111,7 +1114,7 @@ export default function ProfileScreen() {
               <View style={[styles.inviteStatBadge, { backgroundColor: colors.gold + "18" }]}>
                 <Feather name="users" size={12} color={colors.gold} />
                 <Text style={[styles.inviteStatText, { color: colors.gold }]}>
-                  {inviteCount} {inviteCount === 1 ? "convidado" : "convidados"}
+                  {inviteCount === 1 ? t("profile.invited_one", { count: inviteCount }) : t("profile.invited_plural", { count: inviteCount })}
                 </Text>
                 {inviteRank > 0 && (
                   <Text style={[styles.inviteStatText, { color: colors.gold, opacity: 0.7 }]}>
@@ -1124,7 +1127,7 @@ export default function ProfileScreen() {
                 onPress={() => router.push("/referral-ranking" as any)}
               >
                 <Feather name="award" size={12} color={colors.navy} />
-                <Text style={[styles.rankingBtnText, { color: colors.navy }]}>Ver Ranking</Text>
+                <Text style={[styles.rankingBtnText, { color: colors.navy }]}>{t("profile.rank")}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1133,7 +1136,7 @@ export default function ProfileScreen() {
         {/* Badges */}
         {badges.length > 0 && (
           <View style={styles.badgesSection}>
-            <Text style={[styles.badgesTitle, { color: colors.navy }]}>Conquistas</Text>
+            <Text style={[styles.badgesTitle, { color: colors.navy }]}>{t("profile.achievements")}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
               {badges.map((b) => (
                 <View key={b.label} style={[styles.badgeChip, { backgroundColor: colors.gold + "14", borderColor: colors.gold + "30" }]}>
@@ -1174,7 +1177,7 @@ export default function ProfileScreen() {
       {suggestions.length > 0 ? (
         <View style={[styles.suggestSection, { backgroundColor: "#fff" }]}>
           <View style={styles.suggestHeader}>
-            <Text style={[styles.suggestTitle, { color: colors.navy }]}>Pessoas que você pode conhecer</Text>
+            <Text style={[styles.suggestTitle, { color: colors.navy }]}>{t("profile.suggestions_people")}</Text>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestScroll}>
             {suggestions.map((s) => {
@@ -1200,25 +1203,25 @@ export default function ProfileScreen() {
                   {s.company_match ? (
                     <View style={[styles.matchBadge, { backgroundColor: "#1a56db18" }]}>
                       <Feather name="briefcase" size={10} color="#1a56db" />
-                      <Text style={[styles.matchBadgeText, { color: "#1a56db" }]}>Mesma empresa</Text>
+                      <Text style={[styles.matchBadgeText, { color: "#1a56db" }]}>{t("profile.same_company")}</Text>
                     </View>
                   ) : s.match_score > 0 ? (
                     <View style={[styles.matchBadge, { backgroundColor: colors.gold + "18" }]}>
                       <Feather name="zap" size={10} color={colors.gold} />
                       <Text style={[styles.matchBadgeText, { color: colors.gold }]}>
-                        {s.match_score} área{s.match_score > 1 ? "s" : ""} em comum
+                        {s.match_score === 1 ? t("profile.match_areas", { count: s.match_score }) : t("profile.match_areas_plural", { count: s.match_score })}
                       </Text>
                     </View>
                   ) : null}
                   {isConnected ? (
                     <View style={[styles.suggestBtnFilled, { backgroundColor: colors.navy + "14" }]}>
                       <Feather name="check" size={12} color={colors.navy} />
-                      <Text style={[styles.suggestBtnFilledText, { color: colors.navy }]}>Conectado</Text>
+                      <Text style={[styles.suggestBtnFilledText, { color: colors.navy }]}>{t("profile.connected")}</Text>
                     </View>
                   ) : isPending ? (
                     <View style={[styles.suggestBtnFilled, { backgroundColor: colors.border }]}>
                       <Feather name="clock" size={12} color={colors.mutedForeground} />
-                      <Text style={[styles.suggestBtnFilledText, { color: colors.mutedForeground }]}>Enviado</Text>
+                      <Text style={[styles.suggestBtnFilledText, { color: colors.mutedForeground }]}>{t("profile.pending")}</Text>
                     </View>
                   ) : (isCompany || s.is_company) ? (
                     <TouchableOpacity
@@ -1227,7 +1230,7 @@ export default function ProfileScreen() {
                     >
                       <Feather name={(s.is_following || followingSet.has(s.id)) ? "check" : "plus"} size={12} color={(s.is_following || followingSet.has(s.id)) ? colors.navy : "#fff"} />
                       <Text style={[styles.suggestBtnFilledText, { color: (s.is_following || followingSet.has(s.id)) ? colors.navy : "#fff" }]}>
-                        {(s.is_following || followingSet.has(s.id)) ? "Seguindo" : "Seguir"}
+                        {(s.is_following || followingSet.has(s.id)) ? t("profile.following") : t("profile.follow")}
                       </Text>
                     </TouchableOpacity>
                   ) : (
@@ -1238,7 +1241,7 @@ export default function ProfileScreen() {
                     >
                       <Feather name="user-plus" size={12} color="#fff" />
                       <Text style={[styles.suggestBtnFilledText, { color: "#fff" }]}>
-                        {isLoading ? "..." : "Conectar"}
+                        {isLoading ? "..." : t("profile.connect")}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -1252,18 +1255,18 @@ export default function ProfileScreen() {
       {/* ── Profile tabs ── */}
       <View style={[styles.tabRow, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         {([
-          { key: "feed",     label: "FEED",     icon: null },
-          { key: "anuncios", label: "ANÚNCIOS", icon: "tag" },
-          { key: "salvos",   label: "SALVOS",   icon: "bookmark" },
-          { key: "adega",    label: "ADEGA",    icon: "wind" },
-        ] as const).map((t) => (
+          { key: "feed",     label: t("profile.tab_posts").toUpperCase(), icon: null },
+          { key: "anuncios", label: t("profile.tab_ads").toUpperCase(),   icon: "tag" },
+          { key: "salvos",   label: t("profile.tab_saved").toUpperCase(), icon: "bookmark" },
+          { key: "adega",    label: t("profile.tab_cellar").toUpperCase(), icon: "wind" },
+        ] as const).map((tab) => (
           <Pressable
-            key={t.key}
-            style={[styles.tab, activeTab === t.key && [styles.tabActive, { borderBottomColor: colors.gold }]]}
-            onPress={() => setActiveTab(t.key)}
+            key={tab.key}
+            style={[styles.tab, activeTab === tab.key && [styles.tabActive, { borderBottomColor: colors.gold }]]}
+            onPress={() => setActiveTab(tab.key)}
           >
-            <Text style={[styles.tabText, { color: activeTab === t.key ? colors.gold : colors.mutedForeground }]}>
-              {t.label}
+            <Text style={[styles.tabText, { color: activeTab === tab.key ? colors.gold : colors.mutedForeground }]}>
+              {tab.label}
             </Text>
           </Pressable>
         ))}
@@ -1277,12 +1280,12 @@ export default function ProfileScreen() {
           ) : posts.length === 0 ? (
             <View style={styles.emptyTab}>
               <Feather name="file-text" size={32} color={colors.mutedForeground} />
-              <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>Nenhuma publicação ainda</Text>
+              <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>{t("profile.no_posts")}</Text>
               <TouchableOpacity
                 style={[styles.emptyTabBtn, { backgroundColor: colors.gold }]}
                 onPress={() => router.push("/create-post" as any)}
               >
-                <Text style={styles.emptyTabBtnText}>Criar publicação</Text>
+                <Text style={styles.emptyTabBtnText}>{t("profile.create_post")}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -1308,9 +1311,9 @@ export default function ProfileScreen() {
           ) : savedPosts.length === 0 ? (
             <View style={styles.emptyTab}>
               <Feather name="bookmark" size={32} color={colors.mutedForeground} />
-              <Text style={[styles.emptyTabTitle, { color: colors.navy }]}>Nenhuma publicação salva</Text>
+              <Text style={[styles.emptyTabTitle, { color: colors.navy }]}>{t("profile.saved_empty_title")}</Text>
               <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>
-                Salve posts do feed para ler mais tarde
+                {t("profile.saved_empty_sub")}
               </Text>
             </View>
           ) : (
@@ -1358,9 +1361,9 @@ export default function ProfileScreen() {
           {/* KPI row */}
           <View style={styles.adegaKpiRow}>
             {[
-              { label: "Na Adega",   value: wineInCellar,                                          icon: "wind",   color: colors.gold },
-              { label: "Consumidos", value: wineEntries.filter((w) => w.status === "consumido").length, icon: "coffee", color: colors.mutedForeground },
-              { label: "Wishlist",   value: wineEntries.filter((w) => w.status === "wishlist").length,  icon: "star",   color: "#f59e0b" },
+              { label: t("profile.adega_kpi_cellar"),   value: wineInCellar,                                          icon: "wind",   color: colors.gold },
+              { label: t("profile.adega_kpi_consumed"), value: wineEntries.filter((w) => w.status === "consumido").length, icon: "coffee", color: colors.mutedForeground },
+              { label: t("profile.adega_kpi_wishlist"), value: wineEntries.filter((w) => w.status === "wishlist").length,  icon: "star",   color: "#f59e0b" },
             ].map((k) => (
               <View key={k.label} style={[styles.adegaKpiCard, { borderColor: colors.border }]}>
                 <Feather name={k.icon as any} size={20} color={k.color} />
@@ -1373,7 +1376,7 @@ export default function ProfileScreen() {
           {/* Recent wines preview */}
           {wineEntries.length > 0 ? (
             <View style={{ paddingHorizontal: 16, paddingBottom: 16, gap: 8 }}>
-              <Text style={[styles.adegaPreviewTitle, { color: colors.navy }]}>Últimos adicionados</Text>
+              <Text style={[styles.adegaPreviewTitle, { color: colors.navy }]}>{t("profile.adega_recent")}</Text>
               {wineEntries.slice(0, 3).map((wine) => (
                 <View key={wine.id} style={[styles.adegaWineRow, { borderColor: colors.border }]}>
                   <View style={[styles.adegaWineDot, { backgroundColor: colors.gold }]} />
@@ -1391,16 +1394,16 @@ export default function ProfileScreen() {
               ))}
               {wineTotal > 3 ? (
                 <Text style={[styles.adegaMoreText, { color: colors.mutedForeground }]}>
-                  + {wineTotal - 3} vinho{wineTotal - 3 !== 1 ? "s" : ""} na adega
+                  {wineTotal - 3 === 1 ? t("profile.adega_more", { count: wineTotal - 3 }) : t("profile.adega_more_plural", { count: wineTotal - 3 })}
                 </Text>
               ) : null}
             </View>
           ) : (
             <View style={styles.emptyTab}>
               <Feather name="wind" size={32} color={colors.mutedForeground} />
-              <Text style={[styles.emptyTabTitle, { color: colors.navy }]}>Sua adega está vazia</Text>
+              <Text style={[styles.emptyTabTitle, { color: colors.navy }]}>{t("profile.adega_empty_title")}</Text>
               <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>
-                Adicione vinhos para montar sua coleção
+                {t("profile.adega_empty_sub")}
               </Text>
             </View>
           )}
@@ -1413,7 +1416,7 @@ export default function ProfileScreen() {
             >
               <Feather name="wind" size={16} color="#fff" />
               <Text style={styles.adegaOpenBtnText}>
-                {wineEntries.length === 0 ? "Abrir Adega e Adicionar Vinho" : "Gerenciar Adega"}
+                {wineEntries.length === 0 ? t("profile.adega_open") : t("profile.adega_manage")}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1428,15 +1431,15 @@ export default function ProfileScreen() {
           ) : anuncios.length === 0 ? (
             <View style={styles.emptyTab}>
               <Feather name="tag" size={32} color={colors.mutedForeground} />
-              <Text style={[styles.emptyTabTitle, { color: colors.navy }]}>Nenhum anúncio</Text>
+              <Text style={[styles.emptyTabTitle, { color: colors.navy }]}>{t("profile.ads_empty_title")}</Text>
               <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>
-                Você ainda não publicou anúncios no Mercado
+                {t("profile.ads_empty_sub")}
               </Text>
               <TouchableOpacity
                 style={[styles.emptyTabBtn, { backgroundColor: colors.gold }]}
                 onPress={() => router.push("/opportunities" as any)}
               >
-                <Text style={styles.emptyTabBtnText}>Ir para o Mercado</Text>
+                <Text style={styles.emptyTabBtnText}>{t("profile.go_to_market")}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -1465,7 +1468,7 @@ export default function ProfileScreen() {
                         <Text style={[styles.anuncioMeta, { color: colors.mutedForeground }]} numberOfLines={1}>{a.category}</Text>
                       ) : null}
                       {!a.is_active ? (
-                        <Text style={[styles.anuncioInactive, { color: "#9ca3af" }]}>· inativo</Text>
+                        <Text style={[styles.anuncioInactive, { color: "#9ca3af" }]}>· {t("profile.inactive_ad")}</Text>
                       ) : null}
                     </View>
                   </View>

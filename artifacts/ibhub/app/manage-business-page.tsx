@@ -1,6 +1,7 @@
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
@@ -47,22 +48,14 @@ const ROLES: { key: RoleKey; label: string }[] = [
   { key: "visualizador", label: "Visualizador" },
 ];
 
-const ROLE_DESCRIPTIONS: Record<RoleKey, { icon: string; desc: string }> = {
-  editor: {
-    icon: "edit-3",
-    desc: "Pode editar informações da página (nome, logo, bio), alterar portfólio e publicar todo tipo de conteúdo: posts, stories, chat, eventos, vagas e marketplace.",
-  },
-  moderador: {
-    icon: "shield",
-    desc: "Pode publicar posts, responder chat, criar eventos, anunciar vagas e no marketplace. Não pode editar informações da página nem alterar portfólio.",
-  },
-  visualizador: {
-    icon: "eye",
-    desc: "Pode responder mensagens no chat e grupos como empresa. Não pode publicar posts, criar eventos/vagas/marketplace nem editar informações da página.",
-  },
+const ROLE_ICONS: Record<RoleKey, string> = {
+  editor:       "edit-3",
+  moderador:    "shield",
+  visualizador: "eye",
 };
 
 export default function ManageBusinessPageScreen() {
+  const { t } = useTranslation();
   const colors  = useColors();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
@@ -153,7 +146,7 @@ export default function ManageBusinessPageScreen() {
   // ── Save edits (create or update) ─────────────────────────────────────────
   const handleSave = async () => {
     if (!companyName.trim()) {
-      Alert.alert("Atenção", "O nome da empresa é obrigatório.");
+      Alert.alert(t("common.attention"), t("manage_business.field_name_required"));
       return;
     }
     if (!currentUser?.id) return;
@@ -172,11 +165,11 @@ export default function ManageBusinessPageScreen() {
       });
       setSaving(false);
       if (created) {
-        Alert.alert("Página criada!", `"${created.name}" foi criada com sucesso.`, [
+        Alert.alert(t("manage_business.created_title"), t("manage_business.created_success_msg", { name: created.name }), [
           { text: "OK", onPress: () => router.replace(`/manage-business-page?id=${created.id}` as any) },
         ]);
       } else {
-        Alert.alert("Erro", "Não foi possível criar a empresa. Tente novamente.");
+        Alert.alert(t("common.error"), t("manage_business.save_error"));
       }
       return;
     }
@@ -202,21 +195,21 @@ export default function ManageBusinessPageScreen() {
 
     if (ok) {
       setPage(prev => prev ? { ...prev, name: companyName, username: username.trim() || null, industry: category, bio: desc, website, location, avatar_url } : prev);
-      Alert.alert("Salvo!", "Alterações salvas com sucesso.");
+      Alert.alert(t("manage_business.saved_title"), t("manage_business.saved_msg"));
     } else {
-      Alert.alert("Erro", "Não foi possível salvar. Tente novamente.");
+      Alert.alert(t("common.error"), t("manage_business.save_error"));
     }
   };
 
   // ── Delete page ────────────────────────────────────────────────────────────
   const handleDelete = () => {
     Alert.alert(
-      "Excluir página",
-      `Tem certeza que deseja excluir "${page?.name ?? "esta página"}"? Esta ação é irreversível.`,
+      t("manage_business.delete_title"),
+      t("manage_business.delete_confirm_msg", { name: page?.name ?? "esta página" }),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Excluir",
+          text: t("manage_business.delete_btn"),
           style: "destructive",
           onPress: async () => {
             if (!pageId) return;
@@ -224,11 +217,11 @@ export default function ManageBusinessPageScreen() {
             const ok = await API.deleteCompanyPage(pageId);
             setDeleting(false);
             if (ok) {
-              Alert.alert("Excluída", "A página foi excluída.", [
+              Alert.alert(t("manage_business.deleted_title"), t("manage_business.deleted_msg"), [
                 { text: "OK", onPress: () => router.back() },
               ]);
             } else {
-              Alert.alert("Erro", "Não foi possível excluir. Tente novamente.");
+              Alert.alert(t("common.error"), t("manage_business.delete_error"));
             }
           },
         },
@@ -240,7 +233,7 @@ export default function ManageBusinessPageScreen() {
   const handlePickLogo = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permissão necessária", "Permita o acesso à galeria para trocar o logo.");
+      Alert.alert(t("manage_business.perm_required"), t("manage_business.gallery_perm"));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -265,23 +258,23 @@ export default function ManageBusinessPageScreen() {
       const updated = await API.fetchCompanyPageAdmins(pageId);
       setAdmins(updated);
     } else {
-      Alert.alert("Erro", "Não foi possível adicionar o membro.");
+      Alert.alert(t("common.error"), t("manage_business.add_member_error"));
     }
     setAddingMember(false);
   };
 
   // ── Remove member ──────────────────────────────────────────────────────────
   const handleRemoveMember = (userId: string, name: string) => {
-    Alert.alert("Remover membro", `Remover ${name} da equipe?`, [
-      { text: "Cancelar", style: "cancel" },
+    Alert.alert(t("manage_business.remove_member_title"), t("manage_business.remove_member_msg", { name }), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Remover",
+        text: t("empresa_screen.remove"),
         style: "destructive",
         onPress: async () => {
           if (!pageId) return;
           const ok = await API.removeCompanyPageAdmin(pageId, userId);
           if (ok) setAdmins(prev => prev.filter(a => a.user_id !== userId));
-          else Alert.alert("Erro", "Não foi possível remover o membro.");
+          else Alert.alert(t("common.error"), t("manage_business.remove_member_error"));
         },
       },
     ]);
@@ -291,12 +284,12 @@ export default function ManageBusinessPageScreen() {
   const handleTransferOwnership = (toUserId: string, toName: string) => {
     if (!pageId || !currentUser?.id) return;
     Alert.alert(
-      "Transferir Propriedade",
-      `Deseja transferir a propriedade da página para ${toName}?\n\nVocê continuará na equipe como Editor.`,
+      t("manage_business.transfer_title_full"),
+      t("manage_business.transfer_msg_full", { name: toName }),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Transferir",
+          text: t("manage_business.transfer_btn"),
           style: "destructive",
           onPress: async () => {
             setTransferring(true);
@@ -304,12 +297,12 @@ export default function ManageBusinessPageScreen() {
             setTransferring(false);
             if (ok) {
               Alert.alert(
-                "Propriedade transferida",
-                `${toName} agora é o proprietário da página. Você foi convertido em Editor.`,
+                t("manage_business.transfer_success_title"),
+                t("manage_business.transfer_success_msg", { name: toName }),
                 [{ text: "OK", onPress: () => router.back() }],
               );
             } else {
-              Alert.alert("Erro", error ?? "Não foi possível transferir a propriedade.");
+              Alert.alert(t("common.error"), error ?? t("manage_business.transfer_error"));
             }
           },
         },
@@ -345,9 +338,9 @@ export default function ManageBusinessPageScreen() {
   const canEdit = isOwner;
 
   const tabList: Array<{ key: Tab; label: string; icon: string }> = [
-    { key: "preview", label: "Preview", icon: "eye" },
-    ...(canEdit ? [{ key: "editar" as Tab, label: "Editar", icon: "edit-2" }] : []),
-    ...(isOwner  ? [{ key: "equipe" as Tab, label: "Equipe", icon: "users" }] : []),
+    { key: "preview", label: t("manage_business.tab_preview"), icon: "eye" },
+    ...(canEdit ? [{ key: "editar" as Tab, label: t("manage_business.tab_edit"), icon: "edit-2" }] : []),
+    ...(isOwner  ? [{ key: "equipe" as Tab, label: t("manage_business.tab_team"), icon: "users" }] : []),
   ];
 
   return (
@@ -357,7 +350,7 @@ export default function ManageBusinessPageScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
           <Text style={[styles.headerTitle, { color: colors.navy }]}>
-            {isCreateMode ? "Nova Empresa" : (page?.name ?? "Página Empresarial")}
+            {isCreateMode ? t("manage_business.title_new") : (page?.name ?? t("manage_business.title_edit"))}
           </Text>
         </TouchableOpacity>
         {/* Admin panel shortcut — only for owners */}
@@ -367,7 +360,7 @@ export default function ManageBusinessPageScreen() {
             onPress={() => router.push(`/empresa/admin?id=${pageId}&name=${encodeURIComponent(page?.name ?? "")}` as any)}
           >
             <Feather name="bar-chart-2" size={14} color="#fff" />
-            <Text style={styles.adminBtnText}>Painel</Text>
+            <Text style={styles.adminBtnText}>{t("manage_business.panel_btn")}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -408,15 +401,15 @@ export default function ManageBusinessPageScreen() {
         {activeTab === "preview" && (
           <View style={{ padding: 16, gap: 16 }}>
             {/* Role info banner for non-owners */}
-            {!isOwner && userRole && ROLE_DESCRIPTIONS[userRole as RoleKey] && (
+            {!isOwner && userRole && ROLE_ICONS[userRole as RoleKey] && (
               <View style={[styles.roleInfoBanner, { backgroundColor: colors.gold + "12", borderColor: colors.gold + "40" }]}>
-                <Feather name={ROLE_DESCRIPTIONS[userRole as RoleKey].icon as any} size={16} color={colors.gold} />
+                <Feather name={ROLE_ICONS[userRole as RoleKey] as any} size={16} color={colors.gold} />
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.roleInfoTitle, { color: colors.navy }]}>
-                    Seu papel: {userRole.charAt(0).toUpperCase() + userRole.slice(1)}
+                    {t("manage_business.your_role_prefix")}{userRole.charAt(0).toUpperCase() + userRole.slice(1)}
                   </Text>
                   <Text style={[styles.roleInfoDesc, { color: colors.mutedForeground }]}>
-                    {ROLE_DESCRIPTIONS[userRole as RoleKey].desc}
+                    {t(`manage_business.role_desc_${userRole as RoleKey}_full`)}
                   </Text>
                 </View>
               </View>
@@ -458,15 +451,15 @@ export default function ManageBusinessPageScreen() {
             {/* Content is edited inline on the public Empresa page. */}
             {!isCreateMode && pageId && canEdit && (
               <View style={[styles.quickLinksCard, { borderColor: colors.border }]}>
-                <Text style={[styles.quickLinksTitle, { color: colors.navy }]}>Gerenciar conteúdo</Text>
+                <Text style={[styles.quickLinksTitle, { color: colors.navy }]}>{t("manage_business.manage_content")}</Text>
                 <Text style={[styles.quickLinksHint, { color: colors.mutedForeground }]}>
-                  Portfólio, vagas e publicações: os controles de adicionar/editar aparecem na página pública quando você está logado como gestor.
+                  {t("manage_business.manage_content_hint")}
                 </Text>
                 <View style={styles.quickLinksRow}>
                   {[
-                    { key: "portfolio", label: "Portfólio", icon: "shopping-bag" },
-                    { key: "vagas",     label: "Vagas",     icon: "briefcase" },
-                    { key: "publicacoes", label: "Posts",   icon: "edit-3" },
+                    { key: "portfolio",   label: t("manage_business.tab_portfolio_label"), icon: "shopping-bag" },
+                    { key: "vagas",       label: t("manage_business.tab_jobs_label"),      icon: "briefcase" },
+                    { key: "publicacoes", label: t("manage_business.tab_posts_label"),     icon: "edit-3" },
                   ].map(s => (
                     <TouchableOpacity
                       key={s.key}
@@ -492,7 +485,7 @@ export default function ManageBusinessPageScreen() {
                   ? <ActivityIndicator size="small" color="#dc2626" />
                   : <Feather name="trash-2" size={16} color="#dc2626" />
                 }
-                <Text style={[styles.deletePageText, { color: "#dc2626" }]}>Excluir página</Text>
+                <Text style={[styles.deletePageText, { color: "#dc2626" }]}>{t("manage_business.delete_page_btn")}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -521,34 +514,34 @@ export default function ManageBusinessPageScreen() {
             )}
 
             <View style={styles.field}>
-              <Text style={[styles.fieldLabel, { color: colors.navy }]}>Nome da empresa *</Text>
+              <Text style={[styles.fieldLabel, { color: colors.navy }]}>{t("manage_business.field_name")} *</Text>
               <TextInput
                 style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
                 value={companyName}
                 onChangeText={setCompanyName}
-                placeholder="Nome da empresa"
+                placeholder={t("manage_business.field_name_placeholder")}
                 placeholderTextColor={colors.mutedForeground}
               />
             </View>
 
             <View style={styles.field}>
-              <Text style={[styles.fieldLabel, { color: colors.navy }]}>Username da página</Text>
+              <Text style={[styles.fieldLabel, { color: colors.navy }]}>{t("manage_business.field_username_label")}</Text>
               <View style={{ flexDirection: "row", alignItems: "center" }}>
                 <Text style={{ color: colors.mutedForeground, fontSize: 15, marginRight: 4 }}>@</Text>
                 <TextInput
                   style={[styles.input, { flex: 1, backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
                   value={username}
-                  onChangeText={t => setUsername(t.toLowerCase().replace(/[^a-z0-9._]/g, ""))}
-                  placeholder="nome_empresa"
+                  onChangeText={v => setUsername(v.toLowerCase().replace(/[^a-z0-9._]/g, ""))}
+                  placeholder={t("manage_business.field_username_placeholder")}
                   placeholderTextColor={colors.mutedForeground}
                   autoCapitalize="none"
                 />
               </View>
-              <Text style={[styles.charCount, { color: colors.mutedForeground }]}>Letras minúsculas, números, ponto e underscore.</Text>
+              <Text style={[styles.charCount, { color: colors.mutedForeground }]}>{t("manage_business.username_hint")}</Text>
             </View>
 
             <View style={styles.field}>
-              <Text style={[styles.fieldLabel, { color: colors.navy }]}>Categoria *</Text>
+              <Text style={[styles.fieldLabel, { color: colors.navy }]}>{t("manage_business.field_category")} *</Text>
               <View style={styles.catGrid}>
                 {CATEGORIES.map(cat => (
                   <TouchableOpacity
@@ -568,10 +561,10 @@ export default function ManageBusinessPageScreen() {
             </View>
 
             <View style={styles.field}>
-              <Text style={[styles.fieldLabel, { color: colors.navy }]}>Descrição</Text>
+              <Text style={[styles.fieldLabel, { color: colors.navy }]}>{t("manage_business.field_description")}</Text>
               <TextInput
                 style={[styles.input, styles.textarea, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                placeholder="Sobre a empresa..."
+                placeholder={t("manage_business.field_description_placeholder")}
                 placeholderTextColor={colors.mutedForeground}
                 value={desc}
                 onChangeText={setDesc}
@@ -583,8 +576,8 @@ export default function ManageBusinessPageScreen() {
             </View>
 
             {[
-              { label: "Website",    value: website,   onChange: setWebsite,   placeholder: "https://suaempresa.com.br" },
-              { label: "Localização",value: location,  onChange: setLocation,  placeholder: "Ex: São Paulo - SP" },
+              { label: t("manage_business.field_website"),  value: website,  onChange: setWebsite,  placeholder: t("manage_business.field_website_placeholder") },
+              { label: t("manage_business.field_location"), value: location, onChange: setLocation, placeholder: t("manage_business.field_location_placeholder") },
             ].map(f => (
               <View key={f.label} style={styles.field}>
                 <Text style={[styles.fieldLabel, { color: colors.navy }]}>{f.label}</Text>
@@ -607,7 +600,7 @@ export default function ManageBusinessPageScreen() {
                 ? <ActivityIndicator size="small" color="#fff" />
                 : <Feather name="save" size={16} color="#fff" />
               }
-              <Text style={styles.saveBtnText}>{saving ? (isCreateMode ? "Criando..." : "Salvando...") : (isCreateMode ? "Criar Empresa" : "Salvar alterações")}</Text>
+              <Text style={styles.saveBtnText}>{saving ? (isCreateMode ? t("manage_business.creating") : t("manage_business.saving")) : (isCreateMode ? t("manage_business.create_btn") : t("manage_business.save_btn"))}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -617,7 +610,7 @@ export default function ManageBusinessPageScreen() {
           <View style={{ padding: 16, gap: 16 }}>
             {/* Role selector */}
             <View style={styles.field}>
-              <Text style={[styles.fieldLabel, { color: colors.navy }]}>Papel do novo membro</Text>
+              <Text style={[styles.fieldLabel, { color: colors.navy }]}>{t("manage_business.team_role")}</Text>
               <View style={styles.roleChips}>
                 {ROLES.map(r => (
                   <TouchableOpacity
@@ -633,21 +626,21 @@ export default function ManageBusinessPageScreen() {
               </View>
               {/* Role description */}
               <View style={[styles.roleDescCard, { backgroundColor: colors.gold + "12", borderColor: colors.gold + "40" }]}>
-                <Feather name={ROLE_DESCRIPTIONS[selectedRole].icon as any} size={14} color={colors.gold} />
+                <Feather name={ROLE_ICONS[selectedRole] as any} size={14} color={colors.gold} />
                 <Text style={[styles.roleDescText, { color: colors.navy }]}>
-                  {ROLE_DESCRIPTIONS[selectedRole].desc}
+                  {t(`manage_business.role_desc_${selectedRole}_full`)}
                 </Text>
               </View>
             </View>
 
             {/* Search bar */}
             <View style={styles.field}>
-              <Text style={[styles.fieldLabel, { color: colors.navy }]}>Buscar usuário</Text>
+              <Text style={[styles.fieldLabel, { color: colors.navy }]}>{t("manage_business.team_search")}</Text>
               <View style={[styles.memberSearchBar, { backgroundColor: "#fff", borderColor: colors.border }]}>
                 <Feather name="search" size={14} color={colors.mutedForeground} />
                 <TextInput
                   style={[styles.memberSearchInput, { color: colors.foreground }]}
-                  placeholder="Nome ou @username..."
+                  placeholder={t("manage_business.search_user_placeholder")}
                   placeholderTextColor={colors.mutedForeground}
                   value={memberSearch}
                   onChangeText={setMemberSearch}
@@ -690,7 +683,7 @@ export default function ManageBusinessPageScreen() {
 
             {/* Team list */}
             <Text style={[styles.teamSectionTitle, { color: colors.navy }]}>
-              Equipe ({admins.length})
+              {t("manage_business.team_title")} ({admins.length})
             </Text>
 
             {adminsLoading ? (
@@ -699,7 +692,7 @@ export default function ManageBusinessPageScreen() {
               <View style={styles.teamEmpty}>
                 <Feather name="users" size={32} color={colors.border} />
                 <Text style={[styles.teamEmptyText, { color: colors.mutedForeground }]}>
-                  Nenhum membro na equipe ainda.
+                  {t("manage_business.no_team_yet")}
                 </Text>
               </View>
             ) : (

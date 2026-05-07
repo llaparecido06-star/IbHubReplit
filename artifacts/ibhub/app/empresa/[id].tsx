@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
@@ -59,18 +60,6 @@ interface LocalProduct {
   image_url?: string | null;
 }
 
-const PRODUCT_CATS: { key: ProductCat; label: string }[] = [
-  { key: "produto",   label: "Produto" },
-  { key: "vinho",     label: "Vinho" },
-  { key: "acessorio", label: "Acessório" },
-  { key: "servico",   label: "Serviço" },
-];
-
-const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: "data",      label: "Data" },
-  { key: "preco",     label: "Preço" },
-  { key: "categoria", label: "Categoria" },
-];
 
 function toLocalProduct(p: CompanyProduct): LocalProduct {
   return {
@@ -84,10 +73,24 @@ function toLocalProduct(p: CompanyProduct): LocalProduct {
 }
 
 export default function EmpresaScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, activeCompany } = useAuth();
+
+  const PRODUCT_CATS: { key: ProductCat; label: string }[] = [
+    { key: "produto",   label: t("empresa_screen.cat_produto") },
+    { key: "vinho",     label: t("empresa_screen.cat_vinho") },
+    { key: "acessorio", label: t("empresa_screen.cat_acessorio") },
+    { key: "servico",   label: t("empresa_screen.cat_servico") },
+  ];
+
+  const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+    { key: "data",      label: t("empresa_screen.sort_date") },
+    { key: "preco",     label: t("empresa_screen.sort_price") },
+    { key: "categoria", label: t("empresa_screen.sort_category") },
+  ];
   const { id, tab: tabParam } = useLocalSearchParams<{ id: string; tab?: string }>();
 
   const [companyPage, setCompanyPage] = useState<CompanyPage | null>(null);
@@ -330,7 +333,7 @@ export default function EmpresaScreen() {
   const handlePickProductImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permissão necessária", "Precisamos de acesso à sua galeria.");
+      Alert.alert(t("empresa_screen.perm_required"), t("empresa_screen.gallery_perm"));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -344,7 +347,7 @@ export default function EmpresaScreen() {
       const MAX_BYTES = 5 * 1024 * 1024;
       if (asset.fileSize && asset.fileSize > MAX_BYTES) {
         Alert.alert(
-          "Imagem muito grande",
+          t("empresa_screen.img_too_large"),
           `A foto tem ${(asset.fileSize / (1024 * 1024)).toFixed(1)} MB. O limite é 5 MB. Tente uma imagem menor.`,
         );
         return;
@@ -353,7 +356,7 @@ export default function EmpresaScreen() {
       const ext = uri.split(".").pop()?.toLowerCase();
       const allowed = ["jpg", "jpeg", "png", "webp", "heic"];
       if (ext && !allowed.includes(ext)) {
-        Alert.alert("Formato inválido", "Use JPG, PNG, WEBP ou HEIC.");
+        Alert.alert(t("empresa_screen.invalid_format"), "Use JPG, PNG, WEBP ou HEIC.");
         return;
       }
       setPImageUri(uri);
@@ -362,7 +365,7 @@ export default function EmpresaScreen() {
   };
 
   const handleSaveProduct = async () => {
-    if (!pName.trim()) { Alert.alert("Atenção", "Informe o nome do produto."); return; }
+    if (!pName.trim()) { Alert.alert(t("common.attention"), t("empresa_screen.product_name_required")); return; }
     if (!id) return;
     setSavingProduct(true);
     try {
@@ -394,7 +397,7 @@ export default function EmpresaScreen() {
               : p
           ));
         } else {
-          Alert.alert("Erro", "Não foi possível atualizar o produto.");
+          Alert.alert(t("common.error"), t("empresa_screen.update_error"));
         }
       } else {
         const created = await createCompanyProduct({
@@ -408,14 +411,14 @@ export default function EmpresaScreen() {
         if (created) {
           setProducts((prev) => [toLocalProduct(created), ...prev]);
         } else {
-          Alert.alert("Erro", "Não foi possível criar o produto.");
+          Alert.alert(t("common.error"), t("empresa_screen.create_error"));
         }
       }
 
       resetProductForm();
       setShowProductForm(false);
     } catch (e: unknown) {
-      Alert.alert("Erro", friendlyErrorMessage(e));
+      Alert.alert(t("common.error"), friendlyErrorMessage(e));
     } finally {
       setSavingProduct(false);
     }
@@ -433,20 +436,20 @@ export default function EmpresaScreen() {
   };
 
   const handleDeleteProduct = (productId: string) => {
-    Alert.alert("Remover produto", "Deseja remover este produto?", [
-      { text: "Cancelar", style: "cancel" },
+    Alert.alert(t("empresa_screen.remove_product_title"), t("empresa_screen.remove_product_msg"), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Remover", style: "destructive", onPress: async () => {
+        text: t("empresa_screen.remove"), style: "destructive", onPress: async () => {
           setDeletingProductId(productId);
           try {
             const ok = await deleteCompanyProduct(productId);
             if (ok) {
               setProducts((prev) => prev.filter((x) => x.id !== productId));
             } else {
-              Alert.alert("Erro", "Não foi possível remover o produto.");
+              Alert.alert(t("common.error"), t("empresa_screen.remove_error"));
             }
           } catch (e: unknown) {
-            Alert.alert("Erro", friendlyErrorMessage(e));
+            Alert.alert(t("common.error"), friendlyErrorMessage(e));
           } finally {
             setDeletingProductId(null);
           }
@@ -493,13 +496,13 @@ export default function EmpresaScreen() {
         setPosts((prev) =>
           prev.map((p) => p.id === post.id ? { ...p, is_liked: wasLiked, likes_count: prevCount } : p)
         );
-        Alert.alert("Erro", "Não foi possível curtir. Tente novamente.");
+        Alert.alert(t("common.error"), t("common.generic_error"));
       }
     } catch (e: unknown) {
       setPosts((prev) =>
         prev.map((p) => p.id === post.id ? { ...p, is_liked: wasLiked, likes_count: prevCount } : p)
       );
-      Alert.alert("Erro de Conexão", friendlyErrorMessage(e));
+      Alert.alert(t("common.conn_error"), friendlyErrorMessage(e));
     }
   };
 
@@ -619,14 +622,14 @@ export default function EmpresaScreen() {
                 <Text style={[styles.profileStatNum, { color: colors.navy }]}>
                   {profileFollowers === null ? "—" : String(profileFollowers)}
                 </Text>
-                <Text style={[styles.profileStatLabel, { color: colors.mutedForeground }]}>Seguidores</Text>
+                <Text style={[styles.profileStatLabel, { color: colors.mutedForeground }]}>{t("empresa_screen.followers")}</Text>
               </View>
               <View style={[styles.profileStatDivider, { backgroundColor: colors.border }]} />
               <View style={styles.profileStat}>
                 <Text style={[styles.profileStatNum, { color: colors.navy }]}>
                   {profilePostsCount === null ? "—" : String(profilePostsCount)}
                 </Text>
-                <Text style={[styles.profileStatLabel, { color: colors.mutedForeground }]}>Publicações</Text>
+                <Text style={[styles.profileStatLabel, { color: colors.mutedForeground }]}>{t("empresa_screen.posts_count")}</Text>
               </View>
             </View>
 
@@ -636,7 +639,7 @@ export default function EmpresaScreen() {
                 <View style={[styles.roleBadge, { backgroundColor: colors.navy + "0f", borderColor: colors.navy + "25" }]}>
                   <Feather name={userRole === "owner" ? "shield" : "user-check"} size={13} color={colors.navy} />
                   <Text style={[styles.roleBadgeText, { color: colors.navy }]}>
-                    {userRole === "owner" ? "Proprietário" : userRole === "editor" ? "Editor" : userRole === "moderador" ? "Moderador" : "Admin"}
+                    {userRole === "owner" ? t("empresa_screen.role_owner") : userRole === "editor" ? t("empresa_screen.role_editor") : userRole === "moderador" ? t("empresa_screen.role_moderador") : t("empresa_screen.role_admin")}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -644,14 +647,14 @@ export default function EmpresaScreen() {
                   onPress={() => router.push(`/manage-business-page?id=${id}` as any)}
                 >
                   <Feather name="settings" size={14} color="#fff" />
-                  <Text style={styles.ctaBtnPrimaryText}>Gerenciar</Text>
+                  <Text style={styles.ctaBtnPrimaryText}>{t("empresa_screen.manage")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.ctaBtn, styles.ctaBtnOutline, { flex: 1, borderColor: colors.gold }]}
                   onPress={() => router.push(`/empresa/admin?id=${id}` as any)}
                 >
                   <Feather name="briefcase" size={14} color={colors.gold} />
-                  <Text style={[styles.ctaBtnOutlineText, { color: colors.gold }]}>Gerenciar Anúncios</Text>
+                  <Text style={[styles.ctaBtnOutlineText, { color: colors.gold }]}>{t("empresa_screen.manage_ads")}</Text>
                 </TouchableOpacity>
               </View>
             ) : user?.id ? (
@@ -670,7 +673,7 @@ export default function EmpresaScreen() {
                     color={isFollowing ? colors.navy : "#fff"}
                   />
                   <Text style={[styles.ctaBtnPrimaryText, { color: isFollowing ? colors.navy : "#fff" }]}>
-                    {followLoading ? "..." : isFollowing ? "Seguindo" : "Seguir"}
+                    {followLoading ? "..." : isFollowing ? t("empresa_screen.following") : t("empresa_screen.follow")}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -680,7 +683,7 @@ export default function EmpresaScreen() {
                 >
                   <Feather name="message-circle" size={14} color={messagingLoading ? colors.mutedForeground : colors.gold} />
                   <Text style={[styles.ctaBtnOutlineText, { color: messagingLoading ? colors.mutedForeground : colors.gold }]}>
-                    {messagingLoading ? "..." : "Mensagem"}
+                    {messagingLoading ? "..." : t("empresa_screen.message")}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -696,23 +699,23 @@ export default function EmpresaScreen() {
           contentContainerStyle={{ flexDirection: "row" }}
         >
           {([
-            { key: "publicacoes", label: "PUBLICAÇÕES" },
-            { key: "vagas",       label: "VAGAS" },
-            { key: "sobre",       label: "SOBRE" },
-            { key: "portfolio",   label: "PORTFÓLIO" },
-            { key: "eventos",     label: "EVENTOS" },
-            ...(isManager ? [{ key: "painel" as CompanyTab, label: "PAINEL" }] : []),
-          ] as { key: CompanyTab; label: string }[]).map((t) => (
+            { key: "publicacoes", label: t("empresa_screen.tab_posts").toUpperCase() },
+            { key: "vagas",       label: t("empresa_screen.tab_jobs").toUpperCase() },
+            { key: "sobre",       label: t("empresa_screen.tab_about").toUpperCase() },
+            { key: "portfolio",   label: t("empresa_screen.tab_portfolio").toUpperCase() },
+            { key: "eventos",     label: t("empresa_screen.tab_events").toUpperCase() },
+            ...(isManager ? [{ key: "painel" as CompanyTab, label: t("empresa_screen.tab_panel").toUpperCase() }] : []),
+          ] as { key: CompanyTab; label: string }[]).map((tab) => (
             <TouchableOpacity
-              key={t.key}
-              style={[styles.tabItem, { flex: 0, paddingHorizontal: 16 }, activeTab === t.key && { borderBottomColor: colors.gold, borderBottomWidth: 2 }]}
+              key={tab.key}
+              style={[styles.tabItem, { flex: 0, paddingHorizontal: 16 }, activeTab === tab.key && { borderBottomColor: colors.gold, borderBottomWidth: 2 }]}
               onPress={() => {
-                setActiveTab(t.key);
-                router.setParams({ tab: t.key });
+                setActiveTab(tab.key);
+                router.setParams({ tab: tab.key });
               }}
             >
-              <Text style={[styles.tabLabel, { color: activeTab === t.key ? colors.gold : colors.mutedForeground }]}>
-                {t.label}
+              <Text style={[styles.tabLabel, { color: activeTab === tab.key ? colors.gold : colors.mutedForeground }]}>
+                {tab.label}
               </Text>
             </TouchableOpacity>
           ))}
@@ -726,7 +729,7 @@ export default function EmpresaScreen() {
             ) : posts.length === 0 ? (
               <View style={styles.emptyTab}>
                 <Feather name="file-text" size={32} color={colors.mutedForeground} />
-                <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>Nenhuma publicação ainda</Text>
+                <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>{t("empresa_screen.no_posts")}</Text>
               </View>
             ) : (
               posts.map((post) => (
@@ -779,7 +782,7 @@ export default function EmpresaScreen() {
                 onPress={() => { resetProductForm(); setShowProductForm(true); }}
               >
                 <Feather name="plus" size={18} color="#fff" />
-                <Text style={styles.addProductBtnText}>Adicionar item ao portfólio</Text>
+                <Text style={styles.addProductBtnText}>{t("empresa_screen.add_portfolio")}</Text>
               </TouchableOpacity>
             ) : null}
 
@@ -787,7 +790,7 @@ export default function EmpresaScreen() {
               <Feather name="search" size={14} color={colors.mutedForeground} />
               <TextInput
                 style={[styles.searchInput, { color: colors.foreground }]}
-                placeholder="Buscar produto..."
+                placeholder={t("empresa_screen.search_product")}
                 placeholderTextColor={colors.mutedForeground}
                 value={productSearch}
                 onChangeText={setProductSearch}
@@ -805,7 +808,7 @@ export default function EmpresaScreen() {
                 </TouchableOpacity>
               ))}
               <View style={[styles.chipDivider, { backgroundColor: colors.border }]} />
-              {([{ key: "todos" as const, label: "Todos" }, ...PRODUCT_CATS.filter((c) => catCounts[c.key])]).map((c) => (
+              {([{ key: "todos" as const, label: t("empresa_screen.cat_all") }, ...PRODUCT_CATS.filter((c) => catCounts[c.key])]).map((c) => (
                 <TouchableOpacity
                   key={c.key}
                   style={[styles.chip, { backgroundColor: filterCat === c.key ? colors.navy + "18" : "#fff", borderColor: colors.border }]}
@@ -824,7 +827,7 @@ export default function EmpresaScreen() {
               <View style={styles.portfolioEmpty}>
                 <Feather name="package" size={40} color={colors.border} />
                 <Text style={[styles.portfolioEmptyText, { color: colors.mutedForeground }]}>
-                  {isManager ? "Mostre o que sua empresa oferece." : "Esta empresa ainda não cadastrou itens."}
+                  {isManager ? t("empresa_screen.portfolio_empty_manager") : t("empresa_screen.portfolio_empty_visitor")}
                 </Text>
                 {isManager ? (
                   <TouchableOpacity
@@ -832,7 +835,7 @@ export default function EmpresaScreen() {
                     onPress={() => { resetProductForm(); setShowProductForm(true); }}
                   >
                     <Feather name="plus" size={16} color="#fff" />
-                    <Text style={styles.addProductBtnText}>Adicionar primeiro item</Text>
+                    <Text style={styles.addProductBtnText}>{t("empresa_screen.add_first_item")}</Text>
                   </TouchableOpacity>
                 ) : null}
               </View>
@@ -868,7 +871,7 @@ export default function EmpresaScreen() {
                         </Text>
                       </View>
                       {!isManager ? (
-                        <Text style={[styles.productActionText, { color: colors.gold, fontWeight: "700" }]}>Ver detalhes →</Text>
+                        <Text style={[styles.productActionText, { color: colors.gold, fontWeight: "700" }]}>{t("empresa_screen.view_details")}</Text>
                       ) : null}
                     </View>
                     {isManager ? (
@@ -878,7 +881,7 @@ export default function EmpresaScreen() {
                           onPress={() => openEditProduct(p)}
                         >
                           <Feather name="edit-2" size={14} color={colors.navy} />
-                          <Text style={[styles.productActionText, { color: colors.navy }]}>Editar</Text>
+                          <Text style={[styles.productActionText, { color: colors.navy }]}>{t("common.edit")}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={[styles.productActionBtn, deletingProductId === p.id && { opacity: 0.5 }]}
@@ -889,7 +892,7 @@ export default function EmpresaScreen() {
                             ? <ActivityIndicator size={14} color="#dc2626" />
                             : <Feather name="trash-2" size={14} color="#dc2626" />}
                           <Text style={[styles.productActionText, { color: "#dc2626" }]}>
-                            {deletingProductId === p.id ? "Removendo..." : "Remover"}
+                            {deletingProductId === p.id ? t("empresa_screen.removing") : t("empresa_screen.remove")}
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -910,7 +913,7 @@ export default function EmpresaScreen() {
                 onPress={() => router.push({ pathname: "/empresa/admin", params: { id, name: companyPage?.name ?? "" } })}
               >
                 <Feather name="plus" size={16} color="#fff" />
-                <Text style={styles.addProductBtnText}>Publicar nova vaga</Text>
+                <Text style={styles.addProductBtnText}>{t("empresa_screen.publish_job")}</Text>
               </TouchableOpacity>
             )}
             {opportunitiesLoading ? (
@@ -918,7 +921,7 @@ export default function EmpresaScreen() {
             ) : opportunities.length === 0 ? (
               <View style={styles.emptyTab}>
                 <Feather name="briefcase" size={32} color={colors.mutedForeground} />
-                <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>Nenhuma vaga publicada</Text>
+                <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>{t("empresa_screen.no_jobs")}</Text>
               </View>
             ) : (
               opportunities.map((op) => (
@@ -961,12 +964,12 @@ export default function EmpresaScreen() {
         {activeTab === "sobre" && (
           <View style={{ padding: 16, gap: 14 }}>
             <View style={[styles.sobreCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-              <Text style={[styles.sobreSectionTitle, { color: colors.navy }]}>Sobre a empresa</Text>
+              <Text style={[styles.sobreSectionTitle, { color: colors.navy }]}>{t("empresa_screen.about_title")}</Text>
               {companyPage?.bio ? (
                 <Text style={[styles.sobreBio, { color: colors.foreground }]}>{companyPage.bio}</Text>
               ) : (
                 <Text style={[styles.sobreBio, { color: colors.mutedForeground, fontStyle: "italic" }]}>
-                  Nenhuma descrição adicionada.
+                  {t("empresa_screen.no_description")}
                 </Text>
               )}
             </View>
@@ -978,7 +981,7 @@ export default function EmpresaScreen() {
                     <Feather name="briefcase" size={16} color={colors.gold} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.sobreLabel, { color: colors.mutedForeground }]}>Setor</Text>
+                    <Text style={[styles.sobreLabel, { color: colors.mutedForeground }]}>{t("empresa_screen.sector")}</Text>
                     <Text style={[styles.sobreValue, { color: colors.navy }]}>{companyPage.industry}</Text>
                   </View>
                 </View>
@@ -989,7 +992,7 @@ export default function EmpresaScreen() {
                     <Feather name="map-pin" size={16} color={colors.gold} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.sobreLabel, { color: colors.mutedForeground }]}>Localização</Text>
+                    <Text style={[styles.sobreLabel, { color: colors.mutedForeground }]}>{t("empresa_screen.location")}</Text>
                     <Text style={[styles.sobreValue, { color: colors.navy }]}>{companyPage.location}</Text>
                   </View>
                 </View>
@@ -1005,7 +1008,7 @@ export default function EmpresaScreen() {
                     <Feather name="link" size={16} color={colors.gold} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.sobreLabel, { color: colors.mutedForeground }]}>Website</Text>
+                    <Text style={[styles.sobreLabel, { color: colors.mutedForeground }]}>{t("empresa_screen.website")}</Text>
                     <Text style={[styles.sobreValue, { color: colors.gold }]} numberOfLines={1}>
                       {companyPage.website.replace(/^https?:\/\//, "")}
                     </Text>
@@ -1018,7 +1021,7 @@ export default function EmpresaScreen() {
                     <Feather name="calendar" size={16} color={colors.gold} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.sobreLabel, { color: colors.mutedForeground }]}>No ibhub desde</Text>
+                    <Text style={[styles.sobreLabel, { color: colors.mutedForeground }]}>{t("empresa_screen.member_since")}</Text>
                     <Text style={[styles.sobreValue, { color: colors.navy }]}>
                       {new Date(companyPage.created_at).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
                     </Text>
@@ -1027,7 +1030,7 @@ export default function EmpresaScreen() {
               ) : null}
               {!companyPage?.industry && !companyPage?.location && !companyPage?.website && !companyPage?.created_at ? (
                 <Text style={[styles.sobreBio, { color: colors.mutedForeground, fontStyle: "italic" }]}>
-                  Sem informações adicionais.
+                  {t("empresa_screen.no_info")}
                 </Text>
               ) : null}
             </View>
@@ -1042,7 +1045,7 @@ export default function EmpresaScreen() {
             ) : companyEvents.length === 0 ? (
               <View style={styles.emptyTab}>
                 <Feather name="calendar" size={32} color={colors.mutedForeground} />
-                <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>Nenhum evento publicado</Text>
+                <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>{t("empresa_screen.no_events")}</Text>
               </View>
             ) : (
               companyEvents.map((ev) => (
@@ -1069,14 +1072,14 @@ export default function EmpresaScreen() {
                     {ev.location_type ? (
                       <View style={[styles.evChip, { backgroundColor: colors.background }]}>
                         <Text style={[styles.evChipText, { color: colors.navy }]}>
-                          {ev.location_type === "online" ? "Online" : "Presencial"}
+                          {ev.location_type === "online" ? t("empresa_screen.online_label") : t("empresa_screen.presencial_label")}
                         </Text>
                       </View>
                     ) : null}
                     {ev.entry_type ? (
                       <View style={[styles.evChip, { backgroundColor: colors.gold + "18" }]}>
                         <Text style={[styles.evChipText, { color: colors.gold }]}>
-                          {ev.entry_type === "gratuito" ? "Gratuito" : "Pago"}
+                          {ev.entry_type === "gratuito" ? t("empresa_screen.gratuito_label") : t("empresa_screen.pago_label")}
                         </Text>
                       </View>
                     ) : null}
@@ -1096,21 +1099,21 @@ export default function EmpresaScreen() {
               onPress={() => router.push(`/manage-business-page?id=${id}` as any)}
             >
               <Feather name="settings" size={16} color="#fff" />
-              <Text style={styles.panelManageBtnText}>Gerenciar Página da Empresa</Text>
+              <Text style={styles.panelManageBtnText}>{t("empresa_screen.painel_manage")}</Text>
               <Feather name="chevron-right" size={16} color="#fff" />
             </TouchableOpacity>
 
             {/* Analytics grid */}
             <View style={[styles.analyticsCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-              <Text style={[styles.analyticsTitle, { color: colors.navy }]}>Resumo da Empresa</Text>
+              <Text style={[styles.analyticsTitle, { color: colors.navy }]}>{t("empresa_screen.painel_title")}</Text>
               <View style={styles.analyticsGrid}>
                 {[
-                  { label: "Seguidores",      value: followersCount,    icon: "users" },
-                  { label: "Publicações",     value: posts.length,      icon: "file-text" },
-                  { label: "Visitas (7d)",    value: viewsCount,        icon: "eye" },
-                  { label: "Engajamento",     value: engagementCount,   icon: "heart" },
-                  { label: "Vagas abertas",   value: vacanciesCount,    icon: "briefcase" },
-                  { label: "Marketplace",     value: marketCount,       icon: "shopping-bag" },
+                  { label: t("empresa_screen.stat_followers"),   value: followersCount,    icon: "users" },
+                  { label: t("empresa_screen.stat_posts"),       value: posts.length,      icon: "file-text" },
+                  { label: t("empresa_screen.stat_views"),       value: viewsCount,        icon: "eye" },
+                  { label: t("empresa_screen.stat_engagement"),  value: engagementCount,   icon: "heart" },
+                  { label: t("empresa_screen.stat_jobs"),        value: vacanciesCount,    icon: "briefcase" },
+                  { label: t("empresa_screen.stat_marketplace"), value: marketCount,       icon: "shopping-bag" },
                 ].map((stat) => (
                   <View key={stat.label} style={[styles.analyticsStat, { backgroundColor: colors.background, borderRadius: 10 }]}>
                     <Feather name={stat.icon as any} size={20} color={colors.gold} />
@@ -1132,36 +1135,36 @@ export default function EmpresaScreen() {
       <Modal visible={showProductForm} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowProductForm(false)}>
         <View style={[styles.formContainer, { backgroundColor: colors.background }]}>
           <View style={[styles.formHeader, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
-            <Text style={[styles.formTitle, { color: colors.navy }]}>{editingProduct ? "Editar Produto" : "Adicionar Produto"}</Text>
+            <Text style={[styles.formTitle, { color: colors.navy }]}>{editingProduct ? t("empresa_screen.product_form_edit") : t("empresa_screen.product_form_add")}</Text>
             <TouchableOpacity onPress={() => setShowProductForm(false)}>
               <Feather name="x" size={22} color={colors.navy} />
             </TouchableOpacity>
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, rowGap: 14 }}>
             <View style={{ gap: 6 }}>
-              <Text style={[styles.fieldLabel, { color: colors.navy }]}>Nome <Text style={{ color: "#dc2626" }}>*</Text></Text>
+              <Text style={[styles.fieldLabel, { color: colors.navy }]}>{t("empresa_screen.field_name_label")} <Text style={{ color: "#dc2626" }}>*</Text></Text>
               <TextInput
                 style={[styles.formInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                placeholder="Ex: Vinho Cabernet 2022" placeholderTextColor={colors.mutedForeground} value={pName} onChangeText={setPName} />
+                placeholder={t("empresa_screen.name_placeholder")} placeholderTextColor={colors.mutedForeground} value={pName} onChangeText={setPName} />
             </View>
 
             <View style={{ gap: 6 }}>
-              <Text style={[styles.fieldLabel, { color: colors.navy }]}>Descrição</Text>
+              <Text style={[styles.fieldLabel, { color: colors.navy }]}>{t("empresa_screen.field_desc_label")}</Text>
               <TextInput
                 style={[styles.formInput, styles.formTextarea, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                placeholder="Conte mais sobre o item, características, origem..." placeholderTextColor={colors.mutedForeground} value={pDesc} onChangeText={setPDesc} multiline textAlignVertical="top" />
+                placeholder={t("empresa_screen.desc_placeholder")} placeholderTextColor={colors.mutedForeground} value={pDesc} onChangeText={setPDesc} multiline textAlignVertical="top" />
             </View>
 
             <View style={{ gap: 6 }}>
-              <Text style={[styles.fieldLabel, { color: colors.navy }]}>Preço</Text>
+              <Text style={[styles.fieldLabel, { color: colors.navy }]}>{t("empresa_screen.field_price_label")}</Text>
               <TextInput
                 style={[styles.formInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-                placeholder="Ex: R$ 150,00 ou Sob consulta" placeholderTextColor={colors.mutedForeground} value={pPrice} onChangeText={setPPrice} />
-              <Text style={[styles.fieldHelper, { color: colors.mutedForeground }]}>Opcional. Use o formato que preferir.</Text>
+                placeholder={t("empresa_screen.price_placeholder")} placeholderTextColor={colors.mutedForeground} value={pPrice} onChangeText={setPPrice} />
+              <Text style={[styles.fieldHelper, { color: colors.mutedForeground }]}>{t("empresa_screen.price_hint")}</Text>
             </View>
 
             <View style={{ gap: 6 }}>
-              <Text style={[styles.fieldLabel, { color: colors.navy }]}>Categoria <Text style={{ color: "#dc2626" }}>*</Text></Text>
+              <Text style={[styles.fieldLabel, { color: colors.navy }]}>{t("empresa_screen.field_cat_label")} <Text style={{ color: "#dc2626" }}>*</Text></Text>
               <View style={styles.catChips}>
                 {PRODUCT_CATS.map((c) => (
                   <TouchableOpacity
@@ -1176,7 +1179,7 @@ export default function EmpresaScreen() {
             </View>
 
             <View style={{ gap: 6 }}>
-              <Text style={[styles.fieldLabel, { color: colors.navy }]}>Foto</Text>
+              <Text style={[styles.fieldLabel, { color: colors.navy }]}>{t("empresa_screen.field_photo_label")}</Text>
               <TouchableOpacity
                 style={[styles.photoBtn, { borderColor: colors.border }]}
                 onPress={handlePickProductImage}
@@ -1188,14 +1191,14 @@ export default function EmpresaScreen() {
                   <Feather name="image" size={16} color={colors.mutedForeground} />
                 )}
                 <Text style={[styles.photoBtnText, { color: colors.mutedForeground }]}>
-                  {pImageUri ? "Trocar foto" : "Adicionar foto"}
+                  {pImageUri ? t("empresa_screen.change_photo") : t("empresa_screen.add_photo")}
                 </Text>
               </TouchableOpacity>
-              <Text style={[styles.fieldHelper, { color: colors.mutedForeground }]}>Recomendado: imagem quadrada até 5 MB.</Text>
+              <Text style={[styles.fieldHelper, { color: colors.mutedForeground }]}>{t("empresa_screen.photo_hint")}</Text>
             </View>
 
             {!pName.trim() ? (
-              <Text style={[styles.fieldHelper, { color: "#dc2626" }]}>* O nome é obrigatório.</Text>
+              <Text style={[styles.fieldHelper, { color: "#dc2626" }]}>{t("empresa_screen.name_required_error")}</Text>
             ) : null}
 
             <View style={styles.formBtns}>
@@ -1203,14 +1206,14 @@ export default function EmpresaScreen() {
                 style={[styles.formCancelBtn, { borderColor: colors.border }]}
                 onPress={() => { resetProductForm(); setShowProductForm(false); }}
               >
-                <Text style={[styles.formCancelText, { color: colors.foreground }]}>Cancelar</Text>
+                <Text style={[styles.formCancelText, { color: colors.foreground }]}>{t("common.cancel")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.formSaveBtn, { backgroundColor: (savingProduct || !pName.trim()) ? colors.gold + "88" : colors.gold }]}
                 onPress={handleSaveProduct}
                 disabled={savingProduct || !pName.trim()}
               >
-                <Text style={styles.formSaveBtnText}>{savingProduct ? "Salvando..." : "Salvar"}</Text>
+                <Text style={styles.formSaveBtnText}>{savingProduct ? t("common.saving") : t("common.save")}</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -1258,7 +1261,7 @@ export default function EmpresaScreen() {
                 }}
               >
                 <Feather name="message-circle" size={16} color="#fff" />
-                <Text style={[styles.formSaveBtnText, { marginLeft: 8 }]}>Entrar em contato</Text>
+                <Text style={[styles.formSaveBtnText, { marginLeft: 8 }]}>{t("empresa_screen.contact")}</Text>
               </TouchableOpacity>
             )}
           </ScrollView>
@@ -1271,17 +1274,17 @@ export default function EmpresaScreen() {
           <View style={[styles.fabMenu, { backgroundColor: "#fff" }]}>
             <TouchableOpacity style={styles.fabMenuItem} onPress={() => { setShowFab(false); router.push("/create-post" as any); }}>
               <Feather name="file-text" size={16} color={colors.navy} />
-              <Text style={[styles.fabMenuText, { color: colors.navy }]}>Nova Publicação</Text>
+              <Text style={[styles.fabMenuText, { color: colors.navy }]}>{t("empresa_screen.new_publication")}</Text>
             </TouchableOpacity>
             <View style={[styles.fabMenuDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity style={styles.fabMenuItem} onPress={() => { setShowFab(false); resetProductForm(); setShowProductForm(true); }}>
               <Feather name="package" size={16} color={colors.navy} />
-              <Text style={[styles.fabMenuText, { color: colors.navy }]}>Novo Produto</Text>
+              <Text style={[styles.fabMenuText, { color: colors.navy }]}>{t("empresa_screen.new_product")}</Text>
             </TouchableOpacity>
             <View style={[styles.fabMenuDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity style={styles.fabMenuItem} onPress={() => { setShowFab(false); }}>
               <Feather name="calendar" size={16} color={colors.navy} />
-              <Text style={[styles.fabMenuText, { color: colors.navy }]}>Novo Evento</Text>
+              <Text style={[styles.fabMenuText, { color: colors.navy }]}>{t("empresa_screen.fab_event")}</Text>
             </TouchableOpacity>
           </View>
         </Pressable>

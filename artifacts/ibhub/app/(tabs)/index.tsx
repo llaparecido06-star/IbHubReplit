@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { Image } from "expo-image";
@@ -88,6 +89,7 @@ function StarRating({ value, onChange }: { value: number; onChange: (v: number) 
 }
 
 export default function FeedScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const router = useRouter();
   const { user, profile, activeCompany, setActiveCompany } = useAuth();
@@ -953,15 +955,15 @@ export default function FeedScreen() {
 
       {/* Greeting */}
       <View style={[styles.greeting, { backgroundColor: "#fff" }]}>
-        <Text style={[styles.greetingTitle, { color: colors.navy }]}>Olá, {firstName}</Text>
-        <Text style={[styles.greetingSub, { color: colors.mutedForeground }]}>Veja as últimas atualizações</Text>
+        <Text style={[styles.greetingTitle, { color: colors.navy }]}>{t("feed.greeting", { name: firstName })}</Text>
+        <Text style={[styles.greetingSub, { color: colors.mutedForeground }]}>{t("feed.greeting_sub")}</Text>
       </View>
 
       {/* Sugestões */}
       {suggestions.length > 0 && (
         <View style={[styles.suggestSection, { backgroundColor: "#fff" }]}>
           <View style={styles.suggestHeader}>
-            <Text style={[styles.suggestTitle, { color: colors.navy }]}>Pessoas que você pode conhecer</Text>
+            <Text style={[styles.suggestTitle, { color: colors.navy }]}>{t("feed.suggestions_title")}</Text>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestScroll}>
             {suggestions.map((s) => {
@@ -994,7 +996,7 @@ export default function FeedScreen() {
                   {s.company_match ? (
                     <View style={[styles.matchBadge, { backgroundColor: "#1a56db18" }]}>
                       <Feather name="briefcase" size={10} color="#1a56db" />
-                      <Text style={[styles.matchBadgeText, { color: "#1a56db" }]}>Mesma empresa</Text>
+                      <Text style={[styles.matchBadgeText, { color: "#1a56db" }]}>{t("profile.same_company")}</Text>
                     </View>
                   ) : s.match_score > 0 ? (
                     <View style={[styles.matchBadge, { backgroundColor: colors.gold + "18" }]}>
@@ -1007,12 +1009,12 @@ export default function FeedScreen() {
                   {isConnected ? (
                     <View style={[styles.suggestBtnFilled, { backgroundColor: colors.navy + "14" }]}>
                       <Feather name="check" size={12} color={colors.navy} />
-                      <Text style={[styles.suggestBtnFilledText, { color: colors.navy }]}>Conectado</Text>
+                      <Text style={[styles.suggestBtnFilledText, { color: colors.navy }]}>{t("profile.connected")}</Text>
                     </View>
                   ) : isPending ? (
                     <View style={[styles.suggestBtnFilled, { backgroundColor: colors.border }]}>
                       <Feather name="clock" size={12} color={colors.mutedForeground} />
-                      <Text style={[styles.suggestBtnFilledText, { color: colors.mutedForeground }]}>Enviado</Text>
+                      <Text style={[styles.suggestBtnFilledText, { color: colors.mutedForeground }]}>{t("profile.pending")}</Text>
                     </View>
                   ) : (activeCompany || s.is_company) ? (
                     <TouchableOpacity
@@ -1022,7 +1024,7 @@ export default function FeedScreen() {
                     >
                       <Feather name={s.is_following ? "check" : "plus"} size={12} color={s.is_following ? colors.navy : "#fff"} />
                       <Text style={[styles.suggestBtnFilledText, { color: s.is_following ? colors.navy : "#fff" }]}>
-                        {s.is_following ? "Seguindo" : "Seguir"}
+                        {s.is_following ? t("profile.following") : t("profile.follow")}
                       </Text>
                     </TouchableOpacity>
                   ) : (
@@ -1033,7 +1035,7 @@ export default function FeedScreen() {
                     >
                       <Feather name="user-plus" size={12} color="#fff" />
                       <Text style={[styles.suggestBtnFilledText, { color: "#fff" }]}>
-                        {isLoading ? "..." : "Conectar"}
+                        {isLoading ? "..." : t("profile.connect")}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -1073,7 +1075,7 @@ export default function FeedScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {feedNetworkError && (
         <View style={{ backgroundColor: "#c0392b", paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Text style={{ color: "#fff", fontSize: 13, flex: 1 }}>Sem conexão — mostrando dados em cache</Text>
+          <Text style={{ color: "#fff", fontSize: 13, flex: 1 }}>{t("feed.offline_banner")}</Text>
           <TouchableOpacity onPress={() => setFeedNetworkError(false)}>
             <Text style={{ color: "#fff", fontSize: 16, fontWeight: "bold", paddingLeft: 12 }}>×</Text>
           </TouchableOpacity>
@@ -1203,7 +1205,7 @@ export default function FeedScreen() {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              Nenhuma publicação ainda. Seja o primeiro a compartilhar!
+              {t("feed.no_posts")}
             </Text>
           </View>
         }
@@ -1253,7 +1255,7 @@ export default function FeedScreen() {
           >
             <Feather name="arrow-up" size={14} color="#fff" />
             <Text style={styles.newPostsBannerText}>
-              {newPosts.length} novo{newPosts.length > 1 ? "s posts" : " post"} — toque para ver
+              {newPosts.length === 1 ? t("feed.new_posts", { count: newPosts.length }) : t("feed.new_posts_plural", { count: newPosts.length })}
             </Text>
           </TouchableOpacity>
         </Animated.View>
@@ -1269,8 +1271,8 @@ export default function FeedScreen() {
                 <Feather name="image" size={20} color={colors.navy} />
               </View>
               <View>
-                <Text style={[styles.createMenuTitle, { color: colors.navy }]}>Foto</Text>
-                <Text style={[styles.createMenuSub, { color: colors.mutedForeground }]}>Compartilhe imagens</Text>
+                <Text style={[styles.createMenuTitle, { color: colors.navy }]}>{t("feed.create_photo_title")}</Text>
+                <Text style={[styles.createMenuSub, { color: colors.mutedForeground }]}>{t("feed.create_photo_sub")}</Text>
               </View>
             </TouchableOpacity>
             <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
@@ -1280,8 +1282,8 @@ export default function FeedScreen() {
                 <Feather name="video" size={20} color={colors.navy} />
               </View>
               <View>
-                <Text style={[styles.createMenuTitle, { color: colors.navy }]}>Vídeo</Text>
-                <Text style={[styles.createMenuSub, { color: colors.mutedForeground }]}>Compartilhe um vídeo</Text>
+                <Text style={[styles.createMenuTitle, { color: colors.navy }]}>{t("feed.create_video_title")}</Text>
+                <Text style={[styles.createMenuSub, { color: colors.mutedForeground }]}>{t("feed.create_video_sub")}</Text>
               </View>
             </TouchableOpacity>
             <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
@@ -1291,8 +1293,8 @@ export default function FeedScreen() {
                 <Feather name="bar-chart-2" size={20} color={colors.navy} />
               </View>
               <View>
-                <Text style={[styles.createMenuTitle, { color: colors.navy }]}>Enquete</Text>
-                <Text style={[styles.createMenuSub, { color: colors.mutedForeground }]}>Faça uma pergunta</Text>
+                <Text style={[styles.createMenuTitle, { color: colors.navy }]}>{t("feed.create_poll_title")}</Text>
+                <Text style={[styles.createMenuSub, { color: colors.mutedForeground }]}>{t("feed.create_poll_sub")}</Text>
               </View>
             </TouchableOpacity>
             <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
@@ -1302,8 +1304,8 @@ export default function FeedScreen() {
                 <Feather name="tag" size={20} color={colors.gold} />
               </View>
               <View>
-                <Text style={[styles.createMenuTitle, { color: colors.navy }]}>Avaliação do Vinho</Text>
-                <Text style={[styles.createMenuSub, { color: colors.mutedForeground }]}>Ficha técnica de rótulo</Text>
+                <Text style={[styles.createMenuTitle, { color: colors.navy }]}>{t("feed.create_wine_review_title")}</Text>
+                <Text style={[styles.createMenuSub, { color: colors.mutedForeground }]}>{t("feed.create_wine_review_sub")}</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -1325,7 +1327,7 @@ export default function FeedScreen() {
                 <Feather name="x" size={20} color={colors.mutedForeground} />
               </TouchableOpacity>
               <Text style={[styles.postModalTitle, { color: colors.navy }]}>
-                {postMode === "poll" ? "Criar enquete" : postMode === "video" ? "Novo vídeo" : "Nova publicação"}
+                {postMode === "poll" ? t("feed.post_modal_poll") : postMode === "video" ? t("feed.post_modal_video") : t("feed.post_modal_photo")}
               </Text>
               <TouchableOpacity
                 style={[styles.publishBtn, { backgroundColor: isPublishing ? colors.gold + "88" : (postMode === "poll" ? (pollQuestion.trim() ? colors.gold : colors.gold + "55") : colors.gold), flexDirection: "row", alignItems: "center", gap: 6 }]}
@@ -1333,7 +1335,7 @@ export default function FeedScreen() {
                 disabled={isPublishing}
               >
                 {isPublishing && <ActivityIndicator size="small" color="#fff" />}
-                <Text style={styles.publishBtnText}>{isPublishing ? "Publicando..." : "Publicar"}</Text>
+                <Text style={styles.publishBtnText}>{isPublishing ? t("feed.publishing") : t("feed.post_btn")}</Text>
               </TouchableOpacity>
             </View>
 
@@ -1365,43 +1367,43 @@ export default function FeedScreen() {
                 <>
                   <TextInput
                     style={[styles.postInput, { color: colors.foreground }]}
-                    placeholder={postMode === "video" ? "Adicione uma legenda ao vídeo…" : "Adicione uma legenda às fotos… Use # ou @"}
+                    placeholder={postMode === "video" ? t("feed.caption_video") : t("feed.caption_photo")}
                     placeholderTextColor={colors.mutedForeground}
                     multiline maxLength={MAX_CHARS} value={postContent}
                     onChangeText={setPostContent}
                   />
                   <Text style={[styles.charCounter, { color: colors.mutedForeground }]}>
-                    {MAX_CHARS - postContent.length} caracteres restantes
+                    {t("feed.chars_remaining", { count: MAX_CHARS - postContent.length })}
                   </Text>
                 </>
               ) : (
                 <>
                   <TextInput
                     style={[styles.postInput, { color: colors.foreground }]}
-                    placeholder="Faça uma pergunta..."
+                    placeholder={t("feed.poll_question_placeholder_ask")}
                     placeholderTextColor={colors.mutedForeground}
                     multiline maxLength={MAX_CHARS} value={pollQuestion}
                     onChangeText={setPollQuestion}
                   />
                   <Text style={[styles.charCounter, { color: colors.mutedForeground }]}>
-                    {MAX_CHARS - pollQuestion.length} caracteres restantes
+                    {t("feed.chars_remaining", { count: MAX_CHARS - pollQuestion.length })}
                   </Text>
                   <View style={[styles.pollSection, { borderTopColor: colors.border }]}>
                     <View style={styles.pollLabelRow}>
                       <Feather name="bar-chart-2" size={14} color={colors.gold} />
-                      <Text style={[styles.pollLabel, { color: colors.gold }]}>OPÇÕES DA ENQUETE</Text>
+                      <Text style={[styles.pollLabel, { color: colors.gold }]}>{t("feed.poll_options_label")}</Text>
                     </View>
                     {pollOptions.map((opt, i) => (
-                      <TextInput key={i} style={[styles.pollOptionInput, { borderColor: colors.border, color: colors.foreground }]} placeholder={`Opção ${i + 1}`} placeholderTextColor={colors.mutedForeground} value={opt} onChangeText={(v) => { const n = [...pollOptions]; n[i] = v; setPollOptions(n); }} />
+                      <TextInput key={i} style={[styles.pollOptionInput, { borderColor: colors.border, color: colors.foreground }]} placeholder={t("feed.poll_option", { n: i + 1 })} placeholderTextColor={colors.mutedForeground} value={opt} onChangeText={(v) => { const n = [...pollOptions]; n[i] = v; setPollOptions(n); }} />
                     ))}
                     {pollOptions.length < 4 && (
                       <TouchableOpacity style={styles.addOptionBtn} onPress={() => setPollOptions([...pollOptions, ""])}>
                         <Feather name="plus" size={14} color={colors.gold} />
-                        <Text style={[styles.addOptionText, { color: colors.gold }]}>Adicionar opção</Text>
+                        <Text style={[styles.addOptionText, { color: colors.gold }]}>{t("feed.poll_add_option")}</Text>
                       </TouchableOpacity>
                     )}
                     <View style={styles.durationRow}>
-                      <Text style={[styles.durationLabel, { color: colors.foreground }]}>Duração: </Text>
+                      <Text style={[styles.durationLabel, { color: colors.foreground }]}>{t("feed.duration_label")} </Text>
                       <TouchableOpacity style={[styles.durationSelect, { borderColor: colors.border }]} onPress={() => setDurationOpen(!durationOpen)}>
                         <Text style={[styles.durationText, { color: colors.foreground }]}>{pollDuration}</Text>
                         <Feather name="chevron-down" size={14} color={colors.mutedForeground} />
@@ -1419,7 +1421,7 @@ export default function FeedScreen() {
                   </View>
                   {/* Allow multiple toggle */}
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10, paddingHorizontal: 2, marginTop: 4 }}>
-                    <Text style={{ fontSize: 14, color: colors.foreground }}>Permitir várias respostas</Text>
+                    <Text style={{ fontSize: 14, color: colors.foreground }}>{t("feed.allow_multiple")}</Text>
                     <Switch
                       value={pollAllowMultiple}
                       onValueChange={setPollAllowMultiple}
@@ -1438,7 +1440,7 @@ export default function FeedScreen() {
                   <Feather name="map-pin" size={15} color={colors.gold} />
                   <TextInput
                     style={[styles.locationInput, { color: colors.foreground }]}
-                    placeholder="Ex: Serra Gaúcha, Rio Grande do Sul"
+                    placeholder={t("feed.location_placeholder")}
                     placeholderTextColor={colors.mutedForeground}
                     value={postLocation}
                     onChangeText={setPostLocation}
@@ -1510,7 +1512,7 @@ export default function FeedScreen() {
                     size={13} color={colors.gold}
                   />
                   <Text style={{ fontSize: 12, fontWeight: "700", color: colors.gold }}>
-                    {postMode === "poll" ? "Enquete" : postMode === "video" ? "Vídeo" : "Foto"}
+                    {postMode === "poll" ? t("feed.mode_poll") : postMode === "video" ? t("feed.mode_video") : t("feed.mode_photo")}
                   </Text>
                 </View>
               </View>
@@ -1519,7 +1521,7 @@ export default function FeedScreen() {
                 onPress={() => setShowLocationInput(v => !v)}
               >
                 <Feather name="map-pin" size={18} color={postLocation.trim() ? colors.gold : colors.foreground} />
-                <Text style={[styles.toolbarLabel, { color: postLocation.trim() ? colors.gold : colors.foreground }]}>Local</Text>
+                <Text style={[styles.toolbarLabel, { color: postLocation.trim() ? colors.gold : colors.foreground }]}>{t("feed.location_toolbar_label")}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1542,10 +1544,10 @@ export default function FeedScreen() {
               </TouchableOpacity>
               <View style={styles.wineHeaderTitle}>
                 <MaterialCommunityIcons name="glass-wine" size={14} color={colors.gold} />
-                <Text style={[styles.postModalTitle, { color: colors.navy }]}>Avaliar Rótulo</Text>
+                <Text style={[styles.postModalTitle, { color: colors.navy }]}>{t("feed.wine_review_label")}</Text>
               </View>
               <TouchableOpacity style={[styles.publishBtn, { backgroundColor: wineName.trim() ? colors.gold : colors.gold + "55" }]} onPress={handlePublishWine}>
-                <Text style={styles.publishBtnText}>Publicar</Text>
+                <Text style={styles.publishBtnText}>{t("feed.post_btn")}</Text>
               </TouchableOpacity>
             </View>
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, rowGap: 16 }} keyboardShouldPersistTaps="handled">
@@ -1591,14 +1593,14 @@ export default function FeedScreen() {
                   <View style={[styles.wineImagePlaceholderIcon, { backgroundColor: colors.gold + "18" }]}>
                     <Feather name="camera" size={22} color={colors.gold} />
                   </View>
-                  <Text style={[styles.wineImagePlaceholderText, { color: colors.navy }]}>Adicionar foto do rótulo</Text>
-                  <Text style={[styles.wineImagePlaceholderSub, { color: colors.mutedForeground }]}>Opcional · Aparece no feed</Text>
+                  <Text style={[styles.wineImagePlaceholderText, { color: colors.navy }]}>{t("feed.wine_photo_add")}</Text>
+                  <Text style={[styles.wineImagePlaceholderSub, { color: colors.mutedForeground }]}>{t("feed.wine_photo_optional")}</Text>
                 </TouchableOpacity>
               )}
 
               {/* Nome do vinho */}
               <View>
-                <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>NOME DO VINHO *</Text>
+                <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>{t("feed.wine_name_label")}</Text>
                 <TextInput
                   style={[styles.wineInput, { borderColor: colors.border, color: colors.foreground }]}
                   placeholder="Ex: Casillero del Diablo"
@@ -1611,18 +1613,18 @@ export default function FeedScreen() {
               {/* Uva + Safra */}
               <View style={styles.wineNameRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>UVA / CASTA</Text>
+                  <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>{t("feed.wine_grape_label")}</Text>
                   <TextInput style={[styles.wineNameInput, { borderColor: colors.border, color: colors.foreground }]} placeholder="Ex: Cabernet Sauvignon" placeholderTextColor={colors.mutedForeground} value={wineGrape} onChangeText={setWineGrape} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>SAFRA</Text>
+                  <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>{t("feed.wine_vintage_label")}</Text>
                   <TextInput style={[styles.wineNameInput, { borderColor: colors.border, color: colors.foreground }]} placeholder="2020" placeholderTextColor={colors.mutedForeground} value={wineSafra} onChangeText={setWineSafra} keyboardType="number-pad" />
                 </View>
               </View>
 
               {/* EAN */}
               <View>
-                <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>EAN / CÓDIGO DE BARRAS</Text>
+                <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>{t("feed.wine_ean_label")}</Text>
                 <View style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: colors.border, borderRadius: 10, backgroundColor: "#fafaf8", paddingHorizontal: 12 }}>
                   <Feather name="hash" size={18} color={colors.gold} style={{ marginRight: 8 }} />
                   <TextInput
@@ -1641,25 +1643,25 @@ export default function FeedScreen() {
                   )}
                 </View>
                 <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 4 }}>
-                  Usado no ranking comunitário de vinhos · Opcional
+                  {t("feed.wine_ean_hint")}
                 </Text>
               </View>
 
               {/* Produtor + País */}
               <View style={styles.wineNameRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>PRODUTOR</Text>
+                  <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>{t("feed.wine_producer_label")}</Text>
                   <TextInput style={[styles.wineNameInput, { borderColor: colors.border, color: colors.foreground }]} placeholder="Ex: Concha y Toro" placeholderTextColor={colors.mutedForeground} value={wineProducer} onChangeText={setWineProducer} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>PAÍS</Text>
+                  <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>{t("feed.wine_country_label")}</Text>
                   <TextInput style={[styles.wineNameInput, { borderColor: colors.border, color: colors.foreground }]} placeholder="Ex: Chile" placeholderTextColor={colors.mutedForeground} value={wineCountry} onChangeText={setWineCountry} />
                 </View>
               </View>
 
               {/* Região */}
               <View>
-                <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>REGIÃO</Text>
+                <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>{t("feed.wine_region_label")}</Text>
                 <TextInput
                   style={[styles.wineInput, { borderColor: colors.border, color: colors.foreground }]}
                   placeholder="Ex: Vale Central, Mendoza, Douro..."
@@ -1671,12 +1673,12 @@ export default function FeedScreen() {
 
               {/* Stars */}
               <View>
-                <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>NOTA VISUAL</Text>
+                <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>{t("feed.wine_visual_note_label")}</Text>
                 <StarRating value={wineStars} onChange={setWineStars} />
               </View>
               {/* Score slider (+ / - buttons) */}
               <View>
-                <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>PONTUAÇÃO (0-100)</Text>
+                <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>{t("feed.wine_score_label")}</Text>
                 <View style={styles.scoreRow}>
                   <View style={[styles.scoreTrack, { backgroundColor: colors.border }]}>
                     <View style={[styles.scoreFill, { backgroundColor: colors.navy, width: `${wineScore}%` as any }]} />
@@ -1695,7 +1697,7 @@ export default function FeedScreen() {
               </View>
               {/* Tags */}
               <View>
-                <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>TAGS SENSORIAIS</Text>
+                <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>{t("feed.wine_sensory_tags_label")}</Text>
                 <View style={styles.tagChips}>
                   {SENSORY_TAGS.map((tag) => (
                     <TouchableOpacity key={tag} style={[styles.tagChip, { borderColor: selectedTags.includes(tag) ? colors.gold : colors.border, backgroundColor: selectedTags.includes(tag) ? colors.gold + "14" : "#fff" }]} onPress={() => toggleTag(tag)}>
@@ -1706,14 +1708,14 @@ export default function FeedScreen() {
               </View>
               {/* Harmonização */}
               <View>
-                <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>HARMONIZAÇÃO</Text>
-                <TextInput style={[styles.wineInput, { borderColor: colors.border, color: colors.foreground }]} placeholder="Ex: Carnes vermelhas, queijos maturados..." placeholderTextColor={colors.mutedForeground} value={wineHarmonizacao} onChangeText={setWineHarmonizacao} />
+                <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>{t("feed.wine_harmonizacao_label")}</Text>
+                <TextInput style={[styles.wineInput, { borderColor: colors.border, color: colors.foreground }]} placeholder={t("feed.wine_harmonizacao_placeholder")} placeholderTextColor={colors.mutedForeground} value={wineHarmonizacao} onChangeText={setWineHarmonizacao} />
               </View>
               {/* Observações */}
               <View>
-                <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>OBSERVAÇÕES</Text>
-                <TextInput style={[styles.wineTextarea, { borderColor: colors.border, color: colors.foreground }]} placeholder={"Suas impressões sobre o vinho... Use @ para marcar"} placeholderTextColor={colors.mutedForeground} value={wineObs} onChangeText={(v) => v.length <= 300 && setWineObs(v)} multiline textAlignVertical="top" />
-                <Text style={[styles.charCounter, { color: colors.mutedForeground }]}>{300 - wineObs.length} caracteres</Text>
+                <Text style={[styles.wineFieldLabel, { color: colors.mutedForeground }]}>{t("feed.wine_obs_label")}</Text>
+                <TextInput style={[styles.wineTextarea, { borderColor: colors.border, color: colors.foreground }]} placeholder={t("feed.wine_obs_placeholder")} placeholderTextColor={colors.mutedForeground} value={wineObs} onChangeText={(v) => v.length <= 300 && setWineObs(v)} multiline textAlignVertical="top" />
+                <Text style={[styles.charCounter, { color: colors.mutedForeground }]}>{t("feed.chars_left", { count: 300 - wineObs.length })}</Text>
               </View>
             </ScrollView>
           </View>
@@ -1732,18 +1734,18 @@ export default function FeedScreen() {
             >
               <Avatar uri={profile?.avatar_url} name={profile?.full_name} size={40} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.accountName, { color: colors.navy }]}>{profile?.full_name ?? "Meu Perfil"}</Text>
-                <Text style={[styles.accountSub, { color: colors.mutedForeground }]}>Conta pessoal</Text>
+                <Text style={[styles.accountName, { color: colors.navy }]}>{profile?.full_name ?? t("feed.my_profile")}</Text>
+                <Text style={[styles.accountSub, { color: colors.mutedForeground }]}>{t("feed.account_personal_label")}</Text>
               </View>
               <View style={[styles.onlineDot, { backgroundColor: "#22c55e" }]} />
             </TouchableOpacity>
 
             {/* Company pages */}
             <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-            <Text style={[styles.pagesHeader, { color: colors.mutedForeground }]}>PÁGINAS EMPRESARIAIS</Text>
+            <Text style={[styles.pagesHeader, { color: colors.mutedForeground }]}>{t("feed.account_pages_header")}</Text>
             {companyPages.length === 0 ? (
               <View style={{ paddingHorizontal: 16, paddingVertical: 10 }}>
-                <Text style={{ color: colors.mutedForeground, fontSize: 13 }}>Nenhuma página criada</Text>
+                <Text style={{ color: colors.mutedForeground, fontSize: 13 }}>{t("feed.account_no_pages")}</Text>
               </View>
             ) : (
               companyPages.map((page) => (
@@ -1779,12 +1781,12 @@ export default function FeedScreen() {
                 if (activeCompany) {
                   router.push(`/manage-business-page?id=${activeCompany.id}` as any);
                 } else {
-                  Alert.alert("Nenhuma página ativa", "Selecione ou crie uma página empresarial acima antes de gerenciar.");
+                  Alert.alert(t("feed.account_none_active_title"), t("feed.account_none_active_msg"));
                 }
               }}
             >
               <Feather name="briefcase" size={20} color={colors.gold} />
-              <Text style={[styles.managePages, { color: colors.gold }]}>Gerenciar Páginas</Text>
+              <Text style={[styles.managePages, { color: colors.gold }]}>{t("feed.account_manage_pages")}</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
