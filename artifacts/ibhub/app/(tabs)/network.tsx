@@ -75,7 +75,7 @@ interface TooltipState {
 type BiSearchMode = "exportador" | "marca" | "importadores" | "produtores";
 interface BiExpItem  { id: string; name: string; origem_exportador?: string | null; }
 interface BiImpItem  { id: string; name: string; segmentos?: string | null; exportadores: { exportador: string; pais: string }[]; }
-interface BiProdItem { id: string; name: string; name_fantasia?: string | null; regiao?: string | null; estado?: string | null; municipio?: string | null; }
+interface BiProdItem { id: string; name: string; name_fantasia?: string | null; regiao?: string | null; estado?: string | null; }
 
 // ─── Fallback data ─────────────────────────────────────────────────────────────
 
@@ -1399,11 +1399,6 @@ function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useCol
                 {!!m.regiao && (
                   <View style={{ backgroundColor: colors.gold + "12", borderWidth: 1, borderColor: colors.gold + "35", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 3 }}>
                     <Text style={{ fontSize: 11, fontWeight: "600", color: colors.navy }}>📍 {m.regiao}</Text>
-                  </View>
-                )}
-                {!!m.municipio && (
-                  <View style={{ backgroundColor: colors.gold + "08", borderWidth: 1, borderColor: colors.gold + "25", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 3 }}>
-                    <Text style={{ fontSize: 11, fontWeight: "600", color: colors.navy }}>🏘️ {m.municipio}</Text>
                   </View>
                 )}
                 {!!m.estado && (

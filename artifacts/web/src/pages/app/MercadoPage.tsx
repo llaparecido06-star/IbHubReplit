@@ -1757,11 +1757,6 @@ function ProdutoresSearch({ userId, credits, creditsTotal, creditsLoading, setCr
                       📍 {m.regiao}
                     </span>
                   )}
-                  {m.municipio && (
-                    <span style={{ fontSize: 11, fontWeight: 600, color: NAVY, backgroundColor: `${GOLD}08`, border: `1px solid ${GOLD}25`, borderRadius: 20, padding: "3px 12px" }}>
-                      🏘️ {m.municipio}
-                    </span>
-                  )}
                   {m.estado && (
                     <span style={{ fontSize: 11, fontWeight: 600, color: MUTED, backgroundColor: "#f5f5f3", border: `1px solid ${BORDER}`, borderRadius: 20, padding: "3px 12px" }}>
                       {m.estado}

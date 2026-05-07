@@ -4344,7 +4344,6 @@ export interface BiProdutor {
   name_fantasia: string | null;
   regiao: string;
   estado: string | null;
-  municipio: string | null;
   created_at: string;
 }
 

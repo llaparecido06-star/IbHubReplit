@@ -288,11 +288,11 @@ router.get("/wine-imports/bi-search/produtores", async (req: Request, res: Respo
 
   let query = supabaseAdmin
     .from("bi_produtores")
-    .select("id, name, name_fantasia, regiao, estado, municipio, created_at", { count: "exact" })
+    .select("id, name, name_fantasia, regiao, estado, created_at", { count: "exact" })
     .order("name", { ascending: true })
     .range(offset, offset + limit - 1);
 
-  if (q) query = query.or(`name.ilike.%${q}%,name_fantasia.ilike.%${q}%,regiao.ilike.%${q}%,estado.ilike.%${q}%,municipio.ilike.%${q}%`);
+  if (q) query = query.or(`name.ilike.%${q}%,name_fantasia.ilike.%${q}%,regiao.ilike.%${q}%,estado.ilike.%${q}%`);
 
   const { data, error, count } = await query;
   if (error) return res.status(500).json({ error: error.message });
@@ -372,14 +372,14 @@ router.get("/wine-imports/bi-suggestions/produtores", async (req: Request, res: 
   if (!q || q.length < 2) return res.json({ suggestions: [] });
   const { data, error } = await supabaseAdmin
     .from("bi_produtores")
-    .select("name, name_fantasia, municipio")
-    .or(`name.ilike.%${q}%,name_fantasia.ilike.%${q}%,municipio.ilike.%${q}%`)
+    .select("name, name_fantasia")
+    .or(`name.ilike.%${q}%,name_fantasia.ilike.%${q}%`)
     .order("name")
     .limit(30);
   if (error) return res.json({ suggestions: [] });
   const seen = new Set<string>();
   const suggestions: string[] = [];
-  for (const row of (data ?? []) as { name: string | null; name_fantasia: string | null; municipio: string | null }[]) {
+  for (const row of (data ?? []) as { name: string | null; name_fantasia: string | null }[]) {
     for (const val of [row.name, row.name_fantasia]) {
       const v = val?.trim();
       if (v && v.toLowerCase().includes(q.toLowerCase()) && !seen.has(v.toLowerCase())) {
