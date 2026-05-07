@@ -24,6 +24,7 @@ import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/context/AuthContext";
 import { applyReferralCode, ensureReferralCode } from "@/services/api";
 import { usePlans, formatPlanPrice, formatOriginalPrice, calcDiscount } from "@/hooks/usePlans";
+import { useTranslation } from "react-i18next";
 
 const TOTAL_STEPS = 3;
 
@@ -85,16 +86,16 @@ function ValidationIcon({ state }: { state: ValidationState }) {
   return null;
 }
 
-function validationHint(field: "username" | "email", state: ValidationState): string | null {
+function validationHint(field: "username" | "email", state: ValidationState, t: (k: string) => string): string | null {
   if (field === "username") {
-    if (state === "available") return "Username disponível";
-    if (state === "taken") return "Username já está em uso";
-    if (state === "invalid") return "Apenas letras, números, . e _ (mín. 3 chars)";
+    if (state === "available") return t("register_screen.username_available");
+    if (state === "taken") return t("register_screen.username_taken");
+    if (state === "invalid") return t("register_screen.username_invalid_hint");
   }
   if (field === "email") {
-    if (state === "available") return "E-mail disponível";
-    if (state === "taken") return "Este e-mail já está cadastrado";
-    if (state === "invalid") return "Formato de e-mail inválido";
+    if (state === "available") return t("register_screen.email_available");
+    if (state === "taken") return t("register_screen.email_taken");
+    if (state === "invalid") return t("register_screen.email_invalid");
   }
   return null;
 }
@@ -103,6 +104,7 @@ const USERNAME_RE = /^[a-zA-Z0-9._]{3,}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function RegisterScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { signUp, refreshProfileByUserId, clearProfileCompletion } = useAuth();
   const insets = useSafeAreaInsets();
@@ -215,8 +217,8 @@ export default function RegisterScreen() {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
         Alert.alert(
-          "Permissão necessária",
-          "Precisamos de acesso à sua galeria para você escolher uma foto de perfil.",
+          t("register_screen.permission_title"),
+          t("register_screen.permission_gallery_msg"),
           [{ text: "OK" }],
         );
         return;
@@ -277,25 +279,25 @@ export default function RegisterScreen() {
   };
 
   const validateStep1 = (): string | null => {
-    if (!fullName.trim()) return "Informe seu nome completo";
-    if (!username.trim()) return "Informe um username";
-    if (usernameState === "invalid") return "Username inválido (mín. 3 chars, use letras, números, . e _)";
-    if (usernameState === "taken") return "Esse username já está em uso";
-    if (usernameState === "checking") return "Aguarde a verificação do username";
-    if (!email.trim()) return "Informe um e-mail";
-    if (emailState === "invalid") return "Formato de e-mail inválido";
-    if (emailState === "taken") return "Esse e-mail já está cadastrado";
-    if (emailState === "checking") return "Aguarde a verificação do e-mail";
-    if (!password) return "Informe uma senha";
-    if (password.length < 6) return "A senha deve ter no mínimo 6 caracteres";
-    if (password !== confirmPassword) return "As senhas não coincidem";
-    if (!termsAccepted) return "Aceite os Termos de Uso para continuar";
-    if (!ageConfirmed) return "Confirme que você tem 18 anos ou mais";
+    if (!fullName.trim()) return t("register_screen.error_full_name");
+    if (!username.trim()) return t("register_screen.error_username_required");
+    if (usernameState === "invalid") return t("register_screen.error_username_invalid");
+    if (usernameState === "taken") return t("register_screen.error_username_taken");
+    if (usernameState === "checking") return t("register_screen.error_username_checking");
+    if (!email.trim()) return t("register_screen.error_email_required");
+    if (emailState === "invalid") return t("register_screen.error_email_invalid_val");
+    if (emailState === "taken") return t("register_screen.error_email_taken_val");
+    if (emailState === "checking") return t("register_screen.error_email_checking");
+    if (!password) return t("register_screen.error_password_required");
+    if (password.length < 6) return t("register_screen.error_password_short");
+    if (password !== confirmPassword) return t("register_screen.error_password_mismatch");
+    if (!termsAccepted) return t("register_screen.error_terms");
+    if (!ageConfirmed) return t("register_screen.error_age");
     return null;
   };
 
   const validateStep2 = (): string | null => {
-    if (selectedAreas.length === 0) return "Selecione ao menos uma área de atuação";
+    if (selectedAreas.length === 0) return t("register_screen.error_areas");
     return null;
   };
 
@@ -311,7 +313,7 @@ export default function RegisterScreen() {
       setStep(3);
     } else {
       setLoading(true);
-      setLoadingMsg("Criando conta...");
+      setLoadingMsg(t("register_screen.loading_creating"));
 
       // Persist invite code before sign-up so AuthContext can apply it
       // even if email confirmation is required (fires on SIGNED_IN event).
@@ -341,16 +343,16 @@ export default function RegisterScreen() {
         // 3. Upload da foto de perfil (se escolhida)
         let avatarUrl: string | null = null;
         if (avatarUri) {
-          setLoadingMsg("Enviando foto de perfil...");
+          setLoadingMsg(t("register_screen.loading_photo"));
           const result = await uploadAvatarToStorage(currentUser.id, avatarUri);
           avatarUrl = result.url;
           if (result.error) {
-            Alert.alert("Aviso", `Foto não foi salva: ${result.error}. Você pode adicionar depois no perfil.`);
+            Alert.alert(t("register_screen.warning_title"), t("register_screen.photo_not_saved", { error: result.error }));
           }
         }
 
         // 4. Salvar todos os campos do formulário no perfil
-        setLoadingMsg("Finalizando perfil...");
+        setLoadingMsg(t("register_screen.loading_profile"));
         const phoneWithDDI = phone.trim()
           ? `${selectedCountry.ddi}${phone.trim().replace(/\D/g, "")}`
           : null;
@@ -373,7 +375,7 @@ export default function RegisterScreen() {
 
         if (upsertError) {
           setLoading(false);
-          setError(`Erro ao salvar perfil: ${upsertError.message}`);
+          setError(t("register_screen.error_profile", { error: upsertError.message }));
           return;
         }
 
@@ -447,7 +449,7 @@ export default function RegisterScreen() {
 
           {step === 1 && (
             <View style={styles.stepContainer}>
-              <Text style={styles.stepTitle}>Seus dados pessoais</Text>
+              <Text style={styles.stepTitle}>{t("register_screen.step1_title")}</Text>
 
               <TouchableOpacity style={styles.avatarPicker} onPress={pickAvatar}>
                 {avatarUri ? (
@@ -462,7 +464,7 @@ export default function RegisterScreen() {
                 </View>
               </TouchableOpacity>
 
-              <FormField icon="user" value={fullName} onChangeText={setFullName} placeholder="Nome completo" />
+              <FormField icon="user" value={fullName} onChangeText={setFullName} placeholder={t("register_screen.placeholder_full_name")} />
 
               <View>
                 <View style={styles.fieldWrap}>
@@ -478,12 +480,12 @@ export default function RegisterScreen() {
                   />
                   <ValidationIcon state={usernameState} />
                 </View>
-                {validationHint("username", usernameState) && (
+                {validationHint("username", usernameState, t) && (
                   <Text style={[
                     styles.fieldHint,
                     usernameState === "available" ? styles.hintSuccess : styles.hintError,
                   ]}>
-                    {validationHint("username", usernameState)}
+                    {validationHint("username", usernameState, t)}
                   </Text>
                 )}
               </View>
@@ -503,12 +505,12 @@ export default function RegisterScreen() {
                   />
                   <ValidationIcon state={emailState} />
                 </View>
-                {validationHint("email", emailState) && (
+                {validationHint("email", emailState, t) && (
                   <Text style={[
                     styles.fieldHint,
                     emailState === "available" ? styles.hintSuccess : styles.hintError,
                   ]}>
-                    {validationHint("email", emailState)}
+                    {validationHint("email", emailState, t)}
                   </Text>
                 )}
               </View>
@@ -539,7 +541,7 @@ export default function RegisterScreen() {
                 <Feather name="lock" size={16} color="#8fa3b8" style={styles.fieldIcon} />
                 <TextInput
                   style={styles.textInput}
-                  placeholder="Senha"
+                  placeholder={t("register_screen.placeholder_password")}
                   placeholderTextColor="#8fa3b8"
                   value={password}
                   onChangeText={setPassword}
@@ -554,7 +556,7 @@ export default function RegisterScreen() {
                 <Feather name="lock" size={16} color="#8fa3b8" style={styles.fieldIcon} />
                 <TextInput
                   style={styles.textInput}
-                  placeholder="Confirme a senha"
+                  placeholder={t("register_screen.placeholder_confirm_password")}
                   placeholderTextColor="#8fa3b8"
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
@@ -570,7 +572,7 @@ export default function RegisterScreen() {
                 <Feather name="gift" size={16} color="#8fa3b8" style={styles.fieldIcon} />
                 <TextInput
                   style={styles.textInput}
-                  placeholder="Código de convite (opcional)"
+                  placeholder={t("register_screen.placeholder_invite_code")}
                   placeholderTextColor="#8fa3b8"
                   value={inviteCode}
                   onChangeText={v => setInviteCode(v.toUpperCase())}
@@ -589,10 +591,10 @@ export default function RegisterScreen() {
                   </View>
                 </TouchableOpacity>
                 <Text style={styles.termsText} onPress={() => setTermsAccepted((v) => !v)}>
-                  Li e concordo com os{" "}
-                  <Text style={styles.termsLink} onPress={() => router.push("/terms-of-use")}>Termos de Uso</Text>
-                  {" "}e a{" "}
-                  <Text style={styles.termsLink} onPress={() => router.push("/privacy-policy")}>Política de Privacidade</Text>
+                  {t("register_screen.terms_prefix")}{" "}
+                  <Text style={styles.termsLink} onPress={() => router.push("/terms-of-use")}>{t("register_screen.terms_of_use")}</Text>
+                  {" "}{t("register_screen.terms_and")}{" "}
+                  <Text style={styles.termsLink} onPress={() => router.push("/privacy-policy")}>{t("register_screen.privacy_policy")}</Text>
                 </Text>
               </View>
 
@@ -605,9 +607,9 @@ export default function RegisterScreen() {
                   {ageConfirmed && <Feather name="check" size={12} color="#0d1b2a" />}
                 </View>
                 <Text style={styles.termsText}>
-                  Confirmo que tenho{" "}
-                  <Text style={{ fontWeight: "700", color: "#c9a84c" }}>18 anos ou mais</Text>
-                  {" "}e estou ciente de que o ibhub é uma plataforma para profissionais do setor vitivinícola.
+                  {t("register_screen.age_confirm_prefix")}{" "}
+                  <Text style={{ fontWeight: "700", color: "#c9a84c" }}>{t("register_screen.age_confirm_highlight")}</Text>
+                  {" "}{t("register_screen.age_confirm_suffix")}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -615,10 +617,8 @@ export default function RegisterScreen() {
 
           {step === 2 && (
             <View style={styles.stepContainer}>
-              <Text style={styles.stepTitle}>Perfil profissional</Text>
-              <Text style={styles.stepSubtitle}>
-                Selecione suas áreas para networking qualificado (máx. 3)
-              </Text>
+              <Text style={styles.stepTitle}>{t("register_screen.step2_title")}</Text>
+              <Text style={styles.stepSubtitle}>{t("register_screen.step2_subtitle")}</Text>
               <View style={styles.areasGrid}>
                 {AREAS.map((area) => (
                   <TouchableOpacity
@@ -633,8 +633,8 @@ export default function RegisterScreen() {
                 ))}
               </View>
 
-              <FormField icon={undefined} value={company} onChangeText={setCompany} placeholder="Empresa (opcional)" />
-              <FormField icon={undefined} value={role} onChangeText={setRole} placeholder="Cargo (opcional)" />
+              <FormField icon={undefined} value={company} onChangeText={setCompany} placeholder={t("register_screen.placeholder_company")} />
+              <FormField icon={undefined} value={role} onChangeText={setRole} placeholder={t("register_screen.placeholder_role")} />
 
               {/* Bio */}
               <View style={styles.bioWrap}>
@@ -642,7 +642,7 @@ export default function RegisterScreen() {
                   <Feather name="file-text" size={16} color="#8fa3b8" style={styles.fieldIcon} />
                   <TextInput
                     style={[styles.textInput, { flex: 1, height: 80, textAlignVertical: "top", paddingTop: 10 }]}
-                    placeholder="Bio — fale sobre você (opcional)"
+                    placeholder={t("register_screen.placeholder_bio")}
                     placeholderTextColor="#8fa3b8"
                     value={bio}
                     onChangeText={(v) => { if (v.length <= 200) setBio(v); }}
@@ -655,7 +655,7 @@ export default function RegisterScreen() {
 
               {/* Certificações */}
               <View style={{ gap: 8 }}>
-                <Text style={styles.certLabel}>Certificações (opcional)</Text>
+                <Text style={styles.certLabel}>{t("register_screen.certifications_label")}</Text>
                 <View style={styles.certInputRow}>
                   <View style={[styles.fieldWrap, { flex: 1 }]}>
                     <Feather name="award" size={16} color="#8fa3b8" style={styles.fieldIcon} />
@@ -698,15 +698,13 @@ export default function RegisterScreen() {
 
           {step === 3 && (
             <View style={styles.stepContainer}>
-              <Text style={styles.stepTitle}>Invista na sua carreira</Text>
-              <Text style={styles.stepSubtitle}>
-                Escolha um plano para desbloquear o ibhub completo
-              </Text>
+              <Text style={styles.stepTitle}>{t("register_screen.step3_title")}</Text>
+              <Text style={styles.stepSubtitle}>{t("register_screen.step3_subtitle")}</Text>
 
               {plansLoading ? (
                 <View style={{ alignItems: "center", paddingVertical: 24 }}>
                   <ActivityIndicator color="#c9a84c" />
-                  <Text style={{ color: "#8fa3b8", fontSize: 13, marginTop: 8 }}>Carregando planos...</Text>
+                  <Text style={{ color: "#8fa3b8", fontSize: 13, marginTop: 8 }}>{t("register_screen.loading_plans")}</Text>
                 </View>
               ) : (
                 <View style={styles.plansContainer}>
@@ -727,12 +725,12 @@ export default function RegisterScreen() {
                       >
                         {isPopular && !isSelected && (
                           <View style={styles.popularBadge}>
-                            <Text style={styles.popularBadgeText}>MAIS POPULAR</Text>
+                            <Text style={styles.popularBadgeText}>{t("register_screen.badge_popular")}</Text>
                           </View>
                         )}
                         {isSelected && (
                           <View style={[styles.popularBadge, { backgroundColor: "#c9a84c" }]}>
-                            <Text style={styles.popularBadgeText}>✓ SELECIONADO</Text>
+                            <Text style={styles.popularBadgeText}>✓ {t("register_screen.badge_selected")}</Text>
                           </View>
                         )}
                         <View style={styles.planHeader}>
@@ -743,7 +741,7 @@ export default function RegisterScreen() {
                           <View style={{ alignItems: "flex-end" }}>
                             {originalPrice && (
                               <Text style={{ fontSize: 11, color: "#8fa3b8", textDecorationLine: "line-through" }}>
-                                De: {originalPrice}
+                                {t("register_screen.price_from")}: {originalPrice}
                               </Text>
                             )}
                             <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
@@ -782,7 +780,7 @@ export default function RegisterScreen() {
                 <View style={styles.paymentNotice}>
                   <Feather name="credit-card" size={14} color="#c9a84c" />
                   <Text style={styles.paymentNoticeText}>
-                    Após criar sua conta, você será direcionado para concluir o pagamento e ativar o plano selecionado.
+                    {t("register_screen.payment_notice")}
                   </Text>
                 </View>
               )}
@@ -802,8 +800,8 @@ export default function RegisterScreen() {
             ) : (
               <Text style={styles.continueBtnText}>
                 {step === TOTAL_STEPS
-                  ? (selectedPlan !== "gratuito" ? "Criar conta e ir para pagamento  →" : "Finalizar cadastro")
-                  : "Continuar  →"
+                  ? (selectedPlan !== "gratuito" ? t("register_screen.btn_create_and_pay") : t("register_screen.btn_finish"))
+                  : t("register_screen.btn_continue")
                 }
               </Text>
             )}
@@ -818,8 +816,8 @@ export default function RegisterScreen() {
             >
               <Text style={{ color: "#8fa3b8", fontSize: 13, textDecorationLine: "underline" }}>
                 {freePlan
-                  ? `Continuar com o plano ${freePlan.name} (grátis)`
-                  : "Continuar gratuitamente"
+                  ? t("register_screen.btn_free_named", { name: freePlan.name })
+                  : t("register_screen.btn_free")
                 }
               </Text>
             </TouchableOpacity>
@@ -835,7 +833,7 @@ export default function RegisterScreen() {
       >
         <View style={styles.pickerModal}>
           <View style={styles.pickerHeader}>
-            <Text style={styles.pickerTitle}>Selecionar país</Text>
+            <Text style={styles.pickerTitle}>{t("register_screen.picker_title")}</Text>
             <TouchableOpacity onPress={() => setShowCountryPicker(false)} style={styles.pickerClose}>
               <Feather name="x" size={22} color="#f5f0e8" />
             </TouchableOpacity>
@@ -845,7 +843,7 @@ export default function RegisterScreen() {
             <Feather name="search" size={16} color="#8fa3b8" />
             <TextInput
               style={styles.pickerSearchInput}
-              placeholder="Buscar país ou código..."
+              placeholder={t("register_screen.picker_search_placeholder")}
               placeholderTextColor="#8fa3b8"
               value={countrySearch}
               onChangeText={setCountrySearch}

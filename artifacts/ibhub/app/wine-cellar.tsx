@@ -99,10 +99,10 @@ function PortfolioManagerTab({ companyId }: { companyId: string }) {
 
             <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{t("empresa_screen.field_cat_label")}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.statusChips]}>
-              {PRODUCT_CATEGORIES.map(cat => (
+              {PRODUCT_CATEGORIES.map((cat, idx) => (
                 <TouchableOpacity key={cat} onPress={() => setPCat(cat)}
                   style={[styles.statusChip, { borderColor: pCat === cat ? colors.gold : colors.border, backgroundColor: pCat === cat ? colors.gold + "18" : "transparent" }]}>
-                  <Text style={[styles.statusChipText, { color: pCat === cat ? colors.gold : colors.foreground }]}>{cat}</Text>
+                  <Text style={[styles.statusChipText, { color: pCat === cat ? colors.gold : colors.foreground }]}>{t(`wine_cellar_screen.product_cat_${idx}`)}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -140,7 +140,11 @@ function PortfolioManagerTab({ companyId }: { companyId: string }) {
               <View style={styles.wineCardTop}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.wineName, { color: colors.navy }]}>{product.name}</Text>
-                  <Text style={[styles.wineSub, { color: colors.mutedForeground }]}>{product.category}</Text>
+                  <Text style={[styles.wineSub, { color: colors.mutedForeground }]}>
+                    {product.category
+                      ? t(`wine_cellar_screen.product_cat_${PRODUCT_CATEGORIES.indexOf(product.category)}`, { defaultValue: product.category })
+                      : ""}
+                  </Text>
                   {product.description ? <Text style={[styles.wineSub, { color: colors.mutedForeground, marginTop: 4 }]} numberOfLines={2}>{product.description}</Text> : null}
                   {product.price ? <Text style={{ fontSize: 14, fontWeight: "700", color: colors.gold, marginTop: 4 }}>{product.price}</Text> : null}
                 </View>

@@ -69,7 +69,7 @@ export default function SettingsScreen() {
     await changeLocale(code);
   };
 
-  const name      = profile?.full_name ?? "Usuário";
+  const name      = profile?.full_name ?? t("common.user_fallback");
   const initial   = name.charAt(0).toUpperCase();
   const avatarUrl = profile?.avatar_url ?? null;
 

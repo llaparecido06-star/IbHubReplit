@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Feather } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth, supabase } from "@/context/AuthContext";
@@ -21,41 +22,27 @@ import * as API from "@/services/api";
 import type { AppNotification } from "@/services/api";
 import { formatRelativeDate } from "@/utils/dateUtils";
 
-const TYPE_META: Record<string, { icon: any; color: string; label: string }> = {
-  like:             { icon: "heart",            color: "#e74c3c", label: "curtiu sua publicação" },
-  comment:          { icon: "message-circle",   color: "#3498db", label: "comentou na sua publicação" },
-  comment_reply:    { icon: "corner-down-right", color: "#8b5cf6", label: "respondeu seu comentário" },
-  comment_like:     { icon: "heart",            color: "#e74c3c", label: "curtiu seu comentário" },
-  follow:           { icon: "user-plus",        color: "#2ecc71", label: "começou a seguir você" },
-  company_follow:   { icon: "user-plus",        color: "#2ecc71", label: "começou a seguir sua empresa" },
-  connection:       { icon: "users",            color: "#c9a84c", label: "enviou pedido de conexão" },
-  mention:          { icon: "at-sign",          color: "#9b59b6", label: "mencionou você" },
-  group_request:    { icon: "user-check",       color: "#7c3aed", label: "solicitou entrar no seu grupo" },
-  poll_vote:        { icon: "bar-chart-2",      color: "#0ea5e9", label: "votou na sua enquete" },
-};
+type UserCompany = { id: string; name: string; avatar_url: string | null };
 
-/**
- * Build the message text for a notification row, preferring wine-specific
- * wording when the underlying post is a wine review. Falls back to the
- * server-stored `notif.message` (which is the canonical Portuguese phrase
- * inserted by the postgres trigger) and finally to the type label.
- *
- * Company-tab notifications (target_company_id set) use "a avaliação do"
- * instead of "sua avaliação do" so the phrasing matches the company context.
- */
-function buildNotifMessage(notif: AppNotification, fallbackLabel: string): string {
+function buildNotifMessage(
+  notif: AppNotification,
+  fallbackLabel: string,
+  t: (key: string, opts?: any) => string,
+): string {
   const wine = notif.wine_name?.trim();
   if (wine) {
     const isCompany = !!notif.target_company_id;
     if (notif.type === "like")
-      return isCompany ? `curtiu a avaliação do ${wine}` : `curtiu sua avaliação do ${wine}`;
+      return isCompany
+        ? t("notifications_screen.wine_like_company", { wine })
+        : t("notifications_screen.wine_like", { wine });
     if (notif.type === "comment")
-      return isCompany ? `comentou a avaliação do ${wine}` : `comentou sua avaliação do ${wine}`;
+      return isCompany
+        ? t("notifications_screen.wine_comment_company", { wine })
+        : t("notifications_screen.wine_comment", { wine });
   }
   return notif.message ?? fallbackLabel;
 }
-
-type UserCompany = { id: string; name: string; avatar_url: string | null };
 
 function NotifRow({
   notif,
@@ -70,7 +57,22 @@ function NotifRow({
   onAccept?: () => void;
   onReject?: () => void;
 }) {
-  const meta = TYPE_META[notif.type] ?? { icon: "bell", color: colors.gold, label: "nova notificação" };
+  const { t } = useTranslation();
+
+  const TYPE_META: Record<string, { icon: any; color: string; label: string }> = {
+    like:           { icon: "heart",            color: "#e74c3c", label: t("notifications_screen.type_like") },
+    comment:        { icon: "message-circle",   color: "#3498db", label: t("notifications_screen.type_comment") },
+    comment_reply:  { icon: "corner-down-right", color: "#8b5cf6", label: t("notifications_screen.type_comment_reply") },
+    comment_like:   { icon: "heart",            color: "#e74c3c", label: t("notifications_screen.type_comment_like") },
+    follow:         { icon: "user-plus",        color: "#2ecc71", label: t("notifications_screen.type_follow") },
+    company_follow: { icon: "user-plus",        color: "#2ecc71", label: t("notifications_screen.type_company_follow") },
+    connection:     { icon: "users",            color: "#c9a84c", label: t("notifications_screen.type_connection") },
+    mention:        { icon: "at-sign",          color: "#9b59b6", label: t("notifications_screen.type_mention") },
+    group_request:  { icon: "user-check",       color: "#7c3aed", label: t("notifications_screen.type_group_request") },
+    poll_vote:      { icon: "bar-chart-2",      color: "#0ea5e9", label: t("notifications_screen.type_poll_vote") },
+  };
+
+  const meta = TYPE_META[notif.type] ?? { icon: "bell", color: colors.gold, label: t("notifications_screen.type_default") };
   const isConnectionPending  = notif.type === "connection" && notif.connection_status === "pending"  && notif.connection_id;
   const isConnectionAccepted = notif.type === "connection" && notif.connection_status === "accepted";
   const isConnectionRejected = notif.type === "connection" && notif.connection_status === "rejected";
@@ -87,7 +89,7 @@ function NotifRow({
       <View style={styles.avatarWrap}>
         <Avatar
           uri={notif.actor_company?.avatar_url ?? notif.actor?.avatar_url}
-          name={notif.actor_company?.name ?? notif.actor?.full_name ?? "Usuário"}
+          name={notif.actor_company?.name ?? notif.actor?.full_name ?? t("notifications_screen.user_label")}
           size={46}
         />
         <View style={[styles.typeIcon, { backgroundColor: meta.color }]}>
@@ -98,9 +100,9 @@ function NotifRow({
       <View style={styles.rowBody}>
         <Text style={[styles.rowText, { color: colors.foreground }]} numberOfLines={2}>
           <Text style={{ fontWeight: "700" }}>
-            {notif.actor_company?.name ?? notif.actor?.full_name ?? "Alguém"}
+            {notif.actor_company?.name ?? notif.actor?.full_name ?? t("notifications_screen.someone")}
           </Text>{" "}
-          {buildNotifMessage(notif, meta.label)}
+          {buildNotifMessage(notif, meta.label, t)}
         </Text>
         <Text style={[styles.rowTime, { color: colors.mutedForeground }]}>
           {formatRelativeDate(notif.created_at)}
@@ -113,14 +115,14 @@ function NotifRow({
               onPress={(e) => { e.stopPropagation?.(); onAccept(); }}
               activeOpacity={0.8}
             >
-              <Text style={styles.acceptText}>Aceitar</Text>
+              <Text style={styles.acceptText}>{t("notifications_screen.accept")}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.rejectBtn, { borderColor: colors.border }]}
               onPress={(e) => { e.stopPropagation?.(); onReject(); }}
               activeOpacity={0.8}
             >
-              <Text style={[styles.rejectText, { color: colors.mutedForeground }]}>Rejeitar</Text>
+              <Text style={[styles.rejectText, { color: colors.mutedForeground }]}>{t("notifications_screen.reject")}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -128,14 +130,14 @@ function NotifRow({
         {isConnectionAccepted && (
           <View style={styles.connectionFeedback}>
             <Feather name="check-circle" size={13} color="#16a34a" />
-            <Text style={[styles.feedbackText, { color: "#16a34a" }]}>Conexão aceita</Text>
+            <Text style={[styles.feedbackText, { color: "#16a34a" }]}>{t("notifications_screen.connection_accepted")}</Text>
           </View>
         )}
 
         {isConnectionRejected && (
           <View style={styles.connectionFeedback}>
             <Feather name="x-circle" size={13} color={colors.mutedForeground} />
-            <Text style={[styles.feedbackText, { color: colors.mutedForeground }]}>Pedido rejeitado</Text>
+            <Text style={[styles.feedbackText, { color: colors.mutedForeground }]}>{t("notifications_screen.connection_rejected")}</Text>
           </View>
         )}
       </View>
@@ -148,24 +150,26 @@ function NotifRow({
 }
 
 function EmptyState({ colors, isCompany }: { colors: any; isCompany?: boolean }) {
+  const { t } = useTranslation();
   return (
     <View style={styles.empty}>
       <View style={[styles.emptyIconCircle, { backgroundColor: colors.gold + "18" }]}>
         <Feather name="bell" size={36} color={colors.gold} />
       </View>
-      <Text style={[styles.emptyTitle, { color: colors.navy }]}>Tudo tranquilo por aqui</Text>
+      <Text style={[styles.emptyTitle, { color: colors.navy }]}>{t("notifications_screen.empty_title")}</Text>
       <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
         {isCompany
-          ? "Curtidas, comentários e novos seguidores da empresa aparecerão aqui"
-          : "Suas notificações de curtidas, comentários e conexões aparecerão aqui"}
+          ? t("notifications_screen.empty_sub_company")
+          : t("notifications_screen.empty_sub_personal")}
       </Text>
     </View>
   );
 }
 
-type Tab = "personal" | string; // "personal" or a company ID
+type Tab = "personal" | string;
 
 export default function NotificationsScreen() {
+  const { t } = useTranslation();
   const colors  = useColors();
   const router  = useRouter();
   const { user } = useAuth();
@@ -190,7 +194,6 @@ export default function NotificationsScreen() {
 
   const unreadCount = activeNotifs.filter(n => !n.read).length;
 
-  // ── load ──────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     if (!user?.id) { setLoading(false); return; }
 
@@ -226,7 +229,6 @@ export default function NotificationsScreen() {
   useEffect(() => { load(); }, [load]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  // ── realtime personal ────────────────────────────────────────────────────
   useEffect(() => {
     if (!user?.id) return;
     const uid = Math.random().toString(36).slice(2, 8);
@@ -238,7 +240,6 @@ export default function NotificationsScreen() {
       }, async () => {
         const fresh = await API.fetchNotifications(user.id);
         setPersonalNotifs(fresh);
-        // Also refresh company notifs in case one slipped through
         if (userCompanies.length > 0) {
           const results = await Promise.all(
             userCompanies.map(c => API.fetchCompanyNotifications(c.id))
@@ -252,7 +253,6 @@ export default function NotificationsScreen() {
     return () => { supabase.removeChannel(ch); };
   }, [user?.id, userCompanies]);
 
-  // ── actions ───────────────────────────────────────────────────────────────
   const onRefresh = async () => {
     setRefreshing(true);
     await load();
@@ -340,28 +340,26 @@ export default function NotificationsScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Feather name="arrow-left" size={24} color={colors.navy} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.navy }]}>Notificações</Text>
+        <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("notifications_screen.title")}</Text>
         {unreadCount > 0 ? (
           <TouchableOpacity onPress={handleMarkAllRead} style={styles.markAllWrap}>
-            <Text style={[styles.markAllBtn, { color: colors.gold }]}>Marcar todas lidas</Text>
+            <Text style={[styles.markAllBtn, { color: colors.gold }]}>{t("notifications_screen.mark_all_read")}</Text>
           </TouchableOpacity>
         ) : (
           <View style={{ width: 90 }} />
         )}
       </View>
 
-      {/* Tabs — only shown when user has at least one company */}
+      {/* Tabs */}
       {userCompanies.length > 0 && (
         <View style={[styles.tabs, { borderBottomColor: colors.border, backgroundColor: "#fff" }]}>
-          {/* Personal tab */}
           <TabButton
-            label="Pessoal"
+            label={t("notifications_screen.tab_personal")}
             active={tab === "personal"}
             badge={personalUnread}
             colors={colors}
             onPress={() => setTab("personal")}
           />
-          {/* One tab per company */}
           {userCompanies.map(c => (
             <TabButton
               key={c.id}
@@ -382,7 +380,7 @@ export default function NotificationsScreen() {
             <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
           </View>
           <Text style={[styles.unreadBarText, { color: colors.gold }]}>
-            {unreadCount === 1 ? "nova notificação" : "novas notificações"}
+            {unreadCount === 1 ? t("notifications_screen.unread_one") : t("notifications_screen.unread_many")}
           </Text>
         </View>
       )}

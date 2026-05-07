@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image } from "expo-image";
+import { useTranslation } from "react-i18next";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -108,6 +109,7 @@ function pollContentKey(p: Post["poll"] | undefined): string {
 export default function PostDetailScreen() {
   const colors = useColors();
   const router = useRouter();
+  const { t } = useTranslation();
   const { user, profile, activeCompany } = useAuth();
   const { id, commentId: highlightCommentId } = useLocalSearchParams<{ id: string; commentId?: string }>();
   const insets = useSafeAreaInsets();
@@ -256,7 +258,7 @@ export default function PostDetailScreen() {
       replies: [],
       author: {
         id: user.id,
-        full_name: profile?.full_name ?? "Você",
+        full_name: profile?.full_name ?? t("post_screen.you_fallback"),
         avatar_url: profile?.avatar_url ?? null,
         headline: null,
       },
@@ -294,7 +296,7 @@ export default function PostDetailScreen() {
         }
         // Fire mention notifications (best-effort, non-blocking)
         if (text.includes("@") && user?.id) {
-          const actorName = activeCompany?.name ?? profile?.full_name ?? "Usuário";
+          const actorName = activeCompany?.name ?? profile?.full_name ?? t("common.user_fallback");
           sendMentionNotifications(text, user.id, actorName, id, saved.id);
         }
       } else {
@@ -309,7 +311,7 @@ export default function PostDetailScreen() {
           setComments(prev => prev.filter(c => c.id !== tempId));
         }
         setPost(prev => prev ? { ...prev, comments_count: Math.max(0, (prev.comments_count || 0) - 1) } : prev);
-        Alert.alert("Erro", "Não foi possível enviar o comentário. Tente novamente.");
+        Alert.alert(t("common.error"), t("post_screen.error_comment_failed"));
       }
     } catch (e: unknown) {
       // Remove optimistic comment on network failure
@@ -323,7 +325,7 @@ export default function PostDetailScreen() {
         setComments(prev => prev.filter(c => c.id !== tempId));
       }
       setPost(prev => prev ? { ...prev, comments_count: Math.max(0, (prev.comments_count || 0) - 1) } : prev);
-      Alert.alert("Erro", friendlyErrorMessage(e));
+      Alert.alert(t("common.conn_error"), friendlyErrorMessage(e));
     } finally {
       setSendingComment(false);
     }
@@ -356,11 +358,11 @@ export default function PostDetailScreen() {
       const ok = await API.toggleCommentLike(commentId, user.id, wasLiked);
       if (!ok) {
         applyToComments(revert);
-        Alert.alert("Erro", "Não foi possível curtir o comentário. Tente novamente.");
+        Alert.alert(t("common.error"), t("post_screen.error_like_comment"));
       }
     } catch (e: unknown) {
       applyToComments(revert);
-      Alert.alert("Erro de Conexão", friendlyErrorMessage(e));
+      Alert.alert(t("common.conn_error"), friendlyErrorMessage(e));
     }
   };
 
@@ -380,11 +382,11 @@ export default function PostDetailScreen() {
       const ok = await API.toggleReaction(post.id, user.id, reaction, prevReaction, activeCompany?.id);
       if (!ok) {
         setPost(p => p ? { ...p, reaction_type: prevReaction, is_liked: prevLiked, likes_count: prevCount } : p);
-        Alert.alert("Erro", "Não foi possível reagir. Tente novamente.");
+        Alert.alert(t("common.error"), t("post_screen.error_react"));
       }
     } catch (e: unknown) {
       setPost(p => p ? { ...p, reaction_type: prevReaction, is_liked: prevLiked, likes_count: prevCount } : p);
-      Alert.alert("Erro de Conexão", friendlyErrorMessage(e));
+      Alert.alert(t("common.conn_error"), friendlyErrorMessage(e));
     }
   };
 
@@ -402,20 +404,20 @@ export default function PostDetailScreen() {
       const nav = typeof navigator !== "undefined" ? navigator : null;
       if (nav?.share) {
         try {
-          await nav.share({ title: "Compartilhar publicação", text: shareText, url: postUrl });
+          await nav.share({ title: t("post_screen.share_title"), text: shareText, url: postUrl });
           return;
         } catch {}
       }
       try {
         await nav?.clipboard.writeText(postUrl);
-        Alert.alert("Link copiado!", "Link da publicação copiado para a área de transferência.");
+        Alert.alert(t("post_screen.link_copied_title"), t("post_screen.link_copied_msg"));
       } catch {
-        Alert.alert("Erro", "Não foi possível copiar o link. Copie manualmente: " + postUrl);
+        Alert.alert(t("common.error"), t("post_screen.error_copy") + " " + postUrl);
       }
       return;
     }
     try {
-      await Share.share({ message: shareText, url: postUrl, title: "Compartilhar publicação" });
+      await Share.share({ message: shareText, url: postUrl, title: t("post_screen.share_title") });
     } catch {}
   };
 
@@ -476,7 +478,7 @@ export default function PostDetailScreen() {
               else if (item.author?.id) router.push(`/profile/${item.author.id}` as any);
             }}>
               <Text style={[styles.commentAuthor, { color: colors.foreground }]}>
-                {item.company_page ? item.company_page.name : (item.author?.full_name ?? "Usuário")}
+                {item.company_page ? item.company_page.name : (item.author?.full_name ?? t("post_screen.user_fallback"))}
               </Text>
             </TouchableOpacity>
             <MentionText text={item.content} mentionMap={mentionMap} style={[styles.commentContent, { color: colors.foreground }]} />
@@ -508,19 +510,19 @@ export default function PostDetailScreen() {
                 style={styles.commentAction}
                 onPress={() => handleReply(
                   item.author?.id ?? item.company_page?.id ?? "",
-                  item.company_page?.name ?? item.author?.full_name ?? "Usuário",
+                  item.company_page?.name ?? item.author?.full_name ?? t("post_screen.user_fallback"),
                   item.id,
                 )}
               >
                 <Feather name="corner-down-right" size={13} color={colors.gold} />
-                <Text style={[styles.commentReply, { color: colors.gold }]}>Responder</Text>
+                <Text style={[styles.commentReply, { color: colors.gold }]}>{t("post_screen.reply_action")}</Text>
               </TouchableOpacity>
             )}
 
             {/* Reply count badge */}
             {!item.isReply && (item.replies?.length ?? 0) > 0 && (
               <Text style={[styles.replyCount, { color: colors.mutedForeground }]}>
-                {item.replies!.length} {item.replies!.length === 1 ? "resposta" : "respostas"}
+                {t(item.replies!.length === 1 ? "post_screen.reply_count_one" : "post_screen.reply_count_other", { count: item.replies!.length })}
               </Text>
             )}
           </View>
@@ -548,7 +550,7 @@ export default function PostDetailScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Feather name="arrow-left" size={24} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Publicação</Text>
+        <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t("post_screen.header_title")}</Text>
         <TouchableOpacity onPress={handleSharePost} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Feather name="share-2" size={22} color={colors.foreground} />
         </TouchableOpacity>
@@ -568,7 +570,7 @@ export default function PostDetailScreen() {
                 {(() => {
                   const cp = post.company_page ?? null;
                   const displayAvatar = cp ? cp.avatar_url : post.author?.avatar_url;
-                  const displayName   = cp ? cp.name : (post.author?.full_name ?? "Usuário");
+                  const displayName   = cp ? cp.name : (post.author?.full_name ?? t("post_screen.user_fallback"));
                   const handlePress   = cp
                     ? () => router.push(`/empresa/${cp.id}` as any)
                     : () => post.author?.id && router.push(`/profile/${post.author.id}` as any);
@@ -580,7 +582,7 @@ export default function PostDetailScreen() {
                           <Text style={[styles.authorName, { color: colors.foreground }]}>{displayName}</Text>
                           {cp && (
                             <View style={{ backgroundColor: colors.gold + "22", borderWidth: 1, borderColor: colors.gold + "55", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                              <Text style={{ fontSize: 11, fontWeight: "700", color: colors.gold }}>Empresa</Text>
+                              <Text style={{ fontSize: 11, fontWeight: "700", color: colors.gold }}>{t("post_screen.company_badge")}</Text>
                             </View>
                           )}
                         </View>
@@ -655,7 +657,7 @@ export default function PostDetailScreen() {
                     >
                       <Feather name="users" size={13} color={colors.mutedForeground} />
                       <Text style={[styles.likesCountText, { color: colors.mutedForeground }]}>
-                        Ver curtidas ({post.likes_count})
+                        {t("post_screen.see_likes", { count: post.likes_count })}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -664,7 +666,7 @@ export default function PostDetailScreen() {
             )}
 
             <Text style={[styles.commentsHeader, { color: colors.foreground }]}>
-              {totalComments} {totalComments === 1 ? "comentário" : "comentários"}
+              {t(totalComments === 1 ? "post_screen.comments_one" : "post_screen.comments_other", { count: totalComments })}
             </Text>
           </View>
         )}
@@ -680,7 +682,7 @@ export default function PostDetailScreen() {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Feather name="corner-down-right" size={14} color={colors.gold} />
             <Text style={[styles.replyText, { color: colors.gold }]}>
-              Respondendo a <Text style={{ fontWeight: "800" }}>{replyTo.name}</Text>
+              {t("post_screen.reply_to")} <Text style={{ fontWeight: "800" }}>{replyTo.name}</Text>
             </Text>
           </View>
           <TouchableOpacity onPress={cancelReply}>
@@ -693,13 +695,13 @@ export default function PostDetailScreen() {
       <View style={[styles.inputBar, { borderTopColor: colors.border, backgroundColor: colors.background, paddingBottom: insets.bottom + 8 }]}>
         <Avatar
           uri={activeCompany ? activeCompany.avatar_url : profile?.avatar_url}
-          name={activeCompany ? activeCompany.name : (profile?.full_name ?? "Você")}
+          name={activeCompany ? activeCompany.name : (profile?.full_name ?? t("post_screen.you_fallback"))}
           size={34}
         />
         <View style={[styles.inputWrap, { backgroundColor: colors.secondary, borderRadius: 24 }]}>
           <MentionInput
             style={[styles.input, { color: colors.foreground }]}
-            placeholder={replyTo ? `Responder a ${replyTo.name}...` : "Adicionar comentário..."}
+            placeholder={replyTo ? t("post_screen.reply_placeholder", { name: replyTo.name }) : t("post_screen.add_comment_placeholder")}
             placeholderTextColor={colors.mutedForeground}
             value={comment}
             onChangeText={setComment}

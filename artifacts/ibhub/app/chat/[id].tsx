@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useTranslation } from "react-i18next";
 import { useAudioRecorder, requestRecordingPermissionsAsync, setAudioModeAsync, RecordingPresets } from "expo-audio";
 import { VideoView, useVideoPlayer } from "expo-video";
 import * as DocumentPicker from "expo-document-picker";
@@ -55,36 +56,28 @@ function openAppSettings() {
   Linking.openSettings().catch(() => {});
 }
 
-function permissionAlert(message: string) {
+function permissionAlert(message: string, t: (k: string) => string) {
   Alert.alert(
-    "Permissão necessária",
+    t("chat_screen.permission_title"),
     message,
     [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Abrir Ajustes", onPress: openAppSettings },
+      { text: t("chat_screen.permission_cancel"), style: "cancel" },
+      { text: t("chat_screen.permission_open_settings"), onPress: openAppSettings },
     ],
   );
 }
-
-const INTRO_TEMPLATES = [
-  "Olá! Sou produtor de vinho e adoraria conectar com você. Tenho interesse em conhecer seu trabalho no mercado vinícola.",
-  "Oi! Vi seu perfil e fiquei impressionado com sua trajetória. Gostaria de conversar sobre possíveis parcerias.",
-  "Olá! Sou sommelier certificado e estou sempre em busca de novos produtores para recomendar. Podemos trocar experiências?",
-  "Boa tarde! Participei de um evento que você organizou e adorei. Podemos conversar sobre colaborações futuras?",
-  "Olá! Trabalho com distribuição de vinhos artesanais e acho que seu produto pode ter espaço no meu portifólio.",
-];
 
 function formatTime(dateStr: string): string {
   return new Date(dateStr).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
-function formatDateSep(dateStr: string): string {
+function formatDateSep(dateStr: string, t: (k: string) => string): string {
   const d = new Date(dateStr);
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
-  if (d.toDateString() === today.toDateString()) return "Hoje";
-  if (d.toDateString() === yesterday.toDateString()) return "Ontem";
+  if (d.toDateString() === today.toDateString()) return t("chat_screen.today");
+  if (d.toDateString() === yesterday.toDateString()) return t("chat_screen.yesterday");
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" });
 }
 
@@ -99,12 +92,21 @@ function formatDuration(ms: number): string {
 }
 
 export default function ChatScreen() {
+  const { t }    = useTranslation();
   const colors   = useColors();
   const router   = useRouter();
   const { id, companyId } = useLocalSearchParams<{ id: string; companyId?: string }>();
   const { user, activeCompany } = useAuth();
   const { refreshUnread } = useUnread();
   const insets   = useSafeAreaInsets();
+
+  const INTRO_TEMPLATES = [
+    t("chat_screen.intro_1"),
+    t("chat_screen.intro_2"),
+    t("chat_screen.intro_3"),
+    t("chat_screen.intro_4"),
+    t("chat_screen.intro_5"),
+  ];
 
   const [messages,               setMessages]               = useState<AppMessage[]>([]);
   const [input,                  setInput]                  = useState("");
@@ -376,10 +378,10 @@ export default function ChatScreen() {
 
     setSending(false);
 
-    const senderName = activeCompany?.name ?? (user as any)?.full_name ?? "Alguém";
+    const senderName = activeCompany?.name ?? (user as any)?.full_name ?? t("chat_screen.someone_fallback");
     const pushBody =
-      opts?.message_type === "post_share" ? "📎 Compartilhou uma publicação" :
-      opts?.message_type === "wine_card"  ? "🍷 Enviou uma ficha de vinho" : text;
+      opts?.message_type === "post_share" ? t("chat_screen.push_post_share") :
+      opts?.message_type === "wine_card"  ? t("chat_screen.push_wine_card") : text;
     API.dispatchPushToConversation(id, user.id, senderName, pushBody).catch(() => {});
   };
 
@@ -429,14 +431,14 @@ export default function ChatScreen() {
     if (type === "camera") {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
-        permissionAlert("Permita o acesso à câmera nas configurações do dispositivo.");
+        permissionAlert(t("chat_screen.permission_camera_msg"), t);
         return;
       }
       result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images", "videos"], quality: 0.7 });
     } else {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        permissionAlert("Permita o acesso à galeria nas configurações do dispositivo.");
+        permissionAlert(t("chat_screen.permission_gallery_msg"), t);
         return;
       }
       result = await ImagePicker.launchImageLibraryAsync({
@@ -457,9 +459,8 @@ export default function ChatScreen() {
     const assetSize = (asset as any).fileSize as number | undefined;
     if (typeof assetSize === "number" && assetSize > MAX_CHAT_FILE_SIZE) {
       Alert.alert(
-        "Arquivo muito grande",
-        `O ${msgType === "video" ? "vídeo" : "arquivo"} tem ${formatFileSize(assetSize)}. ` +
-          `O limite é ${MAX_FILE_SIZE_LABEL}.`,
+        t("chat_screen.file_too_large_title"),
+        t("chat_screen.file_too_large_msg", { type: msgType === "video" ? t("chat_screen.video_label") : t("chat_screen.file_label"), size: formatFileSize(assetSize), limit: MAX_FILE_SIZE_LABEL }),
       );
       return;
     }
@@ -481,12 +482,12 @@ export default function ChatScreen() {
     setUploading(true);
     try {
       if (msgType === "image") {
-        setUploadStatus("Comprimindo imagem...");
+        setUploadStatus(t("chat_screen.compressing_image"));
         const uploadUri = await compressImage(asset.uri);
-        setUploadStatus("Enviando imagem...");
+        setUploadStatus(t("chat_screen.uploading_image"));
         const url = await API.uploadChatMedia(id, uploadUri, mimeType);
         if (!url) {
-          Alert.alert("Erro", "Não foi possível enviar a imagem. Tente novamente.");
+          Alert.alert(t("chat_screen.error_title"), t("chat_screen.error_image_send"));
           setMessages(prev => prev.filter(m => m.id !== tempId));
           seenMsgIds.current.delete(tempId);
           return;
@@ -501,13 +502,13 @@ export default function ChatScreen() {
         } else {
           setMessages(prev => prev.filter(m => m.id !== tempId));
           seenMsgIds.current.delete(tempId);
-          Alert.alert("Erro", "Não foi possível enviar a imagem. Tente novamente.");
+          Alert.alert(t("chat_screen.error_title"), t("chat_screen.error_image_send"));
         }
       } else {
-        setUploadStatus("Enviando vídeo...");
+        setUploadStatus(t("chat_screen.uploading_video"));
         const url = await API.uploadChatMedia(id, asset.uri, mimeType);
         if (!url) {
-          Alert.alert("Erro", "Não foi possível enviar o vídeo. Tente novamente.");
+          Alert.alert(t("chat_screen.error_title"), t("chat_screen.error_video_send"));
           setMessages(prev => prev.filter(m => m.id !== tempId));
           seenMsgIds.current.delete(tempId);
           return;
@@ -522,7 +523,7 @@ export default function ChatScreen() {
         } else {
           setMessages(prev => prev.filter(m => m.id !== tempId));
           seenMsgIds.current.delete(tempId);
-          Alert.alert("Erro", "Não foi possível enviar o vídeo. Tente novamente.");
+          Alert.alert(t("chat_screen.error_title"), t("chat_screen.error_video_send"));
         }
       }
     } finally {
@@ -546,9 +547,8 @@ export default function ChatScreen() {
       // Validate size client-side. DocumentPicker exposes `size` (bytes).
       if (typeof asset.size === "number" && asset.size > MAX_CHAT_FILE_SIZE) {
         Alert.alert(
-          "Arquivo muito grande",
-          `${asset.name ?? "O arquivo"} tem ${formatFileSize(asset.size)}. ` +
-            `O limite é ${MAX_FILE_SIZE_LABEL}.`,
+          t("chat_screen.file_too_large_title"),
+          t("chat_screen.file_too_large_named", { name: asset.name ?? t("chat_screen.file_label"), size: formatFileSize(asset.size), limit: MAX_FILE_SIZE_LABEL }),
         );
         return;
       }
@@ -559,8 +559,8 @@ export default function ChatScreen() {
       const resolvedMime = resolveChatMime(asset.mimeType, asset.name);
       if (!resolvedMime) {
         Alert.alert(
-          "Tipo de arquivo não suportado",
-          "Envie PDF, Word, Excel, CSV, texto, imagem, vídeo ou áudio.",
+          t("chat_screen.unsupported_file_title"),
+          t("chat_screen.unsupported_file_msg"),
         );
         return;
       }
@@ -582,7 +582,7 @@ export default function ChatScreen() {
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
 
       setUploading(true);
-      setUploadStatus(`Enviando ${asset.name ?? "arquivo"}...`);
+      setUploadStatus(t("chat_screen.uploading_file", { name: asset.name ?? t("chat_screen.file_label") }));
       const fileObj = (asset as any).file as File | undefined;
       const url = await API.uploadChatMedia(id, asset.uri, resolvedMime, fileObj);
       setUploading(false);
@@ -592,7 +592,7 @@ export default function ChatScreen() {
           setMessages(prev => prev.filter(m => m.id !== tempId));
           seenMsgIds.current.delete(tempId);
         }
-        Alert.alert("Erro", "Não foi possível enviar o arquivo.");
+        Alert.alert(t("chat_screen.error_title"), t("chat_screen.error_file_send"));
         return;
       }
       const saved = await API.sendMediaMessage(id, user.id, url, "file", asset.name ?? "arquivo");
@@ -610,10 +610,7 @@ export default function ChatScreen() {
           setMessages(prev => prev.filter(m => m.id !== tempId));
           seenMsgIds.current.delete(tempId);
         }
-        Alert.alert(
-          "Erro",
-          "O arquivo foi enviado mas a mensagem não pôde ser registrada. Tente novamente.",
-        );
+        Alert.alert(t("chat_screen.error_title"), t("chat_screen.error_file_registered"));
       }
     } catch (e: any) {
       setUploading(false);
@@ -622,14 +619,14 @@ export default function ChatScreen() {
         setMessages(prev => prev.filter(m => m.id !== tempId));
         seenMsgIds.current.delete(tempId);
       }
-      if (!e?.message?.includes("cancel")) Alert.alert("Erro", "Não foi possível abrir o arquivo.");
+      if (!e?.message?.includes("cancel")) Alert.alert(t("chat_screen.error_title"), t("chat_screen.error_file_open"));
     }
   };
 
   // ── Audio recording ──────────────────────────────────────────────────────────
 
   const startRecording = async () => {
-    if (Platform.OS === "web") { Alert.alert("Áudio", "Gravação de áudio não disponível na versão web."); return; }
+    if (Platform.OS === "web") { Alert.alert(t("chat_screen.audio_label"), t("chat_screen.audio_web_unavailable")); return; }
     if (isRecordingRef.current) {
       // Already recording — stop and send
       void stopRecording();
@@ -638,7 +635,7 @@ export default function ChatScreen() {
     try {
       const { granted } = await requestRecordingPermissionsAsync();
       if (!granted) {
-        permissionAlert("Permita o acesso ao microfone nas configurações do dispositivo.");
+        permissionAlert(t("chat_screen.permission_mic_msg"), t);
         return;
       }
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
@@ -658,8 +655,8 @@ export default function ChatScreen() {
             setTimeout(() => {
               if (!isRecordingRef.current) return;
               Alert.alert(
-                "Limite de duração",
-                `A gravação atingiu o máximo de ${Math.round(MAX_AUDIO_DURATION_MS / 60000)} minutos e foi enviada.`,
+                t("chat_screen.recording_limit_title"),
+                t("chat_screen.recording_limit_msg", { mins: Math.round(MAX_AUDIO_DURATION_MS / 60000) }),
               );
               void stopRecording();
             }, 0);
@@ -670,7 +667,7 @@ export default function ChatScreen() {
       if (__DEV__) console.log("[Audio] Recording started.");
     } catch (e: any) {
       console.error("[Audio] startRecording error:", e?.message);
-      Alert.alert("Erro", "Não foi possível iniciar a gravação.");
+      Alert.alert(t("chat_screen.error_title"), t("chat_screen.error_recording_start"));
     }
   };
 
@@ -719,14 +716,14 @@ export default function ChatScreen() {
 
       if (!uri || fileSize === 0) {
         Alert.alert(
-          "Áudio vazio",
-          "Nenhum áudio foi capturado. Verifique a permissão do microfone e tente novamente segurando o botão por mais tempo.",
+          t("chat_screen.audio_empty_title"),
+          t("chat_screen.audio_empty_msg"),
         );
         return;
       }
 
       setUploading(true);
-      setUploadStatus("Enviando áudio...");
+      setUploadStatus(t("chat_screen.uploading_audio"));
 
       // Determine mime/extension — expo-audio records as m4a on both platforms
       const mimeType = Platform.OS === "android" ? "audio/mp4" : "audio/m4a";
@@ -744,7 +741,7 @@ export default function ChatScreen() {
 
       if (!url) {
         console.error(`[Audio] uploadChatMedia returned null — platform: ${Platform.OS}, uri: ${uri}, size: ${fileSize} bytes`);
-        Alert.alert("Erro", "Não foi possível enviar o áudio. Verifique sua conexão.");
+        Alert.alert(t("chat_screen.error_title"), t("chat_screen.error_audio_send"));
         return;
       }
       console.log(`[Audio] Upload OK → ${url}`);
@@ -755,7 +752,7 @@ export default function ChatScreen() {
       const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", activeCompany?.id);
       if (!saved) {
         console.error("[Audio] sendMediaMessage returned null");
-        Alert.alert("Erro ao enviar áudio", "Não foi possível salvar a mensagem de áudio.");
+        Alert.alert(t("chat_screen.error_audio_send_title"), t("chat_screen.error_audio_save"));
         return;
       }
 
@@ -770,7 +767,7 @@ export default function ChatScreen() {
       console.error("[Audio] stopRecording error:", e?.message);
       setUploading(false);
       setUploadStatus(null);
-      Alert.alert("Erro", "Não foi possível processar o áudio.");
+      Alert.alert(t("chat_screen.error_title"), t("chat_screen.error_audio_process"));
     }
   };
 
@@ -872,8 +869,8 @@ export default function ChatScreen() {
         if (status === "granted") {
           await Notifications.scheduleNotificationAsync({
             content: {
-              title: "Lembrete de Follow-up",
-              body: `Hora de retomar a conversa com ${companyInfo?.name ?? participant?.full_name ?? "seu contato"}!`,
+              title: t("chat_screen.followup_notif_title"),
+              body: t("chat_screen.followup_notif_body", { name: companyInfo?.name ?? participant?.full_name ?? t("chat_screen.your_contact") }),
               data: { conversationId: id },
             },
             trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger },
@@ -882,8 +879,8 @@ export default function ChatScreen() {
       } catch {}
     }
     Alert.alert(
-      "Lembrete agendado ✓",
-      `Você será lembrado em ${days} dia${days > 1 ? "s" : ""} de retomar esta conversa.`,
+      t("chat_screen.followup_scheduled_title"),
+      t("chat_screen.followup_scheduled_msg", { days }),
     );
   };
 
@@ -935,7 +932,7 @@ export default function ChatScreen() {
     return (
       <View style={[st.quotedMsg, { borderLeftColor: isMe ? "rgba(255,255,255,0.5)" : colors.gold }]}>
         <Text style={[st.quotedSender, { color: isMe ? "#ffffff99" : colors.gold }]}>
-          {isReplyFromMe ? "Você" : (companyInfo?.name ?? participant?.full_name ?? "Usuário")}
+          {isReplyFromMe ? t("chat_screen.you") : (companyInfo?.name ?? participant?.full_name ?? t("chat_screen.user_fallback"))}
         </Text>
         <Text style={[st.quotedContent, { color: isMe ? "#ffffffcc" : "#6b7280" }]} numberOfLines={2}>
           {item.reply_to.content}
@@ -968,7 +965,7 @@ export default function ChatScreen() {
           <View style={st.dateSep}>
             <View style={[st.dateSepLine, { backgroundColor: colors.border }]} />
             <Text style={[st.dateSepText, { color: colors.mutedForeground, backgroundColor: colors.background }]}>
-              {formatDateSep(item.created_at)}
+              {formatDateSep(item.created_at, t)}
             </Text>
             <View style={[st.dateSepLine, { backgroundColor: colors.border }]} />
           </View>
@@ -1075,7 +1072,7 @@ export default function ChatScreen() {
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 4 }}>
                           <Feather name="paperclip" size={16} color={isMe ? "#fff" : colors.mutedForeground} />
                           <Text style={[st.bubbleText, { color: isMe ? "#fff" : colors.foreground, flex: 1 }]} numberOfLines={1}>
-                            {label || "Anexo"}
+                            {label || t("chat_screen.attachment_label")}
                           </Text>
                         </View>
                       )}
@@ -1110,7 +1107,7 @@ export default function ChatScreen() {
           {isTemp && isMe && (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-end", marginTop: 2, marginRight: 6 }}>
               <ActivityIndicator size={10} color={colors.gold} />
-              <Text style={{ fontSize: 10, color: colors.mutedForeground }}>{uploadStatus ?? "Enviando..."}</Text>
+              <Text style={{ fontSize: 10, color: colors.mutedForeground }}>{uploadStatus ?? t("chat_screen.uploading")}</Text>
             </View>
           )}
 
@@ -1128,7 +1125,7 @@ export default function ChatScreen() {
       <View style={[st.postShareCard, { backgroundColor: isMe ? "rgba(255,255,255,0.1)" : colors.background, borderColor: isMe ? "rgba(255,255,255,0.2)" : colors.border }]}>
         {meta.image_url && <Image source={{ uri: meta.image_url }} style={st.postShareImage} resizeMode="cover" />}
         <View style={{ padding: 10 }}>
-          <Text style={[{ fontSize: 11, marginBottom: 3 }, { color: isMe ? "#ffffff88" : colors.mutedForeground }]}>📝 {meta.author_name ?? "Publicação"}</Text>
+          <Text style={[{ fontSize: 11, marginBottom: 3 }, { color: isMe ? "#ffffff88" : colors.mutedForeground }]}>📝 {meta.author_name ?? t("chat_screen.post_label")}</Text>
           <Text style={[{ fontSize: 13, lineHeight: 18 }, { color: isMe ? "#fff" : colors.foreground }]} numberOfLines={3}>{meta.content ?? item.content}</Text>
         </View>
         <Text style={[st.bubbleTime, { color: isMe ? "#ffffff66" : colors.mutedForeground, paddingHorizontal: 10, paddingBottom: 8 }]}>{formatTime(item.created_at)}</Text>
@@ -1143,7 +1140,7 @@ export default function ChatScreen() {
       <View style={{ gap: 4, padding: 4 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <MaterialCommunityIcons name="glass-wine" size={16} color={colors.gold} />
-          <Text style={[{ fontSize: 10, fontWeight: "700", letterSpacing: 0.5 }, { color: isMe ? colors.gold : colors.gold }]}>FICHA DE VINHO</Text>
+          <Text style={[{ fontSize: 10, fontWeight: "700", letterSpacing: 0.5 }, { color: isMe ? colors.gold : colors.gold }]}>{t("chat_screen.wine_card_label")}</Text>
         </View>
         {meta.image_url && <Image source={{ uri: meta.image_url }} style={[st.mediaImage, { borderRadius: 8, height: 100 }]} resizeMode="cover" />}
         <Text style={[{ fontSize: 14, fontWeight: "700" }, { color: isMe ? "#fff" : colors.navy }]}>{meta.name}</Text>
@@ -1169,14 +1166,14 @@ export default function ChatScreen() {
   const renderFileBubble = (item: AppMessage, isMe: boolean) => (
     <TouchableOpacity
       style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 4 }}
-      onPress={() => item.media_url && Linking.openURL(item.media_url).catch(() => Alert.alert("Erro", "Não foi possível abrir o arquivo."))}
+      onPress={() => item.media_url && Linking.openURL(item.media_url).catch(() => Alert.alert(t("chat_screen.error_title"), t("chat_screen.error_file_open")))}
     >
       <View style={[{ width: 36, height: 36, borderRadius: 8, alignItems: "center", justifyContent: "center" }, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : colors.background }]}>
         <Feather name="file-text" size={18} color={isMe ? "#fff" : colors.navy} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={[{ fontSize: 13, fontWeight: "600" }, { color: isMe ? "#fff" : colors.navy }]} numberOfLines={1}>
-          {item.content || fileNameFromUrl(item.media_url) || "Arquivo"}
+          {item.content || fileNameFromUrl(item.media_url) || t("chat_screen.file_label")}
         </Text>
         <Text style={[{ fontSize: 11 }, { color: isMe ? "#ffffff88" : colors.mutedForeground }]}>{formatTime(item.created_at)}</Text>
       </View>
@@ -1188,7 +1185,7 @@ export default function ChatScreen() {
     if (!item.media_url) {
       return (
         <Text style={[st.bubbleText, { color: isMe ? "#fff" : colors.foreground, fontStyle: "italic", opacity: 0.7 }]}>
-          🎤 Áudio indisponível
+          🎤 {t("chat_screen.audio_unavailable")}
         </Text>
       );
     }
@@ -1239,10 +1236,10 @@ export default function ChatScreen() {
             <Text style={[st.headerStatus, {
               color: isTyping ? colors.gold : isParticipantOnline ? "#22c55e" : colors.mutedForeground,
             }]}>
-              {isCompanyChat ? "Empresa"
-                : isTyping ? "digitando..."
-                : isParticipantOnline ? "online"
-                : (participant ? "offline" : "Carregando...")}
+              {isCompanyChat ? t("chat_screen.company_label")
+                : isTyping ? t("chat_screen.typing")
+                : isParticipantOnline ? t("chat_screen.online")
+                : (participant ? t("chat_screen.offline") : t("chat_screen.loading"))}
             </Text>
           </View>
         </TouchableOpacity>
@@ -1268,8 +1265,8 @@ export default function ChatScreen() {
               <View style={[st.emptyIcon, { backgroundColor: colors.navy + "12" }]}>
                 <Feather name="message-circle" size={36} color={colors.navy} />
               </View>
-              <Text style={[st.emptyTitle, { color: colors.navy }]}>Nenhuma mensagem ainda</Text>
-              <Text style={[st.emptyHint, { color: colors.mutedForeground }]}>Seja o primeiro a dizer olá!</Text>
+              <Text style={[st.emptyTitle, { color: colors.navy }]}>{t("chat_screen.empty_title")}</Text>
+              <Text style={[st.emptyHint, { color: colors.mutedForeground }]}>{t("chat_screen.empty_hint")}</Text>
             </View>
           }
         />
@@ -1282,7 +1279,7 @@ export default function ChatScreen() {
             <ActivityIndicator size="small" color={colors.gold} />
             <View style={{ flex: 1 }}>
               <Text style={[st.uploadText, { color: "#fff", fontWeight: "600" }]}>
-                {uploadStatus ?? "Enviando..."}
+                {uploadStatus ?? t("chat_screen.uploading")}
               </Text>
               <View style={st.uploadProgressTrack}>
                 <View style={[st.uploadProgressFill, { backgroundColor: colors.gold }]} />
@@ -1300,7 +1297,7 @@ export default function ChatScreen() {
               <View key={i} style={[st.typingDot, { backgroundColor: colors.mutedForeground }]} />
             ))}
           </View>
-          <Text style={[st.typingText, { color: colors.mutedForeground }]}>{participantName} está digitando</Text>
+          <Text style={[st.typingText, { color: colors.mutedForeground }]}>{t("chat_screen.typing_indicator", { name: participantName })}</Text>
         </View>
       )}
 
@@ -1313,10 +1310,10 @@ export default function ChatScreen() {
           <View style={[st.recordingDot, { backgroundColor: "#dc2626" }]} />
           <View style={{ flex: 1 }}>
             <Text style={[st.recordingText, { color: "#dc2626" }]}>
-              Gravando... {formatDuration(recordingMs)}
+              {t("chat_screen.recording")} {formatDuration(recordingMs)}
             </Text>
             <Text style={{ color: slideToCancel ? "#dc2626" : "#9b1c1c", fontSize: 11, marginTop: 2, fontWeight: slideToCancel ? "700" : "400" }}>
-              {slideToCancel ? "Solte para cancelar" : "↑ Deslize para cancelar  •  solte para enviar"}
+              {slideToCancel ? t("chat_screen.release_to_cancel") : t("chat_screen.slide_to_cancel")}
             </Text>
           </View>
           <TouchableOpacity
@@ -1334,10 +1331,10 @@ export default function ChatScreen() {
           <View style={[st.replyBar, { backgroundColor: colors.gold }]} />
           <View style={{ flex: 1 }}>
             <Text style={[st.replyLabel, { color: colors.gold }]}>
-              Respondendo a {replyTo.sender_id === user?.id ? "você mesmo" : participantName}
+              {t("chat_screen.replying_to", { name: replyTo.sender_id === user?.id ? t("chat_screen.yourself") : participantName })}
             </Text>
             <Text style={[st.replyText, { color: colors.mutedForeground }]} numberOfLines={1}>
-              {replyTo.content || (replyTo.message_type === "image" ? "📷 Foto" : replyTo.message_type === "audio" ? "🎤 Áudio" : "Mensagem")}
+              {replyTo.content || (replyTo.message_type === "image" ? t("chat_screen.photo_label") : replyTo.message_type === "audio" ? t("chat_screen.audio_label_short") : t("chat_screen.message_label"))}
             </Text>
           </View>
           <TouchableOpacity onPress={() => setReplyTo(null)} style={{ padding: 4 }}>
@@ -1360,7 +1357,7 @@ export default function ChatScreen() {
           <View style={[st.inputWrap, { backgroundColor: colors.background, borderColor: colors.border }]}>
             <TextInput
               style={[st.input, { color: colors.foreground }]}
-              placeholder="Mensagem..."
+              placeholder={t("chat_screen.input_placeholder")}
               placeholderTextColor={colors.mutedForeground}
               value={input}
               onChangeText={handleInputChange}
@@ -1393,7 +1390,7 @@ export default function ChatScreen() {
       ) : (
         <View style={[st.lockedBar, { backgroundColor: "#fff", borderTopColor: colors.border, paddingBottom: bottomPad + 10 }]}>
           <Feather name="lock" size={15} color={colors.mutedForeground} />
-          <Text style={[st.lockedText, { color: colors.mutedForeground }]}>Aguardando aceitação para liberar o chat</Text>
+          <Text style={[st.lockedText, { color: colors.mutedForeground }]}>{t("chat_screen.locked_chat")}</Text>
         </View>
       )}
 
@@ -1419,13 +1416,13 @@ export default function ChatScreen() {
         <Pressable style={st.sheetOverlay} onPress={() => setShowAttach(false)}>
           <View style={[st.sheet, { backgroundColor: "#fff" }]}>
             <View style={[st.sheetHandle, { backgroundColor: colors.border }]} />
-            <Text style={[st.sheetTitle, { color: colors.navy }]}>Enviar</Text>
+            <Text style={[st.sheetTitle, { color: colors.navy }]}>{t("chat_screen.send_title")}</Text>
             <View style={st.attachGrid}>
               {[
-                { icon: "camera" as const,    label: "Câmera",    color: "#8b5cf6", action: () => pickAndSendMedia("camera") },
-                { icon: "image" as const,      label: "Galeria",   color: "#3b82f6", action: () => pickAndSendMedia("image") },
-                { icon: "film" as const,       label: "Vídeo",     color: "#ef4444", action: () => pickAndSendMedia("video") },
-                { icon: "file-text" as const,  label: "Arquivo",   color: "#f59e0b", action: pickAndSendFile },
+                { icon: "camera" as const,    label: t("chat_screen.attach_camera"),    color: "#8b5cf6", action: () => pickAndSendMedia("camera") },
+                { icon: "image" as const,      label: t("chat_screen.attach_gallery"),   color: "#3b82f6", action: () => pickAndSendMedia("image") },
+                { icon: "film" as const,       label: t("chat_screen.attach_video"),     color: "#ef4444", action: () => pickAndSendMedia("video") },
+                { icon: "file-text" as const,  label: t("chat_screen.attach_file"),      color: "#f59e0b", action: pickAndSendFile },
               ].map(({ icon, label, color, action }) => (
                 <TouchableOpacity key={label} style={st.attachOption} onPress={action}>
                   <View style={[st.attachCircle, { backgroundColor: color }]}>
@@ -1444,27 +1441,27 @@ export default function ChatScreen() {
         <Pressable style={st.sheetOverlay} onPress={() => setShowProspect(false)}>
           <View style={[st.sheet, { backgroundColor: "#fff" }]}>
             <View style={[st.sheetHandle, { backgroundColor: colors.border }]} />
-            <Text style={[st.sheetTitle, { color: colors.navy }]}>Ferramentas de Prospecção</Text>
+            <Text style={[st.sheetTitle, { color: colors.navy }]}>{t("chat_screen.prospect_title")}</Text>
             <View style={{ gap: 10 }}>
               {[
                 {
                   icon: <MaterialCommunityIcons name="glass-wine" size={22} color={colors.gold} />,
-                  title: "Enviar Ficha de Vinho",
-                  sub: "Compartilhe um vinho do seu catálogo",
+                  title: t("chat_screen.prospect_wine_title"),
+                  sub: t("chat_screen.prospect_wine_sub"),
                   bg: colors.gold + "18",
                   action: loadWines,
                 },
                 {
                   icon: <Feather name="message-square" size={20} color={colors.navy} />,
-                  title: "Template de Introdução",
-                  sub: "Mensagens prontas para prospecção",
+                  title: t("chat_screen.prospect_template_title"),
+                  sub: t("chat_screen.prospect_template_sub"),
                   bg: colors.navy + "12",
                   action: () => { setShowProspect(false); setShowTemplates(true); },
                 },
                 {
                   icon: <Feather name="clock" size={20} color="#10b981" />,
-                  title: "Lembrete de Follow-up",
-                  sub: "Agende um lembrete para retomar",
+                  title: t("chat_screen.prospect_followup_title"),
+                  sub: t("chat_screen.prospect_followup_sub"),
                   bg: "#d1fae510",
                   action: () => { setShowProspect(false); setShowFollowUp(true); },
                 },
@@ -1492,11 +1489,11 @@ export default function ChatScreen() {
         <Pressable style={st.sheetOverlay} onPress={() => setShowWines(false)}>
           <View style={[st.sheet, { backgroundColor: "#fff", maxHeight: "80%" }]}>
             <View style={[st.sheetHandle, { backgroundColor: colors.border }]} />
-            <Text style={[st.sheetTitle, { color: colors.navy }]}>Selecionar Vinho</Text>
+            <Text style={[st.sheetTitle, { color: colors.navy }]}>{t("chat_screen.select_wine_title")}</Text>
             {wines.length === 0 ? (
               <View style={[st.empty, { paddingTop: 32 }]}>
                 <MaterialCommunityIcons name="glass-wine" size={36} color={colors.gold} />
-                <Text style={[{ fontSize: 14, color: colors.mutedForeground }]}>Nenhum vinho cadastrado</Text>
+                <Text style={[{ fontSize: 14, color: colors.mutedForeground }]}>{t("chat_screen.no_wines")}</Text>
               </View>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false}>
@@ -1535,7 +1532,7 @@ export default function ChatScreen() {
         <Pressable style={st.sheetOverlay} onPress={() => setShowTemplates(false)}>
           <View style={[st.sheet, { backgroundColor: "#fff", maxHeight: "85%" }]}>
             <View style={[st.sheetHandle, { backgroundColor: colors.border }]} />
-            <Text style={[st.sheetTitle, { color: colors.navy }]}>Templates de Introdução</Text>
+            <Text style={[st.sheetTitle, { color: colors.navy }]}>{t("chat_screen.intro_templates_title")}</Text>
             <ScrollView showsVerticalScrollIndicator={false}>
               {INTRO_TEMPLATES.map((tmpl, i) => (
                 <View key={i} style={[st.templateCard, { borderColor: colors.border }]}>
@@ -1546,14 +1543,14 @@ export default function ChatScreen() {
                       onPress={() => { setShowTemplates(false); sendMessage(tmpl); }}
                     >
                       <Feather name="send" size={13} color="#fff" />
-                      <Text style={[st.templateBtnText, { color: "#fff" }]}>Enviar</Text>
+                      <Text style={[st.templateBtnText, { color: "#fff" }]}>{t("chat_screen.send_btn")}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[st.templateBtn, { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border }]}
                       onPress={() => { setShowTemplates(false); setInput(tmpl); }}
                     >
                       <Feather name="edit-2" size={13} color={colors.navy} />
-                      <Text style={[st.templateBtnText, { color: colors.navy }]}>Editar</Text>
+                      <Text style={[st.templateBtnText, { color: colors.navy }]}>{t("chat_screen.edit_btn")}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -1568,14 +1565,14 @@ export default function ChatScreen() {
         <Pressable style={st.sheetOverlay} onPress={() => setShowFollowUp(false)}>
           <View style={[st.sheet, { backgroundColor: "#fff" }]}>
             <View style={[st.sheetHandle, { backgroundColor: colors.border }]} />
-            <Text style={[st.sheetTitle, { color: colors.navy }]}>Agendar Follow-up</Text>
+            <Text style={[st.sheetTitle, { color: colors.navy }]}>{t("chat_screen.schedule_followup_title")}</Text>
             {existingFollowUp && (
               <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: colors.gold + "18", borderRadius: 10, padding: 10, marginBottom: 12, gap: 8 }}>
                 <Feather name="clock" size={14} color={existingFollowUp <= new Date() ? "#ef4444" : colors.gold} />
                 <Text style={{ fontSize: 13, color: colors.navy, flex: 1 }}>
                   {existingFollowUp <= new Date()
-                    ? `Lembrete vencido em ${existingFollowUp.toLocaleDateString("pt-BR")}`
-                    : `Lembrete agendado para ${existingFollowUp.toLocaleDateString("pt-BR")}`}
+                    ? t("chat_screen.followup_expired", { date: existingFollowUp.toLocaleDateString("pt-BR") })
+                    : t("chat_screen.followup_set", { date: existingFollowUp.toLocaleDateString("pt-BR") })}
                 </Text>
                 <TouchableOpacity onPress={cancelFollowUp}>
                   <Feather name="x" size={16} color="#ef4444" />
@@ -1583,7 +1580,7 @@ export default function ChatScreen() {
               </View>
             )}
             <Text style={[{ fontSize: 14, color: colors.mutedForeground, marginBottom: 16 }]}>
-              {existingFollowUp ? "Reagendar para daqui:" : "Em quantos dias você quer ser lembrado?"}
+              {existingFollowUp ? t("chat_screen.followup_reschedule_hint") : t("chat_screen.followup_hint")}
             </Text>
             <View style={{ flexDirection: "row", gap: 10, marginBottom: 20 }}>
               {["1", "3", "7", "14", "30"].map(d => (
@@ -1597,7 +1594,7 @@ export default function ChatScreen() {
                   onPress={() => setFollowUpDays(d)}
                 >
                   <Text style={[{ fontSize: 18, fontWeight: "800" }, { color: followUpDays === d ? colors.gold : colors.navy }]}>{d}</Text>
-                  <Text style={[{ fontSize: 10, marginTop: 2 }, { color: colors.mutedForeground }]}>{d === "1" ? "dia" : "dias"}</Text>
+                  <Text style={[{ fontSize: 10, marginTop: 2 }, { color: colors.mutedForeground }]}>{d === "1" ? t("chat_screen.day_singular") : t("chat_screen.day_plural")}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -1606,7 +1603,7 @@ export default function ChatScreen() {
               onPress={scheduleFollowUp}
             >
               <Feather name="bell" size={16} color="#fff" />
-              <Text style={st.followUpBtnText}>{existingFollowUp ? "Reagendar Lembrete" : "Agendar Lembrete"}</Text>
+              <Text style={st.followUpBtnText}>{existingFollowUp ? t("chat_screen.reschedule_btn") : t("chat_screen.schedule_btn")}</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -1626,13 +1623,13 @@ export default function ChatScreen() {
                 }}
               >
                 <Feather name={isCompanyChat ? "briefcase" : "user"} size={17} color={colors.navy} />
-                <Text style={[st.menuItemText, { color: colors.navy }]}>{isCompanyChat ? "Ver empresa" : "Ver perfil"}</Text>
+                <Text style={[st.menuItemText, { color: colors.navy }]}>{isCompanyChat ? t("chat_screen.view_company") : t("chat_screen.view_profile")}</Text>
               </TouchableOpacity>
             )}
             <View style={[st.menuDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity style={st.menuItem} onPress={() => { setShowMenu(false); setShowFollowUp(true); }}>
               <Feather name="clock" size={17} color="#10b981" />
-              <Text style={[st.menuItemText, { color: colors.navy }]}>Follow-up</Text>
+              <Text style={[st.menuItemText, { color: colors.navy }]}>{t("chat_screen.followup_menu")}</Text>
             </TouchableOpacity>
             <View style={[st.menuDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity
@@ -1640,17 +1637,17 @@ export default function ChatScreen() {
               onPress={() => {
                 setShowMenu(false);
                 Alert.alert(
-                  "Apagar conversa",
-                  "Todas as mensagens serão excluídas permanentemente. Tem certeza?",
+                  t("chat_screen.delete_conv_title"),
+                  t("chat_screen.delete_conv_confirm"),
                   [
-                    { text: "Cancelar", style: "cancel" },
+                    { text: t("chat_screen.cancel"), style: "cancel" },
                     {
-                      text: "Apagar",
+                      text: t("chat_screen.delete_btn"),
                       style: "destructive",
                       onPress: async () => {
                         const ok = await API.deleteDirectConversation(id);
                         if (ok) router.back();
-                        else Alert.alert("Erro", "Não foi possível apagar a conversa.");
+                        else Alert.alert(t("chat_screen.error_title"), t("chat_screen.error_delete_conv"));
                       },
                     },
                   ],
@@ -1658,12 +1655,12 @@ export default function ChatScreen() {
               }}
             >
               <Feather name="trash-2" size={17} color="#dc2626" />
-              <Text style={[st.menuItemText, { color: "#dc2626" }]}>Apagar conversa</Text>
+              <Text style={[st.menuItemText, { color: "#dc2626" }]}>{t("chat_screen.delete_conv_title")}</Text>
             </TouchableOpacity>
             <View style={[st.menuDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity style={st.menuItem} onPress={() => setShowMenu(false)}>
               <Feather name="flag" size={17} color="#dc2626" />
-              <Text style={[st.menuItemText, { color: "#dc2626" }]}>Denunciar</Text>
+              <Text style={[st.menuItemText, { color: "#dc2626" }]}>{t("chat_screen.report")}</Text>
             </TouchableOpacity>
           </View>
         </Pressable>

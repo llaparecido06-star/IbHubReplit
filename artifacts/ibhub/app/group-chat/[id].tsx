@@ -1,4 +1,5 @@
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -47,13 +48,13 @@ function openAppSettings() {
   Linking.openSettings().catch(() => {});
 }
 
-function permissionAlert(message: string) {
+function permissionAlert(message: string, t: (k: string) => string) {
   Alert.alert(
-    "Permissão necessária",
+    t("group_chat_screen.permission_title"),
     message,
     [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Abrir Ajustes", onPress: openAppSettings },
+      { text: t("group_chat_screen.permission_cancel"), style: "cancel" },
+      { text: t("group_chat_screen.permission_open_settings"), onPress: openAppSettings },
     ],
   );
 }
@@ -72,6 +73,7 @@ interface SenderProfile {
 }
 
 export default function GroupChatScreen() {
+  const { t }   = useTranslation();
   const colors  = useColors();
   const router  = useRouter();
   const { id }  = useLocalSearchParams<{ id: string }>();
@@ -156,7 +158,7 @@ export default function GroupChatScreen() {
       API.fetchGroupHistoryClearedAt(id, user.id),
     ]);
 
-    const convName = (convRes.data as any)?.name ?? (groupRes.data as any)?.name ?? "Grupo";
+    const convName = (convRes.data as any)?.name ?? (groupRes.data as any)?.name ?? t("group_chat_screen.group_label");
     const memberCount = (partRes.data ?? []).length;
     setGroupInfo({
       name: convName,
@@ -260,7 +262,7 @@ export default function GroupChatScreen() {
         const typingUser = others.find(([_, v]) => (v as any[])[0]?.typing);
         if (typingUser) {
           setIsTyping(true);
-          setTypingName((typingUser[1] as any[])[0]?.name ?? "Alguém");
+          setTypingName((typingUser[1] as any[])[0]?.name ?? t("group_chat_screen.someone"));
         } else {
           setIsTyping(false);
           setTypingName("");
@@ -325,7 +327,7 @@ export default function GroupChatScreen() {
         setUploading(true);
         const url = await API.uploadChatMedia(id, asset.uri, asset.mimeType ?? "audio/mpeg");
         setUploading(false);
-        if (!url) { Alert.alert("Erro", "Não foi possível enviar o áudio."); return; }
+        if (!url) { Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_audio_send")); return; }
         const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", effectiveCompanyId);
         if (saved) {
           seenMsgIds.current.add(saved.id);
@@ -336,7 +338,7 @@ export default function GroupChatScreen() {
         }
       } catch {
         setUploading(false);
-        Alert.alert("Erro", "Não foi possível enviar o arquivo de áudio.");
+        Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_audio_file"));
       }
       return;
     }
@@ -347,7 +349,7 @@ export default function GroupChatScreen() {
     try {
       const { granted } = await requestRecordingPermissionsAsync();
       if (!granted) {
-        permissionAlert("Permita o acesso ao microfone nas configurações do dispositivo.");
+        permissionAlert(t("group_chat_screen.permission_mic_msg"), t);
         return;
       }
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
@@ -365,8 +367,8 @@ export default function GroupChatScreen() {
             setTimeout(() => {
               if (!isRecordingRef.current) return;
               Alert.alert(
-                "Limite de duração",
-                `A gravação atingiu o máximo de ${Math.round(MAX_AUDIO_DURATION_MS / 60000)} minutos e foi enviada.`,
+                t("group_chat_screen.recording_limit_title"),
+                t("group_chat_screen.recording_limit_msg", { mins: Math.round(MAX_AUDIO_DURATION_MS / 60000) }),
               );
               void stopRecording();
             }, 0);
@@ -375,7 +377,7 @@ export default function GroupChatScreen() {
         });
       }, 1000);
     } catch {
-      Alert.alert("Erro", "Não foi possível iniciar a gravação.");
+      Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_recording_start"));
     }
   };
 
@@ -412,8 +414,8 @@ export default function GroupChatScreen() {
       }
       if (!uri || fileSize === 0) {
         Alert.alert(
-          "Áudio vazio",
-          "Nenhum áudio foi capturado. Verifique a permissão do microfone e tente novamente segurando o botão por mais tempo.",
+          t("group_chat_screen.audio_empty_title"),
+          t("group_chat_screen.audio_empty_msg"),
         );
         return;
       }
@@ -421,7 +423,7 @@ export default function GroupChatScreen() {
       const mimeType = Platform.OS === "android" ? "audio/mp4" : "audio/m4a";
       const url = await API.uploadChatMedia(id, uri, mimeType);
       setUploading(false);
-      if (!url) { Alert.alert("Erro", "Não foi possível enviar o áudio."); return; }
+      if (!url) { Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_audio_send")); return; }
       const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", effectiveCompanyId);
       if (saved) {
         seenMsgIds.current.add(saved.id);
@@ -431,11 +433,11 @@ export default function GroupChatScreen() {
         });
         setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
       } else {
-        Alert.alert("Erro ao enviar áudio", "Não foi possível salvar a mensagem de áudio.");
+        Alert.alert(t("group_chat_screen.error_audio_send_title"), t("group_chat_screen.error_audio_save"));
       }
     } catch {
       setUploading(false);
-      Alert.alert("Erro", "Não foi possível processar o áudio.");
+      Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_audio_process"));
     }
   };
 
@@ -507,14 +509,14 @@ export default function GroupChatScreen() {
     if (type === "camera") {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
-        permissionAlert("Permita o acesso à câmera nas configurações do dispositivo.");
+        permissionAlert(t("group_chat_screen.permission_camera_msg"), t);
         return;
       }
       result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images", "videos"], quality: 0.7 });
     } else {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        permissionAlert("Permita o acesso à galeria nas configurações do dispositivo.");
+        permissionAlert(t("group_chat_screen.permission_gallery_msg"), t);
         return;
       }
       result = await ImagePicker.launchImageLibraryAsync({
@@ -534,9 +536,8 @@ export default function GroupChatScreen() {
     const assetSize = (asset as any).fileSize as number | undefined;
     if (typeof assetSize === "number" && assetSize > MAX_CHAT_FILE_SIZE) {
       Alert.alert(
-        "Arquivo muito grande",
-        `O ${msgType === "video" ? "vídeo" : "arquivo"} tem ${formatFileSize(assetSize)}. ` +
-          `O limite é ${MAX_FILE_SIZE_LABEL}.`,
+        t("group_chat_screen.file_too_large_title"),
+        t("group_chat_screen.file_too_large_msg", { type: msgType === "video" ? t("group_chat_screen.video_label") : t("group_chat_screen.file_label"), size: formatFileSize(assetSize), limit: MAX_FILE_SIZE_LABEL }),
       );
       return;
     }
@@ -563,7 +564,7 @@ export default function GroupChatScreen() {
       if (!url) {
         setMessages(prev => prev.filter(m => m.id !== tempId));
         seenMsgIds.current.delete(tempId);
-        Alert.alert("Erro", "Não foi possível enviar a mídia.");
+        Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_media_send"));
         return;
       }
       const saved = await API.sendMediaMessage(id, user.id, url, msgType, "", effectiveCompanyId);
@@ -583,7 +584,7 @@ export default function GroupChatScreen() {
       setUploading(false);
       setMessages(prev => prev.filter(m => m.id !== tempId));
       seenMsgIds.current.delete(tempId);
-      Alert.alert("Erro", "Não foi possível enviar a mídia.");
+      Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_media_send"));
     }
   };
 
@@ -601,9 +602,8 @@ export default function GroupChatScreen() {
 
       if (typeof asset.size === "number" && asset.size > MAX_CHAT_FILE_SIZE) {
         Alert.alert(
-          "Arquivo muito grande",
-          `${asset.name ?? "O arquivo"} tem ${formatFileSize(asset.size)}. ` +
-            `O limite é ${MAX_FILE_SIZE_LABEL}.`,
+          t("group_chat_screen.file_too_large_title"),
+          t("group_chat_screen.file_too_large_named", { name: asset.name ?? t("group_chat_screen.file_label"), size: formatFileSize(asset.size), limit: MAX_FILE_SIZE_LABEL }),
         );
         return;
       }
@@ -614,8 +614,8 @@ export default function GroupChatScreen() {
       const resolvedMime = resolveChatMime(asset.mimeType, asset.name);
       if (!resolvedMime) {
         Alert.alert(
-          "Tipo de arquivo não suportado",
-          "Envie PDF, Word, Excel, CSV, texto, imagem, vídeo ou áudio.",
+          t("group_chat_screen.unsupported_file_title"),
+          t("group_chat_screen.unsupported_file_msg"),
         );
         return;
       }
@@ -644,7 +644,7 @@ export default function GroupChatScreen() {
           setMessages(prev => prev.filter(m => m.id !== tempId));
           seenMsgIds.current.delete(tempId);
         }
-        Alert.alert("Erro", "Não foi possível enviar o arquivo.");
+        Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_file_send"));
         return;
       }
       const saved = await API.sendMediaMessage(id, user.id, url, "file", asset.name ?? "arquivo", effectiveCompanyId);
@@ -662,10 +662,7 @@ export default function GroupChatScreen() {
           setMessages(prev => prev.filter(m => m.id !== tempId));
           seenMsgIds.current.delete(tempId);
         }
-        Alert.alert(
-          "Erro",
-          "O arquivo foi enviado mas a mensagem não pôde ser registrada. Tente novamente.",
-        );
+        Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_file_registered"));
       }
     } catch (e: any) {
       setUploading(false);
@@ -673,7 +670,7 @@ export default function GroupChatScreen() {
         setMessages(prev => prev.filter(m => m.id !== tempId));
         seenMsgIds.current.delete(tempId);
       }
-      if (!e?.message?.includes("cancel")) Alert.alert("Erro", "Não foi possível abrir o arquivo.");
+      if (!e?.message?.includes("cancel")) Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_file_open"));
     }
   };
 
@@ -682,18 +679,18 @@ export default function GroupChatScreen() {
   const handleLeaveGroup = () => {
     setMenuVisible(false);
     Alert.alert(
-      "Sair do grupo",
-      `Tem certeza que deseja sair de "${groupInfo.name}"?`,
+      t("group_chat_screen.leave_title"),
+      t("group_chat_screen.leave_confirm", { name: groupInfo.name }),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: t("group_chat_screen.cancel"), style: "cancel" },
         {
-          text: "Sair", style: "destructive", onPress: async () => {
+          text: t("group_chat_screen.leave_btn"), style: "destructive", onPress: async () => {
             if (!user?.id) return;
             const ok = await API.leaveGroup(id, user.id, activeCompany?.id ?? null);
             if (ok) {
               router.replace("/groups" as any);
             } else {
-              Alert.alert("Erro", "Não foi possível sair do grupo.");
+              Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_leave"));
             }
           },
         },
@@ -707,18 +704,18 @@ export default function GroupChatScreen() {
     setMenuVisible(false);
     if (isGroupOwner) {
       Alert.alert(
-        "Apagar todas as mensagens",
-        "Apagar permanentemente todas as mensagens do grupo para todos os membros? Esta ação não pode ser desfeita.",
+        t("group_chat_screen.delete_all_title"),
+        t("group_chat_screen.delete_all_confirm"),
         [
-          { text: "Cancelar", style: "cancel" },
+          { text: t("group_chat_screen.cancel"), style: "cancel" },
           {
-            text: "Apagar tudo", style: "destructive", onPress: async () => {
+            text: t("group_chat_screen.delete_all_btn"), style: "destructive", onPress: async () => {
               const ok = await API.deleteGroupMessages(id);
               if (ok) {
                 setMessages([]);
                 seenMsgIds.current.clear();
               } else {
-                Alert.alert("Erro", "Não foi possível apagar as mensagens.");
+                Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_delete_msgs"));
               }
             },
           },
@@ -726,19 +723,19 @@ export default function GroupChatScreen() {
       );
     } else {
       Alert.alert(
-        "Limpar meu histórico",
-        "Ocultar o histórico desta conversa para você em todos os seus dispositivos? As mensagens continuarão visíveis para os outros membros.",
+        t("group_chat_screen.clear_history_title"),
+        t("group_chat_screen.clear_history_confirm"),
         [
-          { text: "Cancelar", style: "cancel" },
+          { text: t("group_chat_screen.cancel"), style: "cancel" },
           {
-            text: "Limpar", style: "destructive", onPress: async () => {
+            text: t("group_chat_screen.clear_history_btn"), style: "destructive", onPress: async () => {
               if (!user?.id) return;
               const clearedAt = await API.clearGroupHistoryForUser(id, user.id);
               if (clearedAt !== null) {
                 setMessages([]);
                 seenMsgIds.current.clear();
               } else {
-                Alert.alert("Erro", "Não foi possível limpar o histórico.");
+                Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_clear_history"));
               }
             },
           },
@@ -767,7 +764,7 @@ export default function GroupChatScreen() {
     if (!item.media_url) {
       return (
         <Text style={[styles.bubbleText, { color: isMe ? "#fff" : colors.foreground, fontStyle: "italic", opacity: 0.7 }]}>
-          🎤 Áudio indisponível
+          🎤 {t("group_chat_screen.audio_unavailable")}
         </Text>
       );
     }
@@ -783,14 +780,14 @@ export default function GroupChatScreen() {
   const renderFileBubble = (item: AppMessage, isMe: boolean) => (
     <TouchableOpacity
       style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 4 }}
-      onPress={() => item.media_url && Linking.openURL(item.media_url).catch(() => Alert.alert("Erro", "Não foi possível abrir o arquivo."))}
+      onPress={() => item.media_url && Linking.openURL(item.media_url).catch(() => Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_file_open")))}
     >
       <View style={[styles.fileIcon, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : colors.background }]}>
         <Feather name="file-text" size={18} color={isMe ? "#fff" : colors.navy} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={[styles.bubbleText, { color: isMe ? "#fff" : colors.navy, fontWeight: "600" }]} numberOfLines={1}>
-          {item.content || "Arquivo"}
+          {item.content || t("group_chat_screen.file_label")}
         </Text>
         <Text style={[styles.bubbleTime, { color: isMe ? "#ffffff88" : colors.mutedForeground }]}>
           {new Date(item.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
@@ -806,7 +803,7 @@ export default function GroupChatScreen() {
     const sender       = profiles.get(item.sender_id);
     const fromCompanyId = (item as any).from_company_page_id ?? null;
     const companyProfile = fromCompanyId ? companyProfiles.get(fromCompanyId) : null;
-    const displayName  = isMe ? myName : (companyProfile?.name ?? sender?.full_name ?? "Membro");
+    const displayName  = isMe ? myName : (companyProfile?.name ?? sender?.full_name ?? t("group_chat_screen.member_fallback"));
     const displayAvatar = companyProfile?.avatar_url ?? sender?.avatar_url ?? undefined;
     const isCompanyMsg = !!fromCompanyId;
     const msgReactions = reactionsMap[item.id] ?? {};
@@ -836,7 +833,7 @@ export default function GroupChatScreen() {
                   <Text style={[styles.senderName, { color: colors.gold }]}>{displayName}</Text>
                   {isCompanyMsg && (
                     <View style={{ backgroundColor: colors.gold + "22", borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
-                      <Text style={{ fontSize: 9, color: colors.gold, fontWeight: "700" }}>EMPRESA</Text>
+                      <Text style={{ fontSize: 9, color: colors.gold, fontWeight: "700" }}>{t("group_chat_screen.company_badge")}</Text>
                     </View>
                   )}
                 </View>
@@ -844,7 +841,7 @@ export default function GroupChatScreen() {
             )}
             {isMe && isCompanyMsg && (
               <Text style={{ fontSize: 9, color: "#fff8", textAlign: "right", marginBottom: 2 }}>
-                enviado como empresa
+                {t("group_chat_screen.sent_as_company")}
               </Text>
             )}
             <Pressable
@@ -862,7 +859,7 @@ export default function GroupChatScreen() {
               {item.reply_to && (
                 <View style={[styles.quotedMsg, { borderLeftColor: colors.gold }]}>
                   <Text style={[styles.quotedSender, { color: colors.gold }]} numberOfLines={1}>
-                    {item.reply_to.sender_id === user?.id ? "Você" : (profiles.get(item.reply_to.sender_id)?.full_name ?? "Membro")}
+                    {item.reply_to.sender_id === user?.id ? t("group_chat_screen.you") : (profiles.get(item.reply_to.sender_id)?.full_name ?? t("group_chat_screen.member_fallback"))}
                   </Text>
                   <Text style={[styles.quotedText, { color: isMe ? "#ffffff88" : colors.mutedForeground }]} numberOfLines={1}>
                     {item.reply_to.content}
@@ -926,13 +923,13 @@ export default function GroupChatScreen() {
             <View style={styles.membersRow}>
               {isTyping ? (
                 <Text style={[styles.membersText, { color: colors.gold, fontStyle: "italic" }]}>
-                  {typingName} está digitando...
+                  {t("group_chat_screen.typing_indicator", { name: typingName })}
                 </Text>
               ) : (
                 <>
                   <Feather name="users" size={12} color={colors.mutedForeground} />
                   <Text style={[styles.membersText, { color: colors.mutedForeground }]}>
-                    {groupInfo.member_count} {groupInfo.member_count === 1 ? "membro" : "membros"}
+                    {t("group_chat_screen.member_count", { count: groupInfo.member_count })}
                   </Text>
                 </>
               )}
@@ -961,7 +958,7 @@ export default function GroupChatScreen() {
           ListEmptyComponent={
             <View style={{ alignItems: "center", paddingTop: 60 }}>
               <Text style={{ color: colors.mutedForeground, fontSize: 14 }}>
-                Nenhuma mensagem ainda. Diga olá! 👋
+                {t("group_chat_screen.empty_state")}
               </Text>
             </View>
           }
@@ -972,7 +969,7 @@ export default function GroupChatScreen() {
       {uploading && (
         <View style={[styles.uploadingBar, { backgroundColor: colors.gold + "18" }]}>
           <ActivityIndicator size="small" color={colors.gold} />
-          <Text style={{ fontSize: 13, color: colors.gold, marginLeft: 8 }}>Enviando…</Text>
+          <Text style={{ fontSize: 13, color: colors.gold, marginLeft: 8 }}>{t("group_chat_screen.uploading")}</Text>
         </View>
       )}
 
@@ -982,7 +979,7 @@ export default function GroupChatScreen() {
           <View style={[styles.replyBarAccent, { backgroundColor: colors.gold }]} />
           <View style={{ flex: 1, marginLeft: 8 }}>
             <Text style={{ fontSize: 11, fontWeight: "700", color: colors.gold }}>
-              {replyTo.sender_id === user?.id ? "Você" : (profiles.get(replyTo.sender_id)?.full_name ?? "Membro")}
+              {replyTo.sender_id === user?.id ? t("group_chat_screen.you") : (profiles.get(replyTo.sender_id)?.full_name ?? t("group_chat_screen.member_fallback"))}
             </Text>
             <Text style={{ fontSize: 12, color: colors.mutedForeground }} numberOfLines={1}>{replyTo.content}</Text>
           </View>
@@ -999,19 +996,19 @@ export default function GroupChatScreen() {
             <View style={[styles.attachIcon, { backgroundColor: colors.navy + "12" }]}>
               <Feather name="camera" size={20} color={colors.navy} />
             </View>
-            <Text style={[styles.attachLabel, { color: colors.foreground }]}>Câmera</Text>
+            <Text style={[styles.attachLabel, { color: colors.foreground }]}>{t("group_chat_screen.attach_camera")}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.attachOption} onPress={() => pickAndSendMedia("gallery")}>
             <View style={[styles.attachIcon, { backgroundColor: colors.navy + "12" }]}>
               <Feather name="image" size={20} color={colors.navy} />
             </View>
-            <Text style={[styles.attachLabel, { color: colors.foreground }]}>Galeria</Text>
+            <Text style={[styles.attachLabel, { color: colors.foreground }]}>{t("group_chat_screen.attach_gallery")}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.attachOption} onPress={pickAndSendFile}>
             <View style={[styles.attachIcon, { backgroundColor: colors.navy + "12" }]}>
               <Feather name="file" size={20} color={colors.navy} />
             </View>
-            <Text style={[styles.attachLabel, { color: colors.foreground }]}>Arquivo</Text>
+            <Text style={[styles.attachLabel, { color: colors.foreground }]}>{t("group_chat_screen.attach_file")}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1034,7 +1031,7 @@ export default function GroupChatScreen() {
               color: slideToCancel ? "#dc2626" : colors.mutedForeground,
               fontWeight: slideToCancel ? "700" : "400",
             }}>
-              {slideToCancel ? "Solte para cancelar" : "↑ Deslize para cancelar  •  solte para enviar"}
+              {slideToCancel ? t("group_chat_screen.release_to_cancel") : t("group_chat_screen.slide_to_cancel")}
             </Text>
           </View>
           <TouchableOpacity onPress={stopRecording} style={[styles.recordStopBtn, { backgroundColor: colors.navy }]}>
@@ -1056,7 +1053,7 @@ export default function GroupChatScreen() {
             style={[styles.input, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border }]}
             value={input}
             onChangeText={handleInputChange}
-            placeholder="Mensagem…"
+            placeholder={t("group_chat_screen.input_placeholder")}
             placeholderTextColor={colors.mutedForeground}
             multiline
             onSubmitEditing={handleSend}
@@ -1102,19 +1099,19 @@ export default function GroupChatScreen() {
               }}
             >
               <Feather name="settings" size={18} color={colors.navy} />
-              <Text style={[styles.menuItemText, { color: colors.navy }]}>Configurações</Text>
+              <Text style={[styles.menuItemText, { color: colors.navy }]}>{t("group_chat_screen.menu_settings")}</Text>
             </TouchableOpacity>
             <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity style={styles.menuItem} onPress={handleDeleteMessages}>
               <Feather name="trash-2" size={18} color="#dc2626" />
               <Text style={[styles.menuItemText, { color: "#dc2626" }]}>
-                {isGroupOwner ? "Apagar todas as mensagens" : "Limpar meu histórico"}
+                {isGroupOwner ? t("group_chat_screen.delete_all_btn") : t("group_chat_screen.clear_history_btn")}
               </Text>
             </TouchableOpacity>
             <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity style={styles.menuItem} onPress={handleLeaveGroup}>
               <Feather name="log-out" size={18} color="#dc2626" />
-              <Text style={[styles.menuItemText, { color: "#dc2626" }]}>Sair do grupo</Text>
+              <Text style={[styles.menuItemText, { color: "#dc2626" }]}>{t("group_chat_screen.leave_btn")}</Text>
             </TouchableOpacity>
           </View>
         </Pressable>

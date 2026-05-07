@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   FlatList,
@@ -38,6 +39,7 @@ export default function OpportunitiesScreen() {
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
   const { user } = useAuth();
+  const { t } = useTranslation();
 
   const topPad    = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -102,7 +104,7 @@ export default function OpportunitiesScreen() {
           {item.type === "vaga" && item.company ? (
             <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>{item.company}</Text>
           ) : item.creator?.full_name ? (
-            <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>por {item.creator.full_name}</Text>
+            <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>{t("opportunities_screen.by_prefix")} {item.creator.full_name}</Text>
           ) : null}
         </View>
         <Badge label={item.category ?? item.type} variant={typeColor[item.type] ?? "default"} />
@@ -155,8 +157,8 @@ export default function OpportunitiesScreen() {
             { color: item.is_applied ? colors.mutedForeground : colors.gold },
           ]}>
             {item.type === "vaga"
-              ? (item.is_applied ? "Candidatura enviada" : "Ver vaga →")
-              : "Ver anúncio →"}
+              ? (item.is_applied ? t("opportunities_screen.applied_label") : t("opportunities_screen.view_job"))
+              : t("opportunities_screen.view_ad")}
           </Text>
         </View>
       </View>
@@ -168,27 +170,27 @@ export default function OpportunitiesScreen() {
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Oportunidades</Text>
+        <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t("opportunities_screen.title")}</Text>
         <TouchableOpacity
           style={[styles.addBtn, { backgroundColor: colors.gold }]}
           onPress={() => router.push("/new-opportunity" as any)}
           activeOpacity={0.8}
         >
           <Feather name="plus" size={18} color="#fff" />
-          <Text style={styles.addText}>Publicar</Text>
+          <Text style={styles.addText}>{t("opportunities_screen.create_btn_publish")}</Text>
         </TouchableOpacity>
       </View>
 
       {/* Sub-tabs */}
       <View style={[styles.subTabs, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        {(["vagas", "marketplace"] as SubTab[]).map((t) => (
+        {(["vagas", "marketplace"] as SubTab[]).map((tab) => (
           <Pressable
-            key={t}
-            style={[styles.subTab, subTab === t && { borderBottomColor: colors.gold, borderBottomWidth: 2 }]}
-            onPress={() => setSubTab(t)}
+            key={tab}
+            style={[styles.subTab, subTab === tab && { borderBottomColor: colors.gold, borderBottomWidth: 2 }]}
+            onPress={() => setSubTab(tab)}
           >
-            <Text style={[styles.subTabText, { color: subTab === t ? colors.gold : colors.mutedForeground, fontWeight: subTab === t ? "700" : "400" }]}>
-              {t === "vagas" ? "Vagas" : "Marketplace"}
+            <Text style={[styles.subTabText, { color: subTab === tab ? colors.gold : colors.mutedForeground, fontWeight: subTab === tab ? "700" : "400" }]}>
+              {tab === "vagas" ? t("opportunities_screen.tab_jobs") : t("opportunities_screen.tab_market")}
             </Text>
           </Pressable>
         ))}
@@ -200,7 +202,7 @@ export default function OpportunitiesScreen() {
         <TextInput
           ref={searchRef}
           style={[styles.searchInput, { color: colors.foreground }]}
-          placeholder={subTab === "vagas" ? "Buscar vagas, empresa..." : "Buscar anúncios, categoria..."}
+          placeholder={subTab === "vagas" ? t("opportunities_screen.search_jobs_placeholder") : t("opportunities_screen.search_market_placeholder")}
           placeholderTextColor={colors.mutedForeground}
           value={search}
           onChangeText={setSearch}
@@ -262,17 +264,21 @@ export default function OpportunitiesScreen() {
             <View style={styles.empty}>
               <Feather name={subTab === "vagas" ? "briefcase" : "shopping-bag"} size={42} color={colors.mutedForeground} />
               <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-                {search ? "Nenhum resultado encontrado" : subTab === "vagas" ? "Nenhuma vaga publicada ainda" : "Nenhum anúncio publicado ainda"}
+                {search
+                  ? t("opportunities_screen.empty_vagas_search_title")
+                  : subTab === "vagas"
+                    ? t("opportunities_screen.empty_title_no_search_jobs")
+                    : t("opportunities_screen.empty_title_no_search_market")}
               </Text>
               <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-                {search ? "Tente outros termos de busca" : "Seja o primeiro a publicar!"}
+                {search ? t("opportunities_screen.empty_vagas_search_hint") : t("opportunities_screen.empty_sub_default")}
               </Text>
               {!search && (
                 <TouchableOpacity
                   style={[styles.emptyBtn, { backgroundColor: colors.gold }]}
                   onPress={() => router.push("/new-opportunity" as any)}
                 >
-                  <Text style={styles.emptyBtnText}>+ Publicar agora</Text>
+                  <Text style={styles.emptyBtnText}>{t("opportunities_screen.publish_now_btn")}</Text>
                 </TouchableOpacity>
               )}
             </View>

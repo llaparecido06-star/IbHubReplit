@@ -252,7 +252,7 @@ export default function SearchScreen() {
       <View style={styles.rowBody}>
         <View style={styles.rowNameRow}>
           <Text style={[styles.rowName, { color: colors.foreground }]} numberOfLines={1}>
-            {item.full_name ?? item.username ?? "Usuário"}
+            {item.full_name ?? item.username ?? t("common.user_fallback")}
           </Text>
           {PLAN_LABELS[item.plan] ? (
             <View style={[styles.planBadge, { backgroundColor: colors.gold + "18", borderColor: colors.gold + "60" }]}>
@@ -272,7 +272,7 @@ export default function SearchScreen() {
       onPress={() => router.push(`/post/${item.id}` as any)}>
       <View style={styles.postHeader}>
         <Avatar uri={item.author?.avatar_url ?? null} name={item.author?.full_name ?? "?"} size={30} />
-        <Text style={[styles.postAuthor, { color: colors.foreground }]} numberOfLines={1}>{item.author?.full_name ?? "Usuário"}</Text>
+        <Text style={[styles.postAuthor, { color: colors.foreground }]} numberOfLines={1}>{item.author?.full_name ?? t("common.user_fallback")}</Text>
         <Text style={[styles.postTime, { color: colors.mutedForeground }]}>· {timeAgo(item.created_at)}</Text>
       </View>
       <Text style={[styles.postContent, { color: colors.foreground }]} numberOfLines={3}>{item.content}</Text>
@@ -336,7 +336,7 @@ export default function SearchScreen() {
           ) : null}
           <View style={styles.tagRow}>
             <Feather name="tag" size={11} color={colors.mutedForeground} />
-            <Text style={[styles.rowUser, { color: colors.mutedForeground }]}>{item.entry_type === "gratuito" ? "Gratuito" : "Pago"}</Text>
+            <Text style={[styles.rowUser, { color: colors.mutedForeground }]}>{item.entry_type === "gratuito" ? t("common.free") : t("common.paid")}</Text>
           </View>
         </View>
       </View>
@@ -353,11 +353,11 @@ export default function SearchScreen() {
         <Text style={[styles.rowName, { color: colors.foreground }]} numberOfLines={1}>{item.name}</Text>
         {item.description ? <Text style={[styles.rowSub, { color: colors.mutedForeground }]} numberOfLines={1}>{item.description}</Text> : null}
         <Text style={[styles.rowUser, { color: colors.mutedForeground }]}>
-          {item.members_count ?? 0} membros{item.category ? ` · ${item.category}` : ""}
+          {item.members_count ?? 0} {t("common.members")}{item.category ? ` · ${item.category}` : ""}
         </Text>
       </View>
       <TouchableOpacity style={[styles.joinBtn, { borderColor: colors.navy }]}>
-        <Text style={[styles.joinBtnText, { color: colors.navy }]}>Entrar</Text>
+        <Text style={[styles.joinBtnText, { color: colors.navy }]}>{t("common.join")}</Text>
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -374,7 +374,7 @@ export default function SearchScreen() {
         <Text style={[styles.countText, { color: colors.gold }]}>{count}</Text>
       </View>
       <TouchableOpacity style={styles.seeAllBtn} onPress={() => setFilter(filterKey)}>
-        <Text style={[styles.seeAllText, { color: colors.gold }]}>Ver todos</Text>
+        <Text style={[styles.seeAllText, { color: colors.gold }]}>{t("common.see_all_label")}</Text>
         <Feather name="chevron-right" size={13} color={colors.gold} />
       </TouchableOpacity>
     </View>

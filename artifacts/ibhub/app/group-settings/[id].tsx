@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
+import { useTranslation } from "react-i18next";
 import { Feather } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useColors } from "@/hooks/useColors";
@@ -39,20 +40,21 @@ interface GroupData {
   members: Member[];
 }
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: "membros",   label: "Membros" },
-  { key: "pendentes", label: "Pendentes" },
-  { key: "convidar",  label: "Convidar" },
-  { key: "link",      label: "Link" },
-];
-
 export default function GroupSettingsScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { profile, user } = useAuth();
   const userId = profile?.id ?? user?.id ?? "";
+
+  const TABS: { key: Tab; label: string }[] = [
+    { key: "membros",   label: t("group_settings_screen.tab_members") },
+    { key: "pendentes", label: t("group_settings_screen.tab_pending") },
+    { key: "convidar",  label: t("group_settings_screen.tab_invite") },
+    { key: "link",      label: t("group_settings_screen.tab_link") },
+  ];
 
   const [activeTab, setActiveTab]       = useState<Tab>("membros");
   const [group, setGroup]               = useState<GroupData>({ name: "Grupo", avatar_url: null, owner_id: "", members: [] });
@@ -63,7 +65,6 @@ export default function GroupSettingsScreen() {
   const [isMuted, setIsMuted]           = useState(false);
   const [mutingGroup, setMutingGroup]   = useState(false);
 
-  // Invite search state
   const [inviteQuery,   setInviteQuery]  = useState("");
   const [inviteResults, setInviteResults] = useState<{ id: string; full_name: string; avatar_url: string | null; headline: string | null }[]>([]);
   const [inviteLoading, setInviteLoading] = useState(false);
@@ -92,7 +93,6 @@ export default function GroupSettingsScreen() {
 
     if (!groupData) { setLoading(false); return; }
 
-    // Fetch profiles for active members + pending members
     const allIds = [...new Set([...rawMembers.map((m: any) => m.user_id), ...rawPending.map((m: any) => m.user_id)].filter(Boolean))];
     const { data: profiles } = allIds.length > 0
       ? await supabase.from("profiles").select("id, full_name, avatar_url").in("id", allIds)
@@ -105,13 +105,12 @@ export default function GroupSettingsScreen() {
       const isGroupOwner = m.user_id === groupData.owner_id;
       return {
         id: m.user_id,
-        name: p?.full_name ?? "Membro",
+        name: p?.full_name ?? t("group_settings_screen.member_label"),
         avatar_url: p?.avatar_url ?? null,
         role: isGroupOwner ? "dono" : m.role === "admin" ? "admin" : "membro",
       };
     });
 
-    // Sort: owner first, then admins, then members
     members.sort((a, b) => {
       const rank = { dono: 0, admin: 1, membro: 2 };
       return rank[a.role] - rank[b.role];
@@ -119,7 +118,7 @@ export default function GroupSettingsScreen() {
 
     const pending = rawPending.map((m: any) => {
       const p = profileMap.get(m.user_id);
-      return { id: m.user_id, name: p?.full_name ?? "Usuário", avatar_url: p?.avatar_url ?? null };
+      return { id: m.user_id, name: p?.full_name ?? t("group_settings_screen.user_label"), avatar_url: p?.avatar_url ?? null };
     });
 
     setGroup({ name: groupData.name, avatar_url: groupData.avatar_url, owner_id: groupData.owner_id, members });
@@ -133,7 +132,7 @@ export default function GroupSettingsScreen() {
     if (!isOwner) return;
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permissão necessária", "Permita acesso à galeria de fotos.");
+      Alert.alert(t("group_settings_screen.permission_title"), t("group_settings_screen.permission_gallery"));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -149,7 +148,7 @@ export default function GroupSettingsScreen() {
       await supabase.from("groups").update({ avatar_url: url }).eq("id", id);
       setGroup(prev => ({ ...prev, avatar_url: url }));
     } else {
-      Alert.alert("Erro", "Não foi possível atualizar a foto do grupo.");
+      Alert.alert(t("group_settings_screen.error_title"), t("group_settings_screen.error_update_avatar"));
     }
     setUpdating(false);
   };
@@ -157,19 +156,19 @@ export default function GroupSettingsScreen() {
   const handleRemoveMember = (member: Member) => {
     if (!isOwner || member.role === "dono") return;
     Alert.alert(
-      "Remover membro",
-      `Remover ${member.name} do grupo?`,
+      t("group_settings_screen.remove_member_title"),
+      t("group_settings_screen.remove_member_msg", { name: member.name }),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: t("group_settings_screen.cancel"), style: "cancel" },
         {
-          text: "Remover", style: "destructive", onPress: async () => {
+          text: t("group_settings_screen.remove_btn"), style: "destructive", onPress: async () => {
             const { error } = await supabase
               .from("group_members")
               .delete()
               .eq("group_id", id)
               .eq("user_id", member.id);
             if (!error) load();
-            else Alert.alert("Erro", "Não foi possível remover o membro.");
+            else Alert.alert(t("group_settings_screen.error_title"), t("group_settings_screen.error_remove_member"));
           },
         },
       ],
@@ -178,17 +177,17 @@ export default function GroupSettingsScreen() {
 
   const handleDelete = () => {
     Alert.alert(
-      "Excluir grupo",
-      "Ao excluir o grupo, todos os membros serão removidos e as mensagens serão apagadas permanentemente.",
+      t("group_settings_screen.delete_group_title"),
+      t("group_settings_screen.delete_group_msg"),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: t("group_settings_screen.cancel"), style: "cancel" },
         {
-          text: "Excluir", style: "destructive", onPress: async () => {
+          text: t("group_settings_screen.delete_btn"), style: "destructive", onPress: async () => {
             const { error } = await supabase.from("groups").delete().eq("id", id);
             if (!error) {
               router.replace("/groups" as any);
             } else {
-              Alert.alert("Erro", "Não foi possível excluir o grupo.");
+              Alert.alert(t("group_settings_screen.error_title"), t("group_settings_screen.error_delete_group"));
             }
           },
         },
@@ -198,17 +197,17 @@ export default function GroupSettingsScreen() {
 
   const handleApprove = (member: { id: string; name: string }) => {
     Alert.alert(
-      "Aprovar solicitação",
-      `Aprovar entrada de ${member.name} no grupo?`,
+      t("group_settings_screen.approve_title"),
+      t("group_settings_screen.approve_msg", { name: member.name }),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: t("group_settings_screen.cancel"), style: "cancel" },
         {
-          text: "Aprovar", onPress: async () => {
+          text: t("group_settings_screen.approve_btn"), onPress: async () => {
             setApprovingId(member.id);
             const ok = await approveGroupMember(id, member.id);
             setApprovingId(null);
             if (ok) load();
-            else Alert.alert("Erro", "Não foi possível aprovar o membro.");
+            else Alert.alert(t("group_settings_screen.error_title"), t("group_settings_screen.error_approve"));
           },
         },
       ]
@@ -217,17 +216,17 @@ export default function GroupSettingsScreen() {
 
   const handleReject = (member: { id: string; name: string }) => {
     Alert.alert(
-      "Recusar solicitação",
-      `Recusar a entrada de ${member.name}?`,
+      t("group_settings_screen.reject_title"),
+      t("group_settings_screen.reject_msg", { name: member.name }),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: t("group_settings_screen.cancel"), style: "cancel" },
         {
-          text: "Recusar", style: "destructive", onPress: async () => {
+          text: t("group_settings_screen.reject_btn"), style: "destructive", onPress: async () => {
             setApprovingId(member.id);
             const ok = await rejectGroupMember(id, member.id);
             setApprovingId(null);
             if (ok) load();
-            else Alert.alert("Erro", "Não foi possível recusar a solicitação.");
+            else Alert.alert(t("group_settings_screen.error_title"), t("group_settings_screen.error_reject"));
           },
         },
       ]
@@ -236,15 +235,15 @@ export default function GroupSettingsScreen() {
 
   const handleLeave = () => {
     Alert.alert(
-      "Sair do grupo",
-      `Tem certeza que deseja sair de "${group.name}"?`,
+      t("group_settings_screen.leave_title"),
+      t("group_settings_screen.leave_msg", { name: group.name }),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: t("group_settings_screen.cancel"), style: "cancel" },
         {
-          text: "Sair", style: "destructive", onPress: async () => {
+          text: t("group_settings_screen.leave_btn"), style: "destructive", onPress: async () => {
             const ok = await leaveGroup(id, userId);
             if (ok) router.replace("/groups" as any);
-            else Alert.alert("Erro", "Não foi possível sair do grupo.");
+            else Alert.alert(t("group_settings_screen.error_title"), t("group_settings_screen.error_leave"));
           },
         },
       ]
@@ -263,7 +262,7 @@ export default function GroupSettingsScreen() {
         setIsMuted(true);
       }
     } catch {
-      Alert.alert("Erro", "Não foi possível alterar as notificações.");
+      Alert.alert(t("group_settings_screen.error_title"), t("group_settings_screen.error_mute"));
     } finally {
       setMutingGroup(false);
     }
@@ -287,7 +286,7 @@ export default function GroupSettingsScreen() {
         );
         setInviteResults(filtered.map((p: any) => ({
           id: p.id,
-          full_name: p.full_name ?? "Usuário",
+          full_name: p.full_name ?? t("group_settings_screen.user_label"),
           avatar_url: p.avatar_url ?? null,
           headline: p.headline ?? null,
         })));
@@ -304,11 +303,10 @@ export default function GroupSettingsScreen() {
         .from("group_members")
         .upsert({ group_id: id, user_id: person.id, role: "pending" }, { onConflict: "group_id,user_id" });
       if (error) throw error;
-      Alert.alert("Convite enviado", `${person.full_name} foi convidado(a) para o grupo.`);
-      // Remove from results so double-invite can't happen
+      Alert.alert(t("group_settings_screen.invite_sent_title"), t("group_settings_screen.invite_sent_msg", { name: person.full_name }));
       setInviteResults(prev => prev.filter(r => r.id !== person.id));
     } catch {
-      Alert.alert("Erro", "Não foi possível enviar o convite.");
+      Alert.alert(t("group_settings_screen.error_title"), t("group_settings_screen.error_invite"));
     } finally {
       setInvitingId(null);
     }
@@ -319,7 +317,6 @@ export default function GroupSettingsScreen() {
       case "membros":
         return (
           <View style={{ gap: 10, padding: 16 }}>
-            {/* Group avatar (owner can edit) */}
             <View style={{ alignItems: "center", paddingVertical: 12 }}>
               <TouchableOpacity onPress={handleChangeAvatar} disabled={!isOwner || updating} activeOpacity={isOwner ? 0.8 : 1}>
                 {group.avatar_url ? (
@@ -335,11 +332,10 @@ export default function GroupSettingsScreen() {
               </TouchableOpacity>
               <Text style={[styles.groupNameText, { color: colors.navy }]}>{group.name}</Text>
               <Text style={[styles.memberCountText, { color: colors.mutedForeground }]}>
-                {group.members.length} {group.members.length === 1 ? "membro" : "membros"}
+                {group.members.length} {group.members.length === 1 ? t("group_settings_screen.member_one") : t("group_settings_screen.member_many")}
               </Text>
             </View>
 
-            {/* Member list */}
             {loading ? (
               <ActivityIndicator color={colors.gold} style={{ paddingTop: 20 }} />
             ) : (
@@ -357,11 +353,11 @@ export default function GroupSettingsScreen() {
                     {member.role === "dono" && (
                       <View style={styles.roleRow}>
                         <Feather name="star" size={12} color={colors.gold} />
-                        <Text style={[styles.roleText, { color: colors.gold }]}>Dono</Text>
+                        <Text style={[styles.roleText, { color: colors.gold }]}>{t("group_settings_screen.role_owner")}</Text>
                       </View>
                     )}
                     {member.role === "admin" && (
-                      <Text style={[styles.roleText, { color: colors.mutedForeground }]}>Admin</Text>
+                      <Text style={[styles.roleText, { color: colors.mutedForeground }]}>{t("group_settings_screen.role_admin")}</Text>
                     )}
                   </View>
                   <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
@@ -369,9 +365,7 @@ export default function GroupSettingsScreen() {
               ))
             )}
 
-            {/* Actions */}
             <View style={{ marginTop: 8, gap: 10 }}>
-              {/* Mute toggle — available to all members */}
               <TouchableOpacity
                 style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: isMuted ? "#f1f5f9" : "#fff" }]}
                 onPress={handleToggleMute}
@@ -385,10 +379,10 @@ export default function GroupSettingsScreen() {
                 )}
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.actionBtnText, { color: isMuted ? colors.mutedForeground : colors.navy }]}>
-                    {isMuted ? "Notificações silenciadas" : "Notificações ativas"}
+                    {isMuted ? t("group_settings_screen.notifications_muted") : t("group_settings_screen.notifications_active")}
                   </Text>
                   <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>
-                    {isMuted ? "Toque para reativar" : "Toque para silenciar este grupo"}
+                    {isMuted ? t("group_settings_screen.tap_to_unmute") : t("group_settings_screen.tap_to_mute")}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -399,7 +393,7 @@ export default function GroupSettingsScreen() {
                   onPress={handleLeave}
                 >
                   <Feather name="log-out" size={16} color="#dc2626" />
-                  <Text style={[styles.actionBtnText, { color: "#dc2626" }]}>Sair do grupo</Text>
+                  <Text style={[styles.actionBtnText, { color: "#dc2626" }]}>{t("group_settings_screen.leave_group")}</Text>
                 </TouchableOpacity>
               )}
 
@@ -407,14 +401,14 @@ export default function GroupSettingsScreen() {
                 <View style={[styles.dangerCard, { borderColor: "#fca5a5", backgroundColor: "#fef2f2" }]}>
                   <View style={styles.dangerHeader}>
                     <Feather name="alert-triangle" size={16} color="#dc2626" />
-                    <Text style={[styles.dangerTitle, { color: "#dc2626" }]}>Zona de Perigo</Text>
+                    <Text style={[styles.dangerTitle, { color: "#dc2626" }]}>{t("group_settings_screen.danger_zone")}</Text>
                   </View>
                   <Text style={[styles.dangerDesc, { color: "#7f1d1d" }]}>
-                    Ao excluir o grupo, todos os membros serão removidos e as mensagens serão apagadas permanentemente.
+                    {t("group_settings_screen.danger_desc")}
                   </Text>
                   <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
                     <Feather name="trash-2" size={16} color="#fff" />
-                    <Text style={styles.deleteBtnText}>Excluir Grupo</Text>
+                    <Text style={styles.deleteBtnText}>{t("group_settings_screen.delete_group_btn")}</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -429,7 +423,7 @@ export default function GroupSettingsScreen() {
             <View style={styles.emptyTab}>
               <Feather name="clock" size={36} color={colors.border} />
               <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>
-                Nenhuma solicitação pendente
+                {t("group_settings_screen.no_pending")}
               </Text>
             </View>
           );
@@ -437,7 +431,8 @@ export default function GroupSettingsScreen() {
         return (
           <View style={{ gap: 10, padding: 16 }}>
             <Text style={[{ fontSize: 13, color: colors.mutedForeground, marginBottom: 4 }]}>
-              {pendingMembers.length} {pendingMembers.length === 1 ? "solicitação pendente" : "solicitações pendentes"}
+              {pendingMembers.length}{" "}
+              {pendingMembers.length === 1 ? t("group_settings_screen.pending_one") : t("group_settings_screen.pending_many")}
             </Text>
             {pendingMembers.map((member) => (
               <View key={member.id} style={[styles.memberRow, { backgroundColor: "#fff", borderColor: colors.border }]}>
@@ -451,7 +446,7 @@ export default function GroupSettingsScreen() {
                     <Text style={[styles.memberName, { color: colors.navy }]}>{member.name}</Text>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
                       <Feather name="clock" size={11} color="#d97706" />
-                      <Text style={{ fontSize: 11, color: "#d97706" }}>Aguardando aprovação</Text>
+                      <Text style={{ fontSize: 11, color: "#d97706" }}>{t("group_settings_screen.awaiting_approval")}</Text>
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -485,7 +480,7 @@ export default function GroupSettingsScreen() {
               <Feather name="search" size={16} color={colors.mutedForeground} />
               <TextInput
                 style={[styles.searchInput, { color: colors.navy }]}
-                placeholder="Buscar pelo nome..."
+                placeholder={t("group_settings_screen.search_placeholder")}
                 placeholderTextColor={colors.mutedForeground}
                 value={inviteQuery}
                 onChangeText={handleInviteSearch}
@@ -499,14 +494,14 @@ export default function GroupSettingsScreen() {
               <View style={styles.emptyTab}>
                 <Feather name="user-plus" size={36} color={colors.border} />
                 <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>
-                  Pesquise usuários para convidar
+                  {t("group_settings_screen.search_hint")}
                 </Text>
               </View>
             ) : inviteResults.length === 0 && !inviteLoading ? (
               <View style={styles.emptyTab}>
                 <Feather name="users" size={36} color={colors.border} />
                 <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>
-                  Nenhum usuário encontrado
+                  {t("group_settings_screen.no_results")}
                 </Text>
               </View>
             ) : (
@@ -527,7 +522,7 @@ export default function GroupSettingsScreen() {
                     >
                       {invitingId === person.id
                         ? <ActivityIndicator size="small" color="#fff" />
-                        : <Text style={styles.inviteBtnText}>Convidar</Text>}
+                        : <Text style={styles.inviteBtnText}>{t("group_settings_screen.invite_btn")}</Text>}
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -541,27 +536,25 @@ export default function GroupSettingsScreen() {
         const handleShare = async () => {
           try {
             await Share.share({
-              message: `Participe do grupo "${group.name}" no ibhub!\n${inviteLink}`,
+              message: t("group_settings_screen.share_group_msg", { name: group.name, link: inviteLink }),
               url: inviteLink,
             });
           } catch {
-            Alert.alert("Erro", "Não foi possível compartilhar o link.");
+            Alert.alert(t("group_settings_screen.error_title"), t("group_settings_screen.error_share"));
           }
         };
         return (
           <View style={[styles.linkTab, { padding: 16 }]}>
             <Text style={[{ fontSize: 13, color: colors.mutedForeground, marginBottom: 8 }]}>
-              Compartilhe este link para convidar pessoas ao grupo
+              {t("group_settings_screen.share_link_hint")}
             </Text>
             <View style={[styles.linkBox, { backgroundColor: "#fff", borderColor: colors.border }]}>
               <Feather name="link-2" size={18} color={colors.gold} />
-              <Text style={[styles.linkText, { color: colors.navy }]} numberOfLines={1} selectable>
-                {inviteLink}
-              </Text>
+              <Text style={[styles.linkText, { color: colors.navy }]} numberOfLines={1}>{inviteLink}</Text>
             </View>
             <TouchableOpacity style={[styles.copyBtn, { backgroundColor: colors.gold }]} onPress={handleShare}>
               <Feather name="share-2" size={16} color="#fff" />
-              <Text style={styles.copyBtnText}>Compartilhar link</Text>
+              <Text style={styles.copyBtnText}>{t("group_settings_screen.share_link_btn")}</Text>
             </TouchableOpacity>
           </View>
         );
@@ -576,7 +569,7 @@ export default function GroupSettingsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
           <View>
-            <Text style={[styles.headerTitle, { color: colors.navy }]}>Configurações</Text>
+            <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("group_settings_screen.header_title")}</Text>
             <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>{group.name}</Text>
           </View>
         </TouchableOpacity>
@@ -587,7 +580,7 @@ export default function GroupSettingsScreen() {
         {TABS.map((tab) => {
           const isActive = activeTab === tab.key;
           const label = tab.key === "membros"
-            ? `Membros (${group.members.length})`
+            ? `${t("group_settings_screen.tab_members")} (${group.members.length})`
             : tab.label;
           return (
             <TouchableOpacity

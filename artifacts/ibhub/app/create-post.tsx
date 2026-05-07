@@ -4,6 +4,7 @@ import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
@@ -32,20 +33,19 @@ const HASHTAG_SUGGESTIONS = [
 
 type PostMode = "normal" | "degustacao";
 
-const SCORE_LABELS: Record<string, string> = {
-  "": "",
-  "50": "50 — Inaceitável",
-  "60": "60 — Abaixo da média",
-  "70": "70 — Mediano",
-  "75": "75 — Aceitável",
-  "80": "80 — Bom",
-  "85": "85 — Muito Bom",
-  "88": "88 — Excelente",
-  "90": "90 — Notável",
-  "92": "92 — Excepcional",
-  "95": "95 — Extraordinário",
-  "98": "98 — Lendário",
-  "100": "100 — Perfeito",
+const SCORE_LABEL_KEYS: Record<string, string> = {
+  "50": "create_post_screen.score_50",
+  "60": "create_post_screen.score_60",
+  "70": "create_post_screen.score_70",
+  "75": "create_post_screen.score_75",
+  "80": "create_post_screen.score_80",
+  "85": "create_post_screen.score_85",
+  "88": "create_post_screen.score_88",
+  "90": "create_post_screen.score_90",
+  "92": "create_post_screen.score_92",
+  "95": "create_post_screen.score_95",
+  "98": "create_post_screen.score_98",
+  "100": "create_post_screen.score_100",
 };
 const SCORE_OPTIONS = ["", "50", "60", "70", "75", "80", "85", "88", "90", "92", "95", "98", "100"];
 
@@ -57,13 +57,14 @@ function AutoPlayVideoPreview({ uri, style }: { uri: string; style?: object }) {
 export default function CreatePostScreen() {
   const colors = useColors();
   const router = useRouter();
+  const { t } = useTranslation();
   const { profile, user, activeCompany } = useAuth();
   const insets = useSafeAreaInsets();
   const { companyPageId, companyName } = useLocalSearchParams<{ companyPageId?: string; companyName?: string }>();
 
   // Prefer activeCompany from auth context; fall back to route params for direct deep-links
   const isCompanyPost      = !!(activeCompany || companyPageId);
-  const companyDisplayName = activeCompany?.name ?? companyName ?? "Empresa";
+  const companyDisplayName = activeCompany?.name ?? companyName ?? t("post_screen.company_badge");
   const companyAvatarUrl   = activeCompany?.avatar_url ?? null;
   const effectiveCompanyId = activeCompany?.id ?? companyPageId ?? null;
 
@@ -140,8 +141,8 @@ export default function CreatePostScreen() {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         Alert.alert(
-          "Permissão negada",
-          "Para usar o GPS, ative a permissão de localização nas configurações do seu dispositivo."
+          t("create_post_screen.gps_denied_title"),
+          t("create_post_screen.gps_denied_msg")
         );
         return;
       }
@@ -156,10 +157,10 @@ export default function CreatePostScreen() {
         setLocation(locationName);
         if (!showLocationInput) setShowLocationInput(true);
       } else {
-        Alert.alert("Localização não encontrada", "Não foi possível determinar o nome do local. Tente digitar manualmente.");
+        Alert.alert(t("create_post_screen.location_not_found_title"), t("create_post_screen.location_not_found_msg"));
       }
     } catch {
-      Alert.alert("Erro de GPS", "Não foi possível obter a localização. Verifique se o GPS está ativo e tente novamente.");
+      Alert.alert(t("create_post_screen.gps_error_title"), t("create_post_screen.gps_error_msg"));
     } finally {
       setGpsLoading(false);
     }
@@ -227,7 +228,7 @@ export default function CreatePostScreen() {
 
       // Fire mention notifications (best-effort, non-blocking)
       if (newPost?.id && finalContent.includes("@")) {
-        const actorName = activeCompany?.name ?? profile?.full_name ?? "Usuário";
+        const actorName = activeCompany?.name ?? profile?.full_name ?? t("common.user_fallback");
         sendMentionNotifications(finalContent, user.id, actorName, newPost.id);
       }
 
@@ -264,7 +265,7 @@ export default function CreatePostScreen() {
 
       router.back();
     } catch {
-      Alert.alert("Erro de Conexão", "Não foi possível publicar. Verifique sua conexão e tente novamente.");
+      Alert.alert(t("create_post_screen.error_publish_title"), t("create_post_screen.error_publish_msg"));
     } finally {
       setPosting(false);
     }
@@ -286,16 +287,16 @@ export default function CreatePostScreen() {
     >
       <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
-          <Text style={{ color: colors.mutedForeground, fontSize: 16 }}>Cancelar</Text>
+          <Text style={{ color: colors.mutedForeground, fontSize: 16 }}>{t("create_post_screen.cancel")}</Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Nova publicação</Text>
+        <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t("create_post_screen.header_title")}</Text>
         <TouchableOpacity
           style={[styles.postBtn, { backgroundColor: canPost ? colors.gold : colors.secondary }]}
           onPress={handlePost}
           disabled={!canPost}
         >
           <Text style={{ color: canPost ? colors.navy : colors.mutedForeground, fontWeight: "700", fontSize: 14 }}>
-            {posting ? "Publicando..." : "Publicar"}
+            {posting ? t("create_post_screen.posting") : t("create_post_screen.publish")}
           </Text>
         </TouchableOpacity>
       </View>
@@ -305,7 +306,7 @@ export default function CreatePostScreen() {
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 16, marginTop: 10, padding: 12, borderRadius: 10, backgroundColor: "#fef3c7", borderWidth: 1, borderColor: "#fcd34d" }}>
           <Feather name="lock" size={14} color="#92400e" />
           <Text style={{ flex: 1, fontSize: 13, color: "#92400e", lineHeight: 18 }}>
-            Seu papel de Visualizador não permite publicar conteúdo como essa empresa.
+            {t("create_post_screen.viewer_role_msg")}
           </Text>
         </View>
       )}
@@ -318,7 +319,7 @@ export default function CreatePostScreen() {
         >
           <Feather name="edit-3" size={14} color={mode === "normal" ? colors.gold : colors.mutedForeground} />
           <Text style={[styles.modeBtnText, { color: mode === "normal" ? colors.gold : colors.mutedForeground }]}>
-            Publicação
+            {t("create_post_screen.tab_post")}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -327,7 +328,7 @@ export default function CreatePostScreen() {
         >
           <MaterialCommunityIcons name="glass-wine" size={14} color={mode === "degustacao" ? colors.gold : colors.mutedForeground} />
           <Text style={[styles.modeBtnText, { color: mode === "degustacao" ? colors.gold : colors.mutedForeground }]}>
-            Degustação
+            {t("create_post_screen.tab_tasting")}
           </Text>
         </TouchableOpacity>
       </View>
@@ -341,11 +342,11 @@ export default function CreatePostScreen() {
           />
           <View style={styles.authorInfo}>
             <Text style={[styles.authorName, { color: colors.foreground }]}>
-              {isCompanyPost ? companyDisplayName : (profile?.full_name ?? "Você")}
+              {isCompanyPost ? companyDisplayName : (profile?.full_name ?? t("common.user_fallback"))}
             </Text>
             <View style={[styles.audienceBtn, { backgroundColor: colors.secondary, borderRadius: 12 }]}>
               <Feather name="globe" size={11} color={colors.mutedForeground} />
-              <Text style={{ color: colors.mutedForeground, fontSize: 11, fontWeight: "600" }}>Todos</Text>
+              <Text style={{ color: colors.mutedForeground, fontSize: 11, fontWeight: "600" }}>{t("create_post_screen.audience_all")}</Text>
               <Feather name="chevron-down" size={11} color={colors.mutedForeground} />
             </View>
           </View>
@@ -356,7 +357,7 @@ export default function CreatePostScreen() {
           <>
             <MentionInput
               style={[styles.textInput, { color: colors.foreground }]}
-              placeholder="Compartilhe algo sobre vinho, eventos, oportunidades..."
+              placeholder={t("create_post_screen.placeholder_post")}
               placeholderTextColor={colors.mutedForeground}
               multiline
               value={content}
@@ -371,7 +372,7 @@ export default function CreatePostScreen() {
                 <Feather name="map-pin" size={15} color={colors.gold} />
                 <TextInput
                   style={[styles.locationInput, { color: colors.foreground }]}
-                  placeholder="Ex: Serra Gaúcha, Rio Grande do Sul"
+                  placeholder={t("create_post_screen.location_placeholder")}
                   placeholderTextColor={colors.mutedForeground}
                   value={location}
                   onChangeText={setLocation}
@@ -424,7 +425,7 @@ export default function CreatePostScreen() {
             )}
 
             <View style={styles.hashtagSection}>
-              <Text style={[styles.hashtagLabel, { color: colors.mutedForeground }]}>Hashtags populares</Text>
+              <Text style={[styles.hashtagLabel, { color: colors.mutedForeground }]}>{t("create_post_screen.hashtags_label")}</Text>
               <View style={styles.hashtagChips}>
                 {HASHTAG_SUGGESTIONS.map((tag) => (
                   <Pressable
@@ -456,15 +457,15 @@ export default function CreatePostScreen() {
             <View style={[styles.tastingHero, { backgroundColor: colors.gold + "10", borderColor: colors.gold + "30", borderWidth: 1, borderRadius: 12 }]}>
               <MaterialCommunityIcons name="glass-wine" size={32} color={colors.gold} />
               <View>
-                <Text style={[styles.tastingHeroTitle, { color: colors.navy }]}>Nota de Degustação</Text>
-                <Text style={[styles.tastingHeroSub, { color: colors.mutedForeground }]}>Compartilhe sua avaliação profissional</Text>
+                <Text style={[styles.tastingHeroTitle, { color: colors.navy }]}>{t("create_post_screen.tasting_title")}</Text>
+                <Text style={[styles.tastingHeroSub, { color: colors.mutedForeground }]}>{t("create_post_screen.tasting_sub")}</Text>
               </View>
             </View>
 
-            <Text style={{ fontSize: 10, color: colors.gold, marginBottom: -4 }}>* Campos obrigatórios para publicar</Text>
+            <Text style={{ fontSize: 10, color: colors.gold, marginBottom: -4 }}>{t("create_post_screen.required_fields_notice")}</Text>
             <TextInput
               style={[styles.tastingInput, { borderColor: colors.gold + "80", color: colors.foreground, backgroundColor: "#fff" }]}
-              placeholder="Nome do vinho *"
+              placeholder={t("create_post_screen.field_wine")}
               placeholderTextColor={colors.mutedForeground}
               value={tastingWine}
               onChangeText={setTastingWine}
@@ -473,17 +474,17 @@ export default function CreatePostScreen() {
             <View style={styles.tastingRow}>
               <TextInput
                 style={[styles.tastingInput, { flex: 1, borderColor: colors.gold + "80", color: colors.foreground, backgroundColor: "#fff" }]}
-                placeholder="Uva/Casta *"
+                placeholder={t("create_post_screen.field_grape")}
                 placeholderTextColor={colors.mutedForeground}
                 value={tastingGrape}
                 onChangeText={setTastingGrape}
               />
               <TextInput
                 style={[styles.tastingInput, { width: 80, borderColor: colors.gold + "80", color: colors.foreground, backgroundColor: "#fff" }]}
-                placeholder="Safra *"
+                placeholder={t("create_post_screen.field_vintage")}
                 placeholderTextColor={colors.mutedForeground}
                 value={tastingVintage}
-                onChangeText={(t) => setTastingVintage(t.replace(/\D/g, "").slice(0, 4))}
+                onChangeText={(v) => setTastingVintage(v.replace(/\D/g, "").slice(0, 4))}
                 keyboardType="numeric"
                 maxLength={4}
               />
@@ -491,7 +492,7 @@ export default function CreatePostScreen() {
             <View style={styles.tastingRow}>
               <TextInput
                 style={[styles.tastingInput, { flex: 1, borderColor: colors.border, color: colors.foreground, backgroundColor: "#fff" }]}
-                placeholder="Produtor"
+                placeholder={t("create_post_screen.field_producer")}
                 placeholderTextColor={colors.mutedForeground}
                 value={tastingProducer}
                 onChangeText={setTastingProducer}
@@ -503,7 +504,7 @@ export default function CreatePostScreen() {
               <Feather name="tag" size={15} color={tastingEan.trim() ? colors.gold : colors.mutedForeground} />
               <TextInput
                 style={[styles.tastingInput, { flex: 1, borderWidth: 0, paddingHorizontal: 0, paddingVertical: 0, backgroundColor: "transparent", color: colors.foreground }]}
-                placeholder="EAN / Código de barras * (ex: 7896123456789)"
+                placeholder={t("create_post_screen.field_ean")}
                 placeholderTextColor={colors.mutedForeground}
                 value={tastingEan}
                 onChangeText={setTastingEan}
@@ -512,7 +513,7 @@ export default function CreatePostScreen() {
             </View>
             {tastingEan.trim().length > 0 && (
               <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: -8 }}>
-                🏆 Com EAN + pontuação, sua avaliação entra automaticamente no ranking comunitário.
+                🏆 {t("create_post_screen.ean_ranking_hint")}
               </Text>
             )}
 
@@ -523,9 +524,11 @@ export default function CreatePostScreen() {
             >
               <MaterialCommunityIcons name="star" size={22} color={colors.gold} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.scorePickerLabel, { color: colors.mutedForeground }]}>Pontuação (0–100)</Text>
+                <Text style={[styles.scorePickerLabel, { color: colors.mutedForeground }]}>{t("create_post_screen.score_label")}</Text>
                 <Text style={[styles.scorePickerValue, { color: tastingScore ? colors.gold : colors.mutedForeground }]}>
-                  {tastingScore ? `${tastingScore}/100 — ${SCORE_LABELS[tastingScore] ?? tastingScore}` : "Selecionar pontuação"}
+                  {tastingScore
+                    ? `${tastingScore}/100 — ${SCORE_LABEL_KEYS[tastingScore] ? t(SCORE_LABEL_KEYS[tastingScore]) : tastingScore}`
+                    : t("create_post_screen.score_placeholder")}
                 </Text>
               </View>
               <Feather name={showScorePicker ? "chevron-up" : "chevron-down"} size={18} color={colors.mutedForeground} />
@@ -543,7 +546,9 @@ export default function CreatePostScreen() {
                     onPress={() => { setTastingScore(s); setShowScorePicker(false); }}
                   >
                     <Text style={[styles.scoreOptionText, { color: tastingScore === s ? colors.gold : colors.foreground }]}>
-                      {s ? `${s}/100 — ${SCORE_LABELS[s]}` : "Sem pontuação"}
+                      {s
+                        ? `${s}/100 — ${SCORE_LABEL_KEYS[s] ? t(SCORE_LABEL_KEYS[s]) : s}`
+                        : t("create_post_screen.score_no_score")}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -552,28 +557,28 @@ export default function CreatePostScreen() {
 
             <TextInput
               style={[styles.tastingInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: "#fff" }]}
-              placeholder="👃 Aroma (ex: frutas vermelhas, especiarias...)"
+              placeholder={t("create_post_screen.field_aroma")}
               placeholderTextColor={colors.mutedForeground}
               value={tastingAroma}
               onChangeText={setTastingAroma}
             />
             <TextInput
               style={[styles.tastingInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: "#fff" }]}
-              placeholder="👅 Sabor (ex: taninos sedosos, acidez equilibrada...)"
+              placeholder={t("create_post_screen.field_flavor")}
               placeholderTextColor={colors.mutedForeground}
               value={tastingFlavor}
               onChangeText={setTastingFlavor}
             />
             <TextInput
               style={[styles.tastingInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: "#fff" }]}
-              placeholder="🍽️ Harmonização sugerida"
+              placeholder={t("create_post_screen.field_pairing")}
               placeholderTextColor={colors.mutedForeground}
               value={tastingPair}
               onChangeText={setTastingPair}
             />
             <TextInput
               style={[styles.tastingInput, styles.tastingTextarea, { borderColor: colors.border, color: colors.foreground, backgroundColor: "#fff" }]}
-              placeholder="📝 Notas adicionais sobre o vinho..."
+              placeholder={t("create_post_screen.field_notes")}
               placeholderTextColor={colors.mutedForeground}
               value={tastingNotes}
               onChangeText={setTastingNotes}
