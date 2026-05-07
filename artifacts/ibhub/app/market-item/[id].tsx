@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import { Feather } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useColors } from "@/hooks/useColors";
@@ -29,6 +30,7 @@ import {
 } from "@/services/api";
 
 export default function MarketItemScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -57,7 +59,7 @@ export default function MarketItemScreen() {
 
     const sellerId = item.company_page?.owner_id ?? item.created_by;
     if (sellerId === user.id) {
-      Alert.alert("Atenção", "Você não pode negociar com você mesmo.");
+      Alert.alert(t("common.attention"), t("market_item_detail.own_warning"));
       return;
     }
 
@@ -65,17 +67,10 @@ export default function MarketItemScreen() {
     try {
       const companyId = item.company_page_id ?? null;
 
-      // Record interest first so the listing's interests_count and the
-      // recipient's company inbox notification both fire even if the chat
-      // creation/message step below fails. Mirrors the web
-      // OportunidadeDetalhe flow. Failures here are non-fatal — the chat
-      // is still the primary outcome of "Negociar".
       expressInterest(item.id, user.id, null).catch(() => {});
 
       const convoId = await getOrCreateDirectConversation(user.id, sellerId, true, companyId);
       if (convoId) {
-
-        // Send opening message if user typed one
         const msgText = contactMsg.trim()
           || `Olá! Vi o anúncio **${item.title}** e gostaria de mais informações.`;
         await sendMessage(convoId, user.id, msgText);
@@ -85,7 +80,7 @@ export default function MarketItemScreen() {
           : `/chat/${convoId}`;
         router.push(chatRoute as any);
       } else {
-        Alert.alert("Erro", "Não foi possível abrir uma conversa. Tente novamente.");
+        Alert.alert(t("common.error"), t("market_item_detail.error_open"));
       }
     } finally {
       setContacting(false);
@@ -106,16 +101,16 @@ export default function MarketItemScreen() {
         <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
             <Feather name="arrow-left" size={22} color={colors.navy} />
-            <Text style={[styles.headerTitle, { color: colors.navy }]}>Produto</Text>
+            <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("market_item_detail.title")}</Text>
           </TouchableOpacity>
         </View>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 32 }}>
           <Feather name="package" size={40} color={colors.mutedForeground} />
           <Text style={{ color: colors.mutedForeground, fontSize: 16, textAlign: "center" }}>
-            Produto não encontrado ou removido.
+            {t("market_item_detail.not_found")}
           </Text>
           <TouchableOpacity onPress={() => router.back()}>
-            <Text style={{ color: colors.gold, fontSize: 15, fontWeight: "600" }}>Voltar</Text>
+            <Text style={{ color: colors.gold, fontSize: 15, fontWeight: "600" }}>{t("market_item_detail.back")}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -125,7 +120,6 @@ export default function MarketItemScreen() {
   const isExpired = item.expires_at ? new Date(item.expires_at) < new Date() : false;
   const isOwn = user?.id === item.created_by;
 
-  // Company takes priority; never fall back to personal profile
   const hasCompany = !!item.company_page_id;
   const companyName   = item.company_page?.name   ?? item.company ?? null;
   const companyAvatar = item.company_page?.avatar_url ?? null;
@@ -134,7 +128,6 @@ export default function MarketItemScreen() {
     if (item.company_page_id) {
       router.push(`/empresa/${item.company_page_id}` as any);
     }
-    // If no company page linked, do nothing
   };
 
   return (
@@ -143,7 +136,7 @@ export default function MarketItemScreen() {
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
-          <Text style={[styles.headerTitle, { color: colors.navy }]}>Produto</Text>
+          <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("market_item_detail.title")}</Text>
         </TouchableOpacity>
       </View>
 
@@ -187,13 +180,13 @@ export default function MarketItemScreen() {
                 {isExpired ? (
                   <View style={[styles.chip, { backgroundColor: "#fef2f2" }]}>
                     <Feather name="alert-circle" size={12} color="#dc2626" />
-                    <Text style={[styles.chipText, { color: "#dc2626" }]}>Expirado</Text>
+                    <Text style={[styles.chipText, { color: "#dc2626" }]}>{t("market_item_detail.expired")}</Text>
                   </View>
                 ) : item.expires_at ? (
                   <View style={[styles.chip, { backgroundColor: colors.background }]}>
                     <Feather name="clock" size={12} color={colors.mutedForeground} />
                     <Text style={[styles.chipText, { color: colors.mutedForeground }]}>
-                      Expira {new Date(item.expires_at).toLocaleDateString("pt-BR")}
+                      {t("market_item_detail.expires_on", { date: new Date(item.expires_at).toLocaleDateString() })}
                     </Text>
                   </View>
                 ) : null}
@@ -211,12 +204,12 @@ export default function MarketItemScreen() {
 
               {item.contact_email ? (
                 <Text style={[styles.contactEmail, { color: colors.mutedForeground }]}>
-                  Contato: {item.contact_email}
+                  {t("opportunity_detail.description")}: {item.contact_email}
                 </Text>
               ) : null}
             </View>
 
-            {/* Company card — always shows company, never personal profile */}
+            {/* Company card */}
             <TouchableOpacity
               style={[styles.sellerCard, { backgroundColor: "#fff", borderColor: colors.border }]}
               onPress={handleCompanyPress}
@@ -232,10 +225,10 @@ export default function MarketItemScreen() {
               )}
               <View style={{ flex: 1 }}>
                 <Text style={[styles.sellerName, { color: colors.navy }]}>
-                  {companyName ?? "Anunciante"}
+                  {companyName ?? t("market_item_detail.advertiser")}
                 </Text>
                 <Text style={[styles.sellerSub, { color: colors.mutedForeground }]}>
-                  {hasCompany ? "Página de empresa" : "Empresa anunciante"}
+                  {hasCompany ? t("market_item_detail.company_page") : t("market_item_detail.company_advertiser")}
                 </Text>
               </View>
               {hasCompany && (
@@ -247,7 +240,7 @@ export default function MarketItemScreen() {
             {!isOwn && !isExpired && (
               <View style={[styles.contactCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
                 <Text style={[styles.contactLabel, { color: colors.foreground }]}>
-                  Mensagem para a empresa
+                  {t("market_item_detail.contact_label")}
                 </Text>
                 <TextInput
                   style={[styles.msgInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background }]}
@@ -270,7 +263,7 @@ export default function MarketItemScreen() {
                     <>
                       <Feather name="message-circle" size={18} color="#fff" />
                       <Text style={styles.negotiateBtnText}>
-                        {contacting ? "Abrindo conversa..." : "Enviar mensagem à empresa"}
+                        {t("market_item_detail.negotiate_btn")}
                       </Text>
                     </>
                   )}
@@ -282,7 +275,7 @@ export default function MarketItemScreen() {
               <View style={[styles.expiredBanner, { backgroundColor: "#fef2f2", borderColor: "#fecaca" }]}>
                 <Feather name="alert-circle" size={16} color="#dc2626" />
                 <Text style={{ color: "#dc2626", fontSize: 14, flex: 1 }}>
-                  Este anúncio está expirado e não aceita novas negociações.
+                  {t("market_item_detail.expired_banner")}
                 </Text>
               </View>
             )}
@@ -291,7 +284,7 @@ export default function MarketItemScreen() {
               <View style={[styles.expiredBanner, { backgroundColor: colors.background, borderColor: colors.gold }]}>
                 <Feather name="star" size={16} color={colors.gold} />
                 <Text style={{ color: colors.gold, fontSize: 14, flex: 1 }}>
-                  Este é o seu anúncio.
+                  {t("market_item_detail.own_banner")}
                 </Text>
               </View>
             )}

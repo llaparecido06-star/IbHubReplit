@@ -18,6 +18,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import { Feather } from "@/components/ui/Icon";
 import * as DocumentPicker from "expo-document-picker";
 import { useColors } from "@/hooks/useColors";
@@ -39,6 +40,7 @@ const contractColor: Record<string, string> = {
 };
 
 export default function OpportunityDetailScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -52,7 +54,6 @@ export default function OpportunityDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [isInterested, setIsInterested] = useState(false);
 
-  // Apply sheet state
   const [showApply, setShowApply]   = useState(false);
   const [message, setMessage]       = useState("");
   const [cvName, setCvName]         = useState<string | null>(null);
@@ -61,12 +62,10 @@ export default function OpportunityDetailScreen() {
   const [usingSavedCv, setUsingSavedCv] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Direct message sheet state
   const [showContact, setShowContact] = useState(false);
   const [directMsg, setDirectMsg]     = useState("");
   const [contactSending, setContactSending] = useState(false);
 
-  // Animated bottom sheet (shared)
   const slideAnim        = useRef(new Animated.Value(500)).current;
   const contactSlideAnim = useRef(new Animated.Value(400)).current;
 
@@ -116,7 +115,7 @@ export default function OpportunityDetailScreen() {
         setCvName(result.assets[0].name);
       }
     } catch (e) {
-      Alert.alert("Erro", "Não foi possível selecionar o arquivo.");
+      Alert.alert(t("common.error"), t("opportunity_detail.file_error"));
     }
   };
 
@@ -137,7 +136,7 @@ export default function OpportunityDetailScreen() {
 
       const ok = await applyToJob(opp.id, user.id, cvUrl, message.trim() || null);
       if (!ok) {
-        Alert.alert("Erro", "Não foi possível enviar a candidatura. Você já se candidatou?");
+        Alert.alert(t("common.error"), t("opportunity_detail.apply_error"));
         return;
       }
       closeSheet();
@@ -162,7 +161,7 @@ export default function OpportunityDetailScreen() {
         const route = cpId ? `/chat/${convoId}?companyId=${cpId}` : `/chat/${convoId}`;
         router.push(route as any);
       } else {
-        Alert.alert("Candidatura enviada!", "O recrutador foi notificado da sua candidatura.");
+        Alert.alert(t("opportunity_detail.apply_success"), t("opportunity_detail.apply_success_msg"));
       }
     } finally {
       setSubmitting(false);
@@ -172,7 +171,7 @@ export default function OpportunityDetailScreen() {
   const handleSendDirectMessage = async () => {
     if (!opp || !user?.id) return;
     const text = directMsg.trim();
-    if (!text) { Alert.alert("Atenção", "Digite uma mensagem para enviar."); return; }
+    if (!text) { Alert.alert(t("common.attention"), t("opportunity_detail.contact_empty")); return; }
 
     setContactSending(true);
     try {
@@ -185,7 +184,7 @@ export default function OpportunityDetailScreen() {
         const route = cpId ? `/chat/${convoId}?companyId=${cpId}` : `/chat/${convoId}`;
         router.push(route as any);
       } else {
-        Alert.alert("Erro", "Não foi possível abrir a conversa. Tente novamente.");
+        Alert.alert(t("common.error"), t("opportunity_detail.contact_error"));
       }
     } finally {
       setContactSending(false);
@@ -200,10 +199,10 @@ export default function OpportunityDetailScreen() {
       if (ok) {
         setIsInterested(true);
         Alert.alert(
-          "Interesse registrado!",
+          t("opportunity_detail.interest_title"),
           opp.contact_email
-            ? `O anunciante foi notificado. Você também pode entrar em contato: ${opp.contact_email}`
-            : "O anunciante foi notificado do seu interesse.",
+            ? t("opportunity_detail.interest_msg_email", { email: opp.contact_email })
+            : t("opportunity_detail.interest_msg"),
         );
       }
     } finally {
@@ -223,9 +222,9 @@ export default function OpportunityDetailScreen() {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
         <Feather name="alert-circle" size={40} color={colors.mutedForeground} />
-        <Text style={[styles.notFound, { color: colors.mutedForeground }]}>Oportunidade não encontrada</Text>
+        <Text style={[styles.notFound, { color: colors.mutedForeground }]}>{t("opportunity_detail.not_found")}</Text>
         <TouchableOpacity onPress={() => router.back()}>
-          <Text style={{ color: colors.gold, fontWeight: "700", marginTop: 12 }}>← Voltar</Text>
+          <Text style={{ color: colors.gold, fontWeight: "700", marginTop: 12 }}>{t("opportunity_detail.back")}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -234,10 +233,13 @@ export default function OpportunityDetailScreen() {
   const isOwner = user?.id === opp.created_by;
   const isVaga  = opp.type === "vaga";
 
-  // Company display — always prioritise company_page, never link to personal profile
   const hasCompanyPage = !!opp.company_page_id;
   const companyName    = opp.company_page?.name ?? opp.company ?? null;
   const companyAvatar  = opp.company_page?.avatar_url ?? null;
+
+  const applicationsLabel = opp.applications_count === 1
+    ? t("opportunity_detail.applications_one", { count: opp.applications_count })
+    : t("opportunity_detail.applications_other", { count: opp.applications_count });
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -248,7 +250,7 @@ export default function OpportunityDetailScreen() {
           <Feather name="arrow-left" size={22} color={colors.foreground} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.foreground }]} numberOfLines={1}>
-          {isVaga ? "Vaga" : "Marketplace"}
+          {isVaga ? t("opportunity_detail.title_job") : t("opportunity_detail.title_market")}
         </Text>
         <View style={{ width: 32 }} />
       </View>
@@ -261,7 +263,7 @@ export default function OpportunityDetailScreen() {
         <View style={[styles.heroCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.heroTitle, { color: colors.foreground }]}>{opp.title}</Text>
 
-          {/* Company card — always shows company, never personal profile */}
+          {/* Company card */}
           <TouchableOpacity
             style={styles.companyCard}
             onPress={() => hasCompanyPage ? router.push(`/empresa/${opp.company_page_id}` as any) : undefined}
@@ -277,7 +279,7 @@ export default function OpportunityDetailScreen() {
             )}
             <View style={{ flex: 1 }}>
               <Text style={[styles.companyCardName, { color: colors.gold }]}>
-                {companyName ?? "Empresa anunciante"}
+                {companyName ?? t("opportunity_detail.company_advertiser")}
               </Text>
               {opp.company && opp.company !== companyName ? (
                 <Text style={[styles.heroSub, { color: colors.mutedForeground, marginTop: 0 }]}>{opp.company}</Text>
@@ -329,14 +331,14 @@ export default function OpportunityDetailScreen() {
             <View style={styles.metaItem}>
               <Feather name="clock" size={14} color={colors.mutedForeground} />
               <Text style={[styles.metaText, { color: colors.mutedForeground }]}>
-                Publicada em {new Date(opp.created_at).toLocaleDateString("pt-BR")}
+                {t("opportunity_detail.published_at", { date: new Date(opp.created_at).toLocaleDateString() })}
               </Text>
             </View>
             {isVaga && (
               <View style={styles.metaItem}>
                 <Feather name="users" size={14} color={colors.mutedForeground} />
                 <Text style={[styles.metaText, { color: colors.mutedForeground }]}>
-                  {opp.applications_count} {opp.applications_count === 1 ? "candidatura" : "candidaturas"}
+                  {applicationsLabel}
                 </Text>
               </View>
             )}
@@ -346,7 +348,7 @@ export default function OpportunityDetailScreen() {
         {/* Description */}
         {opp.description ? (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Descrição</Text>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{t("opportunity_detail.description")}</Text>
             <Text style={[styles.sectionBody, { color: colors.mutedForeground }]}>{opp.description}</Text>
           </View>
         ) : null}
@@ -356,7 +358,7 @@ export default function OpportunityDetailScreen() {
           <View style={[styles.expiryBanner, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
             <Feather name="alert-circle" size={14} color={colors.mutedForeground} />
             <Text style={[styles.expiryText, { color: colors.mutedForeground }]}>
-              Expira em {new Date(opp.expires_at).toLocaleDateString("pt-BR")}
+              {t("opportunity_detail.expires_at", { date: new Date(opp.expires_at).toLocaleDateString() })}
             </Text>
           </View>
         ) : null}
@@ -370,14 +372,14 @@ export default function OpportunityDetailScreen() {
               <View style={{ gap: 10 }}>
                 <View style={[styles.appliedBadge, { backgroundColor: colors.secondary }]}>
                   <Feather name="check-circle" size={16} color={colors.mutedForeground} />
-                  <Text style={[styles.appliedText, { color: colors.mutedForeground }]}>Candidatura enviada</Text>
+                  <Text style={[styles.appliedText, { color: colors.mutedForeground }]}>{t("opportunity_detail.applied_badge")}</Text>
                 </View>
                 <TouchableOpacity
                   style={[styles.actionBtnSecondary, { borderColor: colors.navy }]}
                   onPress={openContactSheet}
                 >
                   <Feather name="message-circle" size={16} color={colors.navy} />
-                  <Text style={[styles.actionBtnSecondaryText, { color: colors.navy }]}>Mensagem para a empresa</Text>
+                  <Text style={[styles.actionBtnSecondaryText, { color: colors.navy }]}>{t("opportunity_detail.msg_to_company")}</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -388,14 +390,14 @@ export default function OpportunityDetailScreen() {
                   activeOpacity={0.85}
                 >
                   <Feather name="send" size={17} color="#fff" />
-                  <Text style={styles.actionBtnText}>Candidatar-se</Text>
+                  <Text style={styles.actionBtnText}>{t("opportunity_detail.apply_btn")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.actionBtnSecondary, { borderColor: colors.navy }]}
                   onPress={openContactSheet}
                 >
                   <Feather name="message-circle" size={16} color={colors.navy} />
-                  <Text style={[styles.actionBtnSecondaryText, { color: colors.navy }]}>Mensagem direta para a empresa</Text>
+                  <Text style={[styles.actionBtnSecondaryText, { color: colors.navy }]}>{t("opportunity_detail.direct_msg")}</Text>
                 </TouchableOpacity>
               </View>
             )
@@ -403,14 +405,14 @@ export default function OpportunityDetailScreen() {
             <View style={{ gap: 10 }}>
               <View style={[styles.appliedBadge, { backgroundColor: colors.secondary }]}>
                 <Feather name="check-circle" size={16} color={colors.gold} />
-                <Text style={[styles.appliedText, { color: colors.gold }]}>Interesse registrado</Text>
+                <Text style={[styles.appliedText, { color: colors.gold }]}>{t("opportunity_detail.interest_registered")}</Text>
               </View>
               <TouchableOpacity
                 style={[styles.actionBtnSecondary, { borderColor: colors.navy }]}
                 onPress={openContactSheet}
               >
                 <Feather name="message-circle" size={16} color={colors.navy} />
-                <Text style={[styles.actionBtnSecondaryText, { color: colors.navy }]}>Mensagem para a empresa</Text>
+                <Text style={[styles.actionBtnSecondaryText, { color: colors.navy }]}>{t("opportunity_detail.msg_to_company")}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -424,7 +426,7 @@ export default function OpportunityDetailScreen() {
                 {submitting ? <ActivityIndicator color="#fff" size="small" /> : (
                   <>
                     <Feather name="message-circle" size={17} color="#fff" />
-                    <Text style={styles.actionBtnText}>Tenho interesse</Text>
+                    <Text style={styles.actionBtnText}>{t("opportunity_detail.interest_btn")}</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -433,7 +435,7 @@ export default function OpportunityDetailScreen() {
                 onPress={openContactSheet}
               >
                 <Feather name="mail" size={16} color={colors.gold} />
-                <Text style={[styles.actionBtnSecondaryText, { color: colors.gold }]}>Mensagem direta para a empresa</Text>
+                <Text style={[styles.actionBtnSecondaryText, { color: colors.gold }]}>{t("opportunity_detail.direct_msg")}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -456,7 +458,7 @@ export default function OpportunityDetailScreen() {
                 ]}
               >
                 <View style={styles.sheetHandle} />
-                <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Enviar candidatura</Text>
+                <Text style={[styles.sheetTitle, { color: colors.foreground }]}>{t("opportunity_detail.apply_sheet_title")}</Text>
                 <Text style={[styles.sheetSub, { color: colors.mutedForeground }]}>{opp.title}</Text>
 
                 {savedCv && !cvUri ? (
@@ -464,7 +466,7 @@ export default function OpportunityDetailScreen() {
                     <Feather name="file-text" size={18} color={colors.gold} />
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.cvLabel, { color: colors.gold }]}>
-                        {usingSavedCv ? "Currículo salvo" : "Trocar currículo"}
+                        {usingSavedCv ? t("opportunity_detail.cv_saved") : t("opportunity_detail.cv_change")}
                       </Text>
                       <Text style={[styles.cvHint, { color: colors.mutedForeground }]} numberOfLines={1}>{savedCv.name}</Text>
                     </View>
@@ -483,10 +485,10 @@ export default function OpportunityDetailScreen() {
                     <Feather name="paperclip" size={18} color={cvName ? colors.gold : colors.mutedForeground} />
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.cvLabel, { color: cvName ? colors.gold : colors.mutedForeground }]}>
-                        {cvName ?? "Anexar currículo (PDF ou Word)"}
+                        {cvName ?? t("opportunity_detail.attach_cv")}
                       </Text>
                       {!cvName && (
-                        <Text style={[styles.cvHint, { color: colors.mutedForeground }]}>Opcional — máx. 5 MB</Text>
+                        <Text style={[styles.cvHint, { color: colors.mutedForeground }]}>{t("opportunity_detail.cv_hint")}</Text>
                       )}
                     </View>
                     {cvName && (
@@ -499,7 +501,7 @@ export default function OpportunityDetailScreen() {
 
                 <TextInput
                   style={[styles.msgInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background }]}
-                  placeholder="Mensagem para o recrutador (opcional)"
+                  placeholder={t("opportunity_detail.message_placeholder")}
                   placeholderTextColor={colors.mutedForeground}
                   value={message}
                   onChangeText={setMessage}
@@ -517,7 +519,7 @@ export default function OpportunityDetailScreen() {
                   {submitting ? (
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
-                    <Text style={styles.submitBtnText}>Enviar candidatura</Text>
+                    <Text style={styles.submitBtnText}>{t("opportunity_detail.apply_btn_text")}</Text>
                   )}
                 </TouchableOpacity>
               </Animated.View>
@@ -542,14 +544,14 @@ export default function OpportunityDetailScreen() {
                 ]}
               >
                 <View style={styles.sheetHandle} />
-                <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Mensagem para a empresa</Text>
+                <Text style={[styles.sheetTitle, { color: colors.foreground }]}>{t("opportunity_detail.contact_sheet_title")}</Text>
                 <Text style={[styles.sheetSub, { color: colors.mutedForeground }]}>
                   {companyName ?? opp.title}
                 </Text>
 
                 <TextInput
                   style={[styles.msgInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background, minHeight: 120 }]}
-                  placeholder={`Olá! Tenho interesse em "${opp.title}". Gostaria de mais informações.`}
+                  placeholder={t("opportunity_detail.contact_sheet_title") + `...`}
                   placeholderTextColor={colors.mutedForeground}
                   value={directMsg}
                   onChangeText={setDirectMsg}
@@ -570,7 +572,7 @@ export default function OpportunityDetailScreen() {
                   ) : (
                     <>
                       <Feather name="send" size={16} color="#fff" />
-                      <Text style={styles.submitBtnText}>Enviar mensagem</Text>
+                      <Text style={styles.submitBtnText}>{t("opportunity_detail.contact_send")}</Text>
                     </>
                   )}
                 </TouchableOpacity>

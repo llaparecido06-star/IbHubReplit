@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Image,
@@ -24,6 +25,7 @@ const AREAS = [
 ];
 
 export default function SocialCompleteScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, refreshProfile, clearProfileCompletion } = useAuth();
@@ -64,9 +66,9 @@ export default function SocialCompleteScreen() {
 
   const handleSave = useCallback(async () => {
     if (!user?.id) return;
-    if (!fullName.trim())   { setError("Insira seu nome completo"); return; }
-    if (!username.trim())   { setError("Escolha um nome de usuário"); return; }
-    if (areas.length === 0) { setError("Selecione pelo menos uma área de atuação"); return; }
+    if (!fullName.trim())   { setError(t("social_complete.error_name")); return; }
+    if (!username.trim())   { setError(t("social_complete.error_username")); return; }
+    if (areas.length === 0) { setError(t("social_complete.error_areas")); return; }
 
     setLoading(true);
     setError(null);
@@ -77,7 +79,7 @@ export default function SocialCompleteScreen() {
       .eq("username", username.trim().toLowerCase())
       .neq("id", user.id)
       .maybeSingle();
-    if (taken) { setError("Esse nome de usuário já está em uso"); setLoading(false); return; }
+    if (taken) { setError(t("social_complete.error_username_taken")); setLoading(false); return; }
 
     const { error: upsertErr } = await supabase.from("profiles").upsert({
       id: user.id,
@@ -92,7 +94,7 @@ export default function SocialCompleteScreen() {
     }, { onConflict: "id" });
 
     if (upsertErr) {
-      setError("Erro ao salvar perfil. Tente novamente.");
+      setError(t("social_complete.error_save"));
       setLoading(false);
       return;
     }
@@ -134,8 +136,8 @@ export default function SocialCompleteScreen() {
                 <Feather name="user" size={32} color="#8fa3b8" />
               </View>
             )}
-            <Text style={styles.title}>Finalize seu cadastro</Text>
-            <Text style={styles.subtitle}>Só mais algumas informações para completar seu perfil profissional.</Text>
+            <Text style={styles.title}>{t("social_complete.title")}</Text>
+            <Text style={styles.subtitle}>{t("social_complete.subtitle")}</Text>
           </View>
 
           <View style={styles.card}>
@@ -149,24 +151,24 @@ export default function SocialCompleteScreen() {
             {/* Email — read-only, from Google */}
             {oauthEmail && (
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>E-mail</Text>
+                <Text style={styles.fieldLabel}>{t("social_complete.email_label")}</Text>
                 <View style={[styles.fieldWrap, styles.fieldWrapReadOnly]}>
                   <Feather name="mail" size={16} color="#8fa3b8" style={styles.fieldIcon} />
                   <Text style={styles.fieldReadOnly}>{oauthEmail}</Text>
                   <Feather name="lock" size={13} color="#b0bec9" />
                 </View>
-                <Text style={styles.fieldHint}>Importado da sua conta Google — não é possível alterar aqui.</Text>
+                <Text style={styles.fieldHint}>{t("social_complete.email_hint")}</Text>
               </View>
             )}
 
             {/* Full name */}
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Nome completo <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>{t("social_complete.full_name")} <Text style={styles.required}>*</Text></Text>
               <View style={styles.fieldWrap}>
                 <Feather name="user" size={16} color="#8fa3b8" style={styles.fieldIcon} />
                 <TextInput
                   style={styles.fieldInput}
-                  placeholder="Seu nome"
+                  placeholder={t("social_complete.full_name_placeholder")}
                   placeholderTextColor="#aab4c0"
                   value={fullName}
                   onChangeText={setFullName}
@@ -177,30 +179,30 @@ export default function SocialCompleteScreen() {
 
             {/* Username */}
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Nome de usuário <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>{t("social_complete.username")} <Text style={styles.required}>*</Text></Text>
               <View style={styles.fieldWrap}>
                 <Text style={[styles.fieldIcon, { color: "#8fa3b8", fontSize: 15, lineHeight: 20 }]}>@</Text>
                 <TextInput
                   style={styles.fieldInput}
-                  placeholder="seunome"
+                  placeholder={t("social_complete.username_placeholder")}
                   placeholderTextColor="#aab4c0"
                   value={username}
-                  onChangeText={t => setUsername(t.toLowerCase().replace(/[^a-z0-9_.]/g, ""))}
+                  onChangeText={val => setUsername(val.toLowerCase().replace(/[^a-z0-9_.]/g, ""))}
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
               </View>
-              <Text style={styles.fieldHint}>Apenas letras minúsculas, números, _ e .</Text>
+              <Text style={styles.fieldHint}>{t("social_complete.username_hint")}</Text>
             </View>
 
             {/* Position */}
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Cargo / função <Text style={styles.optional}>(opcional)</Text></Text>
+              <Text style={styles.fieldLabel}>{t("social_complete.position")} <Text style={styles.optional}>({t("common.optional")})</Text></Text>
               <View style={styles.fieldWrap}>
                 <Feather name="briefcase" size={16} color="#8fa3b8" style={styles.fieldIcon} />
                 <TextInput
                   style={styles.fieldInput}
-                  placeholder="Ex: Sommelier, Importador..."
+                  placeholder={t("social_complete.position_placeholder")}
                   placeholderTextColor="#aab4c0"
                   value={position}
                   onChangeText={setPosition}
@@ -210,8 +212,8 @@ export default function SocialCompleteScreen() {
 
             {/* Areas */}
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Área de atuação <Text style={styles.required}>*</Text></Text>
-              <Text style={styles.fieldHint}>Selecione uma ou mais áreas</Text>
+              <Text style={styles.fieldLabel}>{t("social_complete.areas")} <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldHint}>{t("social_complete.areas_hint")}</Text>
               <View style={styles.areasWrap}>
                 {AREAS.map(a => {
                   const sel = areas.includes(a);
@@ -237,7 +239,7 @@ export default function SocialCompleteScreen() {
             >
               {loading
                 ? <ActivityIndicator color="#fff" />
-                : <Text style={styles.primaryBtnText}>Entrar no ibhub</Text>
+                : <Text style={styles.primaryBtnText}>{t("social_complete.finish_btn")}</Text>
               }
             </TouchableOpacity>
           </View>

@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import { Feather } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
@@ -32,7 +33,7 @@ import {
 
 function fmtDateTime(iso: string) {
   const d = new Date(iso);
-  return d.toLocaleString("pt-BR", {
+  return d.toLocaleString(undefined, {
     weekday: "long",
     day: "2-digit",
     month: "long",
@@ -42,16 +43,17 @@ function fmtDateTime(iso: string) {
 }
 
 function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
-const entryLabels: Record<string, string> = {
-  "gratuito": "Gratuito",
-  "pago-externo": "Pago (link externo)",
-  "pago-integrado": "Pago",
+const entryLabelKeys: Record<string, string> = {
+  "gratuito": "event_detail.entry_free",
+  "pago-externo": "event_detail.entry_paid_ext",
+  "pago-integrado": "event_detail.entry_paid",
 };
 
 export default function EventScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -101,7 +103,7 @@ export default function EventScreen() {
       }
     } else {
       if (event.capacity != null && attendees.length >= event.capacity) {
-        Alert.alert("Evento lotado", "Não há mais vagas disponíveis para este evento.");
+        Alert.alert(t("event_detail.full_title"), t("event_detail.full_msg"));
         setRsvpLoading(false);
         return;
       }
@@ -109,10 +111,10 @@ export default function EventScreen() {
       const ok = await confirmAttendance(event.id, user.id, organizerId, event.title);
       if (ok) {
         setIsAttending(true);
-        Alert.alert("Presença confirmada!", `Você está confirmado para "${event.title}".`);
+        Alert.alert(t("event_detail.confirmed_title"), t("event_detail.confirmed_msg", { title: event.title }));
         loadData();
       } else {
-        Alert.alert("Erro", "Não foi possível confirmar presença. Tente novamente.");
+        Alert.alert(t("common.error"), t("event_detail.rsvp_error"));
       }
     }
     setRsvpLoading(false);
@@ -121,7 +123,7 @@ export default function EventScreen() {
   const handleShare = async () => {
     if (!event) return;
     const shareUrl = `${getCanonicalWebBaseUrl()}/event/${event.id}`;
-    const locationStr = event.location_type === "online" ? "Online" : (event.location ?? "");
+    const locationStr = event.location_type === "online" ? t("event_detail.online_label") : (event.location ?? "");
     try {
       await Share.share({
         message: `${event.title}\n📅 ${fmtDateTime(event.start_date)}\n📍 ${locationStr}\n\n${shareUrl}`,
@@ -145,12 +147,12 @@ export default function EventScreen() {
         <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
             <Feather name="arrow-left" size={22} color={colors.navy} />
-            <Text style={[styles.headerTitle, { color: colors.navy }]}>Evento</Text>
+            <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("event_detail.title")}</Text>
           </TouchableOpacity>
         </View>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12 }}>
           <Feather name="calendar" size={40} color={colors.mutedForeground} />
-          <Text style={[{ color: colors.mutedForeground, fontSize: 16 }]}>Evento não encontrado.</Text>
+          <Text style={[{ color: colors.mutedForeground, fontSize: 16 }]}>{t("event_detail.not_found")}</Text>
         </View>
       </View>
     );
@@ -160,7 +162,7 @@ export default function EventScreen() {
   const visibleAttendees = showAllAttendees ? attendees : attendees.slice(0, 5);
 
   const companyOrg = event.company_organizer;
-  const orgName = companyOrg?.name ?? event.organizer?.full_name ?? event.organizer?.username ?? "Organizador";
+  const orgName = companyOrg?.name ?? event.organizer?.full_name ?? event.organizer?.username ?? t("event_detail.organizer_fallback");
   const orgAvatar = companyOrg?.avatar_url ?? event.organizer?.avatar_url ?? null;
   const orgHandle = !companyOrg && event.organizer?.username ? `@${event.organizer.username}` : null;
 
@@ -170,7 +172,7 @@ export default function EventScreen() {
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
-          <Text style={[styles.headerTitle, { color: colors.navy }]}>Evento</Text>
+          <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("event_detail.title")}</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={handleShare} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Feather name="share-2" size={20} color={colors.navy} />
@@ -199,12 +201,12 @@ export default function EventScreen() {
             <View style={styles.badgeRow}>
               <View style={[styles.badge, { backgroundColor: event.entry_type === "gratuito" ? "#dcfce7" : "#fef9c3" }]}>
                 <Text style={[styles.badgeText, { color: event.entry_type === "gratuito" ? "#16a34a" : "#a16207" }]}>
-                  {entryLabels[event.entry_type] ?? event.entry_type}
+                  {t(entryLabelKeys[event.entry_type] ?? "event_detail.entry_paid")}
                 </Text>
               </View>
               <View style={[styles.badge, { backgroundColor: colors.background }]}>
                 <Text style={[styles.badgeText, { color: colors.mutedForeground }]}>
-                  {event.location_type === "online" ? "🌐 Online" : "📍 Presencial"}
+                  {event.location_type === "online" ? t("event_detail.location_online") : t("event_detail.location_presential")}
                 </Text>
               </View>
             </View>
@@ -222,7 +224,7 @@ export default function EventScreen() {
               <View style={styles.metaRow}>
                 <Feather name="clock" size={16} color={colors.mutedForeground} />
                 <Text style={[styles.metaText, { color: colors.foreground }]}>
-                  Até {fmtTime(event.end_date)}
+                  {t("event_detail.until", { time: fmtTime(event.end_date) })}
                 </Text>
               </View>
             ) : null}
@@ -230,7 +232,7 @@ export default function EventScreen() {
               <View style={styles.metaRow}>
                 <Feather name="map-pin" size={16} color={colors.mutedForeground} />
                 <Text style={[styles.metaText, { color: colors.foreground }]}>
-                  {event.location_type === "online" ? "Online" : event.location}
+                  {event.location_type === "online" ? t("event_detail.online_label") : event.location}
                 </Text>
               </View>
             ) : null}
@@ -244,7 +246,7 @@ export default function EventScreen() {
             ) : null}
           </View>
 
-          {/* Online link — visible only to confirmed attendees */}
+          {/* Online link */}
           {event.location_type === "online" && event.link && isAttending ? (
             <TouchableOpacity
               style={[styles.onlineLinkCard, { backgroundColor: "#eff6ff", borderColor: "#bfdbfe" }]}
@@ -254,7 +256,7 @@ export default function EventScreen() {
               <Feather name="video" size={18} color="#2563eb" />
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 13, fontWeight: "700", color: "#1d4ed8" }}>
-                  Link de acesso ao evento
+                  {t("event_detail.link_title")}
                 </Text>
                 <Text style={{ fontSize: 12, color: "#3b82f6", marginTop: 2 }} numberOfLines={1}>
                   {event.link}
@@ -266,17 +268,17 @@ export default function EventScreen() {
             <View style={[styles.onlineLinkCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
               <Feather name="lock" size={16} color={colors.mutedForeground} />
               <Text style={{ fontSize: 13, color: colors.mutedForeground, flex: 1 }}>
-                O link de acesso é disponibilizado após confirmar presença
+                {t("event_detail.link_locked")}
               </Text>
             </View>
           ) : null}
 
-          {/* RSVP button — hidden for creator */}
+          {/* RSVP button */}
           {isCreator ? (
             <View style={[styles.creatorBadge, { backgroundColor: colors.background, borderColor: colors.gold }]}>
               <Feather name="star" size={14} color={colors.gold} />
               <Text style={{ fontSize: 14, fontWeight: "700", color: colors.gold }}>
-                Você é o organizador deste evento
+                {t("event_detail.creator_badge")}
               </Text>
             </View>
           ) : (
@@ -297,7 +299,7 @@ export default function EventScreen() {
                 <ActivityIndicator color={isAttending ? colors.gold : "#fff"} />
               ) : (
                 <Text style={[styles.confirmBtnText, { color: isAttending ? colors.gold : "#fff" }]}>
-                  {isAttending ? "✓ Presença confirmada — Cancelar" : "Confirmar Presença"}
+                  {isAttending ? t("event_detail.cancel_confirm_btn") : t("event_detail.confirm_btn")}
                 </Text>
               )}
             </TouchableOpacity>
@@ -309,25 +311,25 @@ export default function EventScreen() {
               <View style={styles.participantsLeft}>
                 <Feather name="users" size={16} color={colors.gold} />
                 <Text style={[styles.participantsLabel, { color: colors.navy }]}>
-                  Participantes ({attendees.length}
+                  {t("event_detail.participants")} ({attendees.length}
                   {event.capacity != null ? `/${event.capacity}` : ""})
                 </Text>
               </View>
               {remaining != null && (
                 <Text style={[styles.participantsRemaining, { color: remaining > 0 ? colors.mutedForeground : "#dc2626" }]}>
-                  {remaining > 0 ? `${remaining} vagas` : "Lotado"}
+                  {remaining > 0 ? t("event_detail.spots_remaining", { count: remaining }) : t("event_detail.full")}
                 </Text>
               )}
             </View>
 
             {attendees.length === 0 ? (
               <Text style={[styles.noAttendees, { color: colors.mutedForeground }]}>
-                Seja o primeiro a confirmar presença!
+                {t("event_detail.first_rsvp")}
               </Text>
             ) : (
               <View style={{ gap: 10, marginTop: 10 }}>
                 {visibleAttendees.map((att) => {
-                  const name = att.profile?.full_name ?? att.profile?.username ?? "Participante";
+                  const name = att.profile?.full_name ?? att.profile?.username ?? t("event_detail.participant_fallback");
                   const sub  = att.profile?.position;
                   return (
                     <TouchableOpacity
@@ -352,7 +354,7 @@ export default function EventScreen() {
                 {attendees.length > 5 && (
                   <TouchableOpacity onPress={() => setShowAllAttendees((v) => !v)} style={styles.showMoreBtn}>
                     <Text style={[styles.showMoreText, { color: colors.gold }]}>
-                      {showAllAttendees ? "Ver menos" : `Ver todos (${attendees.length})`}
+                      {showAllAttendees ? t("event_detail.see_less") : t("event_detail.see_all", { count: attendees.length })}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -363,14 +365,14 @@ export default function EventScreen() {
           {/* About */}
           {event.description ? (
             <View style={[styles.aboutCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-              <Text style={[styles.aboutTitle, { color: colors.navy }]}>Sobre o Evento</Text>
+              <Text style={[styles.aboutTitle, { color: colors.navy }]}>{t("event_detail.about")}</Text>
               <Text style={[styles.aboutText, { color: colors.foreground }]}>{event.description}</Text>
             </View>
           ) : null}
 
           {/* Organizer */}
           <View style={styles.organizerRow}>
-            <Text style={[styles.organizerLabel, { color: colors.mutedForeground }]}>Organizado por</Text>
+            <Text style={[styles.organizerLabel, { color: colors.mutedForeground }]}>{t("event_detail.organizer")}</Text>
             <TouchableOpacity
               style={styles.organizerInfo}
               onPress={() =>
@@ -384,7 +386,7 @@ export default function EventScreen() {
               <View>
                 <Text style={[styles.organizerName, { color: colors.navy }]}>{orgName}</Text>
                 {companyOrg ? (
-                  <Text style={[styles.organizerHandle, { color: colors.mutedForeground }]}>Página de empresa</Text>
+                  <Text style={[styles.organizerHandle, { color: colors.mutedForeground }]}>{t("event_detail.company_page")}</Text>
                 ) : orgHandle ? (
                   <Text style={[styles.organizerHandle, { color: colors.mutedForeground }]}>{orgHandle}</Text>
                 ) : null}

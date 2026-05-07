@@ -17,6 +17,7 @@ import { useAuth } from "@/context/AuthContext";
 import { usePermissions } from "@/context/PermissionsContext";
 import { PaywallScreen } from "@/components/ui/PaywallScreen";
 import { fetchUserAnalytics, UserAnalytics, DailyEngagement } from "@/services/api";
+import { useTranslation } from "react-i18next";
 
 const CHART_W = 300;
 const CHART_H = 100;
@@ -83,6 +84,7 @@ export default function AnalyticsScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { hasFeature, isLoading: permLoading } = usePermissions();
+  const { t } = useTranslation();
 
   const [analytics, setAnalytics] = useState<UserAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -107,10 +109,10 @@ export default function AnalyticsScreen() {
     : "0.0";
 
   const kpis = [
-    { icon: "users",          label: "SEGUIDORES",        value: a?.followersCount ?? 0,  iconColor: colors.mutedForeground },
-    { icon: "trending-up",    label: "PUBLICAÇÕES",        value: a?.totalPosts ?? 0,      iconColor: colors.gold },
-    { icon: "heart",          label: "CURTIDAS TOTAIS",    value: a?.totalLikes ?? 0,      iconColor: "#ef4444" },
-    { icon: "message-circle", label: "COMENTÁRIOS",        value: a?.totalComments ?? 0,   iconColor: colors.mutedForeground },
+    { icon: "users",          label: t("analytics.followers"),  value: a?.followersCount ?? 0,  iconColor: colors.mutedForeground },
+    { icon: "trending-up",    label: t("analytics.posts"),      value: a?.totalPosts ?? 0,      iconColor: colors.gold },
+    { icon: "heart",          label: t("analytics.likes"),      value: a?.totalLikes ?? 0,      iconColor: "#ef4444" },
+    { icon: "message-circle", label: t("analytics.comments"),   value: a?.totalComments ?? 0,   iconColor: colors.mutedForeground },
   ];
 
   if (permLoading) {
@@ -124,9 +126,9 @@ export default function AnalyticsScreen() {
   if (!hasFeature("Relatórios Detalhados")) {
     return (
       <PaywallScreen
-        featureName="Relatórios Detalhados"
-        description="Acesse estatísticas completas do seu perfil e acompanhe o seu crescimento na rede."
-        requiredPlan="Profissional"
+        featureName={t("analytics.paywall_feature")}
+        description={t("analytics.paywall_desc")}
+        requiredPlan={t("analytics.paywall_plan")}
       />
     );
   }
@@ -137,7 +139,7 @@ export default function AnalyticsScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.navy }]}>Analytics</Text>
+        <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("analytics.title")}</Text>
         <View style={{ width: 22 }} />
       </View>
 
@@ -163,9 +165,9 @@ export default function AnalyticsScreen() {
           {/* Engagement rate */}
           <View style={[styles.engCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.engLabel, { color: colors.foreground }]}>Taxa de Engajamento</Text>
+              <Text style={[styles.engLabel, { color: colors.foreground }]}>{t("analytics.engagement_rate")}</Text>
               <Text style={[styles.engValue, { color: colors.navy }]}>
-                {engagementRate} <Text style={[styles.engSub, { color: colors.mutedForeground }]}>interações/post</Text>
+                {engagementRate} <Text style={[styles.engSub, { color: colors.mutedForeground }]}>{t("analytics.interactions_per_post")}</Text>
               </Text>
             </View>
             <View style={[styles.engIcon, { backgroundColor: colors.gold + "18" }]}>
@@ -175,9 +177,9 @@ export default function AnalyticsScreen() {
 
           {/* Engagement chart */}
           <View style={[styles.chartCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-            <Text style={[styles.chartTitle, { color: colors.navy }]}>Engajamento (14 dias)</Text>
+            <Text style={[styles.chartTitle, { color: colors.navy }]}>{t("analytics.chart_title")}</Text>
             {!hasData || !a?.dailyEngagement.length ? (
-              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhum dado ainda</Text>
+              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{t("analytics.no_data")}</Text>
             ) : (
               <>
                 <View style={{ alignItems: "flex-start", marginTop: 8 }}>
@@ -186,11 +188,11 @@ export default function AnalyticsScreen() {
                 <View style={styles.legend}>
                   <View style={styles.legendItem}>
                     <View style={[styles.legendDot, { backgroundColor: "#ef4444" }]} />
-                    <Text style={[styles.legendText, { color: colors.mutedForeground }]}>Curtidas</Text>
+                    <Text style={[styles.legendText, { color: colors.mutedForeground }]}>{t("analytics.legend_likes")}</Text>
                   </View>
                   <View style={styles.legendItem}>
                     <View style={[styles.legendDot, { backgroundColor: colors.gold }]} />
-                    <Text style={[styles.legendText, { color: colors.mutedForeground }]}>Comentários</Text>
+                    <Text style={[styles.legendText, { color: colors.mutedForeground }]}>{t("analytics.legend_comments")}</Text>
                   </View>
                 </View>
               </>
@@ -199,9 +201,9 @@ export default function AnalyticsScreen() {
 
           {/* Top posts */}
           <View style={[styles.topCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-            <Text style={[styles.chartTitle, { color: colors.navy }]}>Posts com Mais Engajamento</Text>
+            <Text style={[styles.chartTitle, { color: colors.navy }]}>{t("analytics.top_posts")}</Text>
             {!a?.topPosts.length ? (
-              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhum dado ainda</Text>
+              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{t("analytics.no_data")}</Text>
             ) : (
               a.topPosts.map((post, idx) => (
                 <View key={post.id} style={[styles.topRow, { borderBottomColor: colors.border }]}>

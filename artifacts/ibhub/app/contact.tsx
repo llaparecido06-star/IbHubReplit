@@ -17,14 +17,14 @@ import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/context/AuthContext";
-
-const CATEGORIES = ["Suporte Técnico", "Dúvida", "Sugestão", "Outro"];
+import { useTranslation } from "react-i18next";
 
 export default function ContactScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { t } = useTranslation();
 
   const [subject, setSubject]     = useState("");
   const [category, setCategory]   = useState("");
@@ -49,12 +49,14 @@ export default function ContactScreen() {
     }
   }, [success]);
 
+  const CATEGORIES = [t("contact.cat_support"), t("contact.cat_question"), t("contact.cat_suggestion"), t("contact.cat_other")];
+
   const handleSubmit = async () => {
     setError(null);
-    if (!user) { setError("Você precisa estar autenticado para enviar uma mensagem."); return; }
-    if (!subject.trim()) { setError("Informe o assunto da mensagem."); return; }
-    if (!category)       { setError("Selecione uma categoria."); return; }
-    if (!message.trim()) { setError("Escreva sua mensagem."); return; }
+    if (!user) { setError(t("contact.error_auth")); return; }
+    if (!subject.trim()) { setError(t("contact.error_subject")); return; }
+    if (!category)       { setError(t("contact.error_category")); return; }
+    if (!message.trim()) { setError(t("contact.error_message")); return; }
 
     setLoading(true);
     const { error: dbError } = await supabase.from("support_messages").insert({
@@ -66,7 +68,7 @@ export default function ContactScreen() {
     setLoading(false);
 
     if (dbError) {
-      setError("Não foi possível enviar sua mensagem. Tente novamente.");
+      setError(t("contact.send_error"));
     } else {
       setSuccess(true);
     }
@@ -79,22 +81,22 @@ export default function ContactScreen() {
           <TouchableOpacity onPress={() => router.back()}>
             <Feather name="arrow-left" size={22} color={colors.navy} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.navy }]}>Fale Conosco</Text>
+          <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("contact.title")}</Text>
           <View style={{ width: 22 }} />
         </View>
         <Animated.View style={[styles.successContainer, { opacity: opacityAnim }]}>
           <Animated.View style={[styles.successIcon, { backgroundColor: colors.gold + "20", transform: [{ scale: scaleAnim }] }]}>
             <Feather name="check-circle" size={52} color={colors.gold} />
           </Animated.View>
-          <Text style={[styles.successTitle, { color: colors.navy }]}>Mensagem enviada!</Text>
+          <Text style={[styles.successTitle, { color: colors.navy }]}>{t("contact.success_title")}</Text>
           <Text style={[styles.successBody, { color: colors.mutedForeground }]}>
-            Recebemos sua mensagem e nossa equipe retornará em breve. Agradecemos o contato!
+            {t("contact.success_body")}
           </Text>
           <TouchableOpacity
             style={[styles.successBtn, { backgroundColor: colors.navy }]}
             onPress={() => router.back()}
           >
-            <Text style={[styles.successBtnText, { color: "#fff" }]}>Voltar às configurações</Text>
+            <Text style={[styles.successBtnText, { color: "#fff" }]}>{t("contact.back_btn")}</Text>
           </TouchableOpacity>
         </Animated.View>
       </View>
@@ -107,7 +109,7 @@ export default function ContactScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.navy }]}>Fale Conosco</Text>
+        <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("contact.title")}</Text>
         <View style={{ width: 22 }} />
       </View>
 
@@ -121,7 +123,7 @@ export default function ContactScreen() {
           <View style={[styles.infoCard, { backgroundColor: colors.gold + "12", borderColor: colors.gold + "35" }]}>
             <Feather name="mail" size={16} color={colors.gold} />
             <Text style={[styles.infoText, { color: colors.navy }]}>
-              Nossa equipe responde em até 2 dias úteis. Para emergências, use a opção "Reportar Bug".
+              {t("contact.info_text")}
             </Text>
           </View>
 
@@ -133,23 +135,23 @@ export default function ContactScreen() {
           )}
 
           <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
-            <Text style={[styles.label, { color: colors.navy }]}>Assunto</Text>
+            <Text style={[styles.label, { color: colors.navy }]}>{t("contact.subject_label")}</Text>
             <TextInput
               style={[styles.input, { borderColor: colors.border, color: colors.navy }]}
-              placeholder="Ex: Problema ao acessar o perfil"
+              placeholder={t("contact.subject_placeholder")}
               placeholderTextColor={colors.mutedForeground}
               value={subject}
               onChangeText={setSubject}
               maxLength={120}
             />
 
-            <Text style={[styles.label, { color: colors.navy, marginTop: 14 }]}>Categoria</Text>
+            <Text style={[styles.label, { color: colors.navy, marginTop: 14 }]}>{t("contact.category_label")}</Text>
             <TouchableOpacity
               style={[styles.selector, { borderColor: category ? colors.navy : colors.border }]}
               onPress={() => setCatOpen((v) => !v)}
             >
               <Text style={[styles.selectorText, { color: category ? colors.navy : colors.mutedForeground }]}>
-                {category || "Selecione uma categoria"}
+                {category || t("contact.category_placeholder")}
               </Text>
               <Feather name={catOpen ? "chevron-up" : "chevron-down"} size={18} color={colors.mutedForeground} />
             </TouchableOpacity>
@@ -174,10 +176,10 @@ export default function ContactScreen() {
               </View>
             )}
 
-            <Text style={[styles.label, { color: colors.navy, marginTop: 14 }]}>Mensagem</Text>
+            <Text style={[styles.label, { color: colors.navy, marginTop: 14 }]}>{t("contact.message_label")}</Text>
             <TextInput
               style={[styles.textarea, { borderColor: colors.border, color: colors.navy }]}
-              placeholder="Descreva sua dúvida, sugestão ou problema em detalhes..."
+              placeholder={t("contact.message_placeholder")}
               placeholderTextColor={colors.mutedForeground}
               value={message}
               onChangeText={setMessage}
@@ -201,7 +203,7 @@ export default function ContactScreen() {
             ) : (
               <>
                 <Feather name="send" size={16} color="#fff" />
-                <Text style={styles.submitBtnText}>Enviar mensagem</Text>
+                <Text style={styles.submitBtnText}>{t("contact.send_btn")}</Text>
               </>
             )}
           </TouchableOpacity>

@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import { Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
@@ -38,6 +39,7 @@ const FALLBACK_USER = {
 };
 
 export default function PublicProfileScreen() {
+  const { t } = useTranslation();
   const colors  = useColors();
   const router  = useRouter();
   const { user: currentUser, activeCompany } = useAuth();
@@ -65,7 +67,15 @@ export default function PublicProfileScreen() {
   const bottomPad = insets.bottom;
   const navyBg   = (colors as any).navyLight ?? colors.navy;
 
-  /* ── Data ── */
+  const REPORT_REASONS = [
+    t("report.spam"),
+    t("report.offensive"),
+    t("report.false_info"),
+    t("report.harassment"),
+    t("report.fake_profile"),
+    t("common.other"),
+  ];
+
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -119,35 +129,33 @@ export default function PublicProfileScreen() {
 
   const isCompany    = (userProfile as any).profile_type === "empresa";
   const isOwnProfile = currentUser?.id === resolvedId;
-  const tab2Label    = isCompany ? "Portifólio" : "Adega";
-
-  const REPORT_REASONS = ["Spam", "Conteúdo ofensivo", "Informação falsa", "Assédio", "Perfil falso", "Outro"];
+  const tab2Label    = isCompany ? t("profile_view.portfolio_tab") : t("profile_view.cellar_tab");
 
   const handleShowUserMenu = () => {
     if (!currentUser?.id || isOwnProfile) return;
     Alert.alert(
       userProfile.full_name,
-      "O que deseja fazer?",
+      t("profile_view.menu_action"),
       [
-        { text: "Denunciar usuário", onPress: () => { setReportReason(""); setShowReportModal(true); } },
+        { text: t("profile_view.report_user"), onPress: () => { setReportReason(""); setShowReportModal(true); } },
         {
-          text: "Bloquear usuário", style: "destructive",
+          text: t("profile_view.block_user"), style: "destructive",
           onPress: () => Alert.alert(
-            "Bloquear usuário",
-            `Tem certeza que deseja bloquear ${userProfile.full_name}?`,
+            t("profile_view.block_user"),
+            t("profile_view.block_confirm", { name: userProfile.full_name }),
             [
-              { text: "Cancelar", style: "cancel" },
-              { text: "Bloquear", style: "destructive", onPress: async () => {
+              { text: t("common.cancel"), style: "cancel" },
+              { text: t("profile_view.block_btn"), style: "destructive", onPress: async () => {
                 if (!currentUser?.id || !resolvedId) return;
                 const ok = await API.blockUser(currentUser.id, resolvedId);
-                if (!ok) { Alert.alert("Erro", "Não foi possível bloquear. Tente novamente."); return; }
-                Alert.alert("Usuário bloqueado", `${userProfile.full_name} foi bloqueado(a).`);
+                if (!ok) { Alert.alert(t("common.error"), t("profile_view.block_error")); return; }
+                Alert.alert(t("profile_view.block_success"), t("profile_view.block_success_msg", { name: userProfile.full_name }));
                 router.back();
               }},
             ]
           ),
         },
-        { text: "Cancelar", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
       ]
     );
   };
@@ -159,11 +167,10 @@ export default function PublicProfileScreen() {
     setReportSubmitting(false);
     setShowReportModal(false);
     setReportReason("");
-    if (ok) Alert.alert("Denúncia enviada", "Obrigado! Nossa equipe irá revisar.");
-    else Alert.alert("Erro", "Não foi possível enviar a denúncia.");
+    if (ok) Alert.alert(t("profile_view.report_sent"), t("profile_view.report_sent_msg"));
+    else Alert.alert(t("common.error"), t("profile_view.report_error"));
   };
 
-  /* ── Actions ── */
   const handleFollow = async () => {
     if (!currentUser?.id || !id) return;
     const next = !isFollowing;
@@ -238,12 +245,20 @@ export default function PublicProfileScreen() {
     API.toggleBookmark(postId, currentUser.id, post.is_bookmarked ?? false);
   };
 
-  const connectLabel    = connectionStatus === "connected" ? "Conectado" : connectionStatus === "pending" ? "Pendente" : "Conectar";
+  const connectLabel    = connectionStatus === "connected"
+    ? t("profile_view.connected")
+    : connectionStatus === "pending"
+      ? t("profile_view.pending")
+      : t("profile_view.connect");
   const connectDisabled = connectionStatus !== "none";
 
-  /* ────────────────────────────────────────────────────────────
-     PROFILE HEADER — used as FlatList ListHeaderComponent
-  ──────────────────────────────────────────────────────────── */
+  const wineStatusLabel = (status: string) => {
+    if (status === "adega") return t("profile_view.wine_status_cellar");
+    if (status === "consumido") return t("profile_view.wine_status_consumed");
+    if (status === "presenteado") return t("profile_view.wine_status_gifted");
+    return t("profile_view.wine_status_wishlist");
+  };
+
   const ProfileHeader = useCallback(() => (
     <View>
       {/* Cover banner */}
@@ -282,9 +297,9 @@ export default function PublicProfileScreen() {
         {/* Stats */}
         <View style={[styles.statsRow, { borderColor: colors.border }]}>
           {[
-            { n: userProfile.connections_count, l: "Conexões",   type: "connections" as UserListType },
-            { n: userProfile.followers_count,   l: "Seguidores", type: "followers" as UserListType },
-            { n: userProfile.following_count,   l: "Seguindo",   type: "following" as UserListType },
+            { n: userProfile.connections_count, l: t("profile_view.connections"),  type: "connections" as UserListType },
+            { n: userProfile.followers_count,   l: t("profile_view.followers"),    type: "followers" as UserListType },
+            { n: userProfile.following_count,   l: t("profile_view.following"),    type: "following" as UserListType },
           ].map((s, i, arr) => (
             <React.Fragment key={s.l}>
               <TouchableOpacity style={styles.stat} onPress={() => setUserListModal(s.type)} activeOpacity={0.7}>
@@ -306,7 +321,9 @@ export default function PublicProfileScreen() {
                   onPress={handleFollow} activeOpacity={0.82}
                 >
                   <Feather name={isFollowing ? "check" : "plus"} size={15} color={isFollowing ? navyBg : "#fff"} />
-                  <Text style={[styles.pillText, { color: isFollowing ? navyBg : "#fff" }]}>{isFollowing ? "Seguindo" : "Seguir"}</Text>
+                  <Text style={[styles.pillText, { color: isFollowing ? navyBg : "#fff" }]}>
+                    {isFollowing ? t("profile_view.unfollow") : t("profile_view.follow")}
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.iconPill, { borderColor: colors.border, backgroundColor: colors.background }]} onPress={handleMessage} activeOpacity={0.82}>
                   <Feather name="message-circle" size={19} color={colors.foreground} />
@@ -328,7 +345,9 @@ export default function PublicProfileScreen() {
                   onPress={handleFollow} activeOpacity={0.82}
                 >
                   <Feather name={isFollowing ? "check" : "plus"} size={15} color={isFollowing ? navyBg : "#fff"} />
-                  <Text style={[styles.pillText, { color: isFollowing ? navyBg : "#fff" }]}>{isFollowing ? "Seguindo" : "Seguir"}</Text>
+                  <Text style={[styles.pillText, { color: isFollowing ? navyBg : "#fff" }]}>
+                    {isFollowing ? t("profile_view.unfollow") : t("profile_view.follow")}
+                  </Text>
                 </TouchableOpacity>
                 {canMessage && (
                   <TouchableOpacity
@@ -352,7 +371,9 @@ export default function PublicProfileScreen() {
         )}
         {Array.isArray(userProfile.certifications) && userProfile.certifications.length > 0 && (
           <View style={{ marginTop: 10 }}>
-            <Text style={{ fontSize: 11, fontWeight: "700", color: "#7a8494", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 8 }}>Certificações</Text>
+            <Text style={{ fontSize: 11, fontWeight: "700", color: "#7a8494", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 8 }}>
+              {t("profile_view.certifications")}
+            </Text>
             <View style={styles.tags}>
               {userProfile.certifications.map((cert: string) => <Badge key={cert} label={cert} variant="navy" />)}
             </View>
@@ -371,23 +392,25 @@ export default function PublicProfileScreen() {
             ))}
           </View>
           <Text style={[styles.mutualText, { color: colors.mutedForeground }]}>
-            {mutuals.length === 1 ? `${mutuals[0].full_name} é conexão em comum` : `${mutuals[0].full_name} e mais ${mutuals.length - 1} em comum`}
+            {mutuals.length === 1
+              ? t("profile_view.mutual_one", { name: mutuals[0].full_name })
+              : t("profile_view.mutual_many", { name: mutuals[0].full_name, count: mutuals.length - 1 })}
           </Text>
         </View>
       )}
 
       {/* Tabs */}
       <View style={[styles.tabRow, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
-        {(["posts", "adega"] as const).map(t => (
-          <Pressable key={t} style={[styles.tab, tab === t && { borderBottomColor: colors.gold }]} onPress={() => setTab(t)}>
-            <Text style={[styles.tabText, { color: tab === t ? colors.gold : colors.mutedForeground }]}>
-              {t === "posts" ? "Posts" : tab2Label}
+        {(["posts", "adega"] as const).map(tabKey => (
+          <Pressable key={tabKey} style={[styles.tab, tab === tabKey && { borderBottomColor: colors.gold }]} onPress={() => setTab(tabKey)}>
+            <Text style={[styles.tabText, { color: tab === tabKey ? colors.gold : colors.mutedForeground }]}>
+              {tabKey === "posts" ? t("profile_view.posts_tab") : tab2Label}
             </Text>
           </Pressable>
         ))}
       </View>
 
-      {/* Adega / Portfolio — rendered inline in header when on adega tab */}
+      {/* Adega / Portfolio */}
       {tab === "adega" && !isCompany && (
         <View style={{ paddingBottom: 24 }}>
           {isOwnProfile && (
@@ -396,14 +419,14 @@ export default function PublicProfileScreen() {
               onPress={() => router.push("/wine-cellar" as any)}
             >
               <Feather name="plus" size={15} color={colors.navy} />
-              <Text style={[styles.cellarBtnText, { color: colors.navy }]}>Gerenciar minha adega</Text>
+              <Text style={[styles.cellarBtnText, { color: colors.navy }]}>{t("profile_view.manage_cellar")}</Text>
             </TouchableOpacity>
           )}
           {wineEntries.length === 0 ? (
             <View style={styles.empty}>
               <Feather name="package" size={40} color={colors.mutedForeground} />
               <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                {isOwnProfile ? "Sua adega está vazia" : "Nenhum vinho público"}
+                {isOwnProfile ? t("profile_view.cellar_empty") : t("profile_view.cellar_no_public")}
               </Text>
             </View>
           ) : (
@@ -419,7 +442,7 @@ export default function PublicProfileScreen() {
                     </View>
                     <View style={[styles.wineStatus, { backgroundColor: colors.gold + "18" }]}>
                       <Text style={[styles.wineStatusTxt, { color: colors.gold }]}>
-                        {w.status === "adega" ? "Na Adega" : w.status === "consumido" ? "Consumido" : w.status === "presenteado" ? "Presenteado" : "Wishlist"}
+                        {wineStatusLabel(w.status)}
                       </Text>
                     </View>
                   </View>
@@ -439,21 +462,19 @@ export default function PublicProfileScreen() {
       {tab === "adega" && isCompany && (
         <View style={styles.empty}>
           <Feather name="briefcase" size={40} color={colors.mutedForeground} />
-          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Portifólio ainda vazio</Text>
+          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{t("profile_view.portfolio_empty")}</Text>
         </View>
       )}
 
-      {/* Empty state for posts tab */}
       {tab === "posts" && !loading && userPosts.length === 0 && (
         <View style={styles.empty}>
           <Feather name="grid" size={40} color={colors.mutedForeground} />
-          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhuma publicação ainda</Text>
+          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{t("profile_view.no_posts")}</Text>
         </View>
       )}
     </View>
   ), [userProfile, isFollowing, connectionStatus, tab, mutuals, wineEntries, isOwnProfile, isCompany, loading, colors, navyBg]);
 
-  /* ── Loading ── */
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -492,7 +513,7 @@ export default function PublicProfileScreen() {
         )}
       </View>
 
-      {/* ── Main feed via FlatList ── */}
+      {/* Main feed via FlatList */}
       <FlatList
         data={tab === "posts" ? userPosts : []}
         keyExtractor={item => item.id}
@@ -526,8 +547,8 @@ export default function PublicProfileScreen() {
       <Modal visible={showReportModal} transparent animationType="slide" onRequestClose={() => setShowReportModal(false)}>
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" }} onPress={() => setShowReportModal(false)}>
           <Pressable style={{ backgroundColor: "#fff", borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 24, paddingBottom: 40 }} onPress={() => {}}>
-            <Text style={{ fontSize: 17, fontWeight: "800", color: colors.navy, marginBottom: 4 }}>Denunciar usuário</Text>
-            <Text style={{ fontSize: 13, color: colors.mutedForeground, marginBottom: 18 }}>Selecione o motivo da denúncia.</Text>
+            <Text style={{ fontSize: 17, fontWeight: "800", color: colors.navy, marginBottom: 4 }}>{t("profile_view.report_title")}</Text>
+            <Text style={{ fontSize: 13, color: colors.mutedForeground, marginBottom: 18 }}>{t("profile_view.report_reason_label")}</Text>
             {REPORT_REASONS.map((reason) => (
               <TouchableOpacity
                 key={reason}
@@ -543,7 +564,9 @@ export default function PublicProfileScreen() {
               onPress={handleSubmitReport}
               disabled={!reportReason || reportSubmitting}
             >
-              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>{reportSubmitting ? "Enviando..." : "Enviar Denúncia"}</Text>
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>
+                {reportSubmitting ? t("profile_view.report_sending") : t("profile_view.report_send")}
+              </Text>
             </TouchableOpacity>
           </Pressable>
         </Pressable>
@@ -556,7 +579,7 @@ export default function PublicProfileScreen() {
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <MaterialCommunityIcons name="glass-wine" size={18} color={colors.gold} />
-                <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }}>Detalhes do Vinho</Text>
+                <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground }}>{t("profile_view.wine_details")}</Text>
               </View>
               <TouchableOpacity onPress={() => setSelectedWine(null)}>
                 <Feather name="x" size={22} color={colors.mutedForeground} />
@@ -567,7 +590,7 @@ export default function PublicProfileScreen() {
                 <Text style={{ fontSize: 20, fontWeight: "800", color: colors.foreground, marginBottom: 4 }}>{selectedWine.name}</Text>
                 <View style={[styles.wineStatus, { backgroundColor: colors.gold + "20", alignSelf: "flex-start", marginBottom: 12 }]}>
                   <Text style={[styles.wineStatusTxt, { color: colors.gold }]}>
-                    {selectedWine.status === "adega" ? "Na Adega" : selectedWine.status === "consumido" ? "Consumido" : selectedWine.status === "presenteado" ? "Presenteado" : "Wishlist"}
+                    {wineStatusLabel(selectedWine.status)}
                   </Text>
                 </View>
                 {selectedWine.producer && <Text style={{ fontSize: 15, color: colors.mutedForeground, marginBottom: 4 }}>{selectedWine.producer}{selectedWine.vintage ? ` · ${selectedWine.vintage}` : ""}</Text>}

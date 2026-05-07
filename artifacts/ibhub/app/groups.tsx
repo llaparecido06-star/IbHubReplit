@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Alert,
   Image,
@@ -24,9 +25,9 @@ type AccessType = "aberto" | "fechado" | "restrito";
 
 const CATEGORIES = ["Todos", "Exportação", "Sommelier", "Produção", "Importação", "Enoturismo", "Marketing", "Outros"];
 const ACCESS_ICON: Record<AccessType, any> = { aberto: "globe", fechado: "lock", restrito: "shield" };
-const ACCESS_LABEL: Record<AccessType, string> = { aberto: "Aberto", fechado: "Fechado", restrito: "Restrito" };
 
 export default function GroupsScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -64,7 +65,6 @@ export default function GroupsScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Realtime: refresh list on group membership changes
   useEffect(() => {
     if (!userId || realtimeRef.current) return;
     const debouncedLoad = () => {
@@ -102,27 +102,25 @@ export default function GroupsScreen() {
     const access = g.access as AccessType;
 
     if (access === "restrito") {
-      Alert.alert("Grupo restrito", "Este grupo é por convite. Entre em contato com o administrador para solicitar acesso.");
+      Alert.alert(t("groups.restricted_title"), t("groups.restricted_msg"));
       return;
     }
 
     if (access === "fechado") {
       Alert.alert(
-        "Solicitar entrada",
-        `Deseja enviar uma solicitação para entrar em "${g.name}"? O administrador será notificado e precisará aprovar.`,
+        t("groups.request_confirm_title"),
+        t("groups.request_confirm_msg", { name: g.name }),
         [
-          { text: "Cancelar", style: "cancel" },
+          { text: t("common.cancel"), style: "cancel" },
           {
-            text: "Solicitar", onPress: async () => {
-              // requestGroupJoin inserts with role="pending" — NO chat access yet
+            text: t("groups.request_btn"), onPress: async () => {
               const ok = await requestGroupJoin(g.id, userId, activeCompanyId);
               if (ok) {
-                // Notify the group owner via API server (bypasses notification RLS)
                 void notifyGroupJoinRequest(g.id);
-                Alert.alert("Solicitação enviada!", "Aguarde a aprovação do administrador. Você pode acompanhar o status na lista de grupos.");
+                Alert.alert(t("groups.request_sent_ok"), t("groups.request_sent_msg"));
                 load();
               } else {
-                Alert.alert("Erro", "Não foi possível enviar a solicitação. Você já pode ter uma solicitação pendente.");
+                Alert.alert(t("common.error"), t("groups.error_request"));
               }
             }
           },
@@ -131,26 +129,25 @@ export default function GroupsScreen() {
       return;
     }
 
-    // aberto — join immediately
     const ok = await joinGroup(g.id, userId, activeCompanyId);
     if (ok) {
-      const who = activeCompanyId ? "Sua empresa entrou" : "Você entrou";
-      Alert.alert("✅ " + who + "!", `Bem-vindo ao grupo "${g.name}".`);
+      const title = activeCompanyId ? t("groups.joined_company_ok") : t("groups.joined_ok");
+      Alert.alert("✅ " + title, t("groups.joined_msg", { name: g.name }));
       load();
     } else {
-      Alert.alert("Erro", "Não foi possível entrar no grupo.");
+      Alert.alert(t("common.error"), t("groups.error_join"));
     }
   };
 
   const handleLeave = (g: Group) => {
-    const who = activeCompanyId ? "sua empresa sair" : "você sair";
-    Alert.alert("Sair do grupo", `Tem certeza que deseja fazer ${who} de "${g.name}"?`, [
-      { text: "Cancelar", style: "cancel" },
+    const who = activeCompanyId ? t("groups.leave_who_company") : t("groups.leave_who");
+    Alert.alert(t("groups.leave_confirm_title"), t("groups.leave_confirm_msg", { who, name: g.name }), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Sair", style: "destructive", onPress: async () => {
+        text: t("groups.leave"), style: "destructive", onPress: async () => {
           const ok = await leaveGroup(g.id, userId, activeCompanyId);
           if (ok) load();
-          else Alert.alert("Erro", "Não foi possível sair do grupo.");
+          else Alert.alert(t("common.error"), t("groups.error_leave"));
         }
       },
     ]);
@@ -162,14 +159,14 @@ export default function GroupsScreen() {
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
-          <Text style={[styles.headerTitle, { color: colors.navy }]}>Grupos</Text>
+          <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("groups.title")}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.newBtn, { backgroundColor: colors.gold }]}
           onPress={() => router.push("/new-group" as any)}
         >
           <Feather name="plus" size={15} color="#fff" />
-          <Text style={styles.newBtnText}>Novo</Text>
+          <Text style={styles.newBtnText}>{t("groups.new_btn")}</Text>
         </TouchableOpacity>
       </View>
 
@@ -181,7 +178,7 @@ export default function GroupsScreen() {
         {/* DB Error */}
         {dbError && (
           <View style={[styles.errorBanner, { backgroundColor: "#fff7ed", borderColor: "#fdba74" }]}>
-            <Text style={{ fontSize: 13, color: "#9a3412" }}>⚠️ Tabela de grupos não encontrada. Execute a migração no Supabase.</Text>
+            <Text style={{ fontSize: 13, color: "#9a3412" }}>{t("groups.db_error")}</Text>
           </View>
         )}
 
@@ -191,7 +188,7 @@ export default function GroupsScreen() {
             <Feather name="search" size={15} color={colors.mutedForeground} />
             <TextInput
               style={[styles.searchInput, { color: colors.foreground }]}
-              placeholder="Buscar grupos..."
+              placeholder={t("groups.search_placeholder")}
               placeholderTextColor={colors.mutedForeground}
               value={search}
               onChangeText={setSearch}
@@ -208,7 +205,7 @@ export default function GroupsScreen() {
               onPress={() => setCategory(cat)}
             >
               <Text style={[styles.chipText, { color: category === cat ? "#fff" : colors.mutedForeground }]}>
-                {cat}
+                {cat === "Todos" ? t("groups.all") : cat}
               </Text>
             </TouchableOpacity>
           ))}
@@ -216,14 +213,14 @@ export default function GroupsScreen() {
 
         {loading ? (
           <View style={styles.empty}>
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Carregando grupos…</Text>
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{t("groups.loading")}</Text>
           </View>
         ) : (
           <>
             {/* MEUS GRUPOS */}
             {filteredMine.length > 0 && (
               <View style={styles.section}>
-                <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>MEUS GRUPOS</Text>
+                <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>{t("groups.my_groups").toUpperCase()}</Text>
                 {filteredMine.map((g) => (
                   <GroupCard key={g.id} group={g} colors={colors} router={router} onLeave={() => handleLeave(g)} />
                 ))}
@@ -233,60 +230,9 @@ export default function GroupsScreen() {
             {/* EXPLORAR */}
             {filteredExplore.length > 0 && (
               <View style={styles.section}>
-                <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>EXPLORAR</Text>
+                <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>{t("groups.explore").toUpperCase()}</Text>
                 {filteredExplore.map((g) => (
-                  <View key={g.id} style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
-                    <View style={styles.cardTop}>
-                      <View style={styles.cardMeta}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 2 }}>
-                          {g.avatar_url ? (
-                            <Image source={{ uri: g.avatar_url }} style={styles.groupAvatar} />
-                          ) : (
-                            <Avatar name={g.name} size={38} />
-                          )}
-                          <Text style={[styles.cardName, { color: colors.navy }]}>{g.name}</Text>
-                        </View>
-                        <View style={styles.cardChips}>
-                          <View style={[styles.chip2, { backgroundColor: colors.background }]}>
-                            <Text style={[styles.chip2Text, { color: colors.mutedForeground }]}>{g.category}</Text>
-                          </View>
-                          <View style={[styles.chip2, { backgroundColor: colors.background }]}>
-                            <Feather name={ACCESS_ICON[g.access as AccessType]} size={11} color={colors.mutedForeground} />
-                            <Text style={[styles.chip2Text, { color: colors.mutedForeground }]}>{ACCESS_LABEL[g.access as AccessType]}</Text>
-                          </View>
-                        </View>
-                      </View>
-                      {g.is_pending ? (
-                        <View style={[styles.joinBtn, { backgroundColor: "#fef3c7", borderWidth: 1.5, borderColor: "#f59e0b", flexDirection: "row", alignItems: "center", gap: 4 }]}>
-                          <Feather name="clock" size={12} color="#d97706" />
-                          <Text style={[styles.joinBtnText, { color: "#d97706", fontSize: 11 }]}>Aguardando</Text>
-                        </View>
-                      ) : g.access === "restrito" ? (
-                        <View style={[styles.joinBtn, { backgroundColor: colors.background, flexDirection: "row", alignItems: "center", gap: 4 }]}>
-                          <Feather name="shield" size={12} color={colors.mutedForeground} />
-                          <Text style={[styles.joinBtnText, { color: colors.mutedForeground }]}>Por convite</Text>
-                        </View>
-                      ) : (
-                        <TouchableOpacity
-                          style={[styles.joinBtn, { backgroundColor: g.access === "fechado" ? "transparent" : colors.gold, borderWidth: g.access === "fechado" ? 1.5 : 0, borderColor: colors.gold }]}
-                          onPress={() => handleJoin(g)}
-                        >
-                          <Text style={[styles.joinBtnText, { color: g.access === "fechado" ? colors.gold : "#fff" }]}>
-                            {g.access === "fechado" ? "Solicitar" : "Participar"}
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                    {g.description && (
-                      <Text style={[styles.cardDesc, { color: colors.mutedForeground }]}>{g.description}</Text>
-                    )}
-                    <View style={styles.cardMembers}>
-                      <Feather name="users" size={13} color={colors.mutedForeground} />
-                      <Text style={[styles.cardMembersText, { color: colors.mutedForeground }]}>
-                        {(g.member_count ?? 0).toLocaleString("pt-BR")} {g.member_count !== 1 ? "membros" : "membro"}
-                      </Text>
-                    </View>
-                  </View>
+                  <ExploreGroupCard key={g.id} group={g} colors={colors} onJoin={() => handleJoin(g)} />
                 ))}
               </View>
             )}
@@ -295,7 +241,7 @@ export default function GroupsScreen() {
               <View style={styles.empty}>
                 <Feather name="users" size={36} color={colors.mutedForeground} />
                 <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                  {search || category !== "Todos" ? "Nenhum grupo encontrado" : "Ainda não há grupos"}
+                  {search || category !== "Todos" ? t("groups.no_groups") : t("groups.no_groups_yet")}
                 </Text>
                 {!search && category === "Todos" && (
                   <TouchableOpacity
@@ -303,7 +249,7 @@ export default function GroupsScreen() {
                     onPress={() => router.push("/new-group" as any)}
                   >
                     <Feather name="plus" size={15} color="#fff" />
-                    <Text style={styles.newBtnText}>Criar grupo</Text>
+                    <Text style={styles.newBtnText}>{t("groups.create")}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -315,7 +261,8 @@ export default function GroupsScreen() {
   );
 }
 
-function GroupCard({ group: g, colors, router, onLeave }: { group: Group; colors: any; router: any; onLeave: () => void }) {
+function ExploreGroupCard({ group: g, colors, onJoin }: { group: Group; colors: any; onJoin: () => void }) {
+  const { t } = useTranslation();
   const access = g.access as AccessType;
   return (
     <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
@@ -335,7 +282,66 @@ function GroupCard({ group: g, colors, router, onLeave }: { group: Group; colors
             </View>
             <View style={[styles.chip2, { backgroundColor: colors.background }]}>
               <Feather name={ACCESS_ICON[access]} size={11} color={colors.mutedForeground} />
-              <Text style={[styles.chip2Text, { color: colors.mutedForeground }]}>{ACCESS_LABEL[access]}</Text>
+              <Text style={[styles.chip2Text, { color: colors.mutedForeground }]}>{t(`groups.access_${access}`)}</Text>
+            </View>
+          </View>
+        </View>
+        {g.is_pending ? (
+          <View style={[styles.joinBtn, { backgroundColor: "#fef3c7", borderWidth: 1.5, borderColor: "#f59e0b", flexDirection: "row", alignItems: "center", gap: 4 }]}>
+            <Feather name="clock" size={12} color="#d97706" />
+            <Text style={[styles.joinBtnText, { color: "#d97706", fontSize: 11 }]}>{t("groups.waiting_pending")}</Text>
+          </View>
+        ) : access === "restrito" ? (
+          <View style={[styles.joinBtn, { backgroundColor: colors.background, flexDirection: "row", alignItems: "center", gap: 4 }]}>
+            <Feather name="shield" size={12} color={colors.mutedForeground} />
+            <Text style={[styles.joinBtnText, { color: colors.mutedForeground }]}>{t("groups.invite_only")}</Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[styles.joinBtn, { backgroundColor: access === "fechado" ? "transparent" : colors.gold, borderWidth: access === "fechado" ? 1.5 : 0, borderColor: colors.gold }]}
+            onPress={onJoin}
+          >
+            <Text style={[styles.joinBtnText, { color: access === "fechado" ? colors.gold : "#fff" }]}>
+              {access === "fechado" ? t("groups.request_btn") : t("groups.join_btn")}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+      {g.description && (
+        <Text style={[styles.cardDesc, { color: colors.mutedForeground }]}>{g.description}</Text>
+      )}
+      <View style={styles.cardMembers}>
+        <Feather name="users" size={13} color={colors.mutedForeground} />
+        <Text style={[styles.cardMembersText, { color: colors.mutedForeground }]}>
+          {t("groups.members", { count: g.member_count ?? 0 })}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function GroupCard({ group: g, colors, router, onLeave }: { group: Group; colors: any; router: any; onLeave: () => void }) {
+  const { t } = useTranslation();
+  const access = g.access as AccessType;
+  return (
+    <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
+      <View style={styles.cardTop}>
+        <View style={styles.cardMeta}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 2 }}>
+            {g.avatar_url ? (
+              <Image source={{ uri: g.avatar_url }} style={styles.groupAvatar} />
+            ) : (
+              <Avatar name={g.name} size={38} />
+            )}
+            <Text style={[styles.cardName, { color: colors.navy }]}>{g.name}</Text>
+          </View>
+          <View style={styles.cardChips}>
+            <View style={[styles.chip2, { backgroundColor: colors.background }]}>
+              <Text style={[styles.chip2Text, { color: colors.mutedForeground }]}>{g.category}</Text>
+            </View>
+            <View style={[styles.chip2, { backgroundColor: colors.background }]}>
+              <Feather name={ACCESS_ICON[access]} size={11} color={colors.mutedForeground} />
+              <Text style={[styles.chip2Text, { color: colors.mutedForeground }]}>{t(`groups.access_${access}`)}</Text>
             </View>
           </View>
         </View>
@@ -344,19 +350,19 @@ function GroupCard({ group: g, colors, router, onLeave }: { group: Group; colors
             style={[styles.openChatBtn, { backgroundColor: colors.gold }]}
             onPress={() => router.push(`/group-chat/${g.id}`)}
           >
-            <Text style={styles.openChatText}>Chat</Text>
+            <Text style={styles.openChatText}>{t("groups.chat")}</Text>
           </TouchableOpacity>
           {g.is_owner && (
             <TouchableOpacity
               style={[styles.manageBtn, { borderColor: colors.border }]}
               onPress={() => router.push(`/group-settings/${g.id}`)}
             >
-              <Text style={[styles.manageBtnText, { color: colors.navy }]}>Gerenciar</Text>
+              <Text style={[styles.manageBtnText, { color: colors.navy }]}>{t("groups.manage")}</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity style={styles.leaveRow} onPress={onLeave}>
             <Feather name="log-out" size={13} color={colors.mutedForeground} />
-            <Text style={[styles.leaveText, { color: colors.mutedForeground }]}>Sair</Text>
+            <Text style={[styles.leaveText, { color: colors.mutedForeground }]}>{t("groups.leave")}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -366,7 +372,7 @@ function GroupCard({ group: g, colors, router, onLeave }: { group: Group; colors
       <View style={styles.cardMembers}>
         <Feather name="users" size={13} color={colors.mutedForeground} />
         <Text style={[styles.cardMembersText, { color: colors.mutedForeground }]}>
-          {(g.member_count ?? 0).toLocaleString("pt-BR")} {g.member_count !== 1 ? "membros" : "membro"}
+          {t("groups.members", { count: g.member_count ?? 0 })}
         </Text>
       </View>
     </View>

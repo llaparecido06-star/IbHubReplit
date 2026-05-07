@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
@@ -21,6 +22,7 @@ export default function SalvosScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const { user } = useAuth();
   const topPad = Platform.OS === "web" ? 0 : insets.top;
 
@@ -54,7 +56,7 @@ export default function SalvosScreen() {
       await toggleBookmark(postId, user.id, true);
     } catch {
       setPosts(snapshot);
-      Alert.alert("Erro", "Não foi possível remover o salvo. Tente novamente.");
+      Alert.alert(t("common.error"), t("saved.error"));
     }
   };
 
@@ -64,7 +66,7 @@ export default function SalvosScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.navy }]}>Salvos</Text>
+        <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("saved.title")}</Text>
         <View style={{ width: 22 }} />
       </View>
 
@@ -75,17 +77,17 @@ export default function SalvosScreen() {
       ) : fetchError ? (
         <View style={styles.empty}>
           <Feather name="alert-circle" size={48} color={colors.border} />
-          <Text style={[styles.emptyTitle, { color: colors.navy }]}>Erro ao carregar</Text>
+          <Text style={[styles.emptyTitle, { color: colors.navy }]}>{t("saved.load_error")}</Text>
           <TouchableOpacity onPress={load}>
-            <Text style={[styles.emptySub, { color: colors.gold }]}>Tentar novamente</Text>
+            <Text style={[styles.emptySub, { color: colors.gold }]}>{t("common.retry")}</Text>
           </TouchableOpacity>
         </View>
       ) : posts.length === 0 ? (
         <View style={styles.empty}>
           <Feather name="bookmark" size={56} color={colors.border} />
-          <Text style={[styles.emptyTitle, { color: colors.navy }]}>Nenhuma publicação salva</Text>
+          <Text style={[styles.emptyTitle, { color: colors.navy }]}>{t("saved.empty")}</Text>
           <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-            Toque no ícone de salvar em qualquer publicação
+            {t("saved.empty_sub")}
           </Text>
         </View>
       ) : (

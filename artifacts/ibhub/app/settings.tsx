@@ -57,9 +57,9 @@ export default function SettingsScreen() {
   const currentLang = LANGUAGES.find((l) => l.code === selectedLang) ?? LANGUAGES[0];
 
   const handleSignOut = () => {
-    Alert.alert("Sair", "Deseja realmente sair da sua conta?", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Sair", style: "destructive", onPress: signOut },
+    Alert.alert(t("settings.sign_out_title"), t("settings.sign_out_msg"), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("settings.sign_out"), style: "destructive", onPress: signOut },
     ]);
   };
 
@@ -74,51 +74,51 @@ export default function SettingsScreen() {
   const avatarUrl = profile?.avatar_url ?? null;
 
   const planMap: Record<string, string> = {
-    exclusive: "Plano Exclusivo",
-    business:  "Plano Business",
-    premium:   "Plano Premium",
-    basico:    "Plano Básico",
-    gratuito:  "Plano Gratuito",
+    exclusive: t("settings.plans.exclusive"),
+    business:  t("settings.plans.business"),
+    premium:   t("settings.plans.premium"),
+    basico:    t("settings.plans.basico"),
+    gratuito:  t("settings.plans.gratuito"),
   };
   const planRaw   = profile?.plan || profile?.subscription_tier || "";
-  const planLabel = planMap[planRaw.toLowerCase()] ?? (planRaw ? planRaw : "Plano Gratuito");
+  const planLabel = planMap[planRaw.toLowerCase()] ?? (planRaw ? planRaw : t("settings.plans.gratuito"));
 
   const sections: { title?: string; rows: MenuRow[] }[] = [
     {
-      title: "CONTA",
+      title: t("settings.sections.account"),
       rows: [
-        { icon: "edit-2",      label: "Editar Perfil",              sub: "Alterar informações pessoais",      onPress: () => router.push("/edit-profile" as any) },
-        { icon: "bar-chart-2", label: "Analytics",                  sub: "Estatísticas do seu perfil",         onPress: () => router.push("/analytics" as any) },
-        { icon: "shield",      label: "Certificações",              sub: "Certificações",                      onPress: () => router.push("/certifications" as any) },
+        { icon: "edit-2",      label: t("settings.rows.edit_profile"),    sub: t("settings.rows.edit_profile_sub"),    onPress: () => router.push("/edit-profile" as any) },
+        { icon: "bar-chart-2", label: t("settings.rows.analytics"),       sub: t("settings.rows.analytics_sub"),       onPress: () => router.push("/analytics" as any) },
+        { icon: "shield",      label: t("settings.rows.certifications"),  sub: t("settings.rows.certifications_sub"),  onPress: () => router.push("/certifications" as any) },
       ],
     },
     {
-      title: "CONTEÚDO",
+      title: t("settings.sections.content"),
       rows: [
-        { icon: "bookmark",    label: "Publicações Salvas",         sub: "Suas publicações favoritas",         onPress: () => router.push("/salvos" as any) },
+        { icon: "bookmark",    label: t("settings.rows.saved"),           sub: t("settings.rows.saved_sub"),           onPress: () => router.push("/salvos" as any) },
       ],
     },
     {
-      title: "PREFERÊNCIAS",
+      title: t("settings.sections.preferences"),
       rows: [
-        { icon: "bell",        label: "Notificações",               sub: "Gerenciar notificações",             onPress: () => router.push("/notification-settings" as any) },
-        { icon: "lock",        label: "Privacidade e Segurança",    sub: "Visibilidade, senha e bloqueios",    onPress: () => router.push("/privacy-security" as any) },
-        { icon: "slash",       label: "Usuários Bloqueados",        sub: "Gerenciar bloqueios",                onPress: () => router.push("/blocked-users" as any) },
+        { icon: "bell",        label: t("settings.rows.notifications"),   sub: t("settings.rows.notifications_sub"),   onPress: () => router.push("/notification-settings" as any) },
+        { icon: "lock",        label: t("settings.rows.privacy"),         sub: t("settings.rows.privacy_sub"),         onPress: () => router.push("/privacy-security" as any) },
+        { icon: "slash",       label: t("settings.rows.blocked"),         sub: t("settings.rows.blocked_sub"),         onPress: () => router.push("/blocked-users" as any) },
       ],
     },
     {
-      title: "ASSINATURA",
+      title: t("settings.sections.subscription"),
       rows: [
-        { icon: "star",        label: "Assinatura",                 sub: "Gerencie seu plano",                 onPress: () => router.push("/subscription" as any) },
+        { icon: "star",        label: t("settings.rows.subscription"),    sub: t("settings.rows.subscription_sub"),    onPress: () => router.push("/subscription" as any) },
       ],
     },
     {
-      title: "SUPORTE & LEGAL",
+      title: t("settings.sections.support"),
       rows: [
-        { icon: "file-text",   label: "Termos de Uso",              sub: "Termos e condições",                 onPress: () => router.push("/terms-of-use") },
-        { icon: "file-text",   label: "Política de Privacidade",    sub: "Como usamos seus dados",             onPress: () => router.push("/privacy-policy") },
-        { icon: "mail",        label: "Fale Conosco",               sub: "Suporte e feedback",                 onPress: () => router.push("/contact") },
-        { icon: "alert-circle",label: "Reportar Bug",               sub: "Nos ajude a melhorar",               onPress: () => router.push("/report-bug") },
+        { icon: "file-text",   label: t("settings.rows.terms"),           sub: t("settings.rows.terms_sub"),           onPress: () => router.push("/terms-of-use") },
+        { icon: "file-text",   label: t("settings.rows.privacy_policy"),  sub: t("settings.rows.privacy_policy_sub"),  onPress: () => router.push("/privacy-policy") },
+        { icon: "mail",        label: t("settings.rows.contact"),         sub: t("settings.rows.contact_sub"),         onPress: () => router.push("/contact") },
+        { icon: "alert-circle",label: t("settings.rows.report_bug"),      sub: t("settings.rows.report_bug_sub"),      onPress: () => router.push("/report-bug") },
       ],
     },
   ];
@@ -130,7 +130,7 @@ export default function SettingsScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.navy }]}>Configurações</Text>
+        <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("settings.title")}</Text>
         <View style={{ width: 22 }} />
       </View>
 
@@ -162,7 +162,7 @@ export default function SettingsScreen() {
               <Feather name="globe" size={16} color={colors.mutedForeground} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.rowLabel, { color: colors.navy }]}>Idioma</Text>
+              <Text style={[styles.rowLabel, { color: colors.navy }]}>{t("settings.language")}</Text>
               <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
                 {currentLang.flag} {currentLang.label}
               </Text>
@@ -232,8 +232,8 @@ export default function SettingsScreen() {
                 <Feather name="shield" size={16} color="#c9a84c" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.rowLabel, { color: colors.navy }]}>Painel Administrativo</Text>
-                <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>Gerenciar plataforma</Text>
+                <Text style={[styles.rowLabel, { color: colors.navy }]}>{t("settings.rows.admin")}</Text>
+                <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>{t("settings.rows.admin_sub")}</Text>
               </View>
               <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
             </TouchableOpacity>
@@ -246,7 +246,7 @@ export default function SettingsScreen() {
           onPress={handleSignOut}
         >
           <Feather name="log-out" size={16} color="#dc2626" />
-          <Text style={[styles.signOutText, { color: "#dc2626" }]}>Sair da conta</Text>
+          <Text style={[styles.signOutText, { color: "#dc2626" }]}>{t("settings.sign_out")}</Text>
         </TouchableOpacity>
 
         {/* Footer */}

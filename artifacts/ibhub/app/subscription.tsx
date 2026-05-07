@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
@@ -26,15 +27,16 @@ function getWebBaseUrl(): string {
   return getCanonicalWebBaseUrl();
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  active:   { label: "Ativo",              color: "#059669", bg: "#d1fae5" },
-  trialing: { label: "Período de teste",   color: "#2563eb", bg: "#dbeafe" },
-  past_due: { label: "Pagamento pendente", color: "#d97706", bg: "#fef3c7" },
-  canceled: { label: "Cancelado",          color: "#dc2626", bg: "#fee2e2" },
-  courtesy: { label: "Cortesia",           color: "#c9a84c", bg: "#fef9ee" },
+const STATUS_CONFIG: Record<string, { labelKey: string; color: string; bg: string }> = {
+  active:   { labelKey: "subscription.status_active",   color: "#059669", bg: "#d1fae5" },
+  trialing: { labelKey: "subscription.status_trialing", color: "#2563eb", bg: "#dbeafe" },
+  past_due: { labelKey: "subscription.status_past_due", color: "#d97706", bg: "#fef3c7" },
+  canceled: { labelKey: "subscription.status_canceled", color: "#dc2626", bg: "#fee2e2" },
+  courtesy: { labelKey: "subscription.status_courtesy", color: "#c9a84c", bg: "#fef9ee" },
 };
 
 export default function SubscriptionScreen() {
+  const { t }    = useTranslation();
   const colors   = useColors();
   const router   = useRouter();
   const insets   = useSafeAreaInsets();
@@ -69,7 +71,7 @@ export default function SubscriptionScreen() {
 
   const openPlanPage = async (planId?: string) => {
     if (!webBase) {
-      Alert.alert("Sem conexão", "Não foi possível determinar o endereço do site. Tente novamente.");
+      Alert.alert(t("subscription.no_connection"), t("subscription.no_connection_msg"));
       return;
     }
     const url = planId ? `${webBase}/assinar?plano=${planId}` : `${webBase}/assinar`;
@@ -77,9 +79,9 @@ export default function SubscriptionScreen() {
     try {
       const canOpen = await Linking.canOpenURL(url);
       if (canOpen) await Linking.openURL(url);
-      else Alert.alert("Erro", "Não foi possível abrir o navegador.");
+      else Alert.alert(t("common.error"), t("subscription.error_browser"));
     } catch {
-      Alert.alert("Erro", "Não foi possível abrir o navegador.");
+      Alert.alert(t("common.error"), t("subscription.error_browser"));
     } finally {
       setOpeningBrowser(false);
     }
@@ -87,7 +89,7 @@ export default function SubscriptionScreen() {
 
   const openPortal = async () => {
     if (!session?.access_token) {
-      Alert.alert("Erro", "Sessão expirada. Faça login novamente.");
+      Alert.alert(t("common.error"), t("subscription.error_session"));
       return;
     }
     const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? "";
@@ -103,20 +105,26 @@ export default function SubscriptionScreen() {
       });
       const data = await res.json() as { url?: string; error?: string };
       if (!res.ok || !data.url) {
-        Alert.alert("Erro", data.error ?? "Não foi possível abrir o portal de assinatura.");
+        Alert.alert(t("common.error"), data.error ?? t("subscription.error_portal"));
         return;
       }
       const canOpen = await Linking.canOpenURL(data.url);
       if (canOpen) await Linking.openURL(data.url);
-      else Alert.alert("Erro", "Não foi possível abrir o navegador.");
+      else Alert.alert(t("common.error"), t("subscription.error_browser"));
     } catch {
-      Alert.alert("Erro", "Não foi possível abrir o portal de assinatura.");
+      Alert.alert(t("common.error"), t("subscription.error_portal"));
     } finally {
       setOpeningBrowser(false);
     }
   };
 
   const currentPlanLabel = getPlanLabel(currentPlan);
+
+  const managementChips = [
+    { icon: "credit-card", label: t("subscription.change_card") },
+    { icon: "file-text",   label: t("subscription.see_invoices") },
+    { icon: "x-circle",    label: t("common.cancel") },
+  ];
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -125,7 +133,7 @@ export default function SubscriptionScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.navy }]}>Assinatura</Text>
+        <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("subscription.title")}</Text>
         <View style={{ width: 22 }} />
       </View>
 
@@ -145,35 +153,35 @@ export default function SubscriptionScreen() {
             />
             <Text style={[styles.heroBadgeText, { color: colors.gold }]}>Pro</Text>
           </View>
-          <Text style={styles.heroTitle}>Desbloqueie todo o potencial da rede do vinho</Text>
-          <Text style={styles.heroSub}>Pagamentos seguros via Stripe · Cancele quando quiser</Text>
+          <Text style={styles.heroTitle}>{t("subscription.hero_title")}</Text>
+          <Text style={styles.heroSub}>{t("subscription.hero_sub")}</Text>
         </View>
 
         {/* Current plan status */}
         <View style={[styles.statusCard, { backgroundColor: "#fff", borderColor: isFree ? colors.border : colors.gold, borderWidth: isFree ? 1 : 2 }]}>
           <View style={styles.statusRow}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.statusLabel, { color: colors.mutedForeground }]}>Plano atual</Text>
+              <Text style={[styles.statusLabel, { color: colors.mutedForeground }]}>{t("subscription.current_plan")}</Text>
               <Text style={[styles.statusPlan, { color: colors.navy }]}>{currentPlanLabel}</Text>
               {periodEnd && (
                 <Text style={[styles.statusPeriod, { color: colors.mutedForeground }]}>
-                  {hasActiveSub ? "Renova em " : "Encerra em "}
-                  {new Date(periodEnd).toLocaleDateString("pt-BR")}
+                  {hasActiveSub ? t("subscription.renews_on") : t("subscription.encerra_em")}{" "}
+                  {new Date(periodEnd).toLocaleDateString()}
                 </Text>
               )}
               {isCourtesy && courtesyUntil && (
                 <Text style={[styles.statusPeriod, { color: colors.mutedForeground }]}>
-                  Cortesia até {new Date(courtesyUntil).toLocaleDateString("pt-BR")}
+                  {t("subscription.courtesy_until", { date: new Date(courtesyUntil).toLocaleDateString() })}
                 </Text>
               )}
             </View>
             {statusCfg ? (
               <View style={[styles.badge, { backgroundColor: statusCfg.bg }]}>
-                <Text style={[styles.badgeText, { color: statusCfg.color }]}>{statusCfg.label}</Text>
+                <Text style={[styles.badgeText, { color: statusCfg.color }]}>{t(statusCfg.labelKey)}</Text>
               </View>
             ) : (
               <View style={[styles.badge, { backgroundColor: colors.background }]}>
-                <Text style={[styles.badgeText, { color: colors.mutedForeground }]}>Gratuito</Text>
+                <Text style={[styles.badgeText, { color: colors.mutedForeground }]}>{t("subscription.free_plan")}</Text>
               </View>
             )}
           </View>
@@ -182,7 +190,7 @@ export default function SubscriptionScreen() {
             <View style={[styles.warningBox, { backgroundColor: "#fef3c7" }]}>
               <Feather name="alert-triangle" size={14} color="#d97706" />
               <Text style={[styles.warningText, { color: "#92400e" }]}>
-                Pagamento pendente — atualize pelo site para manter o acesso.
+                {t("subscription.past_due_warning")}
               </Text>
             </View>
           )}
@@ -198,17 +206,13 @@ export default function SubscriptionScreen() {
                 : <Feather name="settings" size={14} color={colors.navy} />
               }
               <Text style={[styles.manageBtnText, { color: colors.navy }]}>
-                {openingBrowser ? "Abrindo portal…" : "Gerenciar assinatura"}
+                {openingBrowser ? t("subscription.opening_portal") : t("subscription.manage_btn")}
               </Text>
             </TouchableOpacity>
           )}
           {(hasActiveSub || isPastDue) && (
             <View style={{ marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {[
-                { icon: "credit-card", label: "Trocar cartão" },
-                { icon: "file-text",   label: "Ver faturas"   },
-                { icon: "x-circle",    label: "Cancelar"      },
-              ].map(item => (
+              {managementChips.map(item => (
                 <View key={item.label} style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: colors.background, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}>
                   <Feather name={item.icon as any} size={11} color={colors.mutedForeground} />
                   <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{item.label}</Text>
@@ -220,13 +224,13 @@ export default function SubscriptionScreen() {
 
         {/* Paid plan cards */}
         <Text style={[styles.sectionTitle, { color: colors.navy }]}>
-          {hasActiveSub ? "Outros planos" : "Escolha seu plano"}
+          {hasActiveSub ? t("subscription.other_plans") : t("subscription.upgrade_title")}
         </Text>
 
         {plansLoading ? (
           <View style={styles.loadingBox}>
             <ActivityIndicator color={colors.gold} />
-            <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>Carregando planos...</Text>
+            <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>{t("subscription.loading_plans")}</Text>
           </View>
         ) : (
           paidPlans.map((plan, idx) => {
@@ -251,12 +255,12 @@ export default function SubscriptionScreen() {
               >
                 {isPopular && !isActive && (
                   <View style={[styles.popularBadge, { backgroundColor: colors.gold }]}>
-                    <Text style={styles.popularText}>MAIS POPULAR</Text>
+                    <Text style={styles.popularText}>{t("subscription.popular_badge")}</Text>
                   </View>
                 )}
                 {isActive && (
                   <View style={[styles.popularBadge, { backgroundColor: "#059669" }]}>
-                    <Text style={styles.popularText}>✓ PLANO ATUAL</Text>
+                    <Text style={styles.popularText}>{t("subscription.current_plan_badge")}</Text>
                   </View>
                 )}
 
@@ -268,7 +272,7 @@ export default function SubscriptionScreen() {
                   <View style={{ alignItems: "flex-end" }}>
                     {originalPrice && (
                       <Text style={{ fontSize: 12, color: colors.mutedForeground, textDecorationLine: "line-through" }}>
-                        De: {originalPrice}
+                        {t("subscription.from_prefix")} {originalPrice}
                       </Text>
                     )}
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -281,13 +285,12 @@ export default function SubscriptionScreen() {
                     </View>
                     {price.period && (
                       <Text style={[styles.planPeriod, { color: colors.mutedForeground }]}>
-                        {originalPrice ? `Por: ${price.main}` : ""}{price.period}
+                        {originalPrice ? `${t("subscription.by_prefix")} ${price.main}` : ""}{price.period}
                       </Text>
                     )}
                   </View>
                 </View>
 
-                {/* Marketing description */}
                 {plan.description && (
                   <Text style={{ fontSize: 13, color: colors.mutedForeground, lineHeight: 19, fontStyle: "italic" }}>
                     {plan.description}
@@ -308,7 +311,7 @@ export default function SubscriptionScreen() {
                 {isActive ? (
                   <View style={[styles.currentBtn, { backgroundColor: `${colors.gold}12`, borderColor: `${colors.gold}30` }]}>
                     <Feather name="check-circle" size={14} color={colors.gold} />
-                    <Text style={[styles.currentBtnText, { color: colors.gold }]}>Plano atual</Text>
+                    <Text style={[styles.currentBtnText, { color: colors.gold }]}>{t("subscription.current_badge")}</Text>
                   </View>
                 ) : (
                   <TouchableOpacity
@@ -322,7 +325,7 @@ export default function SubscriptionScreen() {
                     ) : (
                       <>
                         <Feather name="external-link" size={14} color="#fff" />
-                        <Text style={styles.selectBtnText}>Assinar {plan.name}</Text>
+                        <Text style={styles.selectBtnText}>{t("subscription.subscribe_plan", { name: plan.name })}</Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -337,7 +340,7 @@ export default function SubscriptionScreen() {
           <View style={[styles.freePlanHint, { borderColor: colors.border }]}>
             <Feather name="check-circle" size={14} color={colors.mutedForeground} />
             <Text style={[styles.freePlanText, { color: colors.mutedForeground }]}>
-              Você está no plano {freePlan.name} · {freePlan.subtitle}
+              {t("subscription.free_plan_hint", { name: freePlan.name, subtitle: freePlan.subtitle })}
             </Text>
           </View>
         )}
@@ -346,7 +349,7 @@ export default function SubscriptionScreen() {
         <View style={[styles.infoBox, { backgroundColor: `${colors.gold}0A`, borderColor: `${colors.gold}25` }]}>
           <Feather name="lock" size={13} color={colors.gold} />
           <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
-            Assinaturas processadas com segurança via Stripe. Após o pagamento, seu plano é atualizado automaticamente no app.
+            {t("subscription.info_text")}
           </Text>
         </View>
       </ScrollView>

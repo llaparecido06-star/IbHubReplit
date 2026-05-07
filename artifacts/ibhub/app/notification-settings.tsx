@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Feather } from "@/components/ui/Icon";
 import * as Notifications from "@/utils/safeNotifications";
 import { useColors } from "@/hooks/useColors";
@@ -22,28 +23,13 @@ import {
   savePrefs,
 } from "@/utils/notificationPrefs";
 
-interface NotifRow {
-  icon: keyof typeof Feather.glyphMap;
-  label: string;
-  sub: string;
-  stateKey: PrefKey;
-}
-
-const NOTIF_ROWS: NotifRow[] = [
-  { icon: "user-plus",      label: "Novos Seguidores",       sub: "Quando alguém começar a seguir você",    stateKey: "followers" },
-  { icon: "message-circle", label: "Mensagens",              sub: "Novas mensagens diretas",                stateKey: "messages" },
-  { icon: "briefcase",      label: "Vagas e Oportunidades",  sub: "Novas vagas na sua área",                stateKey: "jobs" },
-  { icon: "heart",          label: "Curtidas",               sub: "Quando curtirem suas publicações",       stateKey: "likes" },
-  { icon: "message-square", label: "Comentários",            sub: "Novos comentários nas suas publicações", stateKey: "comments" },
-  { icon: "at-sign",        label: "Menções",                sub: "Quando alguém mencionar você",           stateKey: "mentions" },
-];
-
 type PushStatus = "granted" | "denied" | "undetermined" | "unavailable";
 
 export default function NotificationSettingsScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   const [prefs, setPrefs] = useState<Record<PrefKey, boolean>>(DEFAULT_PREFS);
   const [pushStatus, setPushStatus] = useState<PushStatus>("unavailable");
@@ -51,6 +37,15 @@ export default function NotificationSettingsScreen() {
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
+
+  const NOTIF_ROWS: { icon: keyof typeof Feather.glyphMap; label: string; sub: string; stateKey: PrefKey }[] = [
+    { icon: "user-plus",      label: t("notification_settings.rows.followers"),  sub: t("notification_settings.rows.followers_sub"),  stateKey: "followers" },
+    { icon: "message-circle", label: t("notification_settings.rows.messages"),   sub: t("notification_settings.rows.messages_sub"),   stateKey: "messages" },
+    { icon: "briefcase",      label: t("notification_settings.rows.jobs"),       sub: t("notification_settings.rows.jobs_sub"),       stateKey: "jobs" },
+    { icon: "heart",          label: t("notification_settings.rows.likes"),      sub: t("notification_settings.rows.likes_sub"),      stateKey: "likes" },
+    { icon: "message-square", label: t("notification_settings.rows.comments"),   sub: t("notification_settings.rows.comments_sub"),   stateKey: "comments" },
+    { icon: "at-sign",        label: t("notification_settings.rows.mentions"),   sub: t("notification_settings.rows.mentions_sub"),   stateKey: "mentions" },
+  ];
 
   const checkPushStatus = useCallback(async () => {
     if (Platform.OS === "web") {
@@ -86,11 +81,7 @@ export default function NotificationSettingsScreen() {
   };
 
   const handlePushToggle = async () => {
-    if (pushStatus === "granted") {
-      Linking.openSettings();
-      return;
-    }
-    if (pushStatus === "denied") {
+    if (pushStatus === "granted" || pushStatus === "denied") {
       Linking.openSettings();
       return;
     }
@@ -108,40 +99,37 @@ export default function NotificationSettingsScreen() {
   const pushGranted = pushStatus === "granted";
 
   const pushSubText = () => {
-    if (Platform.OS === "web") return "Notificações push não estão disponíveis na versão web.";
-    if (pushStatus === "denied") return "Permissão bloqueada. Toque para abrir as configurações do sistema.";
-    if (pushStatus === "undetermined") return "Toque para ativar notificações push.";
-    if (pushStatus === "granted") return "Receba notificações mesmo com o app fechado.";
-    return "Receba notificações mesmo com o app fechado.";
+    if (Platform.OS === "web") return t("notification_settings.push_unavailable");
+    if (pushStatus === "denied") return t("notification_settings.push_disabled");
+    if (pushStatus === "granted") return t("notification_settings.push_enabled");
+    return t("notification_settings.push_disabled");
   };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.navy }]}>Notificações</Text>
+        <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("notification_settings.title")}</Text>
         <View style={{ width: 22 }} />
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, rowGap: 14, paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
-        {/* Push card */}
         <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
           <View style={styles.pushRow}>
             <View style={[styles.pushIcon, { backgroundColor: colors.gold + "18" }]}>
               <Feather name="smartphone" size={22} color={colors.gold} />
             </View>
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={[styles.pushTitle, { color: colors.navy }]}>Notificações Push</Text>
+              <Text style={[styles.pushTitle, { color: colors.navy }]}>{t("notification_settings.title")}</Text>
               <Text style={[styles.pushSub, { color: colors.mutedForeground }]}>
                 {pushSubText()}
               </Text>
               {pushStatus === "denied" && (
                 <TouchableOpacity onPress={handlePushToggle}>
                   <Text style={[styles.pushLink, { color: colors.gold }]}>
-                    Abrir configurações do sistema
+                    {t("notification_settings.open_settings")}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -156,7 +144,6 @@ export default function NotificationSettingsScreen() {
           </View>
         </View>
 
-        {/* Individual toggles */}
         <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
           {NOTIF_ROWS.map((row, i) => (
             <View

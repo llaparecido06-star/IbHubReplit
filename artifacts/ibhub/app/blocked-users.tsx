@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
@@ -21,6 +22,7 @@ export default function BlockedUsersScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const { profile } = useAuth();
   const topPad = Platform.OS === "web" ? 0 : insets.top;
 
@@ -49,13 +51,14 @@ export default function BlockedUsersScreen() {
   useEffect(() => { load(); }, [load]);
 
   const handleUnblock = (item: BlockedUser) => {
+    const displayName = item.full_name ?? item.username ?? t("common.others");
     Alert.alert(
-      "Desbloquear usuário",
-      `Deseja desbloquear ${item.full_name ?? item.username ?? "este usuário"}?`,
+      t("blocked_users.unblock_title"),
+      t("blocked_users.unblock_msg", { name: displayName }),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Desbloquear",
+          text: t("blocked_users.unblock_btn"),
           onPress: async () => {
             if (!profile?.id) return;
 
@@ -65,12 +68,10 @@ export default function BlockedUsersScreen() {
 
             try {
               const ok = await unblockUser(profile.id, item.id);
-              if (!ok) {
-                throw new Error("Failed to unblock");
-              }
+              if (!ok) throw new Error("Failed to unblock");
             } catch {
               setBlocked(originalBlocked);
-              Alert.alert("Erro", "Não foi possível desbloquear. Tente novamente.");
+              Alert.alert(t("common.error"), t("blocked_users.error"));
             } finally {
               setUnblocking((prev) => {
                 const next = new Set(prev);
@@ -91,7 +92,7 @@ export default function BlockedUsersScreen() {
         <Avatar uri={item.avatar_url} name={item.full_name ?? undefined} size={44} />
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={[styles.userName, { color: colors.navy }]} numberOfLines={1}>
-            {item.full_name ?? item.username ?? "Usuário"}
+            {item.full_name ?? item.username ?? t("common.others")}
           </Text>
           {item.username ? (
             <Text style={[styles.userHandle, { color: colors.mutedForeground }]} numberOfLines={1}>
@@ -107,7 +108,7 @@ export default function BlockedUsersScreen() {
           {isUnblocking ? (
             <ActivityIndicator size="small" color={colors.navy} />
           ) : (
-            <Text style={[styles.unblockText, { color: colors.navy }]}>Desbloquear</Text>
+            <Text style={[styles.unblockText, { color: colors.navy }]}>{t("blocked_users.unblock")}</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -120,7 +121,7 @@ export default function BlockedUsersScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.navy }]}>Usuários Bloqueados</Text>
+        <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("blocked_users.title")}</Text>
         <View style={{ width: 22 }} />
       </View>
 
@@ -131,15 +132,15 @@ export default function BlockedUsersScreen() {
       ) : fetchError ? (
         <View style={styles.center}>
           <Feather name="alert-circle" size={48} color={colors.border} />
-          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Erro ao carregar a lista</Text>
+          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{t("blocked_users.load_error")}</Text>
           <TouchableOpacity onPress={load} style={[styles.retryBtn, { borderColor: colors.navy }]}>
-            <Text style={[styles.retryText, { color: colors.navy }]}>Tentar novamente</Text>
+            <Text style={[styles.retryText, { color: colors.navy }]}>{t("common.retry")}</Text>
           </TouchableOpacity>
         </View>
       ) : blocked.length === 0 ? (
         <View style={styles.empty}>
           <Feather name="slash" size={56} color={colors.border} />
-          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhum usuário bloqueado</Text>
+          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{t("blocked_users.empty")}</Text>
         </View>
       ) : (
         <FlatList

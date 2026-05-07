@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import { Feather, Ionicons } from "@/components/ui/Icon";
 import { useAuth } from "@/context/AuthContext";
 
@@ -34,6 +35,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const { signIn, signInWithGoogle, signInWithApple, session } = useAuth();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   const [email, setEmail]               = useState("");
   const [password, setPassword]         = useState("");
@@ -42,22 +44,15 @@ export default function LoginScreen() {
   const [socialLoading, setSocialLoading] = useState<"google" | "apple" | null>(null);
   const [error, setError]               = useState<string | null>(null);
 
-  // Show suspension message when redirected here after forced sign-out
   useEffect(() => {
     AsyncStorage.getItem("account_suspended").then((val) => {
       if (val === "true") {
-        setError("Sua conta foi suspensa. Entre em contato com o suporte.");
+        setError(t("auth.login.suspended"));
         AsyncStorage.removeItem("account_suspended");
       }
     });
   }, []);
 
-  // Clear the social-login spinner the moment a session arrives.
-  // On Android, openAuthSessionAsync may never resolve (Chrome Custom Tab fires
-  // an intent instead of returning to the app), so we cannot rely on the
-  // signInWithGoogle() promise resolving to clear the spinner. Instead we watch
-  // the session from AuthContext: as soon as SIGNED_IN fires and RootLayoutNav
-  // is about to navigate away, make sure the button is back to its idle state.
   useEffect(() => {
     if (session && socialLoading) {
       setSocialLoading(null);
@@ -65,14 +60,14 @@ export default function LoginScreen() {
   }, [session, socialLoading]);
 
   const handleLogin = async () => {
-    if (!email || !password) { setError("Preencha todos os campos"); return; }
+    if (!email || !password) { setError(t("auth.login.error_empty")); return; }
     setLoading(true);
     setError(null);
     const { error: err } = await signIn(email, password);
     if (err) {
       setError(err.toLowerCase().includes("suspensa") || err.toLowerCase().includes("suspen")
         ? err
-        : "Email ou senha incorretos");
+        : t("auth.login.error_invalid"));
     }
     setLoading(false);
   };
@@ -95,7 +90,6 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.root}>
-      {/* Decorative top band */}
       <View style={styles.topBand} />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
@@ -107,7 +101,6 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Logo + tagline */}
           <View style={styles.logoSection}>
             <Image
               source={require("@/assets/images/logo_dark.png")}
@@ -119,9 +112,8 @@ export default function LoginScreen() {
             </View>
           </View>
 
-          {/* Card form */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Entrar na sua conta</Text>
+            <Text style={styles.cardTitle}>{t("auth.login.title")}</Text>
 
             {error && (
               <View style={styles.errorBox}>
@@ -131,12 +123,12 @@ export default function LoginScreen() {
             )}
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>E-mail</Text>
+              <Text style={styles.fieldLabel}>{t("auth.login.email_label")}</Text>
               <View style={styles.fieldWrap}>
                 <Feather name="mail" size={16} color="#8fa3b8" style={styles.fieldIcon} />
                 <TextInput
                   style={styles.textInput}
-                  placeholder="seu@email.com"
+                  placeholder={t("auth.login.email_placeholder")}
                   placeholderTextColor="#b0bec5"
                   value={email}
                   onChangeText={setEmail}
@@ -149,9 +141,9 @@ export default function LoginScreen() {
 
             <View style={styles.fieldGroup}>
               <View style={styles.labelRow}>
-                <Text style={styles.fieldLabel}>Senha</Text>
+                <Text style={styles.fieldLabel}>{t("auth.login.password_label")}</Text>
                 <TouchableOpacity onPress={() => router.push("/(auth)/forgot-password" as any)}>
-                  <Text style={styles.forgotText}>Esqueceu?</Text>
+                  <Text style={styles.forgotText}>{t("auth.login.forgot_password")}</Text>
                 </TouchableOpacity>
               </View>
               <View style={styles.fieldWrap}>
@@ -175,12 +167,14 @@ export default function LoginScreen() {
               onPress={handleLogin}
               disabled={loading}
             >
-              <Text style={styles.primaryBtnText}>{loading ? "Entrando..." : "Acessar"}</Text>
+              <Text style={styles.primaryBtnText}>
+                {loading ? t("auth.login.logging_in") : t("auth.login.login_btn")}
+              </Text>
             </TouchableOpacity>
 
             <View style={styles.dividerRow}>
               <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>ou continue com</Text>
+              <Text style={styles.dividerText}>{t("auth.login.or")}</Text>
               <View style={styles.dividerLine} />
             </View>
 
@@ -194,7 +188,7 @@ export default function LoginScreen() {
                   ? <ActivityIndicator size="small" color="#4285F4" />
                   : <GoogleLogo size={18} />
                 }
-                <Text style={styles.socialBtnText}>Google</Text>
+                <Text style={styles.socialBtnText}>{t("auth.login.google")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.socialBtn, styles.socialBtnApple, socialLoading === "apple" && { opacity: 0.6 }]}
@@ -205,15 +199,15 @@ export default function LoginScreen() {
                   ? <ActivityIndicator size="small" color="#fff" />
                   : <Ionicons name="logo-apple" size={18} color="#fff" />
                 }
-                <Text style={[styles.socialBtnText, { color: "#fff" }]}>Apple</Text>
+                <Text style={[styles.socialBtnText, { color: "#fff" }]}>{t("auth.login.apple")}</Text>
               </TouchableOpacity>
             </View>
           </View>
 
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Não tem conta? </Text>
+            <Text style={styles.footerText}>{t("auth.login.no_account")} </Text>
             <Pressable onPress={() => router.push("/(auth)/register" as any)}>
-              <Text style={styles.footerLink}>Criar conta grátis</Text>
+              <Text style={styles.footerLink}>{t("auth.login.register")}</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -224,8 +218,6 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#f4f5f7" },
-
-  /* Thin navy band at the very top — just a tasteful accent */
   topBand: {
     position: "absolute",
     top: 0,
@@ -234,10 +226,7 @@ const styles = StyleSheet.create({
     height: 4,
     backgroundColor: "#c9a84c",
   },
-
   scroll: { paddingHorizontal: 24, flexGrow: 1, justifyContent: "center" },
-
-  /* Logo */
   logoSection: { alignItems: "center", marginBottom: 32 },
   logoImage:   { width: 160, height: 64 },
   taglineWrap: {
@@ -248,8 +237,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   tagline: { fontSize: 9.5, fontWeight: "800", color: "#c9a84c", letterSpacing: 2.5 },
-
-  /* Card */
   card: {
     backgroundColor: "#ffffff",
     borderRadius: 16,
@@ -262,8 +249,6 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   cardTitle: { fontSize: 18, fontWeight: "800", color: "#0d1b2a", marginBottom: 2 },
-
-  /* Error */
   errorBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -274,8 +259,6 @@ const styles = StyleSheet.create({
     borderColor: "#f5c6cb",
   },
   errorText: { color: "#c0392b", fontSize: 13, flex: 1 },
-
-  /* Fields */
   fieldGroup: { gap: 6 },
   labelRow:   { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   fieldLabel: { fontSize: 13, fontWeight: "700", color: "#0d1b2a" },
@@ -298,8 +281,6 @@ const styles = StyleSheet.create({
     paddingVertical: Platform.OS === "android" ? 12 : 0,
   },
   eyeBtn: { padding: 4 },
-
-  /* Primary button */
   primaryBtn: {
     backgroundColor: "#c9a84c",
     borderRadius: 10,
@@ -313,13 +294,9 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   primaryBtnText: { color: "#0d1b2a", fontSize: 15, fontWeight: "800", letterSpacing: 0.3 },
-
-  /* Divider */
   dividerRow:  { flexDirection: "row", alignItems: "center", gap: 10 },
   dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: "#dde1e7" },
   dividerText: { color: "#8fa3b8", fontSize: 12, fontWeight: "500" },
-
-  /* Social buttons */
   socialRow: { flexDirection: "row", gap: 12 },
   socialBtn: {
     flex: 1,
@@ -338,9 +315,6 @@ const styles = StyleSheet.create({
     borderColor: "#0d1b2a",
   },
   socialBtnText: { color: "#0d1b2a", fontSize: 14, fontWeight: "600" },
-  googleG:       { color: "#4285F4", fontSize: 15, fontWeight: "800" },
-
-  /* Footer */
   footer: {
     flexDirection: "row",
     justifyContent: "center",

@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useAuth } from "@/context/AuthContext";
@@ -17,6 +18,7 @@ export default function ResetPasswordScreen() {
   const colors  = useColors();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
+  const { t } = useTranslation();
   const { updatePassword, clearRecovery, mustChangePassword } = useAuth();
 
   const [password, setPassword]         = useState("");
@@ -30,11 +32,11 @@ export default function ResetPasswordScreen() {
   const handleSubmit = async () => {
     setError(null);
     if (password.length < 6) {
-      setError("A senha deve ter pelo menos 6 caracteres.");
+      setError(t("auth.reset_password.error_short"));
       return;
     }
     if (password !== confirm) {
-      setError("As senhas não coincidem.");
+      setError(t("auth.reset_password.error_match"));
       return;
     }
     setLoading(true);
@@ -60,17 +62,16 @@ export default function ResetPasswordScreen() {
       <View style={[styles.content, { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 24 }]}>
 
         {done ? (
-          /* ── Success state ─────────────────────────────────── */
           <View style={styles.centeredBox}>
             <View style={[styles.iconCircle, { backgroundColor: colors.gold + "20" }]}>
               <Text style={{ fontSize: 36 }}>✓</Text>
             </View>
-            <Text style={[styles.title, { color: colors.foreground }]}>Senha alterada!</Text>
+            <Text style={[styles.title, { color: colors.foreground }]}>{t("auth.reset_password.success_title")}</Text>
             <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-              Sua senha foi redefinida com sucesso. Você já pode usar a nova senha para entrar.
+              {t("auth.reset_password.success_subtitle")}
             </Text>
             <Button
-              title="Ir para o app"
+              title={t("auth.reset_password.back_to_login")}
               onPress={handleContinue}
               variant="gold"
               size="lg"
@@ -78,16 +79,14 @@ export default function ResetPasswordScreen() {
             />
           </View>
         ) : (
-          /* ── Form state ────────────────────────────────────── */
           <View style={styles.form}>
-            {/* Lock icon */}
             <View style={styles.centeredBox}>
               <View style={[styles.iconCircle, { backgroundColor: colors.navy + "15" }]}>
                 <Text style={{ fontSize: 36 }}>🔐</Text>
               </View>
-              <Text style={[styles.title, { color: colors.foreground }]}>Nova senha</Text>
+              <Text style={[styles.title, { color: colors.foreground }]}>{t("auth.reset_password.title")}</Text>
               <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-                Escolha uma senha segura de pelo menos 6 caracteres.
+                {t("auth.reset_password.subtitle")}
               </Text>
             </View>
 
@@ -109,7 +108,7 @@ export default function ResetPasswordScreen() {
             )}
 
             <Input
-              label="Nova senha"
+              label={t("auth.reset_password.new_password")}
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPass}
@@ -117,11 +116,11 @@ export default function ResetPasswordScreen() {
               leftIcon="lock"
               rightIcon={showPass ? "eye-off" : "eye"}
               onRightIconPress={() => setShowPass(v => !v)}
-              placeholder="Mínimo 6 caracteres"
+              placeholder={t("auth.reset_password.new_password_placeholder")}
             />
 
             <Input
-              label="Confirmar senha"
+              label={t("auth.reset_password.confirm_password")}
               value={confirm}
               onChangeText={setConfirm}
               secureTextEntry={!showConfirm}
@@ -129,11 +128,11 @@ export default function ResetPasswordScreen() {
               leftIcon="lock"
               rightIcon={showConfirm ? "eye-off" : "eye"}
               onRightIconPress={() => setShowConfirm(v => !v)}
-              placeholder="Repita a nova senha"
+              placeholder={t("auth.reset_password.confirm_password_placeholder")}
             />
 
             <Button
-              title="Salvar nova senha"
+              title={t("auth.reset_password.save_btn")}
               onPress={handleSubmit}
               loading={loading}
               variant="gold"

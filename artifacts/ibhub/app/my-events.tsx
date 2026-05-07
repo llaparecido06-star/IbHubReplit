@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import { Feather } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { useColors } from "@/hooks/useColors";
@@ -16,6 +17,7 @@ export default function MyEventsScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   return (
@@ -24,16 +26,16 @@ export default function MyEventsScreen() {
         <Pressable onPress={() => router.back()}>
           <Feather name="arrow-left" size={24} color={colors.foreground} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Meus Eventos</Text>
+        <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t("my_events.title")}</Text>
         <View style={{ width: 24 }} />
       </View>
       <View style={styles.empty}>
         <Feather name="calendar" size={48} color={colors.mutedForeground} />
-        <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Nenhum evento confirmado</Text>
+        <Text style={[styles.emptyTitle, { color: colors.foreground }]}>{t("my_events.empty")}</Text>
         <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-          Explore e confirme presença em eventos do setor
+          {t("my_events.empty_sub")}
         </Text>
-        <Button title="Ver eventos" onPress={() => router.push("/events" as any)} variant="gold" />
+        <Button title={t("my_events.see_events")} onPress={() => router.push("/events" as any)} variant="gold" />
       </View>
     </View>
   );

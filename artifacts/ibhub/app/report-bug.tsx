@@ -17,6 +17,7 @@ import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/context/AuthContext";
+import { useTranslation } from "react-i18next";
 
 type Severity = "Baixa" | "Média" | "Alta" | "Crítica";
 
@@ -32,6 +33,7 @@ export default function ReportBugScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { t } = useTranslation();
 
   const [title, setTitle]         = useState("");
   const [severity, setSeverity]   = useState<Severity | "">("");
@@ -58,10 +60,10 @@ export default function ReportBugScreen() {
 
   const handleSubmit = async () => {
     setError(null);
-    if (!user)           { setError("Você precisa estar autenticado para reportar um bug."); return; }
-    if (!title.trim())   { setError("Informe o título do bug."); return; }
-    if (!severity)       { setError("Selecione a severidade do bug."); return; }
-    if (!description.trim()) { setError("Descreva o bug detalhadamente."); return; }
+    if (!user)           { setError(t("report_bug.error_auth")); return; }
+    if (!title.trim())   { setError(t("report_bug.error_title")); return; }
+    if (!severity)       { setError(t("report_bug.error_severity")); return; }
+    if (!description.trim()) { setError(t("report_bug.error_desc")); return; }
 
     setLoading(true);
     const { error: dbError } = await supabase.from("bug_reports").insert({
@@ -74,7 +76,7 @@ export default function ReportBugScreen() {
     setLoading(false);
 
     if (dbError) {
-      setError("Não foi possível enviar o relatório. Tente novamente.");
+      setError(t("report_bug.send_error"));
     } else {
       setSuccess(true);
     }
@@ -87,22 +89,22 @@ export default function ReportBugScreen() {
           <TouchableOpacity onPress={() => router.back()}>
             <Feather name="arrow-left" size={22} color={colors.navy} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.navy }]}>Reportar Bug</Text>
+          <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("report_bug.title")}</Text>
           <View style={{ width: 22 }} />
         </View>
         <Animated.View style={[styles.successContainer, { opacity: opacityAnim }]}>
           <Animated.View style={[styles.successIcon, { backgroundColor: "#7c3aed20", transform: [{ scale: scaleAnim }] }]}>
             <Feather name="check-circle" size={52} color="#7c3aed" />
           </Animated.View>
-          <Text style={[styles.successTitle, { color: colors.navy }]}>Bug reportado!</Text>
+          <Text style={[styles.successTitle, { color: colors.navy }]}>{t("report_bug.success_title")}</Text>
           <Text style={[styles.successBody, { color: colors.mutedForeground }]}>
-            Obrigado por nos ajudar a melhorar o ibhub! Nossa equipe técnica vai investigar o problema em breve.
+            {t("report_bug.success_body")}
           </Text>
           <TouchableOpacity
             style={[styles.successBtn, { backgroundColor: colors.navy }]}
             onPress={() => router.back()}
           >
-            <Text style={[styles.successBtnText, { color: "#fff" }]}>Voltar às configurações</Text>
+            <Text style={[styles.successBtnText, { color: "#fff" }]}>{t("contact.back_btn")}</Text>
           </TouchableOpacity>
         </Animated.View>
       </View>
@@ -115,7 +117,7 @@ export default function ReportBugScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.navy }]}>Reportar Bug</Text>
+        <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("report_bug.title")}</Text>
         <View style={{ width: 22 }} />
       </View>
 
@@ -129,7 +131,7 @@ export default function ReportBugScreen() {
           <View style={[styles.infoCard, { backgroundColor: "#7c3aed15", borderColor: "#7c3aed35" }]}>
             <Feather name="alert-triangle" size={16} color="#7c3aed" />
             <Text style={[styles.infoText, { color: colors.navy }]}>
-              Quanto mais detalhes você fornecer, mais rápido conseguiremos corrigir o problema. Obrigado!
+              {t("report_bug.info_text")}
             </Text>
           </View>
 
@@ -141,17 +143,17 @@ export default function ReportBugScreen() {
           )}
 
           <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
-            <Text style={[styles.label, { color: colors.navy }]}>Título do bug</Text>
+            <Text style={[styles.label, { color: colors.navy }]}>{t("report_bug.title_label")}</Text>
             <TextInput
               style={[styles.input, { borderColor: colors.border, color: colors.navy }]}
-              placeholder="Ex: Tela de perfil não carrega imagem"
+              placeholder={t("report_bug.title_placeholder")}
               placeholderTextColor={colors.mutedForeground}
               value={title}
               onChangeText={setTitle}
               maxLength={120}
             />
 
-            <Text style={[styles.label, { color: colors.navy, marginTop: 16 }]}>Severidade</Text>
+            <Text style={[styles.label, { color: colors.navy, marginTop: 16 }]}>{t("report_bug.severity_label")}</Text>
             <View style={styles.severityRow}>
               {SEVERITIES.map((sev) => (
                 <TouchableOpacity
@@ -171,10 +173,10 @@ export default function ReportBugScreen() {
               ))}
             </View>
 
-            <Text style={[styles.label, { color: colors.navy, marginTop: 16 }]}>Descrição do bug</Text>
+            <Text style={[styles.label, { color: colors.navy, marginTop: 16 }]}>{t("report_bug.desc_label")}</Text>
             <TextInput
               style={[styles.textarea, { borderColor: colors.border, color: colors.navy }]}
-              placeholder="O que aconteceu? Qual era o comportamento esperado?"
+              placeholder={t("report_bug.desc_placeholder")}
               placeholderTextColor={colors.mutedForeground}
               value={description}
               onChangeText={setDesc}
@@ -188,12 +190,12 @@ export default function ReportBugScreen() {
             </Text>
 
             <Text style={[styles.label, { color: colors.navy, marginTop: 16 }]}>
-              Passos para reproduzir{" "}
-              <Text style={[styles.optional, { color: colors.mutedForeground }]}>(opcional)</Text>
+              {t("report_bug.steps_label")}{" "}
+              <Text style={[styles.optional, { color: colors.mutedForeground }]}>({t("common.optional")})</Text>
             </Text>
             <TextInput
               style={[styles.textarea, { borderColor: colors.border, color: colors.navy }]}
-              placeholder={"1. Abrir o app\n2. Navegar para Perfil\n3. Tocar em..."}
+              placeholder={t("report_bug.steps_placeholder")}
               placeholderTextColor={colors.mutedForeground}
               value={steps}
               onChangeText={setSteps}
@@ -214,7 +216,7 @@ export default function ReportBugScreen() {
             ) : (
               <>
                 <Feather name="send" size={16} color="#fff" />
-                <Text style={styles.submitBtnText}>Enviar relatório</Text>
+                <Text style={styles.submitBtnText}>{t("report_bug.send_btn")}</Text>
               </>
             )}
           </TouchableOpacity>

@@ -16,6 +16,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { fetchReferralLeaderboard, ReferralRankEntry } from "@/services/api";
+import { useTranslation } from "react-i18next";
 
 const MEDAL_COLORS = ["#FFD700", "#C0C0C0", "#CD7F32"];
 const MEDAL_ICONS  = ["🥇", "🥈", "🥉"];
@@ -25,6 +26,7 @@ export default function ReferralRankingScreen() {
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
   const { user } = useAuth();
+  const { t } = useTranslation();
 
   const [leaderboard, setLeaderboard] = useState<ReferralRankEntry[]>([]);
   const [loading, setLoading]         = useState(true);
@@ -65,8 +67,8 @@ export default function ReferralRankingScreen() {
           <Feather name="arrow-left" size={22} color="#fff" />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Ranking de Convites</Text>
-          <Text style={styles.headerSub}>Quem mais trouxe pessoas</Text>
+          <Text style={styles.headerTitle}>{t("referral.ranking_title")}</Text>
+          <Text style={styles.headerSub}>{t("referral.ranking_sub")}</Text>
         </View>
         <View style={{ width: 44 }} />
       </View>
@@ -79,10 +81,10 @@ export default function ReferralRankingScreen() {
         <View style={styles.center}>
           <Text style={{ fontSize: 48, marginBottom: 12 }}>🍇</Text>
           <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-            Nenhum convite ainda
+            {t("referral.no_invites")}
           </Text>
           <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-            Compartilhe seu código de convite{"\n"}e apareça no ranking!
+            {t("referral.no_invites_sub")}
           </Text>
         </View>
       ) : (
@@ -100,9 +102,9 @@ export default function ReferralRankingScreen() {
               </View>
               <Avatar uri={myEntry.avatar_url} name={myEntry.full_name} size={38} />
               <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={[styles.myName, { color: colors.foreground }]}>Você</Text>
+                <Text style={[styles.myName, { color: colors.foreground }]}>{t("common.you")}</Text>
                 <Text style={[styles.mySub, { color: colors.mutedForeground }]}>
-                  {myEntry.invite_count} {myEntry.invite_count === 1 ? "convite" : "convites"}
+                  {myEntry.invite_count} {t("referral.invites", { count: myEntry.invite_count })}
                 </Text>
               </View>
               <View style={[styles.countBadge, { backgroundColor: colors.gold }]}>
@@ -115,7 +117,7 @@ export default function ReferralRankingScreen() {
           {/* ── Podium (top 3) ── */}
           {podium.length > 0 && (
             <View style={[styles.podiumSection, { backgroundColor: navy }]}>
-              <Text style={styles.podiumLabel}>Pódio</Text>
+              <Text style={styles.podiumLabel}>{t("referral.podium")}</Text>
               <View style={styles.podiumRow}>
                 {/* Reorder: 2nd, 1st, 3rd */}
                 {[podium[1], podium[0], podium[2]].map((entry, visualIdx) => {
@@ -136,8 +138,8 @@ export default function ReferralRankingScreen() {
                       <View style={[styles.podiumAvatarWrap, isMe && { borderColor: colors.gold, borderWidth: 2 }]}>
                         <Avatar uri={entry.avatar_url} name={entry.full_name} size={realIdx === 0 ? 54 : 44} />
                       </View>
-                      <Text style={styles.podiumName} numberOfLines={1}>{isMe ? "Você" : entry.full_name.split(" ")[0]}</Text>
-                      <Text style={styles.podiumCount}>{entry.invite_count} convites</Text>
+                      <Text style={styles.podiumName} numberOfLines={1}>{isMe ? t("common.you") : entry.full_name.split(" ")[0]}</Text>
+                      <Text style={styles.podiumCount}>{entry.invite_count} {t("referral.invites", { count: entry.invite_count })}</Text>
                       <View style={[styles.podiumBar, { height: barH, backgroundColor: MEDAL_COLORS[realIdx] + "55" }]}>
                         <Text style={[styles.podiumRank, { color: MEDAL_COLORS[realIdx] }]}>#{entry.rank}</Text>
                       </View>
@@ -152,7 +154,7 @@ export default function ReferralRankingScreen() {
           {rest.length > 0 && (
             <View style={{ paddingHorizontal: 16, paddingTop: 16, rowGap: 10 }}>
               <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>
-                Classificação completa
+                {t("referral.full_ranking")}
               </Text>
               {rest.map(entry => {
                 const isMe = entry.id === user?.id;
@@ -177,7 +179,7 @@ export default function ReferralRankingScreen() {
                     {/* Info */}
                     <View style={styles.rowInfo}>
                       <Text style={[styles.rowName, { color: colors.foreground }]} numberOfLines={1}>
-                        {isMe ? `${entry.full_name} (você)` : entry.full_name}
+                        {isMe ? `${entry.full_name} (${t("common.you_lower")})` : entry.full_name}
                       </Text>
                       {!!entry.headline && (
                         <Text style={[styles.rowSub, { color: colors.mutedForeground }]} numberOfLines={1}>
@@ -204,8 +206,7 @@ export default function ReferralRankingScreen() {
             <View style={[styles.notYetCard, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
               <Feather name="award" size={20} color={colors.mutedForeground} />
               <Text style={[styles.notYetText, { color: colors.mutedForeground }]}>
-                Você ainda não aparece no ranking.{"\n"}
-                Compartilhe seu código para começar!
+                {t("referral.not_yet")}
               </Text>
             </View>
           )}

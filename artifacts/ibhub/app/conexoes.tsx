@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Platform,
@@ -31,6 +32,7 @@ import {
 type ConexoesTab = "pendentes" | "conectados" | "seguidores" | "seguindo";
 
 export default function ConexoesScreen() {
+  const { t } = useTranslation();
   const colors  = useColors();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
@@ -149,10 +151,10 @@ export default function ConexoesScreen() {
   };
 
   const tabs: { key: ConexoesTab; label: string; badge?: number }[] = [
-    { key: "pendentes",  label: "Pendentes",  badge: received.length },
-    { key: "conectados", label: "Conectados", badge: connected.length },
-    { key: "seguidores", label: "Seguidores", badge: followers.length > 0 ? followers.length : undefined },
-    { key: "seguindo",   label: "Seguindo",   badge: following.length > 0 ? following.length : undefined },
+    { key: "pendentes",  label: t("connections.tab_pending"),    badge: received.length },
+    { key: "conectados", label: t("connections.tab_connected"),  badge: connected.length },
+    { key: "seguidores", label: t("connections.tab_followers"),  badge: followers.length > 0 ? followers.length : undefined },
+    { key: "seguindo",   label: t("connections.tab_following"),  badge: following.length > 0 ? following.length : undefined },
   ];
 
   return (
@@ -161,7 +163,7 @@ export default function ConexoesScreen() {
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
-          <Text style={[styles.headerTitle, { color: colors.navy }]}>Conexões</Text>
+          <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("connections.title")}</Text>
         </TouchableOpacity>
       </View>
 
@@ -199,15 +201,15 @@ export default function ConexoesScreen() {
             <View>
               {received.length > 0 && (
                 <View>
-                  <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>RECEBIDAS</Text>
+                  <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>{t("connections.received")}</Text>
                   {received.map((person) =>
                     personConnRow(person,
                       <View style={styles.receiveActions}>
                         <TouchableOpacity style={[styles.acceptBtn, { backgroundColor: colors.gold }]} onPress={() => handleAccept(person.connectionId, person.id)}>
-                          <Text style={styles.acceptText}>Aceitar</Text>
+                          <Text style={styles.acceptText}>{t("connections.accept")}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.rejectBtn, { borderColor: colors.border }]} onPress={() => handleReject(person.connectionId)}>
-                          <Text style={[styles.rejectText, { color: colors.mutedForeground }]}>Recusar</Text>
+                          <Text style={[styles.rejectText, { color: colors.mutedForeground }]}>{t("connections.reject")}</Text>
                         </TouchableOpacity>
                       </View>
                     )
@@ -217,12 +219,12 @@ export default function ConexoesScreen() {
 
               {sent.length > 0 && (
                 <View>
-                  <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>ENVIADAS</Text>
+                  <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>{t("connections.sent")}</Text>
                   {sent.map((person) =>
                     personConnRow(person,
                       <View style={styles.waitingBadge}>
                         <Feather name="clock" size={13} color={colors.mutedForeground} />
-                        <Text style={[styles.waitingText, { color: colors.mutedForeground }]}>Aguardando</Text>
+                        <Text style={[styles.waitingText, { color: colors.mutedForeground }]}>{t("connections.waiting")}</Text>
                       </View>
                     )
                   )}
@@ -232,7 +234,7 @@ export default function ConexoesScreen() {
               {received.length === 0 && sent.length === 0 && (
                 <View style={styles.empty}>
                   <Feather name="users" size={36} color={colors.border} />
-                  <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhuma solicitação pendente</Text>
+                  <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{t("connections.empty_pending")}</Text>
                 </View>
               )}
             </View>
@@ -243,7 +245,7 @@ export default function ConexoesScreen() {
             connected.length === 0 ? (
               <View style={styles.empty}>
                 <Feather name="user-check" size={36} color={colors.border} />
-                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Nenhuma conexão ainda</Text>
+                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{t("connections.empty_connected")}</Text>
               </View>
             ) : (
               <View>
@@ -263,11 +265,11 @@ export default function ConexoesScreen() {
             followers.length === 0 ? (
               <View style={styles.empty}>
                 <Feather name="users" size={36} color={colors.border} />
-                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Ninguém te segue ainda</Text>
+                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{t("connections.empty_followers")}</Text>
               </View>
             ) : (
               <View>
-                <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>{followers.length} SEGUIDORES</Text>
+                <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>{followers.length} {t("connections.followers_count")}</Text>
                 {followers.map(followerRow)}
               </View>
             )
@@ -278,11 +280,11 @@ export default function ConexoesScreen() {
             following.length === 0 ? (
               <View style={styles.empty}>
                 <Feather name="users" size={36} color={colors.border} />
-                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Você não segue ninguém ainda</Text>
+                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{t("connections.empty_following")}</Text>
               </View>
             ) : (
               <View>
-                <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SEGUINDO {following.length}</Text>
+                <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>{t("connections.following_count")} {following.length}</Text>
                 {following.map(followerRow)}
               </View>
             )

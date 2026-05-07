@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useAuth } from "@/context/AuthContext";
@@ -19,6 +20,7 @@ export default function ForgotPasswordScreen() {
   const router = useRouter();
   const { resetPassword } = useAuth();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -27,7 +29,7 @@ export default function ForgotPasswordScreen() {
 
   const handleReset = async () => {
     if (!email) {
-      setError("Informe seu email");
+      setError(t("auth.forgot_password.error_empty"));
       return;
     }
     setLoading(true);
@@ -48,7 +50,7 @@ export default function ForgotPasswordScreen() {
     >
       <View style={[styles.content, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 }]}>
         <Pressable style={styles.back} onPress={() => router.back()}>
-          <Text style={{ color: colors.gold, fontSize: 16, fontWeight: "600" }}>← Voltar</Text>
+          <Text style={{ color: colors.gold, fontSize: 16, fontWeight: "600" }}>{t("auth.forgot_password.back")}</Text>
         </Pressable>
 
         {sent ? (
@@ -56,12 +58,12 @@ export default function ForgotPasswordScreen() {
             <View style={[styles.icon, { backgroundColor: colors.gold + "20" }]}>
               <Text style={{ fontSize: 32, color: colors.gold }}>✓</Text>
             </View>
-            <Text style={[styles.title, { color: colors.foreground }]}>Email enviado!</Text>
+            <Text style={[styles.title, { color: colors.foreground }]}>{t("auth.forgot_password.sent_title")}</Text>
             <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-              Verifique sua caixa de entrada e siga as instruções para redefinir sua senha.
+              {t("auth.forgot_password.sent_subtitle")}
             </Text>
             <Button
-              title="Voltar ao Login"
+              title={t("auth.forgot_password.back_to_login")}
               onPress={() => router.replace("/(auth)/login" as any)}
               variant="gold"
               size="lg"
@@ -70,9 +72,9 @@ export default function ForgotPasswordScreen() {
           </View>
         ) : (
           <View style={styles.form}>
-            <Text style={[styles.title, { color: colors.foreground }]}>Recuperar senha</Text>
+            <Text style={[styles.title, { color: colors.foreground }]}>{t("auth.forgot_password.title")}</Text>
             <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-              Insira seu email e enviaremos um link para redefinir sua senha.
+              {t("auth.forgot_password.subtitle")}
             </Text>
 
             {error && (
@@ -82,17 +84,17 @@ export default function ForgotPasswordScreen() {
             )}
 
             <Input
-              label="Email"
+              label={t("auth.forgot_password.email_label")}
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
               leftIcon="mail"
-              placeholder="seu@email.com"
+              placeholder={t("auth.forgot_password.email_placeholder")}
             />
 
             <Button
-              title="Enviar link de recuperação"
+              title={loading ? t("auth.forgot_password.sending") : t("auth.forgot_password.send_btn")}
               onPress={handleReset}
               loading={loading}
               variant="gold"

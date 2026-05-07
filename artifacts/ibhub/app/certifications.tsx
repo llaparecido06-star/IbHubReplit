@@ -18,6 +18,7 @@ import { useAuth } from "@/context/AuthContext";
 import { usePermissions } from "@/context/PermissionsContext";
 import { PaywallScreen } from "@/components/ui/PaywallScreen";
 import { updateProfile } from "@/services/api";
+import { useTranslation } from "react-i18next";
 
 const CERT_OPTIONS = [
   "WSET Level 1",
@@ -40,6 +41,7 @@ export default function CertificationsScreen() {
   const insets  = useSafeAreaInsets();
   const { user, profile, patchProfile } = useAuth();
   const { hasFeature, isLoading: permLoading } = usePermissions();
+  const { t } = useTranslation();
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -54,10 +56,10 @@ export default function CertificationsScreen() {
   const [saving, setSaving]             = useState(false);
 
   const handleAdd = async () => {
-    const cert = (selectedCert === "Outro" ? customCert : selectedCert).trim();
-    if (!cert) { Alert.alert("Atenção", "Selecione ou digite uma certificação."); return; }
+    const cert = (selectedCert === t("certifications.other") ? customCert : selectedCert).trim();
+    if (!cert) { Alert.alert(t("common.attention"), t("certifications.validation_select")); return; }
     if (certifications.includes(cert)) {
-      Alert.alert("Atenção", "Essa certificação já está na lista.");
+      Alert.alert(t("common.attention"), t("certifications.validation_duplicate"));
       return;
     }
     if (!user?.id) return;
@@ -67,24 +69,24 @@ export default function CertificationsScreen() {
     try {
       const ok = await updateProfile(user.id, { certifications: updated });
       if (!ok) {
-        Alert.alert("Erro", "Não foi possível salvar. Tente novamente.");
+        Alert.alert(t("common.error"), t("common.save_error"));
         return;
       }
       setCertifications(updated);
       patchProfile({ certifications: updated });
       setSelectedCert(""); setCustomCert(""); setShowForm(false); setShowPicker(false);
     } catch {
-      Alert.alert("Erro de Conexão", "Verifique sua conexão e tente novamente.");
+      Alert.alert(t("common.conn_error"), t("common.conn_error_msg"));
     } finally {
       setSaving(false);
     }
   };
 
   const handleRemove = (cert: string) => {
-    Alert.alert("Remover certificação", `Deseja remover "${cert}"?`, [
-      { text: "Cancelar", style: "cancel" },
+    Alert.alert(t("certifications.remove_title"), t("certifications.remove_msg", { cert }), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Remover", style: "destructive", onPress: async () => {
+        text: t("certifications.remove_btn"), style: "destructive", onPress: async () => {
           if (!user?.id) return;
           const updated = certifications.filter((c) => c !== cert);
           try {
@@ -93,10 +95,10 @@ export default function CertificationsScreen() {
               setCertifications(updated);
               patchProfile({ certifications: updated });
             } else {
-              Alert.alert("Erro", "Não foi possível remover. Tente novamente.");
+              Alert.alert(t("common.error"), t("common.save_error"));
             }
           } catch {
-            Alert.alert("Erro de Conexão", "Verifique sua conexão e tente novamente.");
+            Alert.alert(t("common.conn_error"), t("common.conn_error_msg"));
           }
         },
       },
@@ -114,9 +116,9 @@ export default function CertificationsScreen() {
   if (!hasFeature("Upload Certificados")) {
     return (
       <PaywallScreen
-        featureName="Upload de Certificados"
-        description="Exiba suas certificações profissionais de vinho no seu perfil ibhub."
-        requiredPlan="Profissional"
+        featureName={t("certifications.paywall_feature")}
+        description={t("certifications.paywall_desc")}
+        requiredPlan={t("certifications.paywall_plan")}
       />
     );
   }
@@ -126,7 +128,7 @@ export default function CertificationsScreen() {
       <View style={[styles.header, { paddingTop: topPad + 6, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
-          <Text style={[styles.headerTitle, { color: colors.navy }]}>Certificações</Text>
+          <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("certifications.title")}</Text>
         </TouchableOpacity>
       </View>
 
@@ -142,13 +144,13 @@ export default function CertificationsScreen() {
           onPress={() => { setShowForm(!showForm); setShowPicker(false); }}
         >
           <Feather name="plus" size={16} color={colors.gold} />
-          <Text style={[styles.addBtnText, { color: colors.gold }]}>Adicionar Certificação</Text>
+          <Text style={[styles.addBtnText, { color: colors.gold }]}>{t("certifications.add_btn")}</Text>
         </TouchableOpacity>
 
         {/* Form */}
         {showForm && (
           <View style={[styles.formCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-            <Text style={[styles.formTitle, { color: colors.navy }]}>Nova Certificação</Text>
+            <Text style={[styles.formTitle, { color: colors.navy }]}>{t("certifications.form_title")}</Text>
 
             {/* Picker */}
             <TouchableOpacity
@@ -156,7 +158,7 @@ export default function CertificationsScreen() {
               onPress={() => setShowPicker(!showPicker)}
             >
               <Text style={[styles.pickerBtnText, { color: selectedCert ? colors.foreground : colors.mutedForeground }]}>
-                {selectedCert || "Selecione a certificação"}
+                {selectedCert || t("certifications.select_placeholder")}
               </Text>
               <Feather name={showPicker ? "chevron-up" : "chevron-down"} size={16} color={colors.mutedForeground} />
             </TouchableOpacity>
@@ -185,7 +187,7 @@ export default function CertificationsScreen() {
             {selectedCert === "Outro" && (
               <TextInput
                 style={[styles.input, { borderColor: colors.border, color: colors.foreground }]}
-                placeholder="Nome da certificação"
+                placeholder={t("certifications.custom_placeholder")}
                 placeholderTextColor={colors.mutedForeground}
                 value={customCert}
                 onChangeText={setCustomCert}
@@ -194,14 +196,14 @@ export default function CertificationsScreen() {
 
             <View style={styles.formActions}>
               <TouchableOpacity style={styles.cancelBtn} onPress={() => { setShowForm(false); setShowPicker(false); setSelectedCert(""); }}>
-                <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>Cancelar</Text>
+                <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>{t("common.cancel")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.submitBtn, { backgroundColor: colors.navy, opacity: saving ? 0.7 : 1 }]}
                 onPress={handleAdd}
                 disabled={saving}
               >
-                <Text style={styles.submitText}>{saving ? "Salvando..." : "Adicionar"}</Text>
+                <Text style={styles.submitText}>{saving ? t("common.saving") : t("certifications.add_btn_short")}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -213,9 +215,9 @@ export default function CertificationsScreen() {
             <View style={[styles.emptyIconWrap, { borderColor: colors.mutedForeground }]}>
               <Feather name="award" size={36} color={colors.mutedForeground} />
             </View>
-            <Text style={[styles.emptyTitle, { color: colors.navy }]}>Nenhuma certificação ainda</Text>
+            <Text style={[styles.emptyTitle, { color: colors.navy }]}>{t("certifications.empty")}</Text>
             <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-              Adicione suas certificações e credenciais profissionais
+              {t("certifications.empty_sub")}
             </Text>
           </View>
         )}

@@ -1,5 +1,6 @@
 import { useRouter, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   FlatList,
@@ -22,6 +23,7 @@ import * as API from "@/services/api";
 const PAGE_SIZE = 15;
 
 function StarRow({ avg, count }: { avg: number; count: number }) {
+  const { t } = useTranslation();
   const colors = useColors();
   const full  = Math.floor(avg);
   const half  = avg - full >= 0.5 ? 1 : 0;
@@ -39,13 +41,14 @@ function StarRow({ avg, count }: { avg: number; count: number }) {
         {avg.toFixed(1)}
       </Text>
       <Text style={{ fontSize: 12, color: colors.mutedForeground }}>
-        ({count} {count === 1 ? "avaliação" : "avaliações"})
+        ({t("wine_ranking.ratings", { count })})
       </Text>
     </View>
   );
 }
 
 export default function WineRankingScreen() {
+  const { t }   = useTranslation();
   const colors  = useColors();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
@@ -54,6 +57,12 @@ export default function WineRankingScreen() {
   const initialEan = params.ean ?? "";
 
   type SortKey = "score" | "alpha" | "count";
+
+  const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+    { key: "score", label: t("wine_ranking.sort_score") },
+    { key: "count", label: t("wine_ranking.sort_count") },
+    { key: "alpha", label: t("wine_ranking.sort_alpha") },
+  ];
 
   const [allRatings, setAllRatings]   = useState<API.WineCommunityRating[]>([]);
   const [displayedItems, setDisplayedItems] = useState<API.WineCommunityRating[]>([]);
@@ -64,7 +73,6 @@ export default function WineRankingScreen() {
   const [searching, setSearching]     = useState(false);
   const [sortBy, setSortBy]           = useState<SortKey>("score");
 
-  // Detail modal
   const [detailWine,    setDetailWine]    = useState<API.WineCommunityRating | null>(null);
   const [detailReviews, setDetailReviews] = useState<API.WineEanReview[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -133,12 +141,6 @@ export default function WineRankingScreen() {
     load(undefined);
   };
 
-  const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-    { key: "score", label: "Maior Pontuação" },
-    { key: "count", label: "Mais Avaliados" },
-    { key: "alpha", label: "Alfabética" },
-  ];
-
   const openDetail = async (wine: API.WineCommunityRating) => {
     setDetailWine(wine);
     setDetailReviews([]);
@@ -164,7 +166,7 @@ export default function WineRankingScreen() {
           {item.name}
         </Text>
         <Text style={[styles.wineSub, { color: colors.mutedForeground }]} numberOfLines={1}>
-          {[item.producer, item.vintage].filter(Boolean).join(" · ") || "Produtor desconhecido"}
+          {[item.producer, item.vintage].filter(Boolean).join(" · ") || t("wine_ranking.unknown_producer")}
         </Text>
         <StarRow avg={Number(item.avg_rating)} count={Number(item.total_ratings)} />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
@@ -183,9 +185,9 @@ export default function WineRankingScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
           <View>
-            <Text style={[styles.headerTitle, { color: colors.navy }]}>Ranking de Vinhos</Text>
+            <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("wine_ranking.title")}</Text>
             <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
-              {initialEan ? `EAN ${initialEan}` : "Notas da comunidade ibhub"}
+              {initialEan ? `EAN ${initialEan}` : t("wine_ranking.subtitle")}
             </Text>
           </View>
         </TouchableOpacity>
@@ -197,7 +199,7 @@ export default function WineRankingScreen() {
           <Feather name="tag" size={15} color={colors.mutedForeground} />
           <TextInput
             style={[styles.searchInput, { color: colors.foreground }]}
-            placeholder="Filtrar por EAN (ex: 7896123456789)"
+            placeholder={t("wine_ranking.ean_placeholder")}
             placeholderTextColor={colors.mutedForeground}
             value={eanFilter}
             onChangeText={setEanFilter}
@@ -253,9 +255,7 @@ export default function WineRankingScreen() {
         <View style={styles.center}>
           <Feather name="bar-chart-2" size={44} color={colors.border} />
           <Text style={[styles.emptyTitle, { color: colors.mutedForeground }]}>
-            {eanFilter.trim()
-              ? "Nenhuma avaliação pública encontrada para este EAN."
-              : "Ainda não há avaliações comunitárias.\nAdicione vinhos com EAN e avalie!"}
+            {eanFilter.trim() ? t("wine_ranking.ean_empty") : t("wine_ranking.no_ratings")}
           </Text>
         </View>
       ) : (
@@ -269,7 +269,7 @@ export default function WineRankingScreen() {
           onEndReachedThreshold={0.3}
           ListHeaderComponent={
             <Text style={[styles.listHeader, { color: colors.mutedForeground }]}>
-              {allRatings.length} {allRatings.length === 1 ? "rótulo" : "rótulos"} com avaliação pública
+              {t("wine_ranking.labels", { count: allRatings.length })} {t("wine_ranking.with_public_rating")}
             </Text>
           }
           ListFooterComponent={
@@ -291,10 +291,8 @@ export default function WineRankingScreen() {
       >
         <Pressable style={styles.modalOverlay} onPress={() => setDetailWine(null)}>
           <Pressable style={[styles.modalSheet, { backgroundColor: "#fff" }]} onPress={() => {}}>
-            {/* Handle */}
             <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
 
-            {/* Title */}
             <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 4 }}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.modalTitle, { color: colors.navy }]} numberOfLines={2}>
@@ -311,7 +309,6 @@ export default function WineRankingScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Aggregate */}
             {detailWine && (
               <View style={[styles.modalAggregate, { backgroundColor: colors.gold + "12", borderColor: colors.gold + "40" }]}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -330,25 +327,26 @@ export default function WineRankingScreen() {
                   </View>
                 )}
                 <Text style={{ fontSize: 13, color: colors.mutedForeground }}>
-                  {Number(detailWine.total_ratings)} {Number(detailWine.total_ratings) === 1 ? "avaliação" : "avaliações"}
+                  {t("wine_ranking.ratings", { count: Number(detailWine.total_ratings) })}
                 </Text>
               </View>
             )}
 
-            <Text style={[styles.reviewsLabel, { color: colors.mutedForeground }]}>Avaliações individuais</Text>
+            <Text style={[styles.reviewsLabel, { color: colors.mutedForeground }]}>
+              {t("wine_ranking.individual_reviews")}
+            </Text>
 
             {detailLoading ? (
               <ActivityIndicator color={colors.gold} style={{ marginVertical: 24 }} />
             ) : detailReviews.length === 0 ? (
               <Text style={[styles.emptyReviews, { color: colors.mutedForeground }]}>
-                Nenhuma avaliação pública encontrada.
+                {t("wine_ranking.no_public_reviews")}
               </Text>
             ) : (
               <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
                 <View style={{ gap: 12 }}>
                   {detailReviews.map((rev, idx) => (
                     <View key={rev.id} style={[styles.reviewRow, { borderColor: colors.border }]}>
-                      {/* Rank + avatar */}
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 }}>
                         <Text style={[styles.reviewRank, { color: idx < 3 ? colors.gold : colors.mutedForeground }]}>
                           #{idx + 1}
@@ -360,15 +358,14 @@ export default function WineRankingScreen() {
                         />
                         <View style={{ flex: 1 }}>
                           <Text style={[styles.reviewName, { color: colors.navy }]} numberOfLines={1}>
-                            {rev.profile?.full_name ?? "Usuário"}
+                            {rev.profile?.full_name ?? t("common.user")}
                           </Text>
                           {rev.tasted_at && (
                             <Text style={{ fontSize: 11, color: colors.mutedForeground }}>
-                              {new Date(rev.tasted_at).toLocaleDateString("pt-BR")}
+                              {new Date(rev.tasted_at).toLocaleDateString()}
                             </Text>
                           )}
                         </View>
-                        {/* Score badge */}
                         {rev.score != null && (
                           <View style={[styles.scoreBadge, { backgroundColor: colors.gold }]}>
                             <MaterialCommunityIcons name="star" size={11} color="#fff" />
@@ -376,7 +373,6 @@ export default function WineRankingScreen() {
                           </View>
                         )}
                       </View>
-                      {/* Star rating */}
                       {rev.rating != null && (
                         <View style={{ flexDirection: "row", gap: 3, marginBottom: 4 }}>
                           {Array.from({ length: 5 }).map((_, i) => (
@@ -389,7 +385,6 @@ export default function WineRankingScreen() {
                           ))}
                         </View>
                       )}
-                      {/* Notes */}
                       {rev.notes?.trim() ? (
                         <Text style={[styles.reviewNotes, { color: colors.foreground }]}>
                           {rev.notes.trim()}
@@ -426,7 +421,6 @@ const styles = StyleSheet.create({
   wineName:     { fontSize: 15, fontWeight: "700" },
   wineSub:      { fontSize: 12 },
   eanText:      { fontSize: 11 },
-  // Modal
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
   modalSheet:   { borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 20, paddingBottom: 40, maxHeight: "85%" as any },
   modalHandle:  { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 16 },

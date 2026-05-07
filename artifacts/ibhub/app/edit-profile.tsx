@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import React, { useCallback, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Alert,
   Image,
@@ -38,6 +39,7 @@ const AREAS = [
 type UsernameStatus = "idle" | "checking" | "available" | "unavailable";
 
 export default function EditProfileScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const router = useRouter();
   const { user, profile, refreshProfile, patchProfile } = useAuth();
@@ -65,14 +67,14 @@ export default function EditProfileScreen() {
   const usernameDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { execute: executeSave, isLoading: saving } = useAsyncAction(async () => {
-    if (!user?.id) { Alert.alert("Erro", "Sessão expirada. Faça login novamente."); return; }
+    if (!user?.id) { Alert.alert(t("common.error"), t("common.session_expired")); return; }
     let finalAvatarUrl: string | null | undefined = undefined;
     if (avatarChanged && avatarUri) {
       setUploadingAvatar(true);
       try {
         const uploaded = await uploadAvatar(user.id, avatarUri);
         if (!uploaded) {
-          Alert.alert("Aviso", "Não foi possível fazer upload da foto, mas o resto do perfil será salvo.");
+          Alert.alert(t("edit_profile.avatar_warning_title"), t("edit_profile.avatar_warning_msg"));
         } else {
           finalAvatarUrl = uploaded;
         }
@@ -92,7 +94,7 @@ export default function EditProfileScreen() {
       ...(finalAvatarUrl !== undefined ? { avatar_url: finalAvatarUrl } : {}),
     });
     if (!ok) {
-      Alert.alert("Erro", "Não foi possível salvar o perfil. Verifique se o nome de usuário já está em uso e tente novamente.");
+      Alert.alert(t("common.error"), t("edit_profile.save_error"));
       return;
     }
     if (finalAvatarUrl) {
@@ -101,7 +103,7 @@ export default function EditProfileScreen() {
       patchProfile({ avatar_url: finalAvatarUrl });
     }
     try { await refreshProfile?.(); } catch {}
-    Alert.alert("Salvo!", "Perfil atualizado com sucesso.");
+    Alert.alert(t("edit_profile.saved_title"), t("edit_profile.saved_msg"));
     router.back();
   });
 
@@ -128,11 +130,11 @@ export default function EditProfileScreen() {
   const handleBack = () => {
     if (isDirty()) {
       Alert.alert(
-        "Alterações não salvas",
-        "Você tem alterações que não foram salvas. Deseja sair mesmo assim?",
+        t("edit_profile.unsaved_title"),
+        t("edit_profile.unsaved_msg"),
         [
-          { text: "Continuar editando", style: "cancel" },
-          { text: "Sair sem salvar", style: "destructive", onPress: () => router.back() },
+          { text: t("edit_profile.keep_editing"), style: "cancel" },
+          { text: t("edit_profile.exit_no_save"), style: "destructive", onPress: () => router.back() },
         ]
       );
     } else {
@@ -143,7 +145,7 @@ export default function EditProfileScreen() {
   const handlePickAvatar = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permissão necessária", "Precisamos de acesso à sua galeria para alterar a foto.");
+      Alert.alert(t("common.permission_required"), t("edit_profile.gallery_permission"));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -181,7 +183,7 @@ export default function EditProfileScreen() {
     setSelectedAreas((prev) => {
       if (prev.includes(area)) return prev.filter((a) => a !== area);
       if (prev.length >= 3) {
-        Alert.alert("Limite atingido", "Selecione no máximo 3 áreas de atuação.");
+        Alert.alert(t("edit_profile.area_limit_title"), t("edit_profile.area_limit_msg"));
         return prev;
       }
       return [...prev, area];
@@ -204,9 +206,9 @@ export default function EditProfileScreen() {
   };
 
   const handleSave = () => {
-    if (!fullName.trim()) { Alert.alert("Atenção", "Nome completo é obrigatório."); return; }
+    if (!fullName.trim()) { Alert.alert(t("common.attention"), t("edit_profile.error_name")); return; }
     if (usernameStatus === "unavailable") {
-      Alert.alert("Atenção", "O nome de usuário informado não está disponível.");
+      Alert.alert(t("common.attention"), t("edit_profile.error_username_unavailable"));
       return;
     }
     executeSave();
@@ -219,7 +221,7 @@ export default function EditProfileScreen() {
       <View style={[styles.header, { paddingTop: topPad + 6, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={handleBack} style={styles.backRow}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
-          <Text style={[styles.headerTitle, { color: colors.navy }]}>Editar Perfil</Text>
+          <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("edit_profile.title")}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.saveBtn, { backgroundColor: saving ? colors.gold + "88" : colors.gold }]}
@@ -227,7 +229,7 @@ export default function EditProfileScreen() {
           disabled={saving}
         >
           <Feather name="save" size={14} color="#fff" />
-          <Text style={styles.saveBtnText}>{saving ? "Salvando..." : "Salvar"}</Text>
+          <Text style={styles.saveBtnText}>{saving ? t("common.saving") : t("common.save")}</Text>
         </TouchableOpacity>
       </View>
 
@@ -259,7 +261,7 @@ export default function EditProfileScreen() {
 
         {/* Nome completo */}
         <View style={styles.field}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Nome completo *</Text>
+          <Text style={[styles.label, { color: colors.foreground }]}>{t("edit_profile.full_name")}</Text>
           <TextInput
             style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
             value={fullName}
@@ -269,7 +271,7 @@ export default function EditProfileScreen() {
 
         {/* Username */}
         <View style={styles.field}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Nome de usuário</Text>
+          <Text style={[styles.label, { color: colors.foreground }]}>{t("edit_profile.username")}</Text>
           <View style={styles.inputRow}>
             <TextInput
               style={[styles.input, styles.inputFlex, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
@@ -284,20 +286,20 @@ export default function EditProfileScreen() {
               {usernameStatus === "unavailable" && <Feather name="x" size={16} color="#dc2626" />}
             </View>
           </View>
-          {usernameStatus === "available"   && <Text style={[styles.usernameHint, { color: "#22c55e" }]}>Disponível</Text>}
-          {usernameStatus === "unavailable" && <Text style={[styles.usernameHint, { color: "#dc2626" }]}>Indisponível ou muito curto</Text>}
+          {usernameStatus === "available"   && <Text style={[styles.usernameHint, { color: "#22c55e" }]}>{t("edit_profile.username_available")}</Text>}
+          {usernameStatus === "unavailable" && <Text style={[styles.usernameHint, { color: "#dc2626" }]}>{t("edit_profile.username_unavailable")}</Text>}
         </View>
 
         {/* Bio */}
         <View style={styles.field}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Bio</Text>
+          <Text style={[styles.label, { color: colors.foreground }]}>{t("edit_profile.bio")}</Text>
           <TextInput
             style={[styles.input, styles.textarea, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
             value={bio}
             onChangeText={(v) => { if (v.length <= 200) setBio(v); }}
             multiline
             textAlignVertical="top"
-            placeholder="Fale sobre você..."
+            placeholder={t("edit_profile.bio_placeholder")}
             placeholderTextColor={colors.mutedForeground}
           />
           <Text style={[styles.charCount, { color: colors.mutedForeground }]}>{bio.length}/200</Text>
@@ -305,7 +307,7 @@ export default function EditProfileScreen() {
 
         {/* Telefone */}
         <View style={styles.field}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Telefone (com DDI)</Text>
+          <Text style={[styles.label, { color: colors.foreground }]}>{t("edit_profile.phone")}</Text>
           <TextInput
             style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
             value={phone}
@@ -318,7 +320,7 @@ export default function EditProfileScreen() {
 
         {/* Áreas de atuação */}
         <View style={styles.field}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Áreas de atuação (máx. 3)</Text>
+          <Text style={[styles.label, { color: colors.foreground }]}>{t("edit_profile.areas")}</Text>
           <View style={styles.chips}>
             {AREAS.map((area) => {
               const active = selectedAreas.includes(area);
@@ -337,7 +339,7 @@ export default function EditProfileScreen() {
 
         {/* Empresa */}
         <View style={styles.field}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Empresa</Text>
+          <Text style={[styles.label, { color: colors.foreground }]}>{t("edit_profile.company")}</Text>
           <TextInput
             style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
             value={company}
@@ -347,7 +349,7 @@ export default function EditProfileScreen() {
 
         {/* Cargo */}
         <View style={styles.field}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Cargo</Text>
+          <Text style={[styles.label, { color: colors.foreground }]}>{t("edit_profile.position")}</Text>
           <TextInput
             style={[styles.input, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
             value={position}
@@ -357,7 +359,7 @@ export default function EditProfileScreen() {
 
         {/* Certificações — chips */}
         <View style={styles.field}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Certificações</Text>
+          <Text style={[styles.label, { color: colors.foreground }]}>{t("certifications.title")}</Text>
           {certifications.length > 0 && (
             <View style={styles.chips}>
               {certifications.map((cert) => (
@@ -373,7 +375,7 @@ export default function EditProfileScreen() {
           <View style={styles.inputRow}>
             <TextInput
               style={[styles.input, styles.inputFlex, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-              placeholder="Ex: WSET Level 3"
+              placeholder={t("edit_profile.cert_placeholder")}
               placeholderTextColor={colors.mutedForeground}
               value={certInput}
               onChangeText={setCertInput}

@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import { Feather } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
@@ -38,11 +39,11 @@ const FOLLOWUP_KEY = "ibhub_followup_reminders";
 
 type MainTab = "mensagens" | "solicitacoes";
 
-function timeAgo(dateStr?: string): string {
+function timeAgo(dateStr?: string, justNow = "agora"): string {
   if (!dateStr) return "";
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "agora";
+  if (mins < 1) return justNow;
   if (mins < 60) return `${mins}m`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h`;
@@ -50,6 +51,7 @@ function timeAgo(dateStr?: string): string {
 }
 
 export default function MessagesScreen() {
+  const { t } = useTranslation();
   const colors  = useColors();
   const router  = useRouter();
   const { user, activeCompany } = useAuth();
@@ -71,7 +73,6 @@ export default function MessagesScreen() {
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
 
-  // In company mode, always show Mensagens tab (Solicitações is hidden)
   useEffect(() => {
     if (activeCompany) setMainTab("mensagens");
   }, [activeCompany?.id]);
@@ -90,7 +91,6 @@ export default function MessagesScreen() {
     setUnreadCount(total);
   }, [convos, setUnreadCount]);
 
-  // Real-time subscription: update conversation list when new messages arrive
   useEffect(() => {
     if (!user?.id) return;
 
@@ -145,7 +145,6 @@ export default function MessagesScreen() {
     };
   }, [user?.id, load]);
 
-  // Real-time subscription: move conversation from requests to inbox when accepted status changes
   useEffect(() => {
     if (!user?.id) return;
 
@@ -178,7 +177,6 @@ export default function MessagesScreen() {
     };
   }, [user?.id]);
 
-  // Reload conversations AND follow-up badges when returning from a chat screen.
   useFocusEffect(useCallback(() => {
     load();
     (async () => {
@@ -189,14 +187,13 @@ export default function MessagesScreen() {
     })();
   }, [load]));
 
-  // Debounced search — only connections + following
   useEffect(() => {
     if (!userSearch.trim() || !user?.id) { setSearchResults([]); return; }
-    const t = setTimeout(async () => {
+    const t2 = setTimeout(async () => {
       const res = await API.searchChatContacts(userSearch, user.id);
       setSearchResults(res);
     }, 300);
-    return () => clearTimeout(t);
+    return () => clearTimeout(t2);
   }, [userSearch, user?.id]);
 
   const onRefresh = async () => {
@@ -234,7 +231,6 @@ export default function MessagesScreen() {
     setConvos((prev) => prev.filter((c) => c.id !== conv.id));
   };
 
-  // Split conversations
   const accepted  = convos.filter((c) => c.accepted !== false);
   const requests  = convos.filter((c) => c.accepted === false);
 
@@ -245,18 +241,19 @@ export default function MessagesScreen() {
   });
 
   const requestCount = requests.length;
+  const justNowLabel = t("messages.just_now");
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.navy }]}>Mensagens</Text>
+        <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("messages.title")}</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={[styles.newChatBtn, { backgroundColor: colors.gold }]}
             onPress={() => { setShowNewConvo((v) => !v); setUserSearch(""); setSearchResults([]); }}
             accessibilityRole="button"
-            accessibilityLabel="Nova conversa"
+            accessibilityLabel={t("messages.new_conversation")}
           >
             <Feather name="edit" size={16} color="#fff" />
           </TouchableOpacity>
@@ -265,7 +262,7 @@ export default function MessagesScreen() {
             onPress={() => router.push("/groups" as any)}
           >
             <Feather name="users" size={16} color={colors.navy} />
-            <Text style={[styles.gruposBtnText, { color: colors.navy }]}>Grupos</Text>
+            <Text style={[styles.gruposBtnText, { color: colors.navy }]}>{t("messages.groups_btn")}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -273,15 +270,15 @@ export default function MessagesScreen() {
       {/* Nova conversa */}
       {showNewConvo && (
         <View style={[styles.novaCard, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
-          <Text style={[styles.novaTitle, { color: colors.navy }]}>Nova conversa</Text>
+          <Text style={[styles.novaTitle, { color: colors.navy }]}>{t("messages.new_conversation")}</Text>
           <Text style={[styles.novaHint, { color: colors.mutedForeground }]}>
-            Mostrando apenas suas conexões e quem você segue
+            {t("messages.nova_hint")}
           </Text>
           <View style={[styles.searchBar, { backgroundColor: colors.background }]}>
             <Feather name="search" size={14} color={colors.mutedForeground} />
             <TextInput
               style={[styles.searchInput, { color: colors.foreground }]}
-              placeholder="Buscar por nome ou @username..."
+              placeholder={t("messages.search_name")}
               placeholderTextColor={colors.mutedForeground}
               value={userSearch}
               onChangeText={setUserSearch}
@@ -291,7 +288,7 @@ export default function MessagesScreen() {
               <TouchableOpacity
                 onPress={() => setUserSearch("")}
                 accessibilityRole="button"
-                accessibilityLabel="Limpar busca"
+                accessibilityLabel={t("common.cancel")}
               >
                 <Feather name="x" size={14} color={colors.mutedForeground} />
               </TouchableOpacity>
@@ -301,7 +298,7 @@ export default function MessagesScreen() {
             <View style={{ gap: 4, marginTop: 6 }}>
               {searchResults.length === 0 ? (
                 <Text style={[styles.noResultsText, { color: colors.mutedForeground }]}>
-                  Nenhuma conexão encontrada com esse nome
+                  {t("messages.no_contacts")}
                 </Text>
               ) : (
                 searchResults.map((u) => (
@@ -330,21 +327,21 @@ export default function MessagesScreen() {
         </View>
       )}
 
-      {/* Tabs: Mensagens / Solicitações (only show Solicitações for personal accounts) */}
+      {/* Tabs */}
       <View style={[styles.tabRow, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
-        {(activeCompany ? ["mensagens"] as MainTab[] : ["mensagens", "solicitacoes"] as MainTab[]).map((t) => {
-          const label = t === "mensagens" ? "Mensagens" : "Solicitações";
-          const isActive = t === mainTab;
+        {(activeCompany ? ["mensagens"] as MainTab[] : ["mensagens", "solicitacoes"] as MainTab[]).map((tab) => {
+          const label = tab === "mensagens" ? t("messages.tab_messages") : t("messages.tab_requests");
+          const isActive = tab === mainTab;
           return (
             <TouchableOpacity
-              key={t}
+              key={tab}
               style={[styles.tab, isActive && { borderBottomColor: colors.gold, borderBottomWidth: 2 }]}
-              onPress={() => setMainTab(t)}
+              onPress={() => setMainTab(tab)}
             >
               <Text style={[styles.tabText, { color: isActive ? colors.gold : colors.mutedForeground, fontWeight: isActive ? "700" : "400" }]}>
                 {label}
               </Text>
-              {t === "solicitacoes" && requestCount > 0 && (
+              {tab === "solicitacoes" && requestCount > 0 && (
                 <View style={[styles.badge, { backgroundColor: colors.gold }]}>
                   <Text style={styles.badgeText}>{requestCount}</Text>
                 </View>
@@ -360,7 +357,7 @@ export default function MessagesScreen() {
           <Feather name="search" size={15} color={colors.mutedForeground} />
           <TextInput
             style={[styles.searchInput, { color: colors.foreground }]}
-            placeholder={mainTab === "mensagens" ? "Buscar conversas..." : "Buscar solicitações..."}
+            placeholder={mainTab === "mensagens" ? t("messages.search_convos") : t("messages.search_requests")}
             placeholderTextColor={colors.mutedForeground}
             value={search}
             onChangeText={setSearch}
@@ -388,9 +385,22 @@ export default function MessagesScreen() {
                 onAccept={() => handleAccept(item)}
                 onDecline={() => handleDecline(item)}
                 accepting={accepting === item.id}
+                tAccept={t("messages.accept")}
+                tDecline={t("messages.decline")}
+                tUnknown={t("messages.unknown")}
+                tSentMessage={t("messages.sent_message")}
               />
             ) : (
-              <ConversationRow conversation={item} colors={colors} followUpDate={followUpMap[item.id]} />
+              <ConversationRow
+                conversation={item}
+                colors={colors}
+                followUpDate={followUpMap[item.id]}
+                justNow={justNowLabel}
+                tStartChat={t("messages.start_chat")}
+                tOverdue={t("messages.followup_overdue")}
+                tToday={t("messages.followup_today")}
+                tTomorrow={t("messages.followup_tomorrow")}
+              />
             )
           }
           ListEmptyComponent={
@@ -399,9 +409,9 @@ export default function MessagesScreen() {
                 <View style={[styles.emptyIcon, { backgroundColor: colors.gold + "18" }]}>
                   <Feather name="user-check" size={32} color={colors.gold} />
                 </View>
-                <Text style={[styles.emptyTitle, { color: colors.navy }]}>Sem solicitações</Text>
+                <Text style={[styles.emptyTitle, { color: colors.navy }]}>{t("messages.no_requests_title")}</Text>
                 <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-                  Quando alguém que você não segue enviar uma mensagem, aparecerá aqui
+                  {t("messages.no_requests_sub")}
                 </Text>
               </View>
             ) : (
@@ -409,16 +419,16 @@ export default function MessagesScreen() {
                 <View style={[styles.emptyIcon, { backgroundColor: colors.gold + "18" }]}>
                   <Feather name="message-circle" size={36} color={colors.gold} />
                 </View>
-                <Text style={[styles.emptyTitle, { color: colors.navy }]}>O brinde começa com um "Olá"</Text>
+                <Text style={[styles.emptyTitle, { color: colors.navy }]}>{t("messages.toast_title")}</Text>
                 <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-                  Inicie uma conversa com alguém da sua rede
+                  {t("messages.toast_sub")}
                 </Text>
                 <TouchableOpacity
                   style={[styles.newConvoBtn, { backgroundColor: colors.gold }]}
                   onPress={() => setShowNewConvo(true)}
                 >
                   <Feather name="edit" size={16} color="#fff" />
-                  <Text style={styles.newConvoBtnText}>Nova conversa</Text>
+                  <Text style={styles.newConvoBtnText}>{t("messages.new_conversation")}</Text>
                 </TouchableOpacity>
               </View>
             )
@@ -431,23 +441,40 @@ export default function MessagesScreen() {
 
 // ── Conversation Row ───────────────────────────────────────────────────────────
 
-function ConversationRow({ conversation: conv, colors, followUpDate }: { conversation: AppConversation; colors: any; followUpDate?: string }) {
+function ConversationRow({
+  conversation: conv,
+  colors,
+  followUpDate,
+  justNow,
+  tStartChat,
+  tOverdue,
+  tToday,
+  tTomorrow,
+}: {
+  conversation: AppConversation;
+  colors: any;
+  followUpDate?: string;
+  justNow: string;
+  tStartChat: string;
+  tOverdue: string;
+  tToday: string;
+  tTomorrow: string;
+}) {
   const router   = useRouter();
   const hasUnread = (conv.unread_count ?? 0) > 0;
   const name      = conv.name ?? conv.participant_company?.name ?? conv.participant?.full_name ?? "Chat";
   const companyId = conv.participant_company?.id ?? null;
-  // Never show the human participant's photo when the OTHER party is a company
   const avatarUri = companyId ? (conv.participant_company?.avatar_url ?? null) : (conv.participant?.avatar_url ?? null);
 
   const followUpDue = followUpDate
     ? (() => {
         const d = new Date(followUpDate);
         const now = new Date();
-        if (d <= now) return "vencido";
+        if (d <= now) return tOverdue;
         const diffMs = d.getTime() - now.getTime();
         const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-        if (diffDays === 0) return "hoje";
-        if (diffDays === 1) return "amanhã";
+        if (diffDays === 0) return tToday;
+        if (diffDays === 1) return tTomorrow;
         return `${diffDays}d`;
       })()
     : null;
@@ -464,12 +491,12 @@ function ConversationRow({ conversation: conv, colors, followUpDate }: { convers
           <Text style={[styles.convoName, { color: colors.navy }]} numberOfLines={1}>{name}</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             {followUpDue && (
-              <View style={[styles.followUpBadge, { backgroundColor: followUpDue === "vencido" ? "#ef4444" : colors.gold }]}>
+              <View style={[styles.followUpBadge, { backgroundColor: followUpDue === tOverdue ? "#ef4444" : colors.gold }]}>
                 <Feather name="clock" size={9} color="#fff" />
                 <Text style={styles.followUpText}>{followUpDue}</Text>
               </View>
             )}
-            <Text style={[styles.convoTime, { color: colors.mutedForeground }]}>{timeAgo(conv.last_message_at ?? undefined)}</Text>
+            <Text style={[styles.convoTime, { color: colors.mutedForeground }]}>{timeAgo(conv.last_message_at ?? undefined, justNow)}</Text>
           </View>
         </View>
         <View style={styles.convoBottom}>
@@ -477,7 +504,7 @@ function ConversationRow({ conversation: conv, colors, followUpDate }: { convers
             style={[styles.convoMsg, { color: hasUnread ? colors.foreground : colors.mutedForeground }, hasUnread && { fontWeight: "600" }]}
             numberOfLines={1}
           >
-            {conv.last_message ?? "Iniciar conversa"}
+            {conv.last_message ?? tStartChat}
           </Text>
           {hasUnread && (
             <View style={[styles.unreadBadge, { backgroundColor: colors.gold }]}>
@@ -492,15 +519,29 @@ function ConversationRow({ conversation: conv, colors, followUpDate }: { convers
 
 // ── Request Row ────────────────────────────────────────────────────────────────
 
-function RequestRow({ conversation: conv, colors, onAccept, onDecline, accepting }: {
+function RequestRow({
+  conversation: conv,
+  colors,
+  onAccept,
+  onDecline,
+  accepting,
+  tAccept,
+  tDecline,
+  tUnknown,
+  tSentMessage,
+}: {
   conversation: AppConversation;
   colors: any;
   onAccept: () => void;
   onDecline: () => void;
   accepting: boolean;
+  tAccept: string;
+  tDecline: string;
+  tUnknown: string;
+  tSentMessage: string;
 }) {
-  const name    = conv.participant?.full_name ?? "Desconhecido";
-  const preview = conv.last_message ?? "Enviou uma mensagem";
+  const name    = conv.participant?.full_name ?? tUnknown;
+  const preview = conv.last_message ?? tSentMessage;
 
   return (
     <View style={[styles.requestRow, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
@@ -516,7 +557,7 @@ function RequestRow({ conversation: conv, colors, onAccept, onDecline, accepting
           >
             {accepting
               ? <ActivityIndicator size="small" color="#fff" />
-              : <Text style={styles.acceptBtnText}>Aceitar</Text>
+              : <Text style={styles.acceptBtnText}>{tAccept}</Text>
             }
           </TouchableOpacity>
           <TouchableOpacity
@@ -524,7 +565,7 @@ function RequestRow({ conversation: conv, colors, onAccept, onDecline, accepting
             onPress={onDecline}
             disabled={accepting}
           >
-            <Text style={[styles.declineBtnText, { color: colors.foreground }]}>Recusar</Text>
+            <Text style={[styles.declineBtnText, { color: colors.foreground }]}>{tDecline}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -568,10 +609,10 @@ const styles = StyleSheet.create({
   convoTop:   { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
   convoName:  { fontSize: 15, fontWeight: "700", flex: 1, marginRight: 8 },
   convoTime:  { fontSize: 12 },
-  convoBottom:{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  convoBottom:{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   convoMsg:   { fontSize: 13, flex: 1, marginRight: 8 },
-  unreadBadge:   { minWidth: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 },
-  unreadText:    { fontSize: 11, fontWeight: "700", color: "#fff" },
+  unreadBadge:{ minWidth: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 },
+  unreadText: { fontSize: 11, fontWeight: "700", color: "#fff" },
   followUpBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
   followUpText:  { fontSize: 10, fontWeight: "700", color: "#fff" },
 
@@ -580,15 +621,15 @@ const styles = StyleSheet.create({
   requestName:    { fontSize: 15, fontWeight: "700" },
   requestPreview: { fontSize: 13 },
   requestActions: { flexDirection: "row", gap: 8, marginTop: 6 },
-  acceptBtn:      { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 8, minWidth: 80, alignItems: "center" },
-  acceptBtnText:  { color: "#fff", fontSize: 13, fontWeight: "700" },
-  declineBtn:     { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 8, borderWidth: 1, minWidth: 80, alignItems: "center" },
-  declineBtnText: { fontSize: 13, fontWeight: "600" },
+  acceptBtn:      { flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: "center" },
+  acceptBtnText:  { color: "#fff", fontWeight: "700", fontSize: 13 },
+  declineBtn:     { flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: "center", borderWidth: 1 },
+  declineBtnText: { fontWeight: "600", fontSize: 13 },
 
-  empty:      { alignItems: "center", paddingTop: 80, paddingHorizontal: 40, gap: 14 },
-  emptyIcon:  { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center", marginBottom: 4 },
-  emptyTitle: { fontSize: 18, fontWeight: "800", textAlign: "center" },
-  emptySub:   { fontSize: 14, textAlign: "center", lineHeight: 20 },
-  newConvoBtn:{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 30, marginTop: 6 },
-  newConvoBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  empty:        { alignItems: "center", paddingTop: 80, paddingHorizontal: 32, gap: 12 },
+  emptyIcon:    { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  emptyTitle:   { fontSize: 18, fontWeight: "800", textAlign: "center" },
+  emptySub:     { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  newConvoBtn:  { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, marginTop: 8 },
+  newConvoBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
 });

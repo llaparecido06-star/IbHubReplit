@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
@@ -27,15 +28,16 @@ import {
   uploadCV,
 } from "@/services/api";
 
-function formatExpiresIn(expiresAt: string | null | undefined): { expired: boolean; label: string | null } {
+function formatExpiresIn(expiresAt: string | null | undefined, t: (k: string, opts?: any) => string): { expired: boolean; label: string | null } {
   if (!expiresAt) return { expired: false, label: null };
   const diff = new Date(expiresAt).getTime() - Date.now();
   if (diff <= 0) return { expired: true, label: null };
   const days = Math.ceil(diff / 86400000);
-  if (days === 1) return { expired: false, label: "1 dia" };
-  if (days < 30) return { expired: false, label: `${days} dias` };
+  if (days === 1) return { expired: false, label: t("job_detail.expires_day") };
+  if (days < 30) return { expired: false, label: t("job_detail.expires_days", { count: days }) };
   const months = Math.ceil(days / 30);
-  return { expired: false, label: `${months} ${months === 1 ? "mês" : "meses"}` };
+  if (months === 1) return { expired: false, label: t("job_detail.expires_month") };
+  return { expired: false, label: t("job_detail.expires_months", { count: months }) };
 }
 
 const contractColor: Record<string, string> = {
@@ -43,6 +45,7 @@ const contractColor: Record<string, string> = {
 };
 
 export default function JobScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -83,7 +86,10 @@ export default function JobScreen() {
 
   const handleApply = async () => {
     if (!opp || !user?.id) return;
-    if (opp.is_applied) { Alert.alert("Já candidatado", "Você já se candidatou a esta vaga."); return; }
+    if (opp.is_applied) {
+      Alert.alert(t("job_detail.already_applied_title"), t("job_detail.already_applied_msg"));
+      return;
+    }
 
     setApplying(true);
     try {
@@ -100,7 +106,7 @@ export default function JobScreen() {
 
       const ok = await applyToJob(opp.id, user.id, cvUrl, message.trim() || null);
       if (!ok) {
-        Alert.alert("Erro", "Não foi possível enviar a candidatura. Você já se candidatou?");
+        Alert.alert(t("common.error"), t("job_detail.apply_error"));
         return;
       }
 
@@ -124,7 +130,7 @@ export default function JobScreen() {
         const route = cpId ? `/chat/${convoId}?companyId=${cpId}` : `/chat/${convoId}`;
         router.push(route as any);
       } else {
-        Alert.alert("Candidatura enviada!", "O recrutador foi notificado da sua candidatura.");
+        Alert.alert(t("job_detail.apply_success"), t("job_detail.apply_success_msg"));
       }
     } finally {
       setApplying(false);
@@ -142,15 +148,15 @@ export default function JobScreen() {
   if (!opp) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background, justifyContent: "center", alignItems: "center" }]}>
-        <Text style={{ color: colors.mutedForeground }}>Vaga não encontrada.</Text>
+        <Text style={{ color: colors.mutedForeground }}>{t("job_detail.not_found")}</Text>
         <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 12 }}>
-          <Text style={{ color: colors.navy, fontWeight: "600" }}>Voltar</Text>
+          <Text style={{ color: colors.navy, fontWeight: "600" }}>{t("job_detail.back")}</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  const { expired, label: expiresLabel } = formatExpiresIn(opp.expires_at);
+  const { expired, label: expiresLabel } = formatExpiresIn(opp.expires_at, t);
   const companyName = opp.company ?? opp.company_page?.name ?? null;
   const contractClr = opp.contract_type ? (contractColor[opp.contract_type] ?? colors.navy) : colors.navy;
 
@@ -162,7 +168,7 @@ export default function JobScreen() {
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
-          <Text style={[styles.headerTitle, { color: colors.navy }]}>Vaga</Text>
+          <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("job_detail.title")}</Text>
         </TouchableOpacity>
       </View>
 
@@ -211,12 +217,12 @@ export default function JobScreen() {
             {expired ? (
               <View style={[styles.chip, { backgroundColor: "#fef2f2" }]}>
                 <Feather name="alert-circle" size={12} color="#dc2626" />
-                <Text style={[styles.chipText, { color: "#dc2626" }]}>Expirado</Text>
+                <Text style={[styles.chipText, { color: "#dc2626" }]}>{t("job_detail.expired")}</Text>
               </View>
             ) : expiresLabel ? (
               <View style={[styles.chip, { backgroundColor: colors.background }]}>
                 <Feather name="clock" size={12} color={colors.mutedForeground} />
-                <Text style={[styles.chipText, { color: colors.mutedForeground }]}>Expira em {expiresLabel}</Text>
+                <Text style={[styles.chipText, { color: colors.mutedForeground }]}>{t("job_detail.expires_in", { label: expiresLabel })}</Text>
               </View>
             ) : null}
           </View>
@@ -227,7 +233,7 @@ export default function JobScreen() {
 
           {opp.contact_email ? (
             <Text style={[styles.contactEmail, { color: colors.mutedForeground }]}>
-              Contato: {opp.contact_email}
+              {t("job_detail.contact", { email: opp.contact_email })}
             </Text>
           ) : null}
         </View>
@@ -236,10 +242,10 @@ export default function JobScreen() {
           <View style={[styles.applyCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
             <View style={styles.applyHeader}>
               <Feather name="message-circle" size={18} color={colors.gold} />
-              <Text style={[styles.applyTitle, { color: colors.navy }]}>Candidatar-se</Text>
+              <Text style={[styles.applyTitle, { color: colors.navy }]}>{t("job_detail.apply_title")}</Text>
             </View>
             <Text style={[styles.applySub, { color: colors.mutedForeground }]}>
-              Ao enviar, uma mensagem será enviada diretamente ao recrutador com seu perfil.
+              {t("job_detail.apply_sub")}
             </Text>
 
             {savedCv && (
@@ -256,7 +262,7 @@ export default function JobScreen() {
 
             <TextInput
               style={[styles.messageInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
-              placeholder="Adicione uma mensagem pessoal (opcional)..."
+              placeholder={t("job_detail.message_placeholder")}
               placeholderTextColor={colors.mutedForeground}
               value={message}
               onChangeText={setMessage}
@@ -268,7 +274,7 @@ export default function JobScreen() {
             <TouchableOpacity style={[styles.attachBtn, { borderColor: colors.border }]} onPress={pickCV}>
               <Feather name="upload" size={16} color={colors.navy} />
               <Text style={[styles.attachBtnText, { color: colors.navy }]}>
-                {cvName ? cvName : "Anexar currículo (PDF)"}
+                {cvName ? cvName : t("job_detail.attach_cv")}
               </Text>
             </TouchableOpacity>
 
@@ -278,7 +284,7 @@ export default function JobScreen() {
               disabled={applying}
             >
               <Feather name="send" size={16} color="#fff" />
-              <Text style={styles.applyBtnText}>{applying ? "Enviando..." : "Candidatar-se e Abrir Chat"}</Text>
+              <Text style={styles.applyBtnText}>{applying ? t("job_detail.applying") : t("job_detail.apply_btn")}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -287,7 +293,7 @@ export default function JobScreen() {
           <View style={[styles.appliedBanner, { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }]}>
             <Feather name="check-circle" size={18} color="#16a34a" />
             <Text style={{ color: "#16a34a", fontWeight: "700", fontSize: 14 }}>
-              Candidatura enviada
+              {t("job_detail.applied_banner")}
             </Text>
           </View>
         )}

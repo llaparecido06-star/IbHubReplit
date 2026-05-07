@@ -19,12 +19,14 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/context/AuthContext";
 import { updateProfile, deleteAccount } from "@/services/api";
+import { useTranslation } from "react-i18next";
 
 export default function PrivacySecurityScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profile, refreshProfile } = useAuth();
+  const { t } = useTranslation();
 
   const [publicProfile, setPublicProfile]         = useState<boolean>(true);
   const [allowMessages, setAllowMessages]         = useState<boolean>(true);
@@ -79,47 +81,47 @@ export default function PrivacySecurityScreen() {
 
   const handleChangePassword = async () => {
     if (!newPassword || !confirmPassword) {
-      Alert.alert("Atenção", "Preencha os dois campos.");
+      Alert.alert(t("common.attention"), t("privacy.pw_fill_both"));
       return;
     }
     if (newPassword.length < 6) {
-      Alert.alert("Atenção", "A senha deve ter pelo menos 6 caracteres.");
+      Alert.alert(t("common.attention"), t("privacy.pw_too_short"));
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert("Atenção", "As senhas não coincidem.");
+      Alert.alert(t("common.attention"), t("privacy.pw_mismatch"));
       return;
     }
     setSavingPw(true);
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     setSavingPw(false);
     if (error) {
-      Alert.alert("Erro", error.message ?? "Não foi possível alterar a senha.");
+      Alert.alert(t("common.error"), error.message ?? t("privacy.pw_change_error"));
     } else {
       setPwModalVisible(false);
       setNewPassword("");
       setConfirmPassword("");
-      Alert.alert("Sucesso", "Senha alterada com sucesso!");
+      Alert.alert(t("common.success"), t("privacy.pw_changed"));
     }
   };
 
   const handleDeleteAccount = () => {
     Alert.alert(
-      "Excluir conta",
-      "Esta ação é permanente. Todos os seus dados (perfil, posts, mensagens, adega) serão removidos definitivamente. Deseja continuar?",
+      t("privacy.delete_title"),
+      t("privacy.delete_msg"),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Sim, quero excluir",
+          text: t("privacy.delete_yes"),
           style: "destructive",
           onPress: () => {
             Alert.alert(
-              "Confirmação final",
-              "Você tem certeza? Após a exclusão, sua conta e todos os dados associados serão APAGADOS PERMANENTEMENTE e não poderão ser recuperados.",
+              t("privacy.delete_final_title"),
+              t("privacy.delete_final_msg"),
               [
-                { text: "Cancelar", style: "cancel" },
+                { text: t("common.cancel"), style: "cancel" },
                 {
-                  text: "Excluir definitivamente",
+                  text: t("privacy.delete_final_btn"),
                   style: "destructive",
                   onPress: async () => {
                     setDeletingAccount(true);
@@ -127,12 +129,12 @@ export default function PrivacySecurityScreen() {
                       const { data: sessionData } = await supabase.auth.getSession();
                       const token = sessionData?.session?.access_token;
                       if (!token) {
-                        Alert.alert("Erro", "Sessão inválida. Faça login novamente.");
+                        Alert.alert(t("common.error"), t("privacy.session_invalid"));
                         return;
                       }
                       const result = await deleteAccount(token);
                       if (!result.success) {
-                        Alert.alert("Erro", result.error ?? "Não foi possível excluir a conta.");
+                        Alert.alert(t("common.error"), result.error ?? t("privacy.delete_error"));
                         return;
                       }
                       if (result.warnings && result.warnings.length > 0) {
@@ -159,7 +161,7 @@ export default function PrivacySecurityScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.navy }]}>Privacidade e Segurança</Text>
+        <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("privacy.title")}</Text>
         <View style={{ width: 22 }} />
       </View>
 
@@ -169,16 +171,16 @@ export default function PrivacySecurityScreen() {
         <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
           <View style={styles.sectionHead}>
             <Feather name="eye" size={15} color={colors.gold} />
-            <Text style={[styles.sectionHeadText, { color: colors.navy }]}>Visibilidade do Perfil</Text>
+            <Text style={[styles.sectionHeadText, { color: colors.navy }]}>{t("privacy.section_visibility")}</Text>
           </View>
           <View style={[styles.row, { borderTopColor: colors.border }]}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.rowLabel, { color: colors.navy }]}>Perfil Público</Text>
+              <Text style={[styles.rowLabel, { color: colors.navy }]}>{t("privacy.public_profile")}</Text>
               <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
-                Qualquer pessoa pode ver seu perfil e publicações
+                {t("privacy.public_profile_sub")}
               </Text>
               {savingVisibility && (
-                <Text style={[styles.rowSub, { color: colors.gold }]}>Salvando...</Text>
+                <Text style={[styles.rowSub, { color: colors.gold }]}>{t("common.saving")}</Text>
               )}
             </View>
             <Switch
@@ -195,17 +197,17 @@ export default function PrivacySecurityScreen() {
         <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
           <View style={styles.sectionHead}>
             <Feather name="users" size={15} color={colors.gold} />
-            <Text style={[styles.sectionHeadText, { color: colors.navy }]}>Controle Social</Text>
+            <Text style={[styles.sectionHeadText, { color: colors.navy }]}>{t("privacy.section_social")}</Text>
           </View>
 
           <View style={[styles.row, { borderTopColor: colors.border }]}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.rowLabel, { color: colors.navy }]}>Permitir mensagens</Text>
+              <Text style={[styles.rowLabel, { color: colors.navy }]}>{t("privacy.allow_messages")}</Text>
               <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
-                Não-conexões podem te enviar mensagens diretas
+                {t("privacy.allow_messages_sub")}
               </Text>
               {savingMessages && (
-                <Text style={[styles.rowSub, { color: colors.gold }]}>Salvando...</Text>
+                <Text style={[styles.rowSub, { color: colors.gold }]}>{t("common.saving")}</Text>
               )}
             </View>
             <Switch
@@ -219,12 +221,12 @@ export default function PrivacySecurityScreen() {
 
           <View style={[styles.row, { borderTopColor: colors.border }]}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.rowLabel, { color: colors.navy }]}>Mostrar conexões</Text>
+              <Text style={[styles.rowLabel, { color: colors.navy }]}>{t("privacy.show_connections")}</Text>
               <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
-                Sua rede de conexões é visível no seu perfil
+                {t("privacy.show_connections_sub")}
               </Text>
               {savingConnections && (
-                <Text style={[styles.rowSub, { color: colors.gold }]}>Salvando...</Text>
+                <Text style={[styles.rowSub, { color: colors.gold }]}>{t("common.saving")}</Text>
               )}
             </View>
             <Switch
@@ -241,8 +243,8 @@ export default function PrivacySecurityScreen() {
             onPress={() => router.push("/blocked-users" as any)}
           >
             <View style={{ flex: 1 }}>
-              <Text style={[styles.rowLabel, { color: colors.navy }]}>Usuários Bloqueados</Text>
-              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>Ver e gerenciar bloqueios</Text>
+              <Text style={[styles.rowLabel, { color: colors.navy }]}>{t("privacy.blocked_users")}</Text>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>{t("privacy.blocked_users_sub")}</Text>
             </View>
             <Feather name="arrow-right" size={18} color={colors.mutedForeground} />
           </TouchableOpacity>
@@ -251,17 +253,17 @@ export default function PrivacySecurityScreen() {
             onPress={() => router.push("/my-reports" as any)}
           >
             <View style={{ flex: 1 }}>
-              <Text style={[styles.rowLabel, { color: colors.navy }]}>Minhas Denúncias</Text>
-              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>Ver histórico de denúncias enviadas</Text>
+              <Text style={[styles.rowLabel, { color: colors.navy }]}>{t("privacy.my_reports")}</Text>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>{t("privacy.my_reports_sub")}</Text>
             </View>
             <Feather name="arrow-right" size={18} color={colors.mutedForeground} />
           </TouchableOpacity>
           <View style={[styles.infoRow, { borderTopColor: colors.border }]}>
             <Feather name="flag" size={15} color={colors.mutedForeground} style={{ marginTop: 1 }} />
             <View style={{ flex: 1 }}>
-              <Text style={[styles.rowLabel, { color: colors.navy }]}>Como denunciar</Text>
+              <Text style={[styles.rowLabel, { color: colors.navy }]}>{t("privacy.how_to_report")}</Text>
               <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
-                Use o menu "⋯" em qualquer post ou perfil para denunciar conteúdo inadequado.
+                {t("privacy.how_to_report_sub")}
               </Text>
             </View>
           </View>
@@ -271,13 +273,13 @@ export default function PrivacySecurityScreen() {
         <View style={[styles.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
           <View style={styles.sectionHead}>
             <Feather name="shield" size={15} color={colors.gold} />
-            <Text style={[styles.sectionHeadText, { color: colors.navy }]}>Segurança</Text>
+            <Text style={[styles.sectionHeadText, { color: colors.navy }]}>{t("privacy.section_security")}</Text>
           </View>
           <TouchableOpacity
             style={[styles.arrowRow, { borderTopColor: colors.border }]}
             onPress={() => setPwModalVisible(true)}
           >
-            <Text style={[styles.rowLabel, { color: colors.navy }]}>Alterar senha</Text>
+            <Text style={[styles.rowLabel, { color: colors.navy }]}>{t("privacy.change_password")}</Text>
             <Feather name="arrow-right" size={18} color={colors.mutedForeground} />
           </TouchableOpacity>
         </View>
@@ -286,10 +288,10 @@ export default function PrivacySecurityScreen() {
         <View style={[styles.dangerCard, { backgroundColor: "#fff5f5", borderColor: "#fecaca" }]}>
           <View style={styles.dangerHead}>
             <Feather name="trash-2" size={15} color="#dc2626" />
-            <Text style={[styles.dangerTitle, { color: "#dc2626" }]}>Zona de Perigo</Text>
+            <Text style={[styles.dangerTitle, { color: "#dc2626" }]}>{t("privacy.danger_zone")}</Text>
           </View>
           <Text style={[styles.dangerText, { color: colors.mutedForeground }]}>
-            Ao excluir sua conta, todos os seus dados (perfil, posts, mensagens, adega) serão permanentemente removidos. Esta ação não pode ser desfeita.
+            {t("privacy.danger_text")}
           </Text>
           <TouchableOpacity
             style={[styles.deleteBtn, { borderColor: "#dc2626", opacity: deletingAccount ? 0.5 : 1 }]}
@@ -299,7 +301,7 @@ export default function PrivacySecurityScreen() {
             {deletingAccount ? (
               <ActivityIndicator size="small" color="#dc2626" />
             ) : (
-              <Text style={[styles.deleteBtnText, { color: "#dc2626" }]}>Excluir minha conta</Text>
+              <Text style={[styles.deleteBtnText, { color: "#dc2626" }]}>{t("privacy.delete_account")}</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -308,10 +310,10 @@ export default function PrivacySecurityScreen() {
       <Modal visible={pwModalVisible} transparent animationType="fade" onRequestClose={() => setPwModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalBox, { backgroundColor: "#fff" }]}>
-            <Text style={[styles.modalTitle, { color: colors.navy }]}>Alterar Senha</Text>
+            <Text style={[styles.modalTitle, { color: colors.navy }]}>{t("privacy.modal_title")}</Text>
             <TextInput
               style={[styles.input, { borderColor: colors.border, color: colors.navy }]}
-              placeholder="Nova senha"
+              placeholder={t("privacy.new_password")}
               placeholderTextColor={colors.mutedForeground}
               secureTextEntry
               value={newPassword}
@@ -320,7 +322,7 @@ export default function PrivacySecurityScreen() {
             />
             <TextInput
               style={[styles.input, { borderColor: colors.border, color: colors.navy }]}
-              placeholder="Confirmar nova senha"
+              placeholder={t("privacy.confirm_password")}
               placeholderTextColor={colors.mutedForeground}
               secureTextEntry
               value={confirmPassword}
@@ -333,7 +335,7 @@ export default function PrivacySecurityScreen() {
                 onPress={() => { setPwModalVisible(false); setNewPassword(""); setConfirmPassword(""); }}
                 disabled={savingPw}
               >
-                <Text style={[styles.modalBtnText, { color: colors.navy }]}>Cancelar</Text>
+                <Text style={[styles.modalBtnText, { color: colors.navy }]}>{t("common.cancel")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, { backgroundColor: colors.navy, borderColor: colors.navy }]}
@@ -341,7 +343,7 @@ export default function PrivacySecurityScreen() {
                 disabled={savingPw}
               >
                 <Text style={[styles.modalBtnText, { color: "#fff" }]}>
-                  {savingPw ? "Salvando..." : "Salvar"}
+                  {savingPw ? t("common.saving") : t("common.save")}
                 </Text>
               </TouchableOpacity>
             </View>
