@@ -695,6 +695,7 @@ function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, set
   const [offset, setOffset] = useState(0);
   const [error, setError] = useState<null | "paywall" | "credits" | "error">(null);
   const [searched, setSearched] = useState(false);
+  const [suggestion, setSuggestion] = useState<string | null>(null);
   const exhausted = credits !== null && credits <= 0;
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -757,12 +758,26 @@ function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, set
     finally { setLoading(false); setLoadingMore(false); }
   };
 
+  const spellCheck = async (sq: string) => {
+    try {
+      const session = await getCachedSession();
+      const token = session?.access_token;
+      const authH: HeadersInit = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+      const res = await fetch(`${apiBase}/wine-imports/spell-correct`, { method: "POST", headers: authH, body: JSON.stringify({ query: sq, context: "importador" }) });
+      if (!res.ok) return;
+      const data = await res.json() as { corrected: string | null };
+      if (data.corrected && data.corrected.toLowerCase() !== sq.toLowerCase()) setSuggestion(data.corrected);
+    } catch {}
+  };
+
   const handleSubmit = (overrideQ?: string) => {
     const sq = (overrideQ ?? q).trim();
     if (creditsLoading || exhausted || !sq) return;
+    setSuggestion(null);
     setShowSuggestions(false);
     setSubmittedQ(sq);
     setSearched(false);
+    void spellCheck(sq);
     void doSearch(sq, 0, false);
   };
 
@@ -786,7 +801,7 @@ function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, set
               disabled={creditsLoading || exhausted}
               style={{ flex: 1, padding: "10px 0", border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", backgroundColor: "transparent", color: NAVY }}
             />
-            {q && <button onClick={() => { setQ(""); setSearched(false); setItems([]); setSuggestions([]); setShowSuggestions(false); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, padding: "0 8px" }}>×</button>}
+            {q && <button onClick={() => { setQ(""); setSearched(false); setItems([]); setSuggestions([]); setShowSuggestions(false); setSuggestion(null); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, padding: "0 8px" }}>×</button>}
           </div>
           <button
             onClick={() => handleSubmit()}
@@ -819,6 +834,18 @@ function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, set
           </div>
         )}
       </div>
+      {suggestion && (
+        <div
+          onClick={() => { setSuggestion(null); handleSubmit(suggestion); }}
+          style={{ display: "flex", alignItems: "center", gap: 10, backgroundColor: "#f0f4ff", border: `1px solid ${NAVY}25`, borderRadius: 12, padding: "10px 14px", cursor: "pointer", transition: "background 0.15s" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = "#e8eeff"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = "#f0f4ff"; }}
+        >
+          <span style={{ fontSize: 13 }}>✏️</span>
+          <span style={{ flex: 1, fontSize: 13, color: NAVY }}>Você quis dizer: <strong>{suggestion}</strong>?</span>
+          <span style={{ fontSize: 13, color: MUTED }}>→</span>
+        </div>
+      )}
       {!searched && !loading && (
         <div style={{ backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "12px 16px", fontSize: 13, color: MUTED }}>
           🔑 Digite o nome de um importador e clique em <strong>Buscar</strong> — cada consulta consome 1 crédito.
@@ -893,6 +920,7 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
   const [offset, setOffset] = useState(0);
   const [error, setError] = useState<null | "paywall" | "credits" | "error">(null);
   const [searched, setSearched] = useState(false);
+  const [suggestion, setSuggestion] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [upgradeHint, setUpgradeHint] = useState<string | null>(null);
   const [importadoresMap, setImportadoresMap] = useState<Record<string, { name: string; company_page_id: string | null }[]>>({});
@@ -974,13 +1002,27 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
     finally { setLoading(false); setLoadingMore(false); }
   };
 
+  const spellCheck = async (sq: string) => {
+    try {
+      const session = await getCachedSession();
+      const token = session?.access_token;
+      const authH: HeadersInit = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+      const res = await fetch(`${apiBase}/wine-imports/spell-correct`, { method: "POST", headers: authH, body: JSON.stringify({ query: sq, context: "exportador" }) });
+      if (!res.ok) return;
+      const data = await res.json() as { corrected: string | null };
+      if (data.corrected && data.corrected.toLowerCase() !== sq.toLowerCase()) setSuggestion(data.corrected);
+    } catch {}
+  };
+
   const handleSubmit = (overrideQ?: string) => {
     if (credits === null || exhausted) return;
     const sq = (overrideQ ?? q).trim();
     if (!sq) return;
+    setSuggestion(null);
     setShowSuggestions(false);
     setSubmittedQ(sq);
     setSearched(false);
+    void spellCheck(sq);
     void doSearch(sq, 0, false);
   };
 
@@ -1056,7 +1098,7 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
               disabled={exhausted}
               style={{ flex: 1, padding: "10px 0", border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", backgroundColor: "transparent", color: NAVY }}
             />
-            {q && <button onClick={() => { setQ(""); setSearched(false); setItems([]); setSuggestions([]); setShowSuggestions(false); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, padding: "0 8px" }}>×</button>}
+            {q && <button onClick={() => { setQ(""); setSearched(false); setItems([]); setSuggestions([]); setShowSuggestions(false); setSuggestion(null); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, padding: "0 8px" }}>×</button>}
           </div>
           <button
             onClick={() => handleSubmit()}
@@ -1088,6 +1130,18 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
         )}
       </div>
 
+      {suggestion && (
+        <div
+          onClick={() => { setSuggestion(null); handleSubmit(suggestion); }}
+          style={{ display: "flex", alignItems: "center", gap: 10, backgroundColor: "#f0f4ff", border: `1px solid ${NAVY}25`, borderRadius: 12, padding: "10px 14px", cursor: "pointer", transition: "background 0.15s" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = "#e8eeff"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = "#f0f4ff"; }}
+        >
+          <span style={{ fontSize: 13 }}>✏️</span>
+          <span style={{ flex: 1, fontSize: 13, color: NAVY }}>Você quis dizer: <strong>{suggestion}</strong>?</span>
+          <span style={{ fontSize: 13, color: MUTED }}>→</span>
+        </div>
+      )}
       {!searched && !loading && (
         <div style={{ backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "12px 16px", fontSize: 13, color: MUTED }}>
           🌐 Busque por nome do exportador ou país de origem. Os dados financeiros (FOB US$, CX9L e preço/CX) ficam bloqueados — use créditos de revelação para desbloqueá-los individualmente.
@@ -1250,6 +1304,7 @@ function MarcaCompletaSearch({ userId, credits, creditsTotal, setCredits, setCre
   const [brandExtracted, setBrandExtracted] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestion, setSuggestion] = useState<string | null>(null);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const exhausted = credits === 0;
@@ -1286,13 +1341,29 @@ function MarcaCompletaSearch({ userId, credits, creditsTotal, setCredits, setCre
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  const spellCheck = async (sq: string) => {
+    try {
+      const headers = await getAuthHeader();
+      const res = await fetch(`${apiBase}/wine-imports/spell-correct`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(headers as Record<string, string>) },
+        body: JSON.stringify({ query: sq, context: "marca" }),
+      });
+      if (!res.ok) return;
+      const data = await res.json() as { corrected: string | null };
+      if (data.corrected && data.corrected.toLowerCase() !== sq.toLowerCase()) setSuggestion(data.corrected);
+    } catch {}
+  };
+
   const handleSearch = async (overrideQ?: string, isDirect = false) => {
     const q = (overrideQ ?? query).trim();
     if (!q || searching || exhausted) return;
+    setSuggestion(null);
     setShowSuggestions(false);
     setSearching(true);
     setResult(null);
     setBrandExtracted(null);
+    void spellCheck(q);
     try {
       const headers = await getAuthHeader();
       const url = `${apiBase}/wine-imports/search?q=${encodeURIComponent(q)}${isDirect ? "&direct=true" : ""}`;
@@ -1378,6 +1449,18 @@ function MarcaCompletaSearch({ userId, credits, creditsTotal, setCredits, setCre
         )}
       </div>
 
+      {suggestion && (
+        <div
+          onClick={() => { setQuery(suggestion); setSuggestion(null); void handleSearch(suggestion); }}
+          style={{ display: "flex", alignItems: "center", gap: 10, backgroundColor: "#f0f4ff", border: `1px solid ${NAVY}25`, borderRadius: 12, padding: "10px 14px", cursor: "pointer", transition: "background 0.15s" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = "#e8eeff"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = "#f0f4ff"; }}
+        >
+          <span style={{ fontSize: 13 }}>✏️</span>
+          <span style={{ flex: 1, fontSize: 13, color: NAVY }}>Você quis dizer: <strong>{suggestion}</strong>?</span>
+          <span style={{ fontSize: 13, color: MUTED }}>→</span>
+        </div>
+      )}
       {!result && !searching && (
         <div style={{ backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "12px 16px" }}>
           <div style={{ fontSize: 13, color: NAVY, fontWeight: 600, marginBottom: 4 }}>🔍 Busca por Rótulo</div>
@@ -1500,6 +1583,7 @@ function ProdutoresSearch({ userId, credits, creditsTotal, creditsLoading, setCr
   const [offset, setOffset] = useState(0);
   const [error, setError] = useState<null | "paywall" | "credits" | "error">(null);
   const [searched, setSearched] = useState(false);
+  const [suggestion, setSuggestion] = useState<string | null>(null);
   const exhausted = credits !== null && credits <= 0;
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -1555,13 +1639,27 @@ function ProdutoresSearch({ userId, credits, creditsTotal, creditsLoading, setCr
     finally { setLoading(false); setLoadingMore(false); }
   };
 
+  const spellCheck = async (sq: string) => {
+    try {
+      const session = await getCachedSession();
+      const token = session?.access_token;
+      const authH: HeadersInit = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+      const res = await fetch(`${apiBase}/wine-imports/spell-correct`, { method: "POST", headers: authH, body: JSON.stringify({ query: sq, context: "produtor" }) });
+      if (!res.ok) return;
+      const data = await res.json() as { corrected: string | null };
+      if (data.corrected && data.corrected.toLowerCase() !== sq.toLowerCase()) setSuggestion(data.corrected);
+    } catch {}
+  };
+
   const handleSubmit = (overrideQ?: string) => {
     if (creditsLoading || exhausted) return;
     const sq = (overrideQ ?? q).trim();
     if (!sq) return;
+    setSuggestion(null);
     setShowSuggestions(false);
     setSubmittedQ(sq);
     setSearched(false);
+    void spellCheck(sq);
     void doSearch(sq, 0, false);
   };
 
@@ -1585,7 +1683,7 @@ function ProdutoresSearch({ userId, credits, creditsTotal, creditsLoading, setCr
               disabled={creditsLoading || exhausted}
               style={{ flex: 1, padding: "10px 0", border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", backgroundColor: "transparent", color: NAVY }}
             />
-            {q && <button onClick={() => { setQ(""); setSearched(false); setItems([]); setSuggestions([]); setShowSuggestions(false); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, padding: "0 8px" }}>×</button>}
+            {q && <button onClick={() => { setQ(""); setSearched(false); setItems([]); setSuggestions([]); setShowSuggestions(false); setSuggestion(null); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, padding: "0 8px" }}>×</button>}
           </div>
           <button
             onClick={() => handleSubmit()}
@@ -1616,6 +1714,18 @@ function ProdutoresSearch({ userId, credits, creditsTotal, creditsLoading, setCr
           </div>
         )}
       </div>
+      {suggestion && (
+        <div
+          onClick={() => { setSuggestion(null); handleSubmit(suggestion); }}
+          style={{ display: "flex", alignItems: "center", gap: 10, backgroundColor: "#f0f4ff", border: `1px solid ${NAVY}25`, borderRadius: 12, padding: "10px 14px", cursor: "pointer", transition: "background 0.15s" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = "#e8eeff"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.backgroundColor = "#f0f4ff"; }}
+        >
+          <span style={{ fontSize: 13 }}>✏️</span>
+          <span style={{ flex: 1, fontSize: 13, color: NAVY }}>Você quis dizer: <strong>{suggestion}</strong>?</span>
+          <span style={{ fontSize: 13, color: MUTED }}>→</span>
+        </div>
+      )}
       {!searched && !loading && (
         <div style={{ backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "12px 16px", fontSize: 13, color: MUTED }}>
           🍇 Busque vinícolas e produtores nacionais por nome, região ou estado. Cada consulta consome 1 crédito.
