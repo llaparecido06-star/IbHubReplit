@@ -1679,7 +1679,7 @@ function ProdutoresSearch({ userId, credits, creditsTotal, creditsLoading, setCr
                 if (e.key === "Escape") setShowSuggestions(false);
                 if (e.key === "ArrowDown" && showSuggestions) { document.getElementById("prod-suggest-0")?.focus(); e.preventDefault(); }
               }}
-              placeholder={creditsLoading ? "Carregando…" : exhausted ? "Consultas esgotadas" : "Nome do produtor, região, estado ou tipo…"}
+              placeholder={creditsLoading ? "Carregando…" : exhausted ? "Consultas esgotadas" : "Nome do produtor, região, município ou estado…"}
               disabled={creditsLoading || exhausted}
               style={{ flex: 1, padding: "10px 0", border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", backgroundColor: "transparent", color: NAVY }}
             />
@@ -1728,7 +1728,7 @@ function ProdutoresSearch({ userId, credits, creditsTotal, creditsLoading, setCr
       )}
       {!searched && !loading && (
         <div style={{ backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "12px 16px", fontSize: 13, color: MUTED }}>
-          🍇 Busque vinícolas e produtores nacionais por nome, região ou estado. Cada consulta consome 1 crédito.
+          🍇 Busque vinícolas e produtores nacionais por nome, região, município ou estado. Cada consulta consome 1 crédito.
         </div>
       )}
       {loading ? <BiLoadingSkeleton /> : error ? (
@@ -1755,6 +1755,11 @@ function ProdutoresSearch({ userId, credits, creditsTotal, creditsLoading, setCr
                   {m.regiao && (
                     <span style={{ fontSize: 11, fontWeight: 600, color: NAVY, backgroundColor: `${GOLD}12`, border: `1px solid ${GOLD}35`, borderRadius: 20, padding: "3px 12px" }}>
                       📍 {m.regiao}
+                    </span>
+                  )}
+                  {m.municipio && (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: NAVY, backgroundColor: `${GOLD}08`, border: `1px solid ${GOLD}25`, borderRadius: 20, padding: "3px 12px" }}>
+                      🏘️ {m.municipio}
                     </span>
                   )}
                   {m.estado && (

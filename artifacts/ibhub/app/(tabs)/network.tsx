@@ -75,7 +75,7 @@ interface TooltipState {
 type BiSearchMode = "exportador" | "marca" | "importadores" | "produtores";
 interface BiExpItem  { id: string; name: string; origem_exportador?: string | null; }
 interface BiImpItem  { id: string; name: string; segmentos?: string | null; exportadores: { exportador: string; pais: string }[]; }
-interface BiProdItem { id: string; name: string; name_fantasia?: string | null; regiao?: string | null; estado?: string | null; }
+interface BiProdItem { id: string; name: string; name_fantasia?: string | null; regiao?: string | null; estado?: string | null; municipio?: string | null; }
 
 // ─── Fallback data ─────────────────────────────────────────────────────────────
 
@@ -1317,7 +1317,7 @@ function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useCol
         <View style={{ flex: 1, backgroundColor: "#fff", borderWidth: 1.5, borderColor: exhausted ? "#fca5a5" : colors.border, borderRadius: 14, flexDirection: "row", alignItems: "center", paddingLeft: 14, paddingRight: 4, paddingVertical: 4 }}>
           <Text style={{ fontSize: 16, marginRight: 6 }}>🍇</Text>
           <TextInput value={q} onChangeText={setQ}
-            placeholder={exhausted ? "Consultas esgotadas" : "Nome do produtor, região, estado ou tipo…"}
+            placeholder={exhausted ? "Consultas esgotadas" : "Nome do produtor, região, município ou estado…"}
             placeholderTextColor={colors.mutedForeground}
             style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: 12 }}
             editable={!exhausted} onSubmitEditing={() => doSearch(q)} returnKeyType="search" />
@@ -1366,7 +1366,7 @@ function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useCol
         <View style={{ backgroundColor: colors.gold + "10", borderWidth: 1, borderColor: colors.gold + "30", borderRadius: 12, padding: 14, gap: 4 }}>
           <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>🍇 Como funciona</Text>
           <Text style={{ fontSize: 13, color: colors.mutedForeground, lineHeight: 19 }}>
-            Busque vinícolas e produtores nacionais por nome, região ou estado. Cada consulta consome 1 crédito.
+            Busque vinícolas e produtores nacionais por nome, região, município ou estado. Cada consulta consome 1 crédito.
           </Text>
         </View>
       )}
@@ -1399,6 +1399,11 @@ function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useCol
                 {!!m.regiao && (
                   <View style={{ backgroundColor: colors.gold + "12", borderWidth: 1, borderColor: colors.gold + "35", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 3 }}>
                     <Text style={{ fontSize: 11, fontWeight: "600", color: colors.navy }}>📍 {m.regiao}</Text>
+                  </View>
+                )}
+                {!!m.municipio && (
+                  <View style={{ backgroundColor: colors.gold + "08", borderWidth: 1, borderColor: colors.gold + "25", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 3 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "600", color: colors.navy }}>🏘️ {m.municipio}</Text>
                   </View>
                 )}
                 {!!m.estado && (

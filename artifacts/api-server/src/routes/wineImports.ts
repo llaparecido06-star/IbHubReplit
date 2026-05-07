@@ -288,11 +288,11 @@ router.get("/wine-imports/bi-search/produtores", async (req: Request, res: Respo
 
   let query = supabaseAdmin
     .from("bi_produtores")
-    .select("id, name, name_fantasia, regiao, estado, created_at", { count: "exact" })
+    .select("id, name, name_fantasia, regiao, estado, municipio, created_at", { count: "exact" })
     .order("name", { ascending: true })
     .range(offset, offset + limit - 1);
 
-  if (q) query = query.or(`name.ilike.%${q}%,name_fantasia.ilike.%${q}%,regiao.ilike.%${q}%,estado.ilike.%${q}%`);
+  if (q) query = query.or(`name.ilike.%${q}%,name_fantasia.ilike.%${q}%,regiao.ilike.%${q}%,estado.ilike.%${q}%,municipio.ilike.%${q}%`);
 
   const { data, error, count } = await query;
   if (error) return res.status(500).json({ error: error.message });
@@ -372,14 +372,14 @@ router.get("/wine-imports/bi-suggestions/produtores", async (req: Request, res: 
   if (!q || q.length < 2) return res.json({ suggestions: [] });
   const { data, error } = await supabaseAdmin
     .from("bi_produtores")
-    .select("name, name_fantasia")
-    .or(`name.ilike.%${q}%,name_fantasia.ilike.%${q}%`)
+    .select("name, name_fantasia, municipio")
+    .or(`name.ilike.%${q}%,name_fantasia.ilike.%${q}%,municipio.ilike.%${q}%`)
     .order("name")
     .limit(30);
   if (error) return res.json({ suggestions: [] });
   const seen = new Set<string>();
   const suggestions: string[] = [];
-  for (const row of (data ?? []) as { name: string | null; name_fantasia: string | null }[]) {
+  for (const row of (data ?? []) as { name: string | null; name_fantasia: string | null; municipio: string | null }[]) {
     for (const val of [row.name, row.name_fantasia]) {
       const v = val?.trim();
       if (v && v.toLowerCase().includes(q.toLowerCase()) && !seen.has(v.toLowerCase())) {
@@ -718,23 +718,34 @@ router.post("/wine-imports/bi/exportadores/reveal", async (req: Request, res: Re
   if (fetchError) return res.status(500).json({ error: fetchError.message });
   if (!rows || rows.length === 0) return res.status(404).json({ error: "Exportador não encontrado" });
 
-  // Compute aggregated totals across all distribuidores
-  let fob_sum = 0, cx9l_sum = 0;
+  // Group rows by distribuidor — merge duplicates (same exportador+distribuidor can have multiple rows)
+  const distMap = new Map<string, { distribuidor: string | null; fob: number; cx9l: number }>();
   for (const r of rows as ExpRow[]) {
-    fob_sum  += r.fob_usd ? parseFloat(r.fob_usd) : 0;
-    cx9l_sum += r.cx9l   ? parseFloat(r.cx9l)     : 0;
+    const key = (r.distribuidor ?? "").toLowerCase().trim();
+    const fob = r.fob_usd ? parseFloat(r.fob_usd) : 0;
+    const cx  = r.cx9l   ? parseFloat(r.cx9l)     : 0;
+    const existing = distMap.get(key);
+    if (existing) { existing.fob += fob; existing.cx9l += cx; }
+    else distMap.set(key, { distribuidor: r.distribuidor, fob, cx9l: cx });
   }
+  const merged = Array.from(distMap.values());
+
+  // Compute aggregated totals from merged (deduplicated) distribuidores
+  let fob_sum = 0, cx9l_sum = 0;
+  for (const d of merged) { fob_sum += d.fob; cx9l_sum += d.cx9l; }
   const totals = {
     fob_usd:      fob_sum  > 0                    ? fob_sum.toFixed(2)                   : null,
     cx9l:         cx9l_sum > 0                    ? cx9l_sum.toFixed(2)                  : null,
     usd_por_cx9l: fob_sum  > 0 && cx9l_sum > 0   ? (fob_sum / cx9l_sum).toFixed(2)      : null,
   };
-  const distribuidores = (rows as ExpRow[]).map(r => ({
-    distribuidor: r.distribuidor,
-    fob_usd:      r.fob_usd,
-    cx9l:         r.cx9l,
-    usd_por_cx9l: r.usd_por_cx9l,
-  }));
+  const distribuidores = merged
+    .sort((a, b) => b.fob - a.fob)
+    .map(d => ({
+      distribuidor: d.distribuidor,
+      fob_usd:      d.fob  > 0               ? d.fob.toFixed(2)             : null,
+      cx9l:         d.cx9l > 0               ? d.cx9l.toFixed(2)            : null,
+      usd_por_cx9l: d.fob  > 0 && d.cx9l > 0 ? (d.fob / d.cx9l).toFixed(2) : null,
+    }));
 
   // Admins bypass credit check
   const { data: profile } = await supabaseAdmin.from("profiles").select("role").eq("id", userId).single();
