@@ -773,4 +773,51 @@ router.post("/wine-imports/bi/exportadores/reveal", async (req: Request, res: Re
   return res.json({ totals, distribuidores, already_revealed: false, credits_remaining: newRemaining, credits_total: credits.credits_total });
 });
 
+// ── POST /wine-imports/spell-correct ─────────────────────────────────────────
+router.post("/wine-imports/spell-correct", async (req: Request, res: Response) => {
+  const { query, context } = req.body as { query?: string; context?: string };
+  if (!query || typeof query !== "string" || query.trim().length < 2) {
+    return res.json({ corrected: null });
+  }
+  const sq = query.trim().slice(0, 200);
+
+  const contextHint =
+    context === "marca"
+      ? "nomes de vinhos e marcas (ex: Châteauneuf-du-Pape, Penfolds, Casillero del Diablo)"
+      : context === "importador"
+      ? "nomes de importadores e distribuidores de vinho no Brasil"
+      : context === "produtor"
+      ? "nomes de vinícolas e produtores nacionais"
+      : "nomes de exportadores de vinho e países de origem";
+
+  try {
+    const openai = getOpenAI();
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `Você é especialista em ortografia para o mercado de vinhos brasileiro.
+O usuário buscou por ${contextHint}.
+Corrija apenas erros de ortografia evidentes (letras trocadas, acento errado, etc).
+Se a busca estiver correta, responda apenas: OK
+Se houver correção necessária, responda SOMENTE o texto corrigido, sem explicações.
+Preserve maiúsculas/minúsculas e o idioma original (português, inglês, espanhol, francês, italiano).
+Exemplos: "Concha y Toro" → OK | "Conca y Toro" → Concha y Toro | "malbek" → malbec | "Borgonha" → OK`,
+        },
+        { role: "user", content: sq },
+      ],
+      temperature: 0,
+      max_tokens: 80,
+    });
+    const raw = (completion.choices[0]?.message?.content ?? "").trim();
+    if (!raw || raw === "OK" || raw.toLowerCase() === sq.toLowerCase()) {
+      return res.json({ corrected: null });
+    }
+    return res.json({ corrected: raw });
+  } catch {
+    return res.json({ corrected: null });
+  }
+});
+
 export default router;

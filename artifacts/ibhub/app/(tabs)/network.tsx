@@ -799,6 +799,7 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const [suggestion, setSuggestion] = useState<string | null>(null);
   const exhausted = credits !== null && credits <= 0;
 
   useEffect(() => {
@@ -828,10 +829,25 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
     return () => { if (suggestTimer.current) clearTimeout(suggestTimer.current); };
   }, [q]);
 
+  const spellCheck = async (sq: string) => {
+    try {
+      const res = await fetch(`${API_URL}/wine-imports/spell-correct`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authH() },
+        body: JSON.stringify({ query: sq, context: "exportador" }),
+      });
+      if (!res.ok) return;
+      const data = await res.json() as { corrected: string | null };
+      if (data.corrected && data.corrected.toLowerCase() !== sq.toLowerCase()) setSuggestion(data.corrected);
+    } catch {}
+  };
+
   const doSearch = async (sq: string) => {
     if (!sq.trim() || searchingRef.current) return;
     searchingRef.current = true;
+    setSuggestion(null);
     setSuggestions([]); setSearching(true); setItems([]); setSearched(false); setError(null);
+    void spellCheck(sq);
     try {
       const params = new URLSearchParams({ q: sq, limit: "20", offset: "0" });
       const res = await fetch(`${API_URL}/wine-imports/bi-search/exportadores?${params}`, { headers: authH() });
@@ -888,7 +904,7 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
             placeholderTextColor={colors.mutedForeground}
             style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: 12 }}
             editable={!exhausted} onSubmitEditing={() => doSearch(q)} returnKeyType="search" />
-          {!!q && <TouchableOpacity onPress={() => { setQ(""); setItems([]); setSearched(false); setSuggestions([]); }} style={{ padding: 8 }}>
+          {!!q && <TouchableOpacity onPress={() => { setQ(""); setItems([]); setSearched(false); setSuggestions([]); setSuggestion(null); }} style={{ padding: 8 }}>
             <Feather name="x" size={16} color={colors.mutedForeground} />
           </TouchableOpacity>}
         </View>
@@ -910,6 +926,19 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
         </View>
       )}
 
+      {!!suggestion && (
+        <TouchableOpacity
+          onPress={() => { setQ(suggestion); setSuggestion(null); void doSearch(suggestion); }}
+          activeOpacity={0.8}
+          style={{ backgroundColor: "#f0f4ff", borderWidth: 1, borderColor: colors.navy + "30", borderRadius: 12, padding: 12, flexDirection: "row", alignItems: "center", gap: 8 }}
+        >
+          <Feather name="edit-2" size={14} color={colors.navy} />
+          <Text style={{ flex: 1, fontSize: 13, color: colors.navy }}>
+            Você quis dizer: <Text style={{ fontWeight: "700" }}>{suggestion}</Text>?
+          </Text>
+          <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
+        </TouchableOpacity>
+      )}
       {!!error && (
         <View style={{ backgroundColor: "#fef2f2", borderWidth: 1, borderColor: "#fca5a5", borderRadius: 12, padding: 14, flexDirection: "row", alignItems: "center", gap: 10 }}>
           <Feather name="alert-circle" size={16} color="#dc2626" />
@@ -1053,6 +1082,7 @@ function BiMobileImportadoresSearch({ colors }: { colors: ReturnType<typeof useC
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const [suggestion, setSuggestion] = useState<string | null>(null);
   const exhausted = credits !== null && credits <= 0;
 
   useEffect(() => {
@@ -1070,10 +1100,25 @@ function BiMobileImportadoresSearch({ colors }: { colors: ReturnType<typeof useC
     return () => { if (suggestTimer.current) clearTimeout(suggestTimer.current); };
   }, [q]);
 
+  const spellCheck = async (sq: string) => {
+    try {
+      const res = await fetch(`${API_URL}/wine-imports/spell-correct`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authH() },
+        body: JSON.stringify({ query: sq, context: "importador" }),
+      });
+      if (!res.ok) return;
+      const data = await res.json() as { corrected: string | null };
+      if (data.corrected && data.corrected.toLowerCase() !== sq.toLowerCase()) setSuggestion(data.corrected);
+    } catch {}
+  };
+
   const doSearch = async (sq: string) => {
     if (!sq.trim() || searchingRef.current) return;
     searchingRef.current = true;
+    setSuggestion(null);
     setSuggestions([]); setSearching(true); setItems([]); setSearched(false); setError(null);
+    void spellCheck(sq);
     try {
       const params = new URLSearchParams({ q: sq, limit: "20", offset: "0" });
       const res = await fetch(`${API_URL}/wine-imports/bi-search/importadores?${params}`, { headers: authH() });
@@ -1098,7 +1143,7 @@ function BiMobileImportadoresSearch({ colors }: { colors: ReturnType<typeof useC
             placeholderTextColor={colors.mutedForeground}
             style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: 12 }}
             editable={!exhausted} onSubmitEditing={() => doSearch(q)} returnKeyType="search" />
-          {!!q && <TouchableOpacity onPress={() => { setQ(""); setItems([]); setSearched(false); setSuggestions([]); }} style={{ padding: 8 }}>
+          {!!q && <TouchableOpacity onPress={() => { setQ(""); setItems([]); setSearched(false); setSuggestions([]); setSuggestion(null); }} style={{ padding: 8 }}>
             <Feather name="x" size={16} color={colors.mutedForeground} />
           </TouchableOpacity>}
         </View>
@@ -1120,6 +1165,19 @@ function BiMobileImportadoresSearch({ colors }: { colors: ReturnType<typeof useC
         </View>
       )}
 
+      {!!suggestion && (
+        <TouchableOpacity
+          onPress={() => { setQ(suggestion); setSuggestion(null); void doSearch(suggestion); }}
+          activeOpacity={0.8}
+          style={{ backgroundColor: "#f0f4ff", borderWidth: 1, borderColor: colors.navy + "30", borderRadius: 12, padding: 12, flexDirection: "row", alignItems: "center", gap: 8 }}
+        >
+          <Feather name="edit-2" size={14} color={colors.navy} />
+          <Text style={{ flex: 1, fontSize: 13, color: colors.navy }}>
+            Você quis dizer: <Text style={{ fontWeight: "700" }}>{suggestion}</Text>?
+          </Text>
+          <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
+        </TouchableOpacity>
+      )}
       {!!error && (
         <View style={{ backgroundColor: "#fef2f2", borderWidth: 1, borderColor: "#fca5a5", borderRadius: 12, padding: 14, flexDirection: "row", alignItems: "center", gap: 10 }}>
           <Feather name="alert-circle" size={16} color="#dc2626" />
@@ -1202,6 +1260,7 @@ function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useCol
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const [suggestion, setSuggestion] = useState<string | null>(null);
   const exhausted = credits !== null && credits <= 0;
 
   useEffect(() => {
@@ -1219,10 +1278,25 @@ function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useCol
     return () => { if (suggestTimer.current) clearTimeout(suggestTimer.current); };
   }, [q]);
 
+  const spellCheck = async (sq: string) => {
+    try {
+      const res = await fetch(`${API_URL}/wine-imports/spell-correct`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authH() },
+        body: JSON.stringify({ query: sq, context: "produtor" }),
+      });
+      if (!res.ok) return;
+      const data = await res.json() as { corrected: string | null };
+      if (data.corrected && data.corrected.toLowerCase() !== sq.toLowerCase()) setSuggestion(data.corrected);
+    } catch {}
+  };
+
   const doSearch = async (sq: string) => {
     if (!sq.trim() || searchingRef.current) return;
     searchingRef.current = true;
+    setSuggestion(null);
     setSuggestions([]); setSearching(true); setItems([]); setSearched(false); setError(null);
+    void spellCheck(sq);
     try {
       const params = new URLSearchParams({ q: sq, limit: "20", offset: "0" });
       const res = await fetch(`${API_URL}/wine-imports/bi-search/produtores?${params}`, { headers: authH() });
@@ -1247,7 +1321,7 @@ function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useCol
             placeholderTextColor={colors.mutedForeground}
             style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: 12 }}
             editable={!exhausted} onSubmitEditing={() => doSearch(q)} returnKeyType="search" />
-          {!!q && <TouchableOpacity onPress={() => { setQ(""); setItems([]); setSearched(false); setSuggestions([]); }} style={{ padding: 8 }}>
+          {!!q && <TouchableOpacity onPress={() => { setQ(""); setItems([]); setSearched(false); setSuggestions([]); setSuggestion(null); }} style={{ padding: 8 }}>
             <Feather name="x" size={16} color={colors.mutedForeground} />
           </TouchableOpacity>}
         </View>
@@ -1269,6 +1343,19 @@ function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useCol
         </View>
       )}
 
+      {!!suggestion && (
+        <TouchableOpacity
+          onPress={() => { setQ(suggestion); setSuggestion(null); void doSearch(suggestion); }}
+          activeOpacity={0.8}
+          style={{ backgroundColor: "#f0f4ff", borderWidth: 1, borderColor: colors.navy + "30", borderRadius: 12, padding: 12, flexDirection: "row", alignItems: "center", gap: 8 }}
+        >
+          <Feather name="edit-2" size={14} color={colors.navy} />
+          <Text style={{ flex: 1, fontSize: 13, color: colors.navy }}>
+            Você quis dizer: <Text style={{ fontWeight: "700" }}>{suggestion}</Text>?
+          </Text>
+          <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
+        </TouchableOpacity>
+      )}
       {!!error && (
         <View style={{ backgroundColor: "#fef2f2", borderWidth: 1, borderColor: "#fca5a5", borderRadius: 12, padding: 14, flexDirection: "row", alignItems: "center", gap: 10 }}>
           <Feather name="alert-circle" size={16} color="#dc2626" />
@@ -1347,6 +1434,7 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
   const [brandExtracted, setBrandExtracted] = useState<string | null>(null);
   const [suggestions, setSuggestions]   = useState<string[]>([]);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [suggestion, setSuggestion] = useState<string | null>(null);
 
   const exhausted = credits === 0;
   const creditColor = (credits ?? 3) >= 2 ? "#16a34a" : (credits ?? 3) === 1 ? "#d97706" : "#dc2626";
@@ -1394,13 +1482,28 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
     return () => { if (suggestTimer.current) clearTimeout(suggestTimer.current); };
   }, [query]);
 
+  const spellCheck = async (sq: string) => {
+    try {
+      const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/wine-imports/spell-correct`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader() },
+        body: JSON.stringify({ query: sq, context: "marca" }),
+      });
+      if (!res.ok) return;
+      const data = await res.json() as { corrected: string | null };
+      if (data.corrected && data.corrected.toLowerCase() !== sq.toLowerCase()) setSuggestion(data.corrected);
+    } catch {}
+  };
+
   const handleSearch = async (overrideQ?: string, opts?: { direct?: boolean }) => {
     const q = (overrideQ ?? query).trim();
     if (!q || searching || exhausted) return;
+    setSuggestion(null);
     setSuggestions([]);
     setSearching(true);
     setResult(null);
     setBrandExtracted(null);
+    void spellCheck(q);
     try {
       const directParam = opts?.direct ? "&direct=true" : "";
       const res = await fetch(
@@ -1612,6 +1715,20 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
           </View>
         )}
 
+        {/* Você quis dizer? */}
+        {!!suggestion && (
+          <TouchableOpacity
+            onPress={() => { setQuery(suggestion); setSuggestion(null); handleSearch(suggestion); }}
+            activeOpacity={0.8}
+            style={{ backgroundColor: "#f0f4ff", borderWidth: 1, borderColor: colors.navy + "30", borderRadius: 12, padding: 12, flexDirection: "row", alignItems: "center", gap: 8 }}
+          >
+            <Feather name="edit-2" size={14} color={colors.navy} />
+            <Text style={{ flex: 1, fontSize: 13, color: colors.navy }}>
+              Você quis dizer: <Text style={{ fontWeight: "700" }}>{suggestion}</Text>?
+            </Text>
+            <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        )}
         {/* Info hint when idle */}
         {!result && !searching && suggestions.length === 0 && (
           <View style={{ backgroundColor: colors.gold + "10", borderWidth: 1, borderColor: colors.gold + "30", borderRadius: 12, padding: 14, gap: 4 }}>
