@@ -2,6 +2,7 @@ import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Alert,
   Animated,
@@ -125,6 +126,7 @@ function VideoStoryPlayer({
 }
 
 export default function StoryViewerScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -267,11 +269,11 @@ export default function StoryViewerScreen() {
     const result = await API.repostStory(user.id, currentStory);
     setReposting(false);
     if (result) {
-      Alert.alert("Repostado!", "O Momento foi adicionado aos seus Momentos.", [
+      Alert.alert(t("story_viewer_screen.reposted_title"), t("story_viewer_screen.reposted_msg"), [
         { text: "OK", onPress: () => router.back() },
       ]);
     } else {
-      Alert.alert("Erro", "Não foi possível repostar. Tente novamente.");
+      Alert.alert(t("common.error"), t("story_viewer_screen.error_repost"));
       setIsPlaying(true);
       startProgress(storyDuration);
     }
@@ -280,7 +282,7 @@ export default function StoryViewerScreen() {
   if (!currentGroup || !currentStory) {
     return (
       <View style={styles.screen}>
-        <Text style={{ color: "#fff" }}>Nenhum momento disponível</Text>
+        <Text style={{ color: "#fff" }}>{t("story_viewer_screen.no_stories")}</Text>
       </View>
     );
   }
@@ -350,8 +352,8 @@ export default function StoryViewerScreen() {
                 <Feather name="film" size={11} color="#fff" />
                 <Text style={styles.mediaTypePillText}>
                   {videoPart && videoPart.totalParts > 1
-                    ? `Parte ${videoPart.partNumber}/${videoPart.totalParts}`
-                    : "Vídeo"}
+                    ? t("story_viewer_screen.video_part", { part: videoPart.partNumber, total: videoPart.totalParts })
+                    : t("story_viewer_screen.video_label")}
                 </Text>
               </View>
             )}
@@ -399,7 +401,7 @@ export default function StoryViewerScreen() {
               disabled={reposting}
             >
               <Feather name="repeat" size={15} color="#fff" />
-              <Text style={styles.repostBtnText}>{reposting ? "Repostando..." : "Repostar este Momento"}</Text>
+              <Text style={styles.repostBtnText}>{reposting ? t("story_viewer_screen.reposting") : t("story_viewer_screen.repost_btn")}</Text>
             </TouchableOpacity>
           )}
         </View>

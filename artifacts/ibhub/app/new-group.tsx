@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
@@ -41,6 +42,7 @@ const ACCESS_OPTIONS: { value: AccessType; label: string; desc: string; icon: an
 ];
 
 export default function NewGroupScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -63,7 +65,7 @@ export default function NewGroupScreen() {
   const pickAvatar = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permissão necessária", "Permita acesso à galeria de fotos.");
+      Alert.alert(t("new_group_screen.permission_title"), t("new_group_screen.permission_msg"));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -79,11 +81,11 @@ export default function NewGroupScreen() {
 
   const handleCreate = async () => {
     if (!canCreate) {
-      Alert.alert("Atenção", "Preencha o nome e a categoria do grupo.");
+      Alert.alert(t("new_group_screen.validation_title"), t("new_group_screen.validation_msg"));
       return;
     }
     if (!userId) {
-      Alert.alert("Erro", "Você precisa estar autenticado.");
+      Alert.alert(t("common.error"), t("new_group_screen.error_auth"));
       return;
     }
     setLoading(true);
@@ -96,7 +98,7 @@ export default function NewGroupScreen() {
     });
     if (!group) {
       setLoading(false);
-      Alert.alert("Erro", "Não foi possível criar o grupo. Verifique se a migração foi executada.");
+      Alert.alert(t("common.error"), t("new_group_screen.error_create"));
       return;
     }
     // Upload avatar if selected
@@ -137,16 +139,16 @@ export default function NewGroupScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 14, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
-          <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>Cancelar</Text>
+          <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>{t("new_group_screen.cancel")}</Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.navy }]}>Novo Grupo</Text>
+        <Text style={[styles.headerTitle, { color: colors.navy }]}>{t("new_group_screen.header_title")}</Text>
         <TouchableOpacity
           style={[styles.createBtn, { backgroundColor: canCreate ? colors.gold : colors.border }]}
           onPress={handleCreate}
           disabled={loading}
         >
           <Text style={[styles.createBtnText, { color: canCreate ? "#fff" : colors.mutedForeground }]}>
-            {loading ? "…" : "Criar"}
+            {loading ? t("new_group_screen.creating") : t("new_group_screen.create_btn")}
           </Text>
         </TouchableOpacity>
       </View>
@@ -171,15 +173,15 @@ export default function NewGroupScreen() {
               <Feather name="camera" size={12} color="#fff" />
             </View>
           </TouchableOpacity>
-          <Text style={[styles.avatarHint, { color: colors.mutedForeground }]}>Foto do grupo (opcional)</Text>
+          <Text style={[styles.avatarHint, { color: colors.mutedForeground }]}>{t("new_group_screen.avatar_hint")}</Text>
         </View>
 
         {/* Group name */}
         <View style={styles.field}>
-          <Text style={[styles.fieldLabel, { color: colors.navy }]}>Nome do grupo *</Text>
+          <Text style={[styles.fieldLabel, { color: colors.navy }]}>{t("new_group_screen.field_name_label")}</Text>
           <TextInput
             style={[styles.textInput, { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground }]}
-            placeholder="Nome do grupo"
+            placeholder={t("new_group_screen.field_name_placeholder")}
             placeholderTextColor={colors.mutedForeground}
             value={name}
             onChangeText={setName}
@@ -189,7 +191,7 @@ export default function NewGroupScreen() {
 
         {/* Category */}
         <View style={styles.field}>
-          <Text style={[styles.fieldLabel, { color: colors.navy }]}>Categoria *</Text>
+          <Text style={[styles.fieldLabel, { color: colors.navy }]}>{t("new_group_screen.field_category_label")}</Text>
           <View style={styles.catGrid}>
             {CATEGORIES.map((cat) => (
               <TouchableOpacity
@@ -213,14 +215,14 @@ export default function NewGroupScreen() {
 
         {/* Description */}
         <View style={styles.field}>
-          <Text style={[styles.fieldLabel, { color: colors.navy }]}>Descrição</Text>
+          <Text style={[styles.fieldLabel, { color: colors.navy }]}>{t("new_group_screen.field_desc_label")}</Text>
           <TextInput
             style={[
               styles.textInput,
               styles.textArea,
               { backgroundColor: "#fff", borderColor: colors.border, color: colors.foreground },
             ]}
-            placeholder="Sobre o grupo..."
+            placeholder={t("new_group_screen.field_desc_placeholder")}
             placeholderTextColor={colors.mutedForeground}
             value={desc}
             onChangeText={setDesc}
@@ -232,7 +234,7 @@ export default function NewGroupScreen() {
 
         {/* Access type */}
         <View style={styles.field}>
-          <Text style={[styles.fieldLabel, { color: colors.navy }]}>Tipo de acesso</Text>
+          <Text style={[styles.fieldLabel, { color: colors.navy }]}>{t("new_group_screen.field_access_label")}</Text>
           <View style={styles.accessList}>
             {ACCESS_OPTIONS.map((opt) => (
               <TouchableOpacity
@@ -251,8 +253,16 @@ export default function NewGroupScreen() {
                   <Feather name={opt.icon} size={20} color={access === opt.value ? colors.gold : colors.mutedForeground} />
                 </View>
                 <View style={styles.accessText}>
-                  <Text style={[styles.accessLabel, { color: colors.navy }]}>{opt.label}</Text>
-                  <Text style={[styles.accessDesc, { color: colors.mutedForeground }]}>{opt.desc}</Text>
+                  <Text style={[styles.accessLabel, { color: colors.navy }]}>
+                    {opt.value === "aberto" ? t("new_group_screen.access_open_label")
+                      : opt.value === "fechado" ? t("new_group_screen.access_closed_label")
+                      : t("new_group_screen.access_restricted_label")}
+                  </Text>
+                  <Text style={[styles.accessDesc, { color: colors.mutedForeground }]}>
+                    {opt.value === "aberto" ? t("new_group_screen.access_open_desc")
+                      : opt.value === "fechado" ? t("new_group_screen.access_closed_desc")
+                      : t("new_group_screen.access_restricted_desc")}
+                  </Text>
                 </View>
                 {access === opt.value && (
                   <Feather name="check-circle" size={20} color={colors.gold} />

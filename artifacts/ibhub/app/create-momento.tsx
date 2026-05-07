@@ -3,6 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import React, { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
@@ -52,6 +53,7 @@ function VideoPreview({ uri }: { uri: string }) {
 }
 
 export default function CreateMomentoScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const router = useRouter();
   const { user, profile, activeCompany } = useAuth();
@@ -71,7 +73,7 @@ export default function CreateMomentoScreen() {
     if (Platform.OS !== "web" && permissionFn) {
       const { status } = await permissionFn();
       if (status !== "granted") {
-        Alert.alert("Permissão necessária", "Conceda acesso para continuar.");
+        Alert.alert(t("create_momento_screen.permission_title"), t("create_momento_screen.permission_msg"));
         return;
       }
     }
@@ -148,7 +150,7 @@ export default function CreateMomentoScreen() {
   const handlePublish = async () => {
     if (!user?.id) return;
     if (!mediaUri) {
-      Alert.alert("Mídia obrigatória", "Selecione uma foto ou vídeo para publicar o Momento.");
+      Alert.alert(t("create_momento_screen.media_required_title"), t("create_momento_screen.media_required_msg"));
       return;
     }
     setPublishing(true);
@@ -166,7 +168,7 @@ export default function CreateMomentoScreen() {
       if (ok) {
         router.back();
       } else {
-        Alert.alert("Erro", "Não foi possível publicar o Momento. Tente novamente.");
+        Alert.alert(t("common.error"), t("create_momento_screen.error_publish"));
         setStep("edit");
       }
     } else {
@@ -181,7 +183,7 @@ export default function CreateMomentoScreen() {
       if (story) {
         router.back();
       } else {
-        Alert.alert("Erro", "Não foi possível publicar o Momento. Tente novamente.");
+        Alert.alert(t("common.error"), t("create_momento_screen.error_publish"));
         setStep("edit");
       }
     }
@@ -196,7 +198,7 @@ export default function CreateMomentoScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
             <Feather name="x" size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Novo Momento</Text>
+          <Text style={styles.headerTitle}>{t("create_momento_screen.header_title")}</Text>
           <View style={{ width: 40 }} />
         </View>
 
@@ -208,24 +210,24 @@ export default function CreateMomentoScreen() {
               size={80}
             />
           </View>
-          <Text style={styles.pickTitle}>{activeCompany ? activeCompany.name : (profile?.full_name ?? "Você")}</Text>
+          <Text style={styles.pickTitle}>{activeCompany ? activeCompany.name : (profile?.full_name ?? t("create_momento_screen.you_fallback"))}</Text>
           {activeCompany && (
             <View style={styles.companyBadge}>
-              <Text style={styles.companyBadgeText}>Publicando como empresa</Text>
+              <Text style={styles.companyBadgeText}>{t("create_momento_screen.publishing_as_company")}</Text>
             </View>
           )}
-          <Text style={styles.pickSub}>Compartilhe um momento com sua rede por 24 horas</Text>
+          <Text style={styles.pickSub}>{t("create_momento_screen.pick_sub")}</Text>
 
           <View style={styles.pickBtns}>
             <TouchableOpacity style={[styles.pickBtn, { backgroundColor: colors.gold }]} onPress={openCamera}>
               <Feather name="camera" size={26} color={colors.navy} />
-              <Text style={[styles.pickBtnLabel, { color: colors.navy }]}>Câmera</Text>
-              <Text style={[styles.pickBtnSub, { color: colors.navy + "99" }]}>foto ou vídeo • 30s</Text>
+              <Text style={[styles.pickBtnLabel, { color: colors.navy }]}>{t("create_momento_screen.btn_camera")}</Text>
+              <Text style={[styles.pickBtnSub, { color: colors.navy + "99" }]}>{t("create_momento_screen.btn_camera_sub")}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.pickBtn, { backgroundColor: colors.navyLight }]} onPress={openGallery}>
               <Feather name="image" size={26} color="#fff" />
-              <Text style={[styles.pickBtnLabel, { color: "#fff" }]}>Galeria</Text>
-              <Text style={[styles.pickBtnSub, { color: "rgba(255,255,255,0.6)" }]}>foto ou vídeo</Text>
+              <Text style={[styles.pickBtnLabel, { color: "#fff" }]}>{t("create_momento_screen.btn_gallery")}</Text>
+              <Text style={[styles.pickBtnSub, { color: "rgba(255,255,255,0.6)" }]}>{t("create_momento_screen.btn_gallery_sub")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -239,8 +241,8 @@ export default function CreateMomentoScreen() {
         <ActivityIndicator size="large" color={colors.gold} />
         <Text style={[styles.publishingText, { color: colors.gold }]}>
           {publishing
-            ? isLongVideo ? `Enviando vídeo (${videoParts} partes)...` : "Enviando mídia..."
-            : "Publicando Momento..."}
+            ? isLongVideo ? t("create_momento_screen.sending_video", { parts: videoParts }) : t("create_momento_screen.sending_media")
+            : t("create_momento_screen.publishing")}
         </Text>
       </View>
     );
@@ -270,8 +272,8 @@ export default function CreateMomentoScreen() {
             <Feather name={mediaType === "video" ? "film" : "image"} size={13} color={colors.gold} />
             <Text style={[styles.mediaTypeBadgeText, { color: colors.gold }]}>
               {isLongVideo
-                ? `Vídeo longo • ${videoParts} partes`
-                : mediaType === "video" ? "Vídeo" : "Foto"}
+                ? t("create_momento_screen.media_long_video", { parts: videoParts })
+                : mediaType === "video" ? t("create_momento_screen.media_video") : t("create_momento_screen.media_photo")}
             </Text>
           </View>
           <TouchableOpacity
@@ -279,7 +281,7 @@ export default function CreateMomentoScreen() {
             onPress={handlePublish}
             disabled={publishing}
           >
-            <Text style={[styles.publishEditorBtnText, { color: colors.navy }]}>Publicar</Text>
+            <Text style={[styles.publishEditorBtnText, { color: colors.navy }]}>{t("create_momento_screen.publish_btn")}</Text>
           </TouchableOpacity>
         </View>
 
@@ -288,7 +290,7 @@ export default function CreateMomentoScreen() {
         <View style={styles.editorBottom}>
           <TextInput
             style={styles.textOverlay}
-            placeholder="Adicione um texto..."
+            placeholder={t("create_momento_screen.text_placeholder")}
             placeholderTextColor="rgba(255,255,255,0.6)"
             value={overlayText}
             onChangeText={setOverlayText}
@@ -298,7 +300,7 @@ export default function CreateMomentoScreen() {
           />
 
           <View style={styles.tagSection}>
-            <Text style={styles.tagSectionLabel}>MARCAR PESSOAS</Text>
+            <Text style={styles.tagSectionLabel}>{t("create_momento_screen.tag_section_label")}</Text>
 
             {taggedUsers.length > 0 && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.taggedList} contentContainerStyle={{ gap: 8 }}>
@@ -315,7 +317,7 @@ export default function CreateMomentoScreen() {
               <Feather name="at-sign" size={16} color="rgba(255,255,255,0.7)" />
               <TextInput
                 style={styles.tagInput}
-                placeholder="Buscar pessoa para marcar..."
+                placeholder={t("create_momento_screen.tag_search_placeholder")}
                 placeholderTextColor="rgba(255,255,255,0.5)"
                 value={tagSearch}
                 onChangeText={searchUsers}

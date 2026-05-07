@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Alert,
   FlatList,
@@ -42,6 +43,7 @@ function formatDate(dateStr: string): string {
 }
 
 export default function EventsScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -139,7 +141,7 @@ export default function EventsScreen() {
                 </Text>
               </View>
               <Button
-                title={item.is_rsvp ? "Confirmado ✓" : "Confirmar presença"}
+                title={item.is_rsvp ? t("events_screen.rsvp_confirmed") : t("events_screen.rsvp")}
                 onPress={() => toggleRSVP(item.id)}
                 variant={item.is_rsvp ? "outline" : "gold"}
                 size="sm"
