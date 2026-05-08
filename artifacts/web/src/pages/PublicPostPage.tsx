@@ -111,6 +111,12 @@ export default function PublicPostPage() {
       });
   }, [id]);
 
+  // If already logged in, redirect straight to the in-app post view
+  useEffect(() => {
+    if (authLoading || !id) return;
+    if (session) setLocation(`/app/posts/${id}`);
+  }, [authLoading, session, id, setLocation]);
+
   useEffect(() => {
     if (authLoading || loading) return;
     if (session) return;
@@ -122,15 +128,22 @@ export default function PublicPostPage() {
   useEffect(() => {
     if (!id || appAttempted) return;
     const ua = navigator.userAgent;
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
-    if (!isMobile) return;
+    const isAndroid = /Android/i.test(ua);
+    const isIOS = /iPhone|iPad|iPod/i.test(ua);
+    if (!isAndroid && !isIOS) return;
     setAppAttempted(true);
-    const deepLink = `ibhub://post/${id}`;
-    const iframe = document.createElement("iframe");
-    iframe.style.display = "none";
-    iframe.src = deepLink;
-    document.body.appendChild(iframe);
-    setTimeout(() => document.body.removeChild(iframe), 2000);
+    if (isAndroid) {
+      // Android Intent URL — opens the app if installed, stays in browser otherwise
+      window.location.href = `intent://post/${id}#Intent;scheme=ibhub;package=br.com.ibhub;end`;
+    } else {
+      // iOS: hidden iframe trick
+      const deepLink = `ibhub://post/${id}`;
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.src = deepLink;
+      document.body.appendChild(iframe);
+      setTimeout(() => document.body.removeChild(iframe), 2000);
+    }
   }, [id, appAttempted]);
 
   if (loading) {
@@ -243,12 +256,19 @@ export default function PublicPostPage() {
             <div style={{ fontSize: 14, color: "#374151", marginBottom: 14, lineHeight: 1.5 }}>
               Veja mais publicações e conecte-se com profissionais do vinho na ibhub
             </div>
-            <a
-              href={`ibhub://post/${id}`}
-              style={{ display: "block", padding: "13px 20px", borderRadius: 11, background: GOLD, color: WHITE, fontWeight: 700, fontSize: 15, textDecoration: "none", marginBottom: 10 }}
+            <button
+              onClick={() => {
+                const isAndroid = /Android/i.test(navigator.userAgent);
+                if (isAndroid) {
+                  window.location.href = `intent://post/${id}#Intent;scheme=ibhub;package=br.com.ibhub;end`;
+                } else {
+                  window.location.href = `ibhub://post/${id}`;
+                }
+              }}
+              style={{ display: "block", width: "100%", padding: "13px 20px", borderRadius: 11, background: GOLD, color: WHITE, fontWeight: 700, fontSize: 15, border: "none", cursor: "pointer", marginBottom: 10 }}
             >
               Abrir no app ibhub
-            </a>
+            </button>
             {!session ? (
               <button
                 onClick={() => setLocation("/cadastro")}
