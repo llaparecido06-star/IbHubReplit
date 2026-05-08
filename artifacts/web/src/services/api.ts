@@ -4332,9 +4332,6 @@ export interface BiExportador {
   name: string;
   origem_exportador: string;
   distribuidor: string | null;
-  fob_usd: string | null;
-  cx9l: string | null;
-  usd_por_cx9l: string | null;
   created_at: string;
 }
 

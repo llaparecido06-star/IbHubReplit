@@ -260,9 +260,6 @@ router.get("/wine-imports/bi-search/exportadores", async (req: Request, res: Res
     name: g.name,
     origem_exportador: g.origem_exportador,
     distribuidor: null as string | null,
-    fob_usd: null as string | null,
-    cx9l: null as string | null,
-    usd_por_cx9l: null as string | null,
   }));
 
   return res.json({ items, total, limit, offset, credits_remaining: credits.credits_remaining, credits_total: credits.credits_total });
