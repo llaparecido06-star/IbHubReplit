@@ -1262,6 +1262,15 @@ const ptBR = {
     plan_exclusive: "Exclusivo",
     plan_business: "Business",
     plan_free: "Gratuito",
+    ios_notice_body: "Para assinar ou alterar seu plano, acesse ibhub.com.br no seu navegador.",
+    ios_hero_sub: "Planos para profissionais e apaixonados por vinho.",
+  },
+  paywall: {
+    title: "Recurso Premium",
+    description_default: "Este recurso está disponível nos planos pagos do ibhub.",
+    plan_required: "A partir do plano {{plan}}",
+    cta_btn: "Ver Planos",
+    back_btn: "Voltar",
   },
   wine_cellar: {
     title: "Adega Virtual",

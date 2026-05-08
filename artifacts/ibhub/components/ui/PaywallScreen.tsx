@@ -2,6 +2,7 @@ import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
 
@@ -12,6 +13,7 @@ interface PaywallScreenProps {
 }
 
 export function PaywallScreen({ featureName, description, requiredPlan }: PaywallScreenProps) {
+  const { t } = useTranslation();
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -22,15 +24,15 @@ export function PaywallScreen({ featureName, description, requiredPlan }: Paywal
         <View style={[styles.iconBox, { backgroundColor: colors.gold + "15" }]}>
           <Feather name="lock" size={36} color={colors.gold} />
         </View>
-        <Text style={[styles.title, { color: colors.navy }]}>Recurso Premium</Text>
+        <Text style={[styles.title, { color: colors.navy }]}>{t("paywall.title")}</Text>
         <Text style={[styles.featureName, { color: colors.gold }]}>{featureName}</Text>
         <Text style={[styles.description, { color: colors.mutedForeground }]}>
-          {description ?? "Este recurso está disponível nos planos pagos do ibhub."}
+          {description ?? t("paywall.description_default")}
         </Text>
         {requiredPlan && (
           <View style={[styles.planBadge, { backgroundColor: colors.gold + "15" }]}>
             <Text style={[styles.planBadgeText, { color: colors.gold }]}>
-              A partir do plano {requiredPlan}
+              {t("paywall.plan_required", { plan: requiredPlan })}
             </Text>
           </View>
         )}
@@ -39,10 +41,10 @@ export function PaywallScreen({ featureName, description, requiredPlan }: Paywal
           onPress={() => router.push("/subscription")}
         >
           <Feather name="zap" size={16} color="#fff" />
-          <Text style={styles.btnText}>Ver Planos e Assinar</Text>
+          <Text style={styles.btnText}>{t("paywall.cta_btn")}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={[styles.backBtnText, { color: colors.mutedForeground }]}>Voltar</Text>
+          <Text style={[styles.backBtnText, { color: colors.mutedForeground }]}>{t("paywall.back_btn")}</Text>
         </TouchableOpacity>
       </View>
     </View>

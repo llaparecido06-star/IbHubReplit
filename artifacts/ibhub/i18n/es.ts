@@ -1262,6 +1262,15 @@ const es = {
     plan_exclusive: "Exclusivo",
     plan_business: "Business",
     plan_free: "Gratuito",
+    ios_notice_body: "Para suscribirte o cambiar tu plan, accede a ibhub.com.br desde tu navegador.",
+    ios_hero_sub: "Planes para profesionales y apasionados por el vino.",
+  },
+  paywall: {
+    title: "Función Premium",
+    description_default: "Esta función está disponible en los planes de pago de ibhub.",
+    plan_required: "Desde el plan {{plan}}",
+    cta_btn: "Ver Planes",
+    back_btn: "Volver",
   },
   wine_cellar: {
     title: "Bodega Virtual",

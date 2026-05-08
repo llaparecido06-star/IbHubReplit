@@ -58,6 +58,7 @@ export default function SubscriptionScreen() {
   const isPastDue     = entitleStatus === "past_due";
   const isCourtesy    = entitleStatus === "courtesy";
   const isFree        = entitleStatus === "free";
+  const isIOS         = Platform.OS === "ios";
 
   const statusKey = (entitleStatus !== "free" ? entitleStatus : null) ?? "";
   const statusCfg = statusKey ? STATUS_CONFIG[statusKey] : null;
@@ -154,7 +155,9 @@ export default function SubscriptionScreen() {
             <Text style={[styles.heroBadgeText, { color: colors.gold }]}>Pro</Text>
           </View>
           <Text style={styles.heroTitle}>{t("subscription.hero_title")}</Text>
-          <Text style={styles.heroSub}>{t("subscription.hero_sub")}</Text>
+          <Text style={styles.heroSub}>
+            {isIOS ? t("subscription.ios_hero_sub") : t("subscription.hero_sub")}
+          </Text>
         </View>
 
         {/* Current plan status */}
@@ -227,7 +230,14 @@ export default function SubscriptionScreen() {
           {hasActiveSub ? t("subscription.other_plans") : t("subscription.upgrade_title")}
         </Text>
 
-        {plansLoading ? (
+        {isIOS ? (
+          <View style={[styles.infoBox, { backgroundColor: `${colors.gold}0A`, borderColor: `${colors.gold}25` }]}>
+            <Feather name="globe" size={13} color={colors.gold} />
+            <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
+              {t("subscription.ios_notice_body")}
+            </Text>
+          </View>
+        ) : plansLoading ? (
           <View style={styles.loadingBox}>
             <ActivityIndicator color={colors.gold} />
             <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>{t("subscription.loading_plans")}</Text>
@@ -345,13 +355,15 @@ export default function SubscriptionScreen() {
           </View>
         )}
 
-        {/* Info note */}
-        <View style={[styles.infoBox, { backgroundColor: `${colors.gold}0A`, borderColor: `${colors.gold}25` }]}>
-          <Feather name="lock" size={13} color={colors.gold} />
-          <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
-            {t("subscription.info_text")}
-          </Text>
-        </View>
+        {/* Info note — hidden on iOS (Stripe mention not allowed) */}
+        {!isIOS && (
+          <View style={[styles.infoBox, { backgroundColor: `${colors.gold}0A`, borderColor: `${colors.gold}25` }]}>
+            <Feather name="lock" size={13} color={colors.gold} />
+            <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
+              {t("subscription.info_text")}
+            </Text>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
