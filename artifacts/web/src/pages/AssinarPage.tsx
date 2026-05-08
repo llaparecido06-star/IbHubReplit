@@ -6,7 +6,7 @@ import { hasPlanAccess } from "@/utils/entitlement";
 import { usePlans, formatPlanPrice, formatOriginalPrice, calcDiscount } from "@/hooks/usePlans";
 
 const NAVY  = "#0d1b2a";
-const DEEP  = "#06101e";
+const DEEP  = "#0d1f35";
 const GOLD  = "#c9a84c";
 const WINE  = "#722f37";
 
@@ -304,9 +304,6 @@ export default function AssinarPage() {
         </div>
       </section>
 
-      {/* ── Thin gold divider ── */}
-      <div style={{ height: 1, background: `linear-gradient(90deg, transparent, ${GOLD}30, transparent)` }} />
-
       {/* ── Por que Pro ── */}
       <section style={{ padding: "100px 24px", background: `linear-gradient(180deg, ${DEEP} 0%, #0a1525 100%)` }}>
         <div style={{ maxWidth: 1000, margin: "0 auto" }}>
@@ -350,9 +347,6 @@ export default function AssinarPage() {
           </div>
         </div>
       </section>
-
-      {/* ── Thin gold divider ── */}
-      <div style={{ height: 1, background: `linear-gradient(90deg, transparent, ${GOLD}25, transparent)` }} />
 
       {/* ── Plans ── */}
       <section id="planos" style={{
