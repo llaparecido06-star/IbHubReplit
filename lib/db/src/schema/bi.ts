@@ -54,6 +54,20 @@ export const insertWineImportSchema = createInsertSchema(wineImportsTable).omit(
 export type InsertWineImport = z.infer<typeof insertWineImportSchema>;
 export type WineImport = typeof wineImportsTable.$inferSelect;
 
+export const biExportadoresFinanceiroTable = pgTable("bi_exportadores_financeiro", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull().unique(),
+  fobUsd: numeric("fob_usd", { precision: 15, scale: 2 }),
+  cx9l: numeric("cx9l", { precision: 12, scale: 2 }),
+  usdPorCx9l: numeric("usd_por_cx9l", { precision: 10, scale: 2 }),
+  periodo: text("periodo"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export const insertBiExportadorFinanceiroSchema = createInsertSchema(biExportadoresFinanceiroTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertBiExportadorFinanceiro = z.infer<typeof insertBiExportadorFinanceiroSchema>;
+export type BiExportadorFinanceiro = typeof biExportadoresFinanceiroTable.$inferSelect;
+
 export const biRevealCreditsTable = pgTable("bi_reveal_credits", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull(),

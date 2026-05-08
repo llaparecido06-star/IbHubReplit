@@ -707,68 +707,30 @@ router.post("/wine-imports/bi/exportadores/reveal", async (req: Request, res: Re
   if (!name?.trim()) return res.status(400).json({ error: "name é obrigatório" });
   const exportadorName = name.trim();
 
-  // Fetch all rows for this exportador (one per distribuidor)
-  type ExpRow = { distribuidor: string | null; fob_usd: string | null; cx9l: string | null; usd_por_cx9l: string | null };
-  const { data: rows, error: fetchError } = await supabaseAdmin
-    .from("bi_exportadores")
-    .select("distribuidor, fob_usd, cx9l, usd_por_cx9l")
+  // Busca os dados financeiros consolidados da tabela separada (fonte: planilha Ideal.BI)
+  type FinRow = { fob_usd: string | null; cx9l: string | null; usd_por_cx9l: string | null; periodo: string | null };
+  const { data: finRow, error: finError } = await supabaseAdmin
+    .from("bi_exportadores_financeiro")
+    .select("fob_usd, cx9l, usd_por_cx9l, periodo")
     .eq("name", exportadorName)
-    .order("fob_usd", { ascending: false, nullsFirst: false });
+    .maybeSingle();
 
-  if (fetchError) return res.status(500).json({ error: fetchError.message });
-  if (!rows || rows.length === 0) return res.status(404).json({ error: "Exportador não encontrado" });
+  if (finError) return res.status(500).json({ error: finError.message });
 
-  // Group rows by distribuidor — merge duplicates (same exportador+distribuidor can have multiple rows)
-  // storedUsdCx: preserved from the DB when there's only 1 row for this distribuidor
-  // (avoids recalculation drift when fob/cx9l/usd_por_cx9l are not perfectly consistent in the source data)
-  const distMap = new Map<string, { distribuidor: string | null; fob: number; cx9l: number; storedUsdCx: number | null; rowCount: number }>();
-  for (const r of rows as ExpRow[]) {
-    const key = (r.distribuidor ?? "").toLowerCase().trim();
-    const fob = r.fob_usd ? parseFloat(r.fob_usd) : 0;
-    const cx  = r.cx9l   ? parseFloat(r.cx9l)     : 0;
-    const upc = r.usd_por_cx9l ? parseFloat(r.usd_por_cx9l) : null;
-    const existing = distMap.get(key);
-    if (existing) {
-      existing.fob += fob;
-      existing.cx9l += cx;
-      existing.rowCount++;
-      // When multiple rows exist for the same distribuidor, the stored usd_por_cx9l
-      // is ambiguous — clear it so we fall back to fob/cx9l calculation
-      existing.storedUsdCx = null;
-    } else {
-      distMap.set(key, { distribuidor: r.distribuidor, fob, cx9l: cx, storedUsdCx: upc, rowCount: 1 });
-    }
-  }
-  const merged = Array.from(distMap.values());
-
-  // Aggregated totals (FOB and CX9L are summable; usd_por_cx9l is a weighted average)
-  let fob_sum = 0, cx9l_sum = 0;
-  for (const d of merged) { fob_sum += d.fob; cx9l_sum += d.cx9l; }
-  const totals = {
-    fob_usd:      fob_sum  > 0                  ? fob_sum.toFixed(2)              : null,
-    cx9l:         cx9l_sum > 0                  ? cx9l_sum.toFixed(2)             : null,
-    usd_por_cx9l: fob_sum  > 0 && cx9l_sum > 0  ? (fob_sum / cx9l_sum).toFixed(2) : null,
+  // Se não há dados financeiros, retorna null nos campos (sem erro — dado pode não existir ainda)
+  const financeiro = finRow as FinRow | null;
+  const kpis = {
+    fob_usd:      financeiro?.fob_usd      ?? null,
+    cx9l:         financeiro?.cx9l         ?? null,
+    usd_por_cx9l: financeiro?.usd_por_cx9l ?? null,
+    periodo:      financeiro?.periodo       ?? null,
   };
-  const distribuidores = merged
-    .sort((a, b) => b.fob - a.fob)
-    .map(d => {
-      // Use the stored usd_por_cx9l when available (single-row distribuidor) to avoid
-      // recalculation drift; only recalculate when multiple rows were merged
-      const calcUsdCx = d.fob > 0 && d.cx9l > 0 ? d.fob / d.cx9l : null;
-      const usdCx = d.storedUsdCx ?? calcUsdCx;
-      return {
-        distribuidor: d.distribuidor,
-        fob_usd:      d.fob  > 0    ? d.fob.toFixed(2)    : null,
-        cx9l:         d.cx9l > 0    ? d.cx9l.toFixed(2)   : null,
-        usd_por_cx9l: usdCx != null  ? usdCx.toFixed(2)   : null,
-      };
-    });
 
   // Admins bypass credit check
   const { data: profile } = await supabaseAdmin.from("profiles").select("role").eq("id", userId).single();
   const isAdmin = (profile as { role?: string } | null)?.role === "admin";
   if (isAdmin) {
-    return res.json({ totals, distribuidores, already_revealed: true, credits_remaining: null, credits_total: 0 });
+    return res.json({ kpis, already_revealed: true, credits_remaining: null, credits_total: 0 });
   }
 
   // Check if already revealed this month (keyed by exportador name)
@@ -782,7 +744,7 @@ router.post("/wine-imports/bi/exportadores/reveal", async (req: Request, res: Re
 
   if (logEntry) {
     const credits = await getOrCreateRevealCredits(userId);
-    return res.json({ totals, distribuidores, already_revealed: true, credits_remaining: credits.credits_remaining, credits_total: credits.credits_total });
+    return res.json({ kpis, already_revealed: true, credits_remaining: credits.credits_remaining, credits_total: credits.credits_total });
   }
 
   const credits = await getOrCreateRevealCredits(userId);
@@ -798,7 +760,7 @@ router.post("/wine-imports/bi/exportadores/reveal", async (req: Request, res: Re
     user_id: userId, record_type: "exportador", record_key: exportadorName,
   });
 
-  return res.json({ totals, distribuidores, already_revealed: false, credits_remaining: newRemaining, credits_total: credits.credits_total });
+  return res.json({ kpis, already_revealed: false, credits_remaining: newRemaining, credits_total: credits.credits_total });
 });
 
 // ── POST /wine-imports/spell-correct ─────────────────────────────────────────
