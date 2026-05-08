@@ -305,7 +305,7 @@ export default function AssinarPage() {
       </section>
 
       {/* ── Por que Pro ── */}
-      <section style={{ padding: "100px 24px", background: `linear-gradient(180deg, ${DEEP} 0%, #0a1525 100%)` }}>
+      <section style={{ padding: "100px 24px", background: "#fff" }}>
         <div style={{ maxWidth: 1000, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 72 }}>
             <p style={{ color: GOLD, fontWeight: 600, fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase", marginBottom: 16 }}>
@@ -313,12 +313,12 @@ export default function AssinarPage() {
             </p>
             <h2 style={{
               fontFamily: "'Playfair Display', Georgia, serif",
-              fontSize: 40, fontWeight: 800, color: "#fff", lineHeight: 1.15,
+              fontSize: 40, fontWeight: 800, color: NAVY, lineHeight: 1.15,
             }}>
               Tudo que você precisa para<br />crescer no setor de vinhos
             </h2>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
             {[
               { icon: "✦", title: "Rede exclusiva",           desc: "Conecte-se com importadores, produtores, sommeliers e distribuidores do setor vitivinícola." },
               { icon: "◈", title: "Inteligência de mercado",  desc: "Dados, gráficos e KPIs exclusivos do Ideal.BI para tomadas de decisão mais precisas." },
@@ -330,18 +330,19 @@ export default function AssinarPage() {
               <div
                 key={b.title}
                 style={{
-                  padding: "36px 32px",
-                  background: i % 2 === 0 ? "rgba(255,255,255,0.025)" : "rgba(255,255,255,0.015)",
-                  border: "1px solid rgba(255,255,255,0.06)",
+                  padding: "32px 28px",
+                  background: "#f9f8f6",
+                  border: "1px solid #ede9e2",
+                  borderRadius: 16,
                   transition: "all 0.2s",
                   cursor: "default",
                 }}
-                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "rgba(201,168,76,0.06)"; (e.currentTarget as HTMLDivElement).style.borderColor = `${GOLD}30`; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = i % 2 === 0 ? "rgba(255,255,255,0.025)" : "rgba(255,255,255,0.015)"; (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(255,255,255,0.06)"; }}
+                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "#fff"; (e.currentTarget as HTMLDivElement).style.borderColor = `${GOLD}50`; (e.currentTarget as HTMLDivElement).style.boxShadow = `0 6px 24px ${GOLD}12`; (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "#f9f8f6"; (e.currentTarget as HTMLDivElement).style.borderColor = "#ede9e2"; (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)"; }}
               >
-                <div style={{ color: GOLD, fontSize: 22, marginBottom: 20, fontWeight: 300 }}>{b.icon}</div>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: "#fff", marginBottom: 10, letterSpacing: 0.2 }}>{b.title}</h3>
-                <p style={{ fontSize: 13.5, color: "rgba(255,255,255,0.42)", lineHeight: 1.75 }}>{b.desc}</p>
+                <div style={{ color: GOLD, fontSize: 20, marginBottom: 18, fontWeight: 400 }}>{b.icon}</div>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 10, letterSpacing: 0.1 }}>{b.title}</h3>
+                <p style={{ fontSize: 13.5, color: "#6b7280", lineHeight: 1.75 }}>{b.desc}</p>
               </div>
             ))}
           </div>
@@ -739,7 +740,7 @@ export default function AssinarPage() {
       </div>
 
       {/* ── Testimonials ── */}
-      <section style={{ padding: "100px 24px", background: `linear-gradient(180deg, ${DEEP} 0%, #0a1525 100%)` }}>
+      <section style={{ padding: "100px 24px", background: "#f9f8f6" }}>
         <div style={{ maxWidth: 1000, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 72 }}>
             <p style={{ color: GOLD, fontWeight: 600, fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase", marginBottom: 16 }}>
@@ -747,31 +748,33 @@ export default function AssinarPage() {
             </p>
             <h2 style={{
               fontFamily: "'Playfair Display', Georgia, serif",
-              fontSize: 38, fontWeight: 800, color: "#fff", lineHeight: 1.15,
+              fontSize: 38, fontWeight: 800, color: NAVY, lineHeight: 1.15,
             }}>
               Histórias reais de crescimento
             </h2>
           </div>
           <div
             className="testimonials-grid"
-            style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}
+            style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}
           >
             {TESTIMONIALS.map((t, i) => (
               <div
                 key={t.name}
                 style={{
-                  padding: "40px 36px",
-                  background: i === 1 ? "rgba(201,168,76,0.04)" : "rgba(255,255,255,0.02)",
-                  border: `1px solid ${i === 1 ? `${GOLD}18` : "rgba(255,255,255,0.06)"}`,
+                  padding: "36px 32px",
+                  background: i === 1 ? "#fff" : "#fff",
+                  border: `1px solid ${i === 1 ? `${GOLD}40` : "#ede9e2"}`,
+                  borderRadius: 18,
+                  boxShadow: i === 1 ? `0 8px 32px ${GOLD}10` : "0 2px 12px rgba(0,0,0,0.04)",
                   display: "flex", flexDirection: "column",
                 }}
               >
-                <div style={{ color: GOLD, fontSize: 16, marginBottom: 20, letterSpacing: 3 }}>
+                <div style={{ color: GOLD, fontSize: 15, marginBottom: 20, letterSpacing: 3 }}>
                   {"★".repeat(5)}
                 </div>
                 <p style={{
                   fontFamily: "'Playfair Display', Georgia, serif",
-                  fontSize: 15, color: "rgba(255,255,255,0.75)",
+                  fontSize: 15, color: "#374151",
                   lineHeight: 1.8, marginBottom: 32, flex: 1,
                   fontStyle: "italic", fontWeight: 400,
                 }}>
@@ -783,13 +786,13 @@ export default function AssinarPage() {
                     background: `linear-gradient(135deg, ${NAVY}, #1a3a5c)`,
                     color: GOLD, display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: 13, fontWeight: 800, flexShrink: 0,
-                    border: `1.5px solid ${GOLD}35`,
+                    border: `1.5px solid ${GOLD}40`,
                   }}>
                     {t.avatar}
                   </div>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: "rgba(255,255,255,0.9)" }}>{t.name}</div>
-                    <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>{t.role}</div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: NAVY }}>{t.name}</div>
+                    <div style={{ fontSize: 11.5, color: "#9ca3af", marginTop: 2 }}>{t.role}</div>
                   </div>
                 </div>
               </div>
@@ -839,13 +842,13 @@ export default function AssinarPage() {
       </section>
 
       {/* ── FAQ ── */}
-      <section style={{ padding: "100px 24px", borderTop: `1px solid rgba(255,255,255,0.06)` }}>
+      <section style={{ padding: "100px 24px", background: "#fff" }}>
         <div style={{ maxWidth: 680, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 64 }}>
             <p style={{ color: GOLD, fontWeight: 600, fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase", marginBottom: 16 }}>FAQ</p>
             <h2 style={{
               fontFamily: "'Playfair Display', Georgia, serif",
-              fontSize: 36, fontWeight: 800, color: "#fff",
+              fontSize: 36, fontWeight: 800, color: NAVY,
             }}>Dúvidas frequentes</h2>
           </div>
           <div style={{ display: "flex", flexDirection: "column" }}>
@@ -854,9 +857,9 @@ export default function AssinarPage() {
                 key={i}
                 className="faq-row"
                 style={{
-                  borderBottom: `1px solid rgba(255,255,255,0.07)`,
+                  borderBottom: `1px solid #ede9e2`,
                   overflow: "hidden", borderRadius: 4,
-                  backgroundColor: openFaq === i ? "rgba(201,168,76,0.04)" : "transparent",
+                  backgroundColor: openFaq === i ? `${GOLD}06` : "transparent",
                 }}
                 onClick={() => setOpenFaq(openFaq === i ? null : i)}
               >
@@ -864,13 +867,13 @@ export default function AssinarPage() {
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   padding: "24px 8px", gap: 16, cursor: "pointer",
                 }}>
-                  <span style={{ fontWeight: 600, fontSize: 15, color: openFaq === i ? "#fff" : "rgba(255,255,255,0.75)", flex: 1, lineHeight: 1.4 }}>
+                  <span style={{ fontWeight: 600, fontSize: 15, color: openFaq === i ? NAVY : "#374151", flex: 1, lineHeight: 1.4 }}>
                     {faq.q}
                   </span>
                   <span style={{
                     width: 26, height: 26, borderRadius: "50%",
-                    background: openFaq === i ? GOLD : "rgba(255,255,255,0.07)",
-                    color: openFaq === i ? DEEP : "rgba(255,255,255,0.4)",
+                    background: openFaq === i ? GOLD : "#f3f0ea",
+                    color: openFaq === i ? "#fff" : "#9ca3af",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: 18, fontWeight: 700, flexShrink: 0,
                     transform: openFaq === i ? "rotate(45deg)" : "none",
@@ -880,7 +883,7 @@ export default function AssinarPage() {
                 {openFaq === i && (
                   <div style={{
                     padding: "0 8px 24px",
-                    fontSize: 14, color: "rgba(255,255,255,0.42)", lineHeight: 1.85,
+                    fontSize: 14, color: "#6b7280", lineHeight: 1.85,
                   }}>
                     {faq.a}
                   </div>
