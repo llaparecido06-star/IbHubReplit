@@ -5,74 +5,66 @@ import { createCheckoutSession } from "@/services/stripe";
 import { hasPlanAccess } from "@/utils/entitlement";
 import { usePlans, formatPlanPrice, formatOriginalPrice, calcDiscount } from "@/hooks/usePlans";
 
-const NAVY = "#0d1b2a";
-const GOLD = "#c9a84c";
-const GOLD_LIGHT = "#f0e4c2";
+const NAVY  = "#0d1b2a";
+const GOLD  = "#c9a84c";
+const WINE  = "#722f37";
 
 const BENEFITS = [
-  { icon: "🤝", title: "Rede exclusiva", desc: "Conecte-se com importadores, produtores, sommeliers e distribuidores do setor." },
-  { icon: "📊", title: "Inteligência de mercado", desc: "Dados e tendências do mundo do vinho para tomadas de decisão mais precisas." },
-  { icon: "🎓", title: "Masterclasses & conteúdo", desc: "Acesso a eventos, palestras e conteúdo exclusivo de especialistas renomados." },
-  { icon: "🏢", title: "Página da empresa", desc: "Mostre sua marca, portfólio e serviços para toda a comunidade ibhub." },
-  { icon: "🔍", title: "Veja quem visita você", desc: "Saiba exatamente quem acessou seu perfil e abra novas oportunidades." },
-  { icon: "💬", title: "Chat sem limites", desc: "Mensagens diretas ilimitadas com qualquer profissional da plataforma." },
+  { icon: "🤝", color: "#f0e4c2", title: "Rede exclusiva", desc: "Conecte-se com importadores, produtores, sommeliers e distribuidores do setor." },
+  { icon: "📊", color: "#dbeafe", title: "Inteligência de mercado", desc: "Dados e tendências do mundo do vinho para tomadas de decisão mais precisas." },
+  { icon: "🎓", color: "#ede9fe", title: "Masterclasses & conteúdo", desc: "Acesso a eventos, palestras e conteúdo exclusivo de especialistas renomados." },
+  { icon: "🏢", color: "#dcfce7", title: "Página da empresa", desc: "Mostre sua marca, portfólio e serviços para toda a comunidade ibhub." },
+  { icon: "🔍", color: "#fef9c3", title: "Veja quem visita você", desc: "Saiba exatamente quem acessou seu perfil e abra novas oportunidades." },
+  { icon: "💬", color: "#ffe4e6", title: "Chat sem limites", desc: "Mensagens diretas ilimitadas com qualquer profissional da plataforma." },
 ];
 
 const TESTIMONIALS = [
-  {
-    name: "Fernanda Lopes",
-    role: "Sommelier · São Paulo",
-    text: "O ibhub transformou a minha rede de contatos. Em 2 meses fechei 3 contratos novos com importadoras que nem sabia que existiam.",
-    avatar: "FL",
-  },
-  {
-    name: "Carlos Medeiros",
-    role: "Importador · Rio de Janeiro",
-    text: "A inteligência de mercado do ibhub Pro é indispensável. Consigo identificar tendências antes de todo mundo.",
-    avatar: "CM",
-  },
-  {
-    name: "Beatriz Motta",
-    role: "Produtora · Serra Gaúcha",
-    text: "Minha adega ganhou visibilidade nacional. As conexões que fiz aqui valem muito mais do que a assinatura.",
-    avatar: "BM",
-  },
+  { name: "Fernanda Lopes",  role: "Sommelier · São Paulo",     text: "O ibhub transformou a minha rede de contatos. Em 2 meses fechei 3 contratos novos com importadoras que nem sabia que existiam.", avatar: "FL", stars: 5 },
+  { name: "Carlos Medeiros", role: "Importador · Rio de Janeiro", text: "A inteligência de mercado do ibhub Pro é indispensável. Consigo identificar tendências antes de todo mundo.",                  avatar: "CM", stars: 5 },
+  { name: "Beatriz Motta",   role: "Produtora · Serra Gaúcha",  text: "Minha adega ganhou visibilidade nacional. As conexões que fiz aqui valem muito mais do que a assinatura.",                  avatar: "BM", stars: 5 },
 ];
 
 const FAQS = [
-  {
-    q: "Posso cancelar a qualquer momento?",
-    a: "Sim. Você pode cancelar sua assinatura quando quiser, sem taxas ou multas. O acesso continua até o fim do período pago.",
-  },
-  {
-    q: "Como funciona o pagamento?",
-    a: "O pagamento é processado de forma segura via Stripe, com cartão de crédito. Você recebe o recibo por e-mail.",
-  },
-  {
-    q: "Posso mudar de plano depois?",
-    a: "Sim. Você pode fazer upgrade ou downgrade do seu plano a qualquer momento na sua conta.",
-  },
-  {
-    q: "Existe período de teste gratuito?",
-    a: "Oferecemos o plano Gratuito sem custo por tempo ilimitado. Você pode explorar o ibhub antes de decidir pelo Pro.",
-  },
+  { q: "Posso cancelar a qualquer momento?",  a: "Sim. Você pode cancelar sua assinatura quando quiser, sem taxas ou multas. O acesso continua até o fim do período pago." },
+  { q: "Como funciona o pagamento?",          a: "O pagamento é processado de forma segura via Stripe, com cartão de crédito. Você recebe o recibo por e-mail." },
+  { q: "Posso mudar de plano depois?",        a: "Sim. Você pode fazer upgrade ou downgrade do seu plano a qualquer momento na sua conta." },
+  { q: "Existe período de teste gratuito?",   a: "Oferecemos o plano Gratuito sem custo por tempo ilimitado. Você pode explorar o ibhub antes de decidir pelo Pro." },
 ];
 
 const STATS = [
   { value: "8.000+", label: "Profissionais na rede" },
-  { value: "12+", label: "Países representados" },
-  { value: "94%", label: "Renova a assinatura" },
+  { value: "12+",    label: "Países representados" },
+  { value: "94%",    label: "Renova a assinatura" },
 ];
 
-const ACCENT_COLORS = [GOLD, "#1a3a5c", "#722f37"];
+const PLAN_ACCENTS = [GOLD, "#1a3a5c", WINE];
+
+function PriceDisplay({ priceStr, isDark }: { priceStr: string; isDark: boolean }) {
+  if (priceStr === "Grátis") {
+    return <span style={{ fontSize: 38, fontWeight: 900, color: isDark ? GOLD : NAVY }}>Grátis</span>;
+  }
+  const parts   = priceStr.replace("R$ ", "").split(",");
+  const integer = parts[0] ?? "0";
+  const decimal = parts[1] ?? "00";
+  const numColor = isDark ? GOLD : NAVY;
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 2 }}>
+      <span style={{ fontSize: 16, fontWeight: 800, color: numColor, marginTop: 6, lineHeight: 1 }}>R$</span>
+      <div style={{ lineHeight: 1 }}>
+        <span style={{ fontSize: 48, fontWeight: 900, color: numColor, letterSpacing: -2 }}>{integer}</span>
+        <span style={{ fontSize: 22, fontWeight: 800, color: numColor }}>,{decimal}</span>
+      </div>
+    </div>
+  );
+}
 
 export default function AssinarPage() {
   const { session, profile } = useAuth();
-  const [, setLocation] = useLocation();
+  const [, setLocation]      = useLocation();
   const [loading, setLoading] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]    = useState<string | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const autoTriggered = useRef(false);
+  const autoTriggered        = useRef(false);
 
   const { paidPlans, freePlan, getPlanLabel, loading: plansLoading } = usePlans();
 
@@ -104,7 +96,7 @@ export default function AssinarPage() {
 
   useEffect(() => {
     if (autoTriggered.current || !session || plansLoading || paidPlans.length === 0) return;
-    const params = new URLSearchParams(window.location.search);
+    const params     = new URLSearchParams(window.location.search);
     const planoParam = params.get("plano");
     if (!planoParam) return;
     const plan = paidPlans.find(p => p.id === planoParam);
@@ -119,43 +111,51 @@ export default function AssinarPage() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        .plan-card:hover { transform: translateY(-4px); box-shadow: 0 20px 60px rgba(13,27,42,0.14) !important; }
-        .cta-btn:hover { opacity: 0.9; transform: translateY(-1px); }
-        .benefit-card:hover { background: #fff !important; box-shadow: 0 4px 20px rgba(201,168,76,0.12) !important; }
-        .faq-item { cursor: pointer; }
-        .faq-item:hover { background: rgba(201,168,76,0.04); }
-        @media (max-width: 700px) {
-          .hero-headline { font-size: 32px !important; }
-          .plans-grid { grid-template-columns: 1fr !important; }
-          .benefits-grid { grid-template-columns: 1fr !important; }
-          .stats-row { flex-direction: column; gap: 24px !important; }
+
+        .plan-card { transition: transform 0.25s, box-shadow 0.25s; }
+        .plan-card:hover { transform: translateY(-6px); }
+        .plan-card-popular:hover { transform: translateY(-10px) !important; }
+
+        .cta-btn { transition: all 0.2s; }
+        .cta-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+
+        .benefit-card { transition: all 0.2s; }
+        .benefit-card:hover { background: #fff !important; box-shadow: 0 6px 24px rgba(201,168,76,0.13) !important; transform: translateY(-2px); }
+
+        .faq-item { cursor: pointer; transition: background 0.15s; }
+        .faq-item:hover { background: rgba(201,168,76,0.05) !important; }
+
+        .trust-item { transition: opacity 0.2s; }
+        .trust-item:hover { opacity: 1 !important; }
+
+        @keyframes spin    { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes pulse   { 0%, 100% { box-shadow: 0 4px 18px ${GOLD}60; } 50% { box-shadow: 0 6px 28px ${GOLD}90; } }
+        @keyframes fadein  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        @media (max-width: 720px) {
+          .hero-headline  { font-size: 30px !important; }
+          .plans-grid     { grid-template-columns: 1fr !important; }
+          .plans-grid > * { margin-top: 0 !important; }
+          .benefits-grid  { grid-template-columns: 1fr !important; }
+          .stats-row      { flex-direction: column; gap: 20px !important; }
           .testimonials-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
 
       {/* ── Header ── */}
       <header style={{
-        backgroundColor: NAVY,
-        padding: "16px 32px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        position: "sticky",
-        top: 0,
-        zIndex: 100,
-        boxShadow: "0 2px 20px rgba(0,0,0,0.3)",
+        backgroundColor: NAVY, padding: "16px 32px",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        position: "sticky", top: 0, zIndex: 100,
+        boxShadow: "0 2px 24px rgba(0,0,0,0.35)",
       }}>
         <button
           onClick={() => setLocation(session ? "/app" : "/")}
           style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, padding: 0 }}
         >
-          <img
-            src={`${import.meta.env.BASE_URL}logo-ibhub-branco.png`}
-            alt="ibhub"
-            style={{ height: 32, objectFit: "contain" }}
-          />
-          <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 18 }}>/</span>
-          <span style={{ color: "rgba(255,255,255,0.65)", fontSize: 14, fontWeight: 600 }}>Planos</span>
+          <img src={`${import.meta.env.BASE_URL}logo-ibhub-branco.png`} alt="ibhub" style={{ height: 32, objectFit: "contain" }} />
+          <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 18 }}>/</span>
+          <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 14, fontWeight: 600 }}>Planos</span>
         </button>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {session && currentPlan !== "gratuito" && hasActiveSub && (
@@ -171,7 +171,7 @@ export default function AssinarPage() {
             <button
               onClick={() => setLocation("/login")}
               style={{
-                backgroundColor: "transparent", border: `1px solid rgba(255,255,255,0.25)`,
+                backgroundColor: "transparent", border: "1px solid rgba(255,255,255,0.25)",
                 color: "#fff", borderRadius: 8, padding: "7px 18px",
                 fontSize: 13, fontWeight: 600, cursor: "pointer",
               }}
@@ -182,95 +182,79 @@ export default function AssinarPage() {
 
       {/* ── Hero ── */}
       <section style={{
-        background: `linear-gradient(160deg, ${NAVY} 0%, #112238 60%, #1a2f44 100%)`,
-        padding: "80px 24px 100px",
+        background: `linear-gradient(160deg, ${NAVY} 0%, #0f2235 55%, #1a2f44 100%)`,
+        padding: "88px 24px 108px",
         textAlign: "center",
         position: "relative",
         overflow: "hidden",
       }}>
-        {/* decorative glow */}
-        <div style={{
-          position: "absolute", top: "30%", left: "50%", transform: "translate(-50%, -50%)",
-          width: 600, height: 400, borderRadius: "50%",
-          background: `radial-gradient(ellipse, ${GOLD}18 0%, transparent 70%)`,
-          pointerEvents: "none",
-        }} />
+        <div style={{ position: "absolute", top: "35%", left: "50%", transform: "translate(-50%,-50%)", width: 700, height: 500, borderRadius: "50%", background: `radial-gradient(ellipse, ${GOLD}14 0%, transparent 70%)`, pointerEvents: "none" }} />
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 60, background: "linear-gradient(to bottom, transparent, #f8f7f3)", pointerEvents: "none" }} />
 
-        <div style={{ position: "relative", maxWidth: 700, margin: "0 auto" }}>
-          {/* Logo */}
-          <div style={{ marginBottom: 32 }}>
-            <img
-              src={`${import.meta.env.BASE_URL}logo-ibhub-branco.png`}
-              alt="ibhub"
-              style={{ height: 48, objectFit: "contain" }}
-            />
+        <div style={{ position: "relative", maxWidth: 700, margin: "0 auto", animation: "fadein 0.6s ease both" }}>
+          <div style={{ marginBottom: 36 }}>
+            <img src={`${import.meta.env.BASE_URL}logo-ibhub-branco.png`} alt="ibhub" style={{ height: 48, objectFit: "contain" }} />
           </div>
 
-          {/* Badge */}
           <div style={{
             display: "inline-flex", alignItems: "center", gap: 8,
-            backgroundColor: `${GOLD}20`, border: `1px solid ${GOLD}50`,
-            borderRadius: 100, padding: "7px 20px", marginBottom: 28,
+            backgroundColor: `${GOLD}22`, border: `1px solid ${GOLD}55`,
+            borderRadius: 100, padding: "7px 20px", marginBottom: 32,
           }}>
             <span style={{ fontSize: 14 }}>🍷</span>
-            <span style={{ color: GOLD, fontWeight: 700, fontSize: 13, letterSpacing: 0.5 }}>
+            <span style={{ color: GOLD, fontWeight: 700, fontSize: 13, letterSpacing: 0.4 }}>
               A rede profissional do vinho no Brasil
             </span>
           </div>
 
           <h1
             className="hero-headline"
-            style={{
-              fontSize: 48, fontWeight: 900, color: "#fff",
-              lineHeight: 1.12, marginBottom: 20, letterSpacing: -1,
-            }}
+            style={{ fontSize: 50, fontWeight: 900, color: "#fff", lineHeight: 1.1, marginBottom: 22, letterSpacing: -1.5 }}
           >
             Sua carreira no vinho<br />
             <span style={{ color: GOLD }}>merece mais conexões.</span>
           </h1>
 
-          <p style={{ fontSize: 17, color: "rgba(255,255,255,0.65)", lineHeight: 1.7, marginBottom: 40, maxWidth: 520, margin: "0 auto 40px" }}>
-            Junte-se a mais de 8.000 profissionais do setor. Acesse inteligência de mercado, 
+          <p style={{ fontSize: 17, color: "rgba(255,255,255,0.6)", lineHeight: 1.75, marginBottom: 44, maxWidth: 500, margin: "0 auto 44px" }}>
+            Junte-se a mais de 8.000 profissionais do setor. Acesse inteligência de mercado,
             crie conexões reais e expanda seus negócios.
           </p>
 
-          {/* Stats */}
-          <div className="stats-row" style={{ display: "flex", gap: 40, justifyContent: "center", marginBottom: 40 }}>
+          <div className="stats-row" style={{ display: "flex", gap: 48, justifyContent: "center", marginBottom: 48 }}>
             {STATS.map(s => (
               <div key={s.label} style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 28, fontWeight: 900, color: GOLD }}>{s.value}</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", fontWeight: 500, marginTop: 2 }}>{s.label}</div>
+                <div style={{ fontSize: 30, fontWeight: 900, color: GOLD, letterSpacing: -0.5 }}>{s.value}</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", fontWeight: 500, marginTop: 3 }}>{s.label}</div>
               </div>
             ))}
           </div>
 
-          {/* Scroll CTA */}
           <a
             href="#planos"
             style={{
               display: "inline-flex", alignItems: "center", gap: 8,
               backgroundColor: GOLD, color: NAVY,
-              fontWeight: 800, fontSize: 15, padding: "15px 36px",
+              fontWeight: 800, fontSize: 15, padding: "15px 38px",
               borderRadius: 100, textDecoration: "none",
-              boxShadow: `0 8px 32px ${GOLD}50`,
+              boxShadow: `0 8px 32px ${GOLD}55`,
               transition: "all 0.2s",
             }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = `0 12px 40px ${GOLD}70`; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 32px ${GOLD}50`; }}
+            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.boxShadow = `0 12px 40px ${GOLD}80`; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.boxShadow = `0 8px 32px ${GOLD}55`; }}
           >
             Ver planos e preços ↓
           </a>
         </div>
       </section>
 
-      {/* ── Why ibhub Pro ── */}
-      <section style={{ padding: "72px 24px", backgroundColor: "#fff" }}>
-        <div style={{ maxWidth: 960, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 52 }}>
-            <p style={{ color: GOLD, fontWeight: 700, fontSize: 13, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>
+      {/* ── Por que Pro ── */}
+      <section style={{ padding: "80px 24px", backgroundColor: "#fff" }}>
+        <div style={{ maxWidth: 980, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 56 }}>
+            <p style={{ color: GOLD, fontWeight: 700, fontSize: 12, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10 }}>
               Por que ibhub Pro?
             </p>
-            <h2 style={{ fontSize: 34, fontWeight: 900, color: NAVY, lineHeight: 1.2 }}>
+            <h2 style={{ fontSize: 36, fontWeight: 900, color: NAVY, lineHeight: 1.15 }}>
               Tudo que você precisa para<br />crescer no setor de vinhos
             </h2>
           </div>
@@ -283,14 +267,20 @@ export default function AssinarPage() {
                 key={b.title}
                 className="benefit-card"
                 style={{
-                  backgroundColor: "#f8f7f3", borderRadius: 14,
-                  padding: "24px 22px", transition: "all 0.2s",
-                  border: "1px solid #eeecea",
+                  backgroundColor: "#f8f7f3", borderRadius: 16,
+                  padding: "26px 24px", border: "1px solid #eeecea",
                 }}
               >
-                <div style={{ fontSize: 28, marginBottom: 12 }}>{b.icon}</div>
-                <h3 style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 6 }}>{b.title}</h3>
-                <p style={{ fontSize: 13.5, color: "#6b7280", lineHeight: 1.6 }}>{b.desc}</p>
+                <div style={{
+                  width: 48, height: 48, borderRadius: 12,
+                  backgroundColor: b.color,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 22, marginBottom: 16,
+                }}>
+                  {b.icon}
+                </div>
+                <h3 style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 8 }}>{b.title}</h3>
+                <p style={{ fontSize: 13.5, color: "#6b7280", lineHeight: 1.65 }}>{b.desc}</p>
               </div>
             ))}
           </div>
@@ -298,21 +288,20 @@ export default function AssinarPage() {
       </section>
 
       {/* ── Plans ── */}
-      <section id="planos" style={{ padding: "80px 24px", backgroundColor: "#f8f7f3" }}>
-        <div style={{ maxWidth: 1060, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 56 }}>
-            <p style={{ color: GOLD, fontWeight: 700, fontSize: 13, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>
+      <section id="planos" style={{ padding: "80px 24px 96px", backgroundColor: "#f8f7f3" }}>
+        <div style={{ maxWidth: 1080, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 64 }}>
+            <p style={{ color: GOLD, fontWeight: 700, fontSize: 12, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10 }}>
               Escolha seu plano
             </p>
-            <h2 style={{ fontSize: 34, fontWeight: 900, color: NAVY, lineHeight: 1.2, marginBottom: 12 }}>
+            <h2 style={{ fontSize: 36, fontWeight: 900, color: NAVY, lineHeight: 1.15, marginBottom: 12 }}>
               Invista no seu crescimento profissional
             </h2>
-            <p style={{ fontSize: 15, color: "#6b7280", maxWidth: 460, margin: "0 auto" }}>
+            <p style={{ fontSize: 15, color: "#6b7280", maxWidth: 440, margin: "0 auto" }}>
               Sem letras miúdas. Cancele quando quiser. Comece hoje.
             </p>
           </div>
 
-          {/* Error */}
           {error && (
             <div style={{
               backgroundColor: "#fef2f2", border: "1px solid #fecaca",
@@ -324,20 +313,23 @@ export default function AssinarPage() {
           )}
 
           {plansLoading ? (
-            <div style={{ textAlign: "center", padding: "60px 0" }}>
+            <div style={{ textAlign: "center", padding: "64px 0" }}>
               <div style={{
                 width: 40, height: 40, border: `3px solid ${GOLD}30`, borderTopColor: GOLD,
-                borderRadius: "50%", animation: "spin 1s linear infinite",
-                margin: "0 auto 16px",
+                borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 16px",
               }} />
-              <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-              <p style={{ color: "#9ca3af" }}>Carregando planos...</p>
+              <p style={{ color: "#9ca3af", fontSize: 14 }}>Carregando planos...</p>
             </div>
           ) : (
             <>
               <div
                 className="plans-grid"
-                style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24, alignItems: "start" }}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: `repeat(${paidPlans.length}, 1fr)`,
+                  gap: 20,
+                  alignItems: "end",
+                }}
               >
                 {paidPlans.map((plan, idx) => {
                   const isCurrent     = plan.id === currentPlan && hasActiveSub;
@@ -346,49 +338,52 @@ export default function AssinarPage() {
                   const price         = formatPlanPrice(plan);
                   const originalPrice = formatOriginalPrice(plan);
                   const discount      = calcDiscount(plan);
-                  const accent        = ACCENT_COLORS[idx % ACCENT_COLORS.length];
+                  const accent        = PLAN_ACCENTS[idx % PLAN_ACCENTS.length];
                   const genFeatures   = plan.features.filter(f => !f.startsWith("mercado:"));
                   const isDark        = isPopular;
+
+                  const checkColor = isDark ? GOLD : accent === NAVY ? "#1a3a5c" : accent;
 
                   return (
                     <div
                       key={plan.id}
-                      className="plan-card"
+                      className={`plan-card${isPopular ? " plan-card-popular" : ""}`}
                       style={{
                         backgroundColor: isDark ? NAVY : "#fff",
-                        borderRadius: 20,
+                        borderRadius: 22,
                         border: isCurrent
-                          ? `2px solid #059669`
+                          ? "2px solid #059669"
                           : isPopular
                             ? `2px solid ${GOLD}`
                             : "1.5px solid #e5e7eb",
-                        padding: "32px 28px 28px",
+                        padding: isPopular ? "44px 28px 32px" : "32px 28px 28px",
+                        marginBottom: isPopular ? 0 : 0,
+                        marginTop: isPopular ? 0 : 20,
                         position: "relative",
                         boxShadow: isPopular
-                          ? `0 12px 48px ${GOLD}25`
-                          : "0 2px 12px rgba(0,0,0,0.06)",
+                          ? `0 20px 60px ${GOLD}30, 0 4px 16px rgba(0,0,0,0.1)`
+                          : "0 2px 16px rgba(0,0,0,0.07)",
                         display: "flex",
                         flexDirection: "column",
-                        transition: "all 0.25s",
                       }}
                     >
-                      {/* Badge */}
+                      {/* Popular badge */}
                       {isPopular && !isCurrent && (
                         <div style={{
-                          position: "absolute", top: -16, left: "50%", transform: "translateX(-50%)",
+                          position: "absolute", top: -18, left: "50%", transform: "translateX(-50%)",
                           background: `linear-gradient(90deg, ${GOLD}, #e0b84a)`,
                           color: NAVY, fontWeight: 900,
-                          fontSize: 11, padding: "5px 22px", borderRadius: 100, letterSpacing: 1.2,
-                          whiteSpace: "nowrap", boxShadow: `0 4px 14px ${GOLD}50`,
+                          fontSize: 11, padding: "6px 24px", borderRadius: 100, letterSpacing: 1.4,
+                          whiteSpace: "nowrap", animation: "pulse 2.5s ease-in-out infinite",
                         }}>
                           ⭐ MAIS POPULAR
                         </div>
                       )}
                       {isCurrent && (
                         <div style={{
-                          position: "absolute", top: -16, left: "50%", transform: "translateX(-50%)",
+                          position: "absolute", top: -18, left: "50%", transform: "translateX(-50%)",
                           backgroundColor: "#059669", color: "#fff", fontWeight: 900,
-                          fontSize: 11, padding: "5px 22px", borderRadius: 100, letterSpacing: 1,
+                          fontSize: 11, padding: "6px 24px", borderRadius: 100, letterSpacing: 1,
                           whiteSpace: "nowrap",
                         }}>
                           ✓ SEU PLANO ATUAL
@@ -398,58 +393,62 @@ export default function AssinarPage() {
                       {/* Accent strip */}
                       <div style={{
                         height: 3, borderRadius: 2,
-                        background: `linear-gradient(90deg, ${accent}, ${accent}80)`,
-                        marginBottom: 22, marginLeft: -28, marginRight: -28, marginTop: -8,
+                        background: `linear-gradient(90deg, ${accent}, ${accent}60)`,
+                        marginBottom: 24, marginLeft: -28, marginRight: -28, marginTop: -12,
                       }} />
 
-                      {/* Header */}
-                      <h2 style={{ fontSize: 22, fontWeight: 900, color: isDark ? "#fff" : NAVY, marginBottom: 4 }}>
+                      {/* Plan name */}
+                      <h2 style={{
+                        fontSize: 24, fontWeight: 900, letterSpacing: -0.5,
+                        color: isDark ? "#fff" : NAVY, marginBottom: 4,
+                      }}>
                         {plan.name}
                       </h2>
-                      <p style={{ fontSize: 13, color: isDark ? "rgba(255,255,255,0.5)" : "#9ca3af", marginBottom: 10, lineHeight: 1.5 }}>
+                      <p style={{ fontSize: 13, color: isDark ? "rgba(255,255,255,0.45)" : "#9ca3af", marginBottom: 20, lineHeight: 1.5 }}>
                         {plan.subtitle}
                       </p>
-                      {plan.description && (
-                        <p style={{ fontSize: 12.5, color: isDark ? "rgba(255,255,255,0.45)" : "#6b7280", marginBottom: 16, lineHeight: 1.6, fontStyle: "italic" }}>
-                          {plan.description}
-                        </p>
-                      )}
 
-                      {/* Price */}
+                      {/* Price box */}
                       <div style={{
-                        backgroundColor: isDark ? "rgba(255,255,255,0.06)" : `${accent}0d`,
-                        borderRadius: 12, padding: "16px 18px", marginBottom: 24,
+                        backgroundColor: isDark ? "rgba(255,255,255,0.06)" : `${accent}0e`,
+                        border: isDark ? `1px solid ${GOLD}20` : `1px solid ${accent}20`,
+                        borderRadius: 14, padding: "18px 20px", marginBottom: 28,
                       }}>
                         {originalPrice && (
-                          <div style={{ fontSize: 13, color: isDark ? "rgba(255,255,255,0.35)" : "#9ca3af", textDecoration: "line-through", marginBottom: 4 }}>
+                          <div style={{
+                            fontSize: 12.5, color: isDark ? "rgba(255,255,255,0.3)" : "#b0b7c0",
+                            textDecoration: "line-through", marginBottom: 6, fontWeight: 500,
+                          }}>
                             De {originalPrice}/mês
                           </div>
                         )}
-                        <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
-                          <span style={{ fontSize: 38, fontWeight: 900, lineHeight: 1, color: isDark ? GOLD : accent }}>
-                            {price.main}
-                          </span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <PriceDisplay priceStr={price.main} isDark={isDark} />
                           {discount && (
                             <span style={{
-                              backgroundColor: "#d1fae5", color: "#065f46",
+                              backgroundColor: "#fef2f2",
+                              color: WINE,
                               fontWeight: 800, fontSize: 12,
-                              padding: "3px 9px", borderRadius: 8, marginBottom: 4,
+                              padding: "4px 10px", borderRadius: 8,
+                              border: `1px solid ${WINE}30`,
+                              alignSelf: "flex-start", marginTop: 8,
                             }}>-{discount}%</span>
                           )}
                         </div>
                         {price.period && (
-                          <div style={{ fontSize: 13, color: isDark ? "rgba(255,255,255,0.45)" : "#9ca3af", marginTop: 4 }}>
+                          <div style={{ fontSize: 13, color: isDark ? "rgba(255,255,255,0.4)" : "#9ca3af", marginTop: 4, fontWeight: 500 }}>
                             {price.period}
                           </div>
                         )}
                       </div>
 
                       {/* Features */}
-                      <ul style={{ listStyle: "none", padding: 0, flex: 1, display: "flex", flexDirection: "column", gap: 11, marginBottom: 28 }}>
+                      <ul style={{ listStyle: "none", padding: 0, flex: 1, display: "flex", flexDirection: "column", gap: 12, marginBottom: 32 }}>
                         {genFeatures.map(f => (
-                          <li key={f} style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 14, color: isDark ? "rgba(255,255,255,0.8)" : "#374151" }}>
+                          <li key={f} style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 14, color: isDark ? "rgba(255,255,255,0.82)" : "#374151" }}>
                             <span style={{
-                              color: "#fff", backgroundColor: GOLD,
+                              color: isDark ? NAVY : "#fff",
+                              backgroundColor: checkColor,
                               borderRadius: "50%", width: 18, height: 18,
                               display: "inline-flex", alignItems: "center", justifyContent: "center",
                               fontSize: 10, fontWeight: 900, flexShrink: 0, marginTop: 1,
@@ -468,7 +467,7 @@ export default function AssinarPage() {
                       {isCurrent ? (
                         <div style={{
                           backgroundColor: `${GOLD}14`, border: `1px solid ${GOLD}40`,
-                          borderRadius: 12, padding: "14px 0", textAlign: "center",
+                          borderRadius: 12, padding: "15px 0", textAlign: "center",
                           color: GOLD, fontWeight: 800, fontSize: 15,
                         }}>
                           ✓ Plano atual
@@ -480,15 +479,15 @@ export default function AssinarPage() {
                           disabled={isLoading || !!loading}
                           style={{
                             background: isPopular
-                              ? `linear-gradient(135deg, ${GOLD}, #e0b84a)`
-                              : NAVY,
-                            color: isPopular ? NAVY : "#fff",
+                              ? `linear-gradient(135deg, ${GOLD} 0%, #e0b84a 100%)`
+                              : isDark ? GOLD : NAVY,
+                            color: isPopular ? NAVY : isDark ? NAVY : "#fff",
                             border: "none", borderRadius: 12,
-                            padding: "16px 0", fontSize: 15, fontWeight: 800,
+                            padding: "17px 0", fontSize: 15, fontWeight: 800,
                             cursor: (isLoading || !!loading) ? "not-allowed" : "pointer",
-                            opacity: (isLoading || (!!loading && loading !== plan.id)) ? 0.65 : 1,
-                            transition: "all 0.2s",
-                            boxShadow: isPopular ? `0 4px 20px ${GOLD}50` : "none",
+                            opacity: (isLoading || (!!loading && loading !== plan.id)) ? 0.6 : 1,
+                            boxShadow: isPopular ? `0 6px 24px ${GOLD}55` : "none",
+                            width: "100%",
                           }}
                         >
                           {isLoading ? "Redirecionando..." : isPopular ? `🚀 Assinar ${plan.name}` : `Assinar ${plan.name}`}
@@ -496,7 +495,7 @@ export default function AssinarPage() {
                       )}
 
                       {!isCurrent && (
-                        <p style={{ textAlign: "center", fontSize: 12, color: isDark ? "rgba(255,255,255,0.35)" : "#9ca3af", marginTop: 12 }}>
+                        <p style={{ textAlign: "center", fontSize: 12, color: isDark ? "rgba(255,255,255,0.3)" : "#b0b7c0", marginTop: 12 }}>
                           Cancele quando quiser · Sem fidelidade
                         </p>
                       )}
@@ -505,16 +504,15 @@ export default function AssinarPage() {
                 })}
               </div>
 
-              {/* Free plan note */}
               {freePlan && (
-                <div style={{ textAlign: "center", marginTop: 24 }}>
+                <div style={{ textAlign: "center", marginTop: 28 }}>
                   {isFree ? (
                     <span style={{ fontSize: 13, color: "#9ca3af" }}>
-                      Você está no plano <strong>{freePlan.name}</strong> · {freePlan.subtitle}
+                      Você está no plano <strong style={{ color: NAVY }}>{freePlan.name}</strong> · {freePlan.subtitle}
                     </span>
                   ) : (
                     <span style={{ fontSize: 13, color: "#9ca3af" }}>
-                      Ou continue com o plano <strong>{freePlan.name}</strong> gratuitamente
+                      Ou continue com o plano <strong style={{ color: NAVY }}>{freePlan.name}</strong> gratuitamente
                     </span>
                   )}
                 </div>
@@ -526,36 +524,32 @@ export default function AssinarPage() {
 
       {/* ── Trust strip ── */}
       <section style={{
-        backgroundColor: NAVY,
-        padding: "28px 24px",
-        display: "flex",
-        flexWrap: "wrap",
-        gap: 24,
-        justifyContent: "center",
-        alignItems: "center",
+        backgroundColor: NAVY, padding: "26px 24px",
+        display: "flex", flexWrap: "wrap", gap: 20,
+        justifyContent: "center", alignItems: "center",
       }}>
         {[
           { icon: "🔒", text: "Pagamento 100% seguro via Stripe" },
           { icon: "💳", text: "Cartão de crédito" },
-          { icon: "❌", text: "Cancele quando quiser" },
+          { icon: "✕",  text: "Cancele quando quiser", iconColor: "#f87171" },
           { icon: "🇧🇷", text: "Preços em Reais" },
           { icon: "📧", text: "Recibo por e-mail" },
         ].map(t => (
-          <div key={t.text} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 16 }}>{t.icon}</span>
-            <span style={{ color: "rgba(255,255,255,0.65)", fontSize: 13, fontWeight: 500 }}>{t.text}</span>
+          <div key={t.text} className="trust-item" style={{ display: "flex", alignItems: "center", gap: 8, opacity: 0.75 }}>
+            <span style={{ fontSize: 15, color: t.iconColor }}>{t.icon}</span>
+            <span style={{ color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 500 }}>{t.text}</span>
           </div>
         ))}
       </section>
 
       {/* ── Testimonials ── */}
-      <section style={{ padding: "80px 24px", backgroundColor: "#fff" }}>
-        <div style={{ maxWidth: 960, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 52 }}>
-            <p style={{ color: GOLD, fontWeight: 700, fontSize: 13, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>
+      <section style={{ padding: "84px 24px", backgroundColor: "#fff" }}>
+        <div style={{ maxWidth: 980, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 56 }}>
+            <p style={{ color: GOLD, fontWeight: 700, fontSize: 12, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10 }}>
               Quem já usa o ibhub Pro
             </p>
-            <h2 style={{ fontSize: 32, fontWeight: 900, color: NAVY }}>
+            <h2 style={{ fontSize: 34, fontWeight: 900, color: NAVY, lineHeight: 1.2 }}>
               Histórias reais de crescimento
             </h2>
           </div>
@@ -567,27 +561,30 @@ export default function AssinarPage() {
               <div
                 key={t.name}
                 style={{
-                  backgroundColor: "#f8f7f3",
-                  borderRadius: 16, padding: "28px 24px",
-                  border: "1px solid #eeecea",
+                  backgroundColor: "#f8f7f3", borderRadius: 18, padding: "30px 26px",
+                  border: "1px solid #eeecea", display: "flex", flexDirection: "column", gap: 0,
                 }}
               >
-                <div style={{ color: GOLD, fontSize: 24, marginBottom: 14, letterSpacing: -2 }}>❝</div>
-                <p style={{ fontSize: 14.5, color: "#374151", lineHeight: 1.7, marginBottom: 20, fontStyle: "italic" }}>
+                <div style={{ color: GOLD, fontSize: 20, marginBottom: 4, letterSpacing: 1 }}>
+                  {"★".repeat(t.stars)}
+                </div>
+                <div style={{ color: GOLD, fontSize: 28, marginBottom: 10, lineHeight: 1 }}>❝</div>
+                <p style={{ fontSize: 14, color: "#374151", lineHeight: 1.75, marginBottom: 22, fontStyle: "italic", flex: 1 }}>
                   "{t.text}"
                 </p>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <div style={{
-                    width: 40, height: 40, borderRadius: "50%",
-                    backgroundColor: NAVY, color: GOLD,
-                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 42, height: 42, borderRadius: "50%",
+                    background: `linear-gradient(135deg, ${NAVY}, #1a3a5c)`,
+                    color: GOLD, display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: 13, fontWeight: 800, flexShrink: 0,
+                    border: `2px solid ${GOLD}40`,
                   }}>
                     {t.avatar}
                   </div>
                   <div>
                     <div style={{ fontWeight: 800, fontSize: 14, color: NAVY }}>{t.name}</div>
-                    <div style={{ fontSize: 12, color: "#9ca3af" }}>{t.role}</div>
+                    <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 1 }}>{t.role}</div>
                   </div>
                 </div>
               </div>
@@ -598,28 +595,34 @@ export default function AssinarPage() {
 
       {/* ── Guarantee ── */}
       <section style={{
-        background: `linear-gradient(135deg, ${NAVY} 0%, #1a3a5c 100%)`,
-        padding: "64px 24px",
-        textAlign: "center",
+        background: `linear-gradient(135deg, ${NAVY} 0%, #112238 100%)`,
+        padding: "72px 24px", textAlign: "center",
       }}>
         <div style={{ maxWidth: 560, margin: "0 auto" }}>
-          <div style={{ fontSize: 48, marginBottom: 20 }}>🛡️</div>
-          <h2 style={{ fontSize: 28, fontWeight: 900, color: "#fff", marginBottom: 14 }}>
+          <div style={{
+            width: 72, height: 72, borderRadius: "50%",
+            backgroundColor: `${GOLD}20`, border: `2px solid ${GOLD}40`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 32, margin: "0 auto 24px",
+          }}>🛡️</div>
+          <h2 style={{ fontSize: 30, fontWeight: 900, color: "#fff", marginBottom: 16 }}>
             Sem risco para você
           </h2>
-          <p style={{ fontSize: 16, color: "rgba(255,255,255,0.65)", lineHeight: 1.7, marginBottom: 32 }}>
-            Se por qualquer motivo você não ficar satisfeito, basta cancelar sua assinatura quando quiser — sem perguntas, sem multas. 
+          <p style={{ fontSize: 16, color: "rgba(255,255,255,0.6)", lineHeight: 1.75, marginBottom: 36 }}>
+            Se por qualquer motivo você não ficar satisfeito, basta cancelar sua assinatura quando quiser — sem perguntas, sem multas.
             Seu acesso continua ativo até o fim do período já pago.
           </p>
           <a
             href="#planos"
             style={{
-              display: "inline-block",
-              backgroundColor: GOLD, color: NAVY,
-              fontWeight: 800, fontSize: 15, padding: "14px 36px",
+              display: "inline-block", backgroundColor: GOLD, color: NAVY,
+              fontWeight: 800, fontSize: 15, padding: "15px 40px",
               borderRadius: 100, textDecoration: "none",
-              boxShadow: `0 6px 24px ${GOLD}50`,
+              boxShadow: `0 6px 28px ${GOLD}55`,
+              transition: "all 0.2s",
             }}
+            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.boxShadow = `0 10px 36px ${GOLD}80`; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.boxShadow = `0 6px 28px ${GOLD}55`; }}
           >
             Começar agora →
           </a>
@@ -627,42 +630,42 @@ export default function AssinarPage() {
       </section>
 
       {/* ── FAQ ── */}
-      <section style={{ padding: "80px 24px", backgroundColor: "#f8f7f3" }}>
+      <section style={{ padding: "84px 24px", backgroundColor: "#f8f7f3" }}>
         <div style={{ maxWidth: 700, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 48 }}>
-            <p style={{ color: GOLD, fontWeight: 700, fontSize: 13, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>
+          <div style={{ textAlign: "center", marginBottom: 52 }}>
+            <p style={{ color: GOLD, fontWeight: 700, fontSize: 12, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10 }}>
               FAQ
             </p>
-            <h2 style={{ fontSize: 32, fontWeight: 900, color: NAVY }}>Dúvidas frequentes</h2>
+            <h2 style={{ fontSize: 34, fontWeight: 900, color: NAVY }}>Dúvidas frequentes</h2>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {FAQS.map((faq, i) => (
               <div
                 key={i}
                 className="faq-item"
                 style={{
-                  backgroundColor: "#fff", borderRadius: 12, overflow: "hidden",
-                  border: "1px solid #eeecea",
-                  transition: "background 0.2s",
+                  backgroundColor: "#fff", borderRadius: 14, overflow: "hidden",
+                  border: openFaq === i ? `1.5px solid ${GOLD}50` : "1.5px solid #eeecea",
+                  boxShadow: openFaq === i ? `0 4px 20px ${GOLD}12` : "none",
                 }}
                 onClick={() => setOpenFaq(openFaq === i ? null : i)}
               >
-                <div style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: "18px 22px", gap: 16,
-                }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px", gap: 16 }}>
                   <span style={{ fontWeight: 700, fontSize: 15, color: NAVY, flex: 1 }}>{faq.q}</span>
                   <span style={{
-                    color: GOLD, fontSize: 20, fontWeight: 900,
+                    width: 28, height: 28, borderRadius: "50%",
+                    backgroundColor: openFaq === i ? GOLD : "#f3f4f6",
+                    color: openFaq === i ? NAVY : "#6b7280",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 18, fontWeight: 900, flexShrink: 0,
                     transform: openFaq === i ? "rotate(45deg)" : "none",
-                    transition: "transform 0.2s",
-                    flexShrink: 0,
+                    transition: "all 0.2s",
                   }}>+</span>
                 </div>
                 {openFaq === i && (
                   <div style={{
-                    padding: "0 22px 18px",
-                    fontSize: 14, color: "#6b7280", lineHeight: 1.7,
+                    padding: "0 24px 20px",
+                    fontSize: 14, color: "#6b7280", lineHeight: 1.75,
                     borderTop: "1px solid #f3f4f6",
                   }}>
                     {faq.a}
@@ -675,17 +678,13 @@ export default function AssinarPage() {
       </section>
 
       {/* ── Footer CTA ── */}
-      <section style={{ backgroundColor: "#fff", padding: "60px 24px", textAlign: "center", borderTop: "1px solid #eeecea" }}>
+      <section style={{ backgroundColor: "#fff", padding: "64px 24px", textAlign: "center", borderTop: "1px solid #eeecea" }}>
         <div style={{ maxWidth: 520, margin: "0 auto" }}>
-          <img
-            src={`${import.meta.env.BASE_URL}logo-ibhub.png`}
-            alt="ibhub"
-            style={{ height: 36, objectFit: "contain", marginBottom: 20 }}
-          />
-          <h2 style={{ fontSize: 26, fontWeight: 900, color: NAVY, marginBottom: 12 }}>
+          <img src={`${import.meta.env.BASE_URL}logo-ibhub.png`} alt="ibhub" style={{ height: 36, objectFit: "contain", marginBottom: 24 }} />
+          <h2 style={{ fontSize: 28, fontWeight: 900, color: NAVY, marginBottom: 14, lineHeight: 1.2 }}>
             Pronto para elevar sua carreira?
           </h2>
-          <p style={{ fontSize: 14, color: "#6b7280", marginBottom: 28, lineHeight: 1.6 }}>
+          <p style={{ fontSize: 14, color: "#6b7280", marginBottom: 32, lineHeight: 1.65 }}>
             Mais de 8.000 profissionais já estão na maior rede do vinho do Brasil.
           </p>
           <a
@@ -694,13 +693,16 @@ export default function AssinarPage() {
               display: "inline-block",
               background: `linear-gradient(135deg, ${GOLD}, #e0b84a)`,
               color: NAVY, fontWeight: 800, fontSize: 15,
-              padding: "15px 40px", borderRadius: 100, textDecoration: "none",
-              boxShadow: `0 6px 28px ${GOLD}40`,
+              padding: "16px 44px", borderRadius: 100, textDecoration: "none",
+              boxShadow: `0 6px 28px ${GOLD}45`,
+              transition: "all 0.2s",
             }}
+            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.boxShadow = `0 10px 36px ${GOLD}70`; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.boxShadow = `0 6px 28px ${GOLD}45`; }}
           >
             Ver planos →
           </a>
-          <div style={{ marginTop: 16 }}>
+          <div style={{ marginTop: 20 }}>
             <span style={{ fontSize: 12, color: "#9ca3af" }}>
               Tem dúvidas? Fale conosco em{" "}
               <a href="mailto:contato@ibhub.com.br" style={{ color: GOLD, fontWeight: 600 }}>contato@ibhub.com.br</a>
