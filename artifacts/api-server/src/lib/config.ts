@@ -24,9 +24,6 @@ const EnvSchema = z.object({
   // Stripe (required for payment routes)
   STRIPE_SECRET_KEY: z.string().min(1).optional(),
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
-  STRIPE_PRICE_PREMIUM: z.string().min(1).optional(),
-  STRIPE_PRICE_BUSINESS: z.string().min(1).optional(),
-  STRIPE_PRICE_EXCLUSIVE: z.string().min(1).optional(),
 
   // Session/cookies
   SESSION_SECRET: z.string().min(16).optional(),

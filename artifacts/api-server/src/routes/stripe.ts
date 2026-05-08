@@ -14,23 +14,9 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
 });
 const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey);
 
-// ─── Stripe price IDs — read from plans table (stripe_price_id column) ────────
-// Env vars (STRIPE_PRICE_*) are kept as a legacy fallback for plans that were
-// configured before the stripe_price_id column was added to the plans table.
-const LEGACY_PRICE_IDS: Record<string, string> = {
-  premium:   process.env.STRIPE_PRICE_PREMIUM   ?? "",
-  exclusive: process.env.STRIPE_PRICE_EXCLUSIVE ?? "",
-  business:  process.env.STRIPE_PRICE_BUSINESS  ?? "",
-};
-
-/** Fetch all plans that have a stripe_price_id set, returns map planId→priceId */
+/** Fetch all plans that have a stripe_price_id set from the admin plan builder, returns map planId→priceId */
 async function fetchPlanPriceIds(): Promise<Map<string, string>> {
   const m = new Map<string, string>();
-  // Merge legacy env vars first (lower priority)
-  for (const [plan, priceId] of Object.entries(LEGACY_PRICE_IDS)) {
-    if (priceId) m.set(plan, priceId);
-  }
-  // DB values override env vars
   const { data } = await supabaseAdmin
     .from("plans")
     .select("id, stripe_price_id")
@@ -421,11 +407,10 @@ router.get("/stripe/config-check", async (_req: Request, res: Response) => {
   const result: Record<string, { configured: boolean; valid_format: boolean; source: string; prefix: string }> = {};
 
   for (const [planId, priceId] of planPrices) {
-    const fromLegacy = !!LEGACY_PRICE_IDS[planId] && LEGACY_PRICE_IDS[planId] === priceId;
     result[planId] = {
       configured: true,
       valid_format: priceId.startsWith("price_"),
-      source: fromLegacy ? "env_var" : "plan_builder",
+      source: "plan_builder",
       prefix: priceId.slice(0, 14) + "…",
     };
   }
