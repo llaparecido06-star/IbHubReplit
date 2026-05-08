@@ -84,27 +84,23 @@ const FEATURES = [
 const PLANS = [
   {
     key: "gratuito", name: "Gratuito", price: "R$ 0", period: "/mês",
-    popular: false,
-    features: ["Perfil básico", "Feed de publicações", "5 conexões/mês", "Grupos públicos"],
-    cta: "Começar grátis",
+    popular: false, href: "/cadastro", cta: "Começar grátis",
+    features: ["Perfil público no ibhub", "Feed de publicações", "Acesso ao Smart Match B2B", "Grupos públicos"],
   },
   {
-    key: "profissional", name: "Profissional", price: "R$ 99,90", period: "/mês",
-    popular: true,
-    features: ["Conexões ilimitadas", "Dados de mercado", "Chat ilimitado", "Ver visitantes do perfil"],
-    cta: "Assinar",
+    key: "profissional", name: "Profissional", price: "R$ 149,99", period: "/mês",
+    popular: false, href: "/assinar", cta: "Assinar",
+    features: ["1 slide diário de mercado", "Gráficos & KPIs Ideal.BI", "Feed exclusivo Ideal.BI", "50 créditos de IA / mês"],
   },
   {
-    key: "empresa", name: "Empresa", price: "R$ 247", period: "/mês",
-    popular: false,
-    features: ["Página empresarial", "Publicar vagas e produtos", "Mini-CRM e analytics", "Marketplace B2B"],
-    cta: "Assinar",
+    key: "empresa", name: "Empresa", price: "R$ 249,99", period: "/mês",
+    popular: true, href: "/assinar", cta: "Assinar Empresa",
+    features: ["Página corporativa", "Publicar vagas", "Apresentações diárias do mercado", "3 reveals de volume exportado"],
   },
   {
-    key: "executivo", name: "Executivo", price: "R$ 499", period: "/mês",
-    popular: false,
-    features: ["Relatórios exclusivos", "Apresentações de mercado", "Selo verificado premium", "Suporte prioritário"],
-    cta: "Assinar",
+    key: "executivo", name: "Executivo", price: "R$ 499,90", period: "/mês",
+    popular: false, href: "/assinar", cta: "Assinar",
+    features: ["Acesso imediato a todo o conteúdo", "100 créditos de IA / mês", "5 reveals de volume exportado", "Tudo do plano Empresa"],
   },
 ];
 
@@ -377,64 +373,98 @@ export default function LandingPage() {
 
       {/* ── Planos ─────────────────────────── */}
       <section id="planos" style={{ padding: "96px 24px", backgroundColor: bg }}>
-        <div style={{ maxWidth: 1080, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 60 }}>
-            <h2 style={{ fontSize: 36, fontWeight: 900, color: navy, marginBottom: 14, letterSpacing: -0.5 }}>
+        <div style={{ maxWidth: 1120, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 68 }}>
+            <p style={{ color: gold, fontWeight: 700, fontSize: 11, letterSpacing: 2, textTransform: "uppercase", marginBottom: 12 }}>
+              Planos e preços
+            </p>
+            <h2 style={{ fontSize: 38, fontWeight: 900, color: navy, marginBottom: 14, letterSpacing: -0.5 }}>
               Planos para cada necessidade
             </h2>
-            <p style={{ fontSize: 16, color: "#7a8494" }}>
+            <p style={{ fontSize: 15, color: "#7a8494", maxWidth: 400, margin: "0 auto" }}>
               Comece gratuitamente e evolua conforme sua rede cresce.
             </p>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 20, alignItems: "start" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(4, 1fr)", gap: isMobile ? 24 : 16, alignItems: "center" }}>
             {PLANS.map((plan) => (
               <div key={plan.key} style={{
-                backgroundColor: white,
-                border: plan.popular ? `2px solid ${gold}` : "1px solid #eaeae5",
-                borderRadius: 16,
-                padding: "28px 24px",
+                backgroundColor: plan.popular ? navy : white,
+                border: plan.popular ? `2px solid ${gold}` : "1px solid #e8e4dc",
+                borderRadius: 20,
+                padding: plan.popular ? "40px 28px 32px" : "32px 24px 28px",
                 position: "relative",
+                transform: plan.popular ? "scale(1.04)" : "none",
+                boxShadow: plan.popular
+                  ? `0 20px 60px rgba(201,168,76,0.18), 0 4px 16px rgba(0,0,0,0.12)`
+                  : "0 2px 12px rgba(0,0,0,0.05)",
+                display: "flex", flexDirection: "column",
+                transition: "transform 0.2s, box-shadow 0.2s",
               }}>
+                {/* Gold top edge on popular */}
                 {plan.popular && (
                   <div style={{
-                    position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)",
-                    backgroundColor: gold, color: navy,
-                    fontSize: 11, fontWeight: 800, letterSpacing: 0.5,
-                    padding: "4px 16px", borderRadius: 100, whiteSpace: "nowrap",
-                  }}>Mais popular</div>
+                    position: "absolute", top: 0, left: 0, right: 0, height: 2, borderRadius: "20px 20px 0 0",
+                    background: `linear-gradient(90deg, transparent, ${gold}, #e8c87a, ${gold}, transparent)`,
+                  }} />
                 )}
 
-                <div style={{ marginBottom: 4, fontSize: 13, fontWeight: 700, color: "#7a8494" }}>{plan.name}</div>
-                <div style={{ marginBottom: 20 }}>
-                  <span style={{ fontSize: 28, fontWeight: 900, color: navy }}>{plan.price}</span>
-                  <span style={{ fontSize: 14, color: "#7a8494", marginLeft: 2 }}>{plan.period}</span>
+                {plan.popular && (
+                  <div style={{
+                    position: "absolute", top: -15, left: "50%", transform: "translateX(-50%)",
+                    background: `linear-gradient(90deg, #a07830, ${gold}, #e8c87a, ${gold}, #a07830)`,
+                    color: navy, fontSize: 10, fontWeight: 900, letterSpacing: 1.5,
+                    padding: "5px 18px", borderRadius: 100, whiteSpace: "nowrap",
+                    boxShadow: `0 4px 16px rgba(201,168,76,0.45)`,
+                  }}>✦ MAIS POPULAR</div>
+                )}
+
+                <div style={{ marginBottom: 6, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: plan.popular ? gold : "#9ca3af" }}>
+                  {plan.name}
+                </div>
+                <div style={{ marginBottom: 24 }}>
+                  <span style={{ fontSize: 32, fontWeight: 900, color: plan.popular ? white : navy, letterSpacing: -1 }}>{plan.price}</span>
+                  <span style={{ fontSize: 13, color: plan.popular ? "rgba(255,255,255,0.45)" : "#9ca3af", marginLeft: 3 }}>{plan.period}</span>
                 </div>
 
-                <ul style={{ listStyle: "none", padding: 0, margin: "0 0 24px", display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ height: 1, background: plan.popular ? "rgba(255,255,255,0.08)" : "#f0ece4", marginBottom: 22 }} />
+
+                <ul style={{ listStyle: "none", padding: 0, margin: "0 0 28px", display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
                   {plan.features.map((feat) => (
-                    <li key={feat} style={{ fontSize: 14, color: "#4a5568", display: "flex", alignItems: "center", gap: 8 }}>
-                      <svg width="15" height="15" fill="none" stroke={gold} strokeWidth="2.5" viewBox="0 0 24 24">
-                        <polyline points="20 6 9 17 4 12"/>
-                      </svg>
+                    <li key={feat} style={{ fontSize: 13.5, color: plan.popular ? "rgba(255,255,255,0.8)" : "#374151", display: "flex", alignItems: "flex-start", gap: 10 }}>
+                      <span style={{
+                        width: 18, height: 18, flexShrink: 0, marginTop: 1,
+                        borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                        background: plan.popular ? `rgba(201,168,76,0.2)` : `rgba(201,168,76,0.12)`,
+                        border: `1px solid ${plan.popular ? "rgba(201,168,76,0.4)" : "rgba(201,168,76,0.25)"}`,
+                      }}>
+                        <svg width="8" height="7" viewBox="0 0 8 7" fill="none">
+                          <path d="M1 3.5L3 5.5L7 1.5" stroke={gold} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </span>
                       {feat}
                     </li>
                   ))}
                 </ul>
 
-                <Link href="/cadastro" style={{
-                  display: "block", textAlign: "center", padding: "11px 0",
-                  borderRadius: 9, fontWeight: 700, fontSize: 14,
-                  textDecoration: "none",
-                  backgroundColor: plan.popular ? gold : white,
+                <Link href={plan.href} style={{
+                  display: "block", textAlign: "center", padding: "13px 0",
+                  borderRadius: 10, fontWeight: 800, fontSize: 14,
+                  textDecoration: "none", letterSpacing: 0.2,
+                  background: plan.popular ? `linear-gradient(135deg, ${gold}, #e8c87a, #c9a84c)` : "transparent",
                   color: plan.popular ? navy : navy,
-                  border: plan.popular ? "none" : "1.5px solid #d4d4cc",
+                  border: plan.popular ? "none" : "1.5px solid #d8d3c8",
+                  boxShadow: plan.popular ? `0 4px 20px rgba(201,168,76,0.35)` : "none",
                 } as React.CSSProperties}>
                   {plan.cta}
                 </Link>
               </div>
             ))}
           </div>
+
+          <p style={{ textAlign: "center", marginTop: 32, fontSize: 13, color: "#9ca3af" }}>
+            Sem letras miúdas · Cancele quando quiser · Preços em Reais
+          </p>
         </div>
       </section>
 
