@@ -10,21 +10,43 @@ const GOLD         = "#c9a84c";
 const WINE         = "#722f37";
 const POPULAR_DARK = "#0a1729";
 
-const PLAN_COPY: Record<string, { subtitle: string; tag: string }> = {
+interface PlanCopy {
+  tag: string;
+  tagline: string;
+  highlights: { icon: string; label: string; desc: string }[];
+}
+
+const PLAN_COPY: Record<string, PlanCopy> = {
   profissional: {
-    tag: "Para profissionais individuais",
-    subtitle:
-      "Conecte-se com o mercado via Smart Match B2B, acesse gráficos, KPIs e dados do Ideal.BI, impulsione seus posts e veja quem visita seu perfil. Inclui 50 créditos de busca com IA por mês e uma masterclass liberada por dia.",
+    tag: "Profissional individual",
+    tagline: "Inteligência de mercado e dados exclusivos do setor.",
+    highlights: [
+      { icon: "📰", label: "1 slide diário de mercado",     desc: "Dados e tendências do setor todo dia" },
+      { icon: "📊", label: "Gráficos & KPIs Ideal.BI",     desc: "Inteligência de mercado em tempo real" },
+      { icon: "🔍", label: "Feed exclusivo da Ideal.BI",    desc: "Conteúdo privilegiado para profissionais" },
+      { icon: "🤖", label: "50 créditos de IA/mês",        desc: "Busca inteligente no mercado do vinho" },
+    ],
   },
   empresa: {
-    tag: "Para importadoras, distribuidoras e produtoras",
-    subtitle:
-      "Crie sua página corporativa, publique vagas e acesse análises avançadas por região, tendências e variedades. Inclui 50 créditos de IA/mês, 3 reveals de contatos por mês e masterclasses em sequência progressiva.",
+    tag: "Empresas do setor",
+    tagline: "Presença corporativa e ferramentas de negócio.",
+    highlights: [
+      { icon: "🏢", label: "Página corporativa",             desc: "Vitrine oficial da sua marca na rede" },
+      { icon: "💼", label: "Publicar vagas",                 desc: "Recrute talentos especializados" },
+      { icon: "📑", label: "Apresentações diárias",          desc: "Informações novas do mercado todos os dias" },
+      { icon: "🗺",  label: "Análises por região",           desc: "Tendências, variedades e dados regionais" },
+      { icon: "🔓", label: "3 reveals de volume exportado",  desc: "Descubra quanto cada importador exportou no ano" },
+    ],
   },
   executivo: {
-    tag: "Para líderes e tomadores de decisão",
-    subtitle:
-      "Tudo do plano Empresa com o dobro de capacidade: 100 créditos de IA/mês, 5 reveals de contatos por mês e acesso imediato a todo o conteúdo da plataforma — sem esperar liberações.",
+    tag: "Líderes e gestores",
+    tagline: "Poder total. Sem restrições.",
+    highlights: [
+      { icon: "⚡", label: "Acesso imediato",           desc: "Todo o conteúdo disponível de uma vez" },
+      { icon: "🤖", label: "100 créditos de IA/mês",   desc: "O dobro do plano Empresa" },
+      { icon: "🎯", label: "5 reveals de contato/mês", desc: "Mais acesso direto a decisores" },
+      { icon: "👑", label: "Tudo do plano Empresa",    desc: "Sem limitações de cadência ou conteúdo" },
+    ],
   },
 };
 
@@ -420,39 +442,42 @@ export default function AssinarPage() {
                         marginBottom: 24, marginLeft: -28, marginRight: -28, marginTop: -12,
                       }} />
 
-                      {/* Plan name */}
+                      {/* Header */}
                       {copy?.tag && (
                         <p style={{
-                          fontSize: 11, fontWeight: 700, letterSpacing: 0.8,
-                          color: isDark ? GOLD : "#6b7280",
-                          textTransform: "uppercase", marginBottom: 6,
+                          fontSize: 10, fontWeight: 700, letterSpacing: 1.2,
+                          color: isDark ? GOLD : accent,
+                          textTransform: "uppercase", marginBottom: 8,
                         }}>
                           {copy.tag}
                         </p>
                       )}
                       <h2 style={{
-                        fontSize: 24, fontWeight: 900, letterSpacing: -0.5,
-                        color: isDark ? "#fff" : NAVY, marginBottom: 8,
+                        fontSize: 26, fontWeight: 900, letterSpacing: -0.5,
+                        color: isDark ? "#fff" : NAVY, marginBottom: 4,
                       }}>
                         {plan.name}
                       </h2>
-                      <p style={{
-                        fontSize: 13, lineHeight: 1.6, marginBottom: 20,
-                        color: isDark ? "rgba(255,255,255,0.55)" : "#6b7280",
-                      }}>
-                        {copy?.subtitle ?? plan.subtitle}
-                      </p>
+                      {copy?.tagline && (
+                        <p style={{
+                          fontSize: 13, fontWeight: 500,
+                          color: isDark ? "rgba(255,255,255,0.45)" : "#9ca3af",
+                          marginBottom: 22, lineHeight: 1.4,
+                        }}>
+                          {copy.tagline}
+                        </p>
+                      )}
 
-                      {/* Price box */}
+                      {/* Price */}
                       <div style={{
-                        backgroundColor: isDark ? "rgba(255,255,255,0.06)" : `${accent}0e`,
-                        border: isDark ? `1px solid ${GOLD}20` : `1px solid ${accent}20`,
-                        borderRadius: 14, padding: "18px 20px", marginBottom: 28,
+                        backgroundColor: isDark ? "rgba(255,255,255,0.05)" : `${accent}09`,
+                        border: isDark ? `1px solid ${GOLD}18` : `1px solid ${accent}18`,
+                        borderRadius: 14, padding: "16px 18px", marginBottom: 26,
                       }}>
                         {originalPrice && (
                           <div style={{
-                            fontSize: 12.5, color: isDark ? "rgba(255,255,255,0.3)" : "#b0b7c0",
-                            textDecoration: "line-through", marginBottom: 6, fontWeight: 500,
+                            fontSize: 12, color: isDark ? "rgba(255,255,255,0.28)" : "#c0c4cc",
+                            textDecoration: "line-through", marginBottom: 4, fontWeight: 500,
                           }}>
                             De {originalPrice}/mês
                           </div>
@@ -461,42 +486,46 @@ export default function AssinarPage() {
                           <PriceDisplay priceStr={price.main} isDark={isDark} />
                           {discount && (
                             <span style={{
-                              backgroundColor: "#fef2f2",
-                              color: WINE,
-                              fontWeight: 800, fontSize: 12,
-                              padding: "4px 10px", borderRadius: 8,
-                              border: `1px solid ${WINE}30`,
-                              alignSelf: "flex-start", marginTop: 8,
+                              backgroundColor: isDark ? `${GOLD}20` : "#fef2f2",
+                              color: isDark ? GOLD : WINE,
+                              fontWeight: 800, fontSize: 11,
+                              padding: "3px 9px", borderRadius: 6,
+                              border: isDark ? `1px solid ${GOLD}35` : `1px solid ${WINE}25`,
+                              alignSelf: "flex-start", marginTop: 10,
                             }}>-{discount}%</span>
                           )}
                         </div>
                         {price.period && (
-                          <div style={{ fontSize: 13, color: isDark ? "rgba(255,255,255,0.4)" : "#9ca3af", marginTop: 4, fontWeight: 500 }}>
+                          <div style={{ fontSize: 12, color: isDark ? "rgba(255,255,255,0.35)" : "#b0b7c0", marginTop: 4, fontWeight: 500 }}>
                             {price.period}
                           </div>
                         )}
                       </div>
 
-                      {/* Features */}
-                      <ul style={{ listStyle: "none", padding: 0, flex: 1, display: "flex", flexDirection: "column", gap: 12, marginBottom: 32 }}>
-                        {genFeatures.map(f => (
-                          <li key={f} style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 14, color: isDark ? "rgba(255,255,255,0.82)" : "#374151" }}>
+                      {/* Highlights */}
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
+                        {(copy?.highlights ?? []).map(h => (
+                          <div key={h.label} style={{
+                            display: "flex", alignItems: "center", gap: 14,
+                            padding: "11px 14px",
+                            backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.02)",
+                            borderRadius: 10,
+                            border: isDark ? "1px solid rgba(255,255,255,0.06)" : "1px solid rgba(0,0,0,0.05)",
+                          }}>
                             <span style={{
-                              color: isDark ? POPULAR_DARK : "#fff",
-                              backgroundColor: checkColor,
-                              borderRadius: "50%", width: 18, height: 18,
-                              display: "inline-flex", alignItems: "center", justifyContent: "center",
-                              fontSize: 10, fontWeight: 900, flexShrink: 0, marginTop: 1,
-                            }}>✓</span>
-                            {f}
-                          </li>
+                              width: 36, height: 36, flexShrink: 0,
+                              backgroundColor: isDark ? `${GOLD}18` : `${accent}12`,
+                              borderRadius: 9,
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              fontSize: 17,
+                            }}>{h.icon}</span>
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: isDark ? "#fff" : NAVY, lineHeight: 1.2 }}>{h.label}</div>
+                              <div style={{ fontSize: 11.5, color: isDark ? "rgba(255,255,255,0.42)" : "#9ca3af", marginTop: 2, lineHeight: 1.3 }}>{h.desc}</div>
+                            </div>
+                          </div>
                         ))}
-                        {genFeatures.length === 0 && (
-                          <li style={{ fontSize: 13, color: isDark ? "rgba(255,255,255,0.3)" : "#9ca3af", fontStyle: "italic" }}>
-                            Configure as funcionalidades no Plan Builder
-                          </li>
-                        )}
-                      </ul>
+                      </div>
 
                       {/* CTA */}
                       {isCurrent ? (
