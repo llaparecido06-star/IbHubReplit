@@ -14,17 +14,17 @@ const PLAN_COPY: Record<string, { subtitle: string; tag: string }> = {
   profissional: {
     tag: "Para profissionais individuais",
     subtitle:
-      "Ideal para sommeliers, consultores e especialistas que querem ampliar sua rede, acessar dados de mercado e se posicionar como referência no setor.",
+      "Conecte-se com o mercado via Smart Match B2B, acesse gráficos, KPIs e dados do Ideal.BI, impulsione seus posts e veja quem visita seu perfil. Inclui 50 créditos de busca com IA por mês e uma masterclass liberada por dia.",
   },
   empresa: {
     tag: "Para importadoras, distribuidoras e produtoras",
     subtitle:
-      "O plano mais completo para empresas do setor. Crie sua página corporativa, publique vagas, acesse relatórios B2B e conecte-se com compradores e parceiros estratégicos.",
+      "Crie sua página corporativa, publique vagas e acesse análises avançadas por região, tendências e variedades. Inclui 50 créditos de IA/mês, 3 reveals de contatos por mês e masterclasses em sequência progressiva.",
   },
   executivo: {
-    tag: "Para líderes e gestores de alto nível",
+    tag: "Para líderes e tomadores de decisão",
     subtitle:
-      "Acesso VIP irrestrito a toda a plataforma. Smart Match B2B, relatórios detalhados, visibilidade de perfil completa e todas as ferramentas para quem toma decisões no mundo do vinho.",
+      "Tudo do plano Empresa com o dobro de capacidade: 100 créditos de IA/mês, 5 reveals de contatos por mês e acesso imediato a todo o conteúdo da plataforma — sem esperar liberações.",
   },
 };
 
