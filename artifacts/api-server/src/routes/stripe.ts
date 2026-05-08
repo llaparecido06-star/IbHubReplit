@@ -430,9 +430,13 @@ router.get("/stripe/config-check", async (_req: Request, res: Response) => {
     };
   }
 
+  // List all env var NAMES (not values) that contain "STRIPE" — helps debug production
+  const stripeEnvKeys = Object.keys(process.env).filter(k => k.toUpperCase().includes("STRIPE"));
+
   res.json({
     stripe_key_configured: secretKey.length > 0,
     stripe_key_mode: mode,
+    stripe_env_keys_present: stripeEnvKeys,
     prices: result,
   });
 });
