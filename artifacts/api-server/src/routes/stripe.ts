@@ -41,6 +41,22 @@ async function buildPriceToplanMap(): Promise<Map<string, string>> {
 }
 
 /**
+ * Safely extract current_period_end from a Stripe subscription.
+ * In API versions >= 2024-09-30, the field moved from the subscription root
+ * to each subscription item. We try both locations and return null if neither
+ * is a valid unix timestamp, avoiding RangeError in Date.toISOString().
+ */
+function getPeriodEnd(sub: Stripe.Subscription): string | null {
+  // New location (per-item) — preferred in API 2024-09-30+
+  const fromItem = (sub.items?.data?.[0] as any)?.current_period_end;
+  // Legacy root field — still present in some API versions
+  const fromRoot = (sub as any).current_period_end;
+  const ts = typeof fromItem === "number" ? fromItem : typeof fromRoot === "number" ? fromRoot : null;
+  if (!ts || !isFinite(ts)) return null;
+  return new Date(ts * 1000).toISOString();
+}
+
+/**
  * Determine the plan from a Stripe subscription's price items.
  *
  * Priority:
@@ -323,10 +339,11 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
             expand: ["items.data.price"],
           });
           const plan = resolvePlanFromSubscription(sub, priceToplan);
+          const periodEnd = getPeriodEnd(sub);
           const update: Record<string, unknown> = {
             stripe_subscription_id:     sub.id,
             stripe_subscription_status: sub.status,
-            stripe_current_period_end:  new Date((sub as any).current_period_end * 1000).toISOString(),
+            ...(periodEnd ? { stripe_current_period_end: periodEnd } : {}),
           };
           if (plan) update.plan = plan;
           await supabaseAdmin.from("profiles").update(update).eq("id", userId);
@@ -343,10 +360,11 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
         const priceToplan = await buildPriceToplanMap();
         const plan        = resolvePlanFromSubscription(sub, priceToplan);
         if (userId) {
+          const periodEnd = getPeriodEnd(sub);
           const update: Record<string, unknown> = {
             stripe_subscription_id:     sub.id,
             stripe_subscription_status: sub.status,
-            stripe_current_period_end:  new Date((sub as any).current_period_end * 1000).toISOString(),
+            ...(periodEnd ? { stripe_current_period_end: periodEnd } : {}),
           };
           if (plan) update.plan = plan;
           await supabaseAdmin.from("profiles").update(update).eq("id", userId);
@@ -361,10 +379,11 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
         const custId = typeof sub.customer === "string" ? sub.customer : undefined;
         const userId = await resolveUserId(sub.metadata?.supabase_user_id, custId);
         if (userId) {
+          const periodEnd = getPeriodEnd(sub);
           await supabaseAdmin.from("profiles").update({
             plan:                       "gratuito",
             stripe_subscription_status: "canceled",
-            stripe_current_period_end:  new Date((sub as any).current_period_end * 1000).toISOString(),
+            ...(periodEnd ? { stripe_current_period_end: periodEnd } : {}),
           }).eq("id", userId);
           // Revert credits to the free plan allocation
           void applyPlanChangeToCredits(userId);
