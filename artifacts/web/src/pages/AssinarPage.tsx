@@ -8,7 +8,7 @@ import { usePlans, formatPlanPrice, formatOriginalPrice, calcDiscount } from "@/
 const NAVY         = "#0d1b2a";
 const GOLD         = "#c9a84c";
 const WINE         = "#722f37";
-const POPULAR_BLUE = "#0c2a6e";
+const POPULAR_DARK = "#0a1729";
 
 const PLAN_COPY: Record<string, { subtitle: string; tag: string }> = {
   profissional: {
@@ -148,7 +148,7 @@ export default function AssinarPage() {
         .trust-item:hover { opacity: 1 !important; }
 
         @keyframes spin    { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes pulse   { 0%, 100% { box-shadow: 0 4px 18px rgba(79,142,247,0.5); } 50% { box-shadow: 0 6px 28px rgba(79,142,247,0.85); } }
+        @keyframes pulse   { 0%, 100% { box-shadow: 0 4px 18px ${GOLD}60; } 50% { box-shadow: 0 6px 28px ${GOLD}90; } }
         @keyframes fadein  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
         @media (max-width: 720px) {
@@ -361,10 +361,10 @@ export default function AssinarPage() {
                   const accent        = PLAN_ACCENTS[idx % PLAN_ACCENTS.length];
                   const genFeatures   = plan.features.filter(f => !f.startsWith("mercado:"));
                   const isDark        = isPopular;
-                  const popularBg     = POPULAR_BLUE;
+                  const popularBg     = POPULAR_DARK;
                   const copy          = PLAN_COPY[planKey] ?? null;
 
-                  const checkColor = isDark ? "#93c5fd" : accent === NAVY ? "#1a3a5c" : accent;
+                  const checkColor = isDark ? GOLD : accent === NAVY ? "#1a3a5c" : accent;
 
                   return (
                     <div
@@ -376,13 +376,13 @@ export default function AssinarPage() {
                         border: isCurrent
                           ? "2px solid #059669"
                           : isPopular
-                            ? "2px solid #4f8ef7"
+                            ? `2px solid ${GOLD}`
                             : "1.5px solid #e5e7eb",
                         padding: isPopular ? "44px 28px 32px" : "32px 28px 28px",
                         marginTop: isPopular ? 0 : 20,
                         position: "relative",
                         boxShadow: isPopular
-                          ? "0 24px 64px rgba(12,42,110,0.35), 0 4px 16px rgba(0,0,0,0.12)"
+                          ? `0 24px 64px ${GOLD}25, 0 4px 16px rgba(0,0,0,0.18)`
                           : "0 2px 16px rgba(0,0,0,0.07)",
                         display: "flex",
                         flexDirection: "column",
@@ -392,11 +392,10 @@ export default function AssinarPage() {
                       {isPopular && !isCurrent && (
                         <div style={{
                           position: "absolute", top: -18, left: "50%", transform: "translateX(-50%)",
-                          background: "linear-gradient(90deg, #4f8ef7, #2563eb)",
-                          color: "#fff", fontWeight: 900,
+                          background: `linear-gradient(90deg, ${GOLD}, #e0b84a)`,
+                          color: NAVY, fontWeight: 900,
                           fontSize: 11, padding: "6px 24px", borderRadius: 100, letterSpacing: 1.4,
                           whiteSpace: "nowrap", animation: "pulse 2.5s ease-in-out infinite",
-                          boxShadow: "0 4px 16px rgba(79,142,247,0.55)",
                         }}>
                           ⭐ MAIS POPULAR
                         </div>
@@ -416,7 +415,7 @@ export default function AssinarPage() {
                       <div style={{
                         height: 3, borderRadius: 2,
                         background: isPopular
-                          ? "linear-gradient(90deg, #4f8ef7, #93c5fd)"
+                          ? `linear-gradient(90deg, ${GOLD}, #e0b84a)`
                           : `linear-gradient(90deg, ${accent}, ${accent}60)`,
                         marginBottom: 24, marginLeft: -28, marginRight: -28, marginTop: -12,
                       }} />
@@ -425,7 +424,7 @@ export default function AssinarPage() {
                       {copy?.tag && (
                         <p style={{
                           fontSize: 11, fontWeight: 700, letterSpacing: 0.8,
-                          color: isDark ? "#93c5fd" : "#6b7280",
+                          color: isDark ? GOLD : "#6b7280",
                           textTransform: "uppercase", marginBottom: 6,
                         }}>
                           {copy.tag}
@@ -483,7 +482,7 @@ export default function AssinarPage() {
                         {genFeatures.map(f => (
                           <li key={f} style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 14, color: isDark ? "rgba(255,255,255,0.82)" : "#374151" }}>
                             <span style={{
-                              color: isDark ? POPULAR_BLUE : "#fff",
+                              color: isDark ? POPULAR_DARK : "#fff",
                               backgroundColor: checkColor,
                               borderRadius: "50%", width: 18, height: 18,
                               display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -515,14 +514,14 @@ export default function AssinarPage() {
                           disabled={isLoading || !!loading}
                           style={{
                             background: isPopular
-                              ? "linear-gradient(135deg, #4f8ef7 0%, #2563eb 100%)"
+                              ? `linear-gradient(135deg, ${GOLD} 0%, #e0b84a 100%)`
                               : NAVY,
-                            color: "#fff",
+                            color: isPopular ? NAVY : "#fff",
                             border: "none", borderRadius: 12,
                             padding: "17px 0", fontSize: 15, fontWeight: 800,
                             cursor: (isLoading || !!loading) ? "not-allowed" : "pointer",
                             opacity: (isLoading || (!!loading && loading !== plan.id)) ? 0.6 : 1,
-                            boxShadow: isPopular ? "0 6px 24px rgba(79,142,247,0.55)" : "none",
+                            boxShadow: isPopular ? `0 6px 24px ${GOLD}55` : "none",
                             width: "100%",
                           }}
                         >
