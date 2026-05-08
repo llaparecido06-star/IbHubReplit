@@ -60,7 +60,13 @@ function CadastroModal({ onClose }: { onClose: () => void }) {
         <button onClick={() => setLocation("/cadastro")} style={{ width: "100%", padding: "14px 20px", borderRadius: 12, background: GOLD, color: WHITE, fontWeight: 700, fontSize: 16, border: "none", cursor: "pointer", marginBottom: 10 }}>
           Criar conta grátis
         </button>
-        <button onClick={() => setLocation("/login")} style={{ width: "100%", padding: "14px 20px", borderRadius: 12, background: "transparent", color: NAVY, fontWeight: 600, fontSize: 15, border: "1.5px solid #ddd", cursor: "pointer", marginBottom: 14 }}>
+        <button
+          onClick={() => {
+            sessionStorage.setItem("redirect_after_login", window.location.pathname);
+            setLocation("/login");
+          }}
+          style={{ width: "100%", padding: "14px 20px", borderRadius: 12, background: "transparent", color: NAVY, fontWeight: 600, fontSize: 15, border: "1.5px solid #ddd", cursor: "pointer", marginBottom: 14 }}
+        >
           Já tenho conta
         </button>
         <button onClick={onClose} style={{ width: "100%", background: "none", border: "none", color: "#7a8494", fontSize: 13, cursor: "pointer" }}>
@@ -160,11 +166,21 @@ export default function PublicPostPage() {
 
       <div style={{ minHeight: "100vh", background: BG, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
         {/* Top bar */}
-        <div style={{ background: NAVY, padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: GOLD, letterSpacing: 1.5, textTransform: "uppercase" }}>ibhub</span>
+        <div style={{ background: NAVY, padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <img
+            src={`${import.meta.env.BASE_URL}logo-ibhub.png`}
+            alt="ibhub"
+            style={{ height: 34, objectFit: "contain", display: "block" }}
+          />
           {!session && (
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => setLocation("/login")} style={{ padding: "7px 14px", borderRadius: 8, background: "transparent", color: WHITE, fontWeight: 600, fontSize: 13, border: "1px solid rgba(255,255,255,0.25)", cursor: "pointer" }}>
+              <button
+                onClick={() => {
+                  sessionStorage.setItem("redirect_after_login", window.location.pathname);
+                  setLocation("/login");
+                }}
+                style={{ padding: "7px 14px", borderRadius: 8, background: "transparent", color: WHITE, fontWeight: 600, fontSize: 13, border: "1px solid rgba(255,255,255,0.25)", cursor: "pointer" }}
+              >
                 Entrar
               </button>
               <button onClick={() => setLocation("/cadastro")} style={{ padding: "7px 14px", borderRadius: 8, background: GOLD, color: WHITE, fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer" }}>
