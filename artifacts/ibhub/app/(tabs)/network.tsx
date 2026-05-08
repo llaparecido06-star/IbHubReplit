@@ -797,7 +797,9 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [importadoresMap, setImportadoresMap] = useState<Record<string, { name: string; company_page_id: string | null }[]>>({});
   const [impLoadingSet, setImpLoadingSet]     = useState<Set<string>>(new Set());
-  const [revealedMap, setRevealedMap]         = useState<Record<string, { fob_usd: string | null; cx9l: string | null; usd_por_cx9l: string | null }>>({});
+  type RevealDistExp = { distribuidor: string | null; fob_usd: string | null; cx9l: string | null; usd_por_cx9l: string | null };
+  type RevealedExpData = { totals: { fob_usd: string | null; cx9l: string | null; usd_por_cx9l: string | null }; distribuidores: RevealDistExp[] };
+  const [revealedMap, setRevealedMap]         = useState<Record<string, RevealedExpData>>({});
   const [revealCredits, setRevealCredits]     = useState<number | null>(null);
   const [revealCreditsTotal, setRevealCreditsTotal] = useState(0);
   const [revealingId, setRevealingId]         = useState<string | null>(null);
@@ -890,8 +892,8 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
       });
       if (res.status === 402) { setRevealCredits(0); }
       else if (res.ok) {
-        const data = await res.json() as { totals: { fob_usd: string | null; cx9l: string | null; usd_por_cx9l: string | null }; credits_remaining: number | null; credits_total: number };
-        setRevealedMap(prev => ({ ...prev, [name]: data.totals }));
+        const data = await res.json() as { totals: { fob_usd: string | null; cx9l: string | null; usd_por_cx9l: string | null }; distribuidores: RevealDistExp[]; credits_remaining: number | null; credits_total: number };
+        setRevealedMap(prev => ({ ...prev, [name]: { totals: data.totals, distribuidores: data.distribuidores ?? [] } }));
         if (data.credits_remaining !== null) setRevealCredits(data.credits_remaining);
         if (data.credits_total) setRevealCreditsTotal(data.credits_total);
       }
@@ -1035,30 +1037,72 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
                   }
                   <View style={{ borderTopWidth: 1, borderTopColor: colors.border, marginTop: 14, paddingTop: 14 }}>
                     <Text style={{ fontSize: 11, fontWeight: "700", color: colors.gold, letterSpacing: 0.7, marginBottom: 10 }}>{t("mercado_screen.bi_exp_financial")}</Text>
-                    <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
-                      {([
-                        { label: "FOB US$",    value: revealed?.fob_usd,      icon: "💵" },
-                        { label: "Vol. CX9L",  value: revealed?.cx9l,         icon: "📦" },
-                        { label: "US$/CX9L",   value: revealed?.usd_por_cx9l, icon: "📈" },
-                      ]).map(kpi => (
-                        <View key={kpi.label} style={{ flex: 1, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, alignItems: "center" }}>
-                          <Text style={{ fontSize: 16, marginBottom: 2 }}>{kpi.icon}</Text>
-                          {kpi.value != null
-                            ? <Text style={{ fontSize: 12, fontWeight: "900", color: colors.navy }}>{kpi.value}</Text>
-                            : <Text style={{ fontSize: 16, fontWeight: "900", color: colors.mutedForeground, letterSpacing: 2 }}>••••</Text>}
-                          <Text style={{ fontSize: 9, color: colors.mutedForeground, marginTop: 2, textAlign: "center" }}>{kpi.label}</Text>
+                    {revealed ? (
+                      revealed.distribuidores.length > 0 ? (
+                        <View style={{ gap: 0 }}>
+                          {/* Header row */}
+                          <View style={{ flexDirection: "row", backgroundColor: colors.navy + "0A", borderRadius: 8, paddingVertical: 6, paddingHorizontal: 8, marginBottom: 2 }}>
+                            <Text style={{ flex: 2, fontSize: 9, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase" as const, letterSpacing: 0.5 }}>Distribuidor</Text>
+                            <Text style={{ flex: 1, fontSize: 9, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase" as const, letterSpacing: 0.5, textAlign: "right" }}>FOB US$</Text>
+                            <Text style={{ flex: 1, fontSize: 9, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase" as const, letterSpacing: 0.5, textAlign: "right" }}>CX9L</Text>
+                            <Text style={{ flex: 1, fontSize: 9, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase" as const, letterSpacing: 0.5, textAlign: "right" }}>US$/CX9L</Text>
+                          </View>
+                          {/* Distribuidor rows */}
+                          {revealed.distribuidores.map((d, i) => (
+                            <View key={i} style={{ flexDirection: "row", paddingVertical: 7, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                              <Text style={{ flex: 2, fontSize: 11, color: colors.navy, fontWeight: "600" }} numberOfLines={1}>{d.distribuidor ?? "—"}</Text>
+                              <Text style={{ flex: 1, fontSize: 11, color: colors.navy, fontWeight: "700", textAlign: "right" }}>{d.fob_usd ? (parseFloat(d.fob_usd) >= 1e6 ? `${(parseFloat(d.fob_usd)/1e6).toFixed(2)}M` : parseFloat(d.fob_usd).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })) : "–"}</Text>
+                              <Text style={{ flex: 1, fontSize: 11, color: colors.navy, textAlign: "right" }}>{d.cx9l ? parseFloat(d.cx9l).toLocaleString("pt-BR", { maximumFractionDigits: 0 }) : "–"}</Text>
+                              <Text style={{ flex: 1, fontSize: 11, color: colors.navy, textAlign: "right" }}>{d.usd_por_cx9l ? parseFloat(d.usd_por_cx9l).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "–"}</Text>
+                            </View>
+                          ))}
+                          {/* Total row (only when multiple distribuidores) */}
+                          {revealed.distribuidores.length > 1 && (
+                            <View style={{ flexDirection: "row", paddingVertical: 7, paddingHorizontal: 8, backgroundColor: colors.navy + "06", borderRadius: 6, marginTop: 2 }}>
+                              <Text style={{ flex: 2, fontSize: 11, color: colors.navy, fontWeight: "800" }}>Total</Text>
+                              <Text style={{ flex: 1, fontSize: 11, color: colors.navy, fontWeight: "800", textAlign: "right" }}>{revealed.totals.fob_usd ? (parseFloat(revealed.totals.fob_usd) >= 1e6 ? `${(parseFloat(revealed.totals.fob_usd)/1e6).toFixed(2)}M` : parseFloat(revealed.totals.fob_usd).toLocaleString("pt-BR", { maximumFractionDigits: 0 })) : "–"}</Text>
+                              <Text style={{ flex: 1, fontSize: 11, color: colors.navy, fontWeight: "800", textAlign: "right" }}>{revealed.totals.cx9l ? parseFloat(revealed.totals.cx9l).toLocaleString("pt-BR", { maximumFractionDigits: 0 }) : "–"}</Text>
+                              <Text style={{ flex: 1, fontSize: 10, color: colors.mutedForeground, fontWeight: "700", textAlign: "right" }}>{revealed.totals.usd_por_cx9l ? parseFloat(revealed.totals.usd_por_cx9l).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "–"} ⓘ</Text>
+                            </View>
+                          )}
+                          {revealed.distribuidores.length > 1 && (
+                            <Text style={{ fontSize: 9, color: colors.mutedForeground, marginTop: 4 }}>ⓘ US$/CX9L total = média ponderada (FOB ÷ CX9L)</Text>
+                          )}
                         </View>
-                      ))}
-                    </View>
-                    {!revealed && (
-                      <TouchableOpacity
-                        onPress={() => void revealData(m.name)}
-                        disabled={revealingId === m.name || revealCredits === 0}
-                        style={{ paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10, alignItems: "center", backgroundColor: revealCredits === 0 ? "#e5e7eb" : colors.navy, opacity: revealingId === m.name ? 0.7 : 1 }}>
-                        <Text style={{ fontSize: 13, fontWeight: "700", color: revealCredits === 0 ? colors.mutedForeground : "#fff" }}>
-                          {revealingId === m.name ? t("mercado_screen.bi_exp_revealing") : revealCredits === 0 ? t("mercado_screen.bi_exp_no_credits") : t("mercado_screen.bi_exp_reveal_btn")}
-                        </Text>
-                      </TouchableOpacity>
+                      ) : (
+                        /* Fallback: 3 KPI boxes if no distribuidores data */
+                        <View style={{ flexDirection: "row", gap: 8 }}>
+                          {([
+                            { label: "FOB US$",   value: revealed.totals.fob_usd },
+                            { label: "Vol. CX9L", value: revealed.totals.cx9l },
+                            { label: "US$/CX9L",  value: revealed.totals.usd_por_cx9l },
+                          ]).map(kpi => (
+                            <View key={kpi.label} style={{ flex: 1, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, alignItems: "center" }}>
+                              <Text style={{ fontSize: 12, fontWeight: "900", color: colors.navy }}>{kpi.value ?? "–"}</Text>
+                              <Text style={{ fontSize: 9, color: colors.mutedForeground, marginTop: 2, textAlign: "center" }}>{kpi.label}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      )
+                    ) : (
+                      <>
+                        <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+                          {(["FOB US$", "Vol. CX9L", "US$/CX9L"]).map(label => (
+                            <View key={label} style={{ flex: 1, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, alignItems: "center" }}>
+                              <Text style={{ fontSize: 16, fontWeight: "900", color: colors.mutedForeground, letterSpacing: 2 }}>••••</Text>
+                              <Text style={{ fontSize: 9, color: colors.mutedForeground, marginTop: 2, textAlign: "center" }}>{label}</Text>
+                            </View>
+                          ))}
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => void revealData(m.name)}
+                          disabled={revealingId === m.name || revealCredits === 0}
+                          style={{ paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10, alignItems: "center", backgroundColor: revealCredits === 0 ? "#e5e7eb" : colors.navy, opacity: revealingId === m.name ? 0.7 : 1 }}>
+                          <Text style={{ fontSize: 13, fontWeight: "700", color: revealCredits === 0 ? colors.mutedForeground : "#fff" }}>
+                            {revealingId === m.name ? t("mercado_screen.bi_exp_revealing") : revealCredits === 0 ? t("mercado_screen.bi_exp_no_credits") : t("mercado_screen.bi_exp_reveal_btn")}
+                          </Text>
+                        </TouchableOpacity>
+                      </>
                     )}
                   </View>
                 </View>

@@ -719,33 +719,50 @@ router.post("/wine-imports/bi/exportadores/reveal", async (req: Request, res: Re
   if (!rows || rows.length === 0) return res.status(404).json({ error: "Exportador não encontrado" });
 
   // Group rows by distribuidor — merge duplicates (same exportador+distribuidor can have multiple rows)
-  const distMap = new Map<string, { distribuidor: string | null; fob: number; cx9l: number }>();
+  // storedUsdCx: preserved from the DB when there's only 1 row for this distribuidor
+  // (avoids recalculation drift when fob/cx9l/usd_por_cx9l are not perfectly consistent in the source data)
+  const distMap = new Map<string, { distribuidor: string | null; fob: number; cx9l: number; storedUsdCx: number | null; rowCount: number }>();
   for (const r of rows as ExpRow[]) {
     const key = (r.distribuidor ?? "").toLowerCase().trim();
     const fob = r.fob_usd ? parseFloat(r.fob_usd) : 0;
     const cx  = r.cx9l   ? parseFloat(r.cx9l)     : 0;
+    const upc = r.usd_por_cx9l ? parseFloat(r.usd_por_cx9l) : null;
     const existing = distMap.get(key);
-    if (existing) { existing.fob += fob; existing.cx9l += cx; }
-    else distMap.set(key, { distribuidor: r.distribuidor, fob, cx9l: cx });
+    if (existing) {
+      existing.fob += fob;
+      existing.cx9l += cx;
+      existing.rowCount++;
+      // When multiple rows exist for the same distribuidor, the stored usd_por_cx9l
+      // is ambiguous — clear it so we fall back to fob/cx9l calculation
+      existing.storedUsdCx = null;
+    } else {
+      distMap.set(key, { distribuidor: r.distribuidor, fob, cx9l: cx, storedUsdCx: upc, rowCount: 1 });
+    }
   }
   const merged = Array.from(distMap.values());
 
-  // Compute aggregated totals from merged (deduplicated) distribuidores
+  // Aggregated totals (FOB and CX9L are summable; usd_por_cx9l is a weighted average)
   let fob_sum = 0, cx9l_sum = 0;
   for (const d of merged) { fob_sum += d.fob; cx9l_sum += d.cx9l; }
   const totals = {
-    fob_usd:      fob_sum  > 0                    ? fob_sum.toFixed(2)                   : null,
-    cx9l:         cx9l_sum > 0                    ? cx9l_sum.toFixed(2)                  : null,
-    usd_por_cx9l: fob_sum  > 0 && cx9l_sum > 0   ? (fob_sum / cx9l_sum).toFixed(2)      : null,
+    fob_usd:      fob_sum  > 0                  ? fob_sum.toFixed(2)              : null,
+    cx9l:         cx9l_sum > 0                  ? cx9l_sum.toFixed(2)             : null,
+    usd_por_cx9l: fob_sum  > 0 && cx9l_sum > 0  ? (fob_sum / cx9l_sum).toFixed(2) : null,
   };
   const distribuidores = merged
     .sort((a, b) => b.fob - a.fob)
-    .map(d => ({
-      distribuidor: d.distribuidor,
-      fob_usd:      d.fob  > 0               ? d.fob.toFixed(2)             : null,
-      cx9l:         d.cx9l > 0               ? d.cx9l.toFixed(2)            : null,
-      usd_por_cx9l: d.fob  > 0 && d.cx9l > 0 ? (d.fob / d.cx9l).toFixed(2) : null,
-    }));
+    .map(d => {
+      // Use the stored usd_por_cx9l when available (single-row distribuidor) to avoid
+      // recalculation drift; only recalculate when multiple rows were merged
+      const calcUsdCx = d.fob > 0 && d.cx9l > 0 ? d.fob / d.cx9l : null;
+      const usdCx = d.storedUsdCx ?? calcUsdCx;
+      return {
+        distribuidor: d.distribuidor,
+        fob_usd:      d.fob  > 0    ? d.fob.toFixed(2)    : null,
+        cx9l:         d.cx9l > 0    ? d.cx9l.toFixed(2)   : null,
+        usd_por_cx9l: usdCx != null  ? usdCx.toFixed(2)   : null,
+      };
+    });
 
   // Admins bypass credit check
   const { data: profile } = await supabaseAdmin.from("profiles").select("role").eq("id", userId).single();

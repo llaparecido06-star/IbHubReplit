@@ -1232,49 +1232,90 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
 
                     {/* ── Dados financeiros — requer crédito de revelação ── */}
                     <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: 16, paddingTop: 14 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase" as const, letterSpacing: 0.7, marginBottom: 10 }}>📊 Dados Financeiros</div>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 12 }}>
-                        {([
-                          { label: "FOB US$",    value: revealed ? fmtFobUsd(revealed.totals.fob_usd)     : null, icon: "💵" },
-                          { label: "Vol. CX9L",  value: revealed ? fmtCx9lQty(revealed.totals.cx9l)       : null, icon: "📦" },
-                          { label: "US$ / CX9L", value: revealed ? fmtUsdCx(revealed.totals.usd_por_cx9l) : null, icon: "📈" },
-                        ]).map(kpi => (
-                          <div key={kpi.label} style={{ textAlign: "center", padding: "10px 6px", backgroundColor: WHITE, borderRadius: 10, border: `1px solid ${BORDER}` }}>
-                            <div style={{ fontSize: 18, marginBottom: 3 }}>{kpi.icon}</div>
-                            {kpi.value != null ? (
-                              <div style={{ fontSize: 13, fontWeight: 900, color: NAVY }}>{kpi.value}</div>
-                            ) : (
-                              <div style={{ fontSize: 20, fontWeight: 900, color: MUTED, letterSpacing: 3 }}>••••</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase" as const, letterSpacing: 0.7, marginBottom: 10 }}>📊 Dados Financeiros por Distribuidor</div>
+
+                      {revealed ? (
+                        revealed.distribuidores.length > 0 ? (
+                          <div style={{ overflowX: "auto" }}>
+                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                              <thead>
+                                <tr style={{ backgroundColor: `${NAVY}08` }}>
+                                  {(["Distribuidor", "FOB US$", "CX9L", "US$/CX9L"] as const).map(h => (
+                                    <th key={h} style={{ textAlign: h === "Distribuidor" ? "left" : "right", padding: "7px 10px", color: MUTED, fontWeight: 700, fontSize: 10, textTransform: "uppercase" as const, letterSpacing: 0.5, borderBottom: `1px solid ${BORDER}`, whiteSpace: "nowrap" as const }}>{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {revealed.distribuidores.map((d, i) => (
+                                  <tr key={i} style={{ borderBottom: `1px solid ${BORDER}` }}>
+                                    <td style={{ padding: "8px 10px", color: NAVY, fontWeight: 600 }}>{d.distribuidor ?? "—"}</td>
+                                    <td style={{ padding: "8px 10px", color: NAVY, fontWeight: 700, textAlign: "right" }}>{fmtFobUsd(d.fob_usd)}</td>
+                                    <td style={{ padding: "8px 10px", color: NAVY, textAlign: "right" }}>{fmtCx9lQty(d.cx9l)}</td>
+                                    <td style={{ padding: "8px 10px", color: NAVY, textAlign: "right" }}>{fmtUsdCx(d.usd_por_cx9l)}</td>
+                                  </tr>
+                                ))}
+                                {revealed.distribuidores.length > 1 && (
+                                  <tr style={{ backgroundColor: `${NAVY}06` }}>
+                                    <td style={{ padding: "8px 10px", color: NAVY, fontWeight: 800, fontSize: 11 }}>Total</td>
+                                    <td style={{ padding: "8px 10px", color: NAVY, fontWeight: 800, textAlign: "right" }}>{fmtFobUsd(revealed.totals.fob_usd)}</td>
+                                    <td style={{ padding: "8px 10px", color: NAVY, fontWeight: 800, textAlign: "right" }}>{fmtCx9lQty(revealed.totals.cx9l)}</td>
+                                    <td style={{ padding: "8px 10px", color: MUTED, fontWeight: 700, textAlign: "right", fontSize: 11 }}>{fmtUsdCx(revealed.totals.usd_por_cx9l)} ⓘ</td>
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+                            {revealed.distribuidores.length > 1 && (
+                              <div style={{ fontSize: 10, color: MUTED, marginTop: 5, paddingLeft: 2 }}>ⓘ US$/CX9L total = média ponderada (FOB ÷ CX9L)</div>
                             )}
-                            <div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>{kpi.label}</div>
                           </div>
-                        ))}
-                      </div>
-
-                      {!revealed && (
-                        <div style={{ marginBottom: 14, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-                          <button
-                            onClick={() => void revealData(m.name)}
-                            disabled={revealingId === m.name || revealCredits === 0}
-                            style={{
-                              padding: "8px 22px", borderRadius: 8, border: "none",
-                              backgroundColor: revealCredits === 0 ? "#e5e7eb" : NAVY,
-                              color: revealCredits === 0 ? MUTED : WHITE,
-                              fontSize: 13, fontWeight: 700,
-                              cursor: revealingId === m.name || revealCredits === 0 ? "default" : "pointer",
-                              fontFamily: "inherit", opacity: revealingId === m.name ? 0.7 : 1,
-                            }}
-                          >
-                            {revealingId === m.name ? "Revelando…" : revealCredits === 0 ? "🔒 Sem créditos de revelação" : "🔓 Revelar dados financeiros (1 crédito)"}
-                          </button>
-                          {revealCredits !== null && revealCredits > 0 && (
-                            <div style={{ fontSize: 11, color: MUTED }}>
-                              {revealCredits} crédito{revealCredits === 1 ? "" : "s"} disponível{revealCredits === 1 ? "" : "is"} este mês
-                            </div>
-                          )}
-                        </div>
+                        ) : (
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                            {([
+                              { label: "FOB US$",    value: fmtFobUsd(revealed.totals.fob_usd),     icon: "💵" },
+                              { label: "Vol. CX9L",  value: fmtCx9lQty(revealed.totals.cx9l),       icon: "📦" },
+                              { label: "US$ / CX9L", value: fmtUsdCx(revealed.totals.usd_por_cx9l), icon: "📈" },
+                            ]).map(kpi => (
+                              <div key={kpi.label} style={{ textAlign: "center", padding: "10px 6px", backgroundColor: WHITE, borderRadius: 10, border: `1px solid ${BORDER}` }}>
+                                <div style={{ fontSize: 18, marginBottom: 3 }}>{kpi.icon}</div>
+                                <div style={{ fontSize: 13, fontWeight: 900, color: NAVY }}>{kpi.value}</div>
+                                <div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>{kpi.label}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      ) : (
+                        <>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 12 }}>
+                            {(["FOB US$", "Vol. CX9L", "US$ / CX9L"]).map(label => (
+                              <div key={label} style={{ textAlign: "center", padding: "10px 6px", backgroundColor: WHITE, borderRadius: 10, border: `1px solid ${BORDER}` }}>
+                                <div style={{ fontSize: 20, fontWeight: 900, color: MUTED, letterSpacing: 3 }}>••••</div>
+                                <div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>{label}</div>
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{ marginBottom: 14, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                            <button
+                              onClick={() => void revealData(m.name)}
+                              disabled={revealingId === m.name || revealCredits === 0}
+                              style={{
+                                padding: "8px 22px", borderRadius: 8, border: "none",
+                                backgroundColor: revealCredits === 0 ? "#e5e7eb" : NAVY,
+                                color: revealCredits === 0 ? MUTED : WHITE,
+                                fontSize: 13, fontWeight: 700,
+                                cursor: revealingId === m.name || revealCredits === 0 ? "default" : "pointer",
+                                fontFamily: "inherit", opacity: revealingId === m.name ? 0.7 : 1,
+                              }}
+                            >
+                              {revealingId === m.name ? "Revelando…" : revealCredits === 0 ? "🔒 Sem créditos de revelação" : "🔓 Revelar dados financeiros (1 crédito)"}
+                            </button>
+                            {revealCredits !== null && revealCredits > 0 && (
+                              <div style={{ fontSize: 11, color: MUTED }}>
+                                {revealCredits} crédito{revealCredits === 1 ? "" : "s"} disponível{revealCredits === 1 ? "" : "is"} este mês
+                              </div>
+                            )}
+                          </div>
+                        </>
                       )}
-
                     </div>
                   </div>
                 )}
