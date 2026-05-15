@@ -7,18 +7,43 @@ const PATCH = `
     ${MARKER}
     # Disable Folly coroutines to fix Xcode 26 / iPhoneOS26 SDK build error:
     #   'folly/coro/Coroutine.h' file not found in RCT-Folly/folly/Expected.h
-    # The header is included only when FOLLY_HAS_COROUTINES != 0; the app does
-    # not use folly coroutines, so disabling this preprocessor flag is safe.
+    # The header is included only when FOLLY_HAS_COROUTINES != 0; the app
+    # does not use folly coroutines, so disabling this flag is safe.
+    # Inserted AFTER react_native_post_install so it cannot be overridden.
+    Pod::UI.puts "[with-folly-coroutines-fix] Forcing FOLLY_HAS_COROUTINES=0 on all pod targets"
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
         config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
-        unless config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'].include?('FOLLY_HAS_COROUTINES=0')
-          config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'FOLLY_HAS_COROUTINES=0'
+        defs = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS']
+        defs = [defs] unless defs.is_a?(Array)
+        defs = defs.reject { |d| d.to_s.start_with?('FOLLY_HAS_COROUTINES=') }
+        defs << 'FOLLY_HAS_COROUTINES=0'
+        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = defs
+        # Belt-and-suspenders: also set as compile flag so it cannot be lost.
+        config.build_settings['OTHER_CPLUSPLUSFLAGS'] ||= ['$(inherited)']
+        cxxflags = config.build_settings['OTHER_CPLUSPLUSFLAGS']
+        cxxflags = [cxxflags] unless cxxflags.is_a?(Array)
+        unless cxxflags.any? { |f| f.to_s.include?('FOLLY_HAS_COROUTINES=0') }
+          cxxflags << '-DFOLLY_HAS_COROUTINES=0'
         end
+        config.build_settings['OTHER_CPLUSPLUSFLAGS'] = cxxflags
       end
     end
     # <<< with-folly-coroutines-fix
 `;
+
+// Find the matching closing ')' for a call starting at openParenIdx (which points to '(')
+function matchParen(str, openParenIdx) {
+  let depth = 0;
+  for (let i = openParenIdx; i < str.length; i++) {
+    if (str[i] === "(") depth++;
+    else if (str[i] === ")") {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
 
 const withFollyCoroutinesFix = (config) => {
   return withDangerousMod(config, [
@@ -34,6 +59,26 @@ const withFollyCoroutinesFix = (config) => {
         console.log("[with-folly-coroutines-fix] Podfile já contém o patch — pulando");
         return cfg;
       }
+
+      const callStart = contents.indexOf("react_native_post_install(");
+      if (callStart >= 0) {
+        const openParen = contents.indexOf("(", callStart);
+        const closeParen = matchParen(contents, openParen);
+        if (closeParen > 0) {
+          contents =
+            contents.slice(0, closeParen + 1) +
+            "\n" +
+            PATCH +
+            contents.slice(closeParen + 1);
+          fs.writeFileSync(podfilePath, contents);
+          console.log(
+            "[with-folly-coroutines-fix] Podfile patched AFTER react_native_post_install (FOLLY_HAS_COROUTINES=0)",
+          );
+          return cfg;
+        }
+      }
+
+      // Fallback: inject at the start of post_install block
       if (/post_install do \|installer\|/.test(contents)) {
         contents = contents.replace(
           /post_install do \|installer\|/,
@@ -43,7 +88,9 @@ const withFollyCoroutinesFix = (config) => {
         contents += `\npost_install do |installer|\n${PATCH}end\n`;
       }
       fs.writeFileSync(podfilePath, contents);
-      console.log("[with-folly-coroutines-fix] Podfile aplicado (FOLLY_HAS_COROUTINES=0)");
+      console.log(
+        "[with-folly-coroutines-fix] Podfile patched (fallback path; FOLLY_HAS_COROUTINES=0)",
+      );
       return cfg;
     },
   ]);
