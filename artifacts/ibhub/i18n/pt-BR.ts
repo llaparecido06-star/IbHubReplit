@@ -1247,6 +1247,8 @@ const ptBR = {
     change_card: "Trocar cartão",
     see_invoices: "Ver faturas",
     past_due_warning: "Pagamento pendente — atualize pelo site para manter o acesso.",
+    past_due_warning_ios: "Há um problema com o pagamento da sua assinatura. Para mais informações, entre em contato com nosso suporte.",
+    ios_manage_notice: "Para gerenciar, alterar ou cancelar sua assinatura (cartão, faturas, cancelamento), acesse www.ibhub.com.br no seu navegador.",
     free_plan_hint: "Você está no plano {{name}} · {{subtitle}}",
     info_text: "Assinaturas processadas com segurança via Stripe. Após o pagamento, seu plano é atualizado automaticamente no app.",
     error_browser: "Não foi possível abrir o navegador.",

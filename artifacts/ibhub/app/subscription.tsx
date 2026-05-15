@@ -193,12 +193,16 @@ export default function SubscriptionScreen() {
             <View style={[styles.warningBox, { backgroundColor: "#fef3c7" }]}>
               <Feather name="alert-triangle" size={14} color="#d97706" />
               <Text style={[styles.warningText, { color: "#92400e" }]}>
-                {t("subscription.past_due_warning")}
+                {isIOS ? t("subscription.past_due_warning_ios") : t("subscription.past_due_warning")}
               </Text>
             </View>
           )}
 
-          {(hasActiveSub || isPastDue) && (
+          {/* On iOS, the manage/portal button and chips are hidden to comply
+              with App Store guideline 3.1.3 (no anti-steering / external
+              purchase management without entitlement). A static notice
+              tells users where to manage their subscription instead. */}
+          {(hasActiveSub || isPastDue) && !isIOS && (
             <TouchableOpacity
               style={[styles.manageBtn, { borderColor: colors.border, marginTop: 10 }]}
               onPress={openPortal}
@@ -213,7 +217,7 @@ export default function SubscriptionScreen() {
               </Text>
             </TouchableOpacity>
           )}
-          {(hasActiveSub || isPastDue) && (
+          {(hasActiveSub || isPastDue) && !isIOS && (
             <View style={{ marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {managementChips.map(item => (
                 <View key={item.label} style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: colors.background, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}>
@@ -221,6 +225,18 @@ export default function SubscriptionScreen() {
                   <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{item.label}</Text>
                 </View>
               ))}
+            </View>
+          )}
+
+          {/* Static iOS-only notice for users with active/past_due subs.
+              No external link, no button — purely informational so it does
+              not violate App Store guideline 3.1.3 (anti-steering). */}
+          {(hasActiveSub || isPastDue) && isIOS && (
+            <View style={{ marginTop: 10, flexDirection: "row", gap: 8, padding: 10, borderRadius: 8, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border }}>
+              <Feather name="info" size={13} color={colors.mutedForeground} />
+              <Text style={{ flex: 1, fontSize: 12, color: colors.mutedForeground, lineHeight: 17 }}>
+                {t("subscription.ios_manage_notice")}
+              </Text>
             </View>
           )}
         </View>

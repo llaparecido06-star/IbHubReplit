@@ -1247,6 +1247,8 @@ const es = {
     change_card: "Cambiar tarjeta",
     see_invoices: "Ver facturas",
     past_due_warning: "Pago pendiente — actualiza desde el sitio para mantener el acceso.",
+    past_due_warning_ios: "Hay un problema con el pago de tu suscripción. Para más información, contacta con nuestro soporte.",
+    ios_manage_notice: "Para gestionar, cambiar o cancelar tu suscripción (tarjeta, facturas, cancelación), accede a www.ibhub.com.br desde tu navegador.",
     free_plan_hint: "Estás en el plan {{name}} · {{subtitle}}",
     info_text: "Suscripciones procesadas de forma segura vía Stripe. Tras el pago, tu plan se actualiza automáticamente en la app.",
     error_browser: "No se pudo abrir el navegador.",
