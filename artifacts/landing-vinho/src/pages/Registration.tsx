@@ -374,7 +374,7 @@ export default function Registration() {
                 }} />
                 <img
                   src={`${BASE}ebook-parte1.png`}
-                  alt="O Futuro no Mercado de Vinhos — Parte 1"
+                  alt="Os Últimos 10 Anos do Mercado de Vinhos — Parte 1"
                   style={{
                     width: isMobile ? "150px" : "200px",
                     display: "block", position: "relative", zIndex: 1,
