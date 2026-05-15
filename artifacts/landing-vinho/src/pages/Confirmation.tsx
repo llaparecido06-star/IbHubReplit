@@ -193,7 +193,7 @@ export default function Confirmation() {
           }}>
             <div>
               <p style={{ fontSize: "11px", color: C.dimmed, textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700, marginBottom: "8px" }}>
-                No dia 18 de maio, liberamos
+                No dia 01 de junho, liberamos
               </p>
               <p style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: "28px", fontWeight: 900, color: C.gold, textTransform: "uppercase", margin: 0, lineHeight: 1.1 }}>
                 A PARTE 2
@@ -229,7 +229,7 @@ export default function Confirmation() {
             background: "linear-gradient(90deg, transparent, rgba(201,168,76,0.6), transparent)",
           }} />
           {[
-            { icon: <IconCalendar />, top: "18 DE MAIO",     bot: "Segunda-feira"   },
+            { icon: <IconCalendar />, top: "01 DE JUNHO",    bot: "Segunda-feira"   },
             { icon: <IconClock />,    top: "20H00",          bot: "Duração: 60 min" },
             { icon: <IconLock />,     top: "Evento fechado", bot: "Apenas membros"  },
           ].map((col, i) => (
@@ -300,7 +300,7 @@ export default function Confirmation() {
             {[
               { n: "01", icon: <IconMail />, title: "Verifique seu e-mail", body: "O material já está a caminho." },
               { n: "02", icon: <IconBook />, title: "Leia o material",       body: "Com calma e atenção." },
-              { n: "03", icon: <IconStar />, title: "Esteja no dia 18",      body: "A Parte 2 é liberada exclusivamente ao vivo." },
+              { n: "03", icon: <IconStar />, title: "Esteja no dia 01/06",   body: "A Parte 2 é liberada exclusivamente ao vivo." },
             ].map((step, i) => (
               <div key={i} style={{
                 background: "linear-gradient(135deg, rgba(201,168,76,0.06) 0%, rgba(201,168,76,0.02) 100%)",
@@ -389,7 +389,7 @@ export default function Confirmation() {
           }}>
             Quem entende como usar<br />
             começa a operar diferente.<br />
-            <strong style={{ color: C.white, fontWeight: 700, fontStyle: "normal" }}>Nos vemos no dia 18!</strong>
+            <strong style={{ color: C.white, fontWeight: 700, fontStyle: "normal" }}>Nos vemos no dia 01/06!</strong>
           </div>
         </div>
       </div>

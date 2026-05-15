@@ -219,7 +219,7 @@ export default function Registration() {
               background: "linear-gradient(90deg, transparent, rgba(201,168,76,0.6), transparent)",
             }} />
             {[
-              { icon: <IconCalendar />, top: "18 DE MAIO",     bot: "Segunda-feira"   },
+              { icon: <IconCalendar />, top: "01 DE JUNHO",    bot: "Segunda-feira"   },
               { icon: <IconClock />,    top: "20H00",          bot: "Duração: 60 min" },
               { icon: <IconLock />,     top: "Evento fechado", bot: "Apenas membros"  },
             ].map((col, i) => (

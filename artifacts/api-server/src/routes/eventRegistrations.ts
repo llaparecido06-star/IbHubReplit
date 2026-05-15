@@ -106,7 +106,7 @@ function buildConfirmationEmail(rawName: string): string {
       <table style="width:100%;border-collapse:collapse;">
         <tr>
           <td style="color:#5a6270;font-size:13px;padding:4px 0;">Data</td>
-          <td style="color:#ffffff;font-size:14px;font-weight:600;padding:4px 0;text-align:right;">18 de Maio, Segunda-feira</td>
+          <td style="color:#ffffff;font-size:14px;font-weight:600;padding:4px 0;text-align:right;">01 de Junho, Segunda-feira</td>
         </tr>
         <tr>
           <td style="color:#5a6270;font-size:13px;padding:4px 0;">Horário</td>
