@@ -133,8 +133,9 @@ export async function fetchFeedPosts(
 }
 
 export async function uploadPostImage(imageUri: string, userId: string): Promise<string | null> {
+  let compressed: string = imageUri;
   try {
-    const compressed = await compressPostImage(imageUri);
+    compressed = await compressPostImage(imageUri);
     const ext = "jpg";
     const mime = "image/jpeg";
     const filename = `${userId}/${Date.now()}.${ext}`;
@@ -154,6 +155,12 @@ export async function uploadPostImage(imageUri: string, userId: string): Promise
   } catch (e) {
     console.error("uploadPostImage:", e);
     return null;
+  } finally {
+    // Delete the compressed temp file from local cache (native only).
+    // The original picker URI is managed by the OS; only clean up our own copy.
+    if (Platform.OS !== "web" && compressed !== imageUri) {
+      FileSystem.deleteAsync(compressed, { idempotent: true }).catch(() => {});
+    }
   }
 }
 
