@@ -30,3 +30,9 @@ id = "b8G47qYzYky8Xx1ghDxsE"
 uri = "file://attached_assets/generated_images/generated_image.png"
 type = "image"
 title = "generated_image"
+
+[[generated]]
+id = "YzRQN3Dsn9aph73-_xnes"
+uri = "file://artifacts/landing-vinho/public/opengraph.png"
+type = "image"
+title = "opengraph-wine-event-card"
