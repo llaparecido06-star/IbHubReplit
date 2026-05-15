@@ -23,7 +23,13 @@
         "NSMicrophoneUsageDescription": "O ibhub usa o microfone para gravar mensagens de voz.",
         "NSPhotoLibraryUsageDescription": "O ibhub acessa sua galeria para compartilhar fotos e vídeos.",
         "NSPhotoLibraryAddUsageDescription": "O ibhub salva mídia recebida na sua galeria.",
-        "NSLocationWhenInUseUsageDescription": "O ibhub usa sua localização para preencher automaticamente o campo de localização ao criar uma publicação."
+        "NSLocationWhenInUseUsageDescription": "O ibhub usa sua localização para preencher automaticamente o campo de localização ao criar uma publicação.",
+        "LSApplicationQueriesSchemes": [
+          "mailto",
+          "tel",
+          "instagram",
+          "whatsapp"
+        ]
       }
     },
     "android": {
