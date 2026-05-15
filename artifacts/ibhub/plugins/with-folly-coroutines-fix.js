@@ -10,25 +10,30 @@ const PATCH = `
     # The header is included only when FOLLY_HAS_COROUTINES != 0; the app
     # does not use folly coroutines, so disabling this flag is safe.
     # Inserted AFTER react_native_post_install so it cannot be overridden.
-    Pod::UI.puts "[with-folly-coroutines-fix] Forcing FOLLY_HAS_COROUTINES=0 on all pod targets"
-    installer.pods_project.targets.each do |target|
-      target.build_configurations.each do |config|
+    Pod::UI.puts "[with-folly-coroutines-fix] Forcing FOLLY_CFG_NO_COROUTINES=1 + FOLLY_HAS_COROUTINES=0 on ALL targets"
+    folly_defs = ['FOLLY_CFG_NO_COROUTINES=1', 'FOLLY_HAS_COROUTINES=0']
+    folly_cxxflags = ['-DFOLLY_CFG_NO_COROUTINES=1', '-DFOLLY_HAS_COROUTINES=0']
+    apply_folly_fix = lambda do |build_configurations|
+      build_configurations.each do |config|
         config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
         defs = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS']
         defs = [defs] unless defs.is_a?(Array)
-        defs = defs.reject { |d| d.to_s.start_with?('FOLLY_HAS_COROUTINES=') }
-        defs << 'FOLLY_HAS_COROUTINES=0'
+        defs = defs.reject { |d| d.to_s.start_with?('FOLLY_CFG_NO_COROUTINES=') || d.to_s.start_with?('FOLLY_HAS_COROUTINES=') }
+        defs.concat(folly_defs)
         config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = defs
-        # Belt-and-suspenders: also set as compile flag so it cannot be lost.
         config.build_settings['OTHER_CPLUSPLUSFLAGS'] ||= ['$(inherited)']
         cxxflags = config.build_settings['OTHER_CPLUSPLUSFLAGS']
         cxxflags = [cxxflags] unless cxxflags.is_a?(Array)
-        unless cxxflags.any? { |f| f.to_s.include?('FOLLY_HAS_COROUTINES=0') }
-          cxxflags << '-DFOLLY_HAS_COROUTINES=0'
-        end
+        cxxflags = cxxflags.reject { |f| f.to_s.include?('FOLLY_CFG_NO_COROUTINES=') || f.to_s.include?('FOLLY_HAS_COROUTINES=') }
+        cxxflags.concat(folly_cxxflags)
         config.build_settings['OTHER_CPLUSPLUSFLAGS'] = cxxflags
       end
     end
+    # Apply to pod targets (RNReanimated, RCT-Folly, etc.)
+    installer.pods_project.targets.each { |t| apply_folly_fix.call(t.build_configurations) }
+    # Also apply to aggregate targets (Pods-<App>) so consumer apps inherit
+    installer.aggregate_targets.each { |t| apply_folly_fix.call(t.user_build_configurations.values) rescue nil }
+    Pod::UI.puts "[with-folly-coroutines-fix] Applied to #{installer.pods_project.targets.length} pod targets"
     # <<< with-folly-coroutines-fix
 `;
 
