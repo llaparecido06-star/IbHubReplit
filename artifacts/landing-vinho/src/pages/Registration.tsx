@@ -341,7 +341,7 @@ export default function Registration() {
             <div style={{ fontSize: "15px", color: C.muted, lineHeight: 1.8, flex: 1 }}>
               <p style={{ margin: "0 0 12px" }}>
                 Ao se inscrever, você recebe a{" "}
-                <strong style={{ color: C.white, fontWeight: 600 }}>Parte 1 do Ralo-X do Mercado de Vinhos 2026</strong>.
+                <strong style={{ color: C.white, fontWeight: 600 }}>Parte 1 do Raio-X do Mercado de Vinhos 2026</strong>.
               </p>
               <p style={{ margin: "0 0 16px" }}>
                 Um material estratégico com a base da nossa leitura de mercado.

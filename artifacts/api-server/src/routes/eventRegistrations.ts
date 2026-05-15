@@ -120,7 +120,7 @@ function buildConfirmationEmail(rawName: string): string {
     </div>
 
     <p style="color:#9aa0a8;font-size:14px;line-height:1.7;margin:0 0 8px;">
-      Em breve você receberá o <strong style="color:#ffffff;">material preparatório (Parte 1 do Ralo-X do Mercado de Vinhos 2026)</strong>.
+      Em breve você receberá o <strong style="color:#ffffff;">material preparatório (Parte 1 do Raio-X do Mercado de Vinhos 2026)</strong>.
     </p>
     <p style="color:#9aa0a8;font-size:14px;line-height:1.7;margin:0 0 24px;">
       Fique atento ao seu e-mail para mais informações.
