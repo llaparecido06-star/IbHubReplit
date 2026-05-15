@@ -800,7 +800,7 @@ export default function RegisterScreen() {
             ) : (
               <Text style={styles.continueBtnText}>
                 {step === TOTAL_STEPS
-                  ? (selectedPlan !== "gratuito" ? t("register_screen.btn_create_and_pay") : t("register_screen.btn_finish"))
+                  ? (selectedPlan !== "gratuito" && Platform.OS !== "ios" ? t("register_screen.btn_pay") : t("register_screen.btn_finish"))
                   : t("register_screen.btn_continue")
                 }
               </Text>

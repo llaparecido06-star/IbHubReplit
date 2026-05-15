@@ -190,17 +190,19 @@ export default function LoginScreen() {
                 }
                 <Text style={styles.socialBtnText}>{t("auth.login.google")}</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.socialBtn, styles.socialBtnApple, socialLoading === "apple" && { opacity: 0.6 }]}
-                onPress={handleApple}
-                disabled={!!socialLoading}
-              >
-                {socialLoading === "apple"
-                  ? <ActivityIndicator size="small" color="#fff" />
-                  : <Ionicons name="logo-apple" size={18} color="#fff" />
-                }
-                <Text style={[styles.socialBtnText, { color: "#fff" }]}>{t("auth.login.apple")}</Text>
-              </TouchableOpacity>
+              {Platform.OS === "ios" && (
+                <TouchableOpacity
+                  style={[styles.socialBtn, styles.socialBtnApple, socialLoading === "apple" && { opacity: 0.6 }]}
+                  onPress={handleApple}
+                  disabled={!!socialLoading}
+                >
+                  {socialLoading === "apple"
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <Ionicons name="logo-apple" size={18} color="#fff" />
+                  }
+                  <Text style={[styles.socialBtnText, { color: "#fff" }]}>{t("auth.login.apple")}</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
