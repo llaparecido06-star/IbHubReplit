@@ -330,3 +330,14 @@
     inset: -1px;
   }
 }
+/* Hero scroll-down arrow bounce animation */
+@keyframes ibhub-bounce-down {
+  0%, 100% { transform: translateY(0); opacity: 0.85; }
+  50%      { transform: translateY(8px); opacity: 1; }
+}
+.ibhub-scroll-arrow {
+  animation: ibhub-bounce-down 1.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ibhub-scroll-arrow { animation: none; }
+}

@@ -102,8 +102,8 @@ export default function Registration() {
       <section style={{
         display: "grid",
         gridTemplateColumns: isMobile ? "1fr" : "44% 56%",
-        minHeight: isMobile ? "auto" : "760px",
-        position: isMobile ? "relative" : "static",
+        minHeight: isMobile ? "auto" : "620px",
+        position: "relative",
         overflow: "hidden",
       }}>
         {/* Mobile background image — sits behind content */}
@@ -123,7 +123,7 @@ export default function Registration() {
           background: isMobile ? "transparent" : `radial-gradient(ellipse 100% 70% at -10% 60%, rgba(201,168,76,0.09) 0%, transparent 65%),
                        radial-gradient(ellipse 60% 40% at 50% 0%, rgba(201,168,76,0.04) 0%, transparent 70%),
                        ${C.bg}`,
-          padding: isMobile ? "36px 24px 48px" : "44px 64px 56px",
+          padding: isMobile ? "36px 24px 56px" : "36px 64px 72px",
           display: "flex", flexDirection: "column", justifyContent: "flex-start",
           position: "relative", zIndex: 1,
           order: isMobile ? 1 : 0,
@@ -169,14 +169,14 @@ export default function Registration() {
           <h1 style={{
             fontFamily: "'Barlow Condensed', sans-serif",
             fontWeight: 900,
-            fontSize: isMobile ? "clamp(38px, 10vw, 54px)" : "clamp(52px, 5.5vw, 76px)",
+            fontSize: isMobile ? "clamp(34px, 8.8vw, 48px)" : "clamp(40px, 3.9vw, 54px)",
             lineHeight: 0.95,
             textTransform: "uppercase",
             margin: "0 0 18px",
             whiteSpace: isMobile ? "normal" : "nowrap",
           }}>
-            <span style={{ color: C.white }}>O FUTURO NO</span><br />
-            <span style={{ color: C.gold }}>MERCADO DE VINHOS</span>
+            <span style={{ color: C.white }}>OS ÚLTIMOS 10 ANOS</span><br />
+            <span style={{ color: C.gold }}>DO MERCADO DE VINHOS</span>
           </h1>
 
           <p style={{ fontSize: "15px", color: C.muted, lineHeight: 1.75, margin: "0 0 24px", maxWidth: isMobile ? "100%" : "380px" }}>
@@ -282,6 +282,54 @@ export default function Registration() {
             }} />
           </div>
         )}
+
+        {/* ▼ Scroll-down indicator — tells users there's more below */}
+        <a
+          href="#inscricao"
+          aria-label="Rolar para a próxima seção"
+          onClick={e => { e.preventDefault(); document.getElementById("inscricao")?.scrollIntoView({ behavior: "smooth" }); }}
+          style={{
+            position: "absolute",
+            left: "50%",
+            bottom: isMobile ? "14px" : "18px",
+            transform: "translateX(-50%)",
+            display: "inline-flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "6px",
+            color: C.gold,
+            textDecoration: "none",
+            zIndex: 3,
+            padding: "6px 14px",
+            cursor: "pointer",
+          }}
+        >
+          <span style={{
+            fontSize: "10px",
+            fontWeight: 700,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            color: C.gold,
+            textShadow: "0 1px 8px rgba(0,0,0,0.6)",
+          }}>
+            Veja mais
+          </span>
+          <span className="ibhub-scroll-arrow" style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "34px",
+            height: "34px",
+            borderRadius: "50%",
+            background: "rgba(201,168,76,0.10)",
+            border: "1px solid rgba(201,168,76,0.45)",
+            boxShadow: "0 0 14px rgba(201,168,76,0.18)",
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </span>
+        </a>
       </section>
 
       {/* ═══ PARTICIPE + FORM ═══ */}
