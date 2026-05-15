@@ -96,7 +96,8 @@
           "sounds": []
         }
       ],
-      "./plugins/with-privacy-manifest"
+      "./plugins/with-privacy-manifest",
+      "./plugins/with-folly-coroutines-fix"
     ],
     "experiments": {
       "typedRoutes": true,
