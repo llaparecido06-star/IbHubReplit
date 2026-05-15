@@ -143,7 +143,7 @@ export default function Registration() {
           <div style={{
             fontSize: "10px", color: C.dimmed,
             letterSpacing: isMobile ? "0.04em" : "0.14em",
-            marginBottom: isMobile ? "24px" : "44px",
+            marginBottom: isMobile ? "14px" : "22px",
             textTransform: "uppercase", fontWeight: 500,
             lineHeight: 1.5,
           }}>
@@ -291,7 +291,7 @@ export default function Registration() {
           style={{
             position: "absolute",
             left: "50%",
-            bottom: isMobile ? "14px" : "18px",
+            bottom: isMobile ? "22px" : "32px",
             transform: "translateX(-50%)",
             display: "inline-flex",
             flexDirection: "column",
