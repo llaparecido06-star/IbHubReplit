@@ -290,9 +290,9 @@ export default function Registration() {
           onClick={e => { e.preventDefault(); document.getElementById("inscricao")?.scrollIntoView({ behavior: "smooth" }); }}
           style={{
             position: "absolute",
-            left: isMobile ? "50%" : "auto",
-            right: isMobile ? "auto" : "26%",
-            bottom: isMobile ? "22px" : "60px",
+            left: isMobile ? "50%" : "46%",
+            right: "auto",
+            bottom: isMobile ? "22px" : "88px",
             transform: isMobile ? "translateX(-50%)" : "none",
             display: "inline-flex",
             flexDirection: "column",
