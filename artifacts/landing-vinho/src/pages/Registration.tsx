@@ -123,7 +123,7 @@ export default function Registration() {
           background: isMobile ? "transparent" : `radial-gradient(ellipse 100% 70% at -10% 60%, rgba(201,168,76,0.09) 0%, transparent 65%),
                        radial-gradient(ellipse 60% 40% at 50% 0%, rgba(201,168,76,0.04) 0%, transparent 70%),
                        ${C.bg}`,
-          padding: isMobile ? "36px 24px 56px" : "36px 64px 72px",
+          padding: isMobile ? "36px 24px 96px" : "36px 64px 72px",
           display: "flex", flexDirection: "column", justifyContent: "flex-start",
           position: "relative", zIndex: 1,
           order: isMobile ? 1 : 0,
@@ -445,7 +445,7 @@ export default function Registration() {
               {[
                 { ph: "Nome completo",               icon: <IconUser />,      type: "text",  req: true,  name: "name"    },
                 { ph: "E-mail",                       icon: <IconMail />,      type: "email", req: true,  name: "email"   },
-                { ph: "WhatsApp",                     icon: <IconPhone />,     type: "text",  req: true,  name: "whatsapp"},
+                { ph: "WhatsApp",                     icon: <IconPhone />,     type: "tel",   req: true,  name: "whatsapp"},
                 { ph: "Atuação / Empresa (opcional)", icon: <IconBriefcase />, type: "text",  req: false, name: "company" },
               ].map((f, i) => (
                 <div key={i} style={{
