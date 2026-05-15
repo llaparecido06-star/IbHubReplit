@@ -123,7 +123,7 @@ export default function Registration() {
           background: isMobile ? "transparent" : `radial-gradient(ellipse 100% 70% at -10% 60%, rgba(201,168,76,0.09) 0%, transparent 65%),
                        radial-gradient(ellipse 60% 40% at 50% 0%, rgba(201,168,76,0.04) 0%, transparent 70%),
                        ${C.bg}`,
-          padding: isMobile ? "36px 24px 96px" : "36px 64px 72px",
+          padding: isMobile ? "16px 24px 96px" : "14px 64px 56px",
           display: "flex", flexDirection: "column", justifyContent: "flex-start",
           position: "relative", zIndex: 1,
           order: isMobile ? 1 : 0,
@@ -135,7 +135,7 @@ export default function Registration() {
           }} />
 
           {/* Logos */}
-          <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "6px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "-6px", marginTop: "-8px" }}>
             <img src={`${BASE}ibhub-logo-white-transparent.png`} alt="ibhub" style={{ height: isMobile ? "32px" : "40px" }} />
             <div style={{ width: "1px", height: "26px", background: "linear-gradient(180deg, transparent, rgba(201,168,76,0.5), transparent)" }} />
             <img src={`${BASE}idealbi-logo2-transparent.png`} alt="IDEAL.BI" style={{ height: isMobile ? "80px" : "110px" }} />
@@ -143,7 +143,7 @@ export default function Registration() {
           <div style={{
             fontSize: "10px", color: C.dimmed,
             letterSpacing: isMobile ? "0.04em" : "0.14em",
-            marginBottom: isMobile ? "14px" : "22px",
+            marginBottom: isMobile ? "10px" : "14px",
             textTransform: "uppercase", fontWeight: 500,
             lineHeight: 1.5,
           }}>
@@ -290,9 +290,10 @@ export default function Registration() {
           onClick={e => { e.preventDefault(); document.getElementById("inscricao")?.scrollIntoView({ behavior: "smooth" }); }}
           style={{
             position: "absolute",
-            left: "50%",
-            bottom: isMobile ? "22px" : "32px",
-            transform: "translateX(-50%)",
+            left: isMobile ? "50%" : "auto",
+            right: isMobile ? "auto" : "26%",
+            bottom: isMobile ? "22px" : "60px",
+            transform: isMobile ? "translateX(-50%)" : "none",
             display: "inline-flex",
             flexDirection: "column",
             alignItems: "center",
