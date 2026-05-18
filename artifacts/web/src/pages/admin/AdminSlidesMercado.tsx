@@ -47,12 +47,17 @@ interface MarketOverview {
   [key: string]: unknown;
 }
 
+const PERIOD_LABELS: Record<string, string> = { mes: "Mês", trimestre: "Trim.", ano: "Ano" };
+const ALL_PERIODS = ["mes", "trimestre", "ano"];
+
 interface MarketPermission {
   id: string;
   title: string;
   icon: string;
   sort_order: number;
   section_type: string;
+  periods?: string[];
+  font_size?: number;
 }
 
 // ── Ideal.BI Admin types ───────────────────────────────────────────────────────
@@ -348,6 +353,8 @@ export default function AdminSlidesMercado() {
   const [permTitle, setPermTitle] = useState("");
   const [permIcon, setPermIcon] = useState("bar-chart-2");
   const [permSectionType, setPermSectionType] = useState("lista");
+  const [permPeriods, setPermPeriods] = useState<string[]>(["mes", "trimestre", "ano"]);
+  const [permFontSize, setPermFontSize] = useState("14");
   const [permSaving, setPermSaving] = useState(false);
   const [deletingPermId, setDeletingPermId] = useState<string | null>(null);
 
@@ -369,23 +376,35 @@ export default function AdminSlidesMercado() {
   useEffect(() => { if (tab === "Categorias") void loadPermissions(); }, [tab, loadPermissions]);
 
   const openNewPerm = () => {
-    setPermEdit(null); setPermTitle(""); setPermIcon("bar-chart-2"); setPermSectionType("lista");
+    setPermEdit(null);
+    setPermTitle(""); setPermIcon("bar-chart-2"); setPermSectionType("lista");
+    setPermPeriods(["mes", "trimestre", "ano"]); setPermFontSize("14");
     setPermModal(true);
   };
   const openEditPerm = (p: MarketPermission) => {
-    setPermEdit(p); setPermTitle(p.title); setPermIcon(p.icon); setPermSectionType(p.section_type);
+    setPermEdit(p);
+    setPermTitle(p.title); setPermIcon(p.icon); setPermSectionType(p.section_type);
+    setPermPeriods(p.periods && p.periods.length > 0 ? p.periods : ["mes", "trimestre", "ano"]);
+    setPermFontSize(String(p.font_size ?? 14));
     setPermModal(true);
   };
 
   const handleSavePerm = async () => {
     if (!permTitle.trim()) { alert("Nome obrigatório"); return; }
     setPermSaving(true);
+    const fs = parseInt(permFontSize) || 14;
     if (permEdit) {
-      await supabase.from("market_permissions").update({ title: permTitle.trim(), icon: permIcon, section_type: permSectionType }).eq("id", permEdit.id);
+      await supabase.from("market_permissions").update({
+        title: permTitle.trim(), icon: permIcon, section_type: permSectionType,
+        periods: permPeriods, font_size: fs,
+      }).eq("id", permEdit.id);
     } else {
       const slug = toSlug(permTitle.trim()) || `mp_${Date.now()}`;
       const maxOrder = permissions.reduce((m, p) => Math.max(m, p.sort_order ?? 0), -1);
-      await supabase.from("market_permissions").insert({ id: slug, title: permTitle.trim(), icon: permIcon, section_type: permSectionType, sort_order: maxOrder + 1 });
+      await supabase.from("market_permissions").insert({
+        id: slug, title: permTitle.trim(), icon: permIcon, section_type: permSectionType,
+        sort_order: maxOrder + 1, periods: permPeriods, font_size: fs,
+      });
     }
     setPermSaving(false);
     setPermModal(false);
@@ -719,21 +738,32 @@ export default function AdminSlidesMercado() {
               <div style={{ textAlign: "center", padding: 60, color: "#aaa" }}>Nenhuma categoria configurada.</div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {permissions.map(p => (
-                  <div key={p.id} style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", gap: 16 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: `${GOLD}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, color: GOLD, flexShrink: 0 }}>
-                      📊
+                {permissions.map(p => {
+                  const periods = p.periods && p.periods.length > 0 ? p.periods : ALL_PERIODS;
+                  return (
+                    <div key={p.id} style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", gap: 16 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: `${GOLD}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, color: GOLD, flexShrink: 0 }}>
+                        📊
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{p.title}</div>
+                        <div style={{ fontSize: 12, color: "#8a93a2", marginBottom: 4 }}>ID: {p.id} · Tipo: {p.section_type} · Ícone: {p.icon}</div>
+                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" as const }}>
+                          {periods.map(pd => (
+                            <span key={pd} style={{ fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 4, backgroundColor: `${GOLD}15`, color: GOLD }}>{PERIOD_LABELS[pd] ?? pd}</span>
+                          ))}
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 4, backgroundColor: "#f0f4ff", color: "#4f46e5" }}>
+                            {p.font_size ?? 14}px
+                          </span>
+                        </div>
+                      </div>
+                      <button onClick={() => openEditPerm(p)} style={{ ...chip(""), fontSize: 12 }}>✏️ Editar</button>
+                      <button onClick={() => handleDeletePerm(p)} disabled={deletingPermId === p.id} style={btnDanger}>
+                        {deletingPermId === p.id ? "..." : "🗑"}
+                      </button>
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{p.title}</div>
-                      <div style={{ fontSize: 12, color: "#8a93a2" }}>ID: {p.id} · Tipo: {p.section_type} · Ícone: {p.icon}</div>
-                    </div>
-                    <button onClick={() => openEditPerm(p)} style={{ ...chip(""), fontSize: 12 }}>✏️ Editar</button>
-                    <button onClick={() => handleDeletePerm(p)} disabled={deletingPermId === p.id} style={btnDanger}>
-                      {deletingPermId === p.id ? "..." : "🗑"}
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -910,7 +940,7 @@ export default function AdminSlidesMercado() {
       {/* ── Modal: Categoria (Permissão) ── */}
       {permModal && (
         <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div style={{ backgroundColor: "#fff", borderRadius: 16, padding: 28, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+          <div style={{ backgroundColor: "#fff", borderRadius: 16, padding: 28, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <h2 style={{ fontSize: 17, fontWeight: 800, color: NAVY, margin: 0 }}>{permEdit ? "Editar Categoria" : "Nova Categoria"}</h2>
               <button onClick={() => setPermModal(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#aaa" }}>✕</button>
@@ -925,12 +955,60 @@ export default function AdminSlidesMercado() {
                 ))}
               </select>
             </div>
+
+            {/* Períodos visíveis */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#8a93a2", marginBottom: 8, textTransform: "uppercase" }}>Períodos disponíveis</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {ALL_PERIODS.map(pd => {
+                  const active = permPeriods.includes(pd);
+                  return (
+                    <div key={pd} onClick={() => setPermPeriods(prev => active ? prev.filter(x => x !== pd) : [...prev, pd])} style={{
+                      padding: "6px 16px", border: `1px solid ${active ? GOLD : "#e8eaed"}`,
+                      borderRadius: 20, cursor: "pointer",
+                      backgroundColor: active ? `${GOLD}12` : "transparent",
+                      fontSize: 13, fontWeight: active ? 700 : 400,
+                      color: active ? GOLD : "#666",
+                      userSelect: "none" as const,
+                    }}>
+                      {PERIOD_LABELS[pd]}
+                    </div>
+                  );
+                })}
+              </div>
+              {permPeriods.length === 0 && (
+                <p style={{ fontSize: 11, color: "#dc2626", marginTop: 4 }}>Selecione ao menos um período.</p>
+              )}
+            </div>
+
+            {/* Tamanho da fonte */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#8a93a2", marginBottom: 8, textTransform: "uppercase" }}>Tamanho da fonte</label>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>
+                {["11", "12", "13", "14", "15", "16"].map(sz => {
+                  const active = permFontSize === sz;
+                  return (
+                    <div key={sz} onClick={() => setPermFontSize(sz)} style={{
+                      padding: "5px 14px", border: `1px solid ${active ? "#4f46e5" : "#e8eaed"}`,
+                      borderRadius: 20, cursor: "pointer",
+                      backgroundColor: active ? "#4f46e512" : "transparent",
+                      fontSize: 12, fontWeight: active ? 700 : 400,
+                      color: active ? "#4f46e5" : "#666",
+                      userSelect: "none" as const,
+                    }}>
+                      {sz}px
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {!permEdit && (
               <p style={{ fontSize: 12, color: "#8a93a2", marginBottom: 16 }}>O ID será gerado automaticamente a partir do nome: <strong>{toSlug(permTitle) || "..."}</strong></p>
             )}
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => setPermModal(false)} style={btnSecondary}>Cancelar</button>
-              <button onClick={handleSavePerm} disabled={permSaving} style={{ ...btnPrimary, flex: 1, opacity: permSaving ? 0.6 : 1 }}>
+              <button onClick={handleSavePerm} disabled={permSaving || permPeriods.length === 0} style={{ ...btnPrimary, flex: 1, opacity: (permSaving || permPeriods.length === 0) ? 0.6 : 1 }}>
                 {permSaving ? "Salvando..." : permEdit ? "Atualizar" : "Criar"}
               </button>
             </div>

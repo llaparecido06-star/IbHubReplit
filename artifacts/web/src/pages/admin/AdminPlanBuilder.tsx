@@ -38,12 +38,15 @@ interface Plan {
   reveal_credits?: number | null;
 }
 
+const PERIOD_LABELS: Record<string, string> = { mes: "Mês", trimestre: "Trim.", ano: "Ano" };
+
 interface MarketPermission {
   id: string;
   title: string;
   icon: string;
   sort_order: number;
   section_type: string;
+  periods?: string[];
 }
 
 interface ModalState {
@@ -148,7 +151,21 @@ export default function AdminPlanBuilder() {
     }));
   };
 
-  const toggleMarket = (mp: MarketPermission) => toggleFeature(`mercado:${mp.id}`);
+  const handleTogglePeriod = (mp: MarketPermission, pd: string) => {
+    setModal(prev => {
+      let features = [...prev.features];
+      // Migrate legacy key mercado:{id} → per-period keys on first interaction
+      if (features.includes(`mercado:${mp.id}`)) {
+        features = features.filter(f => f !== `mercado:${mp.id}`);
+        const available = mp.periods && mp.periods.length > 0 ? mp.periods : ["mes", "trimestre", "ano"];
+        for (const p of available) {
+          if (!features.includes(`mercado:${mp.id}:${p}`)) features.push(`mercado:${mp.id}:${p}`);
+        }
+      }
+      const key = `mercado:${mp.id}:${pd}`;
+      return { ...prev, features: features.includes(key) ? features.filter(f => f !== key) : [...features, key] };
+    });
+  };
 
   const handleToggleActive = async (plan: Plan) => {
     if (!confirm(`${plan.is_active ? "Desativar" : "Ativar"} plano "${plan.name}"?`)) return;
@@ -393,15 +410,35 @@ export default function AdminPlanBuilder() {
                   Nenhuma categoria de mercado cadastrada ainda. Crie em <strong>Mercado → Categorias</strong>.
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   {marketPerms.map(mp => {
-                    const key = `mercado:${mp.id}`;
-                    const active = modal.features.includes(key);
-                    return featureToggle(
-                      mp.title,
-                      active,
-                      () => toggleMarket(mp),
-                      "#10b981",
+                    const available = mp.periods && mp.periods.length > 0 ? mp.periods : ["mes", "trimestre", "ano"];
+                    return (
+                      <div key={mp.id}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 6 }}>{mp.title}</div>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>
+                          {available.map(pd => {
+                            const key = `mercado:${mp.id}:${pd}`;
+                            const legacyKey = `mercado:${mp.id}`;
+                            const active = modal.features.includes(key) || modal.features.includes(legacyKey);
+                            return (
+                              <div key={pd} onClick={() => handleTogglePeriod(mp, pd)} style={{
+                                padding: "5px 16px",
+                                border: `1px solid ${active ? "#10b981" : "#e8eaed"}`,
+                                borderRadius: 20,
+                                cursor: "pointer",
+                                backgroundColor: active ? "#10b98112" : "transparent",
+                                fontSize: 12,
+                                fontWeight: active ? 700 : 400,
+                                color: active ? "#10b981" : "#666",
+                                userSelect: "none" as const,
+                              }}>
+                                {PERIOD_LABELS[pd] ?? pd}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     );
                   })}
                 </div>

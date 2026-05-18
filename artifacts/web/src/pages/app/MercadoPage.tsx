@@ -31,29 +31,50 @@ type MercadoTab = "visao" | "idealbi" | "apresentacoes";
 
 // ─── Simple SVG charts ────────────────────────────────────────────────────────
 
+function fmtShort(v: number): string {
+  if (!isFinite(v) || isNaN(v)) return "–";
+  const abs = Math.abs(v);
+  if (abs >= 1_000_000_000) return `${(v / 1_000_000_000).toFixed(1)}B`;
+  if (abs >= 1_000_000)     return `${(v / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000)         return `${(v / 1_000).toFixed(0)}K`;
+  return v % 1 === 0 ? String(Math.round(v)) : v.toFixed(1);
+}
+
 function AreaChart({ data }: { data: MarketOverview["chart_area"] }) {
   const W = 520, H = 160;
-  const PL = 40, PR = 16, PT = 12, PB = 28;
+  const PL = 48, PR = 16, PT = 12, PB = 28;
   const CW = W - PL - PR;
   const CH = H - PT - PB;
   const n = data.labels.length;
 
-  const toX = (i: number) => PL + (i / Math.max(n - 1, 1)) * CW;
-  const toY = (v: number) => PT + (1 - v / 100) * CH;
+  // Dynamic scale from actual data
+  const allVals = [...data.exports, ...data.imports].filter(v => isFinite(v) && !isNaN(v));
+  const rawMax = allVals.length > 0 ? Math.max(...allVals) : 100;
+  const rawMin = allVals.length > 0 ? Math.min(...allVals) : 0;
+  const vPad   = (rawMax - rawMin) * 0.12 || rawMax * 0.12 || 10;
+  const minV   = Math.max(0, rawMin - vPad);
+  const maxV   = rawMax + vPad;
+  const range  = maxV - minV || 1;
 
-  const expPath = data.exports.map((v, i) => `${i === 0 ? "M" : "L"}${toX(i)},${toY(v)}`).join(" ");
-  const impPath = data.imports.map((v, i) => `${i === 0 ? "M" : "L"}${toX(i)},${toY(v)}`).join(" ");
-  const impArea = `${impPath} L${toX(n - 1)},${PT + CH} L${PL},${PT + CH} Z`;
+  const toX = (i: number) => PL + (n <= 1 ? CW / 2 : (i / (n - 1)) * CW);
+  const toY = (v: number) => PT + (1 - (v - minV) / range) * CH;
+
+  const NUM_Y = 5;
+  const yTicks = Array.from({ length: NUM_Y }, (_, i) => minV + (i / (NUM_Y - 1)) * (maxV - minV));
+
+  const expPath = data.exports.map((v, i) => `${i === 0 ? "M" : "L"}${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(" ");
+  const impPath = data.imports.map((v, i) => `${i === 0 ? "M" : "L"}${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(" ");
+  const impArea = `${impPath} L${toX(n - 1).toFixed(1)},${(PT + CH).toFixed(1)} L${PL},${(PT + CH).toFixed(1)} Z`;
 
   return (
     <div style={{ overflowX: "auto" }}>
       <svg width={W} height={H} style={{ display: "block" }}>
-        {data.yLabels.map((lbl, i) => {
-          const y = PT + (i / (data.yLabels.length - 1)) * CH;
+        {yTicks.map((tick, i) => {
+          const y = toY(tick);
           return (
-            <g key={lbl}>
+            <g key={i}>
               <line x1={PL} y1={y} x2={W - PR} y2={y} stroke="#e8eaed" strokeWidth={1} />
-              <text x={PL - 4} y={y + 4} fontSize={9} fill="#9ca3af" textAnchor="end">{lbl}</text>
+              <text x={PL - 4} y={y + 4} fontSize={9} fill="#9ca3af" textAnchor="end">{fmtShort(tick)}</text>
             </g>
           );
         })}
@@ -61,7 +82,7 @@ function AreaChart({ data }: { data: MarketOverview["chart_area"] }) {
         <path d={impPath} fill="none" stroke="#ef4444" strokeWidth={2} strokeLinecap="round" />
         <path d={expPath} fill="none" stroke={GOLD} strokeWidth={2} strokeLinecap="round" />
         {data.labels.map((lbl, i) => (
-          <text key={lbl} x={toX(i)} y={H - 4} fontSize={10} fill="#9ca3af" textAnchor="middle">{lbl}</text>
+          <text key={`xl-${i}`} x={toX(i)} y={H - 4} fontSize={10} fill="#9ca3af" textAnchor="middle">{lbl}</text>
         ))}
         {data.exports.map((v, i) => (
           <circle key={`exp-${i}`} cx={toX(i)} cy={toY(v)} r={4} fill={GOLD} />
@@ -86,29 +107,36 @@ function AreaChart({ data }: { data: MarketOverview["chart_area"] }) {
 
 function BarChart({ data }: { data: MarketOverview["chart_bar"] }) {
   const W = 520, H = 130;
-  const PL = 36, PR = 12, PT = 10, PB = 30;
+  const PL = 48, PR = 12, PT = 10, PB = 30;
   const CW = W - PL - PR;
   const CH = H - PT - PB;
   const n = data.values.length;
-  const barW = Math.min(60, (CW / n) * 0.6);
-  const gap = CW / n;
+  const barW = Math.min(60, (CW / Math.max(n, 1)) * 0.6);
+  const gap  = CW / Math.max(n, 1);
 
-  const xAt = (i: number) => PL + i * gap + (gap - barW) / 2;
-  const yTop = (v: number) => PT + (1 - v / 100) * CH;
-  const yH   = (v: number) => (v / 100) * CH;
+  // Dynamic scale from actual data
+  const safeVals = data.values.filter(v => isFinite(v) && !isNaN(v));
+  const maxV     = safeVals.length > 0 ? Math.max(...safeVals) * 1.1 : 100;
+
+  const xAt  = (i: number) => PL + i * gap + (gap - barW) / 2;
+  const yTop = (v: number) => PT + (1 - v / maxV) * CH;
+  const yH   = (v: number) => Math.max((v / maxV) * CH, 2);
+
+  const NUM_Y = 5;
+  const yTicks = Array.from({ length: NUM_Y }, (_, i) => (i / (NUM_Y - 1)) * maxV);
 
   return (
     <div style={{ overflowX: "auto" }}>
       <svg width={W} height={H} style={{ display: "block" }}>
-        {[0, 25, 50, 75, 100].map((v) => (
-          <g key={v}>
-            <line x1={PL} y1={yTop(v)} x2={W - PR} y2={yTop(v)} stroke="#e8eaed" strokeWidth={1} />
-            <text x={PL - 4} y={yTop(v) + 4} fontSize={9} fill="#9ca3af" textAnchor="end">{v}</text>
+        {yTicks.map((tick, i) => (
+          <g key={i}>
+            <line x1={PL} y1={yTop(tick)} x2={W - PR} y2={yTop(tick)} stroke="#e8eaed" strokeWidth={1} />
+            <text x={PL - 4} y={yTop(tick) + 4} fontSize={9} fill="#9ca3af" textAnchor="end">{fmtShort(tick)}</text>
           </g>
         ))}
         {data.values.map((v, i) => (
           <g key={i}>
-            <rect x={xAt(i)} y={yTop(v)} width={barW} height={Math.max(yH(v), 2)} fill={GOLD} rx={4} />
+            <rect x={xAt(i)} y={yTop(v)} width={barW} height={yH(v)} fill={GOLD} rx={4} />
             <text x={xAt(i) + barW / 2} y={H - 6} fontSize={10} fill="#9ca3af" textAnchor="middle">{data.labels[i]}</text>
           </g>
         ))}
@@ -2785,7 +2813,8 @@ export default function MercadoPage() {
   }, [period, mainTab]);
 
   const isAdmin = profile?.is_admin ?? false;
-  const canMarket = (key: string) => isAdmin || hasFeature(`mercado:${key}`);
+  // Legacy full-access key OR period-specific key
+  const canMarket = (key: string) => isAdmin || hasFeature(`mercado:${key}`) || hasFeature(`mercado:${key}:${period}`);
 
   /* ── Tab / Period definitions ── */
   const PERIODS: { key: Period; label: string }[] = [
