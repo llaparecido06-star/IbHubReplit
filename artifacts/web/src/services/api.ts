@@ -2766,7 +2766,17 @@ export const MARKET_FALLBACK: Record<Period, MarketOverview> = {
 };
 
 export async function fetchMarketOverview(period: Period): Promise<MarketOverview> {
-  return MARKET_FALLBACK[period];
+  try {
+    const { data, error } = await supabase
+      .from("market_overview")
+      .select("*")
+      .eq("period", period)
+      .single();
+    if (error || !data) return MARKET_FALLBACK[period];
+    return data as unknown as MarketOverview;
+  } catch {
+    return MARKET_FALLBACK[period];
+  }
 }
 
 // ─── Groups ───────────────────────────────────────────────────────────────────
