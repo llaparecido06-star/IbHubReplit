@@ -3022,8 +3022,9 @@ export default function MercadoScreen() {
   useEffect(() => { loadPeriod(period); }, [period, loadPeriod]);
 
   const can = useCallback((key: string): boolean => {
-    return hasFeature(`mercado:${key}`);
-  }, [hasFeature]);
+    // Legacy full-access key (no period suffix) OR period-specific key
+    return hasFeature(`mercado:${key}`) || hasFeature(`mercado:${key}:${period}`);
+  }, [hasFeature, period]);
 
   const periods: { key: Period; label: string }[] = [
     { key: "mes",       label: t("mercado_screen.period_mes")       },

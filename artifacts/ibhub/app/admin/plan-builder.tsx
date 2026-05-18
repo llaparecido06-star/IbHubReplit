@@ -90,6 +90,8 @@ function toSlug(s: string): string {
 }
 
 // ─── Plan Modal ────────────────────────────────────────────────────────────────
+const PERIOD_LABELS: Record<string, string> = { mes: "Mês", trimestre: "Trim.", ano: "Ano" };
+
 interface PlanModalProps {
   visible: boolean;
   isNew: boolean;
@@ -100,7 +102,7 @@ interface PlanModalProps {
   loadingMp: boolean;
   onChange: (field: keyof ModalState, value: any) => void;
   onToggleFeature: (f: string) => void;
-  onToggleMarket: (mp: API.MarketPermission) => void;
+  onTogglePeriod: (mp: API.MarketPermission, period: string) => void;
   onSave: () => void;
   onClose: () => void;
 }
@@ -108,7 +110,7 @@ interface PlanModalProps {
 const PlanModal = memo(({
   visible, isNew, editPlan, state, saving,
   marketPerms, loadingMp,
-  onChange, onToggleFeature, onToggleMarket,
+  onChange, onToggleFeature, onTogglePeriod,
   onSave, onClose,
 }: PlanModalProps) => {
   const colors = useColors();
@@ -261,25 +263,58 @@ const PlanModal = memo(({
 
             {/* ── Dados de Mercado ── */}
             <Section label="Dados de Mercado (Ideal.BI Feed)">
+              <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: -4 }}>
+                Selecione quais períodos cada seção estará disponível para o plano.
+              </Text>
               {loadingMp ? (
                 <ActivityIndicator size="small" color={colors.gold} />
               ) : marketPerms.length === 0 ? (
                 <Text style={{ fontSize: 13, color: colors.mutedForeground }}>Nenhuma permissão de mercado cadastrada ainda.</Text>
               ) : (
-                <View style={{ gap: 6 }}>
+                <View style={{ gap: 8 }}>
                   {marketPerms.map((mp) => {
-                    const key = `mercado:${mp.id}`;
-                    const active = state.features.includes(key);
+                    const sectionPeriods = mp.periods ?? ["mes", "trimestre", "ano"];
+                    const activePeriods = sectionPeriods.filter(pd =>
+                      state.features.includes(`mercado:${mp.id}:${pd}`) || state.features.includes(`mercado:${mp.id}`)
+                    );
+                    const anyActive = activePeriods.length > 0;
                     return (
-                      <TouchableOpacity
+                      <View
                         key={mp.id}
-                        style={[s.toggleRow, { borderColor: active ? "#10b981" : colors.border, backgroundColor: active ? "#10b98108" : "transparent" }]}
-                        onPress={() => onToggleMarket(mp)}
+                        style={[s.toggleRow, { borderColor: anyActive ? "#10b981" : colors.border, backgroundColor: anyActive ? "#10b98108" : "transparent", flexDirection: "column", alignItems: "stretch", gap: 8 }]}
                       >
-                        <Feather name={active ? "check-square" : "square"} size={16} color={active ? "#10b981" : colors.mutedForeground} />
-                        <Feather name={mp.icon as any} size={14} color={active ? "#10b981" : colors.mutedForeground} />
-                        <Text style={{ fontSize: 13, color: active ? colors.navy : colors.foreground, flex: 1 }}>{mp.title}</Text>
-                      </TouchableOpacity>
+                        {/* Title row */}
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                          <Feather name={mp.icon as any} size={14} color={anyActive ? "#10b981" : colors.mutedForeground} />
+                          <Text style={{ fontSize: 13, fontWeight: "600", color: anyActive ? colors.navy : colors.foreground, flex: 1 }}>{mp.title}</Text>
+                          {anyActive && (
+                            <Text style={{ fontSize: 10, color: "#10b981", fontWeight: "700" }}>
+                              {activePeriods.length === sectionPeriods.length ? "Todos" : `${activePeriods.length}/${sectionPeriods.length}`}
+                            </Text>
+                          )}
+                        </View>
+                        {/* Period pills */}
+                        <View style={{ flexDirection: "row", gap: 6 }}>
+                          {sectionPeriods.map(pd => {
+                            const on = state.features.includes(`mercado:${mp.id}:${pd}`) || state.features.includes(`mercado:${mp.id}`);
+                            return (
+                              <TouchableOpacity
+                                key={pd}
+                                onPress={() => onTogglePeriod(mp, pd)}
+                                style={{
+                                  flex: 1, paddingVertical: 7, borderRadius: 8, borderWidth: 1.5, alignItems: "center",
+                                  borderColor: on ? "#10b981" : colors.border,
+                                  backgroundColor: on ? "#10b98115" : "#f9f9f9",
+                                }}
+                              >
+                                <Text style={{ fontSize: 12, fontWeight: on ? "700" : "400", color: on ? "#10b981" : colors.mutedForeground }}>
+                                  {PERIOD_LABELS[pd] ?? pd}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
                     );
                   })}
                 </View>
@@ -416,8 +451,31 @@ export default function AdminPlanBuilderScreen() {
       features: prev.features.includes(f) ? prev.features.filter(x => x !== f) : [...prev.features, f],
     }));
 
-  const handleToggleMarket = (mp: API.MarketPermission) =>
-    handleToggleFeature(`mercado:${mp.id}`);
+  // Period-aware toggle: mercado:{id}:{period}
+  // If the legacy key mercado:{id} (no period) exists, it is expanded to
+  // all section periods before toggling the requested period.
+  const handleTogglePeriod = (mp: API.MarketPermission, pd: string) => {
+    const legacyKey   = `mercado:${mp.id}`;
+    const pdKey       = `mercado:${mp.id}:${pd}`;
+    const allPeriods  = mp.periods ?? ["mes", "trimestre", "ano"];
+
+    setModalState(prev => {
+      let feats = [...prev.features];
+
+      // Migrate legacy key → period-specific keys on first interaction
+      if (feats.includes(legacyKey)) {
+        feats = feats.filter(f => f !== legacyKey);
+        allPeriods.forEach(p => {
+          const k = `mercado:${mp.id}:${p}`;
+          if (!feats.includes(k)) feats.push(k);
+        });
+      }
+
+      // Toggle the requested period
+      feats = feats.includes(pdKey) ? feats.filter(f => f !== pdKey) : [...feats, pdKey];
+      return { ...prev, features: feats };
+    });
+  };
 
   const buildPayload = () => ({
     name:                  modalState.name,
@@ -662,7 +720,7 @@ export default function AdminPlanBuilderScreen() {
         loadingMp={loadingMp}
         onChange={handleChange}
         onToggleFeature={handleToggleFeature}
-        onToggleMarket={handleToggleMarket}
+        onTogglePeriod={handleTogglePeriod}
         onSave={handleSaveEdit}
         onClose={() => setShowEditModal(false)}
       />
@@ -676,7 +734,7 @@ export default function AdminPlanBuilderScreen() {
         loadingMp={loadingMp}
         onChange={handleChange}
         onToggleFeature={handleToggleFeature}
-        onToggleMarket={handleToggleMarket}
+        onTogglePeriod={handleTogglePeriod}
         onSave={handleCreateNew}
         onClose={() => setShowNewModal(false)}
       />
