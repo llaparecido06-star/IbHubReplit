@@ -798,7 +798,7 @@ export default function AdminSlidesMercado() {
                           </>
                         ) : (
                           <>
-                            <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{perm.title}</div>
+                            <div style={{ fontSize: perm.font_size ?? 14, fontWeight: 800, color: NAVY }}>{perm.title}</div>
                             <button onClick={() => startEditSecTitle(perm)} title="Editar título" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px", color: "#aaa", fontSize: 13, lineHeight: 1 }}>✏️</button>
                             <button onClick={() => void deleteSection(perm)} title="Excluir seção" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px", color: "#dc2626", fontSize: 13, lineHeight: 1 }}>🗑</button>
                           </>
