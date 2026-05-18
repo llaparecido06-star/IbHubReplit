@@ -102,11 +102,21 @@ interface KpiSectionProps {
   kpis: MarketKPI[];
   onChange: (kpis: MarketKPI[]) => void;
   colors: ReturnType<typeof useColors>;
+  title?: string;
+  titleFontSize?: number;
+  onEdit?: () => void;
 }
-function KpiSection({ kpis, onChange, colors }: KpiSectionProps) {
+function KpiSection({ kpis, onChange, colors, title = "KPIs", titleFontSize = 14, onEdit }: KpiSectionProps) {
   return (
     <View style={sec.wrapper}>
-      <Text style={[sec.title, { color: colors.navy }]}>KPIs</Text>
+      <View style={sec.listHeader}>
+        <Text style={[sec.title, { color: colors.navy, fontSize: titleFontSize }]}>{title}</Text>
+        {onEdit && (
+          <TouchableOpacity onPress={onEdit} style={{ padding: 4, marginLeft: 6 }}>
+            <Feather name="settings" size={14} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        )}
+      </View>
       {kpis.map((kpi, i) => (
         <View key={i} style={[sec.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
           <Text style={[sec.cardLabel, { color: colors.mutedForeground }]}>{kpi.label || KPI_LABELS[i]}</Text>
@@ -181,11 +191,21 @@ interface ChartsSectionProps {
   onArea: (f: keyof ChartsSectionProps["area"], v: string) => void;
   onBar: (f: keyof ChartsSectionProps["bar"], v: string) => void;
   colors: ReturnType<typeof useColors>;
+  title?: string;
+  titleFontSize?: number;
+  onEdit?: () => void;
 }
-function ChartsSection({ area, bar, onArea, onBar, colors }: ChartsSectionProps) {
+function ChartsSection({ area, bar, onArea, onBar, colors, title = "Gráficos", titleFontSize = 14, onEdit }: ChartsSectionProps) {
   return (
     <View style={sec.wrapper}>
-      <Text style={[sec.title, { color: colors.navy }]}>Gráficos</Text>
+      <View style={sec.listHeader}>
+        <Text style={[sec.title, { color: colors.navy, fontSize: titleFontSize }]}>{title}</Text>
+        {onEdit && (
+          <TouchableOpacity onPress={onEdit} style={{ padding: 4, marginLeft: 6 }}>
+            <Feather name="settings" size={14} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        )}
+      </View>
 
       <View style={[sec.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
         <Text style={[sec.cardLabel, { color: colors.mutedForeground }]}>Área — Exportações/Importações</Text>
@@ -236,12 +256,21 @@ interface ListSectionProps<T> {
   renderItem: (item: T, index: number) => React.ReactNode;
   onAdd: () => void;
   colors: ReturnType<typeof useColors>;
+  titleFontSize?: number;
+  onEdit?: () => void;
 }
-function ListSection<T>({ title, items, renderItem, onAdd, colors }: ListSectionProps<T>) {
+function ListSection<T>({ title, items, renderItem, onAdd, colors, titleFontSize = 14, onEdit }: ListSectionProps<T>) {
   return (
     <View style={sec.wrapper}>
       <View style={sec.listHeader}>
-        <Text style={[sec.title, { color: colors.navy }]}>{title}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
+          <Text style={[sec.title, { color: colors.navy, fontSize: titleFontSize }]}>{title}</Text>
+          {onEdit && (
+            <TouchableOpacity onPress={onEdit} style={{ padding: 4 }}>
+              <Feather name="settings" size={14} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          )}
+        </View>
         <TouchableOpacity style={[sec.addBtn, { backgroundColor: colors.navy }]} onPress={onAdd}>
           <Feather name="plus" size={13} color="#fff" />
           <Text style={sec.addBtnText}>Adicionar</Text>
@@ -280,6 +309,8 @@ export default function AdminSlidesMercadoScreen() {
   const [mpTitle,       setMpTitle]       = useState("");
   const [mpIcon,        setMpIcon]        = useState("bar-chart-2");
   const [mpSectionType, setMpSectionType] = useState("lista");
+  const [mpPeriods,     setMpPeriods]     = useState<string[]>(["mes", "trimestre", "ano"]);
+  const [mpFontSize,    setMpFontSize]    = useState("14");
   const [mpSaving,      setMpSaving]      = useState(false);
   const [mpDeleting,    setMpDeleting]    = useState<string | null>(null);
 
@@ -415,6 +446,8 @@ export default function AdminSlidesMercadoScreen() {
     setMpTitle("");
     setMpIcon("bar-chart-2");
     setMpSectionType("lista");
+    setMpPeriods(["mes", "trimestre", "ano"]);
+    setMpFontSize("14");
     setMpModalOpen(true);
   };
 
@@ -423,18 +456,28 @@ export default function AdminSlidesMercadoScreen() {
     setMpTitle(mp.title);
     setMpIcon(mp.icon ?? "bar-chart-2");
     setMpSectionType(mp.section_type ?? "lista");
+    setMpPeriods(mp.periods ?? ["mes", "trimestre", "ano"]);
+    setMpFontSize(String(mp.font_size ?? 14));
     setMpModalOpen(true);
   };
 
   const handleSaveMp = async () => {
     if (!mpTitle.trim()) { Alert.alert("Erro", "Nome da categoria obrigatório."); return; }
+    if (mpPeriods.length === 0) { Alert.alert("Erro", "Selecione ao menos um período."); return; }
     setMpSaving(true);
+    const fs = parseInt(mpFontSize) || 14;
     let ok = false;
     if (mpEditTarget) {
-      ok = await updateMarketPermission(mpEditTarget.id, { title: mpTitle.trim(), icon: mpIcon, section_type: mpSectionType });
+      ok = await updateMarketPermission(mpEditTarget.id, {
+        title: mpTitle.trim(), icon: mpIcon, section_type: mpSectionType,
+        periods: mpPeriods, font_size: fs,
+      });
     } else {
       const slug = toSlug(mpTitle.trim());
-      ok = !!(await createMarketPermission({ id: slug || `mp_${Date.now()}`, title: mpTitle.trim(), icon: mpIcon, section_type: mpSectionType }));
+      ok = !!(await createMarketPermission({
+        id: slug || `mp_${Date.now()}`, title: mpTitle.trim(), icon: mpIcon,
+        section_type: mpSectionType, periods: mpPeriods, font_size: fs,
+      }));
     }
     setMpSaving(false);
     if (ok) { setMpModalOpen(false); loadMarketPerms(); }
@@ -765,109 +808,157 @@ export default function AdminSlidesMercadoScreen() {
 
             {loading ? (
               <ActivityIndicator color={colors.gold} style={{ marginTop: 40 }} />
-            ) : (
+            ) : (() => {
+              const secPerm = (id: string) => marketPerms.find(p => p.id === id);
+              const secVisible = (id: string) => {
+                const p = secPerm(id);
+                const ps = p?.periods ?? ["mes", "trimestre", "ano"];
+                return ps.includes(period);
+              };
+              return (
               <>
                 {/* KPIs */}
-                <KpiSection kpis={kpis} onChange={setKpis} colors={colors} />
+                {secVisible("kpis") && (() => {
+                  const p = secPerm("kpis");
+                  return (
+                    <KpiSection
+                      kpis={kpis} onChange={setKpis} colors={colors}
+                      title={p?.title ?? "KPIs"}
+                      titleFontSize={p?.font_size ?? 14}
+                      onEdit={() => p && openMpEdit(p)}
+                    />
+                  );
+                })()}
 
                 {/* Charts */}
-                <ChartsSection
-                  area={{ exports: areaExp, imports: areaImp, labels: areaLbl }}
-                  bar={{ values: barVal, labels: barLbl }}
-                  onArea={(f, v) => { if (f === "exports") setAreaExp(v); else if (f === "imports") setAreaImp(v); else setAreaLbl(v); }}
-                  onBar={(f, v) => { if (f === "values") setBarVal(v); else setBarLbl(v); }}
-                  colors={colors}
-                />
+                {secVisible("graficos") && (() => {
+                  const p = secPerm("graficos");
+                  return (
+                    <ChartsSection
+                      area={{ exports: areaExp, imports: areaImp, labels: areaLbl }}
+                      bar={{ values: barVal, labels: barLbl }}
+                      onArea={(f, v) => { if (f === "exports") setAreaExp(v); else if (f === "imports") setAreaImp(v); else setAreaLbl(v); }}
+                      onBar={(f, v) => { if (f === "values") setBarVal(v); else setBarLbl(v); }}
+                      colors={colors}
+                      title={p?.title ?? "Gráficos"}
+                      titleFontSize={p?.font_size ?? 14}
+                      onEdit={() => p && openMpEdit(p)}
+                    />
+                  );
+                })()}
 
                 {/* Tendências */}
-                <ListSection
-                  title="Tendências"
-                  items={tendencias}
-                  colors={colors}
-                  onAdd={() => openTendenciaModal(null)}
-                  renderItem={(item, i) => (
-                    <View key={i} style={[sec.row, sec.listItem, { backgroundColor: "#fff", borderColor: colors.border }]}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[sec.itemTitle, { color: colors.navy }]}>{item.title}</Text>
-                        <Text style={[sec.itemSub, { color: colors.mutedForeground }]} numberOfLines={1}>{item.desc}</Text>
-                        <Text style={[sec.itemBadge, { color: item.pos ? "#059669" : "#dc2626" }]}>
-                          {item.pos ? "+" : ""}{item.change}%
-                        </Text>
-                      </View>
-                      <View style={sec.itemActions}>
-                        <TouchableOpacity style={[sec.actionBtn, { backgroundColor: "#f3f4f6" }]} onPress={() => openTendenciaModal(i)}>
-                          <Feather name="edit-2" size={13} color={colors.navy} />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[sec.actionBtn, { backgroundColor: "#fef2f2" }]} onPress={() => deleteItem("tendencia", i)}>
-                          <Feather name="trash-2" size={13} color="#dc2626" />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  )}
-                />
+                {secVisible("tendencias") && (() => {
+                  const p = secPerm("tendencias");
+                  return (
+                    <ListSection
+                      title={p?.title ?? "Tendências"}
+                      titleFontSize={p?.font_size ?? 14}
+                      onEdit={() => p && openMpEdit(p)}
+                      items={tendencias}
+                      colors={colors}
+                      onAdd={() => openTendenciaModal(null)}
+                      renderItem={(item, i) => (
+                        <View key={i} style={[sec.row, sec.listItem, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[sec.itemTitle, { color: colors.navy }]}>{item.title}</Text>
+                            <Text style={[sec.itemSub, { color: colors.mutedForeground }]} numberOfLines={1}>{item.desc}</Text>
+                            <Text style={[sec.itemBadge, { color: item.pos ? "#059669" : "#dc2626" }]}>
+                              {item.pos ? "+" : ""}{item.change}%
+                            </Text>
+                          </View>
+                          <View style={sec.itemActions}>
+                            <TouchableOpacity style={[sec.actionBtn, { backgroundColor: "#f3f4f6" }]} onPress={() => openTendenciaModal(i)}>
+                              <Feather name="edit-2" size={13} color={colors.navy} />
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[sec.actionBtn, { backgroundColor: "#fef2f2" }]} onPress={() => deleteItem("tendencia", i)}>
+                              <Feather name="trash-2" size={13} color="#dc2626" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+                    />
+                  );
+                })()}
 
                 {/* Regiões */}
-                <ListSection
-                  title="Regiões Produtoras"
-                  items={regioes}
-                  colors={colors}
-                  onAdd={() => openRegiaoModal(null)}
-                  renderItem={(item, i) => (
-                    <View key={i} style={[sec.row, sec.listItem, { backgroundColor: "#fff", borderColor: colors.border }]}>
-                      <View style={[sec.rank, { backgroundColor: colors.gold + "20" }]}>
-                        <Text style={[sec.rankText, { color: colors.gold }]}>#{item.rank}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[sec.itemTitle, { color: colors.navy }]}>{item.name}</Text>
-                        <Text style={[sec.itemSub, { color: colors.mutedForeground }]}>{item.volume} · {item.pct}%</Text>
-                      </View>
-                      <View style={sec.itemActions}>
-                        <TouchableOpacity style={[sec.actionBtn, { backgroundColor: "#f3f4f6" }]} onPress={() => openRegiaoModal(i)}>
-                          <Feather name="edit-2" size={13} color={colors.navy} />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[sec.actionBtn, { backgroundColor: "#fef2f2" }]} onPress={() => deleteItem("regiao", i)}>
-                          <Feather name="trash-2" size={13} color="#dc2626" />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  )}
-                />
+                {secVisible("regioes") && (() => {
+                  const p = secPerm("regioes");
+                  return (
+                    <ListSection
+                      title={p?.title ?? "Regiões Produtoras"}
+                      titleFontSize={p?.font_size ?? 14}
+                      onEdit={() => p && openMpEdit(p)}
+                      items={regioes}
+                      colors={colors}
+                      onAdd={() => openRegiaoModal(null)}
+                      renderItem={(item, i) => (
+                        <View key={i} style={[sec.row, sec.listItem, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                          <View style={[sec.rank, { backgroundColor: colors.gold + "20" }]}>
+                            <Text style={[sec.rankText, { color: colors.gold }]}>#{item.rank}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[sec.itemTitle, { color: colors.navy }]}>{item.name}</Text>
+                            <Text style={[sec.itemSub, { color: colors.mutedForeground }]}>{item.volume} · {item.pct}%</Text>
+                          </View>
+                          <View style={sec.itemActions}>
+                            <TouchableOpacity style={[sec.actionBtn, { backgroundColor: "#f3f4f6" }]} onPress={() => openRegiaoModal(i)}>
+                              <Feather name="edit-2" size={13} color={colors.navy} />
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[sec.actionBtn, { backgroundColor: "#fef2f2" }]} onPress={() => deleteItem("regiao", i)}>
+                              <Feather name="trash-2" size={13} color="#dc2626" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+                    />
+                  );
+                })()}
 
                 {/* Variedades */}
-                <ListSection
-                  title="Variedades"
-                  items={variedades}
-                  colors={colors}
-                  onAdd={() => openVariedadeModal(null)}
-                  renderItem={(item, i) => (
-                    <View key={i} style={[sec.row, sec.listItem, { backgroundColor: "#fff", borderColor: colors.border }]}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[sec.itemTitle, { color: colors.navy }]}>{item.name}</Text>
-                        <Text style={[sec.itemSub, { color: colors.mutedForeground }]}>Volume: {item.volume}</Text>
-                        <Text style={[sec.itemBadge, { color: item.change >= 0 ? "#059669" : "#dc2626" }]}>
-                          {item.change >= 0 ? "+" : ""}{item.change}%
-                        </Text>
-                      </View>
-                      <View style={sec.itemActions}>
-                        <TouchableOpacity style={[sec.actionBtn, { backgroundColor: "#f3f4f6" }]} onPress={() => openVariedadeModal(i)}>
-                          <Feather name="edit-2" size={13} color={colors.navy} />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[sec.actionBtn, { backgroundColor: "#fef2f2" }]} onPress={() => deleteItem("variedade", i)}>
-                          <Feather name="trash-2" size={13} color="#dc2626" />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  )}
-                />
+                {secVisible("variedades") && (() => {
+                  const p = secPerm("variedades");
+                  return (
+                    <ListSection
+                      title={p?.title ?? "Variedades"}
+                      titleFontSize={p?.font_size ?? 14}
+                      onEdit={() => p && openMpEdit(p)}
+                      items={variedades}
+                      colors={colors}
+                      onAdd={() => openVariedadeModal(null)}
+                      renderItem={(item, i) => (
+                        <View key={i} style={[sec.row, sec.listItem, { backgroundColor: "#fff", borderColor: colors.border }]}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[sec.itemTitle, { color: colors.navy }]}>{item.name}</Text>
+                            <Text style={[sec.itemSub, { color: colors.mutedForeground }]}>Volume: {item.volume}</Text>
+                            <Text style={[sec.itemBadge, { color: item.change >= 0 ? "#059669" : "#dc2626" }]}>
+                              {item.change >= 0 ? "+" : ""}{item.change}%
+                            </Text>
+                          </View>
+                          <View style={sec.itemActions}>
+                            <TouchableOpacity style={[sec.actionBtn, { backgroundColor: "#f3f4f6" }]} onPress={() => openVariedadeModal(i)}>
+                              <Feather name="edit-2" size={13} color={colors.navy} />
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[sec.actionBtn, { backgroundColor: "#fef2f2" }]} onPress={() => deleteItem("variedade", i)}>
+                              <Feather name="trash-2" size={13} color="#dc2626" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+                    />
+                  );
+                })()}
 
                 {/* Custom category sections */}
-                {marketPerms.filter(p => !DEFAULT_PERM_IDS.has(p.id)).map(perm => {
+                {marketPerms.filter(p => !DEFAULT_PERM_IDS.has(p.id) && (p.periods ?? ["mes","trimestre","ano"]).includes(period)).map(perm => {
                   const items = (customData[perm.id] ?? []) as Record<string, unknown>[];
                   const stype = perm.section_type ?? "lista";
                   return (
                     <ListSection
                       key={perm.id}
                       title={perm.title}
+                      titleFontSize={perm.font_size ?? 14}
+                      onEdit={() => openMpEdit(perm)}
                       items={items}
                       colors={colors}
                       onAdd={() => openCustomModal(perm, null)}
@@ -934,7 +1025,8 @@ export default function AdminSlidesMercadoScreen() {
                   )}
                 </TouchableOpacity>
               </>
-            )}
+              );
+            })()}
           </>
         )}
 
@@ -974,6 +1066,20 @@ export default function AdminSlidesMercadoScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={[sec.itemTitle, { color: colors.navy }]}>{mp.title}</Text>
                     <Text style={[sec.itemSub, { color: colors.mutedForeground }]}>chave: mercado:{mp.id}</Text>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                      {(mp.periods ?? ["mes", "trimestre", "ano"]).map((pd) => (
+                        <View key={pd} style={{ backgroundColor: colors.navy + "12", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                          <Text style={{ fontSize: 10, color: colors.navy, fontWeight: "600" }}>
+                            {pd === "mes" ? "Mês" : pd === "trimestre" ? "Trimestre" : "Ano"}
+                          </Text>
+                        </View>
+                      ))}
+                      {mp.font_size && mp.font_size !== 14 && (
+                        <View style={{ backgroundColor: colors.gold + "20", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                          <Text style={{ fontSize: 10, color: colors.gold, fontWeight: "600" }}>{mp.font_size}px</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                   <View style={sec.itemActions}>
                     <TouchableOpacity style={[sec.actionBtn, { backgroundColor: "#f3f4f6" }]} onPress={() => openMpEdit(mp)}>
@@ -1066,6 +1172,55 @@ export default function AdminSlidesMercadoScreen() {
                       <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{st.hint}</Text>
                     </View>
                     {mpSectionType === st.key && <Feather name="check" size={14} color={colors.navy} />}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Períodos de visibilidade */}
+            <View style={m.field}>
+              <Text style={[m.label, { color: colors.foreground }]}>Visível nos períodos *</Text>
+              <Text style={{ fontSize: 11, color: colors.mutedForeground, marginBottom: 8 }}>
+                Esta seção só aparece nos períodos selecionados.
+              </Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {PERIODS.map(({ key, label }) => {
+                  const active = mpPeriods.includes(key);
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      onPress={() => setMpPeriods(prev =>
+                        prev.includes(key) ? prev.filter(p => p !== key) : [...prev, key]
+                      )}
+                      style={{
+                        flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, alignItems: "center",
+                        borderColor: active ? colors.navy : colors.border,
+                        backgroundColor: active ? colors.navy + "12" : "#f9f9f9",
+                      }}
+                    >
+                      {active && <Feather name="check" size={12} color={colors.navy} style={{ marginBottom: 2 }} />}
+                      <Text style={{ fontSize: 13, fontWeight: active ? "700" : "400", color: active ? colors.navy : colors.mutedForeground }}>{label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Tamanho da fonte do título */}
+            <View style={m.field}>
+              <Text style={[m.label, { color: colors.foreground }]}>Tamanho da fonte do título</Text>
+              <View style={{ flexDirection: "row", gap: 6, marginTop: 6 }}>
+                {["12", "13", "14", "15", "16", "18", "20"].map(sz => (
+                  <TouchableOpacity
+                    key={sz}
+                    onPress={() => setMpFontSize(sz)}
+                    style={{
+                      paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, borderWidth: 1.5,
+                      borderColor: mpFontSize === sz ? colors.navy : colors.border,
+                      backgroundColor: mpFontSize === sz ? colors.navy + "12" : "#f9f9f9",
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: mpFontSize === sz ? "700" : "400", color: mpFontSize === sz ? colors.navy : colors.mutedForeground }}>{sz}</Text>
                   </TouchableOpacity>
                 ))}
               </View>

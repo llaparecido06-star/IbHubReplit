@@ -129,6 +129,8 @@ export interface MarketPermission {
   icon: string;
   sort_order: number;
   section_type: string;
+  periods?: string[];
+  font_size?: number;
 }
 
 export async function fetchMarketPermissions(): Promise<MarketPermission[]> {
