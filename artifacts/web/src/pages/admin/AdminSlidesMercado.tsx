@@ -49,6 +49,7 @@ interface MarketOverview {
 
 const PERIOD_LABELS: Record<string, string> = { mes: "Mês", trimestre: "Trim.", ano: "Ano" };
 const ALL_PERIODS = ["mes", "trimestre", "ano"];
+const DEFAULT_PERM_IDS = new Set(["kpis", "graficos", "tendencias", "regioes", "variedades"]);
 
 interface MarketPermission {
   id: string;
@@ -221,6 +222,7 @@ export default function AdminSlidesMercado() {
   };
 
   // ── Dados de Mercado ──────────────────────────────────────────────────────
+
   const [overview, setOverview] = useState<MarketOverview | null>(null);
   const [loadingData, setLoadingData] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -240,12 +242,25 @@ export default function AdminSlidesMercado() {
   const [regioes, setRegioes] = useState<MarketRegiao[]>([]);
   const [variedades, setVariedades] = useState<MarketVariedade[]>([]);
 
+  // Custom sections (non-default permissions)
+  const [rawOverview, setRawOverview] = useState<Record<string, unknown> | null>(null);
+  const [customData, setCustomData] = useState<Record<string, unknown[]>>({});
+
+  // Section title inline editing
+  const [editingSecId, setEditingSecId] = useState<string | null>(null);
+  const [editingSecTitle, setEditingSecTitle] = useState("");
+  const [savingSecTitle, setSavingSecTitle] = useState(false);
+
+  // Custom item modal (non-default sections)
+  const [customModal, setCustomModal] = useState<{ permId: string; stype: string; idx: number | null } | null>(null);
+
   const loadOverview = useCallback(async (p: Period) => {
     setLoadingData(true);
     const { data } = await supabase.from("market_overview").select("*").eq("period", p).maybeSingle();
     if (data) {
       const d = data as MarketOverview;
       setOverview(d);
+      setRawOverview(d as Record<string, unknown>);
       setKpis(d.kpis ?? []);
       setAreaExp(joinNum(d.chart_area?.exports ?? []));
       setAreaImp(joinNum(d.chart_area?.imports ?? []));
@@ -257,6 +272,7 @@ export default function AdminSlidesMercado() {
       setVariedades(d.variedades ?? []);
     } else {
       setOverview(null);
+      setRawOverview(null);
       setKpis([]); setAreaExp(""); setAreaImp(""); setAreaLbl(""); setBarVal(""); setBarLbl("");
       setTendencias([]); setRegioes([]); setVariedades([]);
     }
@@ -264,6 +280,7 @@ export default function AdminSlidesMercado() {
   }, []);
 
   useEffect(() => { if (tab === "Dados de Mercado") void loadOverview(period); }, [tab, period, loadOverview]);
+
 
   const handleSaveOverview = async () => {
     setSaving(true);
@@ -275,12 +292,88 @@ export default function AdminSlidesMercado() {
       tendencias,
       regioes,
       variedades,
+      ...customData,
       updated_at: new Date().toISOString(),
     };
     const { error } = await supabase.from("market_overview").upsert(payload, { onConflict: "period" });
     setSaving(false);
     if (!error) { setSaved(true); setTimeout(() => setSaved(false), 2500); }
     else alert("Erro ao salvar: " + error.message);
+  };
+
+  // ── Section title editing ─────────────────────────────────────────────────
+  const startEditSecTitle = (perm: MarketPermission) => {
+    setEditingSecId(perm.id);
+    setEditingSecTitle(perm.title);
+  };
+
+  const saveSecTitle = async () => {
+    if (!editingSecId || !editingSecTitle.trim()) return;
+    setSavingSecTitle(true);
+    await supabase.from("market_permissions").update({ title: editingSecTitle.trim() }).eq("id", editingSecId);
+    setSavingSecTitle(false);
+    setEditingSecId(null);
+    void loadPermissions();
+  };
+
+  const deleteSection = async (perm: MarketPermission) => {
+    if (!confirm(`Excluir seção "${perm.title}"?\n\nOs dados desta seção serão removidos no próximo Salvar.`)) return;
+    await supabase.from("market_permissions").delete().eq("id", perm.id);
+    void loadPermissions();
+  };
+
+  // ── Custom section item modal ──────────────────────────────────────────────
+  const openCustomModal = (perm: MarketPermission, idx: number | null) => {
+    const stype = perm.section_type ?? "lista";
+    const items = (customData[perm.id] ?? []) as Record<string, unknown>[];
+    const item = idx !== null ? items[idx] : null;
+    if (stype === "lista") {
+      setMTitle((item?.title as string) ?? ""); setMDesc((item?.desc as string) ?? "");
+      setMChange(item?.change !== undefined ? String(item.change) : ""); setMPos((item?.pos as boolean) ?? true);
+    } else if (stype === "ranking") {
+      setMRank(item?.rank !== undefined ? String(item.rank) : String(items.length + 1));
+      setMName((item?.name as string) ?? ""); setMVolume((item?.volume as string) ?? ""); setMPct(item?.pct !== undefined ? String(item.pct) : "");
+    } else if (stype === "simples") {
+      setMVarName((item?.name as string) ?? ""); setMVarVol((item?.volume as string) ?? ""); setMVarChg(item?.change !== undefined ? String(item.change) : "");
+    } else if (stype === "kpi") {
+      setMLabel((item?.label as string) ?? ""); setMValue((item?.value as string) ?? "");
+      setMPeriodF((item?.period as string) ?? ""); setMChange(item?.change !== undefined ? String(item.change) : "");
+    } else if (stype === "grafico") {
+      const a = (item?.area as Record<string, unknown>) ?? {};
+      const b = (item?.bar as Record<string, unknown>) ?? {};
+      setAreaExp(joinNum((a?.exports as number[]) ?? [])); setAreaImp(joinNum((a?.imports as number[]) ?? []));
+      setAreaLbl(joinStr((a?.labels as string[]) ?? [])); setBarVal(joinNum((b?.values as number[]) ?? []));
+      setBarLbl(joinStr((b?.labels as string[]) ?? []));
+    }
+    setCustomModal({ permId: perm.id, stype, idx });
+  };
+
+  const saveCustomModalItem = () => {
+    if (!customModal) return;
+    const { permId, stype, idx } = customModal;
+    let newItem: Record<string, unknown>;
+    if (stype === "lista")   newItem = { title: mTitle, desc: mDesc, change: parseFloat(mChange) || 0, pos: mPos };
+    else if (stype === "ranking") {
+      const curr = customData[permId] ?? [];
+      newItem = { rank: parseInt(mRank) || curr.length + 1, name: mName, volume: mVolume, pct: parseFloat(mPct) || 0 };
+    } else if (stype === "simples") newItem = { name: mVarName, volume: mVarVol, change: parseFloat(mVarChg) || 0 };
+    else if (stype === "kpi")    newItem = { label: mLabel, value: mValue, period: mPeriodF, change: parseFloat(mChange) || 0 };
+    else if (stype === "grafico") newItem = {
+      area: { exports: numArr(areaExp), imports: numArr(areaImp), labels: strArr(areaLbl), yLabels: [] },
+      bar:  { values: numArr(barVal), labels: strArr(barLbl) },
+    };
+    else newItem = {};
+    setCustomData(prev => {
+      const curr = [...(prev[permId] ?? [])];
+      if (idx !== null) curr[idx] = newItem; else curr.push(newItem);
+      return { ...prev, [permId]: curr };
+    });
+    setCustomModal(null);
+  };
+
+  const deleteCustomItem = (permId: string, idx: number) => {
+    if (!confirm("Remover este item?")) return;
+    setCustomData(prev => ({ ...prev, [permId]: (prev[permId] ?? []).filter((_, i) => i !== idx) }));
   };
 
   // item modals
@@ -373,7 +466,19 @@ export default function AdminSlidesMercado() {
     setLoadingPerms(false);
   }, []);
 
-  useEffect(() => { if (tab === "Categorias") void loadPermissions(); }, [tab, loadPermissions]);
+  useEffect(() => { if (tab === "Categorias" || tab === "Dados de Mercado") void loadPermissions(); }, [tab, loadPermissions]);
+
+  // Populate customData from rawOverview whenever either changes
+  useEffect(() => {
+    const newCustom: Record<string, unknown[]> = {};
+    for (const perm of permissions) {
+      if (!DEFAULT_PERM_IDS.has(perm.id)) {
+        const val = rawOverview?.[perm.id];
+        newCustom[perm.id] = Array.isArray(val) ? val : [];
+      }
+    }
+    setCustomData(newCustom);
+  }, [rawOverview, permissions]);
 
   const openNewPerm = () => {
     setPermEdit(null);
@@ -636,6 +741,7 @@ export default function AdminSlidesMercado() {
         {/* ── Dados de Mercado ── */}
         {tab === "Dados de Mercado" && (
           <div>
+            {/* Top bar: period selector + save */}
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
               <div style={{ display: "flex", gap: 6 }}>
                 {PERIODS.map(p => (
@@ -646,12 +752,13 @@ export default function AdminSlidesMercado() {
               </div>
               <div style={{ flex: 1 }} />
               {saved && <span style={{ fontSize: 13, color: "#059669", fontWeight: 700 }}>✓ Salvo!</span>}
+              <button onClick={() => { openNewPerm(); }} style={{ ...btnSecondary, fontSize: 13 }}>+ Nova Seção</button>
               <button onClick={handleSaveOverview} disabled={saving || loadingData} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
                 {saving ? "Salvando..." : "Salvar alterações"}
               </button>
             </div>
 
-            {loadingData ? (
+            {loadingData || loadingPerms ? (
               <div style={{ textAlign: "center", padding: 60, color: "#aaa" }}>⏳ Carregando dados do período...</div>
             ) : (
               <div>
@@ -661,62 +768,131 @@ export default function AdminSlidesMercado() {
                   </div>
                 )}
 
-                {/* KPIs */}
-                {sectionCard(
-                  `KPIs (${kpis.length})`,
-                  <>
-                    {kpis.map((k, i) => renderItemRow("kpi", `${k.label}: ${k.value}`, `Período: ${k.period} · Variação: ${k.change}%`, i))}
-                    {kpis.length === 0 && <p style={{ color: "#aaa", fontSize: 13, textAlign: "center", padding: 16 }}>Sem KPIs. Adicione abaixo.</p>}
-                  </>,
-                  <button onClick={() => openItemModal("kpi", null)} style={chip("")}>+ Adicionar KPI</button>
-                )}
+                {/* Render sections based on market_permissions order */}
+                {(permissions.length > 0 ? permissions : [
+                  { id: "kpis", title: "KPIs", icon: "activity", sort_order: 0, section_type: "kpi" },
+                  { id: "graficos", title: "Gráficos", icon: "bar-chart-2", sort_order: 1, section_type: "grafico" },
+                  { id: "tendencias", title: "Tendências", icon: "trending-up", sort_order: 2, section_type: "lista" },
+                  { id: "regioes", title: "Regiões", icon: "map-pin", sort_order: 3, section_type: "ranking" },
+                  { id: "variedades", title: "Variedades", icon: "layers", sort_order: 4, section_type: "simples" },
+                ] as MarketPermission[]).map(perm => {
+                  const isDefault = DEFAULT_PERM_IDS.has(perm.id);
 
-                {/* Gráficos */}
-                {sectionCard("Gráficos", (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-                    <div>
-                      <p style={{ fontSize: 12, fontWeight: 700, color: "#8a93a2", marginBottom: 10 }}>ÁREA — Exportações / Importações (separados por vírgula)</p>
-                      {inp("Exportações", areaExp, setAreaExp, { placeholder: "3.2, 3.5, 3.8..." })}
-                      {inp("Importações", areaImp, setAreaImp, { placeholder: "2.1, 2.4, 2.6..." })}
-                      {inp("Labels (meses)", areaLbl, setAreaLbl, { placeholder: "Jan, Fev, Mar..." })}
+                  // Section header (editable title + delete)
+                  const secHeader = (
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+                        {editingSecId === perm.id ? (
+                          <>
+                            <input
+                              value={editingSecTitle}
+                              onChange={e => setEditingSecTitle(e.target.value)}
+                              onKeyDown={e => { if (e.key === "Enter") void saveSecTitle(); if (e.key === "Escape") setEditingSecId(null); }}
+                              autoFocus
+                              style={{ flex: 1, padding: "5px 10px", border: `1px solid ${GOLD}`, borderRadius: 6, fontSize: 14, fontWeight: 700, color: NAVY, outline: "none" }}
+                            />
+                            <button onClick={() => void saveSecTitle()} disabled={savingSecTitle} style={{ padding: "5px 12px", backgroundColor: GOLD, color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>
+                              {savingSecTitle ? "..." : "✓"}
+                            </button>
+                            <button onClick={() => setEditingSecId(null)} style={{ padding: "5px 10px", backgroundColor: "#f3f4f6", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>✕</button>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{perm.title}</div>
+                            <button onClick={() => startEditSecTitle(perm)} title="Editar título" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px", color: "#aaa", fontSize: 13, lineHeight: 1 }}>✏️</button>
+                            <button onClick={() => void deleteSection(perm)} title="Excluir seção" style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px", color: "#dc2626", fontSize: 13, lineHeight: 1 }}>🗑</button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <p style={{ fontSize: 12, fontWeight: 700, color: "#8a93a2", marginBottom: 10 }}>BARRAS — Produção Nacional</p>
-                      {inp("Valores", barVal, setBarVal, { placeholder: "320, 290, 345, 310" })}
-                      {inp("Labels", barLbl, setBarLbl, { placeholder: "Q1, Q2, Q3, Q4" })}
+                  );
+
+                  // Default section content
+                  if (isDefault) {
+                    if (perm.id === "kpis") return (
+                      <div key={perm.id} style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 14, padding: 20, marginBottom: 16 }}>
+                        {secHeader}
+                        {kpis.map((k, i) => renderItemRow("kpi", `${k.label}: ${k.value}`, `Período: ${k.period} · Variação: ${k.change}%`, i))}
+                        {kpis.length === 0 && <p style={{ color: "#aaa", fontSize: 13, textAlign: "center", padding: 16 }}>Sem KPIs.</p>}
+                        <div style={{ marginTop: 8 }}><button onClick={() => openItemModal("kpi", null)} style={chip("")}>+ Adicionar KPI</button></div>
+                      </div>
+                    );
+                    if (perm.id === "graficos") return (
+                      <div key={perm.id} style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 14, padding: 20, marginBottom: 16 }}>
+                        {secHeader}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                          <div>
+                            <p style={{ fontSize: 12, fontWeight: 700, color: "#8a93a2", marginBottom: 10 }}>ÁREA — Exportações / Importações (separados por vírgula)</p>
+                            {inp("Exportações", areaExp, setAreaExp, { placeholder: "3.2, 3.5, 3.8..." })}
+                            {inp("Importações", areaImp, setAreaImp, { placeholder: "2.1, 2.4, 2.6..." })}
+                            {inp("Labels (meses)", areaLbl, setAreaLbl, { placeholder: "Jan, Fev, Mar..." })}
+                          </div>
+                          <div>
+                            <p style={{ fontSize: 12, fontWeight: 700, color: "#8a93a2", marginBottom: 10 }}>BARRAS — Produção Nacional</p>
+                            {inp("Valores", barVal, setBarVal, { placeholder: "320, 290, 345, 310" })}
+                            {inp("Labels", barLbl, setBarLbl, { placeholder: "Q1, Q2, Q3, Q4" })}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                    if (perm.id === "tendencias") return (
+                      <div key={perm.id} style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 14, padding: 20, marginBottom: 16 }}>
+                        {secHeader}
+                        {tendencias.map((t, i) => renderItemRow("tendencia", t.title, `${t.pos ? "▲" : "▼"} ${t.change}% · ${t.desc}`, i))}
+                        {tendencias.length === 0 && <p style={{ color: "#aaa", fontSize: 13, textAlign: "center", padding: 16 }}>Sem tendências.</p>}
+                        <div style={{ marginTop: 8 }}><button onClick={() => openItemModal("tendencia", null)} style={chip("")}>+ Adicionar</button></div>
+                      </div>
+                    );
+                    if (perm.id === "regioes") return (
+                      <div key={perm.id} style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 14, padding: 20, marginBottom: 16 }}>
+                        {secHeader}
+                        {regioes.map((r, i) => renderItemRow("regiao", `${r.rank}. ${r.name}`, `Volume: ${r.volume} · ${r.pct}%`, i))}
+                        {regioes.length === 0 && <p style={{ color: "#aaa", fontSize: 13, textAlign: "center", padding: 16 }}>Sem regiões.</p>}
+                        <div style={{ marginTop: 8 }}><button onClick={() => openItemModal("regiao", null)} style={chip("")}>+ Adicionar</button></div>
+                      </div>
+                    );
+                    if (perm.id === "variedades") return (
+                      <div key={perm.id} style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 14, padding: 20, marginBottom: 16 }}>
+                        {secHeader}
+                        {variedades.map((v, i) => renderItemRow("variedade", v.name, `Volume: ${v.volume} · ${v.change > 0 ? "+" : ""}${v.change}%`, i))}
+                        {variedades.length === 0 && <p style={{ color: "#aaa", fontSize: 13, textAlign: "center", padding: 16 }}>Sem variedades.</p>}
+                        <div style={{ marginTop: 8 }}><button onClick={() => openItemModal("variedade", null)} style={chip("")}>+ Adicionar</button></div>
+                      </div>
+                    );
+                    return null;
+                  }
+
+                  // Custom section content
+                  const items = (customData[perm.id] ?? []) as Record<string, unknown>[];
+                  const stype = perm.section_type ?? "lista";
+                  return (
+                    <div key={perm.id} style={{ backgroundColor: "#fff", border: `1px solid ${GOLD}30`, borderRadius: 14, padding: 20, marginBottom: 16 }}>
+                      {secHeader}
+                      {items.length === 0 && <p style={{ color: "#aaa", fontSize: 13, textAlign: "center", padding: 16 }}>Nenhum item ainda.</p>}
+                      {items.map((item, i) => {
+                        let label = "", sub = "";
+                        if (stype === "lista")   { label = (item.title as string) ?? ""; sub = `${(item.pos as boolean) ? "▲" : "▼"} ${item.change}% · ${item.desc ?? ""}`; }
+                        else if (stype === "ranking") { label = `${item.rank}. ${item.name}`; sub = `Volume: ${item.volume} · ${item.pct}%`; }
+                        else if (stype === "simples") { label = (item.name as string) ?? ""; sub = `Volume: ${item.volume} · ${(item.change as number) > 0 ? "+" : ""}${item.change}%`; }
+                        else if (stype === "kpi")   { label = `${item.label}: ${item.value}`; sub = `${item.period} · ${item.change}%`; }
+                        else if (stype === "grafico") { label = "Gráfico configurado"; sub = "Dados de área e barras"; }
+                        return (
+                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", backgroundColor: "#fafbfc", border: "1px solid #e8eaed", borderRadius: 9, marginBottom: 6 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
+                              {sub && <div style={{ fontSize: 11, color: "#8a93a2" }}>{sub}</div>}
+                            </div>
+                            <button onClick={() => openCustomModal(perm, i)} style={{ ...chip(""), fontSize: 11 }}>Editar</button>
+                            <button onClick={() => deleteCustomItem(perm.id, i)} style={btnDanger}>🗑</button>
+                          </div>
+                        );
+                      })}
+                      <div style={{ marginTop: 8 }}>
+                        <button onClick={() => openCustomModal(perm, null)} style={chip("")}>+ Adicionar item</button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-
-                {/* Tendências */}
-                {sectionCard(
-                  `Tendências (${tendencias.length})`,
-                  <>
-                    {tendencias.map((t, i) => renderItemRow("tendencia", t.title, `${t.pos ? "▲" : "▼"} ${t.change}% · ${t.desc}`, i))}
-                    {tendencias.length === 0 && <p style={{ color: "#aaa", fontSize: 13, textAlign: "center", padding: 16 }}>Sem tendências.</p>}
-                  </>,
-                  <button onClick={() => openItemModal("tendencia", null)} style={chip("")}>+ Adicionar</button>
-                )}
-
-                {/* Regiões */}
-                {sectionCard(
-                  `Regiões (${regioes.length})`,
-                  <>
-                    {regioes.map((r, i) => renderItemRow("regiao", `${r.rank}. ${r.name}`, `Volume: ${r.volume} · ${r.pct}%`, i))}
-                    {regioes.length === 0 && <p style={{ color: "#aaa", fontSize: 13, textAlign: "center", padding: 16 }}>Sem regiões.</p>}
-                  </>,
-                  <button onClick={() => openItemModal("regiao", null)} style={chip("")}>+ Adicionar</button>
-                )}
-
-                {/* Variedades */}
-                {sectionCard(
-                  `Variedades (${variedades.length})`,
-                  <>
-                    {variedades.map((v, i) => renderItemRow("variedade", v.name, `Volume: ${v.volume} · ${v.change > 0 ? "+" : ""}${v.change}%`, i))}
-                    {variedades.length === 0 && <p style={{ color: "#aaa", fontSize: 13, textAlign: "center", padding: 16 }}>Sem variedades.</p>}
-                  </>,
-                  <button onClick={() => openItemModal("variedade", null)} style={chip("")}>+ Adicionar</button>
-                )}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -882,6 +1058,78 @@ export default function AdminSlidesMercado() {
           </div>
         </div>
       )}
+
+      {/* ── Modal: Item de Seção Customizada ── */}
+      {customModal && (() => {
+        const { stype } = customModal;
+        const isEdit = customModal.idx !== null;
+        const typeLabel = stype === "lista" ? "Tendência" : stype === "ranking" ? "Região" : stype === "simples" ? "Variedade" : stype === "kpi" ? "KPI" : "Gráfico";
+        return (
+          <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+            <div style={{ backgroundColor: "#fff", borderRadius: 16, padding: 28, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                <h2 style={{ fontSize: 17, fontWeight: 800, color: NAVY, margin: 0 }}>{isEdit ? "Editar" : "Adicionar"} {typeLabel}</h2>
+                <button onClick={() => setCustomModal(null)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#aaa" }}>✕</button>
+              </div>
+
+              {stype === "kpi" && <>
+                {inp("Label", mLabel, setMLabel, { placeholder: "Ex: Exportação" })}
+                {inp("Valor", mValue, setMValue, { placeholder: "Ex: US$ 3.8M" })}
+                {inp("Período", mPeriodF, setMPeriodF, { placeholder: "Ex: Mar/2026" })}
+                {inp("Variação (%)", mChange, setMChange, { placeholder: "Ex: 9.2", type: "number" })}
+              </>}
+
+              {stype === "lista" && <>
+                {inp("Título", mTitle, setMTitle, { placeholder: "Ex: Alta do vinho natural" })}
+                {inp("Descrição", mDesc, setMDesc, { placeholder: "Contexto...", multiline: true })}
+                {inp("Variação (%)", mChange, setMChange, { placeholder: "Ex: 12.3", type: "number" })}
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                    <input type="checkbox" checked={mPos} onChange={e => setMPos(e.target.checked)} style={{ accentColor: GOLD }} />
+                    <span style={{ fontSize: 14, color: NAVY }}>Tendência positiva (▲)</span>
+                  </label>
+                </div>
+              </>}
+
+              {stype === "ranking" && <>
+                {inp("Posição (rank)", mRank, setMRank, { type: "number" })}
+                {inp("Nome", mName, setMName, { placeholder: "Ex: São Paulo" })}
+                {inp("Volume", mVolume, setMVolume, { placeholder: "Ex: 12.4M L" })}
+                {inp("% do total", mPct, setMPct, { placeholder: "Ex: 28.5", type: "number" })}
+              </>}
+
+              {stype === "simples" && <>
+                {inp("Nome", mVarName, setMVarName, { placeholder: "Ex: Cabernet Sauvignon" })}
+                {inp("Volume", mVarVol, setMVarVol, { placeholder: "Ex: 8.3M L" })}
+                {inp("Variação (%)", mVarChg, setMVarChg, { placeholder: "Ex: 8.1", type: "number" })}
+              </>}
+
+              {stype === "grafico" && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                  <div>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: "#8a93a2", marginBottom: 8 }}>ÁREA</p>
+                    {inp("Exportações", areaExp, setAreaExp, { placeholder: "3.2, 3.5, 3.8..." })}
+                    {inp("Importações", areaImp, setAreaImp, { placeholder: "2.1, 2.4, 2.6..." })}
+                    {inp("Labels", areaLbl, setAreaLbl, { placeholder: "Jan, Fev, Mar..." })}
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: "#8a93a2", marginBottom: 8 }}>BARRAS</p>
+                    {inp("Valores", barVal, setBarVal, { placeholder: "320, 290, 345, 310" })}
+                    {inp("Labels", barLbl, setBarLbl, { placeholder: "Q1, Q2, Q3, Q4" })}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                <button onClick={() => setCustomModal(null)} style={btnSecondary}>Cancelar</button>
+                <button onClick={saveCustomModalItem} style={{ ...btnPrimary, flex: 1 }}>
+                  {isEdit ? "Atualizar" : "Adicionar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Modal: Item (KPI / Tendência / Região / Variedade) ── */}
       {itemModal && (
