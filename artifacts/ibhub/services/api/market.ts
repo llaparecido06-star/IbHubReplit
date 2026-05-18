@@ -227,11 +227,15 @@ export interface MarketChartArea {
   imports: number[];
   labels: string[];
   yLabels: string[];
+  title?: string;
+  subtitle?: string;
 }
 
 export interface MarketChartBar {
   values: number[];
   labels: string[];
+  title?: string;
+  subtitle?: string;
 }
 
 export interface MarketTendencia {

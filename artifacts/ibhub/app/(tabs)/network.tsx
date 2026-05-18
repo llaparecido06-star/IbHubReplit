@@ -344,7 +344,7 @@ function BarChart({ data }: { data: API.MarketChartBar }) {
   };
 
   return (
-    <Svg width={W} height={H}>
+    <Svg width={W} height={H} style={{ overflow: "visible" }}>
       {yTicks.map((tick, i) => {
         const y = toY(tick);
         return (
@@ -365,13 +365,17 @@ function BarChart({ data }: { data: API.MarketChartBar }) {
           </React.Fragment>
         );
       })}
-      {tooltip.visible && (
-        <React.Fragment>
-          <Rect x={Math.min(tooltip.x - 30, W - 72)} y={tooltip.y - 36} width={64} height={30} rx={6} fill="#1f2937" opacity={0.92} />
-          <SvgText x={Math.min(tooltip.x - 30, W - 72) + 32} y={tooltip.y - 22} fontSize={10} fill="#fff" textAnchor="middle" fontWeight="600">{tooltip.label}</SvgText>
-          <SvgText x={Math.min(tooltip.x - 30, W - 72) + 32} y={tooltip.y - 11} fontSize={11} fill="#f9fafb" textAnchor="middle" fontWeight="700">{tooltip.value}</SvgText>
-        </React.Fragment>
-      )}
+      {tooltip.visible && (() => {
+        const tx = Math.min(Math.max(tooltip.x - 30, 0), W - 72);
+        const ty = Math.max(tooltip.y - 36, 4);
+        return (
+          <React.Fragment>
+            <Rect x={tx} y={ty} width={64} height={30} rx={6} fill="#1f2937" opacity={0.92} />
+            <SvgText x={tx + 32} y={ty + 13} fontSize={10} fill="#fff" textAnchor="middle" fontWeight="600">{tooltip.label}</SvgText>
+            <SvgText x={tx + 32} y={ty + 25} fontSize={11} fill="#f9fafb" textAnchor="middle" fontWeight="700">{tooltip.value}</SvgText>
+          </React.Fragment>
+        );
+      })()}
     </Svg>
   );
 }
@@ -3107,7 +3111,7 @@ export default function MercadoScreen() {
                 <>
                   <View style={[styles.chartCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
                     <View style={styles.chartHeader}>
-                      <Text style={[styles.chartTitle, { color: colors.navy }]}>{t("mercado_screen.chart_area_title")}</Text>
+                      <Text style={[styles.chartTitle, { color: colors.navy }]}>{data.chart_area?.title || t("mercado_screen.chart_area_title")}</Text>
                     </View>
                     <AreaChart data={data.chart_area} />
                     <View style={styles.legend}>
@@ -3132,7 +3136,7 @@ export default function MercadoScreen() {
                   {/* Barras: Produção Nacional */}
                   <View style={[styles.chartCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
                     <View style={styles.chartHeader}>
-                      <Text style={[styles.chartTitle, { color: colors.navy }]}>{t("mercado_screen.chart_bar_title")}</Text>
+                      <Text style={[styles.chartTitle, { color: colors.navy }]}>{data.chart_bar?.title || t("mercado_screen.chart_bar_title")}</Text>
                     </View>
                     <BarChart data={data.chart_bar} />
                     <TouchableOpacity style={[styles.fonteBtn, { alignSelf: "flex-end" }]}>

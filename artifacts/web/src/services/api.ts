@@ -1959,8 +1959,10 @@ export interface MarketOverview {
     imports: number[];
     labels: string[];
     yLabels: string[];
+    title?: string;
+    subtitle?: string;
   };
-  chart_bar: { values: number[]; labels: string[] };
+  chart_bar: { values: number[]; labels: string[]; title?: string; subtitle?: string };
   tendencias: { title: string; desc: string; change: number; pos: boolean }[];
   regioes: { rank: number; name: string; volume: string; pct: number }[];
   variedades: { name: string; volume: string; change: number }[];

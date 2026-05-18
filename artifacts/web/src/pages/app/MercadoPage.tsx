@@ -2928,14 +2928,14 @@ export default function MercadoPage() {
             <div className="mercado-card" style={cardStyle()}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
                 <span style={{ fontSize: 15 }}>📈</span>
-                <h3 style={{ fontSize: 14, fontWeight: 700, color: NAVY, margin: 0 }}>Exportações × Importações</h3>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: NAVY, margin: 0 }}>{data.chart_area?.title || "Exportações × Importações"}</h3>
               </div>
               <AreaChart data={data.chart_area} />
             </div>
             <div className="mercado-card" style={cardStyle()}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
                 <span style={{ fontSize: 15 }}>📊</span>
-                <h3 style={{ fontSize: 14, fontWeight: 700, color: NAVY, margin: 0 }}>Produção Nacional (Índice)</h3>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: NAVY, margin: 0 }}>{data.chart_bar?.title || "Produção Nacional (Índice)"}</h3>
               </div>
               <BarChart data={data.chart_bar} />
             </div>

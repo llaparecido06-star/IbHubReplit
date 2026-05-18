@@ -176,6 +176,33 @@ function KpiSection({ kpis, onChange, colors, title = "KPIs", titleFontSize = 14
                 placeholder="Exportação"
               />
             </View>
+            <View style={sec.fieldHalf}>
+              <Text style={[sec.fieldLabel, { color: colors.foreground }]}>Fonte</Text>
+              <TextInput
+                style={[sec.input, { borderColor: colors.border }]}
+                value={kpi.source ?? ""}
+                onChangeText={(v) => {
+                  const updated = [...kpis];
+                  updated[i] = { ...kpi, source: v };
+                  onChange(updated);
+                }}
+                placeholder="IBRAVIN"
+              />
+            </View>
+          </View>
+          <View style={{ marginTop: 8 }}>
+            <Text style={[sec.fieldLabel, { color: colors.foreground }]}>Descrição</Text>
+            <TextInput
+              style={[sec.input, { borderColor: colors.border, height: 56 }]}
+              value={kpi.description ?? ""}
+              onChangeText={(v) => {
+                const updated = [...kpis];
+                updated[i] = { ...kpi, description: v };
+                onChange(updated);
+              }}
+              placeholder="Total exportado pelo Brasil em vinhos..."
+              multiline
+            />
           </View>
         </View>
       ))}
@@ -190,12 +217,16 @@ interface ChartsSectionProps {
   bar: { values: string; labels: string };
   onArea: (f: keyof ChartsSectionProps["area"], v: string) => void;
   onBar: (f: keyof ChartsSectionProps["bar"], v: string) => void;
+  areaTitle: string;
+  barTitle: string;
+  onAreaTitle: (v: string) => void;
+  onBarTitle: (v: string) => void;
   colors: ReturnType<typeof useColors>;
   title?: string;
   titleFontSize?: number;
   onEdit?: () => void;
 }
-function ChartsSection({ area, bar, onArea, onBar, colors, title = "Gráficos", titleFontSize = 14, onEdit }: ChartsSectionProps) {
+function ChartsSection({ area, bar, onArea, onBar, areaTitle, barTitle, onAreaTitle, onBarTitle, colors, title = "Gráficos", titleFontSize = 14, onEdit }: ChartsSectionProps) {
   return (
     <View style={sec.wrapper}>
       <View style={sec.listHeader}>
@@ -209,6 +240,15 @@ function ChartsSection({ area, bar, onArea, onBar, colors, title = "Gráficos", 
 
       <View style={[sec.card, { backgroundColor: "#fff", borderColor: colors.border }]}>
         <Text style={[sec.cardLabel, { color: colors.mutedForeground }]}>Área — Exportações/Importações</Text>
+        <View style={{ marginBottom: 8 }}>
+          <Text style={[sec.fieldLabel, { color: colors.foreground }]}>Título do Gráfico</Text>
+          <TextInput
+            style={[sec.input, { borderColor: "#c9a84c", fontWeight: "700" }]}
+            value={areaTitle}
+            onChangeText={onAreaTitle}
+            placeholder="Evolução de Exportações & Importações"
+          />
+        </View>
         <Text style={[sec.hint, { color: colors.mutedForeground }]}>Valores separados por vírgula, na mesma ordem dos labels.</Text>
         {(["exports", "imports", "labels"] as const).map((field) => (
           <View key={field} style={{ marginTop: 8 }}>
@@ -228,6 +268,15 @@ function ChartsSection({ area, bar, onArea, onBar, colors, title = "Gráficos", 
 
       <View style={[sec.card, { backgroundColor: "#fff", borderColor: colors.border, marginTop: 10 }]}>
         <Text style={[sec.cardLabel, { color: colors.mutedForeground }]}>Barras — Produção Nacional</Text>
+        <View style={{ marginBottom: 8 }}>
+          <Text style={[sec.fieldLabel, { color: colors.foreground }]}>Título do Gráfico</Text>
+          <TextInput
+            style={[sec.input, { borderColor: "#c9a84c", fontWeight: "700" }]}
+            value={barTitle}
+            onChangeText={onBarTitle}
+            placeholder="Produção Nacional por Período"
+          />
+        </View>
         <Text style={[sec.hint, { color: colors.mutedForeground }]}>Valores separados por vírgula.</Text>
         {(["values", "labels"] as const).map((field) => (
           <View key={field} style={{ marginTop: 8 }}>
@@ -394,8 +443,10 @@ export default function AdminSlidesMercadoScreen() {
   const [areaExp,    setAreaExp]     = useState("");
   const [areaImp,    setAreaImp]     = useState("");
   const [areaLbl,    setAreaLbl]     = useState("");
+  const [areaTitle,  setAreaTitle]   = useState("Evolução de Exportações & Importações");
   const [barVal,     setBarVal]      = useState("");
   const [barLbl,     setBarLbl]      = useState("");
+  const [barTitle,   setBarTitle]    = useState("Produção Nacional por Período");
   const [tendencias, setTendencias]  = useState<MarketTendencia[]>([]);
   const [regioes,    setRegioes]     = useState<MarketRegiao[]>([]);
   const [variedades, setVariedades]  = useState<MarketVariedade[]>([]);
@@ -507,8 +558,10 @@ export default function AdminSlidesMercadoScreen() {
       setAreaExp(joinNum(data.chart_area?.exports ?? []));
       setAreaImp(joinNum(data.chart_area?.imports ?? []));
       setAreaLbl(joinStr(data.chart_area?.labels  ?? []));
+      setAreaTitle(data.chart_area?.title ?? "Evolução de Exportações & Importações");
       setBarVal( joinNum(data.chart_bar?.values   ?? []));
       setBarLbl( joinStr(data.chart_bar?.labels   ?? []));
+      setBarTitle(data.chart_bar?.title ?? "Produção Nacional por Período");
       setTendencias(data.tendencias ?? []);
       setRegioes(data.regioes       ?? []);
       setVariedades(data.variedades ?? []);
@@ -528,10 +581,12 @@ export default function AdminSlidesMercadoScreen() {
       imports: numArr(areaImp),
       labels:  strArr(areaLbl),
       yLabels: [],
+      title: areaTitle,
     };
     const chart_bar: MarketChartBar = {
       values: numArr(barVal),
       labels: strArr(barLbl),
+      title: barTitle,
     };
     const customSaves: Record<string, unknown[]> = {};
     for (const [id, items] of Object.entries(customData)) {
@@ -839,6 +894,10 @@ export default function AdminSlidesMercadoScreen() {
                       bar={{ values: barVal, labels: barLbl }}
                       onArea={(f, v) => { if (f === "exports") setAreaExp(v); else if (f === "imports") setAreaImp(v); else setAreaLbl(v); }}
                       onBar={(f, v) => { if (f === "values") setBarVal(v); else setBarLbl(v); }}
+                      areaTitle={areaTitle}
+                      barTitle={barTitle}
+                      onAreaTitle={setAreaTitle}
+                      onBarTitle={setBarTitle}
                       colors={colors}
                       title={p?.title ?? "Gráficos"}
                       titleFontSize={p?.font_size ?? 14}
