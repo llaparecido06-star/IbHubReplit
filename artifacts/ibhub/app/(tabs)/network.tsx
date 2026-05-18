@@ -220,27 +220,50 @@ function NetworkMediaPreview({ uri }: { uri: string }) {
 
 // ─── Area Chart with Tooltips ─────────────────────────────────────────────────
 
+// Abbreviates large numbers for axis labels / tooltips
+function fmtShort(v: number): string {
+  if (!isFinite(v) || isNaN(v)) return "–";
+  const abs = Math.abs(v);
+  if (abs >= 1_000_000_000) return `${(v / 1_000_000_000).toFixed(1)}B`;
+  if (abs >= 1_000_000)     return `${(v / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000)         return `${(v / 1_000).toFixed(0)}K`;
+  return v % 1 === 0 ? String(Math.round(v)) : v.toFixed(1);
+}
+
 function AreaChart({ data }: { data: API.MarketChartArea }) {
   const W = 310, H = 140;
-  const padL = 36, padR = 12, padT = 12, padB = 24;
+  const padL = 44, padR = 12, padT = 12, padB = 24;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
   const n = data.labels.length;
   const [tooltip, setTooltip] = useState<TooltipState>({ visible: false, x: 0, y: 0, label: "", value: "" });
 
-  const toX = (i: number) => padL + (i / (n - 1)) * chartW;
-  const toY = (v: number) => padT + (1 - v / 100) * chartH;
+  // Compute scale dynamically from actual data values
+  const allVals = [...data.exports, ...data.imports].filter(v => isFinite(v) && !isNaN(v));
+  const rawMax  = allVals.length > 0 ? Math.max(...allVals) : 100;
+  const rawMin  = allVals.length > 0 ? Math.min(...allVals) : 0;
+  const vPad    = (rawMax - rawMin) * 0.12 || rawMax * 0.12 || 10;
+  const minV    = Math.max(0, rawMin - vPad);
+  const maxV    = rawMax + vPad;
+  const range   = maxV - minV || 1;
 
-  const exportsPath = data.exports.map((v, i) => `${i === 0 ? "M" : "L"}${toX(i)},${toY(v)}`).join(" ");
-  const importsPath = data.imports.map((v, i) => `${i === 0 ? "M" : "L"}${toX(i)},${toY(v)}`).join(" ");
-  const importsArea = `${importsPath} L${toX(n - 1)},${padT + chartH} L${padL},${padT + chartH} Z`;
+  const toX = (i: number) => padL + (n <= 1 ? chartW / 2 : (i / (n - 1)) * chartW);
+  const toY = (v: number) => padT + (1 - (v - minV) / range) * chartH;
+
+  // 5 evenly-spaced Y ticks from minV to maxV
+  const NUM_Y = 5;
+  const yTicks = Array.from({ length: NUM_Y }, (_, i) => minV + (i / (NUM_Y - 1)) * (maxV - minV));
+
+  const exportsPath = data.exports.map((v, i) => `${i === 0 ? "M" : "L"}${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(" ");
+  const importsPath = data.imports.map((v, i) => `${i === 0 ? "M" : "L"}${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(" ");
+  const importsArea = `${importsPath} L${toX(n - 1).toFixed(1)},${(padT + chartH).toFixed(1)} L${padL},${(padT + chartH).toFixed(1)} Z`;
 
   const handlePointPress = (series: "exports" | "imports", index: number) => {
     const val = series === "exports" ? data.exports[index] : data.imports[index];
     const seriesLabel = series === "exports" ? "Export." : "Import.";
     const px = toX(index);
     const py = toY(val);
-    setTooltip({ visible: true, x: px, y: py, label: `${seriesLabel} · ${data.labels[index]}`, value: `${val}M` });
+    setTooltip({ visible: true, x: px, y: py, label: `${seriesLabel} · ${data.labels[index]}`, value: fmtShort(val) });
     setTimeout(() => setTooltip(t => ({ ...t, visible: false })), 2500);
   };
 
@@ -252,12 +275,12 @@ function AreaChart({ data }: { data: API.MarketChartArea }) {
           <Stop offset="1" stopColor="#ef4444" stopOpacity="0.03" />
         </LinearGradient>
       </Defs>
-      {data.yLabels.map((lbl, i) => {
-        const y = padT + (i / (data.yLabels.length - 1)) * chartH;
+      {yTicks.map((tick, i) => {
+        const y = toY(tick);
         return (
-          <React.Fragment key={lbl}>
+          <React.Fragment key={i}>
             <Line x1={padL} y1={y} x2={W - padR} y2={y} stroke="#e5e7eb" strokeWidth={1} />
-            <SvgText x={padL - 4} y={y + 4} fontSize={9} fill="#9ca3af" textAnchor="end">{lbl}</SvgText>
+            <SvgText x={padL - 4} y={y + 4} fontSize={9} fill="#9ca3af" textAnchor="end">{fmtShort(tick)}</SvgText>
           </React.Fragment>
         );
       })}
@@ -265,56 +288,25 @@ function AreaChart({ data }: { data: API.MarketChartArea }) {
       <Path d={importsPath} fill="none" stroke="#ef4444" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
       <Path d={exportsPath} fill="none" stroke="#c9a84c" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
       {data.labels.map((lbl, i) => (
-        <SvgText key={lbl} x={toX(i)} y={H - 4} fontSize={10} fill="#9ca3af" textAnchor="middle">{lbl}</SvgText>
+        <SvgText key={`xl-${i}`} x={toX(i)} y={H - 4} fontSize={10} fill="#9ca3af" textAnchor="middle">{lbl}</SvgText>
       ))}
       {data.exports.map((_, i) => (
-        <Rect
-          key={`exp-${i}`}
-          x={toX(i) - 10} y={toY(data.exports[i]) - 10}
-          width={20} height={20}
-          fill="transparent"
-          onPress={() => handlePointPress("exports", i)}
-        />
+        <Rect key={`exp-hit-${i}`} x={toX(i) - 10} y={toY(data.exports[i]) - 10} width={20} height={20} fill="transparent" onPress={() => handlePointPress("exports", i)} />
       ))}
       {data.imports.map((_, i) => (
-        <Rect
-          key={`imp-${i}`}
-          x={toX(i) - 10} y={toY(data.imports[i]) - 10}
-          width={20} height={20}
-          fill="transparent"
-          onPress={() => handlePointPress("imports", i)}
-        />
+        <Rect key={`imp-hit-${i}`} x={toX(i) - 10} y={toY(data.imports[i]) - 10} width={20} height={20} fill="transparent" onPress={() => handlePointPress("imports", i)} />
       ))}
       {data.exports.map((v, i) => (
-        <React.Fragment key={`dot-exp-${i}`}>
-          <Rect x={toX(i) - 5} y={toY(v) - 5} width={10} height={10} rx={5} fill="#c9a84c" />
-        </React.Fragment>
+        <Rect key={`dot-exp-${i}`} x={toX(i) - 5} y={toY(v) - 5} width={10} height={10} rx={5} fill="#c9a84c" />
       ))}
       {data.imports.map((v, i) => (
-        <React.Fragment key={`dot-imp-${i}`}>
-          <Rect x={toX(i) - 5} y={toY(v) - 5} width={10} height={10} rx={5} fill="#ef4444" />
-        </React.Fragment>
+        <Rect key={`dot-imp-${i}`} x={toX(i) - 5} y={toY(v) - 5} width={10} height={10} rx={5} fill="#ef4444" />
       ))}
       {tooltip.visible && (
         <React.Fragment>
-          <Rect
-            x={Math.min(tooltip.x - 40, W - 92)}
-            y={tooltip.y - 38}
-            width={88} height={32}
-            rx={6}
-            fill="#1f2937"
-            opacity={0.92}
-          />
-          <SvgText
-            x={Math.min(tooltip.x - 40, W - 92) + 44}
-            y={tooltip.y - 22}
-            fontSize={10} fill="#fff" textAnchor="middle" fontWeight="600"
-          >{tooltip.label}</SvgText>
-          <SvgText
-            x={Math.min(tooltip.x - 40, W - 92) + 44}
-            y={tooltip.y - 10}
-            fontSize={11} fill="#f9fafb" textAnchor="middle" fontWeight="700"
-          >{tooltip.value}</SvgText>
+          <Rect x={Math.min(tooltip.x - 40, W - 92)} y={tooltip.y - 38} width={88} height={32} rx={6} fill="#1f2937" opacity={0.92} />
+          <SvgText x={Math.min(tooltip.x - 40, W - 92) + 44} y={tooltip.y - 22} fontSize={10} fill="#fff" textAnchor="middle" fontWeight="600">{tooltip.label}</SvgText>
+          <SvgText x={Math.min(tooltip.x - 40, W - 92) + 44} y={tooltip.y - 10} fontSize={11} fill="#f9fafb" textAnchor="middle" fontWeight="700">{tooltip.value}</SvgText>
         </React.Fragment>
       )}
     </Svg>
@@ -325,68 +317,59 @@ function AreaChart({ data }: { data: API.MarketChartArea }) {
 
 function BarChart({ data }: { data: API.MarketChartBar }) {
   const W = 310, H = 110;
-  const padL = 36, padR = 12, padT = 8, padB = 24;
+  const padL = 44, padR = 12, padT = 8, padB = 24;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
   const n = data.values.length;
-  const barW = (chartW / n) * 0.55;
-  const gap  = chartW / n;
-  const maxV = 100;
-  const yLabels = ["0", "25", "50", "75", "100"];
+  const barW = (chartW / Math.max(n, 1)) * 0.55;
+  const gap  = chartW / Math.max(n, 1);
   const [tooltip, setTooltip] = useState<TooltipState>({ visible: false, x: 0, y: 0, label: "", value: "" });
+
+  // Compute scale dynamically from actual data values
+  const safeVals = data.values.filter(v => isFinite(v) && !isNaN(v));
+  const maxV     = safeVals.length > 0 ? Math.max(...safeVals) * 1.1 : 100;
+
+  const toY = (v: number) => padT + (1 - v / maxV) * chartH;
+
+  // 5 evenly-spaced Y ticks from 0 to maxV
+  const NUM_Y = 5;
+  const yTicks = Array.from({ length: NUM_Y }, (_, i) => (i / (NUM_Y - 1)) * maxV);
 
   const handleBarPress = (index: number) => {
     const v = data.values[index];
     const x = padL + index * gap + (gap - barW) / 2 + barW / 2;
-    const y = padT + chartH - (v / maxV) * chartH;
-    setTooltip({ visible: true, x, y, label: data.labels[index], value: `${v}` });
+    const y = toY(v);
+    setTooltip({ visible: true, x, y, label: data.labels[index], value: fmtShort(v) });
     setTimeout(() => setTooltip(t => ({ ...t, visible: false })), 2500);
   };
 
   return (
     <Svg width={W} height={H}>
-      {yLabels.map((lbl, i) => {
-        const y = padT + (1 - Number(lbl) / maxV) * chartH;
+      {yTicks.map((tick, i) => {
+        const y = toY(tick);
         return (
-          <React.Fragment key={lbl}>
+          <React.Fragment key={i}>
             <Line x1={padL} y1={y} x2={W - padR} y2={y} stroke="#e5e7eb" strokeWidth={1} />
-            <SvgText x={padL - 4} y={y + 4} fontSize={9} fill="#9ca3af" textAnchor="end">{lbl}</SvgText>
+            <SvgText x={padL - 4} y={y + 4} fontSize={9} fill="#9ca3af" textAnchor="end">{fmtShort(tick)}</SvgText>
           </React.Fragment>
         );
       })}
       {data.values.map((v, i) => {
-        const barH = (v / maxV) * chartH;
+        const barH = Math.max((v / maxV) * chartH, 0);
         const x    = padL + i * gap + (gap - barW) / 2;
         const y    = padT + chartH - barH;
         return (
           <React.Fragment key={i}>
             <Rect x={x} y={y} width={barW} height={barH} rx={4} fill="#c9a84c" onPress={() => handleBarPress(i)} />
-            <SvgText x={x + barW / 2} y={H - 6} fontSize={10} fill="#9ca3af" textAnchor="middle">
-              {data.labels[i]}
-            </SvgText>
+            <SvgText x={x + barW / 2} y={H - 6} fontSize={10} fill="#9ca3af" textAnchor="middle">{data.labels[i]}</SvgText>
           </React.Fragment>
         );
       })}
       {tooltip.visible && (
         <React.Fragment>
-          <Rect
-            x={Math.min(tooltip.x - 30, W - 72)}
-            y={tooltip.y - 36}
-            width={64} height={30}
-            rx={6}
-            fill="#1f2937"
-            opacity={0.92}
-          />
-          <SvgText
-            x={Math.min(tooltip.x - 30, W - 72) + 32}
-            y={tooltip.y - 22}
-            fontSize={10} fill="#fff" textAnchor="middle" fontWeight="600"
-          >{tooltip.label}</SvgText>
-          <SvgText
-            x={Math.min(tooltip.x - 30, W - 72) + 32}
-            y={tooltip.y - 11}
-            fontSize={11} fill="#f9fafb" textAnchor="middle" fontWeight="700"
-          >{tooltip.value}</SvgText>
+          <Rect x={Math.min(tooltip.x - 30, W - 72)} y={tooltip.y - 36} width={64} height={30} rx={6} fill="#1f2937" opacity={0.92} />
+          <SvgText x={Math.min(tooltip.x - 30, W - 72) + 32} y={tooltip.y - 22} fontSize={10} fill="#fff" textAnchor="middle" fontWeight="600">{tooltip.label}</SvgText>
+          <SvgText x={Math.min(tooltip.x - 30, W - 72) + 32} y={tooltip.y - 11} fontSize={11} fill="#f9fafb" textAnchor="middle" fontWeight="700">{tooltip.value}</SvgText>
         </React.Fragment>
       )}
     </Svg>
