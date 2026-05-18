@@ -2986,6 +2986,110 @@ export default function MercadoPage() {
         ) : (
           <LockedBlock title="Tendências do Período" />
         )}
+
+        {/* Regiões Produtoras */}
+        {(() => {
+          const maxPct = data.regioes.length > 0 ? Math.max(...data.regioes.map(r => r.pct)) : 1;
+          return canMarket("regioes") ? (
+            <div className="mercado-card" style={cardStyle()}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                <span style={{ fontSize: 15 }}>🍇</span>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: NAVY, margin: 0 }}>Regiões Produtoras</h3>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {data.regioes.map((r, idx) => (
+                  <div key={r.name} style={{
+                    display: "flex", gap: 12, alignItems: "center",
+                    padding: "10px 0",
+                    borderBottom: idx < data.regioes.length - 1 ? `1px solid ${BORDER}` : "none",
+                  }}>
+                    <div style={{
+                      width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+                      backgroundColor: `${GOLD}22`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 11, fontWeight: 800, color: GOLD,
+                    }}>
+                      {r.rank}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{r.name}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: NAVY, marginLeft: 8 }}>{r.pct}%</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: MUTED, marginBottom: 5 }}>{r.volume}</div>
+                      <div style={{ height: 5, borderRadius: 4, backgroundColor: "#eef0f3", overflow: "hidden" }}>
+                        <div style={{
+                          height: "100%", borderRadius: 4,
+                          backgroundColor: GOLD,
+                          width: `${maxPct > 0 ? (r.pct / maxPct) * 100 : 0}%`,
+                          transition: "width 0.4s ease",
+                        }} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <LockedBlock title="Regiões Produtoras" />
+          );
+        })()}
+
+        {/* Variedades em Destaque */}
+        {(() => {
+          const parseVol = (s: string) => { const m = s.replace(/[^\d.]/g, ""); return parseFloat(m) || 0; };
+          const maxVol = data.variedades.length > 0 ? Math.max(...data.variedades.map(v => parseVol(v.volume))) : 1;
+          return canMarket("variedades") ? (
+            <div className="mercado-card" style={cardStyle()}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                <span style={{ fontSize: 15 }}>🍷</span>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: NAVY, margin: 0 }}>Variedades em Destaque</h3>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {data.variedades.map((v, idx) => {
+                  const vol = parseVol(v.volume);
+                  const barPct = maxVol > 0 ? (vol / maxVol) * 100 : 0;
+                  const isPos = v.change >= 0;
+                  return (
+                    <div key={v.name} style={{
+                      padding: "10px 0",
+                      borderBottom: idx < data.variedades.length - 1 ? `1px solid ${BORDER}` : "none",
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{v.name}</span>
+                        <span style={{
+                          fontSize: 11, fontWeight: 700,
+                          color: isPos ? "#15803d" : "#dc2626",
+                          backgroundColor: isPos ? "#dcfce7" : "#fef2f2",
+                          padding: "2px 8px", borderRadius: 20,
+                        }}>
+                          {isPos ? "+" : ""}{v.change}%
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 11, color: MUTED, marginBottom: 5 }}>{v.volume}</div>
+                      <div style={{ height: 5, borderRadius: 4, backgroundColor: "#eef0f3", overflow: "hidden" }}>
+                        <div style={{
+                          height: "100%", borderRadius: 4,
+                          backgroundColor: isPos ? "#16a34a" : "#dc2626",
+                          width: `${barPct}%`,
+                          transition: "width 0.4s ease",
+                        }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <LockedBlock title="Variedades em Destaque" />
+          );
+        })()}
+
+        {data.updated_at && (
+          <div style={{ textAlign: "right", fontSize: 11, color: "#b0b8c4", paddingBottom: 8 }}>
+            Atualizado em {new Date(data.updated_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
+          </div>
+        )}
       </div>
     );
   };
