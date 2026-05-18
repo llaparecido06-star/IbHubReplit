@@ -33,8 +33,8 @@ interface MarketKPI { label: string; value: string; period: string; change: numb
 interface MarketTendencia { title: string; desc: string; change: number; pos: boolean; }
 interface MarketRegiao { rank: number; name: string; volume: string; pct: number; }
 interface MarketVariedade { name: string; volume: string; change: number; }
-interface MarketChartArea { exports: number[]; imports: number[]; labels: string[]; yLabels: string[]; }
-interface MarketChartBar { values: number[]; labels: string[]; }
+interface MarketChartArea { exports: number[]; imports: number[]; labels: string[]; yLabels: string[]; subtitle?: string; }
+interface MarketChartBar { values: number[]; labels: string[]; subtitle?: string; }
 interface MarketOverview {
   period: Period;
   kpis: MarketKPI[];
@@ -249,7 +249,12 @@ export default function AdminSlidesMercado() {
   // Section title inline editing
   const [editingSecId, setEditingSecId] = useState<string | null>(null);
   const [editingSecTitle, setEditingSecTitle] = useState("");
+  const [editingSecFontSize, setEditingSecFontSize] = useState(14);
   const [savingSecTitle, setSavingSecTitle] = useState(false);
+
+  // Chart subtitles (editable)
+  const [areaSubtitle, setAreaSubtitle] = useState("ÁREA — Exportações / Importações (separados por vírgula)");
+  const [barSubtitle, setBarSubtitle] = useState("BARRAS — Produção Nacional");
 
   // Custom item modal (non-default sections)
   const [customModal, setCustomModal] = useState<{ permId: string; stype: string; idx: number | null } | null>(null);
@@ -265,8 +270,10 @@ export default function AdminSlidesMercado() {
       setAreaExp(joinNum(d.chart_area?.exports ?? []));
       setAreaImp(joinNum(d.chart_area?.imports ?? []));
       setAreaLbl(joinStr(d.chart_area?.labels ?? []));
+      setAreaSubtitle(d.chart_area?.subtitle ?? "ÁREA — Exportações / Importações (separados por vírgula)");
       setBarVal(joinNum(d.chart_bar?.values ?? []));
       setBarLbl(joinStr(d.chart_bar?.labels ?? []));
+      setBarSubtitle(d.chart_bar?.subtitle ?? "BARRAS — Produção Nacional");
       setTendencias(d.tendencias ?? []);
       setRegioes(d.regioes ?? []);
       setVariedades(d.variedades ?? []);
@@ -274,6 +281,8 @@ export default function AdminSlidesMercado() {
       setOverview(null);
       setRawOverview(null);
       setKpis([]); setAreaExp(""); setAreaImp(""); setAreaLbl(""); setBarVal(""); setBarLbl("");
+      setAreaSubtitle("ÁREA — Exportações / Importações (separados por vírgula)");
+      setBarSubtitle("BARRAS — Produção Nacional");
       setTendencias([]); setRegioes([]); setVariedades([]);
     }
     setLoadingData(false);
@@ -287,8 +296,8 @@ export default function AdminSlidesMercado() {
     const payload = {
       period,
       kpis,
-      chart_area: { exports: numArr(areaExp), imports: numArr(areaImp), labels: strArr(areaLbl), yLabels: [] },
-      chart_bar: { values: numArr(barVal), labels: strArr(barLbl) },
+      chart_area: { exports: numArr(areaExp), imports: numArr(areaImp), labels: strArr(areaLbl), yLabels: [], subtitle: areaSubtitle },
+      chart_bar: { values: numArr(barVal), labels: strArr(barLbl), subtitle: barSubtitle },
       tendencias,
       regioes,
       variedades,
@@ -305,12 +314,13 @@ export default function AdminSlidesMercado() {
   const startEditSecTitle = (perm: MarketPermission) => {
     setEditingSecId(perm.id);
     setEditingSecTitle(perm.title);
+    setEditingSecFontSize(perm.font_size ?? 14);
   };
 
   const saveSecTitle = async () => {
     if (!editingSecId || !editingSecTitle.trim()) return;
     setSavingSecTitle(true);
-    await supabase.from("market_permissions").update({ title: editingSecTitle.trim() }).eq("id", editingSecId);
+    await supabase.from("market_permissions").update({ title: editingSecTitle.trim(), font_size: editingSecFontSize }).eq("id", editingSecId);
     setSavingSecTitle(false);
     setEditingSecId(null);
     void loadPermissions();
@@ -791,6 +801,14 @@ export default function AdminSlidesMercado() {
                               autoFocus
                               style={{ flex: 1, padding: "5px 10px", border: `1px solid ${GOLD}`, borderRadius: 6, fontSize: 14, fontWeight: 700, color: NAVY, outline: "none" }}
                             />
+                            <select
+                              value={editingSecFontSize}
+                              onChange={e => setEditingSecFontSize(Number(e.target.value))}
+                              title="Tamanho da fonte"
+                              style={{ padding: "5px 8px", border: `1px solid ${GOLD}40`, borderRadius: 6, fontSize: 12, color: NAVY, cursor: "pointer", background: "#fff" }}
+                            >
+                              {[11, 12, 13, 14, 15, 16, 17, 18].map(s => <option key={s} value={s}>{s}px</option>)}
+                            </select>
                             <button onClick={() => void saveSecTitle()} disabled={savingSecTitle} style={{ padding: "5px 12px", backgroundColor: GOLD, color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>
                               {savingSecTitle ? "..." : "✓"}
                             </button>
@@ -822,13 +840,23 @@ export default function AdminSlidesMercado() {
                         {secHeader}
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
                           <div>
-                            <p style={{ fontSize: 12, fontWeight: 700, color: "#8a93a2", marginBottom: 10 }}>ÁREA — Exportações / Importações (separados por vírgula)</p>
+                            <input
+                              value={areaSubtitle}
+                              onChange={e => setAreaSubtitle(e.target.value)}
+                              style={{ width: "100%", padding: "4px 8px", border: "1px solid #e8eaed", borderRadius: 6, fontSize: 12, fontWeight: 700, color: "#8a93a2", marginBottom: 10, background: "#f9f9fb", boxSizing: "border-box", outline: "none" }}
+                              placeholder="Subtítulo da área..."
+                            />
                             {inp("Exportações", areaExp, setAreaExp, { placeholder: "3.2, 3.5, 3.8..." })}
                             {inp("Importações", areaImp, setAreaImp, { placeholder: "2.1, 2.4, 2.6..." })}
                             {inp("Labels (meses)", areaLbl, setAreaLbl, { placeholder: "Jan, Fev, Mar..." })}
                           </div>
                           <div>
-                            <p style={{ fontSize: 12, fontWeight: 700, color: "#8a93a2", marginBottom: 10 }}>BARRAS — Produção Nacional</p>
+                            <input
+                              value={barSubtitle}
+                              onChange={e => setBarSubtitle(e.target.value)}
+                              style={{ width: "100%", padding: "4px 8px", border: "1px solid #e8eaed", borderRadius: 6, fontSize: 12, fontWeight: 700, color: "#8a93a2", marginBottom: 10, background: "#f9f9fb", boxSizing: "border-box", outline: "none" }}
+                              placeholder="Subtítulo das barras..."
+                            />
                             {inp("Valores", barVal, setBarVal, { placeholder: "320, 290, 345, 310" })}
                             {inp("Labels", barLbl, setBarLbl, { placeholder: "Q1, Q2, Q3, Q4" })}
                           </div>
