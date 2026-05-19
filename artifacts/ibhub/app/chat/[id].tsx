@@ -129,6 +129,7 @@ export default function ChatScreen() {
   const [showReactions,          setShowReactions]          = useState<string | null>(null);
   // ── Action sheet (long-press menu) ──────────────────────────────────────────
   const [msgActionTarget,   setMsgActionTarget]   = useState<AppMessage | null>(null);
+  const pendingForwardMsg                         = useRef<AppMessage | null>(null);
   // ── Forward picker ───────────────────────────────────────────────────────────
   const [showForwardPicker, setShowForwardPicker] = useState(false);
   const [forwardConvos,     setForwardConvos]     = useState<AppConversation[]>([]);
@@ -994,29 +995,43 @@ export default function ChatScreen() {
       const ok = await API.deleteMessage(target.id, user.id);
       if (ok) {
         setMessages(prev => prev.map(m => m.id === target.id ? { ...m, deleted_at: new Date().toISOString() } : m));
+      } else {
+        Alert.alert("Erro", "Não foi possível apagar a mensagem. Tente novamente.");
       }
     } else {
       setMessages(prev => prev.filter(m => m.id !== target.id));
     }
   };
 
+  const dismissForwardPicker = useCallback(() => {
+    setShowForwardPicker(false);
+    setForwardSearch("");
+    setForwardConvos([]);
+    pendingForwardMsg.current = null;
+  }, []);
+
   const openForwardPicker = async () => {
-    if (!user?.id) return;
+    if (!user?.id || !msgActionTarget) return;
+    // Snapshot the target before closing the action sheet
+    pendingForwardMsg.current = msgActionTarget;
+    setMsgActionTarget(null);           // closes action sheet immediately
     setShowForwardPicker(true);
     const convos = await API.fetchConversations(user.id, activeCompany?.id ?? null);
     setForwardConvos(convos.filter(c => c.id !== id));
   };
 
   const handleForwardMessage = async (targetConvId: string) => {
-    if (!msgActionTarget || !user?.id) return;
+    const source = pendingForwardMsg.current;
+    if (!source || !user?.id) return;
     setForwarding(targetConvId);
-    await API.forwardMessage(msgActionTarget, targetConvId, user.id, {
+    await API.forwardMessage(source, targetConvId, user.id, {
       companyPageId: activeCompany?.id ?? null,
       accessToken: session?.access_token ?? undefined,
     });
     setForwarding(null);
     setShowForwardPicker(false);
-    setMsgActionTarget(null);
+    setForwardSearch("");
+    pendingForwardMsg.current = null;
   };
 
   const renderMessage = ({ item, index }: { item: AppMessage; index: number }) => {
@@ -1024,6 +1039,7 @@ export default function ChatScreen() {
     const isTemp = item.id.startsWith("tmp_");
     const type   = item.message_type ?? "text";
     const myCompany = item.from_company_page;
+    const isSearchHit = showSearch && !!searchQuery.trim() && searchHits[searchHitIdx]?.msg.id === item.id;
 
     // Date separator
     const prevMsg = index > 0 ? messages[index - 1] : null;
@@ -1074,7 +1090,7 @@ export default function ChatScreen() {
             <View style={[st.dateSepLine, { backgroundColor: colors.border }]} />
           </View>
         )}
-        <View style={[st.msgGroup, isMe ? st.msgGroupMe : st.msgGroupOther, sameSenderAsPrev ? { marginTop: 2 } : { marginTop: 8 }]}>
+        <View style={[st.msgGroup, isMe ? st.msgGroupMe : st.msgGroupOther, sameSenderAsPrev ? { marginTop: 2 } : { marginTop: 8 }, isSearchHit && { backgroundColor: colors.gold + "22", borderRadius: 12, paddingHorizontal: 4 }]}>
           {isMe && myCompany && !sameSenderAsPrev && (
             <Text style={[st.senderLabel, { color: colors.gold, alignSelf: "flex-end" }]}>{myCompany.name}</Text>
           )}
@@ -1538,8 +1554,18 @@ export default function ChatScreen() {
       {/* ── Message Action Sheet (long-press) ───────────────────────────────── */}
       <Modal visible={!!msgActionTarget} transparent animationType="slide" onRequestClose={() => setMsgActionTarget(null)}>
         <Pressable style={st.sheetOverlay} onPress={() => setMsgActionTarget(null)}>
-          <View style={[st.sheet, { backgroundColor: "#fff", paddingBottom: bottomPad + 8 }]}>
+          <Pressable style={[st.sheet, { backgroundColor: "#fff", paddingBottom: bottomPad + 8 }]}>
             <View style={[st.sheetHandle, { backgroundColor: colors.border }]} />
+
+            {/* Message preview */}
+            {msgActionTarget?.content ? (
+              <View style={{ backgroundColor: colors.background, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 2 }}>
+                <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, marginBottom: 3 }}>
+                  {msgActionTarget.sender_id === user?.id ? "Você" : (participant?.full_name ?? "...")}
+                </Text>
+                <Text style={{ fontSize: 13, color: colors.foreground }} numberOfLines={2}>{msgActionTarget.content}</Text>
+              </View>
+            ) : null}
 
             {/* Reaction row */}
             <View style={{ flexDirection: "row", justifyContent: "space-around", paddingVertical: 14, paddingHorizontal: 4 }}>
@@ -1572,7 +1598,7 @@ export default function ChatScreen() {
             <View style={[st.menuDivider, { backgroundColor: colors.border }]} />
 
             {/* Forward */}
-            <TouchableOpacity style={st.actionRow} onPress={() => { openForwardPicker(); setMsgActionTarget(prev => prev); }}>
+            <TouchableOpacity style={st.actionRow} onPress={openForwardPicker}>
               <Feather name="share-2" size={17} color={colors.navy} />
               <Text style={[st.actionRowText, { color: colors.navy }]}>Encaminhar</Text>
             </TouchableOpacity>
@@ -1605,14 +1631,14 @@ export default function ChatScreen() {
               <Feather name="trash-2" size={17} color="#dc2626" />
               <Text style={[st.actionRowText, { color: "#dc2626" }]}>Apagar mensagem</Text>
             </TouchableOpacity>
-          </View>
+          </Pressable>
         </Pressable>
       </Modal>
 
       {/* ── Forward Picker ───────────────────────────────────────────────────── */}
-      <Modal visible={showForwardPicker} transparent animationType="slide" onRequestClose={() => { setShowForwardPicker(false); setForwardSearch(""); }}>
-        <Pressable style={st.sheetOverlay} onPress={() => { setShowForwardPicker(false); setForwardSearch(""); }}>
-          <View style={[st.sheet, { backgroundColor: "#fff", maxHeight: "78%", paddingBottom: bottomPad + 8 }]}>
+      <Modal visible={showForwardPicker} transparent animationType="slide" onRequestClose={dismissForwardPicker}>
+        <Pressable style={st.sheetOverlay} onPress={dismissForwardPicker}>
+          <Pressable style={[st.sheet, { backgroundColor: "#fff", maxHeight: "78%", paddingBottom: bottomPad + 8 }]}>
             <View style={[st.sheetHandle, { backgroundColor: colors.border }]} />
             <Text style={[st.sheetTitle, { color: colors.navy }]}>Encaminhar para</Text>
             <View style={[st.forwardSearchWrap, { borderColor: colors.border, backgroundColor: colors.background }]}>
@@ -1658,7 +1684,7 @@ export default function ChatScreen() {
                 </Text>
               }
             />
-          </View>
+          </Pressable>
         </Pressable>
       </Modal>
 

@@ -113,6 +113,7 @@ export default function GroupChatScreen() {
   const [selectedMedia, setSelectedMedia] = useState<{ type: "image" | "video"; url: string } | null>(null);
   // ── Action sheet (long-press menu) ──────────────────────────────────────────
   const [msgActionTarget,   setMsgActionTarget]   = useState<AppMessage | null>(null);
+  const pendingForwardMsg                         = useRef<AppMessage | null>(null);
   // ── Forward picker ───────────────────────────────────────────────────────────
   const [showForwardPicker, setShowForwardPicker] = useState(false);
   const [forwardConvos,     setForwardConvos]     = useState<AppConversation[]>([]);
@@ -389,6 +390,7 @@ export default function GroupChatScreen() {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const text = input.trim();
     setInput("");
+    setMentionQuery(null);
     setSending(true);
     broadcastTyping(false);
     if (typingTimer.current) clearTimeout(typingTimer.current);
@@ -901,29 +903,42 @@ export default function GroupChatScreen() {
       const ok = await API.deleteMessage(target.id, user.id);
       if (ok) {
         setMessages(prev => prev.map(m => m.id === target.id ? { ...m, deleted_at: new Date().toISOString() } : m));
+      } else {
+        Alert.alert("Erro", "Não foi possível apagar a mensagem. Tente novamente.");
       }
     } else {
       setMessages(prev => prev.filter(m => m.id !== target.id));
     }
   };
 
+  const dismissForwardPicker = useCallback(() => {
+    setShowForwardPicker(false);
+    setForwardSearch("");
+    setForwardConvos([]);
+    pendingForwardMsg.current = null;
+  }, []);
+
   const openForwardPicker = async () => {
-    if (!user?.id) return;
+    if (!user?.id || !msgActionTarget) return;
+    pendingForwardMsg.current = msgActionTarget;
+    setMsgActionTarget(null);           // closes action sheet immediately
     setShowForwardPicker(true);
     const convos = await API.fetchConversations(user.id, activeCompany?.id ?? null);
     setForwardConvos(convos.filter(c => c.id !== id));
   };
 
   const handleForwardMessage = async (targetConvId: string) => {
-    if (!msgActionTarget || !user?.id) return;
+    const source = pendingForwardMsg.current;
+    if (!source || !user?.id) return;
     setForwarding(targetConvId);
-    await API.forwardMessage(msgActionTarget, targetConvId, user.id, {
+    await API.forwardMessage(source, targetConvId, user.id, {
       companyPageId: effectiveCompanyId,
       accessToken: session?.access_token ?? undefined,
     });
     setForwarding(null);
     setShowForwardPicker(false);
-    setMsgActionTarget(null);
+    setForwardSearch("");
+    pendingForwardMsg.current = null;
   };
 
   const filteredMembers = useMemo(() => {
@@ -1001,6 +1016,8 @@ export default function GroupChatScreen() {
       prevMsg.sender_id === item.sender_id &&
       (new Date(item.created_at).getTime() - new Date(prevMsg.created_at).getTime()) < 5 * 60 * 1000;
 
+    const isSearchHit = showSearch && !!searchQuery.trim() && searchHits[searchHitIdx]?.msg.id === item.id;
+
     // Deleted message — show placeholder
     if (item.deleted_at) {
       return (
@@ -1040,7 +1057,7 @@ export default function GroupChatScreen() {
             <View style={[styles.dateSepLine, { backgroundColor: colors.border }]} />
           </View>
         )}
-        <View style={[styles.msgGroup, isMe ? styles.msgGroupMe : styles.msgGroupOther, isContinuation && { marginBottom: 2 }]}>
+        <View style={[styles.msgGroup, isMe ? styles.msgGroupMe : styles.msgGroupOther, isContinuation && { marginBottom: 2 }, isSearchHit && { backgroundColor: colors.gold + "22", borderRadius: 12, paddingHorizontal: 4 }]}>
           <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
             {!isMe && (
               isContinuation
@@ -1373,16 +1390,25 @@ export default function GroupChatScreen() {
       {/* @mention autocomplete */}
       {mentionQuery !== null && filteredMembers.length > 0 && (
         <View style={[styles.mentionList, { backgroundColor: "#fff", borderTopColor: colors.border }]}>
-          {filteredMembers.slice(0, 5).map(member => (
-            <TouchableOpacity
-              key={member.id}
-              style={[styles.mentionItem, { borderBottomColor: colors.border }]}
-              onPress={() => insertMention(member)}
-            >
-              <Avatar uri={member.avatar_url} name={member.full_name ?? ""} size={28} />
-              <Text style={[styles.mentionName, { color: colors.navy }]}>{member.full_name}</Text>
-            </TouchableOpacity>
-          ))}
+          {filteredMembers.slice(0, 5).map(member => {
+            const name = member.full_name ?? "";
+            const qLen = mentionQuery?.length ?? 0;
+            const matched = name.slice(0, qLen);
+            const rest    = name.slice(qLen);
+            return (
+              <TouchableOpacity
+                key={member.id}
+                style={[styles.mentionItem, { borderBottomColor: colors.border }]}
+                onPress={() => insertMention(member)}
+              >
+                <Avatar uri={member.avatar_url} name={name} size={28} />
+                <Text style={[styles.mentionName, { color: colors.navy }]}>
+                  {qLen > 0 && <Text style={{ fontWeight: "800" }}>{matched}</Text>}
+                  {rest}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       )}
 
@@ -1465,8 +1491,18 @@ export default function GroupChatScreen() {
       {/* ── Message Action Sheet (long-press) ─────────────────────────────── */}
       <Modal visible={!!msgActionTarget} transparent animationType="slide" onRequestClose={() => setMsgActionTarget(null)}>
         <Pressable style={styles.sheetOverlay} onPress={() => setMsgActionTarget(null)}>
-          <View style={[styles.sheet, { backgroundColor: "#fff", paddingBottom: bottomPad + 8 }]}>
+          <Pressable style={[styles.sheet, { backgroundColor: "#fff", paddingBottom: bottomPad + 8 }]}>
             <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+
+            {/* Message preview */}
+            {msgActionTarget?.content ? (
+              <View style={{ backgroundColor: colors.background, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 2 }}>
+                <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, marginBottom: 3 }}>
+                  {msgActionTarget.sender_id === user?.id ? "Você" : (profiles.get(msgActionTarget.sender_id)?.full_name ?? "...")}
+                </Text>
+                <Text style={{ fontSize: 13, color: colors.foreground }} numberOfLines={2}>{msgActionTarget.content}</Text>
+              </View>
+            ) : null}
 
             {/* Reaction row */}
             <View style={{ flexDirection: "row", justifyContent: "space-around", paddingVertical: 14, paddingHorizontal: 4 }}>
@@ -1499,7 +1535,7 @@ export default function GroupChatScreen() {
             <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
 
             {/* Forward */}
-            <TouchableOpacity style={styles.actionRow} onPress={() => { openForwardPicker(); }}>
+            <TouchableOpacity style={styles.actionRow} onPress={openForwardPicker}>
               <Feather name="share-2" size={17} color={colors.navy} />
               <Text style={[styles.actionRowText, { color: colors.navy }]}>Encaminhar</Text>
             </TouchableOpacity>
@@ -1530,14 +1566,14 @@ export default function GroupChatScreen() {
               <Feather name="trash-2" size={17} color="#dc2626" />
               <Text style={[styles.actionRowText, { color: "#dc2626" }]}>Apagar mensagem</Text>
             </TouchableOpacity>
-          </View>
+          </Pressable>
         </Pressable>
       </Modal>
 
       {/* ── Forward Picker ─────────────────────────────────────────────────── */}
-      <Modal visible={showForwardPicker} transparent animationType="slide" onRequestClose={() => { setShowForwardPicker(false); setForwardSearch(""); }}>
-        <Pressable style={styles.sheetOverlay} onPress={() => { setShowForwardPicker(false); setForwardSearch(""); }}>
-          <View style={[styles.sheet, { backgroundColor: "#fff", maxHeight: "78%", paddingBottom: bottomPad + 8 }]}>
+      <Modal visible={showForwardPicker} transparent animationType="slide" onRequestClose={dismissForwardPicker}>
+        <Pressable style={styles.sheetOverlay} onPress={dismissForwardPicker}>
+          <Pressable style={[styles.sheet, { backgroundColor: "#fff", maxHeight: "78%", paddingBottom: bottomPad + 8 }]}>
             <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
             <Text style={[styles.sheetTitle, { color: colors.navy }]}>Encaminhar para</Text>
             <View style={[styles.forwardSearchWrap, { borderColor: colors.border, backgroundColor: colors.background }]}>
@@ -1583,7 +1619,7 @@ export default function GroupChatScreen() {
                 </Text>
               }
             />
-          </View>
+          </Pressable>
         </Pressable>
       </Modal>
 
