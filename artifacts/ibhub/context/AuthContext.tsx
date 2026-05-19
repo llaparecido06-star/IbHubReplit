@@ -138,6 +138,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [activeCompany, setActiveCompany]       = useState<ActiveCompany | null>(null);
 
   const fetchProfile = useCallback(async (userId: string) => {
+    // Safety-net: if the Supabase query hangs (network lost mid-session, server
+    // timeout, etc.) the finally block never runs and profileChecked stays false,
+    // keeping the loading spinner up forever. This timer fires after 5 s and
+    // unblocks the secondary loading guard in RootLayoutNav regardless.
+    let timedOut = false;
+    const tid = setTimeout(() => {
+      timedOut = true;
+      console.warn(`[fetchProfile] 5s timeout for userId=${userId} — unblocking profileChecked`);
+      setProfileChecked(true);
+    }, 5_000);
+
     try {
       // Use limit(1) to avoid "multiple rows" error if duplicate profiles exist
       const { data: rows, error } = await supabase
@@ -145,6 +156,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .select("*")
         .or(`id.eq.${userId},user_id.eq.${userId}`)
         .limit(1);
+
+      // If the timeout already fired, don't overwrite state with stale data.
+      if (timedOut) return;
+
       const data = rows?.[0] ?? null;
       console.log(`[fetchProfile] userId=${userId} found=${!!data} error=${error?.message ?? null}`);
       if (!error && data) {
@@ -166,6 +181,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (e: any) {
       console.error(`[fetchProfile] Exception:`, e?.message);
     } finally {
+      clearTimeout(tid);
+      // setProfileChecked is idempotent — safe to call even if the timeout
+      // already fired it. React bails out of re-rendering when state is the
+      // same value, so this causes no extra renders.
       setProfileChecked(true);
     }
   }, []);
@@ -282,14 +301,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
     // Safety-net: if getSession() itself hangs (no network, token-refresh stall),
-    // unblock the UI after 8s so the user isn't stuck on the spinner forever.
+    // unblock the UI after 5s so the user isn't stuck on the spinner forever.
     // Also force profileChecked=true so the secondary loading guard doesn't
     // activate if session is already set when the timeout fires.
     const initTimeoutId = setTimeout(() => {
-      console.warn("[AuthInit] 8s timeout reached — unblocking UI. Session will resolve via onAuthStateChange.");
+      console.warn("[AuthInit] 5s timeout reached — unblocking UI. Session will resolve via onAuthStateChange.");
       resolveLoading();
       setProfileChecked(true);
-    }, 8_000);
+    }, 5_000);
 
     const init = async () => {
       try {
@@ -337,13 +356,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event === "PASSWORD_RECOVERY") {
         setIsRecovering(true);
       }
-      // Force-unblock the loading spinner the moment a session arrives via any
-      // auth event (SIGNED_IN, TOKEN_REFRESHED, INITIAL_SESSION).  This is a
-      // safety net for the OAuth path where init() may have already resolved
-      // loading=false, but if it hasn't yet (race condition on slow networks)
-      // the user would be stuck on the spinner indefinitely.
-      if (session) {
-        setLoading(false);
+      // Always unblock the loading spinner on any auth event. Previously this
+      // only fired when session was truthy, which meant INITIAL_SESSION with
+      // session=null (unauthenticated first run) left loading=true until the
+      // 5s safety-net timeout — causing a visible hang on every cold start
+      // without a prior session. resolveLoading() is idempotent, so calling it
+      // multiple times (here + in init()) is safe.
+      resolveLoading();
+      // If there is no session after any event, no profile will be fetched, so
+      // profileChecked must be set here so the secondary guard in RootLayoutNav
+      // (session && !profileChecked) is never permanently active.
+      if (!session) {
+        setProfileChecked(true);
       }
       setSession(session);
       setUser(session?.user ?? null);
