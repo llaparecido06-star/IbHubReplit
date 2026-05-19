@@ -14,7 +14,7 @@
       "backgroundColor": "#0d1b2a"
     },
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "br.com.ibhub",
       "usesAppleSignIn": true,
       "infoPlist": {
