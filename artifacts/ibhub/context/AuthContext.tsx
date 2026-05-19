@@ -281,10 +281,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
       }
     };
+    // Safety-net: if getSession() itself hangs (no network, token-refresh stall),
+    // unblock the UI after 8s so the user isn't stuck on the spinner forever.
+    // Also force profileChecked=true so the secondary loading guard doesn't
+    // activate if session is already set when the timeout fires.
     const initTimeoutId = setTimeout(() => {
-      console.warn("[AuthInit] 12s timeout reached — unblocking UI. Session will resolve via onAuthStateChange.");
+      console.warn("[AuthInit] 8s timeout reached — unblocking UI. Session will resolve via onAuthStateChange.");
       resolveLoading();
-    }, 12_000);
+      setProfileChecked(true);
+    }, 8_000);
 
     const init = async () => {
       try {
@@ -295,14 +300,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         setMustChangePassword(session?.user?.user_metadata?.must_change_password === true);
+
+        // ── Unblock the loading spinner as soon as we know the session state.
+        // fetchProfile runs after this; profileChecked gates /(tabs) navigation
+        // only when a session exists (avoids flash-to-tabs for social-auth users
+        // who still need to complete their profile on /social-complete).
+        clearTimeout(initTimeoutId);
+        resolveLoading();
+
         if (session?.user) {
           await fetchProfile(session.user.id);
+        } else {
+          // No session → no profile to wait for. Unblock the secondary guard in
+          // RootLayoutNav so a logged-out user never sees a second loading screen.
+          setProfileChecked(true);
         }
       } catch (e: any) {
         // Never let an unhandled error silently keep loading=true forever
         console.error("[AuthInit] Unhandled error during init:", e?.message ?? e);
       } finally {
-        clearTimeout(initTimeoutId);
+        // resolveLoading is idempotent — safe to call again as a fallback in
+        // case an exception was thrown before the explicit call above.
         resolveLoading();
       }
     };
