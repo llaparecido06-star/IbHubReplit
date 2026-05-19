@@ -2,6 +2,7 @@ import { supabase } from "@/context/AuthContext";
 import { API_URL, fetchCommentProfilesForIds } from "./_shared";
 import type { AppConversation, AppMessage, AppMessageReaction } from "./types";
 import type { Group } from "./groups";
+import { sendMediaMessage } from "./moderation";
 
 // ─── MESSAGES ────────────────────────────────────────────────────────────────
 
@@ -11,7 +12,7 @@ export async function fetchMessages(conversationId: string, currentUserId?: stri
       .from("messages")
       .select(`
         id, conversation_id, sender_id, from_company_page_id, content, created_at,
-        message_type, media_url, reply_to_id, read_at, metadata,
+        message_type, media_url, reply_to_id, read_at, metadata, deleted_at,
         from_company_page:company_pages(id, name, avatar_url)
       `)
       .eq("conversation_id", conversationId)
@@ -331,6 +332,55 @@ export async function fetchConversations(userId: string, activeCompanyId?: strin
     console.error("fetchConversations:", e);
     return [];
   }
+}
+
+// ─── DELETE MESSAGE (soft-delete) ────────────────────────────────────────────
+
+export async function deleteMessage(messageId: string, senderId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("messages")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", messageId)
+      .eq("sender_id", senderId);
+    return !error;
+  } catch { return false; }
+}
+
+// ─── FORWARD MESSAGE ─────────────────────────────────────────────────────────
+
+export async function forwardMessage(
+  sourceMsg: AppMessage,
+  targetConversationId: string,
+  senderId: string,
+  opts?: { companyPageId?: string | null; accessToken?: string },
+): Promise<boolean> {
+  try {
+    const BINARY_TYPES = ["image", "video", "audio", "file"] as const;
+    type BinaryType = typeof BINARY_TYPES[number];
+    const isBinary = (t: string | undefined): t is BinaryType =>
+      BINARY_TYPES.includes(t as BinaryType);
+
+    if (sourceMsg.media_url && isBinary(sourceMsg.message_type)) {
+      const result = await sendMediaMessage(
+        targetConversationId,
+        senderId,
+        sourceMsg.media_url,
+        sourceMsg.message_type,
+        sourceMsg.metadata?.fileName ?? "",
+        opts?.companyPageId ?? null,
+        opts?.accessToken,
+      );
+      return !!result;
+    }
+    const text = sourceMsg.content ?? "";
+    if (!text) return false;
+    const result = await sendMessage(targetConversationId, senderId, text, {
+      companyPageId: opts?.companyPageId,
+      accessToken: opts?.accessToken,
+    });
+    return !!result;
+  } catch { return false; }
 }
 
 export async function acceptConversation(conversationId: string, userId: string): Promise<boolean> {

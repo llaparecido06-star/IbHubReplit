@@ -1,7 +1,7 @@
 import * as Haptics from "expo-haptics";
 import { useTranslation } from "react-i18next";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -34,7 +34,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/context/AuthContext";
 import * as API from "@/services/api";
-import type { AppMessage } from "@/services/api";
+import type { AppMessage, AppConversation } from "@/services/api";
 import {
   MAX_CHAT_FILE_SIZE,
   MAX_AUDIO_DURATION_MS,
@@ -111,6 +111,20 @@ export default function GroupChatScreen() {
   const [menuVisible, setMenuVisible]   = useState(false);
   const [showAttach, setShowAttach]     = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<{ type: "image" | "video"; url: string } | null>(null);
+  // ── Action sheet (long-press menu) ──────────────────────────────────────────
+  const [msgActionTarget,   setMsgActionTarget]   = useState<AppMessage | null>(null);
+  // ── Forward picker ───────────────────────────────────────────────────────────
+  const [showForwardPicker, setShowForwardPicker] = useState(false);
+  const [forwardConvos,     setForwardConvos]     = useState<AppConversation[]>([]);
+  const [forwardSearch,     setForwardSearch]     = useState("");
+  const [forwarding,        setForwarding]        = useState<string | null>(null);
+  // ── In-chat search ───────────────────────────────────────────────────────────
+  const [showSearch,   setShowSearch]   = useState(false);
+  const [searchQuery,  setSearchQuery]  = useState("");
+  const [searchHitIdx, setSearchHitIdx] = useState(0);
+  // ── Group members (for @mentions) ────────────────────────────────────────────
+  const [groupMembers, setGroupMembers] = useState<SenderProfile[]>([]);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording]   = useState(false);
@@ -207,6 +221,24 @@ export default function GroupChatScreen() {
     await loadProfiles(filtered);
 
     API.markConversationRead(id, user.id);
+
+    // Load group members for @mention autocomplete
+    const { data: members } = await supabase
+      .from("group_members")
+      .select("user_id")
+      .eq("group_id", id)
+      .neq("role", "pending");
+    if (members && members.length > 0) {
+      const memberIds = (members as any[]).map(m => m.user_id);
+      const { data: memberProfiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url")
+        .in("id", memberIds);
+      if (memberProfiles) {
+        setGroupMembers((memberProfiles as SenderProfile[]).filter(p => p.id !== user.id));
+      }
+    }
+
     setLoading(false);
   }, [id, user?.id, loadProfiles]);
 
@@ -265,6 +297,17 @@ export default function GroupChatScreen() {
           if (!deletedId) return;
           seenMsgIds.current.delete(deletedId);
           setMessages(prev => prev.filter(m => m.id !== deletedId));
+        },
+      )
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "messages", filter: `conversation_id=eq.${id}` },
+        (payload) => {
+          const updated = payload.new as any;
+          setMessages(prev => prev.map(m =>
+            m.id === updated.id
+              ? { ...m, content: updated.content, deleted_at: updated.deleted_at ?? m.deleted_at }
+              : m,
+          ));
         },
       )
       .subscribe();
@@ -334,6 +377,9 @@ export default function GroupChatScreen() {
     } else {
       broadcastTyping(false);
     }
+    // @mention detection: trigger when last token starts with @
+    const match = text.match(/@(\w*)$/);
+    setMentionQuery(match ? match[1] : null);
   };
 
   // ── Send text message ─────────────────────────────────────────────────────
@@ -830,6 +876,71 @@ export default function GroupChatScreen() {
     API.toggleMessageReaction(msgId, user.id, emoji);
   };
 
+  // ── Search, delete, forward logic ────────────────────────────────────────────
+
+  const searchHits = useMemo(() => {
+    if (!showSearch || !searchQuery.trim()) return [] as { msg: AppMessage; idx: number }[];
+    const q = searchQuery.toLowerCase();
+    return messages
+      .map((msg, idx) => ({ msg, idx }))
+      .filter(({ msg }) => !msg.deleted_at && msg.content?.toLowerCase().includes(q));
+  }, [messages, searchQuery, showSearch]);
+
+  useEffect(() => { setSearchHitIdx(0); }, [searchQuery]);
+
+  const navigateSearch = (dir: 1 | -1) => {
+    if (!searchHits.length) return;
+    const next = (searchHitIdx + dir + searchHits.length) % searchHits.length;
+    setSearchHitIdx(next);
+    try { listRef.current?.scrollToIndex({ index: searchHits[next].idx, animated: true, viewPosition: 0.5 }); } catch {}
+  };
+
+  const handleDeleteMessage = async (target: AppMessage, forEveryone: boolean) => {
+    if (!user?.id) return;
+    if (forEveryone) {
+      const ok = await API.deleteMessage(target.id, user.id);
+      if (ok) {
+        setMessages(prev => prev.map(m => m.id === target.id ? { ...m, deleted_at: new Date().toISOString() } : m));
+      }
+    } else {
+      setMessages(prev => prev.filter(m => m.id !== target.id));
+    }
+  };
+
+  const openForwardPicker = async () => {
+    if (!user?.id) return;
+    setShowForwardPicker(true);
+    const convos = await API.fetchConversations(user.id, activeCompany?.id ?? null);
+    setForwardConvos(convos.filter(c => c.id !== id));
+  };
+
+  const handleForwardMessage = async (targetConvId: string) => {
+    if (!msgActionTarget || !user?.id) return;
+    setForwarding(targetConvId);
+    await API.forwardMessage(msgActionTarget, targetConvId, user.id, {
+      companyPageId: effectiveCompanyId,
+      accessToken: session?.access_token ?? undefined,
+    });
+    setForwarding(null);
+    setShowForwardPicker(false);
+    setMsgActionTarget(null);
+  };
+
+  const filteredMembers = useMemo(() => {
+    if (mentionQuery === null) return [];
+    return groupMembers.filter(m =>
+      !mentionQuery || m.full_name?.toLowerCase().startsWith(mentionQuery.toLowerCase()),
+    );
+  }, [groupMembers, mentionQuery]);
+
+  const insertMention = (member: SenderProfile) => {
+    const firstName = member.full_name?.split(" ")[0] ?? "user";
+    const atIdx = input.lastIndexOf("@");
+    if (atIdx === -1) return;
+    setInput(input.slice(0, atIdx) + `@${firstName} `);
+    setMentionQuery(null);
+  };
+
   // ── Message renderers ─────────────────────────────────────────────────────
 
   const renderAudioBubble = (item: AppMessage, isMe: boolean) => {
@@ -890,6 +1001,34 @@ export default function GroupChatScreen() {
       prevMsg.sender_id === item.sender_id &&
       (new Date(item.created_at).getTime() - new Date(prevMsg.created_at).getTime()) < 5 * 60 * 1000;
 
+    // Deleted message — show placeholder
+    if (item.deleted_at) {
+      return (
+        <>
+          {showDateSep && (
+            <View style={styles.dateSep}>
+              <View style={[styles.dateSepLine, { backgroundColor: colors.border }]} />
+              <Text style={[styles.dateSepText, { color: colors.mutedForeground }]}>
+                {formatDateSep(item.created_at)}
+              </Text>
+              <View style={[styles.dateSepLine, { backgroundColor: colors.border }]} />
+            </View>
+          )}
+          <View style={[styles.msgGroup, isMe ? styles.msgGroupMe : styles.msgGroupOther]}>
+            <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
+              {!isMe && <View style={{ width: 28 }} />}
+              <View style={[styles.bubble, { backgroundColor: isMe ? "#1a2f48" : "#f3f4f6", flexDirection: "row", alignItems: "center", gap: 6 }]}>
+                <Feather name="slash" size={12} color={isMe ? "#ffffff55" : colors.mutedForeground} />
+                <Text style={{ fontSize: 13, fontStyle: "italic", color: isMe ? "#ffffff88" : colors.mutedForeground }}>
+                  Esta mensagem foi apagada
+                </Text>
+              </View>
+            </View>
+          </View>
+        </>
+      );
+    }
+
     return (
       <>
         {showDateSep && (
@@ -945,8 +1084,10 @@ export default function GroupChatScreen() {
                   (msgType === "image" || msgType === "video") && item.media_url ? { padding: 0, overflow: "hidden" } : {},
                 ]}
                 onLongPress={() => {
-                  if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  setReactionTarget(item.id);
+                  if (!isTemp) {
+                    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    setMsgActionTarget(item);
+                  }
                 }}
                 onPress={() => {
                   if ((msgType === "image" || msgType === "video") && item.media_url && !isTemp) {
@@ -1087,10 +1228,47 @@ export default function GroupChatScreen() {
             </View>
           </View>
         </TouchableOpacity>
+        <TouchableOpacity onPress={() => { setShowSearch(v => !v); if (showSearch) setSearchQuery(""); }} style={styles.headerRight}>
+          <Feather name="search" size={19} color={showSearch ? colors.gold : colors.navy} />
+        </TouchableOpacity>
         <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.headerRight}>
           <Feather name="more-vertical" size={20} color={colors.navy} />
         </TouchableOpacity>
       </View>
+
+      {/* Search bar */}
+      {showSearch && (
+        <View style={[styles.searchBar, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+          <Feather name="search" size={15} color={colors.mutedForeground} />
+          <TextInput
+            autoFocus
+            style={[styles.searchInput, { color: colors.foreground }]}
+            placeholder="Buscar mensagens..."
+            placeholderTextColor={colors.mutedForeground}
+            value={searchQuery}
+            onChangeText={q => setSearchQuery(q)}
+          />
+          {searchHits.length > 0 && (
+            <>
+              <Text style={{ fontSize: 12, color: colors.mutedForeground, minWidth: 36, textAlign: "center" }}>
+                {searchHitIdx + 1}/{searchHits.length}
+              </Text>
+              <TouchableOpacity onPress={() => navigateSearch(-1)} style={{ padding: 4 }}>
+                <Feather name="chevron-up" size={18} color={colors.navy} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => navigateSearch(1)} style={{ padding: 4 }}>
+                <Feather name="chevron-down" size={18} color={colors.navy} />
+              </TouchableOpacity>
+            </>
+          )}
+          {searchQuery.length > 0 && searchHits.length === 0 && (
+            <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Sem resultado</Text>
+          )}
+          <TouchableOpacity onPress={() => { setShowSearch(false); setSearchQuery(""); }} style={{ padding: 4 }}>
+            <Feather name="x" size={18} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Messages */}
       {loading ? (
@@ -1192,6 +1370,22 @@ export default function GroupChatScreen() {
       )}
 
       {/* Input */}
+      {/* @mention autocomplete */}
+      {mentionQuery !== null && filteredMembers.length > 0 && (
+        <View style={[styles.mentionList, { backgroundColor: "#fff", borderTopColor: colors.border }]}>
+          {filteredMembers.slice(0, 5).map(member => (
+            <TouchableOpacity
+              key={member.id}
+              style={[styles.mentionItem, { borderBottomColor: colors.border }]}
+              onPress={() => insertMention(member)}
+            >
+              <Avatar uri={member.avatar_url} name={member.full_name ?? ""} size={28} />
+              <Text style={[styles.mentionName, { color: colors.navy }]}>{member.full_name}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       {!isRecording && (
         <View style={[styles.inputRow, { paddingBottom: bottomPad + 8, backgroundColor: "#fff", borderTopColor: colors.border }]}>
           <TouchableOpacity
@@ -1268,24 +1462,127 @@ export default function GroupChatScreen() {
         </Pressable>
       </Modal>
 
-      {/* Reaction picker modal */}
-      <Modal
-        visible={!!reactionTarget}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setReactionTarget(null)}
-      >
-        <Pressable style={styles.reactionOverlay} onPress={() => setReactionTarget(null)}>
-          <View style={[styles.reactionPicker, { backgroundColor: "#fff", borderColor: colors.border }]}>
-            {REACTION_EMOJIS.map(emoji => (
-              <TouchableOpacity
-                key={emoji}
-                style={styles.reactionOption}
-                onPress={() => reactionTarget && handleReaction(reactionTarget, emoji)}
-              >
-                <Text style={styles.reactionEmoji}>{emoji}</Text>
-              </TouchableOpacity>
-            ))}
+      {/* ── Message Action Sheet (long-press) ─────────────────────────────── */}
+      <Modal visible={!!msgActionTarget} transparent animationType="slide" onRequestClose={() => setMsgActionTarget(null)}>
+        <Pressable style={styles.sheetOverlay} onPress={() => setMsgActionTarget(null)}>
+          <View style={[styles.sheet, { backgroundColor: "#fff", paddingBottom: bottomPad + 8 }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+
+            {/* Reaction row */}
+            <View style={{ flexDirection: "row", justifyContent: "space-around", paddingVertical: 14, paddingHorizontal: 4 }}>
+              {REACTION_EMOJIS.map(emoji => {
+                const active = msgActionTarget?.reactions?.find(r => r.emoji === emoji && r.mine);
+                return (
+                  <TouchableOpacity
+                    key={emoji}
+                    style={[{ padding: 8, borderRadius: 20 }, active && { backgroundColor: colors.gold + "22" }]}
+                    onPress={() => {
+                      const target = msgActionTarget!;
+                      setMsgActionTarget(null);
+                      handleReaction(target.id, emoji);
+                    }}
+                  >
+                    <Text style={{ fontSize: 26 }}>{emoji}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+
+            {/* Reply */}
+            <TouchableOpacity style={styles.actionRow} onPress={() => { setReplyTo(msgActionTarget!); setMsgActionTarget(null); }}>
+              <Feather name="corner-up-left" size={17} color={colors.navy} />
+              <Text style={[styles.actionRowText, { color: colors.navy }]}>Responder</Text>
+            </TouchableOpacity>
+
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+
+            {/* Forward */}
+            <TouchableOpacity style={styles.actionRow} onPress={() => { openForwardPicker(); }}>
+              <Feather name="share-2" size={17} color={colors.navy} />
+              <Text style={[styles.actionRowText, { color: colors.navy }]}>Encaminhar</Text>
+            </TouchableOpacity>
+
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+
+            {/* Delete */}
+            <TouchableOpacity
+              style={styles.actionRow}
+              onPress={() => {
+                const target = msgActionTarget!;
+                const isOwn = target.sender_id === user?.id;
+                setMsgActionTarget(null);
+                Alert.alert(
+                  "Apagar mensagem",
+                  isOwn ? "Como deseja apagar esta mensagem?" : "Apagar esta mensagem para você?",
+                  isOwn ? [
+                    { text: "Cancelar", style: "cancel" },
+                    { text: "Apagar para mim", onPress: () => handleDeleteMessage(target, false) },
+                    { text: "Apagar para todos", style: "destructive", onPress: () => handleDeleteMessage(target, true) },
+                  ] : [
+                    { text: "Cancelar", style: "cancel" },
+                    { text: "Apagar para mim", style: "destructive", onPress: () => handleDeleteMessage(target, false) },
+                  ],
+                );
+              }}
+            >
+              <Feather name="trash-2" size={17} color="#dc2626" />
+              <Text style={[styles.actionRowText, { color: "#dc2626" }]}>Apagar mensagem</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ── Forward Picker ─────────────────────────────────────────────────── */}
+      <Modal visible={showForwardPicker} transparent animationType="slide" onRequestClose={() => { setShowForwardPicker(false); setForwardSearch(""); }}>
+        <Pressable style={styles.sheetOverlay} onPress={() => { setShowForwardPicker(false); setForwardSearch(""); }}>
+          <View style={[styles.sheet, { backgroundColor: "#fff", maxHeight: "78%", paddingBottom: bottomPad + 8 }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+            <Text style={[styles.sheetTitle, { color: colors.navy }]}>Encaminhar para</Text>
+            <View style={[styles.forwardSearchWrap, { borderColor: colors.border, backgroundColor: colors.background }]}>
+              <Feather name="search" size={15} color={colors.mutedForeground} />
+              <TextInput
+                style={[styles.forwardSearchInput, { color: colors.foreground }]}
+                placeholder="Buscar conversa..."
+                placeholderTextColor={colors.mutedForeground}
+                value={forwardSearch}
+                onChangeText={setForwardSearch}
+              />
+            </View>
+            <FlatList
+              data={forwardConvos.filter(c => {
+                const name = c.is_group ? c.name : (c.participant?.full_name ?? c.participant_company?.name ?? "");
+                return !forwardSearch || name?.toLowerCase().includes(forwardSearch.toLowerCase());
+              })}
+              keyExtractor={c => c.id}
+              renderItem={({ item: conv }) => {
+                const name = conv.is_group
+                  ? (conv.name ?? "Grupo")
+                  : (conv.participant?.full_name ?? conv.participant_company?.name ?? "Chat");
+                const avatarUri = conv.is_group
+                  ? (conv as any).group_avatar_url
+                  : (conv.participant?.avatar_url ?? conv.participant_company?.avatar_url);
+                return (
+                  <TouchableOpacity
+                    style={[styles.forwardRow, { borderBottomColor: colors.border }]}
+                    onPress={() => handleForwardMessage(conv.id)}
+                    disabled={!!forwarding}
+                  >
+                    <Avatar uri={avatarUri ?? null} name={name} size={40} />
+                    <Text style={[styles.forwardName, { color: colors.navy, flex: 1 }]} numberOfLines={1}>{name}</Text>
+                    {forwarding === conv.id
+                      ? <ActivityIndicator size="small" color={colors.gold} />
+                      : <Feather name="send" size={17} color={colors.gold} />}
+                  </TouchableOpacity>
+                );
+              }}
+              ListEmptyComponent={
+                <Text style={{ color: colors.mutedForeground, textAlign: "center", marginTop: 24, fontSize: 14 }}>
+                  {forwardConvos.length === 0 ? "Carregando..." : "Nenhuma conversa encontrada"}
+                </Text>
+              }
+            />
           </View>
         </Pressable>
       </Modal>
@@ -1400,4 +1697,27 @@ const styles = StyleSheet.create({
   reactionOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.3)", alignItems: "center", justifyContent: "center" },
   reactionPicker:  { flexDirection: "row", borderRadius: 16, padding: 12, gap: 8, borderWidth: 1, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
   reactionOption:  { padding: 6 },
+
+  // Search bar
+  searchBar:          { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
+  searchInput:        { flex: 1, fontSize: 14 },
+
+  // Action sheet
+  sheetOverlay:       { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  sheet:              { borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 20, gap: 0 },
+  sheetHandle:        { width: 36, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 8 },
+  sheetTitle:         { fontSize: 17, fontWeight: "700", marginBottom: 10 },
+  actionRow:          { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 18, paddingVertical: 16 },
+  actionRowText:      { fontSize: 15, fontWeight: "600" },
+
+  // Forward picker
+  forwardSearchWrap:  { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginHorizontal: 4, marginBottom: 8 },
+  forwardSearchInput: { flex: 1, fontSize: 14 },
+  forwardRow:         { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1 },
+  forwardName:        { fontSize: 15, fontWeight: "600" },
+
+  // @mention autocomplete
+  mentionList:        { maxHeight: 160, borderTopWidth: 1 },
+  mentionItem:        { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  mentionName:        { fontSize: 14, fontWeight: "500" },
 });

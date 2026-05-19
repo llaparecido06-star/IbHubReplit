@@ -12,7 +12,7 @@ import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import * as Notifications from "@/utils/safeNotifications";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -40,7 +40,7 @@ import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/context/AuthContext";
 import { useUnread } from "@/context/UnreadContext";
 import * as API from "@/services/api";
-import type { AppMessage } from "@/services/api";
+import type { AppMessage, AppConversation } from "@/services/api";
 import {
   MAX_CHAT_FILE_SIZE,
   MAX_AUDIO_DURATION_MS,
@@ -127,6 +127,17 @@ export default function ChatScreen() {
   const [showFollowUp,           setShowFollowUp]           = useState(false);
   const [existingFollowUp,       setExistingFollowUp]       = useState<Date | null>(null);
   const [showReactions,          setShowReactions]          = useState<string | null>(null);
+  // ── Action sheet (long-press menu) ──────────────────────────────────────────
+  const [msgActionTarget,   setMsgActionTarget]   = useState<AppMessage | null>(null);
+  // ── Forward picker ───────────────────────────────────────────────────────────
+  const [showForwardPicker, setShowForwardPicker] = useState(false);
+  const [forwardConvos,     setForwardConvos]     = useState<AppConversation[]>([]);
+  const [forwardSearch,     setForwardSearch]     = useState("");
+  const [forwarding,        setForwarding]        = useState<string | null>(null);
+  // ── In-chat search ───────────────────────────────────────────────────────────
+  const [showSearch,  setShowSearch]  = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchHitIdx, setSearchHitIdx] = useState(0);
   const [showReport,             setShowReport]             = useState(false);
   const [reportCategory,         setReportCategory]         = useState<string | null>(null);
   const [reportNote,             setReportNote]             = useState("");
@@ -235,7 +246,9 @@ export default function ChatScreen() {
         (payload) => {
           const updated = payload.new as any;
           setMessages(prev => prev.map(m =>
-            m.id === updated.id ? { ...m, read_at: updated.read_at, content: updated.content } : m
+            m.id === updated.id
+              ? { ...m, read_at: updated.read_at, content: updated.content, deleted_at: updated.deleted_at ?? m.deleted_at }
+              : m
           ));
         },
       )
@@ -957,6 +970,55 @@ export default function ChatScreen() {
 
   // ── Render message ───────────────────────────────────────────────────────────
 
+  // ── Search hits (for in-chat search) ─────────────────────────────────────────
+  const searchHits = useMemo(() => {
+    if (!showSearch || !searchQuery.trim()) return [] as { msg: AppMessage; idx: number }[];
+    const q = searchQuery.toLowerCase();
+    return messages
+      .map((msg, idx) => ({ msg, idx }))
+      .filter(({ msg }) => !msg.deleted_at && msg.content?.toLowerCase().includes(q));
+  }, [messages, searchQuery, showSearch]);
+
+  useEffect(() => { setSearchHitIdx(0); }, [searchQuery]);
+
+  const navigateSearch = (dir: 1 | -1) => {
+    if (!searchHits.length) return;
+    const next = (searchHitIdx + dir + searchHits.length) % searchHits.length;
+    setSearchHitIdx(next);
+    try { listRef.current?.scrollToIndex({ index: searchHits[next].idx, animated: true, viewPosition: 0.5 }); } catch {}
+  };
+
+  const handleDeleteMessage = async (target: AppMessage, forEveryone: boolean) => {
+    if (!user?.id) return;
+    if (forEveryone) {
+      const ok = await API.deleteMessage(target.id, user.id);
+      if (ok) {
+        setMessages(prev => prev.map(m => m.id === target.id ? { ...m, deleted_at: new Date().toISOString() } : m));
+      }
+    } else {
+      setMessages(prev => prev.filter(m => m.id !== target.id));
+    }
+  };
+
+  const openForwardPicker = async () => {
+    if (!user?.id) return;
+    setShowForwardPicker(true);
+    const convos = await API.fetchConversations(user.id, activeCompany?.id ?? null);
+    setForwardConvos(convos.filter(c => c.id !== id));
+  };
+
+  const handleForwardMessage = async (targetConvId: string) => {
+    if (!msgActionTarget || !user?.id) return;
+    setForwarding(targetConvId);
+    await API.forwardMessage(msgActionTarget, targetConvId, user.id, {
+      companyPageId: activeCompany?.id ?? null,
+      accessToken: session?.access_token ?? undefined,
+    });
+    setForwarding(null);
+    setShowForwardPicker(false);
+    setMsgActionTarget(null);
+  };
+
   const renderMessage = ({ item, index }: { item: AppMessage; index: number }) => {
     const isMe   = item.sender_id === user?.id;
     const isTemp = item.id.startsWith("tmp_");
@@ -972,6 +1034,34 @@ export default function ChatScreen() {
       isSameDay(prevMsg.created_at, item.created_at) &&
       new Date(item.created_at).getTime() - new Date(prevMsg.created_at).getTime() < 5 * 60 * 1000;
     const showAvatar = !isMe && !sameSenderAsPrev;
+
+    // Deleted message — render placeholder, skip full bubble
+    if (item.deleted_at) {
+      return (
+        <View>
+          {showDateSep && (
+            <View style={st.dateSep}>
+              <View style={[st.dateSepLine, { backgroundColor: colors.border }]} />
+              <Text style={[st.dateSepText, { color: colors.mutedForeground, backgroundColor: colors.background }]}>
+                {formatDateSep(item.created_at, t)}
+              </Text>
+              <View style={[st.dateSepLine, { backgroundColor: colors.border }]} />
+            </View>
+          )}
+          <View style={[st.msgGroup, isMe ? st.msgGroupMe : st.msgGroupOther, { marginTop: 4 }]}>
+            <View style={[st.msgRow, isMe ? st.msgRowMe : st.msgRowOther]}>
+              {!isMe && <View style={{ width: 32 }} />}
+              <View style={[st.bubble, { backgroundColor: isMe ? colors.navy + "88" : "#f3f4f6", borderColor: colors.border, borderWidth: 1, flexDirection: "row", alignItems: "center", gap: 6 }]}>
+                <Feather name="slash" size={12} color={isMe ? "#ffffff66" : colors.mutedForeground} />
+                <Text style={{ fontSize: 13, fontStyle: "italic", color: isMe ? "#ffffff88" : colors.mutedForeground }}>
+                  Esta mensagem foi apagada
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      );
+    }
 
     return (
       <View>
@@ -1037,7 +1127,7 @@ export default function ChatScreen() {
               onLongPress={() => {
                 if (!isTemp) {
                   if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  setShowReactions(item.id);
+                  setMsgActionTarget(item);
                 }
               }}
               delayLongPress={350}
@@ -1257,10 +1347,47 @@ export default function ChatScreen() {
             </Text>
           </View>
         </TouchableOpacity>
+        <TouchableOpacity style={st.menuBtn} onPress={() => { setShowSearch(v => !v); if (showSearch) setSearchQuery(""); }}>
+          <Feather name="search" size={20} color={showSearch ? colors.gold : colors.navy} />
+        </TouchableOpacity>
         <TouchableOpacity style={st.menuBtn} onPress={() => setShowMenu(true)}>
           <Feather name="more-vertical" size={22} color={colors.navy} />
         </TouchableOpacity>
       </View>
+
+      {/* Search bar */}
+      {showSearch && (
+        <View style={[st.searchBar, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+          <Feather name="search" size={15} color={colors.mutedForeground} />
+          <TextInput
+            autoFocus
+            style={[st.searchInput, { color: colors.foreground }]}
+            placeholder="Buscar mensagens..."
+            placeholderTextColor={colors.mutedForeground}
+            value={searchQuery}
+            onChangeText={q => setSearchQuery(q)}
+          />
+          {searchHits.length > 0 && (
+            <>
+              <Text style={{ fontSize: 12, color: colors.mutedForeground, minWidth: 36, textAlign: "center" }}>
+                {searchHitIdx + 1}/{searchHits.length}
+              </Text>
+              <TouchableOpacity onPress={() => navigateSearch(-1)} style={{ padding: 4 }}>
+                <Feather name="chevron-up" size={18} color={colors.navy} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => navigateSearch(1)} style={{ padding: 4 }}>
+                <Feather name="chevron-down" size={18} color={colors.navy} />
+              </TouchableOpacity>
+            </>
+          )}
+          {searchQuery.length > 0 && searchHits.length === 0 && (
+            <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Sem resultado</Text>
+          )}
+          <TouchableOpacity onPress={() => { setShowSearch(false); setSearchQuery(""); }} style={{ padding: 4 }}>
+            <Feather name="x" size={18} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Messages */}
       {loading ? (
@@ -1408,19 +1535,129 @@ export default function ChatScreen() {
         </View>
       )}
 
-      {/* ── Reaction Picker ──────────────────────────────────────────────────── */}
-      <Modal visible={!!showReactions} transparent animationType="fade" onRequestClose={() => setShowReactions(null)}>
-        <Pressable style={st.reactionOverlay} onPress={() => setShowReactions(null)}>
-          <View style={[st.reactionPicker, { backgroundColor: "#fff" }]}>
-            {REACTION_EMOJIS.map(emoji => (
-              <TouchableOpacity
-                key={emoji}
-                style={st.reactionPickerBtn}
-                onPress={() => showReactions && handleReaction(showReactions, emoji)}
-              >
-                <Text style={st.reactionPickerEmoji}>{emoji}</Text>
-              </TouchableOpacity>
-            ))}
+      {/* ── Message Action Sheet (long-press) ───────────────────────────────── */}
+      <Modal visible={!!msgActionTarget} transparent animationType="slide" onRequestClose={() => setMsgActionTarget(null)}>
+        <Pressable style={st.sheetOverlay} onPress={() => setMsgActionTarget(null)}>
+          <View style={[st.sheet, { backgroundColor: "#fff", paddingBottom: bottomPad + 8 }]}>
+            <View style={[st.sheetHandle, { backgroundColor: colors.border }]} />
+
+            {/* Reaction row */}
+            <View style={{ flexDirection: "row", justifyContent: "space-around", paddingVertical: 14, paddingHorizontal: 4 }}>
+              {REACTION_EMOJIS.map(emoji => {
+                const active = msgActionTarget?.reactions?.find(r => r.emoji === emoji && r.mine);
+                return (
+                  <TouchableOpacity
+                    key={emoji}
+                    style={[{ padding: 8, borderRadius: 20 }, active && { backgroundColor: colors.gold + "22" }]}
+                    onPress={() => {
+                      const target = msgActionTarget!;
+                      setMsgActionTarget(null);
+                      handleReaction(target.id, emoji);
+                    }}
+                  >
+                    <Text style={{ fontSize: 26 }}>{emoji}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={[st.menuDivider, { backgroundColor: colors.border }]} />
+
+            {/* Reply */}
+            <TouchableOpacity style={st.actionRow} onPress={() => { setReplyTo(msgActionTarget!); setMsgActionTarget(null); }}>
+              <Feather name="corner-up-left" size={17} color={colors.navy} />
+              <Text style={[st.actionRowText, { color: colors.navy }]}>Responder</Text>
+            </TouchableOpacity>
+
+            <View style={[st.menuDivider, { backgroundColor: colors.border }]} />
+
+            {/* Forward */}
+            <TouchableOpacity style={st.actionRow} onPress={() => { openForwardPicker(); setMsgActionTarget(prev => prev); }}>
+              <Feather name="share-2" size={17} color={colors.navy} />
+              <Text style={[st.actionRowText, { color: colors.navy }]}>Encaminhar</Text>
+            </TouchableOpacity>
+
+            <View style={[st.menuDivider, { backgroundColor: colors.border }]} />
+
+            {/* Delete */}
+            <TouchableOpacity
+              style={st.actionRow}
+              onPress={() => {
+                const target = msgActionTarget!;
+                const isOwn = target.sender_id === user?.id;
+                setMsgActionTarget(null);
+                Alert.alert(
+                  "Apagar mensagem",
+                  isOwn
+                    ? "Como deseja apagar esta mensagem?"
+                    : "Apagar esta mensagem para você?",
+                  isOwn ? [
+                    { text: "Cancelar", style: "cancel" },
+                    { text: "Apagar para mim", onPress: () => handleDeleteMessage(target, false) },
+                    { text: "Apagar para todos", style: "destructive", onPress: () => handleDeleteMessage(target, true) },
+                  ] : [
+                    { text: "Cancelar", style: "cancel" },
+                    { text: "Apagar para mim", style: "destructive", onPress: () => handleDeleteMessage(target, false) },
+                  ],
+                );
+              }}
+            >
+              <Feather name="trash-2" size={17} color="#dc2626" />
+              <Text style={[st.actionRowText, { color: "#dc2626" }]}>Apagar mensagem</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ── Forward Picker ───────────────────────────────────────────────────── */}
+      <Modal visible={showForwardPicker} transparent animationType="slide" onRequestClose={() => { setShowForwardPicker(false); setForwardSearch(""); }}>
+        <Pressable style={st.sheetOverlay} onPress={() => { setShowForwardPicker(false); setForwardSearch(""); }}>
+          <View style={[st.sheet, { backgroundColor: "#fff", maxHeight: "78%", paddingBottom: bottomPad + 8 }]}>
+            <View style={[st.sheetHandle, { backgroundColor: colors.border }]} />
+            <Text style={[st.sheetTitle, { color: colors.navy }]}>Encaminhar para</Text>
+            <View style={[st.forwardSearchWrap, { borderColor: colors.border, backgroundColor: colors.background }]}>
+              <Feather name="search" size={15} color={colors.mutedForeground} />
+              <TextInput
+                style={[st.forwardSearchInput, { color: colors.foreground }]}
+                placeholder="Buscar conversa..."
+                placeholderTextColor={colors.mutedForeground}
+                value={forwardSearch}
+                onChangeText={setForwardSearch}
+              />
+            </View>
+            <FlatList
+              data={forwardConvos.filter(c => {
+                const name = c.is_group ? c.name : (c.participant?.full_name ?? c.participant_company?.name ?? "");
+                return !forwardSearch || name?.toLowerCase().includes(forwardSearch.toLowerCase());
+              })}
+              keyExtractor={c => c.id}
+              renderItem={({ item: conv }) => {
+                const name = conv.is_group
+                  ? (conv.name ?? "Grupo")
+                  : (conv.participant?.full_name ?? conv.participant_company?.name ?? "Chat");
+                const avatarUri = conv.is_group
+                  ? (conv as any).group_avatar_url
+                  : (conv.participant?.avatar_url ?? conv.participant_company?.avatar_url);
+                return (
+                  <TouchableOpacity
+                    style={[st.forwardRow, { borderBottomColor: colors.border }]}
+                    onPress={() => handleForwardMessage(conv.id)}
+                    disabled={!!forwarding}
+                  >
+                    <Avatar uri={avatarUri ?? null} name={name} size={40} />
+                    <Text style={[st.forwardName, { color: colors.navy, flex: 1 }]} numberOfLines={1}>{name}</Text>
+                    {forwarding === conv.id
+                      ? <ActivityIndicator size="small" color={colors.gold} />
+                      : <Feather name="send" size={17} color={colors.gold} />}
+                  </TouchableOpacity>
+                );
+              }}
+              ListEmptyComponent={
+                <Text style={{ color: colors.mutedForeground, textAlign: "center", marginTop: 24, fontSize: 14 }}>
+                  {forwardConvos.length === 0 ? "Carregando..." : "Nenhuma conversa encontrada"}
+                </Text>
+              }
+            />
           </View>
         </Pressable>
       </Modal>
@@ -1969,4 +2206,18 @@ const st = StyleSheet.create({
   menuItem:     { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
   menuItemText: { fontSize: 14, fontWeight: "500" },
   menuDivider:  { height: 1, marginHorizontal: 0 },
+
+  // Search bar
+  searchBar:          { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
+  searchInput:        { flex: 1, fontSize: 14 },
+
+  // Action sheet rows
+  actionRow:          { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 18, paddingVertical: 16 },
+  actionRowText:      { fontSize: 15, fontWeight: "600" },
+
+  // Forward picker
+  forwardSearchWrap:  { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginHorizontal: 4, marginBottom: 8 },
+  forwardSearchInput: { flex: 1, fontSize: 14 },
+  forwardRow:         { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1 },
+  forwardName:        { fontSize: 15, fontWeight: "600" },
 });

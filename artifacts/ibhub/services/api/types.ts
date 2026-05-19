@@ -145,6 +145,7 @@ export interface AppMessage {
   reply_to_id?: string | null;
   reply_to?: { content: string; sender_id: string } | null;
   read_at?: string | null;
+  deleted_at?: string | null;
   metadata?: Record<string, any> | null;
   reactions?: AppMessageReaction[];
 }
