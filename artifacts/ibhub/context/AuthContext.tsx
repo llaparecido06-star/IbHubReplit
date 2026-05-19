@@ -316,8 +316,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setProfileChecked(true);
         }
       } catch (e: any) {
-        // Never let an unhandled error silently keep loading=true forever
+        // Never let an unhandled error silently keep loading=true forever.
+        // Clear the timeout (if it hadn't fired yet) and ensure both loading
+        // and profileChecked are unblocked so the secondary guard in
+        // RootLayoutNav never stays active indefinitely.
         console.error("[AuthInit] Unhandled error during init:", e?.message ?? e);
+        clearTimeout(initTimeoutId);
+        setProfileChecked(true);
       } finally {
         // resolveLoading is idempotent — safe to call again as a fallback in
         // case an exception was thrown before the explicit call above.

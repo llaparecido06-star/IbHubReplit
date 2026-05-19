@@ -40,7 +40,11 @@ export function FeatureFlagsProvider({ children }: { children: React.ReactNode }
   }, []);
 
   useEffect(() => {
-    loadFlags();
+    // Safety-net: if the Supabase query hangs (slow network, review device),
+    // unblock isLoading after 5s so navigation redirects are never permanently
+    // blocked. loadFlags() sets isLoading=false on its own when it resolves.
+    const timeoutId = setTimeout(() => setIsLoading(false), 5_000);
+    loadFlags().finally(() => clearTimeout(timeoutId));
   }, [loadFlags]);
 
   useEffect(() => {
