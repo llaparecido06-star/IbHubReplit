@@ -360,9 +360,9 @@ export default function GroupSettingsScreen() {
                 <Text style={{ fontSize: 14, fontWeight: "700", color: colors.navy }}>Tipo de Acesso</Text>
               </View>
               {[
-                { value: "aberto" as const, label: "Aberto", desc: "Qualquer pessoa pode entrar", icon: "globe" as const },
-                { value: "fechado" as const, label: "Fechado", desc: "Precisa de aprovação do admin", icon: "lock" as const },
-                { value: "restrito" as const, label: "Restrito", desc: "Somente por convite", icon: "shield" as const },
+                { value: "aberto" as const, label: "Aberto", desc: "Aparece na busca · qualquer pessoa pode entrar", icon: "globe" as const },
+                { value: "fechado" as const, label: "Fechado", desc: "Aparece na busca · entrada requer aprovação do admin", icon: "lock" as const },
+                { value: "restrito" as const, label: "Restrito", desc: "Não aparece na busca · somente por convite do admin", icon: "shield" as const },
               ].map((opt) => {
                 const isSelected = editAccess === opt.value;
                 return (

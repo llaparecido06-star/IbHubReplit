@@ -176,7 +176,9 @@ export default function SearchScreen() {
         (isAll || f === "grupos")
           ? supabase.from("groups")
               .select("id, name, description, members_count, category")
-              .or(`name.ilike.%${trimmed}%,description.ilike.%${trimmed}%`).limit(lim(20))
+              .or(`name.ilike.%${trimmed}%,description.ilike.%${trimmed}%`)
+              .neq("access", "restrito")
+              .limit(lim(20))
           : Promise.resolve({ data: [] }),
       ]);
 
