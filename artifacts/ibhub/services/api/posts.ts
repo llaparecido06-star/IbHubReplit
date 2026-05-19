@@ -83,16 +83,23 @@ export async function fetchFeedPosts(
   activeCompanyId?: string | null,
   offset = 0,
   limit = 15,
+  accessToken?: string,
 ): Promise<Post[]> {
   try {
     // Use the authoritative API server endpoint for shadowban enforcement.
     // The server filters using the admin Supabase client; clients cannot bypass this.
-    const session = (await supabase.auth.getSession()).data.session;
-    if (!session?.access_token) return [];
+    //
+    // Prefer the caller-supplied accessToken (already in React state) over
+    // calling getSession() here. On first login, getSession() is invoked from
+    // within code triggered by onAuthStateChange, which still holds the
+    // supabase-js internal auth lock — causing a deadlock / indefinite hang
+    // that leaves the feed skeleton visible forever.
+    const token = accessToken ?? (await supabase.auth.getSession()).data.session?.access_token;
+    if (!token) return [];
 
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     const res = await guardedFetch(`${API_URL}/feed/posts?${params}`, {
-      headers: { Authorization: `Bearer ${session.access_token}` },
+      headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return [];
 

@@ -92,7 +92,7 @@ export default function FeedScreen() {
   const { t } = useTranslation();
   const colors = useColors();
   const router = useRouter();
-  const { user, profile, activeCompany, setActiveCompany } = useAuth();
+  const { user, profile, activeCompany, setActiveCompany, session } = useAuth();
   const { isEnabled: isFlagEnabled } = useFeatureFlags();
   const insets = useSafeAreaInsets();
 
@@ -256,7 +256,7 @@ export default function FeedScreen() {
     // Try real Supabase data first
     if (user?.id) {
       try {
-        const realPosts = await API.fetchFeedPosts(user.id, activeCompany?.id, 0, FEED_PAGE_SIZE);
+        const realPosts = await API.fetchFeedPosts(user.id, activeCompany?.id, 0, FEED_PAGE_SIZE, session?.access_token);
         if (realPosts.length > 0) {
           setPosts(realPosts);
           feedOffsetRef.current = realPosts.length;
@@ -294,14 +294,14 @@ export default function FeedScreen() {
     setPosts([]);
     setHasMoreFeed(false);
     setLoading(false);
-  }, [user?.id, activeCompany?.id]);
+  }, [user?.id, activeCompany?.id, session?.access_token]);
 
   const loadMorePosts = useCallback(async () => {
     if (isLoadingMoreRef.current || !hasMoreFeed || !user?.id) return;
     isLoadingMoreRef.current = true;
     setLoadingMore(true);
     try {
-      const more = await API.fetchFeedPosts(user.id, activeCompany?.id, feedOffsetRef.current, FEED_PAGE_SIZE);
+      const more = await API.fetchFeedPosts(user.id, activeCompany?.id, feedOffsetRef.current, FEED_PAGE_SIZE, session?.access_token);
       if (more.length > 0) {
         setPosts(prev => {
           const existingIds = new Set(prev.map(p => p.id));
@@ -317,7 +317,7 @@ export default function FeedScreen() {
       setLoadingMore(false);
       isLoadingMoreRef.current = false;
     }
-  }, [user?.id, activeCompany?.id, hasMoreFeed]);
+  }, [user?.id, activeCompany?.id, hasMoreFeed, session?.access_token]);
 
   const loadSuggestions = useCallback(async () => {
     if (!user?.id) return;
@@ -394,7 +394,7 @@ export default function FeedScreen() {
     isLoadingMoreRef.current = false;
     if (user?.id) {
       try {
-        const realPosts = await API.fetchFeedPosts(user.id, activeCompany?.id, 0, FEED_PAGE_SIZE);
+        const realPosts = await API.fetchFeedPosts(user.id, activeCompany?.id, 0, FEED_PAGE_SIZE, session?.access_token);
         if (realPosts.length > 0) {
           setPosts(realPosts);
           feedOffsetRef.current = realPosts.length;
@@ -411,7 +411,7 @@ export default function FeedScreen() {
     setPosts([]);
     setHasMoreFeed(false);
     setRefreshing(false);
-  }, [user?.id, activeCompany?.id]);
+  }, [user?.id, activeCompany?.id, session?.access_token]);
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
 
