@@ -50,6 +50,15 @@ import {
 
 const REACTION_EMOJIS = ["🍷", "❤️", "👍", "😂", "🔥", "😮"];
 
+const REPORT_CATEGORIES = [
+  "Conteúdo inapropriado",
+  "Spam ou publicidade",
+  "Assédio ou bullying",
+  "Informações falsas",
+  "Perfil falso",
+  "Outro",
+];
+
 const MAX_FILE_SIZE_LABEL = formatFileSize(MAX_CHAT_FILE_SIZE);
 
 function openAppSettings() {
@@ -118,6 +127,11 @@ export default function ChatScreen() {
   const [showFollowUp,           setShowFollowUp]           = useState(false);
   const [existingFollowUp,       setExistingFollowUp]       = useState<Date | null>(null);
   const [showReactions,          setShowReactions]          = useState<string | null>(null);
+  const [showReport,             setShowReport]             = useState(false);
+  const [reportCategory,         setReportCategory]         = useState<string | null>(null);
+  const [reportNote,             setReportNote]             = useState("");
+  const [reportSending,          setReportSending]          = useState(false);
+  const [reportDone,             setReportDone]             = useState(false);
   const [replyTo,                setReplyTo]                = useState<AppMessage | null>(null);
   const [sending,                setSending]                = useState(false);
   const [uploading,              setUploading]              = useState(false);
@@ -1658,10 +1672,99 @@ export default function ChatScreen() {
               <Text style={[st.menuItemText, { color: "#dc2626" }]}>{t("chat_screen.delete_conv_title")}</Text>
             </TouchableOpacity>
             <View style={[st.menuDivider, { backgroundColor: colors.border }]} />
-            <TouchableOpacity style={st.menuItem} onPress={() => setShowMenu(false)}>
+            <TouchableOpacity
+              style={st.menuItem}
+              onPress={() => {
+                setShowMenu(false);
+                setReportDone(false);
+                setReportCategory(null);
+                setReportNote("");
+                setShowReport(true);
+              }}
+            >
               <Feather name="flag" size={17} color="#dc2626" />
               <Text style={[st.menuItemText, { color: "#dc2626" }]}>{t("chat_screen.report")}</Text>
             </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ── Report modal ─────────────────────────────────────────────────────── */}
+      <Modal visible={showReport} transparent animationType="slide" onRequestClose={() => setShowReport(false)}>
+        <Pressable style={st.sheetOverlay} onPress={() => setShowReport(false)}>
+          <View style={[st.sheet, { backgroundColor: "#fff", maxHeight: "90%" }]}>
+            <View style={[st.sheetHandle, { backgroundColor: colors.border }]} />
+            {reportDone ? (
+              <View style={{ alignItems: "center", paddingVertical: 20, gap: 14 }}>
+                <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: "#d1fae5", alignItems: "center", justifyContent: "center" }}>
+                  <Feather name="check" size={30} color="#10b981" />
+                </View>
+                <Text style={[st.sheetTitle, { color: colors.navy, textAlign: "center" }]}>Denúncia enviada</Text>
+                <Text style={{ fontSize: 14, color: colors.mutedForeground, textAlign: "center", lineHeight: 21 }}>
+                  Sua denúncia foi recebida e será analisada pela nossa equipe. Obrigado por contribuir com a segurança da comunidade.
+                </Text>
+                <TouchableOpacity
+                  style={{ paddingVertical: 13, paddingHorizontal: 36, borderRadius: 12, backgroundColor: colors.navy, marginTop: 4 }}
+                  onPress={() => setShowReport(false)}
+                >
+                  <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Fechar</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                <Text style={[st.sheetTitle, { color: colors.navy }]}>Denunciar conversa</Text>
+                <Text style={{ fontSize: 13, color: colors.mutedForeground, marginTop: -8 }}>Selecione o motivo da denúncia:</Text>
+                <View style={{ gap: 8 }}>
+                  {REPORT_CATEGORIES.map(cat => (
+                    <TouchableOpacity
+                      key={cat}
+                      style={[
+                        { flexDirection: "row", alignItems: "center", gap: 12, padding: 13, borderRadius: 12, borderWidth: 1.5 },
+                        { borderColor: reportCategory === cat ? colors.navy : colors.border },
+                        reportCategory === cat && { backgroundColor: colors.navy + "08" },
+                      ]}
+                      onPress={() => setReportCategory(cat)}
+                    >
+                      <View style={[{ width: 18, height: 18, borderRadius: 9, borderWidth: 2, alignItems: "center", justifyContent: "center" }, { borderColor: reportCategory === cat ? colors.navy : colors.border }]}>
+                        {reportCategory === cat && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.navy }} />}
+                      </View>
+                      <Text style={{ fontSize: 14, color: colors.navy, fontWeight: reportCategory === cat ? "600" : "400" }}>{cat}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TextInput
+                  style={[{ borderWidth: 1, borderRadius: 12, padding: 12, fontSize: 14, minHeight: 72, textAlignVertical: "top" }, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background }]}
+                  placeholder="Descrição adicional (opcional)"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={reportNote}
+                  onChangeText={setReportNote}
+                  multiline
+                />
+                <TouchableOpacity
+                  style={[{ paddingVertical: 14, borderRadius: 14, alignItems: "center" }, { backgroundColor: reportCategory ? "#dc2626" : colors.border }]}
+                  onPress={async () => {
+                    if (!reportCategory || !user?.id) return;
+                    setReportSending(true);
+                    try {
+                      await supabase.from("reports").insert({
+                        reporter_id: user.id,
+                        reported_user_id: participant?.id ?? null,
+                        conversation_id: id,
+                        category: reportCategory,
+                        note: reportNote.trim() || null,
+                      });
+                    } catch {}
+                    setReportSending(false);
+                    setReportDone(true);
+                  }}
+                  disabled={!reportCategory || reportSending}
+                >
+                  {reportSending
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Enviar denúncia</Text>}
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </Pressable>
       </Modal>

@@ -24,7 +24,9 @@ import { useAudioRecorder, requestRecordingPermissionsAsync, setAudioModeAsync, 
 import * as DocumentPicker from "expo-document-picker";
 // Use the legacy module for `getInfoAsync` — see chat/[id].tsx for context.
 import { getInfoAsync as fsGetInfoAsync } from "expo-file-system/legacy";
+import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
+import { VideoView, useVideoPlayer } from "expo-video";
 import { Feather } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { AudioBubble } from "@/components/chat/AudioBubble";
@@ -41,6 +43,16 @@ import {
 } from "@/constants/chatUploads";
 
 const REACTION_EMOJIS = ["🍷", "❤️", "👍", "😂", "🔥", "😮"];
+
+function formatDateSep(dateStr: string): string {
+  const d = new Date(dateStr);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return "Hoje";
+  if (d.toDateString() === yesterday.toDateString()) return "Ontem";
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" });
+}
 
 const MAX_FILE_SIZE_LABEL = formatFileSize(MAX_CHAT_FILE_SIZE);
 
@@ -98,6 +110,7 @@ export default function GroupChatScreen() {
   const [replyTo, setReplyTo]           = useState<AppMessage | null>(null);
   const [menuVisible, setMenuVisible]   = useState(false);
   const [showAttach, setShowAttach]     = useState(false);
+  const [selectedMedia, setSelectedMedia] = useState<{ type: "image" | "video"; url: string } | null>(null);
 
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording]   = useState(false);
@@ -276,10 +289,18 @@ export default function GroupChatScreen() {
       .on("presence", { event: "sync" }, () => {
         const state = presenceChannel.presenceState();
         const others = Object.entries(state).filter(([k]) => k !== user.id);
-        const typingUser = others.find(([_, v]) => (v as any[])[0]?.typing);
-        if (typingUser) {
+        const typingUsers = others
+          .filter(([_, v]) => (v as any[])[0]?.typing)
+          .map(([_, v]) => (v as any[])[0]?.name ?? t("group_chat_screen.someone"));
+        if (typingUsers.length > 0) {
           setIsTyping(true);
-          setTypingName((typingUser[1] as any[])[0]?.name ?? t("group_chat_screen.someone"));
+          setTypingName(
+            typingUsers.length === 1
+              ? typingUsers[0]
+              : typingUsers.length === 2
+                ? `${typingUsers[0]} e ${typingUsers[1]}`
+                : `${typingUsers[0]} e mais ${typingUsers.length - 1}`,
+          );
         } else {
           setIsTyping(false);
           setTypingName("");
@@ -325,7 +346,7 @@ export default function GroupChatScreen() {
     setSending(true);
     broadcastTyping(false);
     if (typingTimer.current) clearTimeout(typingTimer.current);
-    await API.sendMessage(id, user.id, text, { reply_to_id: replyTo?.id, companyPageId: effectiveCompanyId });
+    await API.sendMessage(id, user.id, text, { reply_to_id: replyTo?.id, companyPageId: effectiveCompanyId, accessToken: session?.access_token ?? undefined });
     setReplyTo(null);
     setSending(false);
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
@@ -576,7 +597,21 @@ export default function GroupChatScreen() {
 
     setUploading(true);
     try {
-      const url = await API.uploadChatMedia(id, asset.uri, mimeType);
+      let uploadUri = asset.uri;
+      if (msgType === "image" && Platform.OS !== "web") {
+        try {
+          const compressed = await ImageManipulator.manipulateAsync(
+            asset.uri,
+            [{ resize: { width: 1080 } }],
+            { compress: 0.75, format: ImageManipulator.SaveFormat.JPEG },
+          );
+          uploadUri = compressed.uri;
+        } catch {}
+      }
+      const url = await API.uploadChatMedia(id, uploadUri, mimeType, null, {
+        accessToken: session?.access_token ?? undefined,
+        userId: user?.id ?? undefined,
+      });
       setUploading(false);
       if (!url) {
         setMessages(prev => prev.filter(m => m.id !== tempId));
@@ -584,7 +619,7 @@ export default function GroupChatScreen() {
         Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_media_send"));
         return;
       }
-      const saved = await API.sendMediaMessage(id, user.id, url, msgType, "", effectiveCompanyId);
+      const saved = await API.sendMediaMessage(id, user.id, url, msgType, "", effectiveCompanyId, session?.access_token ?? undefined);
       if (saved) {
         seenMsgIds.current.add(saved.id);
         setMessages(prev => {
@@ -654,7 +689,10 @@ export default function GroupChatScreen() {
 
       setUploading(true);
       const fileObj = (asset as any).file as File | undefined;
-      const url = await API.uploadChatMedia(id, asset.uri, resolvedMime, fileObj);
+      const url = await API.uploadChatMedia(id, asset.uri, resolvedMime, fileObj, {
+        accessToken: session?.access_token ?? undefined,
+        userId: user?.id ?? undefined,
+      });
       setUploading(false);
       if (!url) {
         if (tempId) {
@@ -664,7 +702,7 @@ export default function GroupChatScreen() {
         Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_file_send"));
         return;
       }
-      const saved = await API.sendMediaMessage(id, user.id, url, "file", asset.name ?? "arquivo", effectiveCompanyId);
+      const saved = await API.sendMediaMessage(id, user.id, url, "file", asset.name ?? "arquivo", effectiveCompanyId, session?.access_token ?? undefined);
       if (saved) {
         seenMsgIds.current.add(saved.id);
         setMessages(prev => {
@@ -763,16 +801,33 @@ export default function GroupChatScreen() {
 
   // ── Reactions ─────────────────────────────────────────────────────────────
 
-  const [reactionsMap, setReactionsMap] = useState<Record<string, Record<string, number>>>({});
-
   const handleReaction = (msgId: string, emoji: string) => {
     setReactionTarget(null);
-    setReactionsMap(prev => {
-      const cur = { ...(prev[msgId] ?? {}) };
-      cur[emoji] = (cur[emoji] ?? 0) + 1;
-      return { ...prev, [msgId]: cur };
-    });
+    if (!user?.id) return;
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setMessages(prev => prev.map(m => {
+      if (m.id !== msgId) return m;
+      const old = m.reactions ?? [];
+      const myPrev = old.find(r => r.mine);
+      let next: typeof old;
+      if (myPrev?.emoji === emoji) {
+        next = old
+          .map(r => r.emoji === emoji ? { ...r, count: r.count - 1, mine: false } : r)
+          .filter(r => r.count > 0);
+      } else {
+        const withoutMine = myPrev
+          ? old.map(r => r.emoji === myPrev.emoji ? { ...r, count: r.count - 1, mine: false } : r).filter(r => r.count > 0)
+          : old;
+        const existingNew = withoutMine.find(r => r.emoji === emoji);
+        if (existingNew) {
+          next = withoutMine.map(r => r.emoji === emoji ? { ...r, count: r.count + 1, mine: true } : r);
+        } else {
+          next = [...withoutMine, { emoji, count: 1, mine: true }];
+        }
+      }
+      return { ...m, reactions: next };
+    }));
+    API.toggleMessageReaction(msgId, user.id, emoji);
   };
 
   // ── Message renderers ─────────────────────────────────────────────────────
@@ -814,108 +869,147 @@ export default function GroupChatScreen() {
     </TouchableOpacity>
   );
 
-  const renderMessage = ({ item }: { item: AppMessage }) => {
-    const isMe         = item.sender_id === user?.id;
-    const time         = new Date(item.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-    const sender       = profiles.get(item.sender_id);
+  const renderMessage = ({ item, index }: { item: AppMessage; index: number }) => {
+    const isMe          = item.sender_id === user?.id;
+    const time          = new Date(item.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const sender        = profiles.get(item.sender_id);
     const fromCompanyId = (item as any).from_company_page_id ?? null;
     const companyProfile = fromCompanyId ? companyProfiles.get(fromCompanyId) : null;
-    const displayName  = isMe ? myName : (companyProfile?.name ?? sender?.full_name ?? t("group_chat_screen.member_fallback"));
+    const displayName   = isMe ? myName : (companyProfile?.name ?? sender?.full_name ?? t("group_chat_screen.member_fallback"));
     const displayAvatar = companyProfile?.avatar_url ?? sender?.avatar_url ?? undefined;
-    const isCompanyMsg = !!fromCompanyId;
-    const msgReactions = reactionsMap[item.id] ?? {};
-    const hasReactions = Object.keys(msgReactions).length > 0;
-    const msgType    = item.message_type ?? "text";
-    const isTemp     = item.id.startsWith("tmp_");
+    const isCompanyMsg  = !!fromCompanyId;
+    const msgReactions  = item.reactions ?? [];
+    const hasReactions  = msgReactions.length > 0;
+    const msgType       = item.message_type ?? "text";
+    const isTemp        = item.id.startsWith("tmp_");
+
+    const prevMsg      = index > 0 ? messages[index - 1] : null;
+    const showDateSep  = !prevMsg ||
+      new Date(item.created_at).toDateString() !== new Date(prevMsg.created_at).toDateString();
+    const isContinuation = !showDateSep && !!prevMsg &&
+      prevMsg.sender_id === item.sender_id &&
+      (new Date(item.created_at).getTime() - new Date(prevMsg.created_at).getTime()) < 5 * 60 * 1000;
 
     return (
-      <View style={[styles.msgGroup, isMe ? styles.msgGroupMe : styles.msgGroupOther]}>
-        <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
-          {!isMe && (
-            <TouchableOpacity
-              onPress={() => { isCompanyMsg && fromCompanyId ? router.push(`/empresa/${fromCompanyId}` as any) : router.push(`/profile/${item.sender_id}` as any); }}
-              activeOpacity={0.7}
-              style={styles.senderWrap}
-            >
-              <Avatar name={displayName} uri={displayAvatar} size={28} />
-            </TouchableOpacity>
-          )}
-          <View style={{ maxWidth: "80%", opacity: isTemp ? 0.6 : 1 }}>
-            {!isMe && (
-              <TouchableOpacity
-                onPress={() => { isCompanyMsg && fromCompanyId ? router.push(`/empresa/${fromCompanyId}` as any) : router.push(`/profile/${item.sender_id}` as any); }}
-                activeOpacity={0.7}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                  <Text style={[styles.senderName, { color: colors.gold }]}>{displayName}</Text>
-                  {isCompanyMsg && (
-                    <View style={{ backgroundColor: colors.gold + "22", borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
-                      <Text style={{ fontSize: 9, color: colors.gold, fontWeight: "700" }}>{t("group_chat_screen.company_badge")}</Text>
-                    </View>
-                  )}
-                </View>
-              </TouchableOpacity>
-            )}
-            {isMe && isCompanyMsg && (
-              <Text style={{ fontSize: 9, color: "#fff8", textAlign: "right", marginBottom: 2 }}>
-                {t("group_chat_screen.sent_as_company")}
-              </Text>
-            )}
-            <Pressable
-              style={[
-                styles.bubble,
-                { backgroundColor: isMe ? colors.navy : "#fff" },
-                !isMe && { borderColor: colors.border, borderWidth: 1 },
-              ]}
-              onLongPress={() => {
-                if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                setReactionTarget(item.id);
-              }}
-              delayLongPress={400}
-            >
-              {item.reply_to && (
-                <View style={[styles.quotedMsg, { borderLeftColor: colors.gold }]}>
-                  <Text style={[styles.quotedSender, { color: colors.gold }]} numberOfLines={1}>
-                    {item.reply_to.sender_id === user?.id ? t("group_chat_screen.you") : (profiles.get(item.reply_to.sender_id)?.full_name ?? t("group_chat_screen.member_fallback"))}
-                  </Text>
-                  <Text style={[styles.quotedText, { color: isMe ? "#ffffff88" : colors.mutedForeground }]} numberOfLines={1}>
-                    {item.reply_to.content}
-                  </Text>
-                </View>
-              )}
-
-              {msgType === "audio" ? (
-                renderAudioBubble(item, isMe)
-              ) : msgType === "file" ? (
-                renderFileBubble(item, isMe)
-              ) : (msgType === "image" || msgType === "video") && item.media_url ? (
-                <View>
-                  <Image source={{ uri: item.media_url }} style={styles.mediaImage} resizeMode="cover" />
-                  <Text style={[styles.bubbleTime, { color: isMe ? "#ffffff88" : colors.mutedForeground, marginTop: 4 }]}>{time}</Text>
-                </View>
-              ) : (
-                <>
-                  <Text style={[styles.bubbleText, { color: isMe ? "#fff" : colors.foreground }]}>{item.content}</Text>
-                  <Text style={[styles.bubbleTime, { color: isMe ? "#ffffff88" : colors.mutedForeground }]}>{time}</Text>
-                </>
-              )}
-            </Pressable>
-          </View>
-          <TouchableOpacity style={styles.replyBtn} onPress={() => setReplyTo(item)}>
-            <Feather name={isMe ? "corner-up-right" : "corner-up-left"} size={14} color={colors.mutedForeground} />
-          </TouchableOpacity>
-        </View>
-        {hasReactions && (
-          <View style={styles.reactionsRow}>
-            {Object.entries(msgReactions).map(([emoji, count]) => (
-              <View key={emoji} style={styles.reactionBadge}>
-                <Text style={styles.reactionEmoji}>{emoji}</Text>
-                {count > 1 && <Text style={styles.reactionCount}>{count}</Text>}
-              </View>
-            ))}
+      <>
+        {showDateSep && (
+          <View style={styles.dateSep}>
+            <View style={[styles.dateSepLine, { backgroundColor: colors.border }]} />
+            <Text style={[styles.dateSepText, { color: colors.mutedForeground }]}>
+              {formatDateSep(item.created_at)}
+            </Text>
+            <View style={[styles.dateSepLine, { backgroundColor: colors.border }]} />
           </View>
         )}
-      </View>
+        <View style={[styles.msgGroup, isMe ? styles.msgGroupMe : styles.msgGroupOther, isContinuation && { marginBottom: 2 }]}>
+          <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
+            {!isMe && (
+              isContinuation
+                ? <View style={{ width: 28 }} />
+                : (
+                  <TouchableOpacity
+                    onPress={() => { isCompanyMsg && fromCompanyId ? router.push(`/empresa/${fromCompanyId}` as any) : router.push(`/profile/${item.sender_id}` as any); }}
+                    activeOpacity={0.7}
+                    style={styles.senderWrap}
+                  >
+                    <Avatar name={displayName} uri={displayAvatar} size={28} />
+                  </TouchableOpacity>
+                )
+            )}
+            <View style={{ maxWidth: "80%", opacity: isTemp ? 0.6 : 1 }}>
+              {!isMe && !isContinuation && (
+                <TouchableOpacity
+                  onPress={() => { isCompanyMsg && fromCompanyId ? router.push(`/empresa/${fromCompanyId}` as any) : router.push(`/profile/${item.sender_id}` as any); }}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <Text style={[styles.senderName, { color: colors.gold }]}>{displayName}</Text>
+                    {isCompanyMsg && (
+                      <View style={{ backgroundColor: colors.gold + "22", borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
+                        <Text style={{ fontSize: 9, color: colors.gold, fontWeight: "700" }}>{t("group_chat_screen.company_badge")}</Text>
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              )}
+              {isMe && isCompanyMsg && !isContinuation && (
+                <Text style={{ fontSize: 9, color: "#fff8", textAlign: "right", marginBottom: 2 }}>
+                  {t("group_chat_screen.sent_as_company")}
+                </Text>
+              )}
+              <Pressable
+                style={[
+                  styles.bubble,
+                  { backgroundColor: isMe ? colors.navy : "#fff" },
+                  !isMe && { borderColor: colors.border, borderWidth: 1 },
+                  (msgType === "image" || msgType === "video") && item.media_url ? { padding: 0, overflow: "hidden" } : {},
+                ]}
+                onLongPress={() => {
+                  if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  setReactionTarget(item.id);
+                }}
+                onPress={() => {
+                  if ((msgType === "image" || msgType === "video") && item.media_url && !isTemp) {
+                    setSelectedMedia({ type: msgType as "image" | "video", url: item.media_url });
+                  }
+                }}
+                delayLongPress={400}
+              >
+                {item.reply_to && (
+                  <View style={[styles.quotedMsg, { borderLeftColor: colors.gold }, { margin: 10, marginBottom: 4 }]}>
+                    <Text style={[styles.quotedSender, { color: colors.gold }]} numberOfLines={1}>
+                      {item.reply_to.sender_id === user?.id ? t("group_chat_screen.you") : (profiles.get(item.reply_to.sender_id)?.full_name ?? t("group_chat_screen.member_fallback"))}
+                    </Text>
+                    <Text style={[styles.quotedText, { color: isMe ? "#ffffff88" : colors.mutedForeground }]} numberOfLines={1}>
+                      {item.reply_to.content}
+                    </Text>
+                  </View>
+                )}
+
+                {msgType === "audio" ? (
+                  <View style={{ padding: 10 }}>{renderAudioBubble(item, isMe)}</View>
+                ) : msgType === "file" ? (
+                  <View style={{ padding: 10 }}>{renderFileBubble(item, isMe)}</View>
+                ) : (msgType === "image" || msgType === "video") && item.media_url ? (
+                  <View>
+                    <Image source={{ uri: item.media_url }} style={styles.mediaImage} resizeMode="cover" />
+                    {msgType === "video" && (
+                      <View style={styles.videoOverlay}>
+                        <View style={styles.playBtn}>
+                          <Feather name="play" size={18} color="#fff" />
+                        </View>
+                      </View>
+                    )}
+                    <Text style={[styles.bubbleTime, { color: isMe ? "#ffffff88" : colors.mutedForeground, marginTop: 2, marginBottom: 6, marginHorizontal: 10, textAlign: "right" }]}>{time}</Text>
+                  </View>
+                ) : (
+                  <View style={{ paddingHorizontal: 14, paddingVertical: 10 }}>
+                    <Text style={[styles.bubbleText, { color: isMe ? "#fff" : colors.foreground }]}>{item.content}</Text>
+                    <Text style={[styles.bubbleTime, { color: isMe ? "#ffffff88" : colors.mutedForeground }]}>{time}</Text>
+                  </View>
+                )}
+              </Pressable>
+            </View>
+            <TouchableOpacity style={styles.replyBtn} onPress={() => setReplyTo(item)}>
+              <Feather name={isMe ? "corner-up-right" : "corner-up-left"} size={14} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+          {hasReactions && (
+            <View style={[styles.reactionsRow, isMe ? { marginRight: 34 } : { marginLeft: 34 }]}>
+              {msgReactions.map(r => (
+                <TouchableOpacity
+                  key={r.emoji}
+                  style={[styles.reactionBadge, r.mine && { borderColor: colors.gold, borderWidth: 1 }]}
+                  onPress={() => handleReaction(item.id, r.emoji)}
+                >
+                  <Text style={styles.reactionEmoji}>{r.emoji}</Text>
+                  {r.count > 1 && <Text style={styles.reactionCount}>{r.count}</Text>}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+      </>
     );
   };
 
@@ -962,15 +1056,21 @@ export default function GroupChatScreen() {
     >
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerLeft}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.headerBack}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.headerLeft}
+          onPress={() => router.push(`/group-settings/${id}` as any)}
+          activeOpacity={0.7}
+        >
           {groupInfo.avatar_url ? (
             <Image source={{ uri: groupInfo.avatar_url }} style={styles.headerAvatar} />
           ) : (
             <Avatar name={groupInfo.name} size={36} />
           )}
-          <View>
-            <Text style={[styles.groupName, { color: colors.navy }]}>{groupInfo.name}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.groupName, { color: colors.navy }]} numberOfLines={1}>{groupInfo.name}</Text>
             <View style={styles.membersRow}>
               {isTyping ? (
                 <Text style={[styles.membersText, { color: colors.gold, fontStyle: "italic" }]}>
@@ -1189,15 +1289,66 @@ export default function GroupChatScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      {/* Fullscreen image viewer */}
+      {selectedMedia?.type === "image" && (
+        <Modal visible animationType="fade" statusBarTranslucent onRequestClose={() => setSelectedMedia(null)}>
+          <Pressable
+            style={{ flex: 1, backgroundColor: "#000", justifyContent: "center", alignItems: "center" }}
+            onPress={() => setSelectedMedia(null)}
+          >
+            <TouchableOpacity
+              style={{ position: "absolute", top: topPad + 16, right: 16, zIndex: 10, padding: 10, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 20 }}
+              onPress={() => setSelectedMedia(null)}
+            >
+              <Feather name="x" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Image
+              source={{ uri: selectedMedia.url }}
+              style={{ width: "100%", height: "85%" }}
+              resizeMode="contain"
+            />
+          </Pressable>
+        </Modal>
+      )}
+
+      {/* Fullscreen video player */}
+      {selectedMedia?.type === "video" && (
+        <GroupVideoPlayerModal url={selectedMedia.url} onClose={() => setSelectedMedia(null)} />
+      )}
     </KeyboardAvoidingView>
+  );
+}
+
+function GroupVideoPlayerModal({ url, onClose }: { url: string; onClose: () => void }) {
+  const { top } = useSafeAreaInsets();
+  const player  = useVideoPlayer(url, (p) => { p.play(); });
+  return (
+    <Modal visible animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "#000" }}>
+        <TouchableOpacity
+          style={{ position: "absolute", top: top + 16, right: 16, zIndex: 10, padding: 10, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 20 }}
+          onPress={onClose}
+        >
+          <Feather name="x" size={24} color="#fff" />
+        </TouchableOpacity>
+        <VideoView player={player} style={{ flex: 1 }} contentFit="contain" />
+      </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   container:       { flex: 1 },
-  header:          { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1 },
+  header:          { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, paddingBottom: 12, borderBottomWidth: 1, gap: 8 },
+  headerBack:      { padding: 4 },
   headerLeft:      { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
   headerRight:     { padding: 4 },
+  dateSep:         { flexDirection: "row", alignItems: "center", gap: 8, marginVertical: 12, paddingHorizontal: 4 },
+  dateSepLine:     { flex: 1, height: 1 },
+  dateSepText:     { fontSize: 11, fontWeight: "600", paddingHorizontal: 4 },
+  videoOverlay:    { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.2)" },
+  playBtn:         { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.85)", alignItems: "center", justifyContent: "center" },
   headerAvatar:    { width: 36, height: 36, borderRadius: 18 },
   groupName:       { fontSize: 15, fontWeight: "700" },
   membersRow:      { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 },
@@ -1217,7 +1368,7 @@ const styles = StyleSheet.create({
   quotedSender:    { fontSize: 11, fontWeight: "700", marginBottom: 2 },
   quotedText:      { fontSize: 12 },
   replyBtn:        { padding: 6, opacity: 0.6 },
-  reactionsRow:    { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4, marginHorizontal: 36 },
+  reactionsRow:    { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4 },
   reactionBadge:   { flexDirection: "row", alignItems: "center", backgroundColor: "#f3f4f6", borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3, gap: 3 },
   reactionEmoji:   { fontSize: 16 },
   reactionCount:   { fontSize: 12, fontWeight: "700", color: "#555" },

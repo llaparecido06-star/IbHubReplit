@@ -126,11 +126,10 @@ export async function sendMessage(
   conversationId: string,
   senderId: string,
   content: string,
-  opts?: { reply_to_id?: string; message_type?: string; metadata?: Record<string, any>; companyPageId?: string | null },
+  opts?: { reply_to_id?: string; message_type?: string; metadata?: Record<string, any>; companyPageId?: string | null; accessToken?: string },
 ): Promise<AppMessage | null> {
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
+    const token = opts?.accessToken ?? (await supabase.auth.getSession()).data?.session?.access_token;
 
     const body: Record<string, any> = {
       conversation_id: conversationId,
@@ -260,6 +259,7 @@ export async function fetchConversations(userId: string, activeCompanyId?: strin
         name: convo.name,
         last_message: lastContent,
         last_message_at: lastMsg?.created_at ?? convo.created_at,
+        last_message_sender_id: lastMsg?.sender_id ?? null,
         unread_count: unreadRes.count ?? 0,
         participant,
         participant_company: displayCompanyId ? { id: displayCompanyId, name: "", avatar_url: null } : null,

@@ -125,6 +125,7 @@ export default function MessagesScreen() {
 
             conv.last_message = msgContent;
             conv.last_message_at = newMsg.created_at;
+            conv.last_message_sender_id = newMsg.sender_id;
 
             if (newMsg.sender_id !== user.id) {
               conv.unread_count = (conv.unread_count ?? 0) + 1;
@@ -393,6 +394,7 @@ export default function MessagesScreen() {
             ) : (
               <ConversationRow
                 conversation={item}
+                currentUserId={user?.id ?? null}
                 colors={colors}
                 followUpDate={followUpMap[item.id]}
                 justNow={justNowLabel}
@@ -443,6 +445,7 @@ export default function MessagesScreen() {
 
 function ConversationRow({
   conversation: conv,
+  currentUserId,
   colors,
   followUpDate,
   justNow,
@@ -452,6 +455,7 @@ function ConversationRow({
   tTomorrow,
 }: {
   conversation: AppConversation;
+  currentUserId: string | null;
   colors: any;
   followUpDate?: string;
   justNow: string;
@@ -514,7 +518,9 @@ function ConversationRow({
             style={[styles.convoMsg, { color: hasUnread ? colors.foreground : colors.mutedForeground }, hasUnread && { fontWeight: "600" }]}
             numberOfLines={1}
           >
-            {conv.last_message ?? tStartChat}
+            {conv.last_message != null && conv.last_message_sender_id === currentUserId
+              ? `Você: ${conv.last_message}`
+              : (conv.last_message ?? tStartChat)}
           </Text>
           {hasUnread && (
             <View style={[styles.unreadBadge, { backgroundColor: colors.gold }]}>

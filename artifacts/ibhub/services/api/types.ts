@@ -162,6 +162,7 @@ export interface AppConversation {
   name?: string | null;
   last_message?: string | null;
   last_message_at?: string | null;
+  last_message_sender_id?: string | null;
   unread_count: number;
   participant?: { id: string; full_name: string; avatar_url?: string | null } | null;
   participant_company?: { id: string; name: string; avatar_url?: string | null } | null;
