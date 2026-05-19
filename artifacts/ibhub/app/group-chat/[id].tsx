@@ -89,6 +89,7 @@ export default function GroupChatScreen() {
   const [companyProfiles, setCompanyProfiles] = useState<Map<string, { id: string; name: string; avatar_url: string | null }>>(new Map());
   const [input, setInput]               = useState("");
   const [loading, setLoading]           = useState(true);
+  const [isPending, setIsPending]       = useState(false);
   const [sending, setSending]           = useState(false);
   const [uploading, setUploading]       = useState(false);
   const [isTyping, setIsTyping]         = useState(false);
@@ -149,6 +150,22 @@ export default function GroupChatScreen() {
 
   const load = useCallback(async () => {
     if (!id || !user?.id) { setLoading(false); return; }
+
+    // Check membership status first — pending members see an approval-wait screen
+    const { data: memberRow } = await supabase
+      .from("group_members")
+      .select("role")
+      .eq("group_id", id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if ((memberRow as any)?.role === "pending") {
+      const { data: gr } = await supabase.from("groups").select("name, avatar_url, owner_id").eq("id", id).maybeSingle();
+      if (gr) setGroupInfo(prev => ({ ...prev, name: (gr as any).name ?? prev.name, avatar_url: (gr as any).avatar_url ?? null, owner_id: (gr as any).owner_id ?? "" }));
+      setIsPending(true);
+      setLoading(false);
+      return;
+    }
 
     const [convRes, partRes, groupRes, msgs, clearedAt] = await Promise.all([
       supabase.from("conversations").select("id, name").eq("id", id).maybeSingle(),
@@ -903,6 +920,40 @@ export default function GroupChatScreen() {
   };
 
   // ── Main render ───────────────────────────────────────────────────────────
+
+  // Pending-approval gate — show a friendly waiting screen instead of the chat
+  if (!loading && isPending) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: "space-between" }]}>
+        {/* Minimal header so user can go back */}
+        <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: "#fff", borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.headerLeft}>
+            <Feather name="arrow-left" size={22} color={colors.navy} />
+            {groupInfo.avatar_url
+              ? <Image source={{ uri: groupInfo.avatar_url }} style={styles.headerAvatar} />
+              : <Avatar name={groupInfo.name} size={36} />}
+            <View>
+              <Text style={[styles.senderName, { color: colors.navy }]} numberOfLines={1}>{groupInfo.name}</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Waiting state */}
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 16 }}>
+          <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: "#fef3c7", alignItems: "center", justifyContent: "center" }}>
+            <Feather name="clock" size={32} color="#d97706" />
+          </View>
+          <Text style={{ fontSize: 18, fontWeight: "700", color: colors.navy, textAlign: "center" }}>
+            Aguardando aprovação
+          </Text>
+          <Text style={{ fontSize: 14, color: colors.mutedForeground, textAlign: "center", lineHeight: 20 }}>
+            Sua solicitação de entrada foi enviada ao administrador do grupo. Você receberá acesso ao chat assim que for aprovado.
+          </Text>
+        </View>
+        <View style={{ height: bottomPad + 16 }} />
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
