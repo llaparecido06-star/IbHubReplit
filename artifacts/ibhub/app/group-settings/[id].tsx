@@ -38,6 +38,7 @@ interface GroupData {
   avatar_url: string | null;
   owner_id: string;
   members: Member[];
+  access: "aberto" | "fechado" | "restrito";
 }
 
 export default function GroupSettingsScreen() {
@@ -57,7 +58,9 @@ export default function GroupSettingsScreen() {
   ];
 
   const [activeTab, setActiveTab]       = useState<Tab>("membros");
-  const [group, setGroup]               = useState<GroupData>({ name: "Grupo", avatar_url: null, owner_id: "", members: [] });
+  const [group, setGroup]               = useState<GroupData>({ name: "Grupo", avatar_url: null, owner_id: "", members: [], access: "aberto" });
+  const [editAccess, setEditAccess]     = useState<"aberto" | "fechado" | "restrito">("aberto");
+  const [savingAccess, setSavingAccess] = useState(false);
   const [loading, setLoading]           = useState(true);
   const [updating, setUpdating]         = useState(false);
   const [pendingMembers, setPending]    = useState<{ id: string; name: string; avatar_url: string | null }[]>([]);
@@ -80,7 +83,7 @@ export default function GroupSettingsScreen() {
     if (!id) return;
     setLoading(true);
     const [groupRes, membersRes, pendingRes, muteRes] = await Promise.all([
-      supabase.from("groups").select("name, avatar_url, owner_id").eq("id", id).maybeSingle(),
+      supabase.from("groups").select("name, avatar_url, owner_id, access").eq("id", id).maybeSingle(),
       supabase.from("group_members").select("user_id, role").eq("group_id", id).neq("role", "pending"),
       supabase.from("group_members").select("user_id").eq("group_id", id).eq("role", "pending"),
       supabase.from("group_mutes").select("id").eq("group_id", id).eq("user_id", userId).maybeSingle(),
@@ -121,7 +124,9 @@ export default function GroupSettingsScreen() {
       return { id: m.user_id, name: p?.full_name ?? t("group_settings_screen.user_label"), avatar_url: p?.avatar_url ?? null };
     });
 
-    setGroup({ name: groupData.name, avatar_url: groupData.avatar_url, owner_id: groupData.owner_id, members });
+    const currentAccess: "aberto" | "fechado" | "restrito" = groupData.access ?? "aberto";
+    setGroup({ name: groupData.name, avatar_url: groupData.avatar_url, owner_id: groupData.owner_id, members, access: currentAccess });
+    setEditAccess(currentAccess);
     setPending(pending);
     setLoading(false);
   }, [id]);
@@ -250,6 +255,18 @@ export default function GroupSettingsScreen() {
     );
   };
 
+  const handleSaveAccess = async () => {
+    if (!isOwner || editAccess === group.access || savingAccess) return;
+    setSavingAccess(true);
+    const { error } = await supabase.from("groups").update({ access: editAccess }).eq("id", id);
+    setSavingAccess(false);
+    if (error) {
+      Alert.alert(t("group_settings_screen.error_title"), "Não foi possível atualizar o tipo de acesso.");
+    } else {
+      setGroup(prev => ({ ...prev, access: editAccess }));
+    }
+  };
+
   const handleToggleMute = async () => {
     if (!id || !userId || mutingGroup) return;
     setMutingGroup(true);
@@ -334,6 +351,55 @@ export default function GroupSettingsScreen() {
               <Text style={[styles.memberCountText, { color: colors.mutedForeground }]}>
                 {group.members.length} {group.members.length === 1 ? t("group_settings_screen.member_one") : t("group_settings_screen.member_many")}
               </Text>
+            </View>
+
+            {/* Access type section */}
+            <View style={{ marginTop: 4, marginBottom: 4, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: "#fff" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <Feather name="shield" size={15} color={colors.navy} />
+                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.navy }}>Tipo de Acesso</Text>
+              </View>
+              {[
+                { value: "aberto" as const, label: "Aberto", desc: "Qualquer pessoa pode entrar", icon: "globe" as const },
+                { value: "fechado" as const, label: "Fechado", desc: "Precisa de aprovação do admin", icon: "lock" as const },
+                { value: "restrito" as const, label: "Restrito", desc: "Somente por convite", icon: "shield" as const },
+              ].map((opt) => {
+                const isSelected = editAccess === opt.value;
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={{
+                      flexDirection: "row", alignItems: "center", gap: 12,
+                      padding: 10, borderRadius: 10, marginBottom: 6,
+                      borderWidth: isSelected ? 2 : 1,
+                      borderColor: isSelected ? colors.gold : colors.border,
+                      backgroundColor: isSelected ? colors.gold + "10" : colors.background,
+                      opacity: isOwner ? 1 : 0.6,
+                    }}
+                    onPress={() => isOwner && setEditAccess(opt.value)}
+                    activeOpacity={isOwner ? 0.7 : 1}
+                  >
+                    <Feather name={opt.icon} size={16} color={isSelected ? colors.gold : colors.mutedForeground} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: isSelected ? colors.navy : colors.foreground }}>{opt.label}</Text>
+                      <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>{opt.desc}</Text>
+                    </View>
+                    {isSelected && <Feather name="check-circle" size={16} color={colors.gold} />}
+                  </TouchableOpacity>
+                );
+              })}
+              {isOwner && editAccess !== group.access && (
+                <TouchableOpacity
+                  style={{ marginTop: 4, backgroundColor: colors.gold, borderRadius: 10, paddingVertical: 10, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 }}
+                  onPress={handleSaveAccess}
+                  disabled={savingAccess}
+                >
+                  {savingAccess
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <><Feather name="save" size={15} color="#fff" /><Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>Salvar</Text></>
+                  }
+                </TouchableOpacity>
+              )}
             </View>
 
             {loading ? (

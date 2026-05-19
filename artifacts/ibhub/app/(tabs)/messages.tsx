@@ -462,9 +462,13 @@ function ConversationRow({
 }) {
   const router   = useRouter();
   const hasUnread = (conv.unread_count ?? 0) > 0;
-  const name      = conv.name ?? conv.participant_company?.name ?? conv.participant?.full_name ?? "Chat";
+  const name      = conv.is_group
+    ? (conv.name ?? "Grupo")
+    : (conv.name ?? conv.participant_company?.name ?? conv.participant?.full_name ?? "Chat");
   const companyId = conv.participant_company?.id ?? null;
-  const avatarUri = companyId ? (conv.participant_company?.avatar_url ?? null) : (conv.participant?.avatar_url ?? null);
+  const avatarUri = conv.is_group
+    ? (conv.group_avatar_url ?? null)
+    : (companyId ? (conv.participant_company?.avatar_url ?? null) : (conv.participant?.avatar_url ?? null));
 
   const followUpDue = followUpDate
     ? (() => {
@@ -482,7 +486,13 @@ function ConversationRow({
   return (
     <TouchableOpacity
       style={[styles.convoRow, { borderBottomColor: colors.border, backgroundColor: "#fff" }]}
-      onPress={() => router.push((companyId ? `/chat/${conv.id}?companyId=${companyId}` : `/chat/${conv.id}`) as any)}
+      onPress={() => {
+        if (conv.is_group) {
+          router.push(`/group-chat/${conv.id}` as any);
+        } else {
+          router.push((companyId ? `/chat/${conv.id}?companyId=${companyId}` : `/chat/${conv.id}`) as any);
+        }
+      }}
       activeOpacity={0.7}
     >
       <Avatar uri={avatarUri} name={name} size={52} />

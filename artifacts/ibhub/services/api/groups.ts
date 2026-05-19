@@ -90,13 +90,17 @@ export async function createGroup(params: {
   category: string;
   access: "aberto" | "fechado" | "restrito";
   avatar_url?: string | null;
-}): Promise<Group | null> {
+}, accessToken?: string): Promise<Group | null> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) return null;
+    let token = accessToken;
+    if (!token) {
+      const { data: { session } } = await supabase.auth.getSession();
+      token = session?.access_token;
+    }
+    if (!token) return null;
     const res = await fetch(`${API_URL}/community/groups`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(params),
     });
     if (!res.ok) { console.error("createGroup:", res.status); return null; }

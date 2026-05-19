@@ -96,7 +96,7 @@ export default function ChatScreen() {
   const colors   = useColors();
   const router   = useRouter();
   const { id, companyId } = useLocalSearchParams<{ id: string; companyId?: string }>();
-  const { user, activeCompany } = useAuth();
+  const { user, activeCompany, session } = useAuth();
   const { refreshUnread } = useUnread();
   const insets   = useSafeAreaInsets();
 
@@ -485,14 +485,14 @@ export default function ChatScreen() {
         setUploadStatus(t("chat_screen.compressing_image"));
         const uploadUri = await compressImage(asset.uri);
         setUploadStatus(t("chat_screen.uploading_image"));
-        const url = await API.uploadChatMedia(id, uploadUri, mimeType);
+        const url = await API.uploadChatMedia(id, uploadUri, mimeType, null, { accessToken: session?.access_token ?? undefined, userId: user?.id ?? undefined });
         if (!url) {
           Alert.alert(t("chat_screen.error_title"), t("chat_screen.error_image_send"));
           setMessages(prev => prev.filter(m => m.id !== tempId));
           seenMsgIds.current.delete(tempId);
           return;
         }
-        const saved = await API.sendMediaMessage(id, user.id, url, msgType);
+        const saved = await API.sendMediaMessage(id, user.id, url, msgType, "", null, session?.access_token ?? undefined);
         if (saved) {
           seenMsgIds.current.add(saved.id);
           setMessages(prev => {
@@ -506,14 +506,14 @@ export default function ChatScreen() {
         }
       } else {
         setUploadStatus(t("chat_screen.uploading_video"));
-        const url = await API.uploadChatMedia(id, asset.uri, mimeType);
+        const url = await API.uploadChatMedia(id, asset.uri, mimeType, null, { accessToken: session?.access_token ?? undefined, userId: user?.id ?? undefined });
         if (!url) {
           Alert.alert(t("chat_screen.error_title"), t("chat_screen.error_video_send"));
           setMessages(prev => prev.filter(m => m.id !== tempId));
           seenMsgIds.current.delete(tempId);
           return;
         }
-        const saved = await API.sendMediaMessage(id, user.id, url, msgType);
+        const saved = await API.sendMediaMessage(id, user.id, url, msgType, "", null, session?.access_token ?? undefined);
         if (saved) {
           seenMsgIds.current.add(saved.id);
           setMessages(prev => {
@@ -584,7 +584,7 @@ export default function ChatScreen() {
       setUploading(true);
       setUploadStatus(t("chat_screen.uploading_file", { name: asset.name ?? t("chat_screen.file_label") }));
       const fileObj = (asset as any).file as File | undefined;
-      const url = await API.uploadChatMedia(id, asset.uri, resolvedMime, fileObj);
+      const url = await API.uploadChatMedia(id, asset.uri, resolvedMime, fileObj, { accessToken: session?.access_token ?? undefined, userId: user?.id ?? undefined });
       setUploading(false);
       setUploadStatus(null);
       if (!url) {
@@ -595,7 +595,7 @@ export default function ChatScreen() {
         Alert.alert(t("chat_screen.error_title"), t("chat_screen.error_file_send"));
         return;
       }
-      const saved = await API.sendMediaMessage(id, user.id, url, "file", asset.name ?? "arquivo");
+      const saved = await API.sendMediaMessage(id, user.id, url, "file", asset.name ?? "arquivo", null, session?.access_token ?? undefined);
       if (saved) {
         seenMsgIds.current.add(saved.id);
         setMessages(prev => {
@@ -731,7 +731,7 @@ export default function ChatScreen() {
 
       let url: string | null = null;
       try {
-        url = await API.uploadChatMedia(id, uri, mimeType);
+        url = await API.uploadChatMedia(id, uri, mimeType, null, { accessToken: session?.access_token ?? undefined, userId: user?.id ?? undefined });
       } catch (uploadErr: any) {
         console.error("[Audio] uploadChatMedia threw:", uploadErr?.message ?? uploadErr);
       }
@@ -749,7 +749,7 @@ export default function ChatScreen() {
       // Use the shared API endpoint so the server can fan out push
       // notifications and apply the same moderation/auditing logic that
       // image, video and file messages already get.
-      const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", activeCompany?.id);
+      const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", activeCompany?.id, session?.access_token ?? undefined);
       if (!saved) {
         console.error("[Audio] sendMediaMessage returned null");
         Alert.alert(t("chat_screen.error_audio_send_title"), t("chat_screen.error_audio_save"));

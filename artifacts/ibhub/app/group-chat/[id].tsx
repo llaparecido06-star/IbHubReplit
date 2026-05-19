@@ -77,7 +77,7 @@ export default function GroupChatScreen() {
   const colors  = useColors();
   const router  = useRouter();
   const { id }  = useLocalSearchParams<{ id: string }>();
-  const { user, activeCompany } = useAuth();
+  const { user, activeCompany, session } = useAuth();
   const insets  = useSafeAreaInsets();
 
   // All roles (including visualizador) can chat as company
@@ -325,10 +325,10 @@ export default function GroupChatScreen() {
         if (result.canceled || !result.assets?.length) return;
         const asset = result.assets[0];
         setUploading(true);
-        const url = await API.uploadChatMedia(id, asset.uri, asset.mimeType ?? "audio/mpeg");
+        const url = await API.uploadChatMedia(id, asset.uri, asset.mimeType ?? "audio/mpeg", null, { accessToken: session?.access_token ?? undefined, userId: user?.id ?? undefined });
         setUploading(false);
         if (!url) { Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_audio_send")); return; }
-        const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", effectiveCompanyId);
+        const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", effectiveCompanyId, session?.access_token ?? undefined);
         if (saved) {
           seenMsgIds.current.add(saved.id);
           setMessages(prev => {
@@ -421,10 +421,10 @@ export default function GroupChatScreen() {
       }
       setUploading(true);
       const mimeType = Platform.OS === "android" ? "audio/mp4" : "audio/m4a";
-      const url = await API.uploadChatMedia(id, uri, mimeType);
+      const url = await API.uploadChatMedia(id, uri, mimeType, null, { accessToken: session?.access_token ?? undefined, userId: user?.id ?? undefined });
       setUploading(false);
       if (!url) { Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_audio_send")); return; }
-      const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", effectiveCompanyId);
+      const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", effectiveCompanyId, session?.access_token ?? undefined);
       if (saved) {
         seenMsgIds.current.add(saved.id);
         setMessages(prev => {

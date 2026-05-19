@@ -286,6 +286,29 @@ export async function fetchConversations(userId: string, activeCompanyId?: strin
       }
     }
 
+    // Bulk-fetch group info (name + avatar) for group conversations.
+    // The conversations table may have a null name for older groups; fill it
+    // from the groups table and also grab the avatar for the list preview.
+    const groupIds = results.filter(r => r.is_group).map(r => r.id);
+    if (groupIds.length > 0) {
+      const { data: groupData } = await supabase
+        .from("groups")
+        .select("id, name, avatar_url")
+        .in("id", groupIds);
+      if (groupData) {
+        const groupMap = new Map((groupData as any[]).map(g => [g.id, g]));
+        for (const r of results) {
+          if (r.is_group) {
+            const g = groupMap.get(r.id);
+            if (g) {
+              if (!r.name) r.name = g.name;
+              r.group_avatar_url = g.avatar_url ?? null;
+            }
+          }
+        }
+      }
+    }
+
     // ── Identity filter (personal vs company) ─────────────────────────────────
     // Conversations are tagged at creation with company_page_id (null = personal).
     // Group chats (is_group=true) always appear in both modes.

@@ -46,7 +46,7 @@ export default function NewGroupScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { profile, user } = useAuth();
+  const { profile, user, session } = useAuth();
   const { hasFeature, isLoading: permLoading } = usePermissions();
   const userId = profile?.id ?? user?.id ?? "";
 
@@ -95,7 +95,7 @@ export default function NewGroupScreen() {
       description: desc.trim() || undefined,
       category: category!,
       access,
-    });
+    }, session?.access_token ?? undefined);
     if (!group) {
       setLoading(false);
       Alert.alert(t("common.error"), t("new_group_screen.error_create"));

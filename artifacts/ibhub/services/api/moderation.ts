@@ -300,6 +300,7 @@ export async function uploadChatMedia(
   uri: string,
   mimeType: string,
   fileObj?: File | null,
+  opts?: { accessToken?: string; userId?: string },
 ): Promise<string | null> {
   try {
     const safeMime = mimeType || "image/jpeg";
@@ -309,9 +310,13 @@ export async function uploadChatMedia(
     const fileName = `upload_${Date.now()}.${ext}`;
 
     const apiUrl = process.env.EXPO_PUBLIC_API_URL!;
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
-    const userId = sessionData?.session?.user?.id;
+    let token = opts?.accessToken;
+    let userId = opts?.userId;
+    if (!token || !userId) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      token = token ?? sessionData?.session?.access_token;
+      userId = userId ?? sessionData?.session?.user?.id;
+    }
     if (!token || !userId) return null;
 
     const formData = new FormData();
@@ -394,10 +399,14 @@ export async function sendMediaMessage(
   messageType: "image" | "video" | "audio" | "file",
   caption = "",
   companyPageId?: string | null,
+  accessToken?: string,
 ): Promise<AppMessage | null> {
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
+    let token = accessToken;
+    if (!token) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      token = sessionData?.session?.access_token;
+    }
 
     const body: Record<string, any> = {
       conversation_id: conversationId,

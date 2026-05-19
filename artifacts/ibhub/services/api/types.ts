@@ -167,4 +167,5 @@ export interface AppConversation {
   participant_company?: { id: string; name: string; avatar_url?: string | null } | null;
   accepted?: boolean;
   company_page_id?: string | null;
+  group_avatar_url?: string | null;
 }
