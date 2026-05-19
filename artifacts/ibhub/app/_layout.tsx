@@ -9,7 +9,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, usePathname, type Href } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -338,18 +338,29 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
+  // Safety-net: if useFonts gets stuck (neither resolves nor errors — possible
+  // on rare asset-registration failures in the native runtime), force the app
+  // to proceed after 3s so the splash screen never stays up indefinitely.
+  const [fontTimeout, setFontTimeout] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => setFontTimeout(true), 3_000);
+    return () => clearTimeout(id);
+  }, []);
+
   useEffect(() => {
     // Restore persisted language before first render
     initLocale();
   }, []);
 
+  const fontsReady = fontsLoaded || !!fontError || fontTimeout;
+
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    if (fontsReady) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsReady]);
 
-  if (!fontsLoaded && !fontError) return null;
+  if (!fontsReady) return null;
 
   return (
     <ErrorBoundary
