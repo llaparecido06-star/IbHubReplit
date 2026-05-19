@@ -68,8 +68,17 @@ export default function LoginScreen() {
       setError(err.toLowerCase().includes("suspensa") || err.toLowerCase().includes("suspen")
         ? err
         : t("auth.login.error_invalid"));
+      setLoading(false);
+      return;
     }
-    setLoading(false);
+    // Navigate immediately while still in the auth-stack context.
+    // This is more reliable than waiting for RootLayoutNav to detect the
+    // session change — that mechanism can fail when the layout tree
+    // transitions from auth stack → loading spinner → authenticated layout,
+    // because router.replace is called during a phase with no active navigator.
+    router.replace("/(tabs)" as any);
+    // Do not call setLoading(false): the screen will be replaced before
+    // the user sees the button revert to "Entrar".
   };
 
   const handleGoogle = async () => {
