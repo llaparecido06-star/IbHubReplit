@@ -38,7 +38,7 @@
         "backgroundColor": "#0d1b2a"
       },
       "package": "br.com.ibhub",
-      "versionCode": 23,
+      "versionCode": 25,
       "googleServicesFile": "./google-services.json",
       "allowBackup": false,
       "softwareKeyboardLayoutMode": "pan",
@@ -97,7 +97,8 @@
         }
       ],
       "./plugins/with-privacy-manifest",
-      "./plugins/with-folly-coroutines-fix"
+      "./plugins/with-folly-coroutines-fix",
+      "./plugins/with-fix-audio-boot"
     ],
     "experiments": {
       "typedRoutes": true,
