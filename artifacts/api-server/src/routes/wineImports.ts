@@ -353,7 +353,7 @@ function makeBiSuggestions(table: string, column: string) {
     if (error) return res.json({ suggestions: [] });
     const seen = new Set<string>();
     const suggestions: string[] = [];
-    for (const row of (data ?? []) as Record<string, string>[]) {
+    for (const row of (data ?? []) as unknown as Record<string, string>[]) {
       const name = row[column]?.trim();
       if (name && !seen.has(name)) { seen.add(name); suggestions.push(name); }
     }
