@@ -790,10 +790,28 @@ export default function MeuPerfilPage() {
 
             {/* Action cards — "Empresa" only shows when the user owns a company page */}
             <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              {/* Empresa card with dual actions when the user has a company page */}
+              {myCompanyId && (
+                <div style={{ flex: 1, backgroundColor: "#f8fafc", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "12px 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                  <span style={{ fontSize: 20 }}>🏢</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>Empresa</span>
+                  <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
+                    <button
+                      onClick={() => setLocation(`/app/empresa/${myCompanyId}`)}
+                      style={{ fontSize: 10, fontWeight: 700, color: GOLD, background: "none", border: `1px solid ${GOLD}`, borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}
+                    >
+                      Ver
+                    </button>
+                    <button
+                      onClick={() => setLocation(`/app/empresa/${myCompanyId}/editar`)}
+                      style={{ fontSize: 10, fontWeight: 700, color: WHITE, background: GOLD, border: "none", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}
+                    >
+                      ✏️ Editar
+                    </button>
+                  </div>
+                </div>
+              )}
               {[
-                ...(myCompanyId
-                  ? [{ icon: "🏢", label: "Empresa", sub: "Minha página", onClick: () => setLocation(`/app/empresa/${myCompanyId}`) }]
-                  : []),
                 { icon: "👥", label: "Conexões", sub: `${stats.connections} contatos`, onClick: openConnections },
                 { icon: "⭐", label: "Plano", sub: (profile as any)?.plan ?? "Gratuito", onClick: () => setLocation("/minha-conta") },
               ].map(card => (
