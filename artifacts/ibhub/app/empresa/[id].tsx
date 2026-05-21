@@ -179,8 +179,8 @@ export default function EmpresaScreen() {
         ? Promise.all([
             checkIsFollowingCompany(id, user.id).then(f => setIsFollowing(f)),
             checkUserCompanyRole(id, user.id).then(r => {
-              // Owner-only: matches company_pages / company_products RLS.
-              setIsManager(r.isOwner);
+              // Owners and editors can manage the page (edit info, panel, team).
+              setIsManager(r.isOwner || r.role === "editor");
               setUserRole(r.role);
             }),
           ])

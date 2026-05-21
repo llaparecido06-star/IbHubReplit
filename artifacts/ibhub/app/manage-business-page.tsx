@@ -334,13 +334,14 @@ export default function ManageBusinessPageScreen() {
 
   const isCreateMode = !pageId;
 
-  // Owner-only: matches company_pages RLS.
-  const canEdit = isOwner;
+  // Owners and editors can edit page info and manage the team.
+  const canEdit   = isOwner || userRole === "editor";
+  const canManage = isOwner || userRole === "editor";
 
   const tabList: Array<{ key: Tab; label: string; icon: string }> = [
     { key: "preview", label: t("manage_business.tab_preview"), icon: "eye" },
-    ...(canEdit ? [{ key: "editar" as Tab, label: t("manage_business.tab_edit"), icon: "edit-2" }] : []),
-    ...(isOwner  ? [{ key: "equipe" as Tab, label: t("manage_business.tab_team"), icon: "users" }] : []),
+    ...(canEdit   ? [{ key: "editar" as Tab, label: t("manage_business.tab_edit"), icon: "edit-2" }] : []),
+    ...(canManage ? [{ key: "equipe" as Tab, label: t("manage_business.tab_team"), icon: "users" }] : []),
   ];
 
   return (
@@ -353,8 +354,8 @@ export default function ManageBusinessPageScreen() {
             {isCreateMode ? t("manage_business.title_new") : (page?.name ?? t("manage_business.title_edit"))}
           </Text>
         </TouchableOpacity>
-        {/* Admin panel shortcut — only for owners */}
-        {!isCreateMode && isOwner && pageId && (
+        {/* Admin panel shortcut — owners and editors */}
+        {!isCreateMode && canManage && pageId && (
           <TouchableOpacity
             style={[styles.adminBtn, { backgroundColor: colors.gold }]}
             onPress={() => router.push(`/empresa/admin?id=${pageId}&name=${encodeURIComponent(page?.name ?? "")}` as any)}
@@ -449,7 +450,7 @@ export default function ManageBusinessPageScreen() {
             </View>
 
             {/* Content is edited inline on the public Empresa page. */}
-            {!isCreateMode && pageId && canEdit && (
+            {!isCreateMode && pageId && canManage && (
               <View style={[styles.quickLinksCard, { borderColor: colors.border }]}>
                 <Text style={[styles.quickLinksTitle, { color: colors.navy }]}>{t("manage_business.manage_content")}</Text>
                 <Text style={[styles.quickLinksHint, { color: colors.mutedForeground }]}>
@@ -715,13 +716,15 @@ export default function ManageBusinessPageScreen() {
                         {admin.role.charAt(0).toUpperCase() + admin.role.slice(1)}
                       </Text>
                     </View>
-                    <TouchableOpacity
-                      style={[styles.removeBtn, { marginRight: 4 }]}
-                      onPress={() => handleTransferOwnership(admin.user_id, p?.full_name ?? "membro")}
-                      disabled={transferring}
-                    >
-                      <Feather name="award" size={16} color={colors.gold} />
-                    </TouchableOpacity>
+                    {isOwner && (
+                      <TouchableOpacity
+                        style={[styles.removeBtn, { marginRight: 4 }]}
+                        onPress={() => handleTransferOwnership(admin.user_id, p?.full_name ?? "membro")}
+                        disabled={transferring}
+                      >
+                        <Feather name="award" size={16} color={colors.gold} />
+                      </TouchableOpacity>
+                    )}
                     <TouchableOpacity
                       style={styles.removeBtn}
                       onPress={() => handleRemoveMember(admin.user_id, p?.full_name ?? "membro")}

@@ -1832,7 +1832,7 @@ const ptBR = {
     transfer_btn: "Transferir",
     manage_content: "Gerenciar conteúdo",
     no_name_error: "Informe o nome da empresa.",
-    role_desc_editor_full: "Pode editar informações da página (nome, logo, bio), alterar portfólio e publicar todo tipo de conteúdo: posts, stories, chat, eventos, vagas e marketplace.",
+    role_desc_editor_full: "Pode editar informações da página (nome, logo, bio), alterar portfólio, publicar todo tipo de conteúdo (posts, stories, chat, eventos, vagas e marketplace), gerenciar a equipe e acessar o painel de administração. Não pode transferir nem excluir a página.",
     role_desc_moderador_full: "Pode publicar posts, responder chat, criar eventos, anunciar vagas e no marketplace. Não pode editar informações da página nem alterar portfólio.",
     role_desc_visualizador_full: "Pode responder mensagens no chat e grupos como empresa. Não pode publicar posts, criar eventos/vagas/marketplace nem editar informações da página.",
     your_role_prefix: "Seu papel: ",
