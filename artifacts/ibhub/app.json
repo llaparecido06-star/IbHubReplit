@@ -96,12 +96,6 @@
           "sounds": []
         }
       ],
-      [
-        "@sentry/react-native/expo",
-        {
-          "url": "https://sentry.io/"
-        }
-      ],
       "./plugins/with-privacy-manifest",
       "./plugins/with-folly-coroutines-fix",
       "./plugins/with-fix-audio-boot",
