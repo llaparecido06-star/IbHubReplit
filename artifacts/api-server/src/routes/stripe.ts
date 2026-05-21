@@ -155,7 +155,27 @@ async function getOrCreateCustomer(stripe: Stripe, userId: string, email: string
 
   const profile = data as ProfileRow | null;
 
-  if (profile?.stripe_customer_id) return profile.stripe_customer_id;
+  if (profile?.stripe_customer_id) {
+    // Verify the customer exists in the current Stripe mode (test vs live).
+    // A customer created in test mode will fail with "No such customer" when
+    // the live-mode key is used (and vice-versa). In that case, clear the
+    // stale ID and fall through to create a fresh one in the correct mode.
+    try {
+      const existing = await stripe.customers.retrieve(profile.stripe_customer_id);
+      if (!(existing as Stripe.DeletedCustomer).deleted) {
+        return profile.stripe_customer_id;
+      }
+      // Customer was deleted in Stripe — clear it and create a new one
+    } catch (err: unknown) {
+      if (!(err instanceof Stripe.errors.StripeError) || err.code !== "resource_missing") throw err;
+      // resource_missing = customer belongs to the other mode — fall through
+    }
+    // Clear the stale or deleted customer ID before creating a new one
+    await supabaseAdmin
+      .from("profiles")
+      .update({ stripe_customer_id: null })
+      .eq("id", userId);
+  }
 
   const customer = await stripe.customers.create({
     email: email ?? undefined,
