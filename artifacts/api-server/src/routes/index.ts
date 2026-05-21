@@ -13,6 +13,7 @@ import profileRouter from "./profile";
 import wineImportsRouter from "./wineImports";
 import messagesRouter from "./messages";
 import eventRegistrationsRouter from "./eventRegistrations";
+import crashReportsRouter from "./crashReports";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(profileRouter);
 router.use(wineImportsRouter);
 router.use(messagesRouter);
 router.use(eventRegistrationsRouter);
+router.use(crashReportsRouter);
 
 export default router;

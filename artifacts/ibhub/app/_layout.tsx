@@ -21,6 +21,12 @@ import { UnreadProvider, useUnread } from "@/context/UnreadContext";
 import { SidebarNav, useIsDesktop } from "@/components/ui/SidebarNav";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import * as SafeNotifications from "@/utils/safeNotifications";
+import { installGlobalErrorHandler, reportCrash } from "@/lib/crashReporter";
+
+// Install global JS error handler as early as possible — before any provider
+// or component renders. This catches fatal and non-fatal JS exceptions and
+// reports them to the crash_reports table via the API server.
+installGlobalErrorHandler();
 
 // Must be called once at module load, before any notification can arrive.
 // Without this, notifications received while the app is foregrounded are
@@ -368,6 +374,12 @@ export default function RootLayout() {
         if (__DEV__) {
           console.error("[RootErrorBoundary]", error, stack);
         }
+        reportCrash({
+          type: "render_error",
+          message: error?.message,
+          stack: error?.stack,
+          component_stack: stack,
+        });
       }}
     >
       <SafeAreaProvider>
