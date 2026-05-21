@@ -1,13 +1,12 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { config } from "../lib/config.js";
 
 const router: IRouter = Router();
 
 function getSupabaseAdmin() {
-  const url = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, key, {
+  return createClient(config.EXPO_PUBLIC_SUPABASE_URL, config.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }
