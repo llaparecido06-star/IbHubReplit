@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { BrevoClient } from "@getbrevo/brevo";
 import { logger } from "../lib/logger.js";
+import { config } from "../lib/config.js";
 
 const router = Router();
 
@@ -12,7 +13,22 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } },
 );
 
-const brevo = new BrevoClient({ apiKey: process.env.BREVO_API_KEY });
+// Lazy so the BrevoClient is only built once the config has been parsed and
+// the BREVO_API_KEY value is confirmed non-empty.  A module-level `new
+// BrevoClient({ apiKey: process.env.BREVO_API_KEY })` runs before the config
+// module has a chance to throw on missing vars, meaning `apiKey` can be
+// `undefined` and the Fern SDK silently stores it — then throws at send time.
+let _brevo: BrevoClient | null = null;
+function getBrevoClient(): BrevoClient | null {
+  if (!config.BREVO_API_KEY) {
+    logger.warn("BREVO_API_KEY is not set — skipping confirmation email");
+    return null;
+  }
+  if (!_brevo) {
+    _brevo = new BrevoClient({ apiKey: config.BREVO_API_KEY });
+  }
+  return _brevo;
+}
 
 const registrationSchema = z.object({
   name: z.string().min(2).max(200).transform((s) => s.trim()),
@@ -59,20 +75,24 @@ router.post("/event-registrations", async (req, res) => {
       return;
     }
 
-    try {
-      await brevo.transactionalEmails.sendTransacEmail({
-        sender: { name: "ibhub | IDEAL.BI", email: "atendimento@idealbi.com.br" },
-        to: [{ email, name }],
-        subject: "Inscrição confirmada — O Futuro no Mercado de Vinhos",
-        htmlContent: buildConfirmationEmail(name),
-      });
-    } catch (emailErr) {
-      const e = emailErr as Record<string, unknown>;
-      logger.error({
-        brevoStatus:  e.statusCode,
-        brevoBody:    e.body,
-        brevoMessage: e.message ?? String(emailErr),
-      }, "Failed to send confirmation email via Brevo");
+    const brevo = getBrevoClient();
+    if (brevo) {
+      try {
+        await brevo.transactionalEmails.sendTransacEmail({
+          sender: { name: "ibhub | IDEAL.BI", email: "atendimento@idealbi.com.br" },
+          to: [{ email, name }],
+          subject: "Inscrição confirmada — O Futuro no Mercado de Vinhos",
+          htmlContent: buildConfirmationEmail(name),
+        });
+        logger.info({ email }, "Confirmation email sent via Brevo");
+      } catch (emailErr) {
+        const e = emailErr as Record<string, unknown>;
+        logger.error({
+          brevoStatus:  e.statusCode,
+          brevoBody:    e.body,
+          brevoMessage: e.message ?? String(emailErr),
+        }, "Failed to send confirmation email via Brevo");
+      }
     }
 
     res.status(201).json({ success: true, id: data.id });
