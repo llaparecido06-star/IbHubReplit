@@ -154,7 +154,7 @@ router.delete("/users/me", async (req: Request, res: Response) => {
   // and allows the user to retry account deletion.
   const allWarnings = [...storageWarnings, ...dbWarnings];
   if (allWarnings.length > 0) {
-    console.error("[deleteUser] cleanup failures, aborting auth deletion:", allWarnings);
+    req.log.error({ warnings: allWarnings }, "[deleteUser] cleanup failures, aborting auth deletion");
     res.status(500).json({
       error: "Não foi possível excluir todos os seus dados. Tente novamente.",
       warnings: allWarnings,

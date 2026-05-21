@@ -182,7 +182,7 @@ router.post("/messages/send", validateBody(SendMessageSchema), async (req: Reque
     .single();
 
   if (error) {
-    console.error("[messages/send] insert error:", JSON.stringify(error));
+    req.log.error({ supabaseError: error.message }, "[messages/send] insert error");
     res.status(500).json({ error: error.message });
     return;
   }
@@ -412,7 +412,7 @@ router.post("/conversations/direct", validateBody(DirectConversationSchema), asy
     .insert({ id: newId, is_group: false, company_page_id: company_page_id ?? null });
 
   if (convErr) {
-    console.error("[conversations/direct] insert conversation:", JSON.stringify(convErr));
+    req.log.error({ supabaseError: convErr.message }, "[conversations/direct] insert conversation");
     res.status(500).json({ error: convErr.message });
     return;
   }

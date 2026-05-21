@@ -482,7 +482,7 @@ router.post("/community/groups/:id/notify-request", async (req: Request, res: Re
     });
 
   if (notifErr) {
-    console.error("notify-request insert:", notifErr);
+    req.log.error({ supabaseError: notifErr.message }, "notify-request insert");
     res.status(500).json({ error: notifErr.message });
     return;
   }
@@ -554,7 +554,7 @@ router.post("/community/groups/:id/members/:userId/approve", async (req: Request
       { conversation_id: groupId, user_id: memberId },
       { onConflict: "conversation_id,user_id,company_page_id", ignoreDuplicates: true }
     );
-  if (cpErr) console.warn("approve — conversation_participants:", cpErr.message);
+  if (cpErr) req.log.warn({ supabaseError: cpErr.message }, "approve — conversation_participants");
 
   res.status(200).json({ ok: true });
 });

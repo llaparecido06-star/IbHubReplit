@@ -147,7 +147,7 @@ router.post("/admin/set-password", async (req: Request, res: Response) => {
   });
   if (metaErr) {
     // Non-fatal: password is set, but flag failed — log and continue
-    console.error("[set-password] Failed to set must_change_password metadata:", metaErr.message);
+    req.log.error({ supabaseError: metaErr.message }, "[set-password] Failed to set must_change_password metadata");
   }
 
   res.json({ success: true });

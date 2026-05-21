@@ -2,6 +2,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { resolveUserId, requirePlanFeature } from "../lib/planCheck.js";
 import multer from "multer";
+import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
 
@@ -69,7 +70,7 @@ async function ensureBucket() {
 }
 
 // Ensure bucket exists and is configured at startup
-ensureBucket().catch(err => console.warn("ensureBucket:", err));
+ensureBucket().catch(err => logger.warn({ err }, "ensureBucket failed"));
 
 /**
  * POST /api/uploads/chat
@@ -111,7 +112,7 @@ router.post("/uploads/chat", async (req: Request, res: Response): Promise<void> 
       .upload(path, buffer, { contentType: mimeType || "application/pdf", upsert: false });
 
     if (error) {
-      console.error("upload error:", error);
+      req.log.error({ supabaseError: error.message }, "uploads/chat: storage upload failed");
       res.status(500).json({ error: error.message });
       return;
     }
@@ -119,7 +120,7 @@ router.post("/uploads/chat", async (req: Request, res: Response): Promise<void> 
     const { data } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(path);
     res.json({ url: data.publicUrl });
   } catch (err) {
-    console.error("uploads/chat:", err);
+    req.log.error({ err }, "uploads/chat: unexpected error");
     res.status(500).json({ error: "Upload failed" });
   }
 });
@@ -176,7 +177,7 @@ router.post(
         .upload(path, file.buffer, { contentType: safeMime, upsert: false });
 
       if (error) {
-        console.error("uploads/chat-form error:", error);
+        req.log.error({ supabaseError: error.message }, "uploads/chat-form: storage upload failed");
         res.status(500).json({ error: error.message });
         return;
       }
@@ -184,7 +185,7 @@ router.post(
       const { data } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(path);
       res.json({ url: data.publicUrl });
     } catch (err) {
-      console.error("uploads/chat-form:", err);
+      req.log.error({ err }, "uploads/chat-form: unexpected error");
       res.status(500).json({ error: "Upload failed" });
     }
   }
@@ -237,7 +238,7 @@ router.post(
         .upload(fileName, file.buffer, { contentType: safeMime, upsert: false });
 
       if (error) {
-        console.error("uploads/post-video error:", error);
+        req.log.error({ supabaseError: error.message }, "uploads/post-video: storage upload failed");
         res.status(500).json({ error: error.message });
         return;
       }
@@ -245,7 +246,7 @@ router.post(
       const { data } = supabaseAdmin.storage.from("post-videos").getPublicUrl(fileName);
       res.json({ url: data.publicUrl });
     } catch (err) {
-      console.error("uploads/post-video:", err);
+      req.log.error({ err }, "uploads/post-video: unexpected error");
       res.status(500).json({ error: "Upload failed" });
     }
   }
@@ -289,7 +290,7 @@ router.post("/uploads/portfolio", async (req: Request, res: Response): Promise<v
       .upload(path, buffer, { contentType: mimeType || "image/jpeg", upsert: false });
 
     if (error) {
-      console.error("portfolio upload error:", error);
+      req.log.error({ supabaseError: error.message }, "uploads/portfolio: storage upload failed");
       res.status(500).json({ error: error.message });
       return;
     }
@@ -297,7 +298,7 @@ router.post("/uploads/portfolio", async (req: Request, res: Response): Promise<v
     const { data } = supabaseAdmin.storage.from(PORTFOLIO_BUCKET).getPublicUrl(path);
     res.json({ url: data.publicUrl });
   } catch (err) {
-    console.error("uploads/portfolio:", err);
+    req.log.error({ err }, "uploads/portfolio: unexpected error");
     res.status(500).json({ error: "Upload failed" });
   }
 });
