@@ -21,11 +21,16 @@ import { UnreadProvider, useUnread } from "@/context/UnreadContext";
 import { SidebarNav, useIsDesktop } from "@/components/ui/SidebarNav";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import * as SafeNotifications from "@/utils/safeNotifications";
-import { installGlobalErrorHandler, reportCrash } from "@/lib/crashReporter";
+import { installGlobalErrorHandler, reportCrash, initSentry, Sentry } from "@/lib/crashReporter";
+
+// Initialize Sentry as early as possible — before any component renders.
+// Sentry hooks into the native crash reporter (PLCrashReporter on iOS) and
+// captures crashes that happen even before JavaScript starts executing.
+initSentry();
 
 // Install global JS error handler as early as possible — before any provider
 // or component renders. This catches fatal and non-fatal JS exceptions and
-// reports them to the crash_reports table via the API server.
+// reports them to both Sentry and our own crash_reports table.
 installGlobalErrorHandler();
 
 // Must be called once at module load, before any notification can arrive.
@@ -336,7 +341,7 @@ function RootLayoutNav() {
   return <AuthenticatedLayout />;
 }
 
-export default function RootLayout() {
+function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -400,3 +405,5 @@ export default function RootLayout() {
     </ErrorBoundary>
   );
 }
+
+export default Sentry.wrap(RootLayout);

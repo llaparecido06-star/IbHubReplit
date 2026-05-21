@@ -30,5 +30,8 @@
       "msw",
       "unrs-resolver"
     ]
+  },
+  "dependencies": {
+    "@sentry/react-native": "^8.11.1"
   }
 }

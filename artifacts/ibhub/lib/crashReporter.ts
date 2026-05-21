@@ -1,30 +1,56 @@
 /**
  * crashReporter.ts
  *
- * Lightweight JS-level crash reporter for the ibhub mobile app.
+ * Two-layer crash reporting for the ibhub mobile app:
  *
- * WHAT IT CAPTURES
- * ─────────────────
- * ✅ React render errors (via ErrorBoundary)
- * ✅ Fatal/non-fatal JS exceptions (via global.ErrorUtils handler)
- * ✅ Unhandled promise rejections
+ * Layer 1 — Sentry (native SDK):
+ *   ✅ Native startup crashes (PLCrashReporter on iOS — the "TurboModule queue" crashes)
+ *   ✅ JS exceptions with full symbolicated stack traces
+ *   ✅ React render errors
+ *   ✅ Performance tracing
+ *   → Requires EXPO_PUBLIC_SENTRY_DSN to be set.
  *
- * WHAT IT CANNOT CAPTURE
- * ──────────────────────
- * ❌ Native startup crashes (before JS engine starts — e.g. TurboModule queue)
- *    → These require a native SDK (Sentry) hooked into iOS PLCrashReporter.
- *    → The "com.meta.react.turbomodulemanager.queue" crashes from Apple review
- *      are in this category and will NOT appear here.
- *
- * Reports are sent to POST /api/crash-reports on the ibhub API server and
- * stored in the crash_reports Supabase table (see migrations_v73_crash_reports.sql).
- * The reporter always fails silently — it must never throw or cause a secondary crash.
+ * Layer 2 — Our own API (/api/crash-reports → Supabase):
+ *   ✅ React render errors with component stack
+ *   ✅ Fatal/non-fatal JS exceptions
+ *   ✅ Works even without a Sentry account
+ *   ❌ Native startup crashes (JS never runs, so can't send)
  */
 
 import { Platform } from "react-native";
 import Constants from "expo-constants";
+import * as Sentry from "@sentry/react-native";
+
+export { Sentry };
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? "";
+const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN ?? "";
+
+// ─── Sentry init ────────────────────────────────────────────────────────────
+
+/**
+ * Initialize Sentry. Call this once at the very top of _layout.tsx, before
+ * any component renders. Sentry hooks into the native crash reporter at this
+ * point, enabling it to capture crashes that happen even before JS runs.
+ *
+ * No-ops if EXPO_PUBLIC_SENTRY_DSN is not set.
+ */
+export function initSentry(): void {
+  if (!SENTRY_DSN) return;
+
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    // Only active in production — avoids noise in dev tunnel builds.
+    enabled: !__DEV__,
+    environment: __DEV__ ? "development" : "production",
+    // Capture 10 % of transactions for performance monitoring.
+    tracesSampleRate: 0.1,
+    // Attach a screenshot to error events when possible.
+    attachScreenshot: true,
+  });
+}
+
+// ─── JS crash reporter (our own API) ────────────────────────────────────────
 
 export type CrashType = "js_error" | "render_error" | "unhandled_rejection";
 
@@ -35,9 +61,29 @@ interface CrashPayload {
   component_stack?: string;
 }
 
+/**
+ * Report an error to both Sentry (if configured) and our own API server.
+ * Always fails silently — must never throw or cause a secondary crash.
+ */
 export async function reportCrash(payload: CrashPayload): Promise<void> {
-  if (!API_BASE) return;
+  // Forward to Sentry (no-op if not initialized).
+  if (SENTRY_DSN && !__DEV__) {
+    try {
+      const err = new Error(payload.message ?? payload.type);
+      if (payload.stack) err.stack = payload.stack;
+      Sentry.captureException(err, {
+        extra: {
+          type: payload.type,
+          component_stack: payload.component_stack,
+        },
+      });
+    } catch {
+      // swallow
+    }
+  }
 
+  // Forward to our own API.
+  if (!API_BASE) return;
   try {
     const deviceInfo: Record<string, unknown> = {
       platform: Platform.OS,
@@ -46,32 +92,29 @@ export async function reportCrash(payload: CrashPayload): Promise<void> {
       isDevice: Constants.isDevice,
     };
 
-    const body = JSON.stringify({
-      ...payload,
-      device_info: deviceInfo,
-      app_version: Constants.expoConfig?.version ?? "unknown",
-      build_version:
-        Constants.expoConfig?.ios?.buildNumber ??
-        String(Constants.expoConfig?.android?.versionCode ?? "unknown"),
-    });
-
     await fetch(`${API_BASE}/crash-reports`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body,
+      body: JSON.stringify({
+        ...payload,
+        device_info: deviceInfo,
+        app_version: Constants.expoConfig?.version ?? "unknown",
+        build_version:
+          Constants.expoConfig?.ios?.buildNumber ??
+          String(Constants.expoConfig?.android?.versionCode ?? "unknown"),
+      }),
     });
   } catch {
-    // Intentionally swallowed — the crash reporter must never throw.
+    // Intentionally swallowed — crash reporter must never throw.
   }
 }
 
+// ─── Global JS error handler ─────────────────────────────────────────────────
+
 /**
- * Installs a global JS error handler that intercepts fatal and non-fatal
- * React Native errors before they crash the app. Call this once at module
- * load time (top of _layout.tsx), before any provider renders.
- *
- * The original handler is preserved and called after reporting so the
- * default red-screen (in dev) and crash behaviour (in prod) still work.
+ * Installs a global React Native error handler via ErrorUtils.
+ * Call once at module load (top of _layout.tsx) before any provider renders.
+ * Preserves and chains the original handler so dev red-screen still works.
  */
 export function installGlobalErrorHandler(): void {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -89,32 +132,6 @@ export function installGlobalErrorHandler(): void {
       message: `[${isFatal ? "FATAL" : "non-fatal"}] ${err.message}`,
       stack: err.stack,
     });
-
     originalHandler?.(err, isFatal);
   });
-}
-
-/**
- * Installs a global unhandled promise rejection handler.
- * Call once at module load alongside installGlobalErrorHandler.
- */
-export function installPromiseRejectionHandler(): void {
-  const originalHandler = (Promise as unknown as { _unhandledRejectionHandler?: (reason: unknown) => void })._unhandledRejectionHandler;
-
-  // React Native patches global to track unhandled rejections.
-  // We piggyback on the existing mechanism rather than replacing it.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tracking = (global as any).__reactNativeUnhandledRejectionTracker;
-  if (!tracking) return;
-
-  const originalOnUnhandled = tracking.onUnhandled;
-  tracking.onUnhandled = (id: unknown, rejection: unknown) => {
-    const message =
-      rejection instanceof Error
-        ? rejection.message
-        : String(rejection ?? "unhandled rejection");
-    const stack = rejection instanceof Error ? rejection.stack : undefined;
-    reportCrash({ type: "unhandled_rejection", message, stack });
-    originalOnUnhandled?.(id, rejection);
-  };
 }
