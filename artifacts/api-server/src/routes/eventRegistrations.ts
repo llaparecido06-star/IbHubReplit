@@ -67,7 +67,12 @@ router.post("/event-registrations", async (req, res) => {
         htmlContent: buildConfirmationEmail(name),
       });
     } catch (emailErr) {
-      logger.error({ emailErr }, "Failed to send confirmation email via Brevo");
+      const e = emailErr as Record<string, unknown>;
+      logger.error({
+        brevoStatus:  e.statusCode,
+        brevoBody:    e.body,
+        brevoMessage: e.message ?? String(emailErr),
+      }, "Failed to send confirmation email via Brevo");
     }
 
     res.status(201).json({ success: true, id: data.id });
