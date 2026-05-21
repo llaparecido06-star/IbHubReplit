@@ -73,10 +73,10 @@ function PriceDisplay({ priceStr, gold }: { priceStr: string; gold?: boolean }) 
   const decimal = parts[1] ?? "00";
   return (
     <div style={{ display: "flex", alignItems: "flex-start", gap: 3 }}>
-      <span style={{ fontSize: 15, fontWeight: 700, color, marginTop: 8, lineHeight: 1 }}>R$</span>
+      <span className="price-currency" style={{ fontSize: 15, fontWeight: 700, color, marginTop: 8, lineHeight: 1 }}>R$</span>
       <div style={{ lineHeight: 1 }}>
-        <span style={{ fontSize: 52, fontWeight: 900, color, letterSpacing: -2 }}>{integer}</span>
-        <span style={{ fontSize: 22, fontWeight: 800, color }}>,{decimal}</span>
+        <span className="price-integer" style={{ fontSize: 52, fontWeight: 900, color, letterSpacing: -2 }}>{integer}</span>
+        <span className="price-decimal" style={{ fontSize: 22, fontWeight: 800, color }}>,{decimal}</span>
       </div>
     </div>
   );
@@ -164,11 +164,61 @@ export default function AssinarPage() {
           .stats-row { flex-wrap: wrap; gap: 28px !important; }
           .hero-h1 { font-size: 36px !important; }
           .testimonials-grid { grid-template-columns: 1fr !important; }
+          .benefits-grid { grid-template-columns: 1fr 1fr !important; }
+        }
+
+        @media (max-width:768px) {
+          .header-bar { padding: 12px 16px !important; }
+          .hero-section { padding: 72px 20px 80px !important; }
+          .hero-h1 { font-size: 30px !important; letter-spacing: -0.5px !important; }
+          .hero-body-p { font-size: 15px !important; margin-bottom: 40px !important; }
+          .hero-stats { gap: 36px !important; margin-bottom: 44px !important; }
+          .hero-cta { padding: 14px 32px !important; font-size: 14px !important; }
+          .plans-section { padding: 72px 16px 80px !important; }
+          .plans-section-title { font-size: 32px !important; }
+          .popular-card-inner { padding: 40px 22px 32px !important; }
+          .side-card-inner { padding: 28px 18px 24px !important; }
+          .trust-strip { flex-direction: column !important; gap: 10px !important; align-items: flex-start !important; padding: 20px 20px !important; }
+          .testimonials-section { padding: 64px 16px !important; }
+          .testimonials-title { font-size: 28px !important; }
+          .guarantee-section { padding: 64px 20px !important; }
+          .guarantee-title { font-size: 26px !important; }
+          .faq-section { padding: 64px 16px !important; }
+          .faq-title { font-size: 26px !important; }
+          .footer-cta-section { padding: 64px 20px !important; }
+          .footer-cta-title { font-size: 26px !important; }
+          .benefits-section { padding: 72px 20px !important; }
+          .benefits-title { font-size: 30px !important; }
+          .benefits-grid { grid-template-columns: 1fr 1fr !important; gap: 12px !important; }
+        }
+
+        @media (max-width:480px) {
+          .header-bar { padding: 10px 14px !important; }
+          .hero-section { padding: 52px 16px 60px !important; }
+          .hero-h1 { font-size: 26px !important; }
+          .hero-body-p { font-size: 14px !important; }
+          .hero-stats { gap: 20px !important; flex-wrap: wrap !important; justify-content: center !important; margin-bottom: 36px !important; }
+          .hero-stats > div { min-width: 80px; }
+          .hero-stats .stat-value { font-size: 24px !important; }
+          .hero-cta { padding: 13px 28px !important; width: 100% !important; justify-content: center !important; }
+          .plans-section { padding: 52px 12px 60px !important; }
+          .popular-card-inner { padding: 36px 16px 28px !important; }
+          .side-card-inner { padding: 24px 14px 20px !important; }
+          .benefits-grid { grid-template-columns: 1fr !important; }
+          .benefits-section { padding: 52px 16px !important; }
+          .trust-strip { padding: 16px !important; }
+          .testimonials-section { padding: 48px 14px !important; }
+          .guarantee-section { padding: 48px 16px !important; }
+          .faq-section { padding: 48px 14px !important; }
+          .footer-cta-section { padding: 48px 16px !important; }
+          .price-integer { font-size: 40px !important; }
+          .price-decimal { font-size: 18px !important; }
+          .price-currency { font-size: 13px !important; margin-top: 6px !important; }
         }
       `}</style>
 
       {/* ── Header ── */}
-      <header style={{
+      <header className="header-bar" style={{
         position: "sticky", top: 0, zIndex: 200,
         backgroundColor: "rgba(6,16,30,0.85)",
         backdropFilter: "blur(20px)",
@@ -211,7 +261,7 @@ export default function AssinarPage() {
       </header>
 
       {/* ── Hero ── */}
-      <section style={{
+      <section className="hero-section" style={{
         position: "relative", overflow: "hidden",
         padding: "120px 24px 140px",
         textAlign: "center",
@@ -261,7 +311,7 @@ export default function AssinarPage() {
             }}>merece mais.</span>
           </h1>
 
-          <p style={{
+          <p className="hero-body-p" style={{
             fontSize: 17, color: "rgba(255,255,255,0.5)",
             lineHeight: 1.8, marginBottom: 56,
             maxWidth: 480, margin: "0 auto 56px",
@@ -271,14 +321,14 @@ export default function AssinarPage() {
           </p>
 
           {/* Stats */}
-          <div className="stats-row" style={{ display: "flex", gap: 64, justifyContent: "center", marginBottom: 64 }}>
+          <div className="stats-row hero-stats" style={{ display: "flex", gap: 64, justifyContent: "center", marginBottom: 64 }}>
             {[
               { value: "8.000+", label: "Profissionais na rede" },
               { value: "12+",    label: "Países representados" },
               { value: "94%",    label: "Taxa de renovação" },
             ].map(s => (
               <div key={s.label} style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 32, fontWeight: 900, color: GOLD, letterSpacing: -0.5, lineHeight: 1 }}>{s.value}</div>
+                <div className="stat-value" style={{ fontSize: 32, fontWeight: 900, color: GOLD, letterSpacing: -0.5, lineHeight: 1 }}>{s.value}</div>
                 <div style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", fontWeight: 500, marginTop: 6, letterSpacing: 0.5, textTransform: "uppercase" }}>{s.label}</div>
               </div>
             ))}
@@ -286,6 +336,7 @@ export default function AssinarPage() {
 
           <a
             href="#planos"
+            className="hero-cta"
             style={{
               display: "inline-flex", alignItems: "center", gap: 10,
               background: `linear-gradient(135deg, ${GOLD} 0%, #e8c87a 50%, #b8932a 100%)`,
@@ -305,20 +356,20 @@ export default function AssinarPage() {
       </section>
 
       {/* ── Por que Pro ── */}
-      <section style={{ padding: "100px 24px", background: "#fff" }}>
+      <section className="benefits-section" style={{ padding: "100px 24px", background: "#fff" }}>
         <div style={{ maxWidth: 1000, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 72 }}>
             <p style={{ color: GOLD, fontWeight: 600, fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase", marginBottom: 16 }}>
               Por que ibhub Pro?
             </p>
-            <h2 style={{
+            <h2 className="benefits-title" style={{
               fontFamily: "'Playfair Display', Georgia, serif",
               fontSize: 40, fontWeight: 800, color: NAVY, lineHeight: 1.15,
             }}>
               Tudo que você precisa para<br />crescer no setor de vinhos
             </h2>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+          <div className="benefits-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
             {[
               { icon: "✦", title: "Rede exclusiva",           desc: "Conecte-se com importadores, produtores, sommeliers e distribuidores do setor vitivinícola." },
               { icon: "◈", title: "Inteligência de mercado",  desc: "Dados, gráficos e KPIs exclusivos do Ideal.BI para tomadas de decisão mais precisas." },
@@ -350,7 +401,7 @@ export default function AssinarPage() {
       </section>
 
       {/* ── Plans ── */}
-      <section id="planos" style={{
+      <section id="planos" className="plans-section" style={{
         padding: "120px 24px 140px",
         background: `radial-gradient(ellipse 100% 60% at 50% 100%, #0d1f35 0%, ${DEEP} 70%)`,
         position: "relative", overflow: "hidden",
@@ -362,7 +413,7 @@ export default function AssinarPage() {
             <p style={{ color: GOLD, fontWeight: 600, fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase", marginBottom: 16 }}>
               Escolha seu plano
             </p>
-            <h2 style={{
+            <h2 className="plans-section-title" style={{
               fontFamily: "'Playfair Display', Georgia, serif",
               fontSize: 42, fontWeight: 800, color: "#fff", marginBottom: 16, lineHeight: 1.1,
             }}>
@@ -416,7 +467,7 @@ export default function AssinarPage() {
                     return (
                       <div
                         key={plan.id}
-                        className="plan-card plan-card-popular gold-glow"
+                        className="plan-card plan-card-popular gold-glow popular-card-inner"
                         style={{
                           background: `linear-gradient(160deg, #0c1e34 0%, #071224 100%)`,
                           borderRadius: 24,
@@ -576,7 +627,7 @@ export default function AssinarPage() {
                   return (
                     <div
                       key={plan.id}
-                      className="plan-card"
+                      className="plan-card side-card-inner"
                       style={{
                         background: "rgba(255,255,255,0.03)",
                         borderRadius: 20,
@@ -717,7 +768,7 @@ export default function AssinarPage() {
       </section>
 
       {/* ── Trust strip ── */}
-      <div style={{
+      <div className="trust-strip" style={{
         borderTop: `1px solid rgba(255,255,255,0.06)`,
         borderBottom: `1px solid rgba(255,255,255,0.06)`,
         backgroundColor: "rgba(255,255,255,0.02)",
@@ -740,13 +791,13 @@ export default function AssinarPage() {
       </div>
 
       {/* ── Testimonials ── */}
-      <section style={{ padding: "100px 24px", background: "#f9f8f6" }}>
+      <section className="testimonials-section" style={{ padding: "100px 24px", background: "#f9f8f6" }}>
         <div style={{ maxWidth: 1000, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 72 }}>
             <p style={{ color: GOLD, fontWeight: 600, fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase", marginBottom: 16 }}>
               Quem já usa o ibhub Pro
             </p>
-            <h2 style={{
+            <h2 className="testimonials-title" style={{
               fontFamily: "'Playfair Display', Georgia, serif",
               fontSize: 38, fontWeight: 800, color: NAVY, lineHeight: 1.15,
             }}>
@@ -802,7 +853,7 @@ export default function AssinarPage() {
       </section>
 
       {/* ── Guarantee ── */}
-      <section style={{
+      <section className="guarantee-section" style={{
         padding: "100px 24px", textAlign: "center",
         borderTop: `1px solid rgba(255,255,255,0.06)`,
         background: `radial-gradient(ellipse 80% 60% at 50% 50%, #0d1f35 0%, ${DEEP} 80%)`,
@@ -814,7 +865,7 @@ export default function AssinarPage() {
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 28, margin: "0 auto 28px",
           }}>🛡️</div>
-          <h2 style={{
+          <h2 className="guarantee-title" style={{
             fontFamily: "'Playfair Display', Georgia, serif",
             fontSize: 32, fontWeight: 800, color: "#fff", marginBottom: 18, lineHeight: 1.2,
           }}>
@@ -842,11 +893,11 @@ export default function AssinarPage() {
       </section>
 
       {/* ── FAQ ── */}
-      <section style={{ padding: "100px 24px", background: "#fff" }}>
+      <section className="faq-section" style={{ padding: "100px 24px", background: "#fff" }}>
         <div style={{ maxWidth: 680, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 64 }}>
             <p style={{ color: GOLD, fontWeight: 600, fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase", marginBottom: 16 }}>FAQ</p>
-            <h2 style={{
+            <h2 className="faq-title" style={{
               fontFamily: "'Playfair Display', Georgia, serif",
               fontSize: 36, fontWeight: 800, color: NAVY,
             }}>Dúvidas frequentes</h2>
@@ -895,14 +946,14 @@ export default function AssinarPage() {
       </section>
 
       {/* ── Footer CTA ── */}
-      <section style={{
+      <section className="footer-cta-section" style={{
         padding: "100px 24px", textAlign: "center",
         borderTop: `1px solid rgba(255,255,255,0.06)`,
         background: `radial-gradient(ellipse 80% 60% at 50% 50%, #0d1f35 0%, ${DEEP} 80%)`,
       }}>
         <div style={{ maxWidth: 480, margin: "0 auto" }}>
           <img src={`${import.meta.env.BASE_URL}logo-ibhub-branco.png`} alt="ibhub" style={{ height: 34, objectFit: "contain", marginBottom: 32, opacity: 0.9 }} />
-          <h2 style={{
+          <h2 className="footer-cta-title" style={{
             fontFamily: "'Playfair Display', Georgia, serif",
             fontSize: 32, fontWeight: 800, color: "#fff", marginBottom: 16, lineHeight: 1.2,
           }}>
