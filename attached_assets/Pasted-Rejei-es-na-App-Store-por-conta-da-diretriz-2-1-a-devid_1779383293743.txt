@@ -1,0 +1,30 @@
+Rejeições na App Store por conta da diretriz 2.1(a) devido a falhas na inicialização são extremamente frustrantes, mas conseguir estabilizar completamente o IbHub e publicá-lo na App Store é um grande marco a ser alcançado. Vamos detalhar exatamente o que está acontecendo nos bastidores para que você possa resolver isso.
+
+Ambos os relatórios de falha (crash logs) que você enviou indicam erros fatais no ambiente de execução (runtime) do React Native, especificamente na interação com o motor JavaScript Hermes.
+
+Crash Log 1: Falha no Runtime do JavaScript
+A primeira falha ocorreu diretamente na thread JavaScript do React Native (com.facebook.react.runtime.JavaScript).
+
+O Erro: Ele acionou uma falha de segmentação (EXC_BAD_ACCESS) ao tentar acessar um endereço de memória inválido (0x24).
+
+A Causa: O rastreamento de pilha (stack trace) mostra a falha acontecendo durante hermes::vm::Interpreter::createObjectFromBuffer e hermes::vm::Interpreter::interpretFunction. Isso geralmente significa que o Hermes está falhando ao ler ou interpretar o pacote JS (bundle) inicial na inicialização, possivelmente devido a um pacote corrompido, uma sintaxe JS incompatível que o Hermes não consegue analisar, ou um problema de falta de memória (out-of-memory) durante o carregamento inicial.
+
+Crash Log 2: Exceção no Módulo Nativo
+A segunda falha fornece uma pista muito mais específica. Ela ocorreu na fila do TurboModule (com.meta.react.turbomodulemanager.queue).
+
+O Erro: Assim como a primeira, ela gerou uma falha de segmentação EXC_BAD_ACCESS.
+
+A Causa: O rastreamento de pilha revela exatamente o que o aplicativo estava fazendo quando parou: facebook::react::TurboModuleConvertUtils::convertNSExceptionToJSError.
+
+O que isso significa: Um dos seus módulos nativos em Objective-C (um TurboModule) lançou um erro fatal (NSException). O React Native capturou essa exceção e tentou convertê-la em um erro JavaScript para exibir uma tela vermelha (red screen) ou reportar para o seu código JS. No entanto, o motor Hermes falhou ao tentar alocar a memória de string para essa mensagem de erro (hermes::vm::StringPrimitive::createEfficientImpl).
+
+A Variável do iPad
+A Apple observou explicitamente que testou seu aplicativo em um iPad Air de 11 polegadas (M3) com o iPadOS 26.5. Como o revisor experimentou falhas imediatas na inicialização, é altamente provável que este seja um problema específico do ambiente (dispositivo).
+
+Culpados comuns por exceções em módulos nativos especificamente em iPads incluem:
+
+Restrições de UI/Layout: Módulos nativos que tentam apresentar visualizações (views), alertas ou popovers sem ancorá-los adequadamente (o que os iPhones perdoam, mas os iPads aplicam rigorosamente).
+
+Módulos de Orientação: Bibliotecas que lidam com a orientação da tela e que não estão configuradas para os requisitos de multitarefa do iPad.
+
+Câmera/Permissões: Bibliotecas de permissões nativas que se comportam de maneira diferente em ambientes iPadOS.
