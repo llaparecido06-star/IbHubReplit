@@ -183,7 +183,7 @@ router.get("/wine-imports/bi-search/importadores", async (req: Request, res: Res
     .select("id, name, pais, segmentos, exportador")
     .order("name", { ascending: true });
 
-  if (q) query = query.or(`name.ilike.%${q}%,pais.ilike.%${q}%,segmentos.ilike.%${q}%,exportador.ilike.%${q}%`);
+  if (q) query = query.or(`name.ilike.%${q}%,pais.ilike.%${q}%,segmentos.ilike.%${q}%`);
 
   const { data, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
