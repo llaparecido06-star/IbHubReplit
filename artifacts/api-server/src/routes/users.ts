@@ -116,16 +116,15 @@ router.delete("/users/me", async (req: Request, res: Response) => {
   }
 
   const dbResults = await Promise.all([
-    deleteTable("comment_likes",            () => supabaseAdmin.from("comment_likes").delete().eq("user_id", userId)),
-    deleteTable("likes",                    () => supabaseAdmin.from("likes").delete().eq("user_id", userId)),
-    deleteTable("bookmarks",               () => supabaseAdmin.from("bookmarks").delete().eq("user_id", userId)),
-    deleteTable("notification_preferences", () => supabaseAdmin.from("notification_preferences").delete().eq("user_id", userId)),
-    deleteTable("wine_cellar",             () => supabaseAdmin.from("wine_cellar").delete().eq("user_id", userId)),
-    deleteTable("post_hidden",             () => supabaseAdmin.from("post_hidden").delete().eq("user_id", userId)),
-    deleteTable("user_blocks",             () => supabaseAdmin.from("user_blocks").delete().or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`)),
-    deleteTable("comments",                () => supabaseAdmin.from("comments").delete().eq("user_id", userId)),
-    deleteTable("stories",                 () => supabaseAdmin.from("stories").delete().eq("user_id", userId)),
-    deleteTable("posts",                   () => supabaseAdmin.from("posts").delete().eq("user_id", userId)),
+    deleteTable("comment_likes", () => supabaseAdmin.from("comment_likes").delete().eq("user_id", userId)),
+    deleteTable("likes",         () => supabaseAdmin.from("likes").delete().eq("user_id", userId)),
+    deleteTable("bookmarks",     () => supabaseAdmin.from("bookmarks").delete().eq("user_id", userId)),
+    deleteTable("wine_cellar",   () => supabaseAdmin.from("wine_cellar").delete().eq("user_id", userId)),
+    deleteTable("post_hidden",   () => supabaseAdmin.from("post_hidden").delete().eq("user_id", userId)),
+    deleteTable("user_blocks",   () => supabaseAdmin.from("user_blocks").delete().or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`)),
+    deleteTable("comments",      () => supabaseAdmin.from("comments").delete().eq("user_id", userId)),
+    deleteTable("stories",       () => supabaseAdmin.from("stories").delete().eq("user_id", userId)),
+    deleteTable("posts",         () => supabaseAdmin.from("posts").delete().eq("user_id", userId)),
   ]);
   const dbWarnings = dbResults.filter((w): w is string => w !== null);
 
