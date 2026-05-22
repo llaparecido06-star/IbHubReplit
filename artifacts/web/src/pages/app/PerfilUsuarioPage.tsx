@@ -677,7 +677,9 @@ export default function PerfilUsuarioPage() {
     if (ok) {
       setConnectionStatus("connected");
       setIsFollowing(true);
-      setStats(s => ({ ...s, connections: s.connections + 1 }));
+      // +1 connection (both sides) and +1 follower for the viewed profile
+      // because accepting auto-creates a follows row (receiver → requester)
+      setStats(s => ({ ...s, connections: s.connections + 1, followers: s.followers + 1 }));
     }
     setAcceptLoading(false);
   };
