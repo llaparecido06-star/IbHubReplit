@@ -844,8 +844,7 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
     try {
       const params = new URLSearchParams({ q: sq, limit: "20", offset: "0" });
       const res = await fetch(`${API_URL}/wine-imports/bi-search/exportadores?${params}`, { headers: authH() });
-      if (res.status === 402) { setCredits(0); setError(t("mercado_screen.bi_error_exhausted")); }
-      else if (!res.ok) { setError(t("mercado_screen.bi_error_search")); }
+      if (!res.ok) { setError(t("mercado_screen.bi_error_search")); }
       else {
         const data = await res.json() as { items: BiExpItem[]; total: number; credits_remaining: number; credits_total: number };
         setItems(data.items); setTotal(data.total); setSearched(true);
@@ -890,19 +889,19 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
   return (
     <View style={{ gap: 12, paddingHorizontal: 16, paddingBottom: 8 }}>
       <View style={{ flexDirection: "row", gap: 8 }}>
-        <View style={{ flex: 1, backgroundColor: "#fff", borderWidth: 1.5, borderColor: exhausted ? "#fca5a5" : colors.border, borderRadius: 14, flexDirection: "row", alignItems: "center", paddingLeft: 14, paddingRight: 4, paddingVertical: 4 }}>
+        <View style={{ flex: 1, backgroundColor: "#fff", borderWidth: 1.5, borderColor: colors.border, borderRadius: 14, flexDirection: "row", alignItems: "center", paddingLeft: 14, paddingRight: 4, paddingVertical: 4 }}>
           <Text style={{ fontSize: 16, marginRight: 6 }}>🌐</Text>
           <TextInput value={q} onChangeText={setQ}
-            placeholder={exhausted ? t("mercado_screen.bi_credits_exhausted") : t("mercado_screen.bi_exp_placeholder")}
+            placeholder={t("mercado_screen.bi_exp_placeholder")}
             placeholderTextColor={colors.mutedForeground}
             style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: 12 }}
-            editable={!exhausted} onSubmitEditing={() => doSearch(q)} returnKeyType="search" />
+            onSubmitEditing={() => doSearch(q)} returnKeyType="search" />
           {!!q && <TouchableOpacity onPress={() => { setQ(""); setItems([]); setSearched(false); setSuggestions([]); setSuggestion(null); }} style={{ padding: 8 }}>
             <Feather name="x" size={16} color={colors.mutedForeground} />
           </TouchableOpacity>}
         </View>
-        <TouchableOpacity onPress={() => doSearch(q)} disabled={!q.trim() || searching || exhausted}
-          style={{ paddingHorizontal: 16, borderRadius: 14, justifyContent: "center", backgroundColor: !q.trim() || searching || exhausted ? colors.border : colors.navy }}>
+        <TouchableOpacity onPress={() => doSearch(q)} disabled={!q.trim() || searching}
+          style={{ paddingHorizontal: 16, borderRadius: 14, justifyContent: "center", backgroundColor: !q.trim() || searching ? colors.border : colors.navy }}>
           {searching ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>{t("mercado_screen.bi_search_btn")}</Text>}
         </TouchableOpacity>
       </View>
@@ -1083,6 +1082,8 @@ function BiMobileImportadoresSearch({ colors, onCreditsUpdate }: { colors: Retur
   const searchingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [revealedMap, setRevealedMap] = useState<Record<string, { exportador: string; pais: string }[]>>({});
+  const [revealingId, setRevealingId] = useState<string | null>(null);
   const exhausted = credits !== null && credits <= 0;
 
   useEffect(() => {
@@ -1122,8 +1123,7 @@ function BiMobileImportadoresSearch({ colors, onCreditsUpdate }: { colors: Retur
     try {
       const params = new URLSearchParams({ q: sq, limit: "20", offset: "0" });
       const res = await fetch(`${API_URL}/wine-imports/bi-search/importadores?${params}`, { headers: authH() });
-      if (res.status === 402) { setCredits(0); setError(t("mercado_screen.bi_error_exhausted")); }
-      else if (!res.ok) { setError(t("mercado_screen.bi_error_search")); }
+      if (!res.ok) { setError(t("mercado_screen.bi_error_search")); }
       else {
         const data = await res.json() as { items: BiImpItem[]; total: number; credits_remaining: number; credits_total: number };
         setItems(data.items); setTotal(data.total); setSearched(true);
@@ -1131,6 +1131,25 @@ function BiMobileImportadoresSearch({ colors, onCreditsUpdate }: { colors: Retur
       }
     } catch { setError(t("mercado_screen.bi_error_connection")); }
     finally { setSearching(false); searchingRef.current = false; }
+  };
+
+  const revealImp = async (importadorId: string, importadorName: string) => {
+    if (revealedMap[importadorId] || revealingId === importadorId) return;
+    setRevealingId(importadorId);
+    try {
+      const res = await fetch(`${API_URL}/wine-imports/bi/importadores/reveal`, {
+        method: "POST",
+        headers: { ...(authH() as Record<string, string>), "Content-Type": "application/json" },
+        body: JSON.stringify({ importador_name: importadorName }),
+      });
+      if (res.status === 402) { setCredits(0); }
+      else if (res.ok) {
+        const data = await res.json() as { exportadores: { exportador: string; pais: string }[]; credits_remaining: number };
+        setRevealedMap(prev => ({ ...prev, [importadorId]: data.exportadores }));
+        if (data.credits_remaining !== undefined) { setCredits(data.credits_remaining); onCreditsUpdate?.(data.credits_remaining); }
+      }
+    } catch {}
+    setRevealingId(null);
   };
 
   return (
@@ -1209,36 +1228,59 @@ function BiMobileImportadoresSearch({ colors, onCreditsUpdate }: { colors: Retur
             <Text style={{ fontSize: 13, color: colors.mutedForeground, textAlign: "center" }}>{t("mercado_screen.bi_imp_no_result_sub")}</Text>
           </View>
         )}
-        {items.map(m => (
-          <View key={m.id} style={{ backgroundColor: "#fff", borderWidth: 1.5, borderColor: colors.border, borderRadius: 16, padding: 16, flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
-            <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: colors.gold + "14", alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ fontSize: 22 }}>📦</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 15, fontWeight: "800", color: colors.navy, marginBottom: 6 }}>{m.name}</Text>
-              {!!m.segmentos && (
-                <View style={{ backgroundColor: colors.gold + "12", borderWidth: 1, borderColor: colors.gold + "35", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 3, alignSelf: "flex-start", marginBottom: 8 }}>
-                  <Text style={{ fontSize: 11, fontWeight: "600", color: colors.navy }}>{m.segmentos}</Text>
+        {items.map(m => {
+          const revealed = revealedMap[m.id];
+          const isRevealing = revealingId === m.id;
+          return (
+            <View key={m.id} style={{ backgroundColor: "#fff", borderWidth: 1.5, borderColor: colors.border, borderRadius: 16, padding: 16, gap: 12 }}>
+              <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
+                <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: colors.gold + "14", alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ fontSize: 22 }}>📦</Text>
                 </View>
-              )}
-              {m.exportadores.length > 0 && (
-                <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10, gap: 6 }}>
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, letterSpacing: 0.6 }}>{t("mercado_screen.bi_imp_imports_from")}</Text>
-                  {m.exportadores.map((e, i) => (
-                    <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                      <Text style={{ fontSize: 14 }}>🌍</Text>
-                      <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>{e.exportador}</Text>
-                      <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{e.pais}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: "800", color: colors.navy, marginBottom: 6 }}>{m.name}</Text>
+                  {!!m.segmentos && (
+                    <View style={{ backgroundColor: colors.gold + "12", borderWidth: 1, borderColor: colors.gold + "35", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 3, alignSelf: "flex-start" }}>
+                      <Text style={{ fontSize: 11, fontWeight: "600", color: colors.navy }}>{m.segmentos}</Text>
                     </View>
-                  ))}
+                  )}
                 </View>
-              )}
+                <View style={{ backgroundColor: colors.gold + "15", borderWidth: 1, borderColor: colors.gold + "35", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 }}>
+                  <Text style={{ fontSize: 10, fontWeight: "700", color: colors.gold }}>IMPORTADOR</Text>
+                </View>
+              </View>
+              {/* Importa de — revealed on click */}
+              <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10 }}>
+                {revealed ? (
+                  <View style={{ gap: 6 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, letterSpacing: 0.6 }}>{t("mercado_screen.bi_imp_imports_from")}</Text>
+                    {revealed.length === 0 ? (
+                      <Text style={{ fontSize: 13, color: colors.mutedForeground }}>Sem dados disponíveis.</Text>
+                    ) : revealed.map((e, i) => (
+                      <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <Text style={{ fontSize: 14 }}>🌍</Text>
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>{e.exportador}</Text>
+                        <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{e.pais}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => void revealImp(m.id, m.name)}
+                    disabled={isRevealing || exhausted}
+                    activeOpacity={0.75}
+                    style={{ alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10, borderWidth: 1.5, borderColor: exhausted ? "#fca5a5" : colors.gold, backgroundColor: "transparent" }}
+                  >
+                    {isRevealing
+                      ? <ActivityIndicator size="small" color={colors.gold} />
+                      : <><Text style={{ fontSize: 13 }}>🔑</Text><Text style={{ fontSize: 12, fontWeight: "700", color: exhausted ? "#dc2626" : colors.gold }}>{exhausted ? t("mercado_screen.bi_error_exhausted") : t("mercado_screen.bi_ver_dados")}</Text></>
+                    }
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
-            <View style={{ backgroundColor: colors.gold + "15", borderWidth: 1, borderColor: colors.gold + "35", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 }}>
-              <Text style={{ fontSize: 10, fontWeight: "700", color: colors.gold }}>IMPORTADOR</Text>
-            </View>
-          </View>
-        ))}
+          );
+        })}
       </>)}
     </View>
   );

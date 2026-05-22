@@ -2694,6 +2694,7 @@ const ptBR = {
     bi_imp_count_other: "{{count}} importadores encontrados",
     bi_imp_no_result_sub: "Tente buscar por outro nome.",
     bi_imp_imports_from: "IMPORTA DE",
+    bi_ver_dados: "Ver dados",
     bi_prod_placeholder: "Nome do produtor, região, município ou estado…",
     bi_prod_how_title: "🍇 Como funciona",
     bi_prod_how_text: "Busque vinícolas e produtores nacionais por nome, região, município ou estado. Cada consulta consome 1 crédito.",

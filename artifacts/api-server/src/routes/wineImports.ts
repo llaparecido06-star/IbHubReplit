@@ -173,16 +173,7 @@ router.get("/wine-imports/bi-search/importadores", async (req: Request, res: Res
   const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
   const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
-  let credits = await getOrCreateCredits(userId);
-
-  // Only consume a credit on the initial search (offset === 0)
-  if (offset === 0) {
-    if (credits.credits_remaining <= 0) {
-      return res.status(402).json({ error: "Sem créditos", credits_remaining: 0, credits_total: credits.credits_total });
-    }
-    const consumed = await consumeCredit(userId);
-    if (consumed) credits = { ...credits, ...consumed };
-  }
+  const credits = await getOrCreateCredits(userId);
 
   type RawRow = { id: string; name: string; pais: string; segmentos: string; exportador: string | null };
   type GroupedItem = { id: string; name: string; segmentos: string; exportadores: { exportador: string; pais: string }[] };
@@ -211,7 +202,10 @@ router.get("/wine-imports/bi-search/importadores", async (req: Request, res: Res
 
   const allGroups = Array.from(grouped.values());
   const total = allGroups.length;
-  const items = allGroups.slice(offset, offset + limit);
+  // exportadores hidden in search — revealed only via /bi/importadores/reveal
+  const items = allGroups.slice(offset, offset + limit).map(g => ({
+    id: g.id, name: g.name, segmentos: g.segmentos, exportadores: [] as { exportador: string; pais: string }[],
+  }));
 
   return res.json({ items, total, limit, offset, credits_remaining: credits.credits_remaining, credits_total: credits.credits_total });
 });
@@ -224,15 +218,7 @@ router.get("/wine-imports/bi-search/exportadores", async (req: Request, res: Res
   const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
   const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
-  let credits = await getOrCreateCredits(userId);
-
-  if (offset === 0) {
-    if (credits.credits_remaining <= 0) {
-      return res.status(402).json({ error: "Sem créditos", credits_remaining: 0, credits_total: credits.credits_total });
-    }
-    const consumed = await consumeCredit(userId);
-    if (consumed) credits = { ...credits, ...consumed };
-  }
+  const credits = await getOrCreateCredits(userId);
 
   // Fetch all matching rows (financial data NOT sent — requires reveal credit)
   // One exportador may have many rows (one per distribuidor), so we dedup by name
@@ -263,6 +249,41 @@ router.get("/wine-imports/bi-search/exportadores", async (req: Request, res: Res
   }));
 
   return res.json({ items, total, limit, offset, credits_remaining: credits.credits_remaining, credits_total: credits.credits_total });
+});
+
+/* ─── Reveal importador (IMPORTA DE) — consumes 1 main credit ────────────── */
+router.post("/wine-imports/bi/importadores/reveal", async (req: Request, res: Response) => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+
+  const { importador_name } = req.body as { importador_name?: string };
+  if (!importador_name?.trim()) return res.status(400).json({ error: "importador_name is required" });
+
+  const credits = await getOrCreateCredits(userId);
+  if (credits.credits_remaining <= 0) {
+    return res.status(402).json({ error: "Sem créditos", credits_remaining: 0, credits_total: credits.credits_total });
+  }
+
+  const name = importador_name.trim();
+
+  const { data, error } = await supabaseAdmin
+    .from("bi_importadores")
+    .select("exportador, pais")
+    .ilike("name", name);
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  const exportadores = ((data ?? []) as { exportador: string | null; pais: string | null }[])
+    .filter(r => r.exportador)
+    .map(r => ({ exportador: r.exportador!, pais: r.pais ?? "" }));
+
+  const consumed = await consumeCredit(userId);
+
+  return res.json({
+    exportadores,
+    credits_remaining: consumed?.credits_remaining ?? credits.credits_remaining - 1,
+    credits_total: credits.credits_total,
+  });
 });
 
 router.get("/wine-imports/bi-search/produtores", async (req: Request, res: Response) => {

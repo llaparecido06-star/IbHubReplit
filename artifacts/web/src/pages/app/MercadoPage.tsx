@@ -724,6 +724,9 @@ function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, set
   const [error, setError] = useState<null | "paywall" | "credits" | "error">(null);
   const [searched, setSearched] = useState(false);
   const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [revealedMap, setRevealedMap] = useState<Record<string, { exportador: string; pais: string }[]>>({});
+  const [revealingId, setRevealingId] = useState<string | null>(null);
+  const [revealError, setRevealError] = useState<string | null>(null);
   const exhausted = credits !== null && credits <= 0;
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -768,7 +771,6 @@ function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, set
       const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(fromOffset), ...(searchQ ? { q: searchQ } : {}) });
       const res = await fetch(`${apiBase}/wine-imports/bi-search/importadores?${params}`, { headers });
       if (res.status === 401 || res.status === 403) { setError("paywall"); return; }
-      if (res.status === 402) { setCredits(0); setError("credits"); return; }
       if (!res.ok) { setError("error"); return; }
       const data = await res.json() as { items: BiImportador[]; total: number; credits_remaining: number; credits_total: number };
       if (append) {
@@ -786,6 +788,29 @@ function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, set
     finally { setLoading(false); setLoadingMore(false); }
   };
 
+  const revealImp = async (importadorId: string, importadorName: string) => {
+    if (revealedMap[importadorId] || revealingId === importadorId) return;
+    setRevealingId(importadorId);
+    setRevealError(null);
+    try {
+      const session = await getCachedSession();
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      };
+      const res = await fetch(`${apiBase}/wine-imports/bi/importadores/reveal`, {
+        method: "POST", headers, body: JSON.stringify({ importador_name: importadorName }),
+      });
+      if (res.status === 402) { setCredits(0); setRevealError("Sem créditos disponíveis."); return; }
+      if (!res.ok) { setRevealError("Erro ao revelar dados. Tente novamente."); return; }
+      const data = await res.json() as { exportadores: { exportador: string; pais: string }[]; credits_remaining: number; credits_total: number };
+      setRevealedMap(prev => ({ ...prev, [importadorId]: data.exportadores }));
+      if (data.credits_remaining !== undefined) setCredits(data.credits_remaining);
+      if (data.credits_total !== undefined) setCreditsTotal(data.credits_total);
+    } catch { setRevealError("Erro de conexão. Tente novamente."); }
+    finally { setRevealingId(null); }
+  };
+
   const spellCheck = async (sq: string) => {
     try {
       const session = await getCachedSession();
@@ -800,7 +825,7 @@ function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, set
 
   const handleSubmit = (overrideQ?: string) => {
     const sq = (overrideQ ?? q).trim();
-    if (creditsLoading || exhausted || !sq) return;
+    if (!sq) return;
     setSuggestion(null);
     setShowSuggestions(false);
     setSubmittedQ(sq);
@@ -825,21 +850,20 @@ function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, set
                 if (e.key === "Escape") setShowSuggestions(false);
                 if (e.key === "ArrowDown" && showSuggestions) { document.getElementById("imp-suggest-0")?.focus(); e.preventDefault(); }
               }}
-              placeholder={creditsLoading ? "Carregando…" : exhausted ? "Consultas esgotadas" : "Nome do importador, país ou segmento…"}
-              disabled={creditsLoading || exhausted}
+              placeholder={creditsLoading ? "Carregando…" : "Nome do importador, país ou segmento…"}
               style={{ flex: 1, padding: "10px 0", border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", backgroundColor: "transparent", color: NAVY }}
             />
             {q && <button onClick={() => { setQ(""); setSearched(false); setItems([]); setSuggestions([]); setShowSuggestions(false); setSuggestion(null); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, padding: "0 8px" }}>×</button>}
           </div>
           <button
             onClick={() => handleSubmit()}
-            disabled={creditsLoading || exhausted || !q.trim()}
-            style={{ padding: "0 18px", borderRadius: 12, border: "none", backgroundColor: creditsLoading || exhausted || !q.trim() ? BORDER : NAVY, color: WHITE, fontWeight: 700, fontSize: 13, cursor: creditsLoading || exhausted || !q.trim() ? "default" : "pointer", fontFamily: "inherit", flexShrink: 0 }}
+            disabled={!q.trim()}
+            style={{ padding: "0 18px", borderRadius: 12, border: "none", backgroundColor: !q.trim() ? BORDER : NAVY, color: WHITE, fontWeight: 700, fontSize: 13, cursor: !q.trim() ? "default" : "pointer", fontFamily: "inherit", flexShrink: 0 }}
           >
             {loading ? "…" : "Buscar"}
           </button>
         </div>
-        {showSuggestions && suggestions.length > 0 && !exhausted && (
+        {showSuggestions && suggestions.length > 0 && (
           <div style={{ position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 200, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 6px 20px rgba(0,0,0,0.10)", overflow: "hidden" }}>
             {suggestions.map((s, i) => (
               <button key={s} id={`imp-suggest-${i}`}
@@ -876,7 +900,7 @@ function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, set
       )}
       {!searched && !loading && (
         <div style={{ backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "12px 16px", fontSize: 13, color: MUTED }}>
-          🔑 Digite o nome de um importador e clique em <strong>Buscar</strong> — cada consulta consome 1 crédito.
+          🔍 Digite o nome de um importador e clique em <strong>Buscar</strong> — a busca é gratuita. Clique em <strong>Ver dados</strong> para ver de quem o importador compra (1 crédito por clique).
         </div>
       )}
       {loading ? <BiLoadingSkeleton /> : error ? (
@@ -894,34 +918,50 @@ function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, set
               style={{ backgroundColor: WHITE, border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "16px 18px", transition: "border-color 0.15s, box-shadow 0.15s", boxShadow: "0 2px 10px rgba(0,0,0,0.04)" }}
             >
               {/* Header row */}
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: m.exportadores.length > 0 ? 14 : 0 }}>
-                <div style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: `${GOLD}14`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>📦</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 6 }}>{m.name}</div>
-                  {m.segmentos && (
-                    <span style={{ fontSize: 11, fontWeight: 600, color: NAVY, backgroundColor: `${GOLD}12`, border: `1px solid ${GOLD}35`, borderRadius: 20, padding: "3px 12px" }}>
-                      {m.segmentos}
-                    </span>
-                  )}
-                </div>
-                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: GOLD, backgroundColor: `${GOLD}15`, border: `1px solid ${GOLD}35`, padding: "3px 10px", borderRadius: 20, flexShrink: 0, alignSelf: "flex-start", textTransform: "uppercase" as const }}>Importador</span>
-              </div>
-              {/* Exportadores list */}
-              {m.exportadores.length > 0 && (
-                <div style={{ marginLeft: 62, borderTop: `1px solid ${BORDER}`, paddingTop: 12, display: "flex", flexDirection: "column", gap: 7 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase" as const, letterSpacing: 0.6, marginBottom: 2 }}>
-                    Importa de
-                  </div>
-                  {m.exportadores.map((e, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-                      <span style={{ fontSize: 15 }}>🌍</span>
-                      <span style={{ fontWeight: 700, color: NAVY }}>{e.exportador}</span>
-                      <span style={{ width: 3, height: 3, borderRadius: "50%", backgroundColor: MUTED, flexShrink: 0, display: "inline-block" }} />
-                      <span style={{ color: MUTED, fontSize: 12 }}>{e.pais}</span>
+              {(() => {
+                const revealed = revealedMap[m.id];
+                const isRevealing = revealingId === m.id;
+                return (<>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 14 }}>
+                    <div style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: `${GOLD}14`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>📦</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 6 }}>{m.name}</div>
+                      {m.segmentos && (
+                        <span style={{ fontSize: 11, fontWeight: 600, color: NAVY, backgroundColor: `${GOLD}12`, border: `1px solid ${GOLD}35`, borderRadius: 20, padding: "3px 12px" }}>
+                          {m.segmentos}
+                        </span>
+                      )}
                     </div>
-                  ))}
-                </div>
-              )}
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: GOLD, backgroundColor: `${GOLD}15`, border: `1px solid ${GOLD}35`, padding: "3px 10px", borderRadius: 20, flexShrink: 0, alignSelf: "flex-start", textTransform: "uppercase" as const }}>Importador</span>
+                  </div>
+                  {/* Importa de — revealed on click */}
+                  <div style={{ marginLeft: 62, borderTop: `1px solid ${BORDER}`, paddingTop: 12 }}>
+                    {revealed ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase" as const, letterSpacing: 0.6, marginBottom: 2 }}>Importa de</div>
+                        {revealed.length === 0 ? (
+                          <div style={{ fontSize: 13, color: MUTED }}>Sem dados disponíveis.</div>
+                        ) : revealed.map((e, i) => (
+                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                            <span style={{ fontSize: 15 }}>🌍</span>
+                            <span style={{ fontWeight: 700, color: NAVY }}>{e.exportador}</span>
+                            <span style={{ width: 3, height: 3, borderRadius: "50%", backgroundColor: MUTED, flexShrink: 0, display: "inline-block" }} />
+                            <span style={{ color: MUTED, fontSize: 12 }}>{e.pais}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => void revealImp(m.id, m.name)}
+                        disabled={isRevealing || exhausted}
+                        style={{ padding: "7px 16px", borderRadius: 10, border: `1.5px solid ${exhausted ? "#fca5a5" : GOLD}`, backgroundColor: "transparent", color: exhausted ? "#dc2626" : GOLD, fontSize: 12, fontWeight: 700, cursor: isRevealing || exhausted ? "default" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}
+                      >
+                        {isRevealing ? "…" : exhausted ? "Sem créditos" : <><span>🔑</span> Ver dados</>}
+                      </button>
+                    )}
+                  </div>
+                </>);
+              })()}
             </div>
           ))}
           {items.length < total && <CarregarMaisBtn onClick={loadMore} loading={loadingMore} />}
@@ -1018,7 +1058,6 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
       const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(fromOffset), ...(searchQ ? { q: searchQ } : {}) });
       const res = await fetch(`${apiBase}/wine-imports/bi-search/exportadores?${params}`, { headers });
       if (res.status === 401 || res.status === 403) { setError("paywall"); return; }
-      if (res.status === 402) { setCredits(0); setError("credits"); return; }
       if (!res.ok) { setError("error"); return; }
       const data = await res.json() as { items: BiExportador[]; total: number; credits_remaining: number; credits_total: number };
       if (append) { setItems(prev => [...prev, ...data.items]); setOffset(fromOffset); }
@@ -1042,7 +1081,6 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
   };
 
   const handleSubmit = (overrideQ?: string) => {
-    if (credits === null || exhausted) return;
     const sq = (overrideQ ?? q).trim();
     if (!sq) return;
     setSuggestion(null);
@@ -1120,19 +1158,18 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
                 if (e.key === "Escape") setShowSuggestions(false);
                 if (e.key === "ArrowDown" && showSuggestions) { document.getElementById("exp-suggest-0")?.focus(); e.preventDefault(); }
               }}
-              placeholder={exhausted ? "Consultas esgotadas" : "Nome do exportador ou país de origem…"}
-              disabled={exhausted}
+              placeholder="Nome do exportador ou país de origem…"
               style={{ flex: 1, padding: "10px 0", border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", backgroundColor: "transparent", color: NAVY }}
             />
             {q && <button onClick={() => { setQ(""); setSearched(false); setItems([]); setSuggestions([]); setShowSuggestions(false); setSuggestion(null); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, padding: "0 8px" }}>×</button>}
           </div>
           <button
             onClick={() => handleSubmit()}
-            disabled={exhausted || !q.trim()}
-            style={{ padding: "0 18px", borderRadius: 12, border: "none", backgroundColor: exhausted || !q.trim() ? BORDER : NAVY, color: WHITE, fontWeight: 700, fontSize: 13, cursor: exhausted || !q.trim() ? "default" : "pointer", fontFamily: "inherit", flexShrink: 0 }}
+            disabled={!q.trim()}
+            style={{ padding: "0 18px", borderRadius: 12, border: "none", backgroundColor: !q.trim() ? BORDER : NAVY, color: WHITE, fontWeight: 700, fontSize: 13, cursor: !q.trim() ? "default" : "pointer", fontFamily: "inherit", flexShrink: 0 }}
           >{loading ? "…" : "Buscar"}</button>
         </div>
-        {showSuggestions && suggestions.length > 0 && !exhausted && (
+        {showSuggestions && suggestions.length > 0 && (
           <div style={{ position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 200, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 6px 20px rgba(0,0,0,0.10)", overflow: "hidden" }}>
             {suggestions.map((s, i) => (
               <button key={s} id={`exp-suggest-${i}`}

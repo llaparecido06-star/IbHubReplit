@@ -2694,6 +2694,7 @@ const es = {
     bi_imp_count_other: "{{count}} importadores encontrados",
     bi_imp_no_result_sub: "Intenta buscar con otro nombre.",
     bi_imp_imports_from: "IMPORTA DE",
+    bi_ver_dados: "Ver datos",
     bi_prod_placeholder: "Nombre del productor, región, municipio o estado…",
     bi_prod_how_title: "🍇 Cómo funciona",
     bi_prod_how_text: "Busca bodegas y productores nacionales por nombre, región, municipio o estado. Cada consulta consume 1 crédito.",
