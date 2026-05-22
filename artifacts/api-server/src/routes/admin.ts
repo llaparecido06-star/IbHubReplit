@@ -1009,4 +1009,113 @@ router.post("/admin/users/:id/reveal-credits", async (req: Request, res: Respons
   res.json({ ok: true, credits_remaining, credits_total });
 });
 
+/**
+ * DELETE /admin/delete-user
+ * Permanently deletes a user account and all associated data.
+ * Body: { userId: string }
+ * Admin-only. Cannot delete your own account via this endpoint.
+ */
+router.delete("/admin/delete-user", async (req: Request, res: Response): Promise<void> => {
+  const { data: { user: adminUser }, error: authErr } = await supabaseAdmin.auth.getUser(
+    (req.headers.authorization ?? "").replace("Bearer ", ""),
+  );
+  if (authErr || !adminUser) { res.status(401).json({ error: "Não autenticado." }); return; }
+
+  const { data: profile } = await supabaseAdmin
+    .from("profiles").select("is_admin").eq("id", adminUser.id).maybeSingle() as { data: { is_admin: boolean } | null };
+  if (!profile?.is_admin) { res.status(403).json({ error: "Acesso negado." }); return; }
+
+  const { userId } = req.body as { userId?: string };
+  if (!userId || typeof userId !== "string") {
+    res.status(400).json({ error: "userId é obrigatório." });
+    return;
+  }
+
+  if (userId === adminUser.id) {
+    res.status(400).json({ error: "Não é possível deletar sua própria conta pelo painel admin." });
+    return;
+  }
+
+  const storageWarnings: string[] = [];
+
+  const STORAGE_TARGETS: Array<{ bucket: string; prefix: string }> = [
+    { bucket: "avatars",          prefix: userId },
+    { bucket: "post-images",      prefix: userId },
+    { bucket: "post-videos",      prefix: userId },
+    { bucket: "stories",          prefix: userId },
+    { bucket: "chat-attachments", prefix: `chat/${userId}` },
+    { bucket: "chat-attachments", prefix: `portfolio/${userId}` },
+    { bucket: "cvs",              prefix: `cvs/${userId}` },
+  ];
+
+  const BUCKET_NOT_FOUND_PATTERNS = ["not found", "does not exist", "The resource was not found"];
+  const isBucketMissing = (msg: string) =>
+    BUCKET_NOT_FOUND_PATTERNS.some((p) => msg.toLowerCase().includes(p.toLowerCase()));
+
+  async function deleteStoragePrefix(bucket: string, prefix: string): Promise<void> {
+    const PAGE = 1000;
+    for (;;) {
+      const { data: files, error: listErr } = await supabaseAdmin.storage
+        .from(bucket).list(prefix, { limit: PAGE, offset: 0 });
+      if (listErr) {
+        if (isBucketMissing(listErr.message)) break;
+        storageWarnings.push(`list ${bucket}/${prefix}: ${listErr.message}`);
+        break;
+      }
+      if (!files || files.length === 0) break;
+      const paths = files.map((f: { name: string }) => `${prefix}/${f.name}`);
+      const { error: removeErr } = await supabaseAdmin.storage.from(bucket).remove(paths);
+      if (removeErr) { storageWarnings.push(`remove ${bucket}/${prefix}: ${removeErr.message}`); break; }
+      if (files.length < PAGE) break;
+    }
+  }
+
+  await Promise.all(
+    STORAGE_TARGETS.map(async ({ bucket, prefix }) => {
+      try { await deleteStoragePrefix(bucket, prefix); }
+      catch (e: unknown) { storageWarnings.push(`${bucket}/${prefix}: ${e instanceof Error ? e.message : String(e)}`); }
+    })
+  );
+
+  async function deleteTable(table: string, query: () => PromiseLike<{ error: { message: string } | null }>): Promise<string | null> {
+    try {
+      const { error } = await query();
+      return error ? `delete ${table}: ${error.message}` : null;
+    } catch (e: unknown) {
+      return `delete ${table}: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  }
+
+  const dbResults = await Promise.all([
+    deleteTable("comment_likes",            () => supabaseAdmin.from("comment_likes").delete().eq("user_id", userId)),
+    deleteTable("likes",                    () => supabaseAdmin.from("likes").delete().eq("user_id", userId)),
+    deleteTable("bookmarks",               () => supabaseAdmin.from("bookmarks").delete().eq("user_id", userId)),
+    deleteTable("notification_preferences", () => supabaseAdmin.from("notification_preferences").delete().eq("user_id", userId)),
+    deleteTable("wine_cellar",             () => supabaseAdmin.from("wine_cellar").delete().eq("user_id", userId)),
+    deleteTable("post_hidden",             () => supabaseAdmin.from("post_hidden").delete().eq("user_id", userId)),
+    deleteTable("user_blocks",             () => supabaseAdmin.from("user_blocks").delete().or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`)),
+    deleteTable("comments",                () => supabaseAdmin.from("comments").delete().eq("user_id", userId)),
+    deleteTable("stories",                 () => supabaseAdmin.from("stories").delete().eq("user_id", userId)),
+    deleteTable("posts",                   () => supabaseAdmin.from("posts").delete().eq("user_id", userId)),
+  ]);
+  const dbWarnings = dbResults.filter((w): w is string => w !== null);
+
+  const allWarnings = [...storageWarnings, ...dbWarnings];
+  if (allWarnings.length > 0) {
+    req.log.error({ warnings: allWarnings, targetUserId: userId }, "[admin/deleteUser] cleanup failures, aborting");
+    res.status(500).json({ error: "Falha ao limpar dados do usuário. Tente novamente.", warnings: allWarnings });
+    return;
+  }
+
+  const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+  if (deleteError) {
+    req.log.error({ err: deleteError, targetUserId: userId }, "[admin/deleteUser] auth deletion failed");
+    res.status(500).json({ error: deleteError.message ?? "Falha ao deletar usuário." });
+    return;
+  }
+
+  req.log.info({ targetUserId: userId, adminId: adminUser.id }, "[admin/deleteUser] user deleted");
+  res.status(200).json({ success: true });
+});
+
 export default router;

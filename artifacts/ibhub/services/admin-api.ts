@@ -168,6 +168,19 @@ export async function addUserRevealCredits(userId: string, amount: number): Prom
   return body as UserRevealCredits;
 }
 
+export async function deleteUser(userId: string): Promise<void> {
+  const headers = await getAdminHeaders();
+  const res = await fetch(`${API_URL}/admin/delete-user`, {
+    method: "DELETE",
+    headers,
+    body: JSON.stringify({ userId }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
+  }
+}
+
 export async function broadcastPushNotification(params: {
   title: string;
   body: string;

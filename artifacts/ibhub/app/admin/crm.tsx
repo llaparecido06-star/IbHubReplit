@@ -25,6 +25,7 @@ import {
   addUserCredits,
   getUserRevealCredits,
   addUserRevealCredits,
+  deleteUser,
   type AdminUser,
   type UserCredits,
   type UserRevealCredits,
@@ -122,6 +123,47 @@ export default function AdminCRMScreen() {
       getUserCredits(user.id).then(setUserCredits).catch(() => {});
       getUserRevealCredits(user.id).then(setUserRevealCredits).catch(() => {});
     }
+  };
+
+  const handleDeleteUser = (user: AdminUser) => {
+    const name = user.full_name ?? user.username ?? user.email ?? user.id;
+    Alert.alert(
+      "⚠️ Deletar Usuário",
+      `Você está prestes a deletar permanentemente a conta de "${name}".\n\nEsta ação é IRREVERSÍVEL: todos os dados, posts, fotos e histórico serão apagados.\n\nTem certeza?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Sim, deletar",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Confirmar deleção",
+              `Digite "DELETAR" mentalmente e confirme: deseja realmente excluir "${name}" para sempre?`,
+              [
+                { text: "Cancelar", style: "cancel" },
+                {
+                  text: "DELETAR PERMANENTEMENTE",
+                  style: "destructive",
+                  onPress: async () => {
+                    setActionLoading(true);
+                    try {
+                      await deleteUser(user.id);
+                      Alert.alert("Concluído", `A conta de "${name}" foi deletada permanentemente.`);
+                      setSelectedUser(null);
+                      void fetchUsers();
+                    } catch (e: unknown) {
+                      Alert.alert("Erro", e instanceof Error ? e.message : "Erro desconhecido");
+                    } finally {
+                      setActionLoading(false);
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
   };
 
   const handleBan = (user: AdminUser) => {
@@ -522,6 +564,13 @@ export default function AdminCRMScreen() {
                               <Text style={[styles.dangerBtnText, { color: "#dc2626" }]}>
                                 {user.is_banned ? "Desbanir Usuário" : "Banir Usuário"}
                               </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.dangerBtn, { borderColor: "#dc2626", backgroundColor: "#fee2e2" }]}
+                              onPress={() => handleDeleteUser(user)}
+                            >
+                              <Feather name="trash-2" size={15} color="#dc2626" />
+                              <Text style={[styles.dangerBtnText, { color: "#dc2626" }]}>Deletar Usuário</Text>
                             </TouchableOpacity>
                           </>
                         )}
