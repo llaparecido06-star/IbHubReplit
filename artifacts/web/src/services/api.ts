@@ -946,22 +946,23 @@ export async function toggleWebFollow(
 }
 
 const _statsCache = new Map<string, { data: { connections: number; followers: number; following: number }; ts: number }>();
-const STATS_TTL = 30 * 1000; // 30 s — profiles.connections_count is trigger-maintained, cheap to re-read
+const STATS_TTL = 30 * 1000;
 
 export async function fetchProfileStats(userId: string, forceRefresh = false): Promise<{ connections: number; followers: number; following: number }> {
   const cached = _statsCache.get(userId);
   if (!forceRefresh && cached && Date.now() - cached.ts < STATS_TTL) return cached.data;
   try {
-    const { data } = await supabase
-      .from("profiles")
-      .select("connections_count, followers_count, following_count")
-      .eq("id", userId)
-      .single();
-    const row = data as { connections_count?: number; followers_count?: number; following_count?: number } | null;
+    const [followersRes, followingRes, connRes] = await Promise.all([
+      supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", userId),
+      supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", userId),
+      supabase.from("connections").select("id", { count: "exact", head: true })
+        .or(`requester_id.eq.${userId},receiver_id.eq.${userId}`)
+        .eq("status", "accepted"),
+    ]);
     const result = {
-      connections: row?.connections_count ?? 0,
-      followers:   row?.followers_count   ?? 0,
-      following:   row?.following_count   ?? 0,
+      followers:   followersRes.count  ?? 0,
+      following:   followingRes.count  ?? 0,
+      connections: connRes.count       ?? 0,
     };
     _statsCache.set(userId, { data: result, ts: Date.now() });
     return result;
