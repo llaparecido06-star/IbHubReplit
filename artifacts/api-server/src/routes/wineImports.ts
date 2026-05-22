@@ -760,25 +760,29 @@ router.post("/wine-imports/bi/exportadores/reveal", async (req: Request, res: Re
     .eq("record_key", exportadorName)
     .maybeSingle();
 
+  // Already revealed this month — free repeat, return current main credits
   if (logEntry) {
-    const credits = await getOrCreateRevealCredits(userId);
+    const credits = await getOrCreateCredits(userId);
     return res.json({ kpis, already_revealed: true, credits_remaining: credits.credits_remaining, credits_total: credits.credits_total });
   }
 
-  const credits = await getOrCreateRevealCredits(userId);
+  // Use main credits pool (same as importadores reveal)
+  const credits = await getOrCreateCredits(userId);
   if (credits.credits_remaining <= 0) {
-    return res.status(402).json({ error: "Sem créditos de revelação", credits_remaining: 0, credits_total: credits.credits_total });
+    return res.status(402).json({ error: "Sem créditos", credits_remaining: 0, credits_total: credits.credits_total });
   }
 
-  const newRemaining = credits.credits_remaining - 1;
-  await supabaseAdmin.from("bi_reveal_credits")
-    .update({ credits_remaining: newRemaining, updated_at: new Date().toISOString() })
-    .eq("user_id", userId);
+  const consumed = await consumeCredit(userId);
   await supabaseAdmin.from("bi_reveal_log").insert({
     user_id: userId, record_type: "exportador", record_key: exportadorName,
   });
 
-  return res.json({ kpis, already_revealed: false, credits_remaining: newRemaining, credits_total: credits.credits_total });
+  return res.json({
+    kpis,
+    already_revealed: false,
+    credits_remaining: consumed?.credits_remaining ?? credits.credits_remaining - 1,
+    credits_total: credits.credits_total,
+  });
 });
 
 // ── POST /wine-imports/spell-correct ─────────────────────────────────────────

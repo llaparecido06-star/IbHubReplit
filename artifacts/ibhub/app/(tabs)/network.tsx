@@ -767,7 +767,7 @@ function ApresentacoesView({ colors, bottomPad, session, isAdmin }: { colors: an
 // ─── Ideal.BI Busca com IA ────────────────────────────────────────────────────
 
 // ── BiMobileExportadorSearch ───────────────────────────────────────────────────
-function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useColors> }) {
+function BiMobileExportadorSearch({ colors, onCreditsUpdate }: { colors: ReturnType<typeof useColors>; onCreditsUpdate?: (remaining: number) => void }) {
   const { t } = useTranslation();
   const router = useRouter();
   const { session } = useAuth();
@@ -786,8 +786,6 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
   const [impLoadingSet, setImpLoadingSet]     = useState<Set<string>>(new Set());
   type RevealedKpisExp = { fob_usd: string | null; cx9l: string | null; usd_por_cx9l: string | null; periodo: string | null };
   const [revealedMap, setRevealedMap]         = useState<Record<string, RevealedKpisExp>>({});
-  const [revealCredits, setRevealCredits]     = useState<number | null>(null);
-  const [revealCreditsTotal, setRevealCreditsTotal] = useState(0);
   const [revealingId, setRevealingId]         = useState<string | null>(null);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchingRef = useRef(false);
@@ -795,17 +793,6 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const exhausted = credits !== null && credits <= 0;
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`${API_URL}/wine-imports/bi/reveal-credits`, { headers: authH() });
-        if (!res.ok) return;
-        const data = await res.json() as { credits_remaining: number; credits_total: number };
-        setRevealCredits(data.credits_remaining);
-        setRevealCreditsTotal(data.credits_total);
-      } catch {}
-    })();
-  }, []);
 
   useEffect(() => {
     const val = q.trim();
@@ -875,12 +862,11 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
         headers: { ...(authH() as Record<string, string>), "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       });
-      if (res.status === 402) { setRevealCredits(0); }
+      if (res.status === 402) { setCredits(0); }
       else if (res.ok) {
         const data = await res.json() as { kpis: RevealedKpisExp; credits_remaining: number | null; credits_total: number };
         setRevealedMap(prev => ({ ...prev, [name]: data.kpis }));
-        if (data.credits_remaining !== null) setRevealCredits(data.credits_remaining);
-        if (data.credits_total) setRevealCreditsTotal(data.credits_total);
+        if (data.credits_remaining !== null) { setCredits(data.credits_remaining); onCreditsUpdate?.(data.credits_remaining); }
       }
     } catch {}
     setRevealingId(null);
@@ -956,14 +942,6 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
       {searched && !searching && (<>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{t("mercado_screen.bi_exp_count", { count: total })}</Text>
-          {revealCredits !== null && (
-            <View style={{ backgroundColor: colors.gold + "10", borderWidth: 1, borderColor: colors.gold + "25", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
-              <Text style={{ fontSize: 11, color: colors.mutedForeground }}>
-                {"🔓 "}
-                <Text style={{ color: revealCredits === 0 ? "#dc2626" : colors.navy, fontWeight: "700" }}>{revealCredits}/{revealCreditsTotal}</Text>
-              </Text>
-            </View>
-          )}
         </View>
 
         {items.length === 0 && (
@@ -1046,10 +1024,10 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
                     {!revealed && (
                       <TouchableOpacity
                         onPress={() => void revealData(m.name)}
-                        disabled={revealingId === m.name || revealCredits === 0}
-                        style={{ paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10, alignItems: "center", backgroundColor: revealCredits === 0 ? "#e5e7eb" : colors.navy, opacity: revealingId === m.name ? 0.7 : 1 }}>
-                        <Text style={{ fontSize: 13, fontWeight: "700", color: revealCredits === 0 ? colors.mutedForeground : "#fff" }}>
-                          {revealingId === m.name ? t("mercado_screen.bi_exp_revealing") : revealCredits === 0 ? t("mercado_screen.bi_exp_no_credits") : t("mercado_screen.bi_exp_reveal_btn")}
+                        disabled={revealingId === m.name || exhausted}
+                        style={{ paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10, alignItems: "center", backgroundColor: exhausted ? "#e5e7eb" : colors.navy, opacity: revealingId === m.name ? 0.7 : 1 }}>
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: exhausted ? colors.mutedForeground : "#fff" }}>
+                          {revealingId === m.name ? t("mercado_screen.bi_exp_revealing") : exhausted ? t("mercado_screen.bi_exp_no_credits") : t("mercado_screen.bi_exp_reveal_btn")}
                         </Text>
                       </TouchableOpacity>
                     )}
@@ -1619,7 +1597,7 @@ function IdealBISearchView({ colors, bottomPad, credits, creditsTotal, creditsLo
         })}
       </ScrollView>
 
-      {searchMode === "exportador"   && <BiMobileExportadorSearch   colors={colors} />}
+      {searchMode === "exportador"   && <BiMobileExportadorSearch   colors={colors} onCreditsUpdate={setCredits} />}
       {searchMode === "importadores" && <BiMobileImportadoresSearch colors={colors} onCreditsUpdate={setCredits} />}
       {searchMode === "produtores"   && <BiMobileProdutoresSearch   colors={colors} onCreditsUpdate={setCredits} />}
 

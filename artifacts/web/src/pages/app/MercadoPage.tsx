@@ -995,8 +995,6 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
   const [importadoresLoading, setImportadoresLoading] = useState<Set<string>>(new Set());
   type RevealedKpis = { fob_usd: string | null; cx9l: string | null; usd_por_cx9l: string | null; periodo: string | null };
   const [revealedMap, setRevealedMap] = useState<Record<string, RevealedKpis>>({});
-  const [revealCredits, setRevealCredits] = useState<number | null>(null);
-  const [revealCreditsTotal, setRevealCreditsTotal] = useState(0);
   const [revealingId, setRevealingId] = useState<string | null>(null);
   const [revealError, setRevealError] = useState<string | null>(null);
   const exhausted = credits !== null && credits <= 0;
@@ -1033,20 +1031,6 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const session = await getCachedSession();
-        const headers: HeadersInit = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
-        const res = await fetch(`${apiBase}/wine-imports/bi/reveal-credits`, { headers });
-        if (!res.ok) return;
-        const data = await res.json() as { credits_remaining: number; credits_total: number };
-        setRevealCredits(data.credits_remaining);
-        setRevealCreditsTotal(data.credits_total);
-      } catch {}
-    };
-    void load();
-  }, [apiBase]);
 
   const doSearch = async (searchQ: string, fromOffset = 0, append = false) => {
     if (append) setLoadingMore(true); else setLoading(true);
@@ -1130,7 +1114,7 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
       const res = await fetch(`${apiBase}/wine-imports/bi/exportadores/reveal`, {
         method: "POST", headers, body: JSON.stringify({ name }),
       });
-      if (res.status === 402) { setRevealCredits(0); setRevealError("Sem créditos de revelação disponíveis."); return; }
+      if (res.status === 402) { setCredits(0); setRevealError("Sem créditos disponíveis."); return; }
       if (!res.ok) { setRevealError("Erro ao revelar dados. Tente novamente."); return; }
       type RevealRes = {
         kpis: { fob_usd: string | null; cx9l: string | null; usd_por_cx9l: string | null; periodo: string | null };
@@ -1138,8 +1122,8 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
       };
       const data = await res.json() as RevealRes;
       setRevealedMap(prev => ({ ...prev, [name]: data.kpis }));
-      if (data.credits_remaining !== null) setRevealCredits(data.credits_remaining);
-      if (data.credits_total) setRevealCreditsTotal(data.credits_total);
+      if (data.credits_remaining !== null) setCredits(data.credits_remaining);
+      if (data.credits_total) setCreditsTotal(data.credits_total);
     } catch { setRevealError("Erro de conexão. Tente novamente."); }
     finally { setRevealingId(null); }
   };
@@ -1217,11 +1201,6 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
         <>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
             <div style={{ fontSize: 12, color: MUTED }}>{total} exportador{total !== 1 ? "es" : ""} encontrado{total !== 1 ? "s" : ""}</div>
-            {revealCredits !== null && (
-              <div style={{ fontSize: 11, color: MUTED, backgroundColor: `${GOLD}08`, border: `1px solid ${GOLD}25`, borderRadius: 8, padding: "4px 10px" }}>
-                🔓 Revelação: <strong style={{ color: revealCredits === 0 ? "#dc2626" : NAVY }}>{revealCredits}/{revealCreditsTotal}</strong>
-              </div>
-            )}
           </div>
           {revealError && (
             <div style={{ fontSize: 12, color: "#dc2626", backgroundColor: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, padding: "8px 12px" }}>
@@ -1323,23 +1302,18 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
                         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
                           <button
                             onClick={() => void revealData(m.name)}
-                            disabled={revealingId === m.name || revealCredits === 0}
+                            disabled={revealingId === m.name || exhausted}
                             style={{
                               padding: "8px 22px", borderRadius: 8, border: "none",
-                              backgroundColor: revealCredits === 0 ? "#e5e7eb" : NAVY,
-                              color: revealCredits === 0 ? MUTED : WHITE,
+                              backgroundColor: exhausted ? "#e5e7eb" : NAVY,
+                              color: exhausted ? MUTED : WHITE,
                               fontSize: 13, fontWeight: 700,
-                              cursor: revealingId === m.name || revealCredits === 0 ? "default" : "pointer",
+                              cursor: revealingId === m.name || exhausted ? "default" : "pointer",
                               fontFamily: "inherit", opacity: revealingId === m.name ? 0.7 : 1,
                             }}
                           >
-                            {revealingId === m.name ? "Revelando…" : revealCredits === 0 ? "🔒 Sem créditos de revelação" : "🔓 Revelar dados financeiros (1 crédito)"}
+                            {revealingId === m.name ? "Revelando…" : exhausted ? "🔒 Sem créditos" : "🔓 Revelar dados financeiros (1 crédito)"}
                           </button>
-                          {revealCredits !== null && revealCredits > 0 && (
-                            <div style={{ fontSize: 11, color: MUTED }}>
-                              {revealCredits} crédito{revealCredits === 1 ? "" : "s"} disponível{revealCredits === 1 ? "" : "is"} este mês
-                            </div>
-                          )}
                         </div>
                       )}
                     </div>
