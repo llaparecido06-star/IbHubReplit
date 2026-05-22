@@ -345,6 +345,20 @@ export async function fetchPendingConnectionsSent(userId: string): Promise<Conne
   } catch (e) { console.warn("fetchPendingConnectionsSent:", e); return []; }
 }
 
+export async function removeConnection(targetId: string, currentUserId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("connections")
+      .delete()
+      .or(
+        `and(requester_id.eq.${currentUserId},receiver_id.eq.${targetId}),and(requester_id.eq.${targetId},receiver_id.eq.${currentUserId})`
+      );
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 export async function respondToConnection(
   connectionId: string,
   action: "accepted" | "rejected",

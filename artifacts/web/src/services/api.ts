@@ -808,6 +808,20 @@ export async function fetchWebSuggestedConnections(
   }
 }
 
+export async function removeWebConnection(targetId: string, currentUserId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("connections")
+      .delete()
+      .or(
+        `and(requester_id.eq.${currentUserId},receiver_id.eq.${targetId}),and(requester_id.eq.${targetId},receiver_id.eq.${currentUserId})`
+      );
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 export async function sendWebConnectionRequest(targetId: string, currentUserId: string): Promise<void> {
   try {
     await supabase.from("connections").upsert(

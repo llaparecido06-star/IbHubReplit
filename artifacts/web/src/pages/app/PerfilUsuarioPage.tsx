@@ -8,6 +8,7 @@ import {
   fetchUserPosts,
   fetchProfileStats,
   sendWebConnectionRequest,
+  removeWebConnection,
   checkWebConnectionStatus,
   checkWebFollowStatus,
   toggleWebFollow,
@@ -606,6 +607,8 @@ export default function PerfilUsuarioPage() {
   const [pendingConnectionId, setPendingConnectionId] = useState<string | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [connectLoading, setConnectLoading] = useState(false);
+  const [disconnectLoading, setDisconnectLoading] = useState(false);
+  const [showDisconnectMenu, setShowDisconnectMenu] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [msgLoading, setMsgLoading] = useState(false);
   const [acceptLoading, setAcceptLoading] = useState(false);
@@ -691,6 +694,18 @@ export default function PerfilUsuarioPage() {
     setConnectionStatus("none");
     setPendingConnectionId(null);
     setAcceptLoading(false);
+  };
+
+  const handleDisconnect = async () => {
+    if (!currentUserId || !targetId || disconnectLoading) return;
+    setShowDisconnectMenu(false);
+    setDisconnectLoading(true);
+    const ok = await removeWebConnection(targetId, currentUserId);
+    if (ok) {
+      setConnectionStatus("none");
+      setStats(s => ({ ...s, connections: Math.max(0, s.connections - 1) }));
+    }
+    setDisconnectLoading(false);
   };
 
   const handleFollow = async () => {
@@ -878,8 +893,53 @@ export default function PerfilUsuarioPage() {
                 {!activeCompany && !isCompany && (
                   <>
                     {connectionStatus === "connected" && (
-                      <div style={{ padding: "9px 18px", borderRadius: 10, fontSize: 13, fontWeight: 700, backgroundColor: "#e8f5e9", color: "#16a34a" }}>
-                        ✓ Conectado
+                      <div style={{ position: "relative" }}>
+                        <button
+                          onClick={() => setShowDisconnectMenu(v => !v)}
+                          disabled={disconnectLoading}
+                          style={{
+                            padding: "9px 18px", borderRadius: 10, fontSize: 13, fontWeight: 700,
+                            backgroundColor: "#e8f5e9", color: "#16a34a",
+                            border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                            opacity: disconnectLoading ? 0.7 : 1,
+                          }}
+                        >
+                          {disconnectLoading ? "…" : "✓ Conectado"}
+                          {!disconnectLoading && (
+                            <svg width="12" height="12" fill="none" stroke="#16a34a" strokeWidth="2.5" viewBox="0 0 24 24">
+                              <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                          )}
+                        </button>
+                        {showDisconnectMenu && (
+                          <>
+                            <div style={{ position: "fixed", inset: 0, zIndex: 800 }} onClick={() => setShowDisconnectMenu(false)} />
+                            <div style={{
+                              position: "absolute", top: "calc(100% + 6px)", left: 0,
+                              backgroundColor: WHITE, border: `1px solid ${BORDER}`,
+                              borderRadius: 12, boxShadow: "0 8px 28px rgba(0,0,0,0.14)",
+                              zIndex: 900, minWidth: 200, overflow: "hidden",
+                            }}>
+                              <button
+                                onClick={handleDisconnect}
+                                style={{
+                                  width: "100%", display: "flex", alignItems: "center", gap: 10,
+                                  padding: "12px 16px", background: "none", border: "none",
+                                  cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#dc2626", textAlign: "left",
+                                }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#fef2f2"; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+                              >
+                                <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                                  <circle cx="9" cy="7" r="4"/>
+                                  <line x1="22" y1="11" x2="16" y2="11"/>
+                                </svg>
+                                Remover conexão
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
                     {connectionStatus === "pending_received" && (

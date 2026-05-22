@@ -62,6 +62,7 @@ export default function PublicProfileScreen() {
   const [reportReason,     setReportReason]     = useState("");
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [likingPostId, setLikingPostId] = useState<string | null>(null);
+  const [disconnectLoading, setDisconnectLoading] = useState(false);
 
   const topPad   = insets.top;
   const bottomPad = insets.bottom;
@@ -188,6 +189,30 @@ export default function PublicProfileScreen() {
       await API.toggleFollow(id, currentUser.id, false);
     }
     await API.sendConnectionRequest(id, currentUser.id);
+  };
+
+  const handleDisconnect = () => {
+    if (!currentUser?.id || !resolvedId) return;
+    Alert.alert(
+      "Remover conexão",
+      `Deseja remover ${userProfile.full_name} das suas conexões?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Remover",
+          style: "destructive",
+          onPress: async () => {
+            setDisconnectLoading(true);
+            const ok = await API.removeConnection(resolvedId, currentUser.id);
+            if (ok) {
+              setConnectionStatus("none");
+              setUserProfile(p => ({ ...p, connections_count: Math.max(0, p.connections_count - 1) }));
+            }
+            setDisconnectLoading(false);
+          },
+        },
+      ],
+    );
   };
 
   const canMessage      = isCompany ? true : connectionStatus === "connected" || isFollowing;
@@ -338,6 +363,17 @@ export default function PublicProfileScreen() {
                   >
                     <Feather name={connectionStatus === "pending" ? "clock" : "user-plus"} size={15} color={connectDisabled ? colors.mutedForeground : colors.navy} />
                     <Text style={[styles.pillText, { color: connectDisabled ? colors.mutedForeground : colors.navy }]}>{connectLabel}</Text>
+                  </TouchableOpacity>
+                )}
+                {!activeCompany && connectionStatus === "connected" && (
+                  <TouchableOpacity
+                    style={[styles.pill, { backgroundColor: "transparent", borderColor: "#16a34a", flex: 1, opacity: disconnectLoading ? 0.6 : 1 }]}
+                    onPress={handleDisconnect} disabled={disconnectLoading} activeOpacity={0.82}
+                  >
+                    <Feather name="user-check" size={15} color="#16a34a" />
+                    <Text style={[styles.pillText, { color: "#16a34a" }]}>
+                      {disconnectLoading ? "…" : t("profile_view.connected")}
+                    </Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
