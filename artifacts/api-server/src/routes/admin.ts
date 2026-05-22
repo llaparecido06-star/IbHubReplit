@@ -1087,17 +1087,28 @@ router.delete("/admin/delete-user", async (req: Request, res: Response): Promise
   }
 
   const dbResults = await Promise.all([
-    deleteTable("comment_likes", () => supabaseAdmin.from("comment_likes").delete().eq("user_id", userId)),
-    deleteTable("likes",         () => supabaseAdmin.from("likes").delete().eq("user_id", userId)),
-    deleteTable("bookmarks",     () => supabaseAdmin.from("bookmarks").delete().eq("user_id", userId)),
-    deleteTable("wine_cellar",   () => supabaseAdmin.from("wine_cellar").delete().eq("user_id", userId)),
-    deleteTable("post_hidden",   () => supabaseAdmin.from("post_hidden").delete().eq("user_id", userId)),
-    deleteTable("user_blocks",   () => supabaseAdmin.from("user_blocks").delete().or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`)),
-    deleteTable("comments",      () => supabaseAdmin.from("comments").delete().eq("user_id", userId)),
-    deleteTable("stories",       () => supabaseAdmin.from("stories").delete().eq("user_id", userId)),
-    deleteTable("posts",         () => supabaseAdmin.from("posts").delete().eq("user_id", userId)),
+    deleteTable("comment_likes",  () => supabaseAdmin.from("comment_likes").delete().eq("user_id", userId)),
+    deleteTable("likes",          () => supabaseAdmin.from("likes").delete().eq("user_id", userId)),
+    deleteTable("bookmarks",      () => supabaseAdmin.from("bookmarks").delete().eq("user_id", userId)),
+    deleteTable("wine_cellar",    () => supabaseAdmin.from("wine_cellar").delete().eq("user_id", userId)),
+    deleteTable("post_hidden",    () => supabaseAdmin.from("post_hidden").delete().eq("user_id", userId)),
+    deleteTable("user_blocks",    () => supabaseAdmin.from("user_blocks").delete().or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`)),
+    deleteTable("comments",       () => supabaseAdmin.from("comments").delete().eq("user_id", userId)),
+    deleteTable("stories",        () => supabaseAdmin.from("stories").delete().eq("user_id", userId)),
+    deleteTable("posts",          () => supabaseAdmin.from("posts").delete().eq("user_id", userId)),
+    deleteTable("bi_reveal_credits", () => supabaseAdmin.from("bi_reveal_credits").delete().eq("user_id", userId)),
+    deleteTable("push_tokens",    () => supabaseAdmin.from("push_tokens").delete().eq("user_id", userId)),
+    deleteTable("follows",        () => supabaseAdmin.from("follows").delete().or(`follower_id.eq.${userId},following_id.eq.${userId}`)),
+    deleteTable("connections",    () => supabaseAdmin.from("connections").delete().or(`requester_id.eq.${userId},receiver_id.eq.${userId}`)),
+    deleteTable("company_pages",  () => supabaseAdmin.from("company_pages").delete().eq("owner_id", userId)),
   ]);
   const dbWarnings = dbResults.filter((w): w is string => w !== null);
+
+  // Delete profile row (must happen before auth deletion to avoid FK violations)
+  const { error: profileDelErr } = await supabaseAdmin.from("profiles").delete().eq("id", userId);
+  if (profileDelErr) {
+    req.log.warn({ err: profileDelErr, targetUserId: userId }, "[admin/deleteUser] profile delete warning (non-fatal)");
+  }
 
   const allWarnings = [...storageWarnings, ...dbWarnings];
   if (allWarnings.length > 0) {
