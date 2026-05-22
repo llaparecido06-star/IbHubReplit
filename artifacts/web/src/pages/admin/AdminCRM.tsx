@@ -12,6 +12,7 @@ import {
   addUserCredits,
   getUserRevealCredits,
   addUserRevealCredits,
+  deleteUser,
 } from "@/services/adminApi";
 import { supabase } from "@/lib/supabase";
 
@@ -183,6 +184,22 @@ export default function AdminCRM() {
       alert(`${amount > 0 ? `+${amount}` : amount} consulta${Math.abs(amount) === 1 ? "" : "s"} especial${Math.abs(amount) === 1 ? "" : "is"} aplicada${Math.abs(amount) === 1 ? "" : "s"}. Agora: ${updated.credits_remaining}/${updated.credits_total}`);
     } catch (e) {
       alert(e instanceof Error ? e.message : "Erro ao ajustar créditos.");
+    }
+  };
+
+  const handleDeleteUser = async (user: AdminUser) => {
+    const name = user.full_name ?? user.username ?? user.email ?? user.id;
+    if (!confirm(`⚠️ ATENÇÃO\n\nVocê está prestes a deletar permanentemente a conta de "${name}".\n\nEsta ação é IRREVERSÍVEL: todos os dados, posts, fotos e histórico serão apagados.\n\nTem certeza?`)) return;
+    if (!confirm(`CONFIRMAÇÃO FINAL\n\nDeletar "${name}" para sempre?\n\nClique em OK para confirmar.`)) return;
+    setActionLoading(true);
+    const result = await deleteUser(user.id);
+    setActionLoading(false);
+    if (result.success) {
+      alert(`A conta de "${name}" foi deletada permanentemente.`);
+      setSelectedUser(null);
+      void fetchUsers();
+    } else {
+      alert(`Erro ao deletar usuário: ${result.error ?? "Erro desconhecido"}`);
     }
   };
 
@@ -383,6 +400,11 @@ export default function AdminCRM() {
                               disabled={actionLoading}
                               style={{ padding: "8px 16px", backgroundColor: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}
                             >🔗 Resetar Senha</button>
+                            <button
+                              onClick={() => handleDeleteUser(user)}
+                              disabled={actionLoading}
+                              style={{ padding: "8px 16px", backgroundColor: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+                            >🗑 Deletar Usuário</button>
                           </div>
                           {resetLinkMsg && (
                             <div style={{ marginTop: 12, padding: "10px 14px", backgroundColor: resetLinkMsg.type === "success" ? "#f0fdf4" : "#fef2f2", border: `1px solid ${resetLinkMsg.type === "success" ? "#86efac" : "#fca5a5"}`, borderRadius: 8 }}>

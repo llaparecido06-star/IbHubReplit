@@ -495,6 +495,20 @@ export async function addUserRevealCredits(userId: string, amount: number): Prom
   return body as UserCredits;
 }
 
+export async function deleteUser(userId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await adminFetch("/admin/delete-user", {
+      method: "DELETE",
+      body: JSON.stringify({ userId }),
+    });
+    const json = await res.json() as { success?: boolean; error?: string };
+    if (!res.ok) return { success: false, error: json.error ?? `HTTP ${res.status}` };
+    return { success: true };
+  } catch {
+    return { success: false, error: "Erro de rede" };
+  }
+}
+
 export function relativeTime(isoString: string): string {
   const diff = Date.now() - new Date(isoString).getTime();
   const seconds = Math.floor(diff / 1000);
