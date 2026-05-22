@@ -386,24 +386,6 @@ export default function GroupChatScreen() {
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
   };
 
-  // ── Image / video picker (formerly preceded by audio section) ───────────────
-  // placeholder comment kept for diff clarity; audio recording was removed.
-
-  // ── Image / video picker ──────────────────────────────────────────────────
-  // (duplicate heading removed below — keeping original section)
-        }
-      },
-      onPanResponderTerminate: () => {
-        recordHandlersRef.current.cancel();
-      },
-    }),
-  ).current;
-
-  const formatRecordingTime = (ms: number) => {
-    const s = Math.floor(ms / 1000);
-    return `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
-  };
-
   // ── Image / video picker ──────────────────────────────────────────────────
 
   const pickAndSendMedia = async (type: "camera" | "gallery") => {
@@ -1179,33 +1161,6 @@ export default function GroupChatScreen() {
         </View>
       )}
 
-      {/* Recording bar */}
-      {isRecording && (
-        <View style={[styles.recordingBar, { backgroundColor: "#fff", borderTopColor: colors.border }]}>
-          <TouchableOpacity onPress={cancelRecording} style={styles.recordCancelBtn}>
-            <Feather name="x" size={20} color={colors.mutedForeground} />
-          </TouchableOpacity>
-          <View style={{ flex: 1, alignItems: "center" }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <View style={styles.recordDot} />
-              <Text style={{ fontSize: 15, color: colors.navy, fontWeight: "600" }}>
-                {formatRecordingTime(recordingMs)}
-              </Text>
-            </View>
-            <Text style={{
-              fontSize: 12,
-              color: slideToCancel ? "#dc2626" : colors.mutedForeground,
-              fontWeight: slideToCancel ? "700" : "400",
-            }}>
-              {slideToCancel ? t("group_chat_screen.release_to_cancel") : t("group_chat_screen.slide_to_cancel")}
-            </Text>
-          </View>
-          <TouchableOpacity onPress={stopRecording} style={[styles.recordStopBtn, { backgroundColor: colors.navy }]}>
-            <Feather name="send" size={18} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      )}
-
       {/* Input */}
       {/* @mention autocomplete */}
       {mentionQuery !== null && filteredMembers.length > 0 && (
@@ -1232,46 +1187,34 @@ export default function GroupChatScreen() {
         </View>
       )}
 
-      {!isRecording && (
-        <View style={[styles.inputRow, { paddingBottom: bottomPad + 8, backgroundColor: "#fff", borderTopColor: colors.border }]}>
+      <View style={[styles.inputRow, { paddingBottom: bottomPad + 8, backgroundColor: "#fff", borderTopColor: colors.border }]}>
+        <TouchableOpacity
+          onPress={() => setShowAttach(v => !v)}
+          style={[styles.iconBtn, showAttach && { opacity: 1 }]}
+        >
+          <Feather name={showAttach ? "x" : "paperclip"} size={20} color={showAttach ? colors.gold : colors.mutedForeground} />
+        </TouchableOpacity>
+        <TextInput
+          style={[styles.input, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border }]}
+          value={input}
+          onChangeText={handleInputChange}
+          placeholder={t("group_chat_screen.input_placeholder")}
+          placeholderTextColor={colors.mutedForeground}
+          multiline
+          onSubmitEditing={handleSend}
+          returnKeyType="send"
+          onFocus={() => setShowAttach(false)}
+        />
+        {input.trim() ? (
           <TouchableOpacity
-            onPress={() => setShowAttach(v => !v)}
-            style={[styles.iconBtn, showAttach && { opacity: 1 }]}
+            style={[styles.sendBtn, { backgroundColor: colors.navy }]}
+            onPress={handleSend}
+            disabled={sending}
           >
-            <Feather name={showAttach ? "x" : "paperclip"} size={20} color={showAttach ? colors.gold : colors.mutedForeground} />
+            <Feather name="send" size={18} color="#fff" />
           </TouchableOpacity>
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border }]}
-            value={input}
-            onChangeText={handleInputChange}
-            placeholder={t("group_chat_screen.input_placeholder")}
-            placeholderTextColor={colors.mutedForeground}
-            multiline
-            onSubmitEditing={handleSend}
-            returnKeyType="send"
-            onFocus={() => setShowAttach(false)}
-          />
-          {input.trim() ? (
-            <TouchableOpacity
-              style={[styles.sendBtn, { backgroundColor: colors.navy }]}
-              onPress={handleSend}
-              disabled={sending}
-            >
-              <Feather name="send" size={18} color="#fff" />
-            </TouchableOpacity>
-          ) : (
-            <View
-              style={[
-                styles.sendBtn,
-                { backgroundColor: slideToCancel ? "#dc2626" : colors.navy },
-              ]}
-              {...recordPanResponder.panHandlers}
-            >
-              <Feather name="mic" size={18} color="#fff" />
-            </View>
-          )}
-        </View>
-      )}
+        ) : null}
+      </View>
 
       {/* 3-dot menu modal */}
       <Modal

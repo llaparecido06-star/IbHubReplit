@@ -1230,30 +1230,6 @@ export default function ChatScreen() {
         </View>
       )}
 
-      {/* Recording overlay */}
-      {isRecording && (
-        <View style={[st.recordingBanner, { backgroundColor: "#fee2e2", borderTopColor: "#fca5a5" }]}>
-          <TouchableOpacity onPress={cancelRecording} style={st.recordingCancel}>
-            <Feather name="x" size={18} color="#dc2626" />
-          </TouchableOpacity>
-          <View style={[st.recordingDot, { backgroundColor: "#dc2626" }]} />
-          <View style={{ flex: 1 }}>
-            <Text style={[st.recordingText, { color: "#dc2626" }]}>
-              {t("chat_screen.recording")} {formatDuration(recordingMs)}
-            </Text>
-            <Text style={{ color: slideToCancel ? "#dc2626" : "#9b1c1c", fontSize: 11, marginTop: 2, fontWeight: slideToCancel ? "700" : "400" }}>
-              {slideToCancel ? t("chat_screen.release_to_cancel") : t("chat_screen.slide_to_cancel")}
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={stopRecording}
-            style={[st.recordingSend, { backgroundColor: "#dc2626" }]}
-          >
-            <Feather name="send" size={16} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      )}
-
       {/* Reply preview */}
       {replyTo && (
         <View style={[st.replyPreview, { backgroundColor: "#fff", borderTopColor: colors.gold }]}>
@@ -1304,17 +1280,7 @@ export default function ChatScreen() {
                 ? <ActivityIndicator size="small" color="#fff" />
                 : <Feather name="send" size={17} color="#fff" />}
             </TouchableOpacity>
-          ) : (
-            <View
-              style={[
-                st.micBtnWrap,
-                isRecording && { backgroundColor: slideToCancel ? "#fecaca" : "#fee2e2" },
-              ]}
-              {...recordPanResponder.panHandlers}
-            >
-              <Feather name="mic" size={22} color={isRecording ? "#dc2626" : colors.mutedForeground} />
-            </View>
-          )}
+          ) : null}
         </View>
       ) : (
         <View style={[st.lockedBar, { backgroundColor: "#fff", borderTopColor: colors.border, paddingBottom: bottomPad + 10 }]}>
