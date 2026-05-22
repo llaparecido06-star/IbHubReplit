@@ -1,12 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTranslation } from "react-i18next";
-import { useAudioRecorder, requestRecordingPermissionsAsync, setAudioModeAsync, RecordingPresets } from "expo-audio";
 import { VideoView, useVideoPlayer } from "expo-video";
 import * as DocumentPicker from "expo-document-picker";
-// Use the legacy module for `getInfoAsync` — the new (v19) main module
-// only exposes the class-based File API and re-exports legacy helpers as
-// stubs that throw at runtime.
-import { getInfoAsync as fsGetInfoAsync } from "expo-file-system/legacy";
 import * as Haptics from "expo-haptics";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
@@ -21,7 +16,6 @@ import {
   KeyboardAvoidingView,
   Linking,
   Modal,
-  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -43,7 +37,6 @@ import * as API from "@/services/api";
 import type { AppMessage, AppConversation } from "@/services/api";
 import {
   MAX_CHAT_FILE_SIZE,
-  MAX_AUDIO_DURATION_MS,
   formatFileSize,
   resolveChatMime,
 } from "@/constants/chatUploads";
@@ -94,11 +87,6 @@ function isSameDay(a: string, b: string): boolean {
   return new Date(a).toDateString() === new Date(b).toDateString();
 }
 
-function formatDuration(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  return `${m}:${String(s % 60).padStart(2, "0")}`;
-}
 
 export default function ChatScreen() {
   const { t }    = useTranslation();
@@ -157,16 +145,6 @@ export default function ChatScreen() {
   const [companyInfo,            setCompanyInfo]            = useState<{ id: string; name: string; avatar_url: string | null } | null>(null);
   const [isConversationAccepted, setIsConversationAccepted] = useState(true);
   const [selectedMedia,          setSelectedMedia]          = useState<{ url: string; type: "image" | "video" } | null>(null);
-
-  // Audio recording
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const [isRecording,     setIsRecording]      = useState(false);
-  const isRecordingRef = useRef(false); // ref mirror to avoid race conditions
-  const [recordingMs,     setRecordingMs]      = useState(0);
-  const recordingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Slide-up-to-cancel gesture state (WhatsApp-style hold-to-record).
-  const slideToCancelRef = useRef(false);
-  const [slideToCancel, setSlideToCancel] = useState(false);
 
   const listRef            = useRef<FlatList>(null);
   const typingTimer        = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -650,212 +628,6 @@ export default function ChatScreen() {
       if (!e?.message?.includes("cancel")) Alert.alert(t("chat_screen.error_title"), t("chat_screen.error_file_open"));
     }
   };
-
-  // ── Audio recording ──────────────────────────────────────────────────────────
-
-  const startRecording = async () => {
-    if (Platform.OS === "web") { Alert.alert(t("chat_screen.audio_label"), t("chat_screen.audio_web_unavailable")); return; }
-    if (isRecordingRef.current) {
-      // Already recording — stop and send
-      void stopRecording();
-      return;
-    }
-    try {
-      const { granted } = await requestRecordingPermissionsAsync();
-      if (!granted) {
-        permissionAlert(t("chat_screen.permission_mic_msg"), t);
-        return;
-      }
-      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      await audioRecorder.record();
-      isRecordingRef.current = true;
-      setIsRecording(true);
-      setRecordingMs(0);
-      slideToCancelRef.current = false;
-      setSlideToCancel(false);
-      recordingTimer.current = setInterval(() => {
-        setRecordingMs(prev => {
-          const next = prev + 1000;
-          // Hard cap on duration. Same approach WhatsApp uses: stop and send
-          // automatically when the user is about to hit the limit, instead of
-          // discarding the audio.
-          if (next >= MAX_AUDIO_DURATION_MS && isRecordingRef.current) {
-            setTimeout(() => {
-              if (!isRecordingRef.current) return;
-              Alert.alert(
-                t("chat_screen.recording_limit_title"),
-                t("chat_screen.recording_limit_msg", { mins: Math.round(MAX_AUDIO_DURATION_MS / 60000) }),
-              );
-              void stopRecording();
-            }, 0);
-          }
-          return next;
-        });
-      }, 1000);
-      if (__DEV__) console.log("[Audio] Recording started.");
-    } catch (e: any) {
-      console.error("[Audio] startRecording error:", e?.message);
-      Alert.alert(t("chat_screen.error_title"), t("chat_screen.error_recording_start"));
-    }
-  };
-
-  const stopRecording = async () => {
-    // Use ref instead of state to avoid React batching race condition
-    if (!isRecordingRef.current || !user?.id || !id) {
-      if (__DEV__) console.log("[Audio] stopRecording skipped — not recording or missing context.");
-      return;
-    }
-    if (recordingTimer.current) {
-      clearInterval(recordingTimer.current);
-      recordingTimer.current = null;
-    }
-    isRecordingRef.current = false;
-    setIsRecording(false);
-    setRecordingMs(0);
-    slideToCancelRef.current = false;
-    setSlideToCancel(false);
-    try {
-      await audioRecorder.stop();
-      // Restore playback mode: allow silent mode so audio plays even when
-      // the device ringer is off (same behaviour as WhatsApp/Telegram).
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
-
-      // Poll for URI AND a non-empty file. Android's MediaRecorder layer can
-      // resolve `stop()` and even expose `audioRecorder.uri` before the file
-      // on disk is fully flushed — uploading at that moment streams 0 bytes
-      // to the server and the resulting message is unplayable. We wait for
-      // both the URI to appear AND the file to have non-zero size, with a
-      // generous timeout (~6s) for slow devices.
-      let uri: string | null = null;
-      let fileSize = 0;
-      for (let i = 0; i < 40; i++) {
-        await new Promise(resolve => setTimeout(resolve, 150));
-        uri = audioRecorder.uri;
-        if (!uri) continue;
-        try {
-          const info: any = await fsGetInfoAsync(uri, { size: true } as any);
-          if (info?.exists && typeof info.size === "number") {
-            fileSize = info.size;
-            if (fileSize > 0) break;
-          }
-        } catch {}
-      }
-      if (__DEV__) console.log("[Audio] Recording stopped. URI:", uri ?? "null", "size:", fileSize);
-
-      if (!uri || fileSize === 0) {
-        Alert.alert(
-          t("chat_screen.audio_empty_title"),
-          t("chat_screen.audio_empty_msg"),
-        );
-        return;
-      }
-
-      setUploading(true);
-      setUploadStatus(t("chat_screen.uploading_audio"));
-
-      // Determine mime/extension — expo-audio records as m4a on both platforms
-      const mimeType = Platform.OS === "android" ? "audio/mp4" : "audio/m4a";
-      if (__DEV__) console.log(`[Audio] Starting upload — platform: ${Platform.OS}, uri: ${uri}, size: ${fileSize} bytes, mime: ${mimeType}`);
-
-      let url: string | null = null;
-      try {
-        url = await API.uploadChatMedia(id, uri, mimeType, null, { accessToken: session?.access_token ?? undefined, userId: user?.id ?? undefined });
-      } catch (uploadErr: any) {
-        console.error("[Audio] uploadChatMedia threw:", uploadErr?.message ?? uploadErr);
-      }
-
-      setUploading(false);
-      setUploadStatus(null);
-
-      if (!url) {
-        console.error(`[Audio] uploadChatMedia returned null — platform: ${Platform.OS}, uri: ${uri}, size: ${fileSize} bytes`);
-        Alert.alert(t("chat_screen.error_title"), t("chat_screen.error_audio_send"));
-        return;
-      }
-      if (__DEV__) console.log(`[Audio] Upload OK → ${url}`);
-
-      // Use the shared API endpoint so the server can fan out push
-      // notifications and apply the same moderation/auditing logic that
-      // image, video and file messages already get.
-      const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", activeCompany?.id, session?.access_token ?? undefined);
-      if (!saved) {
-        console.error("[Audio] sendMediaMessage returned null");
-        Alert.alert(t("chat_screen.error_audio_send_title"), t("chat_screen.error_audio_save"));
-        return;
-      }
-
-      seenMsgIds.current.add(saved.id);
-      setMessages(prev => {
-        const filtered = prev.filter((m: any) => m.id !== saved.id);
-        return [...filtered, saved as any];
-      });
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
-      if (__DEV__) console.log("[Audio] Audio message sent successfully.");
-    } catch (e: any) {
-      console.error("[Audio] stopRecording error:", e?.message);
-      setUploading(false);
-      setUploadStatus(null);
-      Alert.alert(t("chat_screen.error_title"), t("chat_screen.error_audio_process"));
-    }
-  };
-
-  const cancelRecording = async () => {
-    if (!isRecordingRef.current) return;
-    if (recordingTimer.current) {
-      clearInterval(recordingTimer.current);
-      recordingTimer.current = null;
-    }
-    isRecordingRef.current = false;
-    setIsRecording(false);
-    setRecordingMs(0);
-    slideToCancelRef.current = false;
-    setSlideToCancel(false);
-    try { await audioRecorder.stop(); } catch {}
-    await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
-    if (__DEV__) console.log("[Audio] Recording cancelled.");
-  };
-
-  // ── Hold-to-record gesture (WhatsApp-style) ─────────────────────────────────
-  // PanResponder is created once with stable refs to the latest handlers, so
-  // we don't recreate it on every render and don't capture stale closures.
-  const recordHandlersRef = useRef({
-    start: () => {},
-    stop: () => {},
-    cancel: () => {},
-  });
-  recordHandlersRef.current.start = () => { void startRecording(); };
-  recordHandlersRef.current.stop = () => { void stopRecording(); };
-  recordHandlersRef.current.cancel = () => { void cancelRecording(); };
-
-  const recordPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        recordHandlersRef.current.start();
-      },
-      onPanResponderMove: (_evt, gesture) => {
-        // Slide up by ~60px to enter the "release-to-cancel" zone.
-        const isCancel = gesture.dy < -60;
-        if (isCancel !== slideToCancelRef.current) {
-          slideToCancelRef.current = isCancel;
-          setSlideToCancel(isCancel);
-        }
-      },
-      onPanResponderRelease: () => {
-        if (slideToCancelRef.current) {
-          recordHandlersRef.current.cancel();
-        } else {
-          recordHandlersRef.current.stop();
-        }
-      },
-      onPanResponderTerminate: () => {
-        // Gesture was forcibly stolen (e.g. system modal). Treat as cancel
-        // to avoid sending an audio the user didn't intend to send.
-        recordHandlersRef.current.cancel();
-      },
-    }),
-  ).current;
 
   // ── Wine card ────────────────────────────────────────────────────────────────
 

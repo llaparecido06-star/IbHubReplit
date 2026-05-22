@@ -10,7 +10,6 @@ import {
   KeyboardAvoidingView,
   Linking,
   Modal,
-  PanResponder,
   Platform,
   Pressable,
   StyleSheet,
@@ -20,10 +19,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useAudioRecorder, requestRecordingPermissionsAsync, setAudioModeAsync, RecordingPresets } from "expo-audio";
 import * as DocumentPicker from "expo-document-picker";
-// Use the legacy module for `getInfoAsync` — see chat/[id].tsx for context.
-import { getInfoAsync as fsGetInfoAsync } from "expo-file-system/legacy";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { VideoView, useVideoPlayer } from "expo-video";
@@ -37,7 +33,6 @@ import * as API from "@/services/api";
 import type { AppMessage, AppConversation } from "@/services/api";
 import {
   MAX_CHAT_FILE_SIZE,
-  MAX_AUDIO_DURATION_MS,
   formatFileSize,
   resolveChatMime,
 } from "@/constants/chatUploads";
@@ -126,15 +121,6 @@ export default function GroupChatScreen() {
   // ── Group members (for @mentions) ────────────────────────────────────────────
   const [groupMembers, setGroupMembers] = useState<SenderProfile[]>([]);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const [isRecording, setIsRecording]   = useState(false);
-  const isRecordingRef                  = useRef(false);
-  const [recordingMs, setRecordingMs]   = useState(0);
-  const recordingTimer                  = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Slide-up-to-cancel gesture state (WhatsApp-style hold-to-record).
-  const slideToCancelRef                = useRef(false);
-  const [slideToCancel, setSlideToCancel] = useState(false);
 
   const listRef            = useRef<FlatList>(null);
   const typingTimer        = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -400,177 +386,11 @@ export default function GroupChatScreen() {
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
   };
 
-  // ── Audio recording ───────────────────────────────────────────────────────
+  // ── Image / video picker (formerly preceded by audio section) ───────────────
+  // placeholder comment kept for diff clarity; audio recording was removed.
 
-  const startRecording = async () => {
-    // On web, fall back to picking an audio file
-    if (Platform.OS === "web") {
-      if (!user?.id || !id) return;
-      try {
-        const result = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true });
-        if (result.canceled || !result.assets?.length) return;
-        const asset = result.assets[0];
-        setUploading(true);
-        const url = await API.uploadChatMedia(id, asset.uri, asset.mimeType ?? "audio/mpeg", null, { accessToken: session?.access_token ?? undefined, userId: user?.id ?? undefined });
-        setUploading(false);
-        if (!url) { Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_audio_send")); return; }
-        const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", effectiveCompanyId, session?.access_token ?? undefined);
-        if (saved) {
-          seenMsgIds.current.add(saved.id);
-          setMessages(prev => {
-            const filtered = prev.filter(m => m.id !== saved.id);
-            return [...filtered, saved];
-          });
-        }
-      } catch {
-        setUploading(false);
-        Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_audio_file"));
-      }
-      return;
-    }
-    if (isRecordingRef.current) {
-      void stopRecording();
-      return;
-    }
-    try {
-      const { granted } = await requestRecordingPermissionsAsync();
-      if (!granted) {
-        permissionAlert(t("group_chat_screen.permission_mic_msg"), t);
-        return;
-      }
-      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      await audioRecorder.record();
-      isRecordingRef.current = true;
-      setIsRecording(true);
-      setRecordingMs(0);
-      slideToCancelRef.current = false;
-      setSlideToCancel(false);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      recordingTimer.current = setInterval(() => {
-        setRecordingMs(prev => {
-          const next = prev + 1000;
-          if (next >= MAX_AUDIO_DURATION_MS && isRecordingRef.current) {
-            setTimeout(() => {
-              if (!isRecordingRef.current) return;
-              Alert.alert(
-                t("group_chat_screen.recording_limit_title"),
-                t("group_chat_screen.recording_limit_msg", { mins: Math.round(MAX_AUDIO_DURATION_MS / 60000) }),
-              );
-              void stopRecording();
-            }, 0);
-          }
-          return next;
-        });
-      }, 1000);
-    } catch {
-      Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_recording_start"));
-    }
-  };
-
-  const stopRecording = async () => {
-    if (!isRecordingRef.current || !user?.id || !id) return;
-    if (recordingTimer.current) {
-      clearInterval(recordingTimer.current);
-      recordingTimer.current = null;
-    }
-    isRecordingRef.current = false;
-    setIsRecording(false);
-    setRecordingMs(0);
-    slideToCancelRef.current = false;
-    setSlideToCancel(false);
-    try {
-      await audioRecorder.stop();
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-      // Poll for URI AND non-empty file. See chat/[id].tsx for the rationale —
-      // `audioRecorder.uri` can be set before the file on disk has any bytes,
-      // and uploading at that moment ships an empty multipart part.
-      let uri: string | null = null;
-      let fileSize = 0;
-      for (let i = 0; i < 40; i++) {
-        await new Promise(resolve => setTimeout(resolve, 150));
-        uri = audioRecorder.uri;
-        if (!uri) continue;
-        try {
-          const info: any = await fsGetInfoAsync(uri, { size: true } as any);
-          if (info?.exists && typeof info.size === "number") {
-            fileSize = info.size;
-            if (fileSize > 0) break;
-          }
-        } catch {}
-      }
-      if (!uri || fileSize === 0) {
-        Alert.alert(
-          t("group_chat_screen.audio_empty_title"),
-          t("group_chat_screen.audio_empty_msg"),
-        );
-        return;
-      }
-      setUploading(true);
-      const mimeType = Platform.OS === "android" ? "audio/mp4" : "audio/m4a";
-      const url = await API.uploadChatMedia(id, uri, mimeType, null, { accessToken: session?.access_token ?? undefined, userId: user?.id ?? undefined });
-      setUploading(false);
-      if (!url) { Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_audio_send")); return; }
-      const saved = await API.sendMediaMessage(id, user.id, url, "audio", "", effectiveCompanyId, session?.access_token ?? undefined);
-      if (saved) {
-        seenMsgIds.current.add(saved.id);
-        setMessages(prev => {
-          const filtered = prev.filter(m => m.id !== saved.id);
-          return [...filtered, saved];
-        });
-        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
-      } else {
-        Alert.alert(t("group_chat_screen.error_audio_send_title"), t("group_chat_screen.error_audio_save"));
-      }
-    } catch {
-      setUploading(false);
-      Alert.alert(t("group_chat_screen.error_title"), t("group_chat_screen.error_audio_process"));
-    }
-  };
-
-  const cancelRecording = async () => {
-    if (!isRecordingRef.current) return;
-    if (recordingTimer.current) {
-      clearInterval(recordingTimer.current);
-      recordingTimer.current = null;
-    }
-    isRecordingRef.current = false;
-    setIsRecording(false);
-    setRecordingMs(0);
-    slideToCancelRef.current = false;
-    setSlideToCancel(false);
-    try { await audioRecorder.stop(); } catch {}
-    await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
-  };
-
-  // ── Hold-to-record gesture (WhatsApp-style) ──────────────────────────────
-  const recordHandlersRef = useRef({
-    start: () => {},
-    stop: () => {},
-    cancel: () => {},
-  });
-  recordHandlersRef.current.start = () => { void startRecording(); };
-  recordHandlersRef.current.stop = () => { void stopRecording(); };
-  recordHandlersRef.current.cancel = () => { void cancelRecording(); };
-
-  const recordPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        recordHandlersRef.current.start();
-      },
-      onPanResponderMove: (_evt, gesture) => {
-        const isCancel = gesture.dy < -60;
-        if (isCancel !== slideToCancelRef.current) {
-          slideToCancelRef.current = isCancel;
-          setSlideToCancel(isCancel);
-        }
-      },
-      onPanResponderRelease: () => {
-        if (slideToCancelRef.current) {
-          recordHandlersRef.current.cancel();
-        } else {
-          recordHandlersRef.current.stop();
+  // ── Image / video picker ──────────────────────────────────────────────────
+  // (duplicate heading removed below — keeping original section)
         }
       },
       onPanResponderTerminate: () => {
