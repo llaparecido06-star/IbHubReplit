@@ -1066,7 +1066,7 @@ function BiMobileExportadorSearch({ colors }: { colors: ReturnType<typeof useCol
 }
 
 // ── BiMobileImportadoresSearch ─────────────────────────────────────────────────
-function BiMobileImportadoresSearch({ colors }: { colors: ReturnType<typeof useColors> }) {
+function BiMobileImportadoresSearch({ colors, onCreditsUpdate }: { colors: ReturnType<typeof useColors>; onCreditsUpdate?: (remaining: number) => void }) {
   const { t } = useTranslation();
   const { session } = useAuth();
   const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
@@ -1127,7 +1127,7 @@ function BiMobileImportadoresSearch({ colors }: { colors: ReturnType<typeof useC
       else {
         const data = await res.json() as { items: BiImpItem[]; total: number; credits_remaining: number; credits_total: number };
         setItems(data.items); setTotal(data.total); setSearched(true);
-        if (data.credits_remaining !== undefined) setCredits(data.credits_remaining);
+        if (data.credits_remaining !== undefined) { setCredits(data.credits_remaining); onCreditsUpdate?.(data.credits_remaining); }
       }
     } catch { setError(t("mercado_screen.bi_error_connection")); }
     finally { setSearching(false); searchingRef.current = false; }
@@ -1245,7 +1245,7 @@ function BiMobileImportadoresSearch({ colors }: { colors: ReturnType<typeof useC
 }
 
 // ── BiMobileProdutoresSearch ───────────────────────────────────────────────────
-function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useColors> }) {
+function BiMobileProdutoresSearch({ colors, onCreditsUpdate }: { colors: ReturnType<typeof useColors>; onCreditsUpdate?: (remaining: number) => void }) {
   const { t } = useTranslation();
   const { session } = useAuth();
   const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
@@ -1306,7 +1306,7 @@ function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useCol
       else {
         const data = await res.json() as { items: BiProdItem[]; total: number; credits_remaining: number; credits_total: number };
         setItems(data.items); setTotal(data.total); setSearched(true);
-        if (data.credits_remaining !== undefined) setCredits(data.credits_remaining);
+        if (data.credits_remaining !== undefined) { setCredits(data.credits_remaining); onCreditsUpdate?.(data.credits_remaining); }
       }
     } catch { setError(t("mercado_screen.bi_error_connection")); }
     finally { setSearching(false); searchingRef.current = false; }
@@ -1420,7 +1420,11 @@ function BiMobileProdutoresSearch({ colors }: { colors: ReturnType<typeof useCol
 }
 
 // ── IdealBISearchView (main) ───────────────────────────────────────────────────
-function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof useColors>; bottomPad: number }) {
+function IdealBISearchView({ colors, bottomPad, credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal }: {
+  colors: ReturnType<typeof useColors>; bottomPad: number;
+  credits: number | null; creditsTotal: number; creditsLoading: boolean;
+  setCredits: (n: number) => void; setCreditsTotal: (n: number) => void;
+}) {
   const { t } = useTranslation();
   const router = useRouter();
   const { session } = useAuth();
@@ -1428,9 +1432,6 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
   const [searchMode, setSearchMode]     = useState<BiSearchMode>("exportador");
 
   const [query, setQuery]               = useState("");
-  const [credits, setCredits]           = useState<number | null>(null);
-  const [creditsTotal, setCreditsTotal] = useState(3);
-  const [creditsLoading, setCreditsLoading] = useState(true);
   const [searching, setSearching]       = useState(false);
   const [result, setResult]             = useState<WineRecord | null | "not_found" | "out_of_scope">(null);
   const [brandExtracted, setBrandExtracted] = useState<string | null>(null);
@@ -1446,24 +1447,6 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
     session?.access_token
       ? { Authorization: `Bearer ${session.access_token}` }
       : {};
-
-  const loadCredits = useCallback(async () => {
-    if (!session?.access_token) return;
-    try {
-      const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/wine-imports/credits`, {
-        headers: authHeader(),
-      });
-      if (!res.ok) return;
-      const json = await res.json() as { credits_remaining: number; credits_total: number };
-      setCredits(json.credits_remaining);
-      setCreditsTotal(json.credits_total);
-    } catch {
-    } finally {
-      setCreditsLoading(false);
-    }
-  }, [session?.access_token]);
-
-  useEffect(() => { loadCredits(); }, [loadCredits]);
 
   /* Fetch label autocomplete suggestions from DB as user types */
   useEffect(() => {
@@ -1595,8 +1578,8 @@ function IdealBISearchView({ colors, bottomPad }: { colors: ReturnType<typeof us
       </ScrollView>
 
       {searchMode === "exportador"   && <BiMobileExportadorSearch   colors={colors} />}
-      {searchMode === "importadores" && <BiMobileImportadoresSearch colors={colors} />}
-      {searchMode === "produtores"   && <BiMobileProdutoresSearch   colors={colors} />}
+      {searchMode === "importadores" && <BiMobileImportadoresSearch colors={colors} onCreditsUpdate={setCredits} />}
+      {searchMode === "produtores"   && <BiMobileProdutoresSearch   colors={colors} onCreditsUpdate={setCredits} />}
 
       {searchMode === "marca" && (<>
       {/* ── Credits KPI card — same style as Visão Geral KPIs ── */}
@@ -2553,8 +2536,32 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
 }) {
   const { t } = useTranslation();
   const router = useRouter();
+  const { session } = useAuth();
   const { hasFeature: permHasFeature } = usePermissions();
   const [idealbiSubTab, setIdealbiSubTab] = useState<IdealBISubTab>("feed");
+
+  /* ── Shared credits state (fetched here so the pill is always visible) ── */
+  const [sharedCredits, setSharedCredits]           = useState<number | null>(null);
+  const [sharedCreditsTotal, setSharedCreditsTotal] = useState(3);
+  const [sharedCreditsLoading, setSharedCreditsLoading] = useState(true);
+
+  const fetchSharedCredits = useCallback(async () => {
+    if (!session?.access_token) return;
+    try {
+      const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/wine-imports/credits`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) return;
+      const json = await res.json() as { credits_remaining: number; credits_total: number };
+      setSharedCredits(json.credits_remaining);
+      setSharedCreditsTotal(json.credits_total);
+    } catch {} finally {
+      setSharedCreditsLoading(false);
+    }
+  }, [session?.access_token]);
+
+  useEffect(() => { void fetchSharedCredits(); }, [fetchSharedCredits]);
+
   const [newContent, setNewContent] = useState("");
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<"image" | "video" | null>(null);
@@ -2858,6 +2865,28 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
 
   return (
     <View style={{ flex: 1 }}>
+      {/* Credits pill — fixed above sub-tabs; visible on Feed and IA */}
+      {(() => {
+        const c = sharedCredits;
+        const total = sharedCreditsTotal;
+        const pillColor = c === null || c >= 2 ? "#16a34a" : c === 1 ? "#d97706" : "#dc2626";
+        const pillBg    = c === null || c >= 2 ? "#dcfce7" : c === 1 ? "#fef3c7" : "#fef2f2";
+        return (
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 2 }}>
+            {sharedCreditsLoading ? (
+              <ActivityIndicator size="small" color={colors.gold} />
+            ) : (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: pillBg, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 }}>
+                <Feather name="zap" size={13} color={pillColor} />
+                <Text style={{ fontSize: 12, fontWeight: "700", color: pillColor }}>
+                  {c ?? "—"}/{total} {t("mercado_screen.bi_credits_pill_label")}
+                </Text>
+              </View>
+            )}
+          </View>
+        );
+      })()}
+
       {/* Sub-tab bar: Feed | 🔍 IA — same pill style as Visão Geral period filter */}
       <View style={[styles.periodRow, { backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border }]}>
         {([
@@ -2880,7 +2909,15 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
       </View>
 
       {idealbiSubTab === "search" ? (
-        <IdealBISearchView colors={colors} bottomPad={bottomPad} />
+        <IdealBISearchView
+          colors={colors}
+          bottomPad={bottomPad}
+          credits={sharedCredits}
+          creditsTotal={sharedCreditsTotal}
+          creditsLoading={sharedCreditsLoading}
+          setCredits={setSharedCredits}
+          setCreditsTotal={setSharedCreditsTotal}
+        />
       ) : (
         <KeyboardAvoidingView
           style={{ flex: 1 }}

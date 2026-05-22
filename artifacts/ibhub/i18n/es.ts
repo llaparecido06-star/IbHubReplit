@@ -2701,6 +2701,7 @@ const es = {
     bi_prod_count_one: "{{count}} productor encontrado",
     bi_prod_count_other: "{{count}} productores encontrados",
     bi_prod_no_result_sub: "Intenta buscar con otro nombre o región.",
+    bi_credits_pill_label: "créditos",
     bi_marca_credits_label: "Consultas Restantes",
     bi_marca_credits_period: "Ideal.BI · Búsqueda con IA · {{total}}/mes",
     bi_marca_exhausted_badge: "Agotado",

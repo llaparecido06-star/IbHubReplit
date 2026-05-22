@@ -2558,6 +2558,9 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
+      {/* Credits bar — always visible above sub-tabs */}
+      <CreditsBar credits={credits} creditsTotal={creditsTotal} loading={creditsLoading} />
+
       {/* Sub-tabs: Feed | Busca — always visible */}
       <div style={{ display: "flex", gap: 8, paddingBottom: 4 }}>
         {([
@@ -2587,7 +2590,6 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
       {/* Search section — flat 4 mode buttons */}
       {subTab === "search" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <CreditsBar credits={credits} creditsTotal={creditsTotal} loading={creditsLoading} />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {([
               { key: "exportador",   icon: "🌐", label: "Buscar Exportador" },
