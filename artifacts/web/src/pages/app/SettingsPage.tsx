@@ -1,7 +1,9 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/context/AuthContext";
+import { usePermissions } from "@/context/PermissionsContext";
+import { fetchWebCompanyPages, type WebCompanyPage } from "@/services/api";
 
 const GOLD   = "#c9a84c";
 const NAVY   = "#0d1b2a";
@@ -50,6 +52,15 @@ function Row({ row, onNav }: { row: RowItem; onNav: (to: string, external?: bool
 export default function SettingsPage() {
   const [, setLocation] = useLocation();
   const { profile, signOut } = useAuth();
+  const { hasFeature } = usePermissions();
+  const canCreateEmpresa = hasFeature("Criar Página Empresa");
+
+  const [myPages, setMyPages] = useState<WebCompanyPage[]>([]);
+
+  useEffect(() => {
+    if (!profile?.id || !canCreateEmpresa) return;
+    fetchWebCompanyPages(profile.id).then(setMyPages).catch(() => {});
+  }, [profile?.id, canCreateEmpresa]);
 
   const handleNav = (to: string, external?: boolean) => {
     if (external) {
@@ -161,6 +172,52 @@ export default function SettingsPage() {
             </div>
           </div>
         ))}
+
+        {/* ── Seção Empresa (apenas planos Empresarial+) ── */}
+        {canCreateEmpresa && (
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: MUTED, letterSpacing: 0.8, padding: "0 2px 8px" }}>
+              EMPRESA
+            </div>
+            <div style={{ backgroundColor: WHITE, borderRadius: 12, border: `1px solid ${BORDER}`, overflow: "hidden" }}>
+              {/* Páginas existentes */}
+              {myPages.map((page, i) => (
+                <div key={page.id} style={{ borderBottom: `1px solid ${BORDER}` }}>
+                  <button
+                    type="button"
+                    onClick={() => setLocation(`/app/empresa/${page.id}/editar`)}
+                    style={{
+                      width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer",
+                      display: "flex", alignItems: "center", gap: 12, padding: 14, fontFamily: "inherit",
+                    }}
+                  >
+                    {page.avatar_url ? (
+                      <img src={page.avatar_url} alt="" style={{ width: 34, height: 34, borderRadius: 10, objectFit: "cover", flexShrink: 0 }} />
+                    ) : (
+                      <div style={{
+                        width: 34, height: 34, borderRadius: 10, backgroundColor: GOLD + "20",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 16, fontWeight: 900, color: GOLD, flexShrink: 0,
+                      }}>
+                        {(page.name?.[0] ?? "E").toUpperCase()}
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{page.name}</div>
+                      <div style={{ fontSize: 12, color: MUTED, marginTop: 1 }}>Gerenciar página</div>
+                    </div>
+                    <span aria-hidden style={{ color: MUTED, fontSize: 18 }}>›</span>
+                  </button>
+                </div>
+              ))}
+              {/* Criar nova página */}
+              <Row
+                row={{ icon: "➕", label: "Criar Página Empresarial", sub: "Configure a presença da sua empresa", to: "/app/criar-empresa" }}
+                onNav={handleNav}
+              />
+            </div>
+          </div>
+        )}
 
         {profile?.is_admin && (
           <div style={{ backgroundColor: WHITE, borderRadius: 12, border: `1px solid ${BORDER}`, overflow: "hidden" }}>

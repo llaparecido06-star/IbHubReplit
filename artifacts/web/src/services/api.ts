@@ -3822,6 +3822,24 @@ export async function uploadCompanyLogoWeb(
   }
 }
 
+export async function createCompanyPage(
+  ownerId: string,
+  data: Pick<CompanyPageFull, "name"> & Partial<Pick<CompanyPageFull, "username" | "bio" | "website" | "industry" | "location">>
+): Promise<CompanyPageFull | null> {
+  try {
+    const { data: row, error } = await supabase
+      .from("company_pages")
+      .insert({ owner_id: ownerId, ...data })
+      .select("id, owner_id, name, username, avatar_url, bio, website, industry, location, plan, created_at")
+      .single();
+    if (error || !row) { console.warn("createCompanyPage:", error); return null; }
+    return row as CompanyPageFull;
+  } catch (e) {
+    console.warn("createCompanyPage:", e);
+    return null;
+  }
+}
+
 export async function updateCompanyPage(
   companyId: string,
   updates: Partial<Pick<CompanyPageFull, "name" | "bio" | "website" | "industry" | "location" | "username" | "avatar_url">>
