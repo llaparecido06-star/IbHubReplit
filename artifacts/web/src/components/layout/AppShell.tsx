@@ -1370,14 +1370,21 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
             {peopleModal.list.length === 0 ? (
               <div style={{ textAlign: "center", color: MUTED, fontSize: 14, padding: "24px 0" }}>Nenhuma pessoa encontrada.</div>
             ) : (
-              <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
                 {peopleModal.list.map(p => (
-                  <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div
+                    key={p.id}
+                    onClick={() => { setPeopleModal(null); setLocation(p.id === userId ? "/app/perfil" : `/app/usuario/${p.id}`); }}
+                    style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 10px", borderRadius: 10, cursor: "pointer", transition: "background 0.12s" }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${GOLD}12`; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                  >
                     <Avatar src={p.avatar_url} name={p.full_name} size={40} />
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: NAVY }}>{p.full_name}</div>
-                      {p.headline && <div style={{ fontSize: 12, color: MUTED }}>{p.headline}</div>}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.full_name}</div>
+                      {p.headline && <div style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.headline}</div>}
                     </div>
+                    <svg width="14" height="14" fill="none" stroke={MUTED} strokeWidth="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
                   </div>
                 ))}
               </div>
