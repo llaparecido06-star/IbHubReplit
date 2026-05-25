@@ -415,7 +415,8 @@ router.get("/wine-imports/bi-suggestions/produtores", async (req: Request, res: 
  * GET /wine-imports/exportador-importadores?nome=X
  * Returns distinct distribuidores (importadores no Brasil) for the given
  * exportador name, sourced from bi_exportadores.distribuidor.
- * No credit consumed — read-only, open information.
+ * Consumes 1 AI search credit on the first call per exportador.
+ * Returns 402 if credits are exhausted.
  */
 router.get("/wine-imports/exportador-importadores", async (req: Request, res: Response) => {
   const userId = await resolveUserId(req, res);
@@ -423,7 +424,13 @@ router.get("/wine-imports/exportador-importadores", async (req: Request, res: Re
 
   const nome = (req.query.nome as string | undefined)?.trim();
   if (!nome || nome.length < 2) {
-    return res.json({ importadores: [] });
+    return res.json({ importadores: [], credits_remaining: null, credits_total: null });
+  }
+
+  const deducted = await consumeCredit(userId);
+  if (!deducted) {
+    const current = await getOrCreateCredits(userId);
+    return res.status(402).json({ error: "Sem créditos", credits_remaining: 0, credits_total: current.credits_total });
   }
 
   const { data, error } = await supabaseAdmin
@@ -472,7 +479,7 @@ router.get("/wine-imports/exportador-importadores", async (req: Request, res: Re
     } catch {}
   }
 
-  return res.json({ importadores });
+  return res.json({ importadores, credits_remaining: deducted.credits_remaining, credits_total: deducted.credits_total });
 });
 
 router.get("/wine-imports/credits", async (req: Request, res: Response) => {

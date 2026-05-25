@@ -1022,8 +1022,10 @@ function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, set
 
 
 /* ─── Exportador list (sub-component) ───────────────────────────── */
-function ExportadorList({ userId, hasAccess, revealCredits, setRevealCredits, setRevealCreditsTotal }: {
+function ExportadorList({ userId, hasAccess, credits, creditsTotal, setCredits, setCreditsTotal, revealCredits, setRevealCredits, setRevealCreditsTotal }: {
   userId: string; hasAccess: boolean;
+  credits: number | null; creditsTotal: number;
+  setCredits: (n: number) => void; setCreditsTotal: (n: number) => void;
   revealCredits: number | null;
   setRevealCredits: (n: number) => void;
   setRevealCreditsTotal: (n: number) => void;
@@ -1046,7 +1048,8 @@ function ExportadorList({ userId, hasAccess, revealCredits, setRevealCredits, se
   const [revealedMap, setRevealedMap] = useState<Record<string, RevealedKpis>>({});
   const [revealingId, setRevealingId] = useState<string | null>(null);
   const [revealError, setRevealError] = useState<string | null>(null);
-  const exhausted = revealCredits !== null && revealCredits <= 0;
+  const searchExhausted = credits !== null && credits <= 0;
+  const revealExhausted = revealCredits !== null && revealCredits <= 0;
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -1142,9 +1145,18 @@ function ExportadorList({ userId, hasAccess, revealCredits, setRevealCredits, se
       const session = await getCachedSession();
       const headers: HeadersInit = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
       const res = await fetch(`${apiBase}/wine-imports/exportador-importadores?nome=${encodeURIComponent(exportadorName)}`, { headers });
+      if (res.status === 402) {
+        const json = await res.json() as { credits_remaining: number; credits_total: number };
+        setCredits(0);
+        if (json.credits_total) setCreditsTotal(json.credits_total);
+        setRevealError("Seus créditos de consulta acabaram.");
+        return;
+      }
       if (!res.ok) return;
-      const data = await res.json() as { importadores: { name: string; company_page_id: string | null }[] };
+      const data = await res.json() as { importadores: { name: string; company_page_id: string | null }[]; credits_remaining: number | null; credits_total: number | null };
       setImportadoresMap(prev => ({ ...prev, [exportadorId]: data.importadores }));
+      if (data.credits_remaining !== null && data.credits_remaining !== undefined) setCredits(data.credits_remaining);
+      if (data.credits_total !== null && data.credits_total !== undefined) setCreditsTotal(data.credits_total);
     } catch {}
     finally { setImportadoresLoading(prev => { const s = new Set(prev); s.delete(exportadorId); return s; }); }
   };
@@ -1238,7 +1250,7 @@ function ExportadorList({ userId, hasAccess, revealCredits, setRevealCredits, se
       )}
       {!searched && !loading && (
         <div style={{ backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "12px 16px", fontSize: 13, color: MUTED }}>
-          🌐 Busque por nome do exportador ou país de origem. Clique em <strong>Ver dados</strong> para ver os importadores no Brasil e os dados financeiros — cada consulta consome 1 crédito de revelação.
+          🌐 Busque por nome do exportador ou país de origem. Clique em <strong>Ver dados</strong> para ver os importadores no Brasil (1 crédito de consulta). Os dados financeiros ficam mascarados — clique em <strong>Revelar dados financeiros</strong> para desbloqueá-los (1 crédito de revelação).
         </div>
       )}
 
@@ -1277,26 +1289,22 @@ function ExportadorList({ userId, hasAccess, revealCredits, setRevealCredits, se
                   </div>
                   <button
                     onClick={() => {
-                      if (!isOpen && hasAccess && exhausted) return;
+                      if (!isOpen && hasAccess && searchExhausted) return;
                       toggleCard(m.id);
-                      if (!isOpen && hasAccess) {
-                        void loadImportadores(m.name, m.id);
-                        if (!revealedMap[m.name]) void revealData(m.name);
-                      }
+                      if (!isOpen && hasAccess) void loadImportadores(m.name, m.id);
                     }}
-                    disabled={!isOpen && exhausted}
+                    disabled={!isOpen && searchExhausted}
                     style={{
                       padding: "7px 14px", borderRadius: 10, flexShrink: 0,
-                      border: `1.5px solid ${isOpen ? GOLD : !isOpen && exhausted ? "#fca5a5" : BORDER}`,
+                      border: `1.5px solid ${isOpen ? GOLD : !isOpen && searchExhausted ? "#fca5a5" : BORDER}`,
                       backgroundColor: isOpen ? `${GOLD}15` : "transparent",
-                      color: isOpen ? GOLD : !isOpen && exhausted ? "#dc2626" : MUTED,
+                      color: isOpen ? GOLD : !isOpen && searchExhausted ? "#dc2626" : MUTED,
                       fontSize: 12, fontWeight: 700,
-                      cursor: !isOpen && exhausted ? "default" : "pointer",
+                      cursor: !isOpen && searchExhausted ? "default" : "pointer",
                       fontFamily: "inherit",
                       display: "flex", alignItems: "center", gap: 4, transition: "all 0.15s",
-                      opacity: revealingId === m.name && !isOpen ? 0.7 : 1,
                     }}
-                  >{isOpen ? "▲ Fechar" : revealingId === m.name ? "…" : exhausted ? "🔒 Sem créditos" : "📊 Ver dados"}</button>
+                  >{isOpen ? "▲ Fechar" : searchExhausted ? "🔒 Sem créditos" : "📊 Ver dados"}</button>
                 </div>
 
                 {showHint && (
@@ -1330,35 +1338,49 @@ function ExportadorList({ userId, hasAccess, revealCredits, setRevealCredits, se
                       </div>
                     )}
 
-                    {/* ── Dados financeiros — revelados automaticamente ao abrir ── */}
+                    {/* ── Dados financeiros — requer crédito de revelação ── */}
                     <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: 16, paddingTop: 14 }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase" as const, letterSpacing: 0.7, marginBottom: 10 }}>📊 Dados Financeiros</div>
 
-                      {revealingId === m.name && !revealed ? (
-                        <div style={{ fontSize: 12, color: MUTED, padding: "8px 0" }}>Carregando dados financeiros…</div>
-                      ) : (
-                        <>
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-                            {([
-                              { label: "FOB US$",    value: revealed ? fmtFobUsd(revealed.fob_usd)     : null, icon: "💵" },
-                              { label: "Vol. CX9L",  value: revealed ? fmtCx9lQty(revealed.cx9l)       : null, icon: "📦" },
-                              { label: "US$ / CX9L", value: revealed ? fmtUsdCx(revealed.usd_por_cx9l) : null, icon: "📈" },
-                            ]).map(kpi => (
-                              <div key={kpi.label} style={{ textAlign: "center", padding: "10px 6px", backgroundColor: WHITE, borderRadius: 10, border: `1px solid ${BORDER}` }}>
-                                <div style={{ fontSize: 18, marginBottom: 3 }}>{kpi.icon}</div>
-                                {kpi.value != null ? (
-                                  <div style={{ fontSize: 13, fontWeight: 900, color: NAVY }}>{kpi.value}</div>
-                                ) : (
-                                  <div style={{ fontSize: 12, color: MUTED }}>—</div>
-                                )}
-                                <div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>{kpi.label}</div>
-                              </div>
-                            ))}
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: revealed ? 0 : 12 }}>
+                        {([
+                          { label: "FOB US$",    value: revealed ? fmtFobUsd(revealed.fob_usd)     : null, icon: "💵" },
+                          { label: "Vol. CX9L",  value: revealed ? fmtCx9lQty(revealed.cx9l)       : null, icon: "📦" },
+                          { label: "US$ / CX9L", value: revealed ? fmtUsdCx(revealed.usd_por_cx9l) : null, icon: "📈" },
+                        ]).map(kpi => (
+                          <div key={kpi.label} style={{ textAlign: "center", padding: "10px 6px", backgroundColor: WHITE, borderRadius: 10, border: `1px solid ${BORDER}` }}>
+                            <div style={{ fontSize: 18, marginBottom: 3 }}>{kpi.icon}</div>
+                            {kpi.value != null ? (
+                              <div style={{ fontSize: 13, fontWeight: 900, color: NAVY }}>{kpi.value}</div>
+                            ) : (
+                              <div style={{ fontSize: 20, fontWeight: 900, color: MUTED, letterSpacing: 3 }}>••••</div>
+                            )}
+                            <div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>{kpi.label}</div>
                           </div>
-                          {revealed?.periodo && (
-                            <div style={{ fontSize: 10, color: MUTED, marginTop: 6 }}>Período: {revealed.periodo}</div>
-                          )}
-                        </>
+                        ))}
+                      </div>
+
+                      {revealed?.periodo && (
+                        <div style={{ fontSize: 10, color: MUTED, marginTop: 6 }}>Período: {revealed.periodo}</div>
+                      )}
+
+                      {!revealed && (
+                        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                          <button
+                            onClick={() => void revealData(m.name)}
+                            disabled={revealingId === m.name || revealExhausted}
+                            style={{
+                              padding: "8px 22px", borderRadius: 8, border: "none",
+                              backgroundColor: revealExhausted ? "#e5e7eb" : NAVY,
+                              color: revealExhausted ? MUTED : WHITE,
+                              fontSize: 13, fontWeight: 700,
+                              cursor: revealingId === m.name || revealExhausted ? "default" : "pointer",
+                              fontFamily: "inherit", opacity: revealingId === m.name ? 0.7 : 1,
+                            }}
+                          >
+                            {revealingId === m.name ? "Revelando…" : revealExhausted ? "🔒 Sem créditos" : "🔓 Revelar dados financeiros (1 crédito)"}
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -2679,7 +2701,7 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
             })}
           </div>
 
-          {searchMode === "exportador"   && <ExportadorList userId={userId} hasAccess={hasAccess} revealCredits={revealCredits} setRevealCredits={setRevealCredits} setRevealCreditsTotal={setRevealCreditsTotal} />}
+          {searchMode === "exportador"   && <ExportadorList userId={userId} hasAccess={hasAccess} credits={credits} creditsTotal={creditsTotal} setCredits={setCredits} setCreditsTotal={setCreditsTotal} revealCredits={revealCredits} setRevealCredits={setRevealCredits} setRevealCreditsTotal={setRevealCreditsTotal} />}
           {searchMode === "marca"        && <MarcaCompletaSearch userId={userId} credits={credits} creditsTotal={creditsTotal} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
           {searchMode === "importadores" && <ImportadoresSearch userId={userId} credits={credits} creditsTotal={creditsTotal} creditsLoading={creditsLoading} setCredits={setCredits} setCreditsTotal={setCreditsTotal} revealCredits={revealCredits} setRevealCredits={setRevealCredits} setRevealCreditsTotal={setRevealCreditsTotal} />}
           {searchMode === "produtores"   && <ProdutoresSearch userId={userId} credits={credits} creditsTotal={creditsTotal} creditsLoading={creditsLoading} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
