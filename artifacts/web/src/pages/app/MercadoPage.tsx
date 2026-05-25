@@ -706,13 +706,62 @@ function CreditsBar({ credits, creditsTotal, loading }: { credits: number | null
   );
 }
 
+/* ─── Reveal Credits Hook ────────────────────────────────────────── */
+function useRevealCredits(userId: string) {
+  const [revealCredits, setRevealCredits] = useState<number | null>(null);
+  const [revealCreditsTotal, setRevealCreditsTotal] = useState(0);
+  const [revealCreditsLoading, setRevealCreditsLoading] = useState(true);
+  const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
+
+  const refresh = async () => {
+    try {
+      const session = await getCachedSession();
+      const headers: HeadersInit = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+      const res = await fetch(`${apiBase}/wine-imports/bi/reveal-credits`, { headers });
+      if (!res.ok) return;
+      const json = await res.json() as { credits_remaining: number; credits_total: number };
+      setRevealCredits(json.credits_remaining);
+      setRevealCreditsTotal(json.credits_total);
+    } catch {} finally { setRevealCreditsLoading(false); }
+  };
+
+  useEffect(() => { void refresh(); }, [userId]);
+  return { revealCredits, revealCreditsTotal, revealCreditsLoading, setRevealCredits, setRevealCreditsTotal };
+}
+
+/* ─── Reveal Credits Bar ─────────────────────────────────────────── */
+function RevealCreditsBar({ revealCredits, revealCreditsTotal, loading }: { revealCredits: number | null; revealCreditsTotal: number; loading: boolean }) {
+  const color = (revealCredits ?? 0) >= 2 ? "#16a34a" : (revealCredits ?? 0) === 1 ? "#d97706" : "#dc2626";
+  const bg    = (revealCredits ?? 0) >= 2 ? "#dcfce7" : (revealCredits ?? 0) === 1 ? "#fef3c7" : "#fef2f2";
+  return (
+    <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "10px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+      <span style={{ fontSize: 16 }}>{loading ? "⏳" : "🔓"}</span>
+      <div style={{ flex: 1 }}>
+        <span style={{ fontSize: 12, color: MUTED, fontWeight: 600 }}>Revelações disponíveis — </span>
+        {loading ? (
+          <span style={{ fontSize: 12, color: MUTED }}>Carregando…</span>
+        ) : (
+          <>
+            <span style={{ fontSize: 14, fontWeight: 900, color: NAVY }}>{revealCredits}</span>
+            <span style={{ fontSize: 12, color: MUTED }}> de {revealCreditsTotal}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, marginLeft: 8, padding: "2px 8px", borderRadius: 20, backgroundColor: bg, color }}>
+              {(revealCredits ?? 0) >= 2 ? "OK" : (revealCredits ?? 0) === 1 ? "Última" : "Esgotado"}
+            </span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Importadores Search ────────────────────────────────────────── */
 const SEARCH_PAGE_SIZE = 5;
 
-function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal }: {
+function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal, revealCredits, setRevealCredits, setRevealCreditsTotal }: {
   userId: string;
   credits: number | null; creditsTotal: number; creditsLoading: boolean;
   setCredits: (n: number) => void; setCreditsTotal: (n: number) => void;
+  revealCredits: number | null; setRevealCredits: (n: number) => void; setRevealCreditsTotal: (n: number) => void;
 }) {
   const [q, setQ] = useState("");
   const [submittedQ, setSubmittedQ] = useState<string | null>(null);
@@ -727,7 +776,7 @@ function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, set
   const [revealedMap, setRevealedMap] = useState<Record<string, { exportador: string; pais: string }[]>>({});
   const [revealingId, setRevealingId] = useState<string | null>(null);
   const [revealError, setRevealError] = useState<string | null>(null);
-  const exhausted = credits !== null && credits <= 0;
+  const exhausted = revealCredits !== null && revealCredits <= 0;
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -801,12 +850,12 @@ function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, set
       const res = await fetch(`${apiBase}/wine-imports/bi/importadores/reveal`, {
         method: "POST", headers, body: JSON.stringify({ importador_name: importadorName }),
       });
-      if (res.status === 402) { setCredits(0); setRevealError("Sem créditos disponíveis."); return; }
+      if (res.status === 402) { setRevealCredits(0); setRevealError("Sem créditos disponíveis."); return; }
       if (!res.ok) { setRevealError("Erro ao revelar dados. Tente novamente."); return; }
       const data = await res.json() as { exportadores: { exportador: string; pais: string }[]; credits_remaining: number; credits_total: number };
       setRevealedMap(prev => ({ ...prev, [importadorId]: data.exportadores }));
-      if (data.credits_remaining !== undefined) setCredits(data.credits_remaining);
-      if (data.credits_total !== undefined) setCreditsTotal(data.credits_total);
+      if (data.credits_remaining !== undefined) setRevealCredits(data.credits_remaining);
+      if (data.credits_total !== undefined) setRevealCreditsTotal(data.credits_total);
     } catch { setRevealError("Erro de conexão. Tente novamente."); }
     finally { setRevealingId(null); }
   };
@@ -973,11 +1022,11 @@ function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, set
 
 
 /* ─── Exportador list (sub-component) ───────────────────────────── */
-function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTotal }: {
+function ExportadorList({ userId, hasAccess, revealCredits, setRevealCredits, setRevealCreditsTotal }: {
   userId: string; hasAccess: boolean;
-  credits: number | null;
-  setCredits: (n: number) => void;
-  setCreditsTotal: (n: number) => void;
+  revealCredits: number | null;
+  setRevealCredits: (n: number) => void;
+  setRevealCreditsTotal: (n: number) => void;
 }) {
   const [q, setQ] = useState("");
   const [submittedQ, setSubmittedQ] = useState<string | null>(null);
@@ -997,7 +1046,7 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
   const [revealedMap, setRevealedMap] = useState<Record<string, RevealedKpis>>({});
   const [revealingId, setRevealingId] = useState<string | null>(null);
   const [revealError, setRevealError] = useState<string | null>(null);
-  const exhausted = credits !== null && credits <= 0;
+  const exhausted = revealCredits !== null && revealCredits <= 0;
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -1043,11 +1092,9 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
       const res = await fetch(`${apiBase}/wine-imports/bi-search/exportadores?${params}`, { headers });
       if (res.status === 401 || res.status === 403) { setError("paywall"); return; }
       if (!res.ok) { setError("error"); return; }
-      const data = await res.json() as { items: BiExportador[]; total: number; credits_remaining: number; credits_total: number };
+      const data = await res.json() as { items: BiExportador[]; total: number };
       if (append) { setItems(prev => [...prev, ...data.items]); setOffset(fromOffset); }
       else { setItems(data.items); setTotal(data.total); setOffset(0); setSearched(true); setExpanded(new Set()); }
-      if (data.credits_remaining !== undefined) setCredits(data.credits_remaining);
-      if (data.credits_total !== undefined) setCreditsTotal(data.credits_total);
     } catch { setError("error"); }
     finally { setLoading(false); setLoadingMore(false); }
   };
@@ -1114,7 +1161,7 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
       const res = await fetch(`${apiBase}/wine-imports/bi/exportadores/reveal`, {
         method: "POST", headers, body: JSON.stringify({ name }),
       });
-      if (res.status === 402) { setCredits(0); setRevealError("Sem créditos disponíveis."); return; }
+      if (res.status === 402) { setRevealCredits(0); setRevealError("Sem créditos disponíveis."); return; }
       if (!res.ok) { setRevealError("Erro ao revelar dados. Tente novamente."); return; }
       type RevealRes = {
         kpis: { fob_usd: string | null; cx9l: string | null; usd_por_cx9l: string | null; periodo: string | null };
@@ -1122,8 +1169,8 @@ function ExportadorList({ userId, hasAccess, credits, setCredits, setCreditsTota
       };
       const data = await res.json() as RevealRes;
       setRevealedMap(prev => ({ ...prev, [name]: data.kpis }));
-      if (data.credits_remaining !== null) setCredits(data.credits_remaining);
-      if (data.credits_total) setCreditsTotal(data.credits_total);
+      if (data.credits_remaining !== null) setRevealCredits(data.credits_remaining);
+      if (data.credits_total) setRevealCreditsTotal(data.credits_total);
     } catch { setRevealError("Erro de conexão. Tente novamente."); }
     finally { setRevealingId(null); }
   };
@@ -2448,6 +2495,7 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
   const [subTab, setSubTab] = useState<"feed" | "search">("feed");
   const [searchMode, setSearchMode] = useState<SearchMode>("exportador");
   const { credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal } = useCredits(userId);
+  const { revealCredits, revealCreditsTotal, revealCreditsLoading, setRevealCredits, setRevealCreditsTotal } = useRevealCredits(userId);
   const [posts, setPosts] = useState<MarketPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -2601,6 +2649,9 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
       {/* Search section — flat 4 mode buttons */}
       {subTab === "search" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {(searchMode === "exportador" || searchMode === "importadores") && (
+            <RevealCreditsBar revealCredits={revealCredits} revealCreditsTotal={revealCreditsTotal} loading={revealCreditsLoading} />
+          )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {([
               { key: "exportador",   icon: "🌐", label: "Buscar Exportador" },
@@ -2631,9 +2682,9 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
             })}
           </div>
 
-          {searchMode === "exportador"   && <ExportadorList userId={userId} hasAccess={hasAccess} credits={credits} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
+          {searchMode === "exportador"   && <ExportadorList userId={userId} hasAccess={hasAccess} revealCredits={revealCredits} setRevealCredits={setRevealCredits} setRevealCreditsTotal={setRevealCreditsTotal} />}
           {searchMode === "marca"        && <MarcaCompletaSearch userId={userId} credits={credits} creditsTotal={creditsTotal} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
-          {searchMode === "importadores" && <ImportadoresSearch userId={userId} credits={credits} creditsTotal={creditsTotal} creditsLoading={creditsLoading} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
+          {searchMode === "importadores" && <ImportadoresSearch userId={userId} credits={credits} creditsTotal={creditsTotal} creditsLoading={creditsLoading} setCredits={setCredits} setCreditsTotal={setCreditsTotal} revealCredits={revealCredits} setRevealCredits={setRevealCredits} setRevealCreditsTotal={setRevealCreditsTotal} />}
           {searchMode === "produtores"   && <ProdutoresSearch userId={userId} credits={credits} creditsTotal={creditsTotal} creditsLoading={creditsLoading} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
         </div>
       )}
