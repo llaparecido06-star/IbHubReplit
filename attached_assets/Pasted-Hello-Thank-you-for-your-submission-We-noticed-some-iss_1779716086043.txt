@@ -1,0 +1,69 @@
+Hello, 
+
+
+Thank you for your submission. We noticed some issues that require your attention. Please see below for additional information.
+
+
+If you have any questions, we are here to help. Reply to this message in App Store Connect and let us know.
+
+
+Review Environment
+Review date: May 23, 2026
+
+Review Device: iPhone 17 Pro Max
+
+Build version reviewed: 1.1.1 (13)
+
+
+Guideline 2.1(a) - Performance - App Completeness
+
+Issue Description
+
+
+We were unable to review the app because it crashed on launch. We have attached detailed crash logs to help troubleshoot this issue.
+
+
+Review device details: 
+
+
+- Device type: iPhone 17 Pro Max 
+
+- OS version: iOS 26.4.2
+
+
+Next Steps
+
+
+To address the crash in the app, follow these steps:
+
+
+1. Fully symbolicate the crash report. See Adding Identifiable Symbol Names to a Crash Report for an explanation of the symbolication process.
+
+2. Match the crash report to a common pattern. Based on the pattern, take specific actions to further investigate the crash. See Identifying the Cause of Common Crashes.
+
+3. Test the app on a device to ensure that it now runs as expected.
+
+4. Once the crash is addressed, create and submit a new build for review.
+
+
+Note that users expect apps they download to function on all the devices where they are available. For example, apps that may be downloaded onto iPad devices should function as expected for iPad users. 
+
+
+Resources
+
+
+For additional information on crash reports, see Diagnosing Issues Using Crash Reports and Device Logs.
+
+Support
+- Reply to this message in your preferred language if you need assistance. If you need additional support, use the Contact Us module.
+
+- Consult with fellow developers and Apple engineers on the Apple Developer Forums.
+
+- Provide feedback on this message and your review experience by completing a short survey.
+
+
+Anexos da mensagem:
+crashlog-A6CA9FFC-5C2D-4C7C-A441-810184ACBC46.ipsBaixar
+crashlog-993117A4-6F30-4359-B7E8-6F9C5D62DCF9.ipsBaixar
+crashlog-F6F9992F-AD93-4DA5-BF24-C1D589A07974.ipsBaixar
+crashlog-40AF0A53-6D64-4C91-9287-BBDE88A3BB02.ipsBaixar
