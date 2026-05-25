@@ -222,7 +222,7 @@ export default function SocialCompletePage() {
                 type="text"
                 placeholder="seunome"
                 value={username}
-                onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, ""))}
+                onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ""))}
                 style={{ ...inputStyle, paddingLeft: 28 }}
                 autoComplete="off"
               />

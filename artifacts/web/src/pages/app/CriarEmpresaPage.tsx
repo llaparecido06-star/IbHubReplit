@@ -61,6 +61,28 @@ function AvatarPreview({ src, name, size = 80 }: { src?: string | null; name: st
   );
 }
 
+function Field({
+  label,
+  hint,
+  required,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <label style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>
+        {label}{required && <span style={{ color: "#dc2626", marginLeft: 2 }}>*</span>}
+      </label>
+      {children}
+      {hint && <p style={{ fontSize: 12, color: MUTED, margin: 0 }}>{hint}</p>}
+    </div>
+  );
+}
+
 export default function CriarEmpresaPage() {
   const [, setLocation] = useLocation();
   const { profile } = useAuth();
@@ -139,25 +161,6 @@ export default function CriarEmpresaPage() {
     setLocation(`/app/empresa/${page.id}/editar`);
   };
 
-  const Field = ({
-    label,
-    hint,
-    required,
-    children,
-  }: {
-    label: string;
-    hint?: string;
-    required?: boolean;
-    children: React.ReactNode;
-  }) => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <label style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>
-        {label}{required && <span style={{ color: "#dc2626", marginLeft: 2 }}>*</span>}
-      </label>
-      {children}
-      {hint && <p style={{ fontSize: 12, color: MUTED, margin: 0 }}>{hint}</p>}
-    </div>
-  );
 
   return (
     <AppShell>
@@ -235,7 +238,7 @@ export default function CriarEmpresaPage() {
           {/* Username */}
           <Field
             label="Username da página"
-            hint="Endereço único da sua página. Apenas letras minúsculas, números e traços."
+            hint="Endereço único da sua página. Letras minúsculas, números, pontos e traços."
           >
             <div style={{ position: "relative" }}>
               <span style={{
@@ -244,7 +247,7 @@ export default function CriarEmpresaPage() {
               }}>@</span>
               <input
                 value={form.username}
-                onChange={e => setForm(f => ({ ...f, username: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") }))}
+                onChange={e => setForm(f => ({ ...f, username: e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, "") }))}
                 placeholder="nome-da-empresa"
                 style={{ ...inputStyle, paddingLeft: 28 }}
                 maxLength={50}
