@@ -12,29 +12,7 @@ import Constants from "expo-constants";
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? "";
 
-// ─── Sentry no-op stub ───────────────────────────────────────────────────────
-// Keeps the public API so callers don't need to change, but does nothing.
-// @sentry/react-native has been removed from this project.
-
-export const Sentry = {
-  wrap: <T>(component: T): T => component,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  captureException: (_err: unknown, _ctx?: unknown): void => {},
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  captureMessage: (_msg: string): void => {},
-};
-
-// ─── Sentry init (no-op) ─────────────────────────────────────────────────────
-
-/**
- * No-op — kept for call-site compatibility in _layout.tsx.
- * Sentry has been removed from this project.
- */
-export function initSentry(): void {
-  // intentional no-op
-}
-
-// ─── JS crash reporter (our own API) ────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 export type CrashType = "js_error" | "render_error" | "unhandled_rejection";
 
@@ -44,6 +22,8 @@ interface CrashPayload {
   stack?: string;
   component_stack?: string;
 }
+
+// ─── Crash reporter ──────────────────────────────────────────────────────────
 
 /**
  * Report an error to our own API server.
