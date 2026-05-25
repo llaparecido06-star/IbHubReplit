@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "ibhub",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/images/icon.png",
       "resizeMode": "contain",
@@ -37,7 +37,7 @@
         "backgroundColor": "#0d1b2a"
       },
       "package": "br.com.ibhub",
-      "versionCode": 28,
+      "versionCode": 29,
       "googleServicesFile": "./google-services.json",
       "allowBackup": false,
       "softwareKeyboardLayoutMode": "pan",
@@ -94,7 +94,18 @@
       ],
       "./plugins/with-privacy-manifest",
       "./plugins/with-folly-coroutines-fix",
-      "./plugins/with-ipad-popover-fix"
+      "./plugins/with-ipad-popover-fix",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "newArchEnabled": true
+          },
+          "ios": {
+            "newArchEnabled": false
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
