@@ -95,7 +95,6 @@
       ],
       "./plugins/with-privacy-manifest",
       "./plugins/with-folly-coroutines-fix",
-      "./plugins/with-fix-audio-boot",
       "./plugins/with-ipad-popover-fix"
     ],
     "experiments": {
