@@ -1238,7 +1238,7 @@ function ExportadorList({ userId, hasAccess, revealCredits, setRevealCredits, se
       )}
       {!searched && !loading && (
         <div style={{ backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}30`, borderRadius: 12, padding: "12px 16px", fontSize: 13, color: MUTED }}>
-          🌐 Busque por nome do exportador ou país de origem. Os dados financeiros (FOB US$, CX9L e preço/CX) ficam bloqueados — use créditos de revelação para desbloqueá-los individualmente.
+          🌐 Busque por nome do exportador ou país de origem. Clique em <strong>Ver dados</strong> para ver os importadores no Brasil e os dados financeiros — cada consulta consome 1 crédito de revelação.
         </div>
       )}
 
@@ -1276,16 +1276,27 @@ function ExportadorList({ userId, hasAccess, revealCredits, setRevealCredits, se
                     )}
                   </div>
                   <button
-                    onClick={() => { toggleCard(m.id); if (hasAccess && !expanded.has(m.id)) void loadImportadores(m.name, m.id); }}
+                    onClick={() => {
+                      if (!isOpen && hasAccess && exhausted) return;
+                      toggleCard(m.id);
+                      if (!isOpen && hasAccess) {
+                        void loadImportadores(m.name, m.id);
+                        if (!revealedMap[m.name]) void revealData(m.name);
+                      }
+                    }}
+                    disabled={!isOpen && exhausted}
                     style={{
                       padding: "7px 14px", borderRadius: 10, flexShrink: 0,
-                      border: `1.5px solid ${isOpen ? GOLD : BORDER}`,
+                      border: `1.5px solid ${isOpen ? GOLD : !isOpen && exhausted ? "#fca5a5" : BORDER}`,
                       backgroundColor: isOpen ? `${GOLD}15` : "transparent",
-                      color: isOpen ? GOLD : MUTED,
-                      fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                      color: isOpen ? GOLD : !isOpen && exhausted ? "#dc2626" : MUTED,
+                      fontSize: 12, fontWeight: 700,
+                      cursor: !isOpen && exhausted ? "default" : "pointer",
+                      fontFamily: "inherit",
                       display: "flex", alignItems: "center", gap: 4, transition: "all 0.15s",
+                      opacity: revealingId === m.name && !isOpen ? 0.7 : 1,
                     }}
-                  >{isOpen ? "▲ Fechar" : "📊 Ver dados"}</button>
+                  >{isOpen ? "▲ Fechar" : revealingId === m.name ? "…" : exhausted ? "🔒 Sem créditos" : "📊 Ver dados"}</button>
                 </div>
 
                 {showHint && (
@@ -1319,49 +1330,35 @@ function ExportadorList({ userId, hasAccess, revealCredits, setRevealCredits, se
                       </div>
                     )}
 
-                    {/* ── Dados financeiros — requer crédito de revelação ── */}
+                    {/* ── Dados financeiros — revelados automaticamente ao abrir ── */}
                     <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: 16, paddingTop: 14 }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase" as const, letterSpacing: 0.7, marginBottom: 10 }}>📊 Dados Financeiros</div>
 
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: revealed ? 0 : 12 }}>
-                        {([
-                          { label: "FOB US$",    value: revealed ? fmtFobUsd(revealed.fob_usd)     : null, icon: "💵" },
-                          { label: "Vol. CX9L",  value: revealed ? fmtCx9lQty(revealed.cx9l)       : null, icon: "📦" },
-                          { label: "US$ / CX9L", value: revealed ? fmtUsdCx(revealed.usd_por_cx9l) : null, icon: "📈" },
-                        ]).map(kpi => (
-                          <div key={kpi.label} style={{ textAlign: "center", padding: "10px 6px", backgroundColor: WHITE, borderRadius: 10, border: `1px solid ${BORDER}` }}>
-                            <div style={{ fontSize: 18, marginBottom: 3 }}>{kpi.icon}</div>
-                            {kpi.value != null ? (
-                              <div style={{ fontSize: 13, fontWeight: 900, color: NAVY }}>{kpi.value}</div>
-                            ) : (
-                              <div style={{ fontSize: 20, fontWeight: 900, color: MUTED, letterSpacing: 3 }}>••••</div>
-                            )}
-                            <div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>{kpi.label}</div>
+                      {revealingId === m.name && !revealed ? (
+                        <div style={{ fontSize: 12, color: MUTED, padding: "8px 0" }}>Carregando dados financeiros…</div>
+                      ) : (
+                        <>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                            {([
+                              { label: "FOB US$",    value: revealed ? fmtFobUsd(revealed.fob_usd)     : null, icon: "💵" },
+                              { label: "Vol. CX9L",  value: revealed ? fmtCx9lQty(revealed.cx9l)       : null, icon: "📦" },
+                              { label: "US$ / CX9L", value: revealed ? fmtUsdCx(revealed.usd_por_cx9l) : null, icon: "📈" },
+                            ]).map(kpi => (
+                              <div key={kpi.label} style={{ textAlign: "center", padding: "10px 6px", backgroundColor: WHITE, borderRadius: 10, border: `1px solid ${BORDER}` }}>
+                                <div style={{ fontSize: 18, marginBottom: 3 }}>{kpi.icon}</div>
+                                {kpi.value != null ? (
+                                  <div style={{ fontSize: 13, fontWeight: 900, color: NAVY }}>{kpi.value}</div>
+                                ) : (
+                                  <div style={{ fontSize: 12, color: MUTED }}>—</div>
+                                )}
+                                <div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>{kpi.label}</div>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-
-                      {revealed?.periodo && (
-                        <div style={{ fontSize: 10, color: MUTED, marginTop: 6 }}>Período: {revealed.periodo}</div>
-                      )}
-
-                      {!revealed && (
-                        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-                          <button
-                            onClick={() => void revealData(m.name)}
-                            disabled={revealingId === m.name || exhausted}
-                            style={{
-                              padding: "8px 22px", borderRadius: 8, border: "none",
-                              backgroundColor: exhausted ? "#e5e7eb" : NAVY,
-                              color: exhausted ? MUTED : WHITE,
-                              fontSize: 13, fontWeight: 700,
-                              cursor: revealingId === m.name || exhausted ? "default" : "pointer",
-                              fontFamily: "inherit", opacity: revealingId === m.name ? 0.7 : 1,
-                            }}
-                          >
-                            {revealingId === m.name ? "Revelando…" : exhausted ? "🔒 Sem créditos" : "🔓 Revelar dados financeiros (1 crédito)"}
-                          </button>
-                        </div>
+                          {revealed?.periodo && (
+                            <div style={{ fontSize: 10, color: MUTED, marginTop: 6 }}>Período: {revealed.periodo}</div>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
