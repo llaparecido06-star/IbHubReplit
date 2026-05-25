@@ -3453,3 +3453,5 @@ const styles = StyleSheet.create({
   presentFooter:         { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 4 },
   presentLink:           { fontSize: 13, fontWeight: "600" },
 });
+
+export { TabErrorBoundary as ErrorBoundary } from "@/components/TabErrorBoundary";

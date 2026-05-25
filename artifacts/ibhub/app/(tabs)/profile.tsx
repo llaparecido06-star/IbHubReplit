@@ -1672,3 +1672,5 @@ const styles = StyleSheet.create({
   menuItemText:       { fontSize: 15, fontWeight: "500" },
   menuDiv:            { height: 1 },
 });
+
+export { TabErrorBoundary as ErrorBoundary } from "@/components/TabErrorBoundary";

@@ -28,7 +28,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
-import { AudioBubble } from "@/components/chat/AudioBubble";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/context/AuthContext";
@@ -1073,22 +1072,11 @@ export default function ChatScreen() {
     </TouchableOpacity>
   );
 
-  const renderAudioBubble = (item: AppMessage, isMe: boolean) => {
-    if (!item.media_url) {
-      return (
-        <Text style={[st.bubbleText, { color: isMe ? "#fff" : colors.foreground, fontStyle: "italic", opacity: 0.7 }]}>
-          🎤 {t("chat_screen.audio_unavailable")}
-        </Text>
-      );
-    }
-    return (
-      <AudioBubble
-        uri={item.media_url}
-        isMe={isMe}
-        timeLabel={formatTime(item.created_at)}
-      />
-    );
-  };
+  const renderAudioBubble = (item: AppMessage, isMe: boolean) => (
+    <Text style={[st.bubbleText, { color: isMe ? "#fff" : colors.foreground, fontStyle: "italic", opacity: 0.7 }]}>
+      🎤 {t("chat_screen.audio_unavailable")}
+    </Text>
+  );
 
   // ── Derived ──────────────────────────────────────────────────────────────────
 
@@ -1902,11 +1890,6 @@ const st = StyleSheet.create({
   typingDots:   { flexDirection: "row", gap: 3 },
   typingDot:    { width: 5, height: 5, borderRadius: 3 },
   typingText:   { fontSize: 12, fontStyle: "italic" },
-  recordingBanner: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: 1 },
-  recordingDot: { width: 8, height: 8, borderRadius: 4 },
-  recordingText:{ fontSize: 14, fontWeight: "600" },
-  recordingCancel: { padding: 4 },
-  recordingSend: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
 
   // Reply preview bar
   replyPreview: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: 2 },

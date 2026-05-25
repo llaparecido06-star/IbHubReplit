@@ -649,3 +649,5 @@ const styles = StyleSheet.create({
   newConvoBtn:  { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, marginTop: 8 },
   newConvoBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
 });
+
+export { TabErrorBoundary as ErrorBoundary } from "@/components/TabErrorBoundary";

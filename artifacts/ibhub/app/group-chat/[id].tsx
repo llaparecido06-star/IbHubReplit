@@ -25,7 +25,6 @@ import * as ImagePicker from "expo-image-picker";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { Feather } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
-import { AudioBubble } from "@/components/chat/AudioBubble";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/context/AuthContext";
@@ -760,22 +759,11 @@ export default function GroupChatScreen() {
 
   // ── Message renderers ─────────────────────────────────────────────────────
 
-  const renderAudioBubble = (item: AppMessage, isMe: boolean) => {
-    if (!item.media_url) {
-      return (
-        <Text style={[styles.bubbleText, { color: isMe ? "#fff" : colors.foreground, fontStyle: "italic", opacity: 0.7 }]}>
-          🎤 {t("group_chat_screen.audio_unavailable")}
-        </Text>
-      );
-    }
-    return (
-      <AudioBubble
-        uri={item.media_url}
-        isMe={isMe}
-        timeLabel={new Date(item.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-      />
-    );
-  };
+  const renderAudioBubble = (item: AppMessage, isMe: boolean) => (
+    <Text style={[styles.bubbleText, { color: isMe ? "#fff" : colors.foreground, fontStyle: "italic", opacity: 0.7 }]}>
+      🎤 {t("group_chat_screen.audio_unavailable")}
+    </Text>
+  );
 
   const renderFileBubble = (item: AppMessage, isMe: boolean) => (
     <TouchableOpacity
@@ -1469,9 +1457,6 @@ const styles = StyleSheet.create({
   reactionEmoji:   { fontSize: 16 },
   reactionCount:   { fontSize: 12, fontWeight: "700", color: "#555" },
   mediaImage:      { width: 200, height: 150, borderRadius: 10 },
-  audioPlayBtn:    { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
-  audioBar:        { height: 4, borderRadius: 2, overflow: "hidden" },
-  audioFill:       { width: "40%", height: "100%" },
   fileIcon:        { width: 36, height: 36, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   uploadingBar:    { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8 },
   replyBar:        { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: 1 },
@@ -1480,10 +1465,6 @@ const styles = StyleSheet.create({
   attachOption:    { alignItems: "center", gap: 6 },
   attachIcon:      { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
   attachLabel:     { fontSize: 11, fontWeight: "600" },
-  recordingBar:    { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 14, borderTopWidth: 1, gap: 10 },
-  recordCancelBtn: { padding: 8 },
-  recordDot:       { width: 8, height: 8, borderRadius: 4, backgroundColor: "#dc2626" },
-  recordStopBtn:   { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
   inputRow:        { flexDirection: "row", alignItems: "flex-end", gap: 8, paddingHorizontal: 10, paddingTop: 10, borderTopWidth: 1 },
   iconBtn:         { padding: 8, opacity: 0.7 },
   input:           { flex: 1, borderRadius: 22, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, maxHeight: 120 },

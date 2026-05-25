@@ -1927,3 +1927,5 @@ const styles = StyleSheet.create({
   onlineDot:          { width: 10, height: 10, borderRadius: 5 },
   managePages:        { fontSize: 15, fontWeight: "600" },
 });
+
+export { TabErrorBoundary as ErrorBoundary } from "@/components/TabErrorBoundary";

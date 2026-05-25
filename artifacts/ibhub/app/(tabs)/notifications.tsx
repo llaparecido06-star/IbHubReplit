@@ -951,3 +951,5 @@ const styles = StyleSheet.create({
   filterApplyBtn: { flex: 2, paddingVertical: 12, borderRadius: 12, alignItems: "center" },
   filterApplyText: { color: "#fff", fontSize: 14, fontWeight: "700" },
 });
+
+export { TabErrorBoundary as ErrorBoundary } from "@/components/TabErrorBoundary";
