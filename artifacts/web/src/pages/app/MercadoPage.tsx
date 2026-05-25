@@ -757,11 +757,10 @@ function RevealCreditsBar({ revealCredits, revealCreditsTotal, loading }: { reve
 /* ─── Importadores Search ────────────────────────────────────────── */
 const SEARCH_PAGE_SIZE = 5;
 
-function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal, revealCredits, setRevealCredits, setRevealCreditsTotal }: {
+function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal }: {
   userId: string;
   credits: number | null; creditsTotal: number; creditsLoading: boolean;
   setCredits: (n: number) => void; setCreditsTotal: (n: number) => void;
-  revealCredits: number | null; setRevealCredits: (n: number) => void; setRevealCreditsTotal: (n: number) => void;
 }) {
   const [q, setQ] = useState("");
   const [submittedQ, setSubmittedQ] = useState<string | null>(null);
@@ -776,7 +775,7 @@ function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, set
   const [revealedMap, setRevealedMap] = useState<Record<string, { exportador: string; pais: string }[]>>({});
   const [revealingId, setRevealingId] = useState<string | null>(null);
   const [revealError, setRevealError] = useState<string | null>(null);
-  const exhausted = revealCredits !== null && revealCredits <= 0;
+  const exhausted = credits !== null && credits <= 0;
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -850,12 +849,12 @@ function ImportadoresSearch({ userId, credits, creditsTotal, creditsLoading, set
       const res = await fetch(`${apiBase}/wine-imports/bi/importadores/reveal`, {
         method: "POST", headers, body: JSON.stringify({ importador_name: importadorName }),
       });
-      if (res.status === 402) { setRevealCredits(0); setRevealError("Sem créditos disponíveis."); return; }
+      if (res.status === 402) { setCredits(0); setRevealError("Sem créditos disponíveis."); return; }
       if (!res.ok) { setRevealError("Erro ao revelar dados. Tente novamente."); return; }
       const data = await res.json() as { exportadores: { exportador: string; pais: string }[]; credits_remaining: number; credits_total: number };
       setRevealedMap(prev => ({ ...prev, [importadorId]: data.exportadores }));
-      if (data.credits_remaining !== undefined) setRevealCredits(data.credits_remaining);
-      if (data.credits_total !== undefined) setRevealCreditsTotal(data.credits_total);
+      if (data.credits_remaining !== undefined) setCredits(data.credits_remaining);
+      if (data.credits_total !== undefined) setCreditsTotal(data.credits_total);
     } catch { setRevealError("Erro de conexão. Tente novamente."); }
     finally { setRevealingId(null); }
   };
@@ -2668,7 +2667,7 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
       {/* Search section — flat 4 mode buttons */}
       {subTab === "search" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {(searchMode === "exportador" || searchMode === "importadores") && (
+          {searchMode === "exportador" && (
             <RevealCreditsBar revealCredits={revealCredits} revealCreditsTotal={revealCreditsTotal} loading={revealCreditsLoading} />
           )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -2703,7 +2702,7 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
 
           {searchMode === "exportador"   && <ExportadorList userId={userId} hasAccess={hasAccess} credits={credits} creditsTotal={creditsTotal} setCredits={setCredits} setCreditsTotal={setCreditsTotal} revealCredits={revealCredits} setRevealCredits={setRevealCredits} setRevealCreditsTotal={setRevealCreditsTotal} />}
           {searchMode === "marca"        && <MarcaCompletaSearch userId={userId} credits={credits} creditsTotal={creditsTotal} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
-          {searchMode === "importadores" && <ImportadoresSearch userId={userId} credits={credits} creditsTotal={creditsTotal} creditsLoading={creditsLoading} setCredits={setCredits} setCreditsTotal={setCreditsTotal} revealCredits={revealCredits} setRevealCredits={setRevealCredits} setRevealCreditsTotal={setRevealCreditsTotal} />}
+          {searchMode === "importadores" && <ImportadoresSearch userId={userId} credits={credits} creditsTotal={creditsTotal} creditsLoading={creditsLoading} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
           {searchMode === "produtores"   && <ProdutoresSearch userId={userId} credits={credits} creditsTotal={creditsTotal} creditsLoading={creditsLoading} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
         </div>
       )}

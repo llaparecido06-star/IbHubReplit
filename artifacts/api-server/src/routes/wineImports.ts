@@ -758,7 +758,7 @@ router.post("/wine-imports/bi/exportadores/reveal", async (req: Request, res: Re
     return res.json({ kpis, already_revealed: true, credits_remaining: null, credits_total: 0 });
   }
 
-  // Check if already revealed this month (keyed by exportador name)
+  // Check if already revealed this month (keyed by exportador name) — free repeat
   const { data: logEntry } = await supabaseAdmin
     .from("bi_reveal_log")
     .select("id")
@@ -767,19 +767,23 @@ router.post("/wine-imports/bi/exportadores/reveal", async (req: Request, res: Re
     .eq("record_key", exportadorName)
     .maybeSingle();
 
-  // Already revealed this month — free repeat, return current main credits
   if (logEntry) {
-    const credits = await getOrCreateCredits(userId);
-    return res.json({ kpis, already_revealed: true, credits_remaining: credits.credits_remaining, credits_total: credits.credits_total });
+    const rc = await getOrCreateRevealCredits(userId);
+    return res.json({ kpis, already_revealed: true, credits_remaining: rc.credits_remaining, credits_total: rc.credits_total });
   }
 
-  // Use main credits pool (same as importadores reveal)
-  const credits = await getOrCreateCredits(userId);
-  if (credits.credits_remaining <= 0) {
-    return res.status(402).json({ error: "Sem créditos", credits_remaining: 0, credits_total: credits.credits_total });
+  // Deduct 1 reveal credit from bi_reveal_credits
+  const rc = await getOrCreateRevealCredits(userId);
+  if (rc.credits_remaining <= 0) {
+    return res.status(402).json({ error: "Sem créditos de revelação", credits_remaining: 0, credits_total: rc.credits_total });
   }
 
-  const consumed = await consumeCredit(userId);
+  const newRemaining = rc.credits_remaining - 1;
+  await supabaseAdmin
+    .from("bi_reveal_credits")
+    .update({ credits_remaining: newRemaining, updated_at: new Date().toISOString() })
+    .eq("user_id", userId);
+
   await supabaseAdmin.from("bi_reveal_log").insert({
     user_id: userId, record_type: "exportador", record_key: exportadorName,
   });
@@ -787,8 +791,8 @@ router.post("/wine-imports/bi/exportadores/reveal", async (req: Request, res: Re
   return res.json({
     kpis,
     already_revealed: false,
-    credits_remaining: consumed?.credits_remaining ?? credits.credits_remaining - 1,
-    credits_total: credits.credits_total,
+    credits_remaining: newRemaining,
+    credits_total: rc.credits_total,
   });
 });
 
