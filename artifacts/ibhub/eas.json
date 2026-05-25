@@ -11,6 +11,12 @@
         "simulator": false
       }
     },
+    "simulator": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      }
+    },
     "preview": {
       "distribution": "internal",
       "ios": {
@@ -24,12 +30,6 @@
       "autoIncrement": true,
       "cache": {
         "disabled": true
-      },
-      "env": {
-        "EAS_SKIP_AUTO_FINGERPRINT": "1",
-        "EAS_BUILD_NO_EXPO_GO_WARNING": "true",
-        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
-        "SENTRY_ALLOW_FAILURE": "true"
       },
       "ios": {
         "resourceClass": "m-medium"
