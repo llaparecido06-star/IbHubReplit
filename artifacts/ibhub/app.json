@@ -20,7 +20,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "O ibhub usa a câmera para enviar fotos e vídeos nas conversas.",
-        "NSMicrophoneUsageDescription": "O ibhub usa o microfone para gravar mensagens de voz.",
+        "NSMicrophoneUsageDescription": "O ibhub usa o microfone para gravar vídeos.",
         "NSPhotoLibraryUsageDescription": "O ibhub acessa sua galeria para compartilhar fotos e vídeos.",
         "NSPhotoLibraryAddUsageDescription": "O ibhub salva mídia recebida na sua galeria.",
         "NSLocationWhenInUseUsageDescription": "O ibhub usa sua localização para preencher automaticamente o campo de localização ao criar uma publicação.",
@@ -47,13 +47,11 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO",
-        "android.permission.READ_MEDIA_AUDIO",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.VIBRATE",
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.POST_NOTIFICATIONS"
       ],
       "blockedPermissions": [
@@ -86,7 +84,6 @@
         }
       ],
       "expo-video",
-      "expo-audio",
       "expo-apple-authentication",
       [
         "expo-notifications",

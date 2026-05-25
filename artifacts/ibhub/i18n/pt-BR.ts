@@ -683,7 +683,6 @@ const ptBR = {
     file_too_large: "Arquivo muito grande. Máximo: {{max}}.",
     attach_image: "Imagem",
     attach_file: "Arquivo",
-    attach_audio: "Áudio",
     message_deleted: "Mensagem apagada",
     delete_message: "Apagar mensagem",
     delete_message_msg: "Deseja apagar esta mensagem?",
