@@ -251,7 +251,7 @@ function ImageCarousel({ imageUrls }: { imageUrls: string[] }) {
   );
 }
 
-const REPORT_REASONS = ["Spam", "Conteúdo ofensivo", "Informação falsa", "Assédio", "Outro"];
+export const REPORT_REASONS = ["Spam", "Conteúdo ofensivo", "Informação falsa", "Assédio", "Outro"];
 
 
 export function PostCard({ post, currentUserId, isVisible = false, onLike, onReact, onBookmark, onComment, onVote, onHide, onBlock, onViewLikes, isLiking = false, onUserPlayVideo, onSwipeNextVideo, onSwipeBackVideo, canSwipeNextVideo = false, canSwipeBackVideo = false, playToken = 0 }: PostCardProps) {

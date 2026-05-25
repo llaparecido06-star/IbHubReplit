@@ -8,7 +8,9 @@ import {
   Dimensions,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   Share,
   StyleSheet,
@@ -29,7 +31,7 @@ import type { AppComment } from "@/services/api";
 import { sendMentionNotifications, normalizePollIndices } from "@/services/api";
 import { MentionInput } from "@/components/ui/MentionInput";
 import { friendlyErrorMessage } from "@/hooks/useAsyncAction";
-import { Post, AdaptiveImage } from "@/components/feed/PostCard";
+import { Post, AdaptiveImage, REPORT_REASONS } from "@/components/feed/PostCard";
 import { PostActionsBar, buildPostShareUrl, type ReactionType } from "@/components/feed/PostActionsBar";
 import { FeedVideo } from "@/components/feed/FeedVideo";
 import { LikesModal } from "@/components/feed/LikesModal";
@@ -121,7 +123,11 @@ export default function PostDetailScreen() {
   const [replyTo, setReplyTo] = useState<{ id: string; name: string; commentId: string } | null>(null);
   const [loadingPost, setLoadingPost] = useState(true);
   const [sendingComment, setSendingComment] = useState(false);
-  const [showLikesModal, setShowLikesModal] = useState(false);
+  const [showLikesModal, setShowLikesModal]     = useState(false);
+  const [showPostOptions, setShowPostOptions]   = useState(false);
+  const [showReportModal, setShowReportModal]   = useState(false);
+  const [selectedReason, setSelectedReason]     = useState<string | null>(null);
+  const [reportSending, setReportSending]       = useState(false);
 
   const inputRef = useRef<TextInput>(null);
   const listRef = useRef<FlatList>(null);
@@ -421,6 +427,20 @@ export default function PostDetailScreen() {
     } catch {}
   };
 
+  const handleSubmitReport = async () => {
+    if (!selectedReason || !user?.id || !post?.id) return;
+    setReportSending(true);
+    const ok = await API.createReport({ post_id: post.id, reported_by: user.id, reason: selectedReason });
+    setReportSending(false);
+    setShowReportModal(false);
+    setSelectedReason(null);
+    if (ok) {
+      Alert.alert("Denúncia enviada", "Obrigado pelo seu feedback. Nossa equipe irá analisar.");
+    } else {
+      Alert.alert("Erro", "Não foi possível enviar a denúncia. Tente novamente.");
+    }
+  };
+
   const handleVotePoll = async (postId: string, optionIndex: number) => {
     if (!user?.id) return;
     const result = await API.voteOnPoll(postId, user.id, optionIndex);
@@ -551,9 +571,16 @@ export default function PostDetailScreen() {
           <Feather name="arrow-left" size={24} color={colors.foreground} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t("post_screen.header_title")}</Text>
-        <TouchableOpacity onPress={handleSharePost} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Feather name="share-2" size={22} color={colors.foreground} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <TouchableOpacity onPress={handleSharePost} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Feather name="share-2" size={22} color={colors.foreground} />
+          </TouchableOpacity>
+          {post && post.author?.id !== user?.id && (
+            <TouchableOpacity onPress={() => setShowPostOptions(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Feather name="more-horizontal" size={22} color={colors.foreground} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <FlatList
@@ -730,6 +757,62 @@ export default function PostDetailScreen() {
         visible={showLikesModal}
         onClose={() => setShowLikesModal(false)}
       />
+
+      {/* ── Post Options Menu ── */}
+      <Modal visible={showPostOptions} transparent animationType="fade" onRequestClose={() => setShowPostOptions(false)}>
+        <Pressable style={reportStyles.overlay} onPress={() => setShowPostOptions(false)}>
+          <View style={[reportStyles.menu, { backgroundColor: "#fff" }]}>
+            <TouchableOpacity
+              style={reportStyles.menuItem}
+              onPress={() => { setShowPostOptions(false); setSelectedReason(null); setShowReportModal(true); }}
+            >
+              <Feather name="flag" size={16} color="#374151" />
+              <Text style={[reportStyles.menuText, { color: "#374151" }]}>Denunciar publicação</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ── Report Reason Modal ── */}
+      <Modal visible={showReportModal} transparent animationType="slide" onRequestClose={() => setShowReportModal(false)}>
+        <Pressable style={reportStyles.overlay} onPress={() => setShowReportModal(false)}>
+          <Pressable style={[reportStyles.sheet, { backgroundColor: "#fff" }]}>
+            <View style={reportStyles.sheetHeader}>
+              <Text style={[reportStyles.sheetTitle, { color: "#0d1b2a" }]}>Denunciar publicação</Text>
+              <TouchableOpacity onPress={() => setShowReportModal(false)}>
+                <Feather name="x" size={20} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <Text style={[reportStyles.sheetSubtitle, { color: "#6b7280" }]}>Selecione o motivo da denúncia:</Text>
+            {REPORT_REASONS.map((reason) => (
+              <TouchableOpacity
+                key={reason}
+                style={[
+                  reportStyles.reasonItem,
+                  { borderColor: selectedReason === reason ? "#c9a84c" : "#e5e7eb" },
+                  selectedReason === reason && { backgroundColor: "#fdf6e3" },
+                ]}
+                onPress={() => setSelectedReason(reason)}
+              >
+                <View style={[reportStyles.radio, { borderColor: selectedReason === reason ? "#c9a84c" : "#d1d5db" }]}>
+                  {selectedReason === reason && <View style={[reportStyles.radioInner, { backgroundColor: "#c9a84c" }]} />}
+                </View>
+                <Text style={[reportStyles.reasonText, { color: "#111827" }]}>{reason}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={[reportStyles.submitBtn, { backgroundColor: selectedReason ? "#c9a84c" : "#e5e7eb" }]}
+              onPress={handleSubmitReport}
+              disabled={!selectedReason || reportSending}
+            >
+              <Text style={[reportStyles.submitText, { color: selectedReason ? "#fff" : "#9ca3af" }]}>
+                {reportSending ? "Enviando…" : "Enviar denúncia"}
+              </Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
     </KeyboardAvoidingView>
   );
 }
@@ -767,4 +850,45 @@ const styles = StyleSheet.create({
   inputWrap:          { flex: 1, paddingHorizontal: 14, paddingVertical: 8 },
   input:              { fontSize: 14, maxHeight: 100 },
   sendBtn:            { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+});
+
+const reportStyles = StyleSheet.create({
+  overlay:     { flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" },
+  menu: {
+    margin: 16,
+    marginBottom: 40,
+    borderRadius: 14,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  menuItem:    { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingVertical: 16 },
+  menuText:    { fontSize: 15, fontWeight: "600" },
+  sheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 36,
+    gap: 10,
+  },
+  sheetHeader:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 2 },
+  sheetTitle:    { fontSize: 16, fontWeight: "700" },
+  sheetSubtitle: { fontSize: 13, marginBottom: 4 },
+  reasonItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1.5,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  radio:       { width: 18, height: 18, borderRadius: 9, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  radioInner:  { width: 8, height: 8, borderRadius: 4 },
+  reasonText:  { fontSize: 14, fontWeight: "500", flex: 1 },
+  submitBtn:   { borderRadius: 10, paddingVertical: 14, alignItems: "center", marginTop: 4 },
+  submitText:  { fontSize: 15, fontWeight: "700" },
 });
