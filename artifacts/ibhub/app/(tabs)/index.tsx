@@ -1396,7 +1396,7 @@ export default function FeedScreen() {
                     {pollOptions.map((opt, i) => (
                       <TextInput key={i} style={[styles.pollOptionInput, { borderColor: colors.border, color: colors.foreground }]} placeholder={t("feed.poll_option", { n: i + 1 })} placeholderTextColor={colors.mutedForeground} value={opt} onChangeText={(v) => { const n = [...pollOptions]; n[i] = v; setPollOptions(n); }} />
                     ))}
-                    {pollOptions.length < 4 && (
+                    {pollOptions.length < 15 && (
                       <TouchableOpacity style={styles.addOptionBtn} onPress={() => setPollOptions([...pollOptions, ""])}>
                         <Feather name="plus" size={14} color={colors.gold} />
                         <Text style={[styles.addOptionText, { color: colors.gold }]}>{t("feed.poll_add_option")}</Text>

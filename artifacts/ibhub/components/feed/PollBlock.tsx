@@ -186,7 +186,6 @@ export function PollBlock({ post, onVote }: Props) {
                       flex: 1,
                     },
                   ]}
-                  numberOfLines={2}
                 >
                   {opt.text}
                 </Text>
