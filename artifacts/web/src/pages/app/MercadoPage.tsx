@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/context/AuthContext";
 import { usePermissions } from "@/context/PermissionsContext";
+import { useMarketFeedBadge } from "@/context/MarketFeedBadgeContext";
 import { supabase, getCachedSession } from "@/lib/supabase";
 import {
   MARKET_FALLBACK, MarketOverview, Period, fetchMarketOverview,
@@ -2510,6 +2511,7 @@ type SearchMode = "exportador" | "marca" | "importadores" | "produtores";
 
 function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) {
   const { hasFeature } = usePermissions();
+  const { hasNewPost, checkForNewPosts, markFeedSeen } = useMarketFeedBadge();
   const [subTab, setSubTab] = useState<"feed" | "search">("feed");
   const [searchMode, setSearchMode] = useState<SearchMode>("exportador");
   const { credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal } = useCredits(userId);
@@ -2571,10 +2573,18 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
     if (!hasAccess) { setLoading(false); return; }
     setLoading(true);
     fetchMarketPosts(userId)
-      .then(p => { setPosts(p); })
+      .then(p => {
+        setPosts(p);
+        if (p.length > 0) checkForNewPosts(p[0].created_at);
+      })
       .catch(() => {})
       .finally(() => { setLoading(false); });
   }, [userId, hasAccess]);
+
+  // Mark feed as seen when the user views the Feed sub-tab
+  useEffect(() => {
+    if (subTab === "feed") markFeedSeen();
+  }, [subTab]);
 
   useEffect(() => {
     if (!hasAccess) return;
@@ -2662,10 +2672,7 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-      {/* Credits bar — always visible above sub-tabs */}
-      <CreditsBar credits={credits} creditsTotal={creditsTotal} loading={creditsLoading} />
-
-      {/* Sub-tabs: Feed | Busca — always visible */}
+      {/* Sub-tabs: Feed | Busca */}
       <div style={{ display: "flex", gap: 8, paddingBottom: 4 }}>
         {([
           { key: "feed",   label: "Feed",  icon: "📡" },
@@ -2683,13 +2690,25 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
               fontWeight: subTab === t.key ? 700 : 500,
               fontSize: 14, cursor: "pointer", fontFamily: "inherit",
               transition: "all 0.15s",
+              position: "relative",
             }}
           >
             <span>{t.icon}</span>
             <span>{t.label}</span>
+            {t.key === "feed" && hasNewPost && subTab !== "feed" && (
+              <span style={{
+                width: 8, height: 8, borderRadius: "50%",
+                backgroundColor: "#dc2626", flexShrink: 0,
+              }} />
+            )}
           </button>
         ))}
       </div>
+
+      {/* Credits bar — only on Busca sub-tab, between sub-tabs and buscadores */}
+      {subTab === "search" && (
+        <CreditsBar credits={credits} creditsTotal={creditsTotal} loading={creditsLoading} />
+      )}
 
       {/* Search section — flat 4 mode buttons */}
       {subTab === "search" && (
@@ -2916,6 +2935,7 @@ function useWindowWidth() {
 export default function MercadoPage() {
   const { profile, user } = useAuth();
   const { hasFeature, isLoading: permLoading } = usePermissions();
+  const { hasNewPost: hasNewMarketPost } = useMarketFeedBadge();
   const [period, setPeriod] = useState<Period>("ano");
   const [mainTab, setMainTab] = useState<MercadoTab>("visao");
   const isMobile = useWindowWidth() < 768;
@@ -3239,6 +3259,7 @@ export default function MercadoPage() {
           <div style={{ position: "sticky", top: 113, zIndex: 99, backgroundColor: WHITE, borderBottom: `1px solid ${BORDER}`, display: "flex", padding: "8px 10px", gap: 4 }}>
             {TABS.map(t => {
               const active = mainTab === t.key;
+              const showDot = t.key === "idealbi" && hasNewMarketPost && !active;
               return (
                 <button key={t.key} onClick={() => setMainTab(t.key)} style={{
                   flex: 1, padding: "8px 6px", borderRadius: 8,
@@ -3247,9 +3268,14 @@ export default function MercadoPage() {
                   fontSize: 11, fontWeight: active ? 700 : 500,
                   color: active ? GOLD : MUTED,
                   display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
-                  transition: "color 0.15s",
+                  transition: "color 0.15s", position: "relative",
                 }}>
-                  <span style={{ fontSize: 16 }}>{t.icon}</span>
+                  <span style={{ fontSize: 16, position: "relative" }}>
+                    {t.icon}
+                    {showDot && (
+                      <span style={{ position: "absolute", top: -2, right: -4, width: 7, height: 7, borderRadius: "50%", backgroundColor: "#dc2626", display: "inline-block" }} />
+                    )}
+                  </span>
                   {t.label}
                 </button>
               );
@@ -3307,15 +3333,25 @@ export default function MercadoPage() {
 
           {/* Underline tabs */}
           <div style={{ display: "flex", gap: 8, marginBottom: 20, borderBottom: "2px solid #e8eaed" }}>
-            {TABS.map((t) => (
-              <button key={t.key} onClick={() => setMainTab(t.key)} style={{
-                background: "none", border: "none", padding: "10px 16px",
-                borderBottom: mainTab === t.key ? `2px solid ${GOLD}` : "2px solid transparent",
-                color: mainTab === t.key ? GOLD : "#8a93a2",
-                fontWeight: mainTab === t.key ? 700 : 500,
-                fontSize: 14, cursor: "pointer", marginBottom: -2, transition: "all 0.15s",
-              }}>{t.icon} {t.label}</button>
-            ))}
+            {TABS.map((t) => {
+              const active = mainTab === t.key;
+              const showDot = t.key === "idealbi" && hasNewMarketPost && !active;
+              return (
+                <button key={t.key} onClick={() => setMainTab(t.key)} style={{
+                  background: "none", border: "none", padding: "10px 16px",
+                  borderBottom: active ? `2px solid ${GOLD}` : "2px solid transparent",
+                  color: active ? GOLD : "#8a93a2",
+                  fontWeight: active ? 700 : 500,
+                  fontSize: 14, cursor: "pointer", marginBottom: -2, transition: "all 0.15s",
+                  display: "flex", alignItems: "center", gap: 6, position: "relative",
+                }}>
+                  {t.icon} {t.label}
+                  {showDot && (
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "#dc2626", flexShrink: 0 }} />
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {/* Content */}

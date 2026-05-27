@@ -3,6 +3,7 @@ import { Switch, Route, Router as WouterRouter, useLocation, useParams } from "w
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { PermissionsProvider } from "@/context/PermissionsContext";
+import { MarketFeedBadgeProvider } from "@/context/MarketFeedBadgeContext";
 import LandingPage from "@/pages/LandingPage";
 import LoginPage from "@/pages/LoginPage";
 import CadastroPage from "@/pages/CadastroPage";
@@ -398,9 +399,11 @@ function App() {
       <AuthProvider>
         <FeatureFlagsProvider>
           <PermissionsProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-              <Router />
-            </WouterRouter>
+            <MarketFeedBadgeProvider>
+              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                <Router />
+              </WouterRouter>
+            </MarketFeedBadgeProvider>
           </PermissionsProvider>
         </FeatureFlagsProvider>
       </AuthProvider>

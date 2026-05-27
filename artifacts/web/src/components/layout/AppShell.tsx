@@ -5,6 +5,7 @@ import {
   AtSign, UserCheck, BarChart2, Bell as BellIcon,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useMarketFeedBadge } from "@/context/MarketFeedBadgeContext";
 import {
   fetchProfileStats,
   fetchWebCompanyPages,
@@ -678,6 +679,7 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
 /* ─── AppShell ───────────────────────────── */
 export function AppShell({ children, onPostCreated }: { children: React.ReactNode; onPostCreated?: () => void }) {
   const { profile, user, signOut, activeCompany, setActiveCompany } = useAuth();
+  const { hasNewPost: hasNewMarketPost } = useMarketFeedBadge();
   const [location, setLocation] = useLocation();
   const [stats, setStats]           = useState({ connections: 0, followers: 0, following: 0 });
   const [companyPages, setCompanyPages] = useState<WebCompanyPage[]>([]);
@@ -1171,6 +1173,7 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
                   {currentNavItems.map((item) => {
                     const active = isActive(location, item.path);
                     const iconBg = navBg[item.path] ?? "#c9a84c20";
+                    const showMarketDot = item.path === "/app/mercado" && hasNewMarketPost && !active;
                     return (
                       <button key={item.path} onClick={() => setLocation(item.path)} style={{
                         display: "flex", alignItems: "center", gap: 10,
@@ -1188,8 +1191,12 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
                           backgroundColor: active ? `${GOLD}25` : iconBg,
                           color: active ? GOLD : NAVY,
                           transition: "background 0.12s",
+                          position: "relative",
                         }}>
                           {item.icon}
+                          {showMarketDot && (
+                            <div style={{ position: "absolute", top: 2, right: 2, width: 7, height: 7, borderRadius: "50%", backgroundColor: "#dc2626", border: "1.5px solid #fff" }} />
+                          )}
                         </div>
                         <span style={{ fontSize: 13, fontWeight: active ? 700 : 500, color: active ? GOLD : NAVY, flex: 1, lineHeight: 1.2 }}>
                           {item.label}
@@ -1325,6 +1332,7 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
             { path: "/app/perfil",        label: "Perfil",     icon: I.company },
           ]).map(item => {
             const active = isActive(location, item.path);
+            const showMarketDot = item.path === "/app/mercado" && hasNewMarketPost && !active;
             return (
               <button
                 key={item.path}
@@ -1336,9 +1344,15 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
                   color: active ? GOLD : "#9ca3af",
                   fontSize: 10, fontWeight: 600,
                   transition: "color 0.15s",
+                  position: "relative",
                 }}
               >
-                <span style={{ display: "flex", color: active ? GOLD : "#9ca3af", transition: "color 0.15s" }}>{item.icon}</span>
+                <span style={{ display: "flex", color: active ? GOLD : "#9ca3af", transition: "color 0.15s", position: "relative" }}>
+                  {item.icon}
+                  {showMarketDot && (
+                    <span style={{ position: "absolute", top: -2, right: -3, width: 7, height: 7, borderRadius: "50%", backgroundColor: "#dc2626", border: "1.5px solid #fff" }} />
+                  )}
+                </span>
                 {item.label}
               </button>
             );
