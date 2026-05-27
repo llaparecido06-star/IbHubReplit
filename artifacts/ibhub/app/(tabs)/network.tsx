@@ -43,6 +43,7 @@ import { AdaptiveImage, ReactionPicker, REACTIONS, type ReactionType } from "@/c
 import * as API from "@/services/api";
 import { compressPostImage } from "@/utils/compressImage";
 import { usePaginatedQuery } from "@/hooks/usePaginatedQuery";
+import { useMarketFeedBadge } from "@/context/MarketFeedBadgeContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -2559,6 +2560,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
   const { session } = useAuth();
   const { hasFeature: permHasFeature } = usePermissions();
   const [idealbiSubTab, setIdealbiSubTab] = useState<IdealBISubTab>("feed");
+  const { hasNewPost, checkForNewPosts, markFeedSeen } = useMarketFeedBadge();
 
   /* ── Shared credits state (fetched here so the pill is always visible) ── */
   const [sharedCredits, setSharedCredits]           = useState<number | null>(null);
@@ -2663,6 +2665,20 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
     usePaginatedQuery<API.MarketPost>(fetcher);
 
   useEffect(() => { refresh(); }, [hasAccess]);
+
+  // When new posts load, notify the badge context
+  useEffect(() => {
+    if (posts.length > 0) {
+      void checkForNewPosts(posts[0].created_at);
+    }
+  }, [posts, checkForNewPosts]);
+
+  // When the user switches to Feed, mark as seen
+  useEffect(() => {
+    if (idealbiSubTab === "feed") {
+      void markFeedSeen();
+    }
+  }, [idealbiSubTab, markFeedSeen]);
 
   const handleLikeToggle = (id: string, liked: boolean, reactionType: string | null, count: number) => {
     setPosts(prev => prev.map(p => p.id === id ? { ...p, user_liked: liked, reaction_type: reactionType, likes_count: count } : p));
@@ -2885,8 +2901,35 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Credits pill — fixed above sub-tabs; visible on Feed and IA */}
-      {(() => {
+      {/* Sub-tab bar: Feed | 🔍 IA */}
+      <View style={[styles.periodRow, { backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border }]}>
+        {([
+          { key: "feed",   label: "Feed"  },
+          { key: "search", label: "🔍 IA" },
+        ] as { key: IdealBISubTab; label: string }[]).map(tab => {
+          const active = idealbiSubTab === tab.key;
+          const showDot = tab.key === "feed" && hasNewPost && !active;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={[styles.periodBtn, active && [styles.periodBtnActive, { backgroundColor: colors.gold }]]}
+              onPress={() => setIdealbiSubTab(tab.key)}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                <Text style={[styles.periodBtnText, { color: active ? "#fff" : colors.mutedForeground }]}>
+                  {tab.label}
+                </Text>
+                {showDot && (
+                  <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#dc2626" }} />
+                )}
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Credits pill — visible only on IA sub-tab, between sub-tabs and buscadores */}
+      {idealbiSubTab === "search" && (() => {
         const c = sharedCredits;
         const total = sharedCreditsTotal;
         const pillColor = c === null || c >= 2 ? "#16a34a" : c === 1 ? "#d97706" : "#dc2626";
@@ -2906,27 +2949,6 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
           </View>
         );
       })()}
-
-      {/* Sub-tab bar: Feed | 🔍 IA — same pill style as Visão Geral period filter */}
-      <View style={[styles.periodRow, { backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border }]}>
-        {([
-          { key: "feed",   label: "Feed"  },
-          { key: "search", label: "🔍 IA" },
-        ] as { key: IdealBISubTab; label: string }[]).map(tab => {
-          const active = idealbiSubTab === tab.key;
-          return (
-            <TouchableOpacity
-              key={tab.key}
-              style={[styles.periodBtn, active && [styles.periodBtnActive, { backgroundColor: colors.gold }]]}
-              onPress={() => setIdealbiSubTab(tab.key)}
-            >
-              <Text style={[styles.periodBtnText, { color: active ? "#fff" : colors.mutedForeground }]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
 
       {idealbiSubTab === "search" ? (
         <IdealBISearchView
@@ -3041,6 +3063,7 @@ export default function MercadoScreen() {
   const colors  = useColors();
   const insets  = useSafeAreaInsets();
   const { user, profile, session } = useAuth();
+  const { hasNewPost } = useMarketFeedBadge();
 
   const [period,       setPeriod]       = useState<Period>("ano");
   const [mainTab,      setMainTab]      = useState<MercadoTab>("visao");
@@ -3107,18 +3130,27 @@ export default function MercadoScreen() {
           { key: "visao",         label: t("mercado_screen.tab_visao"),         icon: "bar-chart-2" },
           { key: "apresentacoes", label: t("mercado_screen.tab_apresentacoes"), icon: "monitor"     },
           { key: "idealbi",       label: t("mercado_screen.tab_idealbi"),       icon: "radio"       },
-        ] as { key: MercadoTab; label: string; icon: any }[]).map(tab => (
-          <TouchableOpacity
-            key={tab.key}
-            style={[styles.mainTabBtn, mainTab === tab.key && [styles.mainTabBtnActive, { backgroundColor: "#fff", borderColor: colors.border }]]}
-            onPress={() => setMainTab(tab.key)}
-          >
-            <Feather name={tab.icon} size={14} color={mainTab === tab.key ? colors.navy : colors.mutedForeground} />
-            <Text style={[styles.mainTabText, { color: mainTab === tab.key ? colors.navy : colors.mutedForeground, fontWeight: mainTab === tab.key ? "700" : "500" }]}>
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        ] as { key: MercadoTab; label: string; icon: any }[]).map(tab => {
+          const isActive = mainTab === tab.key;
+          const showDot  = tab.key === "idealbi" && hasNewPost && !isActive;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={[styles.mainTabBtn, isActive && [styles.mainTabBtnActive, { backgroundColor: "#fff", borderColor: colors.border }]]}
+              onPress={() => setMainTab(tab.key)}
+            >
+              <View style={{ position: "relative" }}>
+                <Feather name={tab.icon} size={14} color={isActive ? colors.navy : colors.mutedForeground} />
+                {showDot && (
+                  <View style={{ position: "absolute", top: -3, right: -4, width: 7, height: 7, borderRadius: 4, backgroundColor: "#dc2626" }} />
+                )}
+              </View>
+              <Text style={[styles.mainTabText, { color: isActive ? colors.navy : colors.mutedForeground, fontWeight: isActive ? "700" : "500" }]}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {mainTab === "idealbi" ? (

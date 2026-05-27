@@ -2,11 +2,12 @@ import { Tabs } from "expo-router";
 import { Feather } from "@/components/ui/Icon";
 import { useIsDesktop } from "@/components/ui/SidebarNav";
 import React from "react";
-import { Platform } from "react-native";
+import { Platform, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { useUnread } from "@/context/UnreadContext";
+import { useMarketFeedBadge } from "@/context/MarketFeedBadgeContext";
 import { useTranslation } from "react-i18next";
 
 export default function TabLayout() {
@@ -15,6 +16,7 @@ export default function TabLayout() {
   const isCompany = !!activeCompany || profile?.profile_type === "empresa";
   const insets    = useSafeAreaInsets();
   const { unreadCount } = useUnread();
+  const { hasNewPost } = useMarketFeedBadge();
   const isDesktop = useIsDesktop();
   const { t } = useTranslation();
 
@@ -67,7 +69,19 @@ export default function TabLayout() {
         options={{
           title: t("nav.market"),
           href: isCompany ? null : undefined,
-          tabBarIcon: ({ color }) => <Feather name="bar-chart-2" size={22} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <View>
+              <Feather name="bar-chart-2" size={22} color={color} />
+              {hasNewPost && (
+                <View style={{
+                  position: "absolute", top: -2, right: -4,
+                  width: 8, height: 8, borderRadius: 4,
+                  backgroundColor: "#dc2626",
+                  borderWidth: 1.5, borderColor: "#fff",
+                }} />
+              )}
+            </View>
+          ),
         }}
       />
       <Tabs.Screen

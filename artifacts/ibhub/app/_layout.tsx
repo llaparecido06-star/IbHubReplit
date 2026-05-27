@@ -18,6 +18,7 @@ import { AuthProvider, useAuth, supabase } from "@/context/AuthContext";
 import { PermissionsProvider } from "@/context/PermissionsContext";
 import { FeatureFlagsProvider, useFeatureFlags } from "@/context/FeatureFlagsContext";
 import { UnreadProvider, useUnread } from "@/context/UnreadContext";
+import { MarketFeedBadgeProvider } from "@/context/MarketFeedBadgeContext";
 import { SidebarNav, useIsDesktop } from "@/components/ui/SidebarNav";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import * as SafeNotifications from "@/utils/safeNotifications";
@@ -450,7 +451,9 @@ function RootLayout() {
               <FeatureFlagsProvider>
                 <PermissionsProvider>
                   <UnreadProvider>
-                    <RootLayoutNav />
+                    <MarketFeedBadgeProvider>
+                      <RootLayoutNav />
+                    </MarketFeedBadgeProvider>
                   </UnreadProvider>
                 </PermissionsProvider>
               </FeatureFlagsProvider>
