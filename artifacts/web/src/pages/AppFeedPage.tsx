@@ -1036,19 +1036,16 @@ export default function AppFeedPage() {
     }
     setLoading(true);
     try {
-      if (companyId) {
-        const postsData = await fetchCompanyFeedPosts(companyId, userId);
-        setPosts(postsData);
-      } else {
-        const userAreas: string[] = JSON.parse(areasKey) as string[];
-        const userCompany: string | null = companyKey;
-        const [postsData, suggsData] = await Promise.all([
-          fetchFeedPosts(userId),
-          fetchWebSuggestedConnections(userId, userAreas, userCompany, 5),
-        ]);
-        setPosts(postsData);
-        setSuggestions(suggsData);
-      }
+      // Always load the full community feed regardless of company mode.
+      // Company mode only changes how interactions (likes, etc.) are attributed.
+      const userAreas: string[] = JSON.parse(areasKey) as string[];
+      const userCompany: string | null = companyKey;
+      const [postsData, suggsData] = await Promise.all([
+        fetchFeedPosts(userId),
+        companyId ? Promise.resolve([]) : fetchWebSuggestedConnections(userId, userAreas, userCompany, 5),
+      ]);
+      setPosts(postsData);
+      if (!companyId) setSuggestions(suggsData);
     } finally {
       setLoading(false);
     }
@@ -1069,11 +1066,8 @@ export default function AppFeedPage() {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts" }, async (payload) => {
         const raw = payload.new as any;
         if (raw.user_id === userId) return;
-        if (companyId) {
-          if (raw.company_page_id !== companyId) return;
-        } else {
-          if (raw.company_page_id) return;
-        }
+        // In personal mode: skip posts from company pages (not part of personal feed)
+        if (!companyId && raw.company_page_id) return;
         const full = await fetchPostById(raw.id, userId);
         if (!full) return;
         // Skip posts from shadowbanned users (server-side shadowban enforcement for realtime path)

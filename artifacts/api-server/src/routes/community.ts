@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
+import { randomUUID } from "node:crypto";
 import { resolveUserId, requirePlanFeature } from "../lib/planCheck.js";
 import { sendPushToUser } from "../lib/pushUtils.js";
 
@@ -36,9 +37,27 @@ router.post("/community/groups", async (req: Request, res: Response): Promise<vo
     return;
   }
 
+  // Pre-generate a shared UUID for both the group and its conversation.
+  // The conversation MUST be created first so the auto_add_group_owner trigger
+  // (which inserts into conversation_participants) satisfies the FK constraint.
+  const groupId = randomUUID();
+
+  const { error: convErr } = await supabaseAdmin.from("conversations").insert({
+    id: groupId,
+    is_group: true,
+    name: name.trim(),
+    created_at: new Date().toISOString(),
+  });
+
+  if (convErr) {
+    res.status(500).json({ error: "Failed to create group conversation" });
+    return;
+  }
+
   const { data: group, error } = await supabaseAdmin
     .from("groups")
     .insert({
+      id: groupId,
       owner_id: userId,
       name: name.trim(),
       description: description ?? null,
@@ -50,35 +69,15 @@ router.post("/community/groups", async (req: Request, res: Response): Promise<vo
     .single();
 
   if (error) {
+    // Roll back the conversation
+    await supabaseAdmin.from("conversations").delete().eq("id", groupId);
     res.status(500).json({ error: error.message });
     return;
   }
 
-  const { error: convErr } = await supabaseAdmin.from("conversations").insert({
-    id: group.id,
-    is_group: true,
-    name: group.name,
-    created_at: group.created_at,
-  });
-
-  if (convErr) {
-    await supabaseAdmin.from("groups").delete().eq("id", group.id);
-    res.status(500).json({ error: "Failed to create group conversation" });
-    return;
-  }
-
-  // Add creator to both conversation_participants (for RLS messaging) and
-  // group_members (for member count + "my groups" list) with role "owner"
-  await Promise.all([
-    supabaseAdmin.from("conversation_participants").upsert(
-      { conversation_id: group.id, user_id: userId },
-      { onConflict: "conversation_id,user_id", ignoreDuplicates: true }
-    ),
-    supabaseAdmin.from("group_members").upsert(
-      { group_id: group.id, user_id: userId, role: "owner" },
-      { onConflict: "group_id,user_id", ignoreDuplicates: true }
-    ),
-  ]);
+  // The auto_add_group_owner trigger fires on groups INSERT and adds the owner
+  // to both group_members and conversation_participants (conversation already exists).
+  // No manual inserts needed.
 
   res.status(201).json({ group });
 });
