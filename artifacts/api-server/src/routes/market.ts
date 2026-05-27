@@ -86,19 +86,35 @@ router.post("/market/posts", async (req: Request, res: Response): Promise<void> 
     .maybeSingle();
   const isAdmin = !!(profileRow as { is_admin?: boolean } | null)?.is_admin;
 
-  // If not admin, check if the user owns a company page with can_post_market
+  // If not admin, check if user is owner OR member (company_page_admins) of a
+  // company page with can_post_market = true.
   let authorizedCompanyPageId: string | null = null;
   if (isAdmin) {
     authorizedCompanyPageId = await getIdealbiCompanyPageId();
   } else {
-    const { data: companyRow } = await supabaseAdmin
+    // Check ownership first
+    const { data: ownedRow } = await supabaseAdmin
       .from("company_pages")
       .select("id")
       .eq("owner_id", userId)
       .eq("can_post_market", true)
       .limit(1)
       .maybeSingle();
-    authorizedCompanyPageId = (companyRow as { id?: string } | null)?.id ?? null;
+    authorizedCompanyPageId = (ownedRow as { id?: string } | null)?.id ?? null;
+
+    // If not owner, check company_page_admins membership
+    if (!authorizedCompanyPageId) {
+      const { data: memberRow } = await supabaseAdmin
+        .from("company_page_admins")
+        .select("company_id, company_pages!inner(id, can_post_market)")
+        .eq("user_id", userId)
+        .eq("company_pages.can_post_market", true)
+        .limit(1)
+        .maybeSingle();
+      const row = memberRow as { company_id?: string } | null;
+      authorizedCompanyPageId = row?.company_id ?? null;
+    }
+
     if (!authorizedCompanyPageId) {
       res.status(403).json({ error: "Sua empresa não tem permissão para publicar no feed de mercado." });
       return;

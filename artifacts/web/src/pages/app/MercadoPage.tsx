@@ -2544,6 +2544,7 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
 
   useEffect(() => {
     if (isAdmin) return;
+    // Check ownership first, then fall back to company_page_admins membership
     supabase
       .from("company_pages")
       .select("id, name, avatar_url")
@@ -2551,7 +2552,19 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
       .eq("can_post_market", true)
       .limit(1)
       .maybeSingle()
-      .then(({ data }) => { if (data) setUserCompany(data as IdealBICompany); });
+      .then(async ({ data: owned }) => {
+        if (owned) { setUserCompany(owned as IdealBICompany); return; }
+        // Not owner — check if member of a company with can_post_market
+        const { data: membership } = await supabase
+          .from("company_page_admins")
+          .select("company_pages!inner(id, name, avatar_url, can_post_market)")
+          .eq("user_id", userId)
+          .eq("company_pages.can_post_market", true)
+          .limit(1)
+          .maybeSingle();
+        const cp = (membership as { company_pages?: IdealBICompany } | null)?.company_pages;
+        if (cp) setUserCompany(cp);
+      });
   }, [userId, isAdmin]);
 
   useEffect(() => {
