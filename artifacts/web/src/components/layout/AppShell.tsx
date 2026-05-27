@@ -542,7 +542,7 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
                   )}
                 </div>
               ))}
-              {pollOptions.length < 4 && (
+              {pollOptions.length < 15 && (
                 <button onClick={() => setPollOptions(prev => [...prev, ""])} style={{
                   background: "none", border: `1px dashed ${BORDER}`, borderRadius: 8, padding: "8px 12px",
                   fontSize: 13, color: MUTED, cursor: "pointer", textAlign: "left", fontFamily: "inherit",

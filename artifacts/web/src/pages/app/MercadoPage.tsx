@@ -2794,7 +2794,7 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
                       )}
                     </div>
                   ))}
-                  {pollOptions.length < 5 && (
+                  {pollOptions.length < 15 && (
                     <button onClick={() => setPollOptions(prev => [...prev, ""])} style={{ marginTop: 4, fontSize: 12, color: GOLD, border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>
                       + Adicionar opção
                     </button>
