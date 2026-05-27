@@ -2283,20 +2283,20 @@ function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idea
       {/* Author header */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px 10px" }}>
         <div
-          onClick={() => idealbiCompany && setLocation(`/app/empresa/${idealbiCompany.id}`)}
-          style={{ cursor: idealbiCompany ? "pointer" : "default", display: "flex", alignItems: "center" }}
+          onClick={() => post.author?.id && setLocation(`/app/empresa/${post.author.id}`)}
+          style={{ cursor: post.author?.id ? "pointer" : "default", display: "flex", alignItems: "center" }}
         >
-          <MarketPostAvatar src={idealbiCompany?.avatar_url ?? post.author?.avatar_url} name={idealbiCompany?.name ?? post.author?.full_name ?? "Ideal.BI"} size={40} />
+          <MarketPostAvatar src={post.author?.avatar_url} name={post.author?.full_name ?? "Mercado"} size={40} />
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span
-              onClick={() => idealbiCompany && setLocation(`/app/empresa/${idealbiCompany.id}`)}
-              style={{ fontSize: 14, fontWeight: 800, color: NAVY, cursor: idealbiCompany ? "pointer" : "default" }}
+              onClick={() => post.author?.id && setLocation(`/app/empresa/${post.author.id}`)}
+              style={{ fontSize: 14, fontWeight: 800, color: NAVY, cursor: post.author?.id ? "pointer" : "default" }}
             >
-              {idealbiCompany?.name ?? post.author?.full_name ?? "Ideal.BI"}
+              {post.author?.full_name ?? "Mercado"}
             </span>
-            <span style={{ fontSize: 10, fontWeight: 700, color: WHITE, backgroundColor: GOLD, borderRadius: 4, padding: "1px 6px", letterSpacing: 0.3 }}>IDEAL.BI</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: WHITE, backgroundColor: GOLD, borderRadius: 4, padding: "1px 6px", letterSpacing: 0.3 }}>EXCLUSIVO</span>
           </div>
           {post.author?.headline && (
             <div style={{ fontSize: 12, color: MUTED }}>{post.author.headline}</div>
@@ -2806,15 +2806,15 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
           ) : (
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                {(isAdmin ? idealbiCompany : userCompany)?.avatar_url && (
+                {userCompany?.avatar_url && (
                   <img
-                    src={(isAdmin ? idealbiCompany : userCompany)!.avatar_url!}
+                    src={userCompany.avatar_url}
                     alt=""
                     style={{ width: 28, height: 28, borderRadius: 6, objectFit: "cover" }}
                   />
                 )}
                 <span style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                  📡 {isAdmin ? "Publicação Ideal.BI" : `Publicação — ${userCompany?.name ?? "Empresa"}`}
+                  📡 {userCompany ? `Publicação — ${userCompany.name}` : "Publicação Exclusiva"}
                 </span>
               </div>
               <textarea
