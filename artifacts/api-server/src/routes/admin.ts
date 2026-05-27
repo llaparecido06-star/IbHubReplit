@@ -1128,4 +1128,56 @@ router.delete("/admin/delete-user", async (req: Request, res: Response): Promise
   res.status(200).json({ success: true });
 });
 
+/* ─── Company Pages — Market Feed Access ────────────────────────────────── */
+
+/**
+ * GET /admin/company-pages
+ * Returns all company pages with their can_post_market flag. ADMIN ONLY.
+ */
+router.get("/admin/company-pages", async (req: Request, res: Response): Promise<void> => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+
+  const q = (req.query.q as string | undefined)?.trim() ?? "";
+  let query = supabaseAdmin
+    .from("company_pages")
+    .select("id, name, avatar_url, can_post_market, created_at")
+    .order("name", { ascending: true });
+
+  if (q) {
+    query = query.ilike("name", `%${q}%`);
+  }
+
+  const { data, error } = await query;
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.json({ companies: data ?? [] });
+});
+
+/**
+ * PATCH /admin/company-pages/:id/market-access
+ * Toggle the can_post_market flag for a company page. ADMIN ONLY.
+ * Body: { can_post_market: boolean }
+ */
+router.patch("/admin/company-pages/:id/market-access", async (req: Request, res: Response): Promise<void> => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+
+  const { can_post_market } = req.body as { can_post_market?: boolean };
+  if (typeof can_post_market !== "boolean") {
+    res.status(400).json({ error: "can_post_market must be a boolean" });
+    return;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("company_pages")
+    .update({ can_post_market })
+    .eq("id", req.params.id)
+    .select("id, name, can_post_market")
+    .maybeSingle();
+
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  if (!data) { res.status(404).json({ error: "Empresa não encontrada" }); return; }
+  res.json(data);
+});
+
 export default router;

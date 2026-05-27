@@ -68,18 +68,42 @@ router.get("/market/posts", async (req: Request, res: Response): Promise<void> =
 
 /**
  * POST /market/posts
- * Creates an Ideal.BI market post. ADMIN ONLY.
- * Only users with is_admin = true in their profile may create posts.
- * The post is always stored with the Ideal.BI company page as the owner
- * (company_page_id), regardless of which admin published it.
+ * Creates a market feed post.
+ * Allowed for:
+ *   - ibhub admins (is_admin = true) → post attributed to the Ideal.BI company page
+ *   - owners of a company page with can_post_market = true → post attributed to their company
+ * Body: { content, image_url?, video_url?, poll_options?, poll_allow_multiple? }
  */
 router.post("/market/posts", async (req: Request, res: Response): Promise<void> => {
   const userId = await resolveUserId(req, res);
   if (!userId) return;
 
-  // Only ibhub admins can publish to the Ideal.BI feed
-  const allowed = await requireAdmin(req, res, userId);
-  if (!allowed) return;
+  // Fetch profile to check admin flag
+  const { data: profileRow } = await supabaseAdmin
+    .from("profiles")
+    .select("is_admin")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const isAdmin = !!(profileRow as { is_admin?: boolean } | null)?.is_admin;
+
+  // If not admin, check if the user owns a company page with can_post_market
+  let authorizedCompanyPageId: string | null = null;
+  if (isAdmin) {
+    authorizedCompanyPageId = await getIdealbiCompanyPageId();
+  } else {
+    const { data: companyRow } = await supabaseAdmin
+      .from("company_pages")
+      .select("id")
+      .eq("owner_id", userId)
+      .eq("can_post_market", true)
+      .limit(1)
+      .maybeSingle();
+    authorizedCompanyPageId = (companyRow as { id?: string } | null)?.id ?? null;
+    if (!authorizedCompanyPageId) {
+      res.status(403).json({ error: "Sua empresa não tem permissão para publicar no feed de mercado." });
+      return;
+    }
+  }
 
   const { content, image_url, video_url, poll_options, poll_allow_multiple } = req.body as {
     content?: string;
@@ -94,14 +118,11 @@ router.post("/market/posts", async (req: Request, res: Response): Promise<void> 
     return;
   }
 
-  // Always attribute the post to the Ideal.BI company page
-  const companyPageId = await getIdealbiCompanyPageId();
-
   const { data, error } = await supabaseAdmin
     .from("market_posts")
     .insert({
-      author_id: userId,          // who physically published (for audit / notifications)
-      company_page_id: companyPageId, // the company the post belongs to (always Ideal.BI)
+      author_id: userId,
+      company_page_id: authorizedCompanyPageId,
       content: content.trim(),
       image_url: image_url ?? null,
       video_url: video_url ?? null,
@@ -118,7 +139,7 @@ router.post("/market/posts", async (req: Request, res: Response): Promise<void> 
     return;
   }
 
-  // Fire-and-forget: notify all users about the new Ideal.BI post
+  // Fire-and-forget: notify all users about the new market post
   const previewBody = (data as any).content?.slice(0, 100) ?? "Novo conteúdo disponível";
   broadcastPushToAllUsers({
     title: "📡 Novo post Ideal.BI",

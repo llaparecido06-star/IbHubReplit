@@ -57,6 +57,7 @@ import AdminPlanBuilder from "@/pages/admin/AdminPlanBuilder";
 import AdminComunicacao from "@/pages/admin/AdminComunicacao";
 import AdminAdmins from "@/pages/admin/AdminAdmins";
 import AdminConfiguracoes from "@/pages/admin/AdminConfiguracoes";
+import AdminEmpresasFeed from "@/pages/admin/AdminEmpresasFeed";
 import AssinarPage from "@/pages/AssinarPage";
 import AssinarSucessoPage from "@/pages/AssinarSucessoPage";
 import AssinarCanceladoPage from "@/pages/AssinarCanceladoPage";
@@ -179,6 +180,7 @@ const ADMIN_SUB_ROUTES: Record<string, React.ComponentType> = {
   "/admin/comunicacao":           AdminComunicacao,
   "/admin/admins":                AdminAdmins,
   "/admin/configuracoes":         AdminConfiguracoes,
+  "/admin/empresas-feed":         AdminEmpresasFeed,
 };
 
 function AdminSubRouter() {

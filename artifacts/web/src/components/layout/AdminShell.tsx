@@ -21,6 +21,7 @@ const SECTIONS = [
       { path: "/admin/eventos",             label: "Eventos",           icon: "📅" },
       { path: "/admin/marketplace",         label: "Marketplace",       icon: "🛍" },
       { path: "/admin/slides-mercado",      label: "Mercado",           icon: "📊" },
+      { path: "/admin/empresas-feed",       label: "Empresas Feed",     icon: "📡" },
       { path: "/admin/presentation-slides", label: "Slides de Apres.",  icon: "⧉" },
       { path: "/admin/moderacao",           label: "Moderação",         icon: "🛡" },
     ],

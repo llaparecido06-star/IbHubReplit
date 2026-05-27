@@ -2303,8 +2303,8 @@ function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idea
           <div style={{ fontSize: 11, color: "#aaa" }}>{timeAgo(post.created_at)}</div>
         </div>
 
-        {/* Admin 3-dot menu */}
-        {isAdmin && (
+        {/* 3-dot menu — admins and post authors can edit/delete their own posts */}
+        {(isAdmin || post.author_id === userId) && (
           <div ref={menuRef} style={{ position: "relative", flexShrink: 0 }}>
             <button
               onClick={() => setMenuOpen(v => !v)}
@@ -2526,10 +2526,12 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const [submitting, setSubmitting] = useState(false);
   const [idealbiCompany, setIdealbiCompany] = useState<IdealBICompany | null>(null);
+  const [userCompany, setUserCompany] = useState<IdealBICompany | null>(null);
   const imgRef = useRef<HTMLInputElement>(null);
   const vidRef = useRef<HTMLInputElement>(null);
 
   const hasAccess = hasFeature("mercado:idealbi") || isAdmin;
+  const canPost = isAdmin || !!userCompany;
 
   useEffect(() => {
     supabase
@@ -2539,6 +2541,18 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
       .maybeSingle()
       .then(({ data }) => { if (data) setIdealbiCompany(data as IdealBICompany); });
   }, []);
+
+  useEffect(() => {
+    if (isAdmin) return;
+    supabase
+      .from("company_pages")
+      .select("id, name, avatar_url")
+      .eq("owner_id", userId)
+      .eq("can_post_market", true)
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => { if (data) setUserCompany(data as IdealBICompany); });
+  }, [userId, isAdmin]);
 
   useEffect(() => {
     if (!hasAccess) { setLoading(false); return; }
@@ -2738,20 +2752,29 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
       ) : (
       <>
 
-      {/* Admin create post */}
-      {isAdmin && (
+      {/* Create post — available to admins and companies with can_post_market */}
+      {canPost && (
         <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16 }}>
           {!creating ? (
             <button
               onClick={() => setCreating(true)}
               style={{ width: "100%", textAlign: "left", padding: "12px 16px", border: `1px dashed ${GOLD}60`, borderRadius: 10, backgroundColor: `${GOLD}08`, color: MUTED, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}
             >
-              ✏️ Publicar informação de mercado (admin)…
+              ✏️ {isAdmin ? "Publicar informação de mercado (admin)…" : `Publicar como ${userCompany?.name ?? "sua empresa"}…`}
             </button>
           ) : (
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5 }}>📡 Publicação Ideal.BI</span>
+                {(isAdmin ? idealbiCompany : userCompany)?.avatar_url && (
+                  <img
+                    src={(isAdmin ? idealbiCompany : userCompany)!.avatar_url!}
+                    alt=""
+                    style={{ width: 28, height: 28, borderRadius: 6, objectFit: "cover" }}
+                  />
+                )}
+                <span style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  📡 {isAdmin ? "Publicação Ideal.BI" : `Publicação — ${userCompany?.name ?? "Empresa"}`}
+                </span>
               </div>
               <textarea
                 value={newContent}
