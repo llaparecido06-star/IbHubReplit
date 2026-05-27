@@ -3806,10 +3806,12 @@ export async function checkUserCompanyRole(
 export async function uploadCompanyLogoWeb(
   companyId: string,
   file: File,
+  userId: string,
 ): Promise<string | null> {
   try {
     const ext = file.name.split(".").pop() ?? "jpg";
-    const path = `company-logos/${companyId}/logo.${ext}`;
+    // Path must start with userId to satisfy Supabase Storage RLS
+    const path = `${userId}/company-logos/${companyId}.${ext}`;
     const { error } = await supabase.storage
       .from("avatars")
       .upload(path, file, { contentType: file.type, upsert: true });

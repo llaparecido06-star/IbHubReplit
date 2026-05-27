@@ -50,7 +50,7 @@ function AvatarPreview({ src, name, size = 80 }: { src?: string | null; name: st
 export default function GerenciarEmpresaPage() {
   const [, params] = useRoute("/app/empresa/:id/editar");
   const [, setLocation] = useLocation();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const companyId = params?.id;
 
   const [company, setCompany]   = useState<CompanyPageFull | null>(null);
@@ -165,7 +165,7 @@ export default function GerenciarEmpresaPage() {
     let avatar_url = company.avatar_url;
     if (avatarFile) {
       setUploadingLogo(true);
-      const uploaded = await uploadCompanyLogoWeb(companyId, avatarFile);
+      const uploaded = await uploadCompanyLogoWeb(companyId, avatarFile, user?.id ?? "");
       setUploadingLogo(false);
       if (uploaded) {
         avatar_url = uploaded;

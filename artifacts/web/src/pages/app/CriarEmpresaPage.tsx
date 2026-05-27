@@ -85,7 +85,7 @@ function Field({
 
 export default function CriarEmpresaPage() {
   const [, setLocation] = useLocation();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { hasFeature, isLoading: permLoading } = usePermissions();
 
   const [form, setForm] = useState({
@@ -154,7 +154,7 @@ export default function CriarEmpresaPage() {
     }
 
     if (avatarFile) {
-      await uploadCompanyLogoWeb(page.id, avatarFile);
+      await uploadCompanyLogoWeb(page.id, avatarFile, user?.id ?? "");
     }
 
     setSaving(false);

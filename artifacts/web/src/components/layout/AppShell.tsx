@@ -333,6 +333,11 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
         is_private: false,
       }).catch(() => {});
     }
+    if (!newPost) {
+      setSubmitting(false);
+      alert("Erro ao publicar. Verifique sua conexão e tente novamente.");
+      return;
+    }
     setSubmitting(false);
     onCreated();
     onClose();
