@@ -299,6 +299,20 @@ function RootLayoutNav() {
     );
   }
 
+  // Feature flags still loading — auth resolved but navigation effect is
+  // blocked on flagsLoading. Without this guard, RootLayoutNav falls through
+  // to <AuthenticatedLayout /> which renders a Stack with no active route
+  // (there is no app/index.tsx), producing a blank/white screen on cold start.
+  // The second open avoids this because the session is cached in AsyncStorage
+  // and the flags query resolves before or simultaneously with auth.
+  if (flagsLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0d1b2a" }}>
+        <ActivityIndicator color="#c9a84c" size="large" />
+      </View>
+    );
+  }
+
   // Session was just established (e.g. OAuth SIGNED_IN fired) but the first
   // profile fetch hasn't completed yet. Show a loading screen instead of
   // briefly flashing AuthenticatedLayout with no valid route (blank screen).
