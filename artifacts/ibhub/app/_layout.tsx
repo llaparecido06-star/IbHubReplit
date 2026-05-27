@@ -39,6 +39,31 @@ SafeNotifications.setNotificationHandler({
   }),
 });
 
+// ── Cold-start notification pre-fetch ────────────────────────────────────────
+// Read the last notification response immediately at module load — before any
+// React tree renders. By the time auth resolves (even from cache), this promise
+// will have settled, letting RootLayoutNav navigate directly to the deep-link
+// destination instead of first landing on /(tabs) and then jumping away.
+const coldStartDeepLinkPromise: Promise<string | null> = (async () => {
+  try {
+    const response = await SafeNotifications.getLastNotificationResponseAsync();
+    if (response) {
+      const data = response.notification.request.content.data ?? {};
+      const deepLink = (data as { deepLink?: string }).deepLink;
+      if (deepLink && typeof deepLink === "string" && deepLink.startsWith("/")) {
+        return deepLink;
+      }
+    }
+  } catch {
+    // Not available in Expo Go
+  }
+  return null;
+})();
+
+// Tracks whether RootLayoutNav has already consumed the cold-start deep link.
+// PushNotificationHandler checks this flag to avoid double-navigating.
+let coldStartLinkConsumed = false;
+
 // ── Background unread badge syncer ──────────────────────────────────────────
 function UnreadSyncer() {
   const { user } = useAuth();
@@ -96,7 +121,13 @@ function PushNotificationHandler() {
     // Token registration (requestPermissionsAsync) is intentionally NOT done
     // here — it is done in the feed screen after navigation has settled, so
     // the OS permission dialog never appears mid-onboarding.
+    //
+    // NOTE: RootLayoutNav pre-reads getLastNotificationResponseAsync() at
+    // module load and navigates directly to the deep-link destination before
+    // this component mounts. If it has already consumed the cold-start link,
+    // we skip this call entirely to prevent double-navigation.
     const handleLastResponse = async () => {
+      if (coldStartLinkConsumed) return;
       try {
         const response = await SafeNotifications.getLastNotificationResponseAsync();
         if (response) {
@@ -285,7 +316,23 @@ function RootLayoutNav() {
     }
 
     lastDestination.current = destination;
-    router.replace(destination as any);
+
+    // For /(tabs), check whether a cold-start notification was tapped.
+    // The deep link was pre-fetched at module load so the promise is already
+    // settled by the time we get here, keeping navigation instantaneous.
+    if (destination === "/(tabs)") {
+      (async () => {
+        const coldLink = await coldStartDeepLinkPromise;
+        if (coldLink && !coldStartLinkConsumed) {
+          coldStartLinkConsumed = true;
+          router.replace(coldLink as any);
+        } else {
+          router.replace("/(tabs)" as any);
+        }
+      })();
+    } else {
+      router.replace(destination as any);
+    }
   }, [
     session, loading, isRecovering, mustChangePassword, manutencao,
     flagsLoading, isAuthPath, needsProfileCompletion, profileChecked, pathname,
