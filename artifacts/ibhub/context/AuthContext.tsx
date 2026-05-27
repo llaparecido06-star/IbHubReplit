@@ -104,6 +104,62 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+// ── Persistent cache helpers ─────────────────────────────────────────────────
+// Caching session + profile in AsyncStorage lets us pre-populate state before
+// the Supabase getSession() round-trip completes, eliminating the cold-start
+// spinner for users who are already logged in. The real session is validated
+// in the background; if it changed (expired / sign-out on another device) the
+// UI is updated after the fact.
+
+const SESSION_CACHE_KEY = "@ibhub/auth_session_cache";
+const PROFILE_CACHE_KEY = "@ibhub/profile_cache";
+
+interface SessionCache {
+  session: Session;
+  userId: string;
+}
+
+async function readSessionCache(): Promise<SessionCache | null> {
+  try {
+    const raw = await AsyncStorage.getItem(SESSION_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as SessionCache;
+  } catch {
+    return null;
+  }
+}
+
+async function writeSessionCache(session: Session): Promise<void> {
+  try {
+    await AsyncStorage.setItem(
+      SESSION_CACHE_KEY,
+      JSON.stringify({ session, userId: session.user.id } satisfies SessionCache),
+    );
+  } catch {}
+}
+
+async function readProfileCache(): Promise<Profile | null> {
+  try {
+    const raw = await AsyncStorage.getItem(PROFILE_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as Profile;
+  } catch {
+    return null;
+  }
+}
+
+async function writeProfileCache(profile: Profile): Promise<void> {
+  try {
+    await AsyncStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile));
+  } catch {}
+}
+
+async function clearAuthCache(): Promise<void> {
+  try {
+    await AsyncStorage.multiRemove([SESSION_CACHE_KEY, PROFILE_CACHE_KEY]);
+  } catch {}
+}
+
 /** Parses `access_token`, `refresh_token`, and `type` from a deep link URL fragment */
 function parseRecoveryUrl(url: string): { accessToken: string; refreshToken: string } | null {
   try {
@@ -170,9 +226,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const areas_of_expertise: string[] =
           Array.isArray(d.areas_of_expertise) ? d.areas_of_expertise :
           Array.isArray(d.areas) ? d.areas : [];
-        setProfile({ ...d, headline, areas_of_expertise } as Profile);
-        setNeedsProfileCompletion(!isProfileComplete({ ...d, areas_of_expertise }));
-        console.log(`[fetchProfile] profile loaded. username=${d.username ?? "null"} needsCompletion=${!isProfileComplete({ ...d, areas_of_expertise })}`);
+        const profileData = { ...d, headline, areas_of_expertise } as Profile;
+        setProfile(profileData);
+        setNeedsProfileCompletion(!isProfileComplete(profileData));
+        writeProfileCache(profileData);
+        console.log(`[fetchProfile] profile loaded. username=${d.username ?? "null"} needsCompletion=${!isProfileComplete(profileData)}`);
       } else {
         // No profile row yet — new social auth user
         console.warn(`[fetchProfile] No profile found for userId=${userId}. Marking needsProfileCompletion=true`);
@@ -312,27 +370,74 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const init = async () => {
       try {
+        // ── Deep link must be resolved first to avoid session-state races ──────
         const initialUrl = await Linking.getInitialURL();
         if (initialUrl) await handleDeepLink(initialUrl);
 
-        const { data: { session } } = await supabase.auth.getSession();
-        setSession(session);
-        setUser(session?.user ?? null);
-        setMustChangePassword(session?.user?.user_metadata?.must_change_password === true);
+        // ── Cache-first: seed state from AsyncStorage before any network call ──
+        // Reading both caches in parallel keeps this as fast as possible.
+        const [cachedAuth, cachedProfile] = await Promise.all([
+          readSessionCache(),
+          readProfileCache(),
+        ]);
 
-        // ── Unblock the loading spinner as soon as we know the session state.
-        // fetchProfile runs after this; profileChecked gates /(tabs) navigation
-        // only when a session exists (avoids flash-to-tabs for social-auth users
-        // who still need to complete their profile on /social-complete).
-        clearTimeout(initTimeoutId);
-        resolveLoading();
+        if (cachedAuth) {
+          // Cache hit — show the app instantly, validate session in background.
+          console.log(`[AuthInit] Cache hit for userId=${cachedAuth.userId}. Unblocking UI.`);
+          setSession(cachedAuth.session);
+          setUser(cachedAuth.session.user);
+          setMustChangePassword(cachedAuth.session.user?.user_metadata?.must_change_password === true);
 
-        if (session?.user) {
-          await fetchProfile(session.user.id);
+          if (cachedProfile) {
+            setProfile(cachedProfile);
+            setNeedsProfileCompletion(!isProfileComplete(cachedProfile));
+            setProfileChecked(true);
+          }
+
+          clearTimeout(initTimeoutId);
+          resolveLoading();
+
+          // Background validation: confirm the session is still valid and
+          // refresh profile data. This updates the UI without blocking it.
+          const { data: { session: freshSession } } = await supabase.auth.getSession();
+          if (freshSession) {
+            setSession(freshSession);
+            setUser(freshSession.user);
+            setMustChangePassword(freshSession.user?.user_metadata?.must_change_password === true);
+            writeSessionCache(freshSession);
+            await fetchProfile(freshSession.user.id);
+          } else {
+            // Cached session was stale / refresh token expired → sign the user out.
+            console.warn("[AuthInit] Cached session is no longer valid — clearing.");
+            setSession(null);
+            setUser(null);
+            setProfile(null);
+            setNeedsProfileCompletion(false);
+            setProfileChecked(true);
+            clearAuthCache();
+          }
         } else {
-          // No session → no profile to wait for. Unblock the secondary guard in
-          // RootLayoutNav so a logged-out user never sees a second loading screen.
-          setProfileChecked(true);
+          // No cache (first install, after explicit sign-out) → normal blocking flow.
+          const { data: { session } } = await supabase.auth.getSession();
+          setSession(session);
+          setUser(session?.user ?? null);
+          setMustChangePassword(session?.user?.user_metadata?.must_change_password === true);
+
+          // ── Unblock the loading spinner as soon as we know the session state.
+          // fetchProfile runs after this; profileChecked gates /(tabs) navigation
+          // only when a session exists (avoids flash-to-tabs for social-auth users
+          // who still need to complete their profile on /social-complete).
+          clearTimeout(initTimeoutId);
+          resolveLoading();
+
+          if (session?.user) {
+            writeSessionCache(session);
+            await fetchProfile(session.user.id);
+          } else {
+            // No session → no profile to wait for. Unblock the secondary guard in
+            // RootLayoutNav so a logged-out user never sees a second loading screen.
+            setProfileChecked(true);
+          }
         }
       } catch (e: any) {
         // Never let an unhandled error silently keep loading=true forever.
@@ -373,6 +478,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null);
       setMustChangePassword(session?.user?.user_metadata?.must_change_password === true);
       if (session?.user) {
+        writeSessionCache(session);
         await fetchProfile(session.user.id);
 
         // Safety net: ensure a profile row exists for new social-auth users.
@@ -451,6 +557,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(null);
         setNeedsProfileCompletion(false);
         setProfileChecked(false);
+        clearAuthCache();
       }
     });
 
@@ -747,6 +854,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setActiveCompany(null);
     setNeedsProfileCompletion(false);
     setProfileChecked(false);
+    clearAuthCache();
     await supabase.auth.signOut();
   };
 
