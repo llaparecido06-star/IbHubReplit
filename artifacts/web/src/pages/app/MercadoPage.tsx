@@ -2526,6 +2526,10 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
   const [newVideoPreview, setNewVideoPreview] = useState<string | null>(null);
   const [pollMode, setPollMode] = useState(false);
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
+  const POLL_DURATIONS = ["1 dia", "3 dias", "7 dias", "2 semanas"];
+  const [pollDuration, setPollDuration] = useState("3 dias");
+  const [pollDurationOpen, setPollDurationOpen] = useState(false);
+  const [pollAllowMultiple, setPollAllowMultiple] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [idealbiCompany, setIdealbiCompany] = useState<IdealBICompany | null>(null);
   const [userCompany, setUserCompany] = useState<IdealBICompany | null>(null);
@@ -2631,6 +2635,7 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
     setCreating(false); setNewContent(""); setNewImageFile(null);
     setNewImagePreview(null); setNewVideoFile(null); setNewVideoPreview(null);
     setPollMode(false); setPollOptions(["", ""]);
+    setPollDuration("3 dias"); setPollDurationOpen(false); setPollAllowMultiple(false);
   };
 
   const handleSubmit = async () => {
@@ -2642,14 +2647,18 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
 
     if (newImageFile) imageUrl = await uploadMarketPostImage(newImageFile, userId);
     if (newVideoFile) videoUrl = await uploadMarketPostVideo(newVideoFile, userId);
+    let pollExpiresAt: string | null = null;
     if (pollMode) {
       const valid = pollOptions.filter(o => o.trim());
       if (valid.length >= 2) {
         finalPollOptions = valid.map((text, i) => ({ id: `opt_${i}`, text, votes_count: 0 }));
+        const daysMap: Record<string, number> = { "1 dia": 1, "3 dias": 3, "7 dias": 7, "2 semanas": 14 };
+        const days = daysMap[pollDuration] ?? 3;
+        pollExpiresAt = new Date(Date.now() + days * 24 * 3600 * 1000).toISOString();
       }
     }
 
-    const post = await createMarketPost(userId, newContent.trim(), imageUrl, videoUrl, finalPollOptions);
+    const post = await createMarketPost(userId, newContent.trim(), imageUrl, videoUrl, finalPollOptions, pollAllowMultiple, pollExpiresAt);
     if (post) {
       setPosts(prev => [post, ...prev]);
       resetForm();
@@ -2834,26 +2843,67 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
 
               {/* Poll builder */}
               {pollMode && (
-                <div style={{ marginTop: 12, padding: 14, border: `1px solid ${BORDER}`, borderRadius: 10, background: "#fafaf8" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: GOLD, marginBottom: 10 }}>📊 Opções da enquete</div>
+                <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 2 }}>📊 Opções da enquete</div>
                   {pollOptions.map((opt, i) => (
-                    <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                    <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <div style={{ width: 28, height: 28, borderRadius: "50%", backgroundColor: `${GOLD}20`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: GOLD, flexShrink: 0 }}>{i + 1}</div>
                       <input
                         value={opt}
                         onChange={e => setPollOptions(prev => prev.map((o, j) => j === i ? e.target.value : o))}
                         placeholder={`Opção ${i + 1}`}
-                        style={{ flex: 1, padding: "7px 10px", border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none" }}
+                        style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", fontFamily: "inherit" }}
                       />
                       {pollOptions.length > 2 && (
-                        <button onClick={() => setPollOptions(prev => prev.filter((_, j) => j !== i))} style={{ padding: "0 8px", border: "none", background: "transparent", cursor: "pointer", color: MUTED, fontSize: 16 }}>×</button>
+                        <button onClick={() => setPollOptions(prev => prev.filter((_, j) => j !== i))} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 16 }}>×</button>
                       )}
                     </div>
                   ))}
                   {pollOptions.length < 15 && (
-                    <button onClick={() => setPollOptions(prev => [...prev, ""])} style={{ marginTop: 4, fontSize: 12, color: GOLD, border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>
-                      + Adicionar opção
-                    </button>
+                    <button onClick={() => setPollOptions(prev => [...prev, ""])} style={{
+                      background: "none", border: `1px dashed ${BORDER}`, borderRadius: 8, padding: "8px 12px",
+                      fontSize: 13, color: MUTED, cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                    }}>+ Adicionar opção</button>
                   )}
+                  {/* Duration picker */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
+                    <span style={{ fontSize: 13, color: MUTED }}>⏱ Duração:</span>
+                    <div style={{ position: "relative" }}>
+                      <button
+                        onClick={() => setPollDurationOpen(o => !o)}
+                        style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: "6px 12px", fontSize: 13, background: "white", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}
+                      >
+                        {pollDuration} <span style={{ fontSize: 10 }}>▾</span>
+                      </button>
+                      {pollDurationOpen && (
+                        <div style={{ position: "absolute", top: "100%", left: 0, backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 100, minWidth: 120, marginTop: 2 }}>
+                          {POLL_DURATIONS.map(d => (
+                            <button key={d} onClick={() => { setPollDuration(d); setPollDurationOpen(false); }}
+                              style={{ display: "block", width: "100%", padding: "9px 14px", background: d === pollDuration ? `${GOLD}15` : "none", border: "none", textAlign: "left", fontSize: 13, cursor: "pointer", color: d === pollDuration ? GOLD : NAVY, fontWeight: d === pollDuration ? 700 : 400, fontFamily: "inherit" }}>
+                              {d}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {/* Allow multiple toggle */}
+                  <div
+                    onClick={() => setPollAllowMultiple(v => !v)}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 4, padding: "10px 12px", borderRadius: 10, border: `1px solid ${BORDER}`, cursor: "pointer", userSelect: "none" }}
+                  >
+                    <span style={{ fontSize: 13, color: NAVY }}>Permitir várias respostas</span>
+                    <div style={{
+                      width: 44, height: 24, borderRadius: 12, transition: "background 0.2s",
+                      background: pollAllowMultiple ? GOLD : "#d1d5db", position: "relative", flexShrink: 0,
+                    }}>
+                      <div style={{
+                        position: "absolute", top: 2, left: pollAllowMultiple ? 22 : 2,
+                        width: 20, height: 20, borderRadius: "50%", background: "white",
+                        transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+                      }} />
+                    </div>
+                  </div>
                 </div>
               )}
 

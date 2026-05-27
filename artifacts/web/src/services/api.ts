@@ -3064,6 +3064,8 @@ export async function createMarketPost(
   imageUrl?: string | null,
   videoUrl?: string | null,
   pollOptions?: MarketPollOption[] | null,
+  pollAllowMultiple?: boolean,
+  pollExpiresAt?: string | null,
 ): Promise<MarketPost | null> {
   try {
     const session = await getCachedSession();
@@ -3078,6 +3080,8 @@ export async function createMarketPost(
         image_url: imageUrl ?? null,
         video_url: videoUrl ?? null,
         poll_options: pollOptions && pollOptions.length > 0 ? pollOptions : null,
+        poll_allow_multiple: pollAllowMultiple ?? false,
+        poll_expires_at: pollExpiresAt ?? null,
       }),
     });
     if (!res.ok) return null;
