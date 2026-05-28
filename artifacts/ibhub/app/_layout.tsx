@@ -263,6 +263,14 @@ function RootLayoutNav() {
   const lastDestination = useRef<string | null>(null);
   const manutencao = isEnabled("manutencao");
 
+  // True once router.replace() has been called at least once for an authenticated
+  // user. On cold start with a cached session, loading + profileChecked resolve
+  // synchronously, but the navigation useEffect runs *after* the first render —
+  // leaving AuthenticatedLayout with an empty Stack for one frame (white screen).
+  // Keeping this false until navigation fires means we show the navy spinner
+  // instead of the blank Stack, eliminating the visible white flash.
+  const [navInitiated, setNavInitiated] = useState(false);
+
   // Auth routes that must remain accessible without a session
   const isAuthPath = ["login", "register", "forgot-password", "reset-password", "auth"].some(
     (p) => pathname.includes(p),
@@ -297,7 +305,13 @@ function RootLayoutNav() {
     // Don't override screens the user explicitly navigated to (settings, profile, etc.).
     // Only redirect when on an auth screen or when the destination actually changed.
     const shouldRedirect = isAuthPath || lastDestination.current !== destination;
-    if (!shouldRedirect) return;
+    if (!shouldRedirect) {
+      // Even if we skip the redirect, ensure navInitiated is marked so the
+      // loading guard doesn't block AuthenticatedLayout indefinitely when the
+      // user is already on the correct screen (e.g. deep-link cold start).
+      setNavInitiated(true);
+      return;
+    }
 
     // Never auto-redirect from the register screen — it drives its own
     // navigation at the end of the signup flow. Auto-redirecting here would
@@ -305,6 +319,7 @@ function RootLayoutNav() {
     // a visible flash back to the first onboarding step.
     if (pathname.includes("register")) {
       lastDestination.current = destination;
+      setNavInitiated(true);
       return;
     }
 
@@ -313,6 +328,7 @@ function RootLayoutNav() {
     const completionBlockPaths = ["social-complete", "reset-password", "forgot-password"];
     if (needsProfileCompletion && completionBlockPaths.some(p => pathname.includes(p))) {
       lastDestination.current = destination;
+      setNavInitiated(true);
       return;
     }
 
@@ -330,14 +346,27 @@ function RootLayoutNav() {
         } else {
           router.replace("/(tabs)" as any);
         }
+        setNavInitiated(true);
       })();
     } else {
       router.replace(destination as any);
+      setNavInitiated(true);
     }
   }, [
     session, loading, isRecovering, mustChangePassword, manutencao,
     flagsLoading, isAuthPath, needsProfileCompletion, profileChecked, pathname,
   ]);
+
+  // Safety-net: if the navigation effect somehow never fires (extreme edge case),
+  // unblock AuthenticatedLayout after 3 s so the user isn't permanently stuck.
+  useEffect(() => {
+    if (navInitiated || loading || flagsLoading || !session || !profileChecked || isRecovering || mustChangePassword) return;
+    const t = setTimeout(() => {
+      console.warn("[RootLayoutNav] navInitiated safety-net fired after 3s");
+      setNavInitiated(true);
+    }, 3_000);
+    return () => clearTimeout(t);
+  }, [navInitiated, loading, flagsLoading, session, profileChecked, isRecovering, mustChangePassword]);
 
   if (loading) {
     return (
@@ -392,6 +421,17 @@ function RootLayoutNav() {
         <Stack.Screen name="terms-of-use" options={{ animation: "slide_from_right" }} />
         <Stack.Screen name="privacy-policy" options={{ animation: "slide_from_right" }} />
       </Stack>
+    );
+  }
+
+  // Auth is fully resolved and session exists, but router.replace() hasn't
+  // fired yet (useEffect runs after render). Show the navy spinner to prevent
+  // the one-frame blank white screen from the empty Stack in AuthenticatedLayout.
+  if (!navInitiated) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0d1b2a" }}>
+        <ActivityIndicator color="#c9a84c" size="large" />
+      </View>
     );
   }
 
