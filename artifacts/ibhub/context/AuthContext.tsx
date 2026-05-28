@@ -218,7 +218,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const data = rows?.[0] ?? null;
       console.log(`[fetchProfile] userId=${userId} found=${!!data} error=${error?.message ?? null}`);
-      if (!error && data) {
+      if (error) {
+        // Network failure, RLS denial, or server error — do NOT treat this as
+        // "new user without profile". Keep whatever profile/needsCompletion state
+        // is already set (could be from cache). Redirecting to social-complete
+        // on a transient error would boot an existing user into the signup flow.
+        console.warn(`[fetchProfile] Supabase error for userId=${userId}: ${error.message}. Keeping current profile state.`);
+      } else if (data) {
         const d = data as any;
         const headline =
           d.headline ??
@@ -232,8 +238,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         writeProfileCache(profileData);
         console.log(`[fetchProfile] profile loaded. username=${d.username ?? "null"} needsCompletion=${!isProfileComplete(profileData)}`);
       } else {
-        // No profile row yet — new social auth user
-        console.warn(`[fetchProfile] No profile found for userId=${userId}. Marking needsProfileCompletion=true`);
+        // No error AND no data: profile row genuinely doesn't exist yet.
+        // This is a new social-auth user who hasn't completed registration.
+        console.warn(`[fetchProfile] No profile row found for userId=${userId}. Marking needsProfileCompletion=true`);
         setNeedsProfileCompletion(true);
       }
     } catch (e: any) {
