@@ -3,7 +3,7 @@ import { useRoute, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import { supabase } from "@/lib/supabase";
-import { approveGroupMemberWeb, rejectGroupMemberWeb } from "@/services/api";
+import { approveGroupMemberWeb, rejectGroupMemberWeb, leaveGroup } from "@/services/api";
 
 const GOLD   = "#c9a84c";
 const NAVY   = "#0d1b2a";
@@ -14,6 +14,7 @@ const MUTED  = "#7a8494";
 
 const CATEGORIES = ["Vinificação", "Exportação", "Enoturismo", "Varejo", "Negócios", "Educação", "Sommelier", "Outros"];
 
+type MyRole = "owner" | "moderator" | "member" | null;
 type ConfigTab = "membros" | "pendentes" | "convidar" | "link";
 
 interface Member {
@@ -57,7 +58,7 @@ export default function GrupoConfiguracoesPage() {
   const [loading, setLoading]     = useState(true);
   const [saving, setSaving]       = useState(false);
   const [saved, setSaved]         = useState(false);
-  const [isOwner, setIsOwner]     = useState(false);
+  const [myRole, setMyRole]       = useState<MyRole>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -67,14 +68,22 @@ export default function GrupoConfiguracoesPage() {
   const [invitingId, setInvitingId] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
+  const [isMuted, setIsMuted]     = useState(false);
+  const [mutingGroup, setMutingGroup] = useState(false);
+  const [leavingGroup, setLeavingGroup] = useState(false);
+  const [clearDone, setClearDone] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const isOwner = myRole === "owner";
+  const isMod   = myRole === "owner" || myRole === "moderator";
+
   const loadGroup = useCallback(async () => {
-    if (!groupId) return;
+    if (!groupId || !userId) return;
     setLoading(true);
-    const [{ data: grp }, { data: mems }] = await Promise.all([
+    const [{ data: grp }, { data: mems }, { data: muteRow }] = await Promise.all([
       supabase.from("groups").select("*").eq("id", groupId).single(),
       supabase.from("group_members").select("user_id, role").eq("group_id", groupId),
+      supabase.from("group_mutes").select("id").eq("group_id", groupId).eq("user_id", userId).maybeSingle(),
     ]);
     if (!grp) { setLocation("/app/mensagens"); return; }
 
@@ -84,14 +93,19 @@ export default function GrupoConfiguracoesPage() {
     setCategory(grp.category ?? "");
     setAvatarUrl(grp.avatar_url ?? null);
     setInviteLink(`${window.location.origin}/app/grupos/${groupId}`);
+    setIsMuted(!!muteRow);
 
-    const myRole = (mems ?? []).find((m: any) => m.user_id === userId)?.role;
-    if (myRole !== "owner") { setLocation(`/app/grupos/${groupId}`); return; }
-    setIsOwner(true);
+    const rawMems = mems ?? [];
+    const me = rawMems.find((m: any) => m.user_id === userId);
+    const rawRole = me?.role as string | undefined;
+    const role: MyRole =
+      rawRole === "owner" || rawRole === "moderator" || rawRole === "member" ? rawRole : null;
+    if (!role) { setLocation(`/app/grupos/${groupId}`); return; }
+    setMyRole(role);
 
-    const activeMems = (mems ?? []).filter((m: any) => m.role !== "pending");
-    const pendingMems = (mems ?? []).filter((m: any) => m.role === "pending");
-    const allIds = (mems ?? []).map((m: any) => m.user_id);
+    const activeMems  = rawMems.filter((m: any) => m.role !== "pending");
+    const pendingMems = rawMems.filter((m: any) => m.role === "pending");
+    const allIds = rawMems.map((m: any) => m.user_id);
 
     if (allIds.length > 0) {
       const { data: profiles } = await supabase
@@ -110,9 +124,13 @@ export default function GrupoConfiguracoesPage() {
   async function handleSave() {
     if (!groupId || saving) return;
     setSaving(true);
-    await supabase.from("groups").update({ name, description: desc, access, category }).eq("id", groupId);
-    setSaving(false); setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    try {
+      await supabase.from("groups").update({ name, description: desc, access, category }).eq("id", groupId);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleRemoveMember(targetUserId: string) {
@@ -162,10 +180,48 @@ export default function GrupoConfiguracoesPage() {
 
   async function handleDeleteGroup() {
     if (!groupId) return;
-    if (!confirm("Tem certeza que deseja excluir este grupo? Esta ação é irreversível.")) return;
+    if (!confirm("Tem certeza que deseja excluir este grupo? Todos os membros e mensagens serão removidos permanentemente.")) return;
     await supabase.from("group_members").delete().eq("group_id", groupId);
     await supabase.from("groups").delete().eq("id", groupId);
     setLocation("/app/mensagens");
+  }
+
+  async function handleLeaveGroup() {
+    if (!groupId || !userId || leavingGroup) return;
+    if (!confirm("Tem certeza que deseja sair deste grupo?")) return;
+    setLeavingGroup(true);
+    const ok = await leaveGroup(groupId, userId);
+    if (ok) {
+      setLocation("/app/mensagens");
+    } else {
+      alert("Não foi possível sair do grupo. Tente novamente.");
+      setLeavingGroup(false);
+    }
+  }
+
+  async function handleToggleMute() {
+    if (!groupId || !userId || mutingGroup) return;
+    setMutingGroup(true);
+    try {
+      if (isMuted) {
+        await supabase.from("group_mutes").delete().eq("group_id", groupId).eq("user_id", userId);
+        setIsMuted(false);
+      } else {
+        await supabase.from("group_mutes").upsert({ group_id: groupId, user_id: userId }, { onConflict: "user_id,group_id" });
+        setIsMuted(true);
+      }
+    } finally {
+      setMutingGroup(false);
+    }
+  }
+
+  function handleClearConversation() {
+    if (!groupId) return;
+    if (!confirm("Limpar sua visualização desta conversa? As mensagens serão ocultadas para você (outros membros continuam vendo).")) return;
+    const key = `group_cleared_at_${groupId}`;
+    localStorage.setItem(key, new Date().toISOString());
+    setClearDone(true);
+    setTimeout(() => setClearDone(false), 2500);
   }
 
   async function searchUsers(q: string) {
@@ -201,13 +257,13 @@ export default function GrupoConfiguracoesPage() {
   if (loading) {
     return <AppShell><div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300, color: MUTED }}>Carregando...</div></AppShell>;
   }
-  if (!isOwner) return null;
+  if (!myRole) return null;
 
   const TABS: { key: ConfigTab; label: string; badge?: number }[] = [
-    { key: "membros",  label: "Membros",   badge: members.length },
-    { key: "pendentes",label: "Pendentes", badge: pending.length },
-    { key: "convidar", label: "Convidar" },
-    { key: "link",     label: "Link" },
+    { key: "membros",   label: "Membros",   badge: members.length },
+    ...(isMod ? [{ key: "pendentes" as ConfigTab, label: "Pendentes", badge: pending.length }] : []),
+    ...(isOwner ? [{ key: "convidar" as ConfigTab, label: "Convidar" }] : []),
+    { key: "link",      label: "Link" },
   ];
 
   return (
@@ -246,64 +302,77 @@ export default function GrupoConfiguracoesPage() {
         {/* ── Membros tab ── */}
         {activeTab === "membros" && (
           <>
-            {/* Avatar */}
-            <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Imagem do grupo</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                <Avatar src={avatarUrl} name={name} size={64} />
-                <button
-                  onClick={() => fileRef.current?.click()}
-                  disabled={avatarUploading}
-                  style={{ padding: "9px 18px", backgroundColor: `${GOLD}18`, color: NAVY, border: `1px solid ${GOLD}`, borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
-                >
-                  {avatarUploading ? "Enviando..." : "Alterar foto"}
-                </button>
-                <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }}
-                  onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarUpload(f); e.target.value = ""; }} />
+            {/* Avatar — only owners can change */}
+            {isOwner && (
+              <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Imagem do grupo</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                  <Avatar src={avatarUrl} name={name} size={64} />
+                  <button
+                    onClick={() => fileRef.current?.click()}
+                    disabled={avatarUploading}
+                    style={{ padding: "9px 18px", backgroundColor: `${GOLD}18`, color: NAVY, border: `1px solid ${GOLD}`, borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                  >
+                    {avatarUploading ? "Enviando..." : "Alterar foto"}
+                  </button>
+                  <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarUpload(f); e.target.value = ""; }} />
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Info */}
-            <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16, display: "flex", flexDirection: "column", gap: 14 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: NAVY }}>Informações</div>
-              <div>
-                <label style={{ fontSize: 13, fontWeight: 600, color: NAVY, display: "block", marginBottom: 6 }}>Nome do grupo</label>
-                <input value={name} onChange={e => setName(e.target.value)}
-                  style={{ width: "100%", padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
-              </div>
-              <div>
-                <label style={{ fontSize: 13, fontWeight: 600, color: NAVY, display: "block", marginBottom: 6 }}>Descrição</label>
-                <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={3}
-                  style={{ width: "100%", padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none", resize: "vertical", boxSizing: "border-box" }} />
-              </div>
-              <div>
-                <label style={{ fontSize: 13, fontWeight: 600, color: NAVY, display: "block", marginBottom: 6 }}>Categoria</label>
-                <select value={category} onChange={e => setCategory(e.target.value)}
-                  style={{ width: "100%", padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none", backgroundColor: WHITE }}>
-                  <option value="">Selecione...</option>
-                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: 13, fontWeight: 600, color: NAVY, display: "block", marginBottom: 6 }}>Tipo de acesso</label>
-                <div style={{ display: "flex", gap: 8 }}>
-                  {(["aberto", "fechado", "restrito"] as const).map(a => (
-                    <button key={a} onClick={() => setAccess(a)} style={{
-                      flex: 1, padding: "9px 0", borderRadius: 10, border: `1.5px solid ${access === a ? GOLD : BORDER}`,
-                      backgroundColor: access === a ? `${GOLD}15` : WHITE, color: access === a ? GOLD : MUTED,
-                      fontWeight: access === a ? 700 : 500, fontSize: 13, cursor: "pointer", textTransform: "capitalize",
-                    }}>{a}</button>
-                  ))}
+            {/* Info — editable for owners */}
+            {isOwner ? (
+              <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16, display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: NAVY }}>Informações</div>
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: NAVY, display: "block", marginBottom: 6 }}>Nome do grupo</label>
+                  <input value={name} onChange={e => setName(e.target.value)}
+                    style={{ width: "100%", padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
                 </div>
-                <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>
-                  {access === "aberto" ? "Qualquer membro pode entrar" : access === "fechado" ? "Precisa de aprovação do owner" : "Apenas convidados"}
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: NAVY, display: "block", marginBottom: 6 }}>Descrição</label>
+                  <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={3}
+                    style={{ width: "100%", padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: NAVY, display: "block", marginBottom: 6 }}>Categoria</label>
+                  <select value={category} onChange={e => setCategory(e.target.value)}
+                    style={{ width: "100%", padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none", backgroundColor: WHITE }}>
+                    <option value="">Selecione...</option>
+                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: NAVY, display: "block", marginBottom: 6 }}>Tipo de acesso</label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {(["aberto", "fechado", "restrito"] as const).map(a => (
+                      <button key={a} onClick={() => setAccess(a)} style={{
+                        flex: 1, padding: "9px 0", borderRadius: 10, border: `1.5px solid ${access === a ? GOLD : BORDER}`,
+                        backgroundColor: access === a ? `${GOLD}15` : WHITE, color: access === a ? GOLD : MUTED,
+                        fontWeight: access === a ? 700 : 500, fontSize: 13, cursor: "pointer", textTransform: "capitalize",
+                      }}>{a}</button>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>
+                    {access === "aberto" ? "Qualquer membro pode entrar" : access === "fechado" ? "Precisa de aprovação do owner" : "Apenas convidados"}
+                  </div>
+                </div>
+                <button onClick={handleSave} disabled={saving}
+                  style={{ padding: "12px 0", backgroundColor: GOLD, color: NAVY, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
+                  {saved ? "✓ Salvo!" : saving ? "Salvando..." : "Salvar alterações"}
+                </button>
+              </div>
+            ) : (
+              /* Read-only group info for members */
+              <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16, display: "flex", alignItems: "center", gap: 14 }}>
+                <Avatar src={avatarUrl} name={name} size={52} />
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: NAVY }}>{name}</div>
+                  {desc && <div style={{ fontSize: 13, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>{desc}</div>}
                 </div>
               </div>
-              <button onClick={handleSave} disabled={saving}
-                style={{ padding: "12px 0", backgroundColor: GOLD, color: NAVY, border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
-                {saved ? "✓ Salvo!" : saving ? "Salvando..." : "Salvar alterações"}
-              </button>
-            </div>
+            )}
 
             {/* Members list */}
             <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16 }}>
@@ -325,7 +394,7 @@ export default function GrupoConfiguracoesPage() {
                         <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6, backgroundColor: m.role === "owner" ? `${GOLD}20` : BG, color: m.role === "owner" ? GOLD : MUTED }}>
                           {m.role === "owner" ? "Owner" : m.role === "moderator" ? "Mod" : "Membro"}
                         </span>
-                        {!isMe && m.role !== "owner" && (
+                        {isOwner && !isMe && m.role !== "owner" && (
                           <button onClick={() => handleRemoveMember(m.user_id)} disabled={removingId === m.user_id}
                             style={{ padding: "4px 10px", backgroundColor: "#fee2e2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                             Remover
@@ -338,19 +407,67 @@ export default function GrupoConfiguracoesPage() {
               </div>
             </div>
 
-            {/* Danger */}
-            <div style={{ backgroundColor: WHITE, border: "1px solid #fecaca", borderRadius: 16, padding: 20 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#dc2626", marginBottom: 8 }}>Zona de perigo</div>
-              <p style={{ fontSize: 13, color: MUTED, margin: "0 0 14px", lineHeight: 1.6 }}>Ao excluir o grupo, todos os membros e mensagens serão removidos permanentemente.</p>
-              <button onClick={handleDeleteGroup}
-                style={{ padding: "10px 20px", backgroundColor: "#dc2626", color: WHITE, border: "none", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
-                Excluir grupo
+            {/* Actions for all members */}
+            <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Ações</div>
+
+              {/* Mute */}
+              <button
+                onClick={handleToggleMute}
+                disabled={mutingGroup}
+                style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", backgroundColor: isMuted ? "#f1f5f9" : BG, border: `1px solid ${BORDER}`, borderRadius: 12, cursor: "pointer", textAlign: "left" }}
+              >
+                <span style={{ fontSize: 18 }}>{isMuted ? "🔕" : "🔔"}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: NAVY }}>{isMuted ? "Notificações silenciadas" : "Silenciar notificações"}</div>
+                  <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{isMuted ? "Toque para reativar" : "Parar de receber notificações deste grupo"}</div>
+                </div>
+                {mutingGroup && <span style={{ fontSize: 12, color: MUTED }}>...</span>}
+              </button>
+
+              {/* Clear conversation */}
+              <button
+                onClick={handleClearConversation}
+                style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", backgroundColor: BG, border: `1px solid ${BORDER}`, borderRadius: 12, cursor: "pointer", textAlign: "left" }}
+              >
+                <span style={{ fontSize: 18 }}>{clearDone ? "✅" : "🗑️"}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: NAVY }}>{clearDone ? "Conversa limpa!" : "Limpar conversa"}</div>
+                  <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>Oculta as mensagens antigas para você</div>
+                </div>
               </button>
             </div>
+
+            {/* Leave group — non-owners only */}
+            {!isOwner && (
+              <div style={{ backgroundColor: WHITE, border: "1px solid #fecaca", borderRadius: 16, padding: 20, marginBottom: 16 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#dc2626", marginBottom: 8 }}>Sair do grupo</div>
+                <p style={{ fontSize: 13, color: MUTED, margin: "0 0 14px", lineHeight: 1.6 }}>Você perderá o acesso às mensagens e precisará ser convidado novamente para entrar.</p>
+                <button
+                  onClick={handleLeaveGroup}
+                  disabled={leavingGroup}
+                  style={{ padding: "10px 20px", backgroundColor: "#dc2626", color: WHITE, border: "none", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: leavingGroup ? "not-allowed" : "pointer", opacity: leavingGroup ? 0.7 : 1 }}
+                >
+                  {leavingGroup ? "Saindo..." : "Sair do grupo"}
+                </button>
+              </div>
+            )}
+
+            {/* Danger — owners only */}
+            {isOwner && (
+              <div style={{ backgroundColor: WHITE, border: "1px solid #fecaca", borderRadius: 16, padding: 20 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#dc2626", marginBottom: 8 }}>Zona de perigo</div>
+                <p style={{ fontSize: 13, color: MUTED, margin: "0 0 14px", lineHeight: 1.6 }}>Ao excluir o grupo, todos os membros e mensagens serão removidos permanentemente.</p>
+                <button onClick={handleDeleteGroup}
+                  style={{ padding: "10px 20px", backgroundColor: "#dc2626", color: WHITE, border: "none", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+                  Excluir grupo
+                </button>
+              </div>
+            )}
           </>
         )}
 
-        {/* ── Pendentes tab ── */}
+        {/* ── Pendentes tab (owner/mod only) ── */}
         {activeTab === "pendentes" && (
           <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>
@@ -395,7 +512,7 @@ export default function GrupoConfiguracoesPage() {
           </div>
         )}
 
-        {/* ── Convidar tab ── */}
+        {/* ── Convidar tab (owner only) ── */}
         {activeTab === "convidar" && (
           <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Convidar Membros</div>
@@ -435,7 +552,7 @@ export default function GrupoConfiguracoesPage() {
           </div>
         )}
 
-        {/* ── Link tab ── */}
+        {/* ── Link tab (all members) ── */}
         {activeTab === "link" && (
           <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Link de Convite</div>
@@ -453,6 +570,15 @@ export default function GrupoConfiguracoesPage() {
                 {linkCopied ? "✓ Copiado!" : "Copiar"}
               </button>
             </div>
+            {/* WhatsApp share */}
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(`Entre no grupo "${name}" no ibhub: ${inviteLink}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 12, padding: "10px 0", backgroundColor: "#dcfce7", color: "#16a34a", border: "1px solid #86efac", borderRadius: 10, fontWeight: 700, fontSize: 13, textDecoration: "none" }}
+            >
+              <span>📲</span> Compartilhar via WhatsApp
+            </a>
           </div>
         )}
       </div>

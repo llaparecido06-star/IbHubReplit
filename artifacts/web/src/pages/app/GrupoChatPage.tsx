@@ -74,8 +74,11 @@ export default function GrupoChatPage() {
       fetchWebMessages(groupId),
     ]);
     setGroupInfo(info);
-    setMessages(msgs);
-    msgs.forEach(m => seenIds.current.add(m.id));
+    const clearKey = `group_cleared_at_${groupId}`;
+    const clearedAt = localStorage.getItem(clearKey);
+    const filtered = clearedAt ? msgs.filter(m => m.created_at > clearedAt) : msgs;
+    setMessages(filtered);
+    filtered.forEach(m => seenIds.current.add(m.id));
     setLoading(false);
     scrollBottom();
 
