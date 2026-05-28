@@ -8,6 +8,7 @@
     "scheme": "ibhub",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
+    "backgroundColor": "#0d1b2a",
     "splash": {
       "image": "./assets/images/icon.png",
       "resizeMode": "contain",
@@ -58,7 +59,8 @@
       ]
     },
     "web": {
-      "favicon": "./assets/images/icon.png"
+      "favicon": "./assets/images/icon.png",
+      "backgroundColor": "#0d1b2a"
     },
     "plugins": [
       [
