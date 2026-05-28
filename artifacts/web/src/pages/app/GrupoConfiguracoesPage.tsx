@@ -44,9 +44,9 @@ function Avatar({ src, name, size = 40 }: { src?: string | null; name: string; s
 export default function GrupoConfiguracoesPage() {
   const [, params]      = useRoute("/app/grupos/:id/configuracoes");
   const [, setLocation] = useLocation();
-  const { profile }     = useAuth();
+  const { profile, user } = useAuth();
   const groupId = params?.id;
-  const userId  = profile?.id;
+  const userId  = user?.id ?? profile?.user_id ?? profile?.id;
 
   const [activeTab, setActiveTab] = useState<ConfigTab>("membros");
   const [name, setName]           = useState("");
