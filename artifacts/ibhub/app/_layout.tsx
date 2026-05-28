@@ -357,16 +357,20 @@ function RootLayoutNav() {
     flagsLoading, isAuthPath, needsProfileCompletion, profileChecked, pathname,
   ]);
 
-  // Safety-net: if the navigation effect somehow never fires (extreme edge case),
-  // unblock AuthenticatedLayout after 3 s so the user isn't permanently stuck.
+  // Safety-net: if the navigation effect somehow never fires (extreme edge case —
+  // e.g. coldStartDeepLinkPromise hangs without rejecting), unblock after 3 s.
+  // IMPORTANT: also call router.replace so AuthenticatedLayout has an active
+  // route. Without this, navInitiated=true renders an empty Stack → white screen.
   useEffect(() => {
     if (navInitiated || loading || flagsLoading || !session || !profileChecked || isRecovering || mustChangePassword) return;
     const t = setTimeout(() => {
-      console.warn("[RootLayoutNav] navInitiated safety-net fired after 3s");
+      console.warn("[RootLayoutNav] navInitiated safety-net fired after 3s — forcing navigation");
+      const destination = needsProfileCompletion ? "/social-complete" : "/(tabs)";
+      router.replace(destination as any);
       setNavInitiated(true);
     }, 3_000);
     return () => clearTimeout(t);
-  }, [navInitiated, loading, flagsLoading, session, profileChecked, isRecovering, mustChangePassword]);
+  }, [navInitiated, loading, flagsLoading, session, profileChecked, isRecovering, mustChangePassword, needsProfileCompletion, router]);
 
   if (loading) {
     return (
@@ -468,7 +472,9 @@ function RootLayout() {
     }
   }, [fontsReady]);
 
-  if (!fontsReady) return null;
+  // Return a dark background instead of null so that if SplashScreen fails to
+  // stay visible, the user sees navy instead of a white flash while fonts load.
+  if (!fontsReady) return <View style={{ flex: 1, backgroundColor: "#0d1b2a" }} />;
 
   return (
     <ErrorBoundary
