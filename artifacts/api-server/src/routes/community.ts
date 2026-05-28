@@ -50,7 +50,8 @@ router.post("/community/groups", async (req: Request, res: Response): Promise<vo
   });
 
   if (convErr) {
-    res.status(500).json({ error: "Failed to create group conversation" });
+    req.log.error({ err: convErr, groupId }, "Failed to create group conversation");
+    res.status(500).json({ error: `Failed to create group conversation: ${convErr.message}` });
     return;
   }
 
@@ -69,15 +70,24 @@ router.post("/community/groups", async (req: Request, res: Response): Promise<vo
     .single();
 
   if (error) {
+    req.log.error({ err: error, groupId }, "Failed to create group row");
     // Roll back the conversation
     await supabaseAdmin.from("conversations").delete().eq("id", groupId);
     res.status(500).json({ error: error.message });
     return;
   }
 
-  // The auto_add_group_owner trigger fires on groups INSERT and adds the owner
-  // to both group_members and conversation_participants (conversation already exists).
-  // No manual inserts needed.
+  // Manually add the owner to group_members and conversation_participants.
+  // We do this in the API instead of relying on the DB trigger so the operation
+  // works even if the trigger or ON CONFLICT constraint has not been migrated yet.
+  await supabaseAdmin.from("group_members").upsert(
+    { group_id: groupId, user_id: userId, role: "owner" },
+    { onConflict: "group_id,user_id", ignoreDuplicates: true },
+  );
+  await supabaseAdmin.from("conversation_participants").upsert(
+    { conversation_id: groupId, user_id: userId },
+    { onConflict: "conversation_id,user_id", ignoreDuplicates: true },
+  );
 
   res.status(201).json({ group });
 });
