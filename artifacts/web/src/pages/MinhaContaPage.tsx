@@ -198,13 +198,16 @@ export default function MinhaContaPage() {
   async function handleSavePerfil() {
     if (!profile?.id) return;
     setSaving(true);
-    const patch = { full_name: fullName, bio, headline, position, company };
-    const { error } = await supabase.from("profiles").update(patch).or(`id.eq.${profile.id},user_id.eq.${profile.id}`);
-    setSaving(false);
-    if (!error) {
-      patchProfile(patch);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
+    try {
+      const patch = { full_name: fullName, bio, headline, position, company };
+      const { error } = await supabase.from("profiles").update(patch).or(`id.eq.${profile.id},user_id.eq.${profile.id}`);
+      if (!error) {
+        patchProfile(patch);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2500);
+      }
+    } finally {
+      setSaving(false);
     }
   }
 

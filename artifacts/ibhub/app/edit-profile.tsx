@@ -102,7 +102,10 @@ export default function EditProfileScreen() {
       setAvatarChanged(false);
       patchProfile({ avatar_url: finalAvatarUrl });
     }
-    try { await refreshProfile?.(); } catch {}
+    // Fire-and-forget: do NOT await refreshProfile — if the Supabase query
+    // hangs (network blip, server timeout), awaiting it would block the
+    // finally-block in useAsyncAction and keep isLoading=true forever.
+    refreshProfile?.().catch(() => {});
     Alert.alert(t("edit_profile.saved_title"), t("edit_profile.saved_msg"));
     router.back();
   });
