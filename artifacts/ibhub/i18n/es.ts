@@ -2667,6 +2667,7 @@ const es = {
     bi_search_rotulo: "Buscar Etiqueta",
     bi_search_importadores: "Importadores",
     bi_search_produtores: "Productores",
+    bi_search_precos: "Precios de Etiqueta",
     bi_search_btn: "Buscar",
     bi_credits_exhausted: "Consultas agotadas",
     bi_did_you_mean: "¿Quisiste decir: {{suggestion}}?",

@@ -36,7 +36,7 @@ import {
   Text as SvgText,
 } from "react-native-svg";
 import { useColors } from "@/hooks/useColors";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, supabase } from "@/context/AuthContext";
 import { usePermissions } from "@/context/PermissionsContext";
 import { PaywallScreen } from "@/components/ui/PaywallScreen";
 import { AdaptiveImage, ReactionPicker, REACTIONS, type ReactionType } from "@/components/feed/PostCard";
@@ -74,7 +74,7 @@ interface TooltipState {
   value: string;
 }
 
-type BiSearchMode = "exportador" | "marca" | "importadores" | "produtores";
+type BiSearchMode = "exportador" | "marca" | "importadores" | "produtores" | "precos";
 interface BiExpItem  { id: string; name: string; origem_exportador?: string | null; }
 interface BiImpItem  { id: string; name: string; segmentos?: string | null; exportadores: { exportador: string; pais: string }[]; }
 interface BiProdItem { id: string; name: string; name_fantasia?: string | null; regiao?: string | null; estado?: string | null; }
@@ -1586,6 +1586,7 @@ function IdealBISearchView({ colors, bottomPad, credits, creditsTotal, creditsLo
           { key: "marca",        icon: "🔍", label: t("mercado_screen.bi_search_rotulo") },
           { key: "importadores", icon: "📦", label: t("mercado_screen.bi_search_importadores") },
           { key: "produtores",   icon: "🍇", label: t("mercado_screen.bi_search_produtores") },
+          { key: "precos",       icon: "🏷️", label: t("mercado_screen.bi_search_precos") },
         ] as { key: BiSearchMode; icon: string; label: string }[]).map(m => {
           const active = searchMode === m.key;
           return (
@@ -1601,6 +1602,7 @@ function IdealBISearchView({ colors, bottomPad, credits, creditsTotal, creditsLo
       {searchMode === "exportador"   && <BiMobileExportadorSearch   colors={colors} onCreditsUpdate={setCredits} />}
       {searchMode === "importadores" && <BiMobileImportadoresSearch colors={colors} onCreditsUpdate={setCredits} />}
       {searchMode === "produtores"   && <BiMobileProdutoresSearch   colors={colors} onCreditsUpdate={setCredits} />}
+      {searchMode === "precos"       && <BiMobilePrecosRotuloSearch colors={colors} />}
 
       {searchMode === "marca" && (<>
       {/* ── Credits KPI card — same style as Visão Geral KPIs ── */}
@@ -1897,6 +1899,142 @@ function IdealBISearchView({ colors, bottomPad, credits, creditsTotal, creditsLo
         </View>
       )}
       </>)}
+    </ScrollView>
+  );
+}
+
+// ─── BiMobilePrecosRotuloSearch ───────────────────────────────────────────────
+interface WinePriceItem {
+  id: string;
+  descricao_detalhada: string | null;
+  codigo_barras: string | null;
+  marca_completa: string | null;
+  distribuidor: string | null;
+  pais_de_origem: string | null;
+  preco_medio: string | null;
+  fonte: string | null;
+}
+
+function BiMobilePrecosRotuloSearch({ colors }: { colors: ReturnType<typeof useColors> }) {
+  const [query, setQuery] = React.useState("");
+  const [searching, setSearching] = React.useState(false);
+  const [items, setItems] = React.useState<WinePriceItem[]>([]);
+  const [searched, setSearched] = React.useState(false);
+  const [err, setErr] = React.useState(false);
+
+  const handleSearch = async () => {
+    const q = query.trim();
+    if (!q || searching) return;
+    setSearching(true);
+    setErr(false);
+    setSearched(false);
+    try {
+      const { data, error: sbError } = await supabase
+        .from("wine_price_list")
+        .select("id, descricao_detalhada, codigo_barras, marca_completa, distribuidor, pais_de_origem, preco_medio, fonte")
+        .or(`descricao_detalhada.ilike.%${q}%,codigo_barras.ilike.%${q}%,marca_completa.ilike.%${q}%`)
+        .limit(30);
+      if (sbError) throw sbError;
+      setItems(data ?? []);
+      setSearched(true);
+    } catch {
+      setErr(true);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 14 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      {/* Info banner */}
+      <View style={{ backgroundColor: colors.gold + "12", borderWidth: 1, borderColor: colors.gold + "40", borderRadius: 12, padding: 14, marginBottom: 4 }}>
+        <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy, marginBottom: 2 }}>🏷️ Busca de Preço por Rótulo</Text>
+        <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Digite o nome do vinho, marca ou código de barras para consultar o preço médio no mercado.</Text>
+      </View>
+
+      {/* Search bar */}
+      <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Ex: Concha y Toro, 7806500012345…"
+          placeholderTextColor={colors.mutedForeground}
+          returnKeyType="search"
+          onSubmitEditing={() => void handleSearch()}
+          style={{ flex: 1, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: colors.navy, fontFamily: "Inter_400Regular" }}
+        />
+        <TouchableOpacity
+          onPress={() => void handleSearch()}
+          disabled={searching || !query.trim()}
+          style={{ backgroundColor: !query.trim() ? colors.border : colors.navy, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 }}
+        >
+          {searching
+            ? <ActivityIndicator size="small" color="#fff" />
+            : <Text style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}>Buscar</Text>
+          }
+        </TouchableOpacity>
+      </View>
+
+      {/* Error */}
+      {err && (
+        <View style={{ padding: 20, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 14, alignItems: "center" }}>
+          <Text style={{ fontSize: 28, marginBottom: 8 }}>⚠️</Text>
+          <Text style={{ fontSize: 14, color: colors.mutedForeground }}>Não foi possível carregar os dados. Tente novamente.</Text>
+        </View>
+      )}
+
+      {/* Empty */}
+      {!err && searched && items.length === 0 && (
+        <View style={{ padding: 40, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 14, alignItems: "center" }}>
+          <Text style={{ fontSize: 32, marginBottom: 8 }}>🔍</Text>
+          <Text style={{ fontSize: 14, color: colors.mutedForeground }}>Nenhum vinho encontrado para "{query}"</Text>
+        </View>
+      )}
+
+      {/* Results */}
+      {!err && items.length > 0 && (
+        <>
+          <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{items.length} resultado{items.length !== 1 ? "s" : ""} encontrado{items.length !== 1 ? "s" : ""}</Text>
+          {items.map(item => (
+            <View key={item.id} style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 14, gap: 6 }}>
+              {item.marca_completa && (
+                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.navy }}>{item.marca_completa}</Text>
+              )}
+              {item.descricao_detalhada && (
+                <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{item.descricao_detalhada}</Text>
+              )}
+              {item.preco_medio && (
+                <View style={{ marginTop: 4 }}>
+                  <Text style={{ fontSize: 10, color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5 }}>Preço Médio</Text>
+                  <Text style={{ fontSize: 20, fontWeight: "800", color: colors.gold }}>{item.preco_medio}</Text>
+                </View>
+              )}
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 4 }}>
+                {item.pais_de_origem && (
+                  <View>
+                    <Text style={{ fontSize: 10, color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5 }}>País de Origem</Text>
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: colors.navy }}>{item.pais_de_origem}</Text>
+                  </View>
+                )}
+                {item.distribuidor && (
+                  <View>
+                    <Text style={{ fontSize: 10, color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5 }}>Distribuidor</Text>
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: colors.navy }}>{item.distribuidor}</Text>
+                  </View>
+                )}
+              </View>
+              {item.codigo_barras && (
+                <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "monospace" }}>EAN: {item.codigo_barras}</Text>
+              )}
+              {item.fonte && (
+                <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 6, marginTop: 2 }}>
+                  <Text style={{ fontSize: 11, color: colors.mutedForeground }}>Fonte: {item.fonte}</Text>
+                </View>
+              )}
+            </View>
+          ))}
+        </>
+      )}
     </ScrollView>
   );
 }

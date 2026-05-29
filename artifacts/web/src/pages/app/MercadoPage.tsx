@@ -1883,6 +1883,133 @@ function ProdutoresSearch({ userId, credits, creditsTotal, creditsLoading, setCr
   );
 }
 
+/* ─── Preços de Rótulo (wine_price_list) ─────────────────────────────────── */
+
+interface WinePriceItem {
+  id: string;
+  descricao_detalhada: string | null;
+  codigo_barras: string | null;
+  marca_completa: string | null;
+  distribuidor: string | null;
+  pais_de_origem: string | null;
+  preco_medio: string | null;
+  fonte: string | null;
+}
+
+function PrecosRotuloSearch({ hasAccess }: { hasAccess: boolean }) {
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [items, setItems] = useState<WinePriceItem[]>([]);
+  const [searched, setSearched] = useState(false);
+  const [err, setErr] = useState(false);
+
+  const handleSearch = async (overrideQ?: string) => {
+    const q = (overrideQ ?? query).trim();
+    if (!q || searching) return;
+    setSearching(true);
+    setErr(false);
+    setSearched(false);
+    try {
+      const { data, error: sbError } = await supabase
+        .from("wine_price_list")
+        .select("id, descricao_detalhada, codigo_barras, marca_completa, distribuidor, pais_de_origem, preco_medio, fonte")
+        .or(`descricao_detalhada.ilike.%${q}%,codigo_barras.ilike.%${q}%,marca_completa.ilike.%${q}%`)
+        .limit(30);
+      if (sbError) throw sbError;
+      setItems(data ?? []);
+      setSearched(true);
+    } catch {
+      setErr(true);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  if (!hasAccess) return <BiErrorState kind="paywall" />;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ padding: "12px 16px", backgroundColor: `${GOLD}08`, border: `1px solid ${GOLD}30`, borderRadius: 12 }}>
+        <div style={{ fontSize: 13, color: NAVY, fontWeight: 600, marginBottom: 2 }}>🏷️ Busca de Preço por Rótulo</div>
+        <div style={{ fontSize: 12, color: MUTED }}>Digite o nome do vinho, marca ou código de barras para consultar o preço médio no mercado.</div>
+      </div>
+
+      <div style={{ position: "relative" }}>
+        <BiSearchBar
+          value={query}
+          onChange={v => { setQuery(v); }}
+          placeholder="Ex: Concha y Toro Cabernet, 7806500012345…"
+        />
+        <button
+          onClick={() => void handleSearch()}
+          disabled={searching || !query.trim()}
+          style={{
+            position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)",
+            padding: "7px 18px", borderRadius: 8, border: "none",
+            backgroundColor: !query.trim() ? "#e5e7eb" : NAVY,
+            color: !query.trim() ? MUTED : WHITE,
+            fontSize: 13, fontWeight: 700, cursor: searching || !query.trim() ? "default" : "pointer",
+            fontFamily: "inherit", transition: "all 0.15s",
+          }}
+        >
+          {searching ? "…" : "Buscar"}
+        </button>
+      </div>
+
+      {err && <BiErrorState kind="error" />}
+      {!err && searched && items.length === 0 && <BiEmptyState q={query} label="vinho" />}
+      {!err && items.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ fontSize: 12, color: MUTED }}>
+            {items.length} resultado{items.length !== 1 ? "s" : ""} encontrado{items.length !== 1 ? "s" : ""}
+          </div>
+          {items.map(item => (
+            <div key={item.id} style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 16px" }}>
+              {item.marca_completa && (
+                <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{item.marca_completa}</div>
+              )}
+              {item.descricao_detalhada && (
+                <div style={{ fontSize: 12, color: MUTED, marginBottom: 10 }}>{item.descricao_detalhada}</div>
+              )}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px", marginBottom: item.fonte ? 8 : 0 }}>
+                {item.preco_medio && (
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>Preço Médio</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: GOLD }}>{item.preco_medio}</div>
+                  </div>
+                )}
+                {item.pais_de_origem && (
+                  <div>
+                    <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>País de Origem</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: NAVY }}>{item.pais_de_origem}</div>
+                  </div>
+                )}
+                {item.distribuidor && (
+                  <div>
+                    <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>Distribuidor</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: NAVY }}>{item.distribuidor}</div>
+                  </div>
+                )}
+                {item.codigo_barras && (
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>Código de Barras</div>
+                    <div style={{ fontSize: 12, color: MUTED, fontFamily: "monospace" }}>{item.codigo_barras}</div>
+                  </div>
+                )}
+              </div>
+              {item.fonte && (
+                <div style={{ fontSize: 11, color: MUTED, borderTop: `1px solid ${BORDER}`, paddingTop: 6, marginTop: 4 }}>
+                  Fonte: {item.fonte}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Ideal.BI Feed ──────────────────────────────────────────────────────── */
 
 
@@ -2507,7 +2634,7 @@ function LockedBlock({ title }: { title: string }) {
 }
 
 
-type SearchMode = "exportador" | "marca" | "importadores" | "produtores";
+type SearchMode = "exportador" | "marca" | "importadores" | "produtores" | "precos";
 
 function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) {
   const { hasFeature } = usePermissions();
@@ -2731,6 +2858,7 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
               { key: "marca",        icon: "🔍", label: "Buscar por Rótulo" },
               { key: "importadores", icon: "📦", label: "Buscar Importadores" },
               { key: "produtores",   icon: "🍇", label: "Buscar Produtor Nacional" },
+              { key: "precos",       icon: "🏷️", label: "Buscar Preço de Rótulo" },
             ] as { key: SearchMode; icon: string; label: string }[]).map(s => {
               const active = searchMode === s.key;
               return (
@@ -2759,6 +2887,7 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
           {searchMode === "marca"        && <MarcaCompletaSearch userId={userId} credits={credits} creditsTotal={creditsTotal} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
           {searchMode === "importadores" && <ImportadoresSearch userId={userId} credits={credits} creditsTotal={creditsTotal} creditsLoading={creditsLoading} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
           {searchMode === "produtores"   && <ProdutoresSearch userId={userId} credits={credits} creditsTotal={creditsTotal} creditsLoading={creditsLoading} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
+          {searchMode === "precos"       && <PrecosRotuloSearch hasAccess={hasAccess} />}
         </div>
       )}
 

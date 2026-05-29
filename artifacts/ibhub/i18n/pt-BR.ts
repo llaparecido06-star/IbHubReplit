@@ -2627,6 +2627,7 @@ const ptBR = {
     bi_search_rotulo: "Buscar Rótulo",
     bi_search_importadores: "Importadores",
     bi_search_produtores: "Produtores",
+    bi_search_precos: "Preços de Rótulo",
     bi_search_btn: "Buscar",
     bi_credits_exhausted: "Consultas esgotadas",
     bi_did_you_mean: "Você quis dizer: {{suggestion}}?",
