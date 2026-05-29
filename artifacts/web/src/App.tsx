@@ -67,6 +67,7 @@ import PoliticaPrivacidadePage from "@/pages/PoliticaPrivacidadePage";
 import TermosUsoPage from "@/pages/TermosUsoPage";
 import ExcluirContaPage from "@/pages/ExcluirContaPage";
 import NotFound from "@/pages/not-found";
+import GrupoRedirect from "@/pages/GrupoRedirect";
 import PublicProfilePage from "@/pages/PublicProfilePage";
 import PublicPostPage from "@/pages/PublicPostPage";
 import SocialCompletePage from "@/pages/SocialCompletePage";
@@ -359,6 +360,7 @@ function Router() {
       </Route>
 
       {/* Public pages — no auth required */}
+      <Route path="/grupo/:id" component={GrupoRedirect} />
       <Route path="/u/:id" component={PublicProfilePage} />
       <Route path="/p/:id" component={PublicPostPage} />
       {/* Canonical post share URL: /post/:id (mirrors mobile share helper). */}

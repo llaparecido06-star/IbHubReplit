@@ -585,7 +585,7 @@ export default function GroupChatScreen() {
   const handleShareGroup = async () => {
     setMenuVisible(false);
     try {
-      const link = ExpoLinking.createURL(`group-chat/${id}`);
+      const link = `https://ibhub.com.br/grupo/${id}`;
       await Share.share({ message: `${groupInfo.name} — ${link}`, url: link });
     } catch { /* user dismissed */ }
   };

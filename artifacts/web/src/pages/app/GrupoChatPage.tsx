@@ -64,7 +64,7 @@ export default function GrupoChatPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [linkCopied, setLinkCopied]   = useState(false);
 
-  const groupLink = `${window.location.origin}/app/grupos/${groupId}`;
+  const groupLink = `https://ibhub.com.br/grupo/${groupId}`;
   const handleCopyLink = () => {
     navigator.clipboard.writeText(groupLink).catch(() => {});
     setLinkCopied(true);
