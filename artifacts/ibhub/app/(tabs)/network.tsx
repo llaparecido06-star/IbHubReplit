@@ -2122,15 +2122,10 @@ function BiMobilePrecosRotuloSearch({ colors, onCreditsUpdate }: { colors: Retur
                           </View>
                         ))}
                       </View>
-                      {/* EAN + Fonte */}
-                      {(revealed.codigo_barras || revealed.fonte) && (
-                        <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8, gap: 2 }}>
-                          {revealed.codigo_barras && (
-                            <Text style={{ fontSize: 11, color: colors.mutedForeground }}>EAN: {revealed.codigo_barras}</Text>
-                          )}
-                          {revealed.fonte && (
-                            <Text style={{ fontSize: 11, color: colors.mutedForeground }}>Fonte: {revealed.fonte}</Text>
-                          )}
+                      {/* EAN */}
+                      {revealed.codigo_barras && (
+                        <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8 }}>
+                          <Text style={{ fontSize: 11, color: colors.mutedForeground }}>EAN: {revealed.codigo_barras}</Text>
                         </View>
                       )}
                     </View>
