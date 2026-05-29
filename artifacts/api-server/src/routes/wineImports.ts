@@ -796,6 +796,81 @@ router.post("/wine-imports/bi/exportadores/reveal", async (req: Request, res: Re
   });
 });
 
+/**
+ * POST /wine-imports/bi/retail-prices/reveal
+ * Body: { id: string }   — UUID de um registro de wine_price_list
+ * Consome 1 reveal credit; gratuito se já revelado neste período ou admin.
+ */
+router.post("/wine-imports/bi/retail-prices/reveal", async (req: Request, res: Response) => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+
+  const { id } = req.body as { id?: string };
+  if (!id?.trim()) return res.status(400).json({ error: "id é obrigatório" });
+  const recordId = id.trim();
+
+  // Busca o registro completo na tabela wine_price_list
+  type PriceRow = {
+    id: string;
+    descricao_detalhada: string | null;
+    codigo_barras: string | null;
+    marca_completa: string | null;
+    distribuidor: string | null;
+    pais_de_origem: string | null;
+    preco_medio: string | null;
+    fonte: string | null;
+  };
+  const { data: row, error: rowError } = await supabaseAdmin
+    .from("wine_price_list")
+    .select("id, descricao_detalhada, codigo_barras, marca_completa, distribuidor, pais_de_origem, preco_medio, fonte")
+    .eq("id", recordId)
+    .maybeSingle();
+
+  if (rowError) return res.status(500).json({ error: rowError.message });
+  if (!row) return res.status(404).json({ error: "Registro não encontrado" });
+
+  const priceData = row as PriceRow;
+
+  // Admins não consomem crédito
+  const { data: profile } = await supabaseAdmin.from("profiles").select("role").eq("id", userId).single();
+  const isAdmin = (profile as { role?: string } | null)?.role === "admin";
+  if (isAdmin) {
+    return res.json({ data: priceData, already_revealed: true, credits_remaining: null, credits_total: 0 });
+  }
+
+  // Verifica se já foi revelado este período (repetição gratuita)
+  const { data: logEntry } = await supabaseAdmin
+    .from("bi_reveal_log")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("record_type", "retail_price")
+    .eq("record_key", recordId)
+    .maybeSingle();
+
+  if (logEntry) {
+    const rc = await getOrCreateRevealCredits(userId);
+    return res.json({ data: priceData, already_revealed: true, credits_remaining: rc.credits_remaining, credits_total: rc.credits_total });
+  }
+
+  // Deduz 1 reveal credit
+  const rc = await getOrCreateRevealCredits(userId);
+  if (rc.credits_remaining <= 0) {
+    return res.status(402).json({ error: "Sem créditos de revelação", credits_remaining: 0, credits_total: rc.credits_total });
+  }
+
+  const newRemaining = rc.credits_remaining - 1;
+  await supabaseAdmin
+    .from("bi_reveal_credits")
+    .update({ credits_remaining: newRemaining, updated_at: new Date().toISOString() })
+    .eq("user_id", userId);
+
+  await supabaseAdmin.from("bi_reveal_log").insert({
+    user_id: userId, record_type: "retail_price", record_key: recordId,
+  });
+
+  return res.json({ data: priceData, already_revealed: false, credits_remaining: newRemaining, credits_total: rc.credits_total });
+});
+
 // ── POST /wine-imports/spell-correct ─────────────────────────────────────────
 router.post("/wine-imports/spell-correct", async (req: Request, res: Response) => {
   const { query, context } = req.body as { query?: string; context?: string };

@@ -1904,23 +1904,33 @@ function IdealBISearchView({ colors, bottomPad, credits, creditsTotal, creditsLo
 }
 
 // ─── BiMobilePrecosRotuloSearch ───────────────────────────────────────────────
-interface WinePriceItem {
+interface WinePriceListItem {
   id: string;
-  descricao_detalhada: string | null;
-  codigo_barras: string | null;
   marca_completa: string | null;
-  distribuidor: string | null;
-  pais_de_origem: string | null;
+  descricao_detalhada: string | null;
+}
+
+interface WinePriceRevealedData {
   preco_medio: string | null;
+  pais_de_origem: string | null;
+  distribuidor: string | null;
+  codigo_barras: string | null;
   fonte: string | null;
 }
 
-function BiMobilePrecosRotuloSearch({ colors }: { colors: ReturnType<typeof useColors> }) {
+function BiMobilePrecosRotuloSearch({ colors, onCreditsUpdate }: { colors: ReturnType<typeof useColors>; onCreditsUpdate?: (remaining: number) => void }) {
+  const { session } = useAuth();
+  const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
+  const authH = (): HeadersInit => session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+
   const [query, setQuery] = React.useState("");
   const [searching, setSearching] = React.useState(false);
-  const [items, setItems] = React.useState<WinePriceItem[]>([]);
+  const [items, setItems] = React.useState<WinePriceListItem[]>([]);
   const [searched, setSearched] = React.useState(false);
   const [err, setErr] = React.useState(false);
+  const [revealedMap, setRevealedMap] = React.useState<Record<string, WinePriceRevealedData>>({});
+  const [revealingId, setRevealingId] = React.useState<string | null>(null);
+  const [revealCreditsExhausted, setRevealCreditsExhausted] = React.useState(false);
 
   const handleSearch = async () => {
     const q = query.trim();
@@ -1928,10 +1938,11 @@ function BiMobilePrecosRotuloSearch({ colors }: { colors: ReturnType<typeof useC
     setSearching(true);
     setErr(false);
     setSearched(false);
+    setRevealedMap({});
     try {
       const { data, error: sbError } = await supabase
         .from("wine_price_list")
-        .select("id, descricao_detalhada, codigo_barras, marca_completa, distribuidor, pais_de_origem, preco_medio, fonte")
+        .select("id, marca_completa, descricao_detalhada")
         .or(`descricao_detalhada.ilike.%${q}%,codigo_barras.ilike.%${q}%,marca_completa.ilike.%${q}%`)
         .limit(30);
       if (sbError) throw sbError;
@@ -1944,42 +1955,70 @@ function BiMobilePrecosRotuloSearch({ colors }: { colors: ReturnType<typeof useC
     }
   };
 
+  const handleReveal = async (id: string) => {
+    if (revealingId || revealCreditsExhausted) return;
+    setRevealingId(id);
+    try {
+      const res = await fetch(`${API_URL}/wine-imports/bi/retail-prices/reveal`, {
+        method: "POST",
+        headers: { ...(authH() as Record<string, string>), "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (res.status === 402) {
+        setRevealCreditsExhausted(true);
+      } else if (res.ok) {
+        const data = await res.json() as { data: WinePriceRevealedData; credits_remaining: number | null; credits_total: number };
+        setRevealedMap(prev => ({ ...prev, [id]: data.data }));
+        if (data.credits_remaining !== null) { onCreditsUpdate?.(data.credits_remaining); }
+      }
+    } catch {}
+    setRevealingId(null);
+  };
+
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 14 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16, gap: 12 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+
       {/* Info banner */}
-      <View style={{ backgroundColor: colors.gold + "12", borderWidth: 1, borderColor: colors.gold + "40", borderRadius: 12, padding: 14, marginBottom: 4 }}>
-        <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy, marginBottom: 2 }}>🏷️ Busca de Preço por Rótulo</Text>
-        <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Digite o nome do vinho, marca ou código de barras para consultar o preço médio no mercado.</Text>
+      <View style={{ backgroundColor: colors.gold + "12", borderWidth: 1, borderColor: colors.gold + "40", borderRadius: 12, padding: 14, marginTop: 12 }}>
+        <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy, marginBottom: 2 }}>🏷️ Preços Retail</Text>
+        <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Busque por nome, marca ou código de barras. Toque em <Text style={{ fontWeight: "700" }}>Ver dados</Text> para revelar o preço (1 crédito).</Text>
       </View>
 
       {/* Search bar */}
       <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Ex: Concha y Toro, 7806500012345…"
-          placeholderTextColor={colors.mutedForeground}
-          returnKeyType="search"
-          onSubmitEditing={() => void handleSearch()}
-          style={{ flex: 1, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: colors.navy, fontFamily: "Inter_400Regular" }}
-        />
+        <View style={{ flex: 1, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 12, flexDirection: "row", alignItems: "center", paddingLeft: 14, paddingRight: 4, paddingVertical: 4 }}>
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Ex: Concha y Toro, 7806500012345…"
+            placeholderTextColor={colors.mutedForeground}
+            returnKeyType="search"
+            onSubmitEditing={() => void handleSearch()}
+            style={{ flex: 1, fontSize: 14, color: colors.navy, paddingVertical: 10 }}
+          />
+          {!!query && (
+            <TouchableOpacity onPress={() => { setQuery(""); setItems([]); setSearched(false); }} style={{ padding: 8 }}>
+              <Feather name="x" size={16} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          )}
+        </View>
         <TouchableOpacity
           onPress={() => void handleSearch()}
           disabled={searching || !query.trim()}
-          style={{ backgroundColor: !query.trim() ? colors.border : colors.navy, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 }}
+          style={{ paddingHorizontal: 16, borderRadius: 12, justifyContent: "center", alignItems: "center", paddingVertical: 14, backgroundColor: !query.trim() || searching ? colors.border : colors.navy }}
         >
           {searching
             ? <ActivityIndicator size="small" color="#fff" />
-            : <Text style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}>Buscar</Text>
+            : <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>Buscar</Text>
           }
         </TouchableOpacity>
       </View>
 
       {/* Error */}
       {err && (
-        <View style={{ padding: 20, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 14, alignItems: "center" }}>
-          <Text style={{ fontSize: 28, marginBottom: 8 }}>⚠️</Text>
-          <Text style={{ fontSize: 14, color: colors.mutedForeground }}>Não foi possível carregar os dados. Tente novamente.</Text>
+        <View style={{ backgroundColor: "#fef2f2", borderWidth: 1, borderColor: "#fca5a5", borderRadius: 12, padding: 14, flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Feather name="alert-circle" size={16} color="#dc2626" />
+          <Text style={{ flex: 1, fontSize: 13, color: "#dc2626" }}>Não foi possível carregar os dados. Tente novamente.</Text>
         </View>
       )}
 
@@ -1987,52 +2026,83 @@ function BiMobilePrecosRotuloSearch({ colors }: { colors: ReturnType<typeof useC
       {!err && searched && items.length === 0 && (
         <View style={{ padding: 40, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 14, alignItems: "center" }}>
           <Text style={{ fontSize: 32, marginBottom: 8 }}>🔍</Text>
-          <Text style={{ fontSize: 14, color: colors.mutedForeground }}>Nenhum vinho encontrado para "{query}"</Text>
+          <Text style={{ fontSize: 14, color: colors.mutedForeground, textAlign: "center" }}>Nenhum vinho encontrado para "{query}"</Text>
         </View>
       )}
 
       {/* Results */}
       {!err && items.length > 0 && (
         <>
-          <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{items.length} resultado{items.length !== 1 ? "s" : ""} encontrado{items.length !== 1 ? "s" : ""}</Text>
-          {items.map(item => (
-            <View key={item.id} style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 14, gap: 6 }}>
-              {item.marca_completa && (
-                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.navy }}>{item.marca_completa}</Text>
-              )}
-              {item.descricao_detalhada && (
-                <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{item.descricao_detalhada}</Text>
-              )}
-              {item.preco_medio && (
-                <View style={{ marginTop: 4 }}>
-                  <Text style={{ fontSize: 10, color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5 }}>Preço Médio</Text>
-                  <Text style={{ fontSize: 20, fontWeight: "800", color: colors.gold }}>{item.preco_medio}</Text>
-                </View>
-              )}
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 4 }}>
-                {item.pais_de_origem && (
-                  <View>
-                    <Text style={{ fontSize: 10, color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5 }}>País de Origem</Text>
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: colors.navy }}>{item.pais_de_origem}</Text>
+          <Text style={{ fontSize: 12, color: colors.mutedForeground }}>
+            {items.length} resultado{items.length !== 1 ? "s" : ""} — toque em <Text style={{ fontWeight: "700" }}>Ver dados</Text> para revelar (1 crédito)
+          </Text>
+          {items.map(item => {
+            const revealed = revealedMap[item.id];
+            const isRevealing = revealingId === item.id;
+            return (
+              <View key={item.id} style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: revealed ? colors.gold + "80" : colors.border, borderRadius: 14, padding: 14, gap: 8 }}>
+                {/* Header row: name + button */}
+                <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    {item.marca_completa && (
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: colors.navy }}>{item.marca_completa}</Text>
+                    )}
+                    {item.descricao_detalhada && (
+                      <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 2 }} numberOfLines={2}>{item.descricao_detalhada}</Text>
+                    )}
                   </View>
-                )}
-                {item.distribuidor && (
-                  <View>
-                    <Text style={{ fontSize: 10, color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5 }}>Distribuidor</Text>
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: colors.navy }}>{item.distribuidor}</Text>
+                  {!revealed && (
+                    <TouchableOpacity
+                      onPress={() => void handleReveal(item.id)}
+                      disabled={isRevealing || revealCreditsExhausted}
+                      style={{ backgroundColor: revealCreditsExhausted ? colors.border : colors.navy, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, opacity: isRevealing ? 0.7 : 1 }}
+                    >
+                      {isRevealing
+                        ? <ActivityIndicator size="small" color="#fff" />
+                        : <Text style={{ fontSize: 12, fontWeight: "700", color: revealCreditsExhausted ? colors.mutedForeground : "#fff" }}>
+                            {revealCreditsExhausted ? "🔒 Sem créditos" : "🔓 Ver dados"}
+                          </Text>
+                      }
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Revealed data */}
+                {revealed && (
+                  <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10, gap: 8 }}>
+                    {revealed.preco_medio && (
+                      <View>
+                        <Text style={{ fontSize: 10, color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5 }}>Preço Médio</Text>
+                        <Text style={{ fontSize: 22, fontWeight: "800", color: colors.gold }}>{revealed.preco_medio}</Text>
+                      </View>
+                    )}
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14 }}>
+                      {revealed.pais_de_origem && (
+                        <View>
+                          <Text style={{ fontSize: 10, color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5 }}>País de Origem</Text>
+                          <Text style={{ fontSize: 13, fontWeight: "600", color: colors.navy }}>{revealed.pais_de_origem}</Text>
+                        </View>
+                      )}
+                      {revealed.distribuidor && (
+                        <View>
+                          <Text style={{ fontSize: 10, color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5 }}>Distribuidor</Text>
+                          <Text style={{ fontSize: 13, fontWeight: "600", color: colors.navy }}>{revealed.distribuidor}</Text>
+                        </View>
+                      )}
+                    </View>
+                    {revealed.codigo_barras && (
+                      <Text style={{ fontSize: 11, color: colors.mutedForeground }}>EAN: {revealed.codigo_barras}</Text>
+                    )}
+                    {revealed.fonte && (
+                      <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 6 }}>
+                        <Text style={{ fontSize: 11, color: colors.mutedForeground }}>Fonte: {revealed.fonte}</Text>
+                      </View>
+                    )}
                   </View>
                 )}
               </View>
-              {item.codigo_barras && (
-                <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "monospace" }}>EAN: {item.codigo_barras}</Text>
-              )}
-              {item.fonte && (
-                <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 6, marginTop: 2 }}>
-                  <Text style={{ fontSize: 11, color: colors.mutedForeground }}>Fonte: {item.fonte}</Text>
-                </View>
-              )}
-            </View>
-          ))}
+            );
+          })}
         </>
       )}
     </ScrollView>

@@ -1883,36 +1883,56 @@ function ProdutoresSearch({ userId, credits, creditsTotal, creditsLoading, setCr
   );
 }
 
-/* ─── Preços de Rótulo (wine_price_list) ─────────────────────────────────── */
+/* ─── Preços Retail (wine_price_list) ────────────────────────────────────── */
 
-interface WinePriceItem {
+interface WinePriceListItem {
   id: string;
-  descricao_detalhada: string | null;
-  codigo_barras: string | null;
   marca_completa: string | null;
-  distribuidor: string | null;
-  pais_de_origem: string | null;
+  descricao_detalhada: string | null;
+}
+
+interface WinePriceRevealedData {
   preco_medio: string | null;
+  pais_de_origem: string | null;
+  distribuidor: string | null;
+  codigo_barras: string | null;
   fonte: string | null;
 }
 
-function PrecosRotuloSearch({ hasAccess }: { hasAccess: boolean }) {
+function PrecosRotuloSearch({
+  hasAccess,
+  revealCredits,
+  setRevealCredits,
+  setRevealCreditsTotal,
+}: {
+  hasAccess: boolean;
+  revealCredits: number | null;
+  setRevealCredits: (n: number) => void;
+  setRevealCreditsTotal: (n: number) => void;
+}) {
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
-  const [items, setItems] = useState<WinePriceItem[]>([]);
+  const [items, setItems] = useState<WinePriceListItem[]>([]);
   const [searched, setSearched] = useState(false);
   const [err, setErr] = useState(false);
+  const [revealedMap, setRevealedMap] = useState<Record<string, WinePriceRevealedData>>({});
+  const [revealingId, setRevealingId] = useState<string | null>(null);
+  const [revealError, setRevealError] = useState<string | null>(null);
+  const revealExhausted = revealCredits !== null && revealCredits <= 0;
+  const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
 
-  const handleSearch = async (overrideQ?: string) => {
-    const q = (overrideQ ?? query).trim();
+  const handleSearch = async () => {
+    const q = query.trim();
     if (!q || searching) return;
     setSearching(true);
     setErr(false);
     setSearched(false);
+    setRevealedMap({});
+    setRevealError(null);
     try {
       const { data, error: sbError } = await supabase
         .from("wine_price_list")
-        .select("id, descricao_detalhada, codigo_barras, marca_completa, distribuidor, pais_de_origem, preco_medio, fonte")
+        .select("id, marca_completa, descricao_detalhada")
         .or(`descricao_detalhada.ilike.%${q}%,codigo_barras.ilike.%${q}%,marca_completa.ilike.%${q}%`)
         .limit(30);
       if (sbError) throw sbError;
@@ -1925,27 +1945,50 @@ function PrecosRotuloSearch({ hasAccess }: { hasAccess: boolean }) {
     }
   };
 
+  const handleReveal = async (id: string) => {
+    if (revealingId || revealExhausted) return;
+    setRevealingId(id);
+    setRevealError(null);
+    try {
+      const session = await getCachedSession();
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      };
+      const res = await fetch(`${apiBase}/wine-imports/bi/retail-prices/reveal`, {
+        method: "POST", headers, body: JSON.stringify({ id }),
+      });
+      if (res.status === 402) { setRevealCredits(0); setRevealError("Sem créditos de revelação disponíveis."); return; }
+      if (!res.ok) { setRevealError("Erro ao revelar dados. Tente novamente."); return; }
+      type RevealRes = { data: WinePriceRevealedData; already_revealed: boolean; credits_remaining: number | null; credits_total: number };
+      const json = await res.json() as RevealRes;
+      setRevealedMap(prev => ({ ...prev, [id]: json.data }));
+      if (json.credits_remaining !== null) setRevealCredits(json.credits_remaining);
+      if (json.credits_total) setRevealCreditsTotal(json.credits_total);
+    } catch { setRevealError("Erro de conexão. Tente novamente."); }
+    finally { setRevealingId(null); }
+  };
+
   if (!hasAccess) return <BiErrorState kind="paywall" />;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ padding: "12px 16px", backgroundColor: `${GOLD}08`, border: `1px solid ${GOLD}30`, borderRadius: 12 }}>
-        <div style={{ fontSize: 13, color: NAVY, fontWeight: 600, marginBottom: 2 }}>🏷️ Busca de Preço por Rótulo</div>
-        <div style={{ fontSize: 12, color: MUTED }}>Digite o nome do vinho, marca ou código de barras para consultar o preço médio no mercado.</div>
+        <div style={{ fontSize: 13, color: NAVY, fontWeight: 600, marginBottom: 2 }}>🏷️ Preços Retail</div>
+        <div style={{ fontSize: 12, color: MUTED }}>Busque por nome, marca ou código de barras. Clique em <strong>Ver dados</strong> para revelar o preço (1 crédito de revelação).</div>
       </div>
 
-      <div style={{ position: "relative" }}>
+      <div style={{ display: "flex", gap: 8 }}>
         <BiSearchBar
           value={query}
-          onChange={v => { setQuery(v); }}
+          onChange={setQuery}
           placeholder="Ex: Concha y Toro Cabernet, 7806500012345…"
         />
         <button
           onClick={() => void handleSearch()}
           disabled={searching || !query.trim()}
           style={{
-            position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)",
-            padding: "7px 18px", borderRadius: 8, border: "none",
+            flexShrink: 0, padding: "0 20px", borderRadius: 10, border: "none",
             backgroundColor: !query.trim() ? "#e5e7eb" : NAVY,
             color: !query.trim() ? MUTED : WHITE,
             fontSize: 13, fontWeight: 700, cursor: searching || !query.trim() ? "default" : "pointer",
@@ -1956,54 +1999,90 @@ function PrecosRotuloSearch({ hasAccess }: { hasAccess: boolean }) {
         </button>
       </div>
 
+      {revealError && (
+        <div style={{ padding: "10px 14px", backgroundColor: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, fontSize: 13, color: "#dc2626" }}>
+          {revealError}
+        </div>
+      )}
+
       {err && <BiErrorState kind="error" />}
       {!err && searched && items.length === 0 && <BiEmptyState q={query} label="vinho" />}
       {!err && items.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ fontSize: 12, color: MUTED }}>
-            {items.length} resultado{items.length !== 1 ? "s" : ""} encontrado{items.length !== 1 ? "s" : ""}
+            {items.length} resultado{items.length !== 1 ? "s" : ""} — clique em <strong>Ver dados</strong> para revelar o preço (1 crédito)
           </div>
-          {items.map(item => (
-            <div key={item.id} style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "14px 16px" }}>
-              {item.marca_completa && (
-                <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{item.marca_completa}</div>
-              )}
-              {item.descricao_detalhada && (
-                <div style={{ fontSize: 12, color: MUTED, marginBottom: 10 }}>{item.descricao_detalhada}</div>
-              )}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px", marginBottom: item.fonte ? 8 : 0 }}>
-                {item.preco_medio && (
-                  <div style={{ gridColumn: "1 / -1" }}>
-                    <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>Preço Médio</div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: GOLD }}>{item.preco_medio}</div>
+          {items.map(item => {
+            const revealed = revealedMap[item.id];
+            const isRevealing = revealingId === item.id;
+            return (
+              <div key={item.id} style={{ backgroundColor: WHITE, border: `1px solid ${revealed ? GOLD + "60" : BORDER}`, borderRadius: 14, padding: "14px 16px", transition: "border-color 0.2s" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: revealed ? 12 : 0 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {item.marca_completa && (
+                      <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{item.marca_completa}</div>
+                    )}
+                    {item.descricao_detalhada && (
+                      <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{item.descricao_detalhada}</div>
+                    )}
                   </div>
-                )}
-                {item.pais_de_origem && (
-                  <div>
-                    <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>País de Origem</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: NAVY }}>{item.pais_de_origem}</div>
-                  </div>
-                )}
-                {item.distribuidor && (
-                  <div>
-                    <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>Distribuidor</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: NAVY }}>{item.distribuidor}</div>
-                  </div>
-                )}
-                {item.codigo_barras && (
-                  <div style={{ gridColumn: "1 / -1" }}>
-                    <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>Código de Barras</div>
-                    <div style={{ fontSize: 12, color: MUTED, fontFamily: "monospace" }}>{item.codigo_barras}</div>
+                  {!revealed && (
+                    <button
+                      onClick={() => void handleReveal(item.id)}
+                      disabled={isRevealing || revealExhausted}
+                      style={{
+                        flexShrink: 0, padding: "7px 16px", borderRadius: 8, border: "none",
+                        backgroundColor: revealExhausted ? "#e5e7eb" : NAVY,
+                        color: revealExhausted ? MUTED : WHITE,
+                        fontSize: 12, fontWeight: 700,
+                        cursor: isRevealing || revealExhausted ? "default" : "pointer",
+                        fontFamily: "inherit", opacity: isRevealing ? 0.7 : 1,
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      {isRevealing ? "…" : revealExhausted ? "🔒 Sem créditos" : "🔓 Ver dados"}
+                    </button>
+                  )}
+                </div>
+
+                {revealed && (
+                  <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 12 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 12px" }}>
+                      {revealed.preco_medio && (
+                        <div style={{ gridColumn: "1 / -1" }}>
+                          <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>Preço Médio</div>
+                          <div style={{ fontSize: 22, fontWeight: 800, color: GOLD }}>{revealed.preco_medio}</div>
+                        </div>
+                      )}
+                      {revealed.pais_de_origem && (
+                        <div>
+                          <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>País de Origem</div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: NAVY }}>{revealed.pais_de_origem}</div>
+                        </div>
+                      )}
+                      {revealed.distribuidor && (
+                        <div>
+                          <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>Distribuidor</div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: NAVY }}>{revealed.distribuidor}</div>
+                        </div>
+                      )}
+                      {revealed.codigo_barras && (
+                        <div style={{ gridColumn: "1 / -1" }}>
+                          <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>Código de Barras</div>
+                          <div style={{ fontSize: 12, color: MUTED, fontFamily: "monospace" }}>{revealed.codigo_barras}</div>
+                        </div>
+                      )}
+                    </div>
+                    {revealed.fonte && (
+                      <div style={{ fontSize: 11, color: MUTED, borderTop: `1px solid ${BORDER}`, paddingTop: 6, marginTop: 8 }}>
+                        Fonte: {revealed.fonte}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-              {item.fonte && (
-                <div style={{ fontSize: 11, color: MUTED, borderTop: `1px solid ${BORDER}`, paddingTop: 6, marginTop: 4 }}>
-                  Fonte: {item.fonte}
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -2849,7 +2928,7 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
       {/* Search section — flat 4 mode buttons */}
       {subTab === "search" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {searchMode === "exportador" && (
+          {(searchMode === "exportador" || searchMode === "precos") && (
             <RevealCreditsBar revealCredits={revealCredits} revealCreditsTotal={revealCreditsTotal} loading={revealCreditsLoading} />
           )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -2858,7 +2937,7 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
               { key: "marca",        icon: "🔍", label: "Buscar por Rótulo" },
               { key: "importadores", icon: "📦", label: "Buscar Importadores" },
               { key: "produtores",   icon: "🍇", label: "Buscar Produtor Nacional" },
-              { key: "precos",       icon: "🏷️", label: "Buscar Preço de Rótulo" },
+              { key: "precos",       icon: "🏷️", label: "Preços Retail" },
             ] as { key: SearchMode; icon: string; label: string }[]).map(s => {
               const active = searchMode === s.key;
               return (
@@ -2887,7 +2966,7 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
           {searchMode === "marca"        && <MarcaCompletaSearch userId={userId} credits={credits} creditsTotal={creditsTotal} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
           {searchMode === "importadores" && <ImportadoresSearch userId={userId} credits={credits} creditsTotal={creditsTotal} creditsLoading={creditsLoading} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
           {searchMode === "produtores"   && <ProdutoresSearch userId={userId} credits={credits} creditsTotal={creditsTotal} creditsLoading={creditsLoading} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
-          {searchMode === "precos"       && <PrecosRotuloSearch hasAccess={hasAccess} />}
+          {searchMode === "precos"       && <PrecosRotuloSearch hasAccess={hasAccess} revealCredits={revealCredits} setRevealCredits={setRevealCredits} setRevealCreditsTotal={setRevealCreditsTotal} />}
         </div>
       )}
 
