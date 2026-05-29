@@ -24,6 +24,7 @@ import {
   WebNotification,
   Poll,
   sendMentionNotifications,
+  fetchWebConversations,
 } from "@/services/api";
 import { MentionTextArea } from "@/components/MentionTextArea";
 
@@ -704,6 +705,8 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
   const notifRef = useRef<HTMLDivElement>(null);
   const unreadCount = notifItems.filter(n => !n.read).length;
 
+  const [chatUnreadTotal, setChatUnreadTotal] = useState(0);
+
   const loadNotifs = useCallback(async () => {
     if (!userId) return;
     setNotifLoading(true);
@@ -713,6 +716,15 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
   }, [userId, activeCompany?.id]);
 
   useEffect(() => { loadNotifs(); }, [loadNotifs]);
+
+  // Refresh chat unread count on mount and on every navigation
+  useEffect(() => {
+    if (!userId) return;
+    fetchWebConversations(userId, activeCompany?.id ?? null).then(convos => {
+      const total = convos.reduce((sum, c) => sum + (c.unread_count ?? 0), 0);
+      setChatUnreadTotal(total);
+    });
+  }, [userId, activeCompany?.id, location]);
 
   useEffect(() => {
     if (!notifOpen) return;
@@ -838,7 +850,14 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
         {/* ── Notification Bell ── */}
         <div ref={notifRef} style={{ position: "relative" }}>
           <button
-            onClick={() => { setNotifOpen(o => !o); if (!notifOpen) loadNotifs(); }}
+            onClick={() => {
+              if (isMobile) {
+                setLocation("/app/notificacoes");
+              } else {
+                setNotifOpen(o => !o);
+                if (!notifOpen) loadNotifs();
+              }
+            }}
             style={{ background: "none", border: "none", cursor: "pointer", color: notifOpen ? GOLD : MUTED, display: "flex", alignItems: "center", padding: 4, position: "relative" }}
             title="Notificações"
           >
@@ -858,8 +877,8 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
             )}
           </button>
 
-          {/* Dropdown panel */}
-          {notifOpen && (
+          {/* Dropdown panel — desktop only */}
+          {notifOpen && !isMobile && (
             <div style={{
               position: "absolute", right: 0, top: "calc(100% + 10px)",
               width: 360, maxWidth: "calc(100vw - 24px)",
@@ -1338,6 +1357,7 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
           ]).map(item => {
             const active = isActive(location, item.path);
             const showMarketDot = item.path === "/app/mercado" && hasNewMarketPost && !active;
+            const showChatBadge = item.path === "/app/mensagens" && chatUnreadTotal > 0 && !active;
             return (
               <button
                 key={item.path}
@@ -1356,6 +1376,19 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
                   {item.icon}
                   {showMarketDot && (
                     <span style={{ position: "absolute", top: -2, right: -3, width: 7, height: 7, borderRadius: "50%", backgroundColor: "#dc2626", border: "1.5px solid #fff" }} />
+                  )}
+                  {showChatBadge && (
+                    <span style={{
+                      position: "absolute", top: -4, right: -6,
+                      backgroundColor: "#e74c3c", color: WHITE,
+                      borderRadius: 10, minWidth: 16, height: 16,
+                      fontSize: 10, fontWeight: 800,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      border: `1.5px solid ${WHITE}`, lineHeight: 1,
+                      padding: chatUnreadTotal > 9 ? "0 3px" : "0",
+                    }}>
+                      {chatUnreadTotal > 9 ? "9+" : chatUnreadTotal}
+                    </span>
                   )}
                 </span>
                 {item.label}
