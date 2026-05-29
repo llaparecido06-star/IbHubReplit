@@ -665,7 +665,7 @@ export async function approveGroupMemberWeb(groupId: string, memberId: string): 
   try {
     const session = await getCachedSession();
     if (!session?.access_token) return false;
-    const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? "/api";
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
     const res = await fetch(`${apiBase}/community/groups/${groupId}/members/${memberId}/approve`, {
       method: "POST",
       headers: { Authorization: `Bearer ${session.access_token}` },
@@ -678,7 +678,7 @@ export async function rejectGroupMemberWeb(groupId: string, memberId: string): P
   try {
     const session = await getCachedSession();
     if (!session?.access_token) return false;
-    const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? "/api";
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
     const res = await fetch(`${apiBase}/community/groups/${groupId}/members/${memberId}/reject`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${session.access_token}` },
@@ -2932,7 +2932,7 @@ export async function requestGroupJoinWeb(
   try {
     const session = await getCachedSession();
     if (!session?.access_token) return "error";
-    const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? "/api";
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
     const res = await fetch(`${apiBase}/community/groups/${groupId}/request-join`, {
       method: "POST",
       headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
