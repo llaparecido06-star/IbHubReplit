@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { supabase } from "@/lib/supabase";
 import { useLocation } from "wouter";
 import {
   Heart, MessageCircle, CornerDownRight, UserPlus, Users,
@@ -706,6 +707,11 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
   const unreadCount = notifItems.filter(n => !n.read).length;
 
   const [chatUnreadTotal, setChatUnreadTotal] = useState(0);
+  // Ref keeps the set of conversation IDs the user belongs to (updated on each fetch)
+  const chatConvIdsRef   = useRef<Set<string>>(new Set());
+  const chatChannelRef   = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  // Both profile.id and user.id are checked — senderId can be stored as either depending on path
+  const senderSelfIds    = useRef<Set<string>>(new Set());
 
   const loadNotifs = useCallback(async () => {
     if (!userId) return;
@@ -717,14 +723,61 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
 
   useEffect(() => { loadNotifs(); }, [loadNotifs]);
 
-  // Refresh chat unread count on mount and on every navigation
+  // Keep senderSelfIds up-to-date so the realtime filter can exclude own messages
+  useEffect(() => {
+    const ids = new Set<string>();
+    if (profile?.id) ids.add(profile.id);
+    if (user?.id)    ids.add(user.id);
+    senderSelfIds.current = ids;
+  }, [profile?.id, user?.id]);
+
+  // Refresh chat unread count on mount, identity change and navigation (but NOT while on chat)
   useEffect(() => {
     if (!userId) return;
+    const onChat = location.startsWith("/app/mensagens") || location.startsWith("/app/grupos");
+    if (onChat) {
+      // User is looking at messages — reset badge and don't re-fetch
+      setChatUnreadTotal(0);
+      return;
+    }
     fetchWebConversations(userId, activeCompany?.id ?? null).then(convos => {
       const total = convos.reduce((sum, c) => sum + (c.unread_count ?? 0), 0);
       setChatUnreadTotal(total);
+      chatConvIdsRef.current = new Set(convos.map(c => c.id));
     });
   }, [userId, activeCompany?.id, location]);
+
+  // Realtime: increment badge immediately when a new message arrives from someone else
+  useEffect(() => {
+    if (!userId) return;
+    if (chatChannelRef.current) return;
+
+    chatChannelRef.current = supabase
+      .channel(`appshell-chat:${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        (payload) => {
+          const msg = payload.new as { sender_id?: string; conversation_id?: string };
+          const isSelf = senderSelfIds.current.has(msg.sender_id ?? "");
+          const inMyConv = chatConvIdsRef.current.has(msg.conversation_id ?? "");
+          if (!isSelf && inMyConv) {
+            // Only badge if the user isn't actively looking at chat right now
+            const onChat = window.location.pathname.includes("/app/mensagens") ||
+                           window.location.pathname.includes("/app/grupos");
+            if (!onChat) setChatUnreadTotal(prev => prev + 1);
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      if (chatChannelRef.current) {
+        supabase.removeChannel(chatChannelRef.current);
+        chatChannelRef.current = null;
+      }
+    };
+  }, [userId]);
 
   useEffect(() => {
     if (!notifOpen) return;
@@ -1198,6 +1251,7 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
                     const active = isActive(location, item.path);
                     const iconBg = navBg[item.path] ?? "#c9a84c20";
                     const showMarketDot = item.path === "/app/mercado" && hasNewMarketPost && !active;
+                    const showChatBadgeSidebar = item.path === "/app/mensagens" && chatUnreadTotal > 0 && !active;
                     return (
                       <button key={item.path} onClick={() => setLocation(item.path)} style={{
                         display: "flex", alignItems: "center", gap: 10,
@@ -1220,6 +1274,19 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
                           {item.icon}
                           {showMarketDot && (
                             <div style={{ position: "absolute", top: 2, right: 2, width: 7, height: 7, borderRadius: "50%", backgroundColor: "#dc2626", border: "1.5px solid #fff" }} />
+                          )}
+                          {showChatBadgeSidebar && (
+                            <span style={{
+                              position: "absolute", top: -4, right: -6,
+                              backgroundColor: "#e74c3c", color: WHITE,
+                              borderRadius: 10, minWidth: 16, height: 16,
+                              fontSize: 10, fontWeight: 800,
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              border: `1.5px solid ${WHITE}`, lineHeight: 1,
+                              padding: chatUnreadTotal > 9 ? "0 3px" : "0",
+                            }}>
+                              {chatUnreadTotal > 9 ? "9+" : chatUnreadTotal}
+                            </span>
                           )}
                         </div>
                         <span style={{ fontSize: 13, fontWeight: active ? 700 : 500, color: active ? GOLD : NAVY, flex: 1, lineHeight: 1.2 }}>
