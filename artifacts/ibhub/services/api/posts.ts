@@ -202,11 +202,14 @@ export async function uploadPostVideo(videoUri: string, userId: string): Promise
     }
 
     const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? "";
+    const controller = new AbortController();
+    const uploadTimeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 minutes
     const res = await fetch(`${apiUrl}/uploads/post-video`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       body: formData,
-    });
+      signal: controller.signal,
+    }).finally(() => clearTimeout(uploadTimeoutId));
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");

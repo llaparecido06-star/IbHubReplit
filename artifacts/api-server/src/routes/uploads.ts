@@ -1,4 +1,4 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { resolveUserId, requirePlanFeature } from "../lib/planCheck.js";
 import multer from "multer";
@@ -205,6 +205,12 @@ const postVideoUpload = multer({
 
 router.post(
   "/uploads/post-video",
+  // Extend socket timeout to 10 min before multer starts reading the body.
+  // Without this, Node's default socket timeout can abort large video uploads.
+  (req: Request, _res: Response, next: NextFunction) => {
+    req.socket.setTimeout(10 * 60 * 1000);
+    next();
+  },
   postVideoUpload.single("file"),
   async (req: Request, res: Response): Promise<void> => {
     try {

@@ -171,9 +171,16 @@ export async function uploadWebPostVideo(file: File, userId: string): Promise<st
   try {
     const ext = file.name.split(".").pop() ?? "mp4";
     const path = `${userId}/${Date.now()}.${ext}`;
-    const { data, error } = await supabase.storage
+
+    const uploadPromise = supabase.storage
       .from("post-videos")
       .upload(path, file, { contentType: file.type, upsert: false });
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Video upload timed out after 10 minutes")), 10 * 60 * 1000)
+    );
+
+    const { data, error } = await Promise.race([uploadPromise, timeoutPromise]);
     if (error) { console.error("uploadWebPostVideo error:", error); return null; }
     const { data: urlData } = supabase.storage.from("post-videos").getPublicUrl(data.path);
     return urlData?.publicUrl ?? null;
@@ -3284,7 +3291,16 @@ export async function uploadMarketPostVideo(file: File, userId: string): Promise
   try {
     const ext = file.name.split(".").pop() ?? "mp4";
     const path = `market/video/${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await supabase.storage.from("chat-attachments").upload(path, file, { contentType: file.type, upsert: true });
+
+    const uploadPromise = supabase.storage
+      .from("chat-attachments")
+      .upload(path, file, { contentType: file.type, upsert: true });
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Video upload timed out after 10 minutes")), 10 * 60 * 1000)
+    );
+
+    const { error } = await Promise.race([uploadPromise, timeoutPromise]);
     if (error) return null;
     const { data: urlData } = supabase.storage.from("chat-attachments").getPublicUrl(path);
     return urlData?.publicUrl ?? null;
