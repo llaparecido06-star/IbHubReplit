@@ -1923,13 +1923,14 @@ function BiMobilePrecosRotuloSearch({ colors, onCreditsUpdate }: { colors: Retur
   const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
   const authH = (): HeadersInit => session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 
-  const [query, setQuery] = React.useState("");
-  const [searching, setSearching] = React.useState(false);
-  const [items, setItems] = React.useState<WinePriceListItem[]>([]);
-  const [searched, setSearched] = React.useState(false);
-  const [err, setErr] = React.useState(false);
-  const [revealedMap, setRevealedMap] = React.useState<Record<string, WinePriceRevealedData>>({});
-  const [revealingId, setRevealingId] = React.useState<string | null>(null);
+  const [query, setQuery]                           = React.useState("");
+  const [searching, setSearching]                   = React.useState(false);
+  const [items, setItems]                           = React.useState<WinePriceListItem[]>([]);
+  const [searched, setSearched]                     = React.useState(false);
+  const [err, setErr]                               = React.useState(false);
+  const [expandedId, setExpandedId]                 = React.useState<string | null>(null);
+  const [revealedMap, setRevealedMap]               = React.useState<Record<string, WinePriceRevealedData>>({});
+  const [revealingId, setRevealingId]               = React.useState<string | null>(null);
   const [revealCreditsExhausted, setRevealCreditsExhausted] = React.useState(false);
 
   const handleSearch = async () => {
@@ -1938,6 +1939,7 @@ function BiMobilePrecosRotuloSearch({ colors, onCreditsUpdate }: { colors: Retur
     setSearching(true);
     setErr(false);
     setSearched(false);
+    setExpandedId(null);
     setRevealedMap({});
     try {
       const { data, error: sbError } = await supabase
@@ -1976,17 +1978,11 @@ function BiMobilePrecosRotuloSearch({ colors, onCreditsUpdate }: { colors: Retur
   };
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16, gap: 12 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-
-      {/* Info banner */}
-      <View style={{ backgroundColor: colors.gold + "12", borderWidth: 1, borderColor: colors.gold + "40", borderRadius: 12, padding: 14, marginTop: 12 }}>
-        <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy, marginBottom: 2 }}>🏷️ Preços Retail</Text>
-        <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Busque por nome, marca ou código de barras. Toque em <Text style={{ fontWeight: "700" }}>Ver dados</Text> para revelar o preço (1 crédito).</Text>
-      </View>
-
+    <View style={{ gap: 12, paddingHorizontal: 16, paddingBottom: 8 }}>
       {/* Search bar */}
-      <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-        <View style={{ flex: 1, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 12, flexDirection: "row", alignItems: "center", paddingLeft: 14, paddingRight: 4, paddingVertical: 4 }}>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <View style={{ flex: 1, backgroundColor: "#fff", borderWidth: 1.5, borderColor: colors.border, borderRadius: 14, flexDirection: "row", alignItems: "center", paddingLeft: 14, paddingRight: 4, paddingVertical: 4 }}>
+          <Text style={{ fontSize: 16, marginRight: 6 }}>🏷️</Text>
           <TextInput
             value={query}
             onChangeText={setQuery}
@@ -1994,10 +1990,10 @@ function BiMobilePrecosRotuloSearch({ colors, onCreditsUpdate }: { colors: Retur
             placeholderTextColor={colors.mutedForeground}
             returnKeyType="search"
             onSubmitEditing={() => void handleSearch()}
-            style={{ flex: 1, fontSize: 14, color: colors.navy, paddingVertical: 10 }}
+            style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: 12 }}
           />
           {!!query && (
-            <TouchableOpacity onPress={() => { setQuery(""); setItems([]); setSearched(false); }} style={{ padding: 8 }}>
+            <TouchableOpacity onPress={() => { setQuery(""); setItems([]); setSearched(false); setExpandedId(null); }} style={{ padding: 8 }}>
               <Feather name="x" size={16} color={colors.mutedForeground} />
             </TouchableOpacity>
           )}
@@ -2005,7 +2001,7 @@ function BiMobilePrecosRotuloSearch({ colors, onCreditsUpdate }: { colors: Retur
         <TouchableOpacity
           onPress={() => void handleSearch()}
           disabled={searching || !query.trim()}
-          style={{ paddingHorizontal: 16, borderRadius: 12, justifyContent: "center", alignItems: "center", paddingVertical: 14, backgroundColor: !query.trim() || searching ? colors.border : colors.navy }}
+          style={{ paddingHorizontal: 16, borderRadius: 14, justifyContent: "center", backgroundColor: !query.trim() || searching ? colors.border : colors.navy }}
         >
           {searching
             ? <ActivityIndicator size="small" color="#fff" />
@@ -2022,90 +2018,154 @@ function BiMobilePrecosRotuloSearch({ colors, onCreditsUpdate }: { colors: Retur
         </View>
       )}
 
-      {/* Empty */}
-      {!err && searched && items.length === 0 && (
-        <View style={{ padding: 40, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 14, alignItems: "center" }}>
-          <Text style={{ fontSize: 32, marginBottom: 8 }}>🔍</Text>
-          <Text style={{ fontSize: 14, color: colors.mutedForeground, textAlign: "center" }}>Nenhum vinho encontrado para "{query}"</Text>
+      {/* How-to banner (only before first search) */}
+      {!searched && !searching && !err && (
+        <View style={{ backgroundColor: colors.gold + "10", borderWidth: 1, borderColor: colors.gold + "30", borderRadius: 12, padding: 14, gap: 4 }}>
+          <Text style={{ fontSize: 13, fontWeight: "700", color: colors.navy }}>Como usar</Text>
+          <Text style={{ fontSize: 13, color: colors.mutedForeground, lineHeight: 19 }}>
+            Busque por nome, marca ou código de barras. Toque em <Text style={{ fontWeight: "700" }}>Ver dados</Text> para revelar o preço médio (1 crédito de revelação).
+          </Text>
+        </View>
+      )}
+
+      {/* Searching state */}
+      {searching && (
+        <View style={{ alignItems: "center", paddingVertical: 24 }}>
+          <ActivityIndicator size="large" color={colors.gold} />
+          <Text style={{ color: colors.mutedForeground, marginTop: 8, fontSize: 13 }}>Buscando vinhos…</Text>
         </View>
       )}
 
       {/* Results */}
-      {!err && items.length > 0 && (
-        <>
+      {searched && !searching && (<>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <Text style={{ fontSize: 12, color: colors.mutedForeground }}>
-            {items.length} resultado{items.length !== 1 ? "s" : ""} — toque em <Text style={{ fontWeight: "700" }}>Ver dados</Text> para revelar (1 crédito)
+            {items.length} resultado{items.length !== 1 ? "s" : ""}
+            {items.length > 0 ? " — toque em Ver dados para revelar (1 crédito)" : ""}
           </Text>
-          {items.map(item => {
-            const revealed = revealedMap[item.id];
-            const isRevealing = revealingId === item.id;
-            return (
-              <View key={item.id} style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: revealed ? colors.gold + "80" : colors.border, borderRadius: 14, padding: 14, gap: 8 }}>
-                {/* Header row: name + button */}
-                <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
-                  <View style={{ flex: 1 }}>
-                    {item.marca_completa && (
-                      <Text style={{ fontSize: 14, fontWeight: "700", color: colors.navy }}>{item.marca_completa}</Text>
-                    )}
-                    {item.descricao_detalhada && (
-                      <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 2 }} numberOfLines={2}>{item.descricao_detalhada}</Text>
-                    )}
-                  </View>
-                  {!revealed && (
-                    <TouchableOpacity
-                      onPress={() => void handleReveal(item.id)}
-                      disabled={isRevealing || revealCreditsExhausted}
-                      style={{ backgroundColor: revealCreditsExhausted ? colors.border : colors.navy, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, opacity: isRevealing ? 0.7 : 1 }}
-                    >
-                      {isRevealing
-                        ? <ActivityIndicator size="small" color="#fff" />
-                        : <Text style={{ fontSize: 12, fontWeight: "700", color: revealCreditsExhausted ? colors.mutedForeground : "#fff" }}>
-                            {revealCreditsExhausted ? "🔒 Sem créditos" : "🔓 Ver dados"}
-                          </Text>
-                      }
-                    </TouchableOpacity>
+        </View>
+
+        {items.length === 0 && (
+          <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 24, alignItems: "center" }}>
+            <Text style={{ fontSize: 32, marginBottom: 8 }}>🔍</Text>
+            <Text style={{ fontSize: 15, fontWeight: "800", color: colors.navy, marginBottom: 4 }}>Nenhum resultado</Text>
+            <Text style={{ fontSize: 13, color: colors.mutedForeground, textAlign: "center" }}>
+              Nenhum vinho encontrado para "{query}". Tente outro nome, marca ou EAN.
+            </Text>
+          </View>
+        )}
+
+        {items.map(item => {
+          const isOpen     = expandedId === item.id;
+          const revealed   = revealedMap[item.id];
+          const isRevealing = revealingId === item.id;
+          const exhausted  = revealCreditsExhausted;
+          return (
+            <View key={item.id} style={{ backgroundColor: "#fff", borderWidth: 1.5, borderColor: isOpen ? colors.gold : colors.border, borderRadius: 16, overflow: "hidden" }}>
+              {/* Card header */}
+              <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12, padding: 16 }}>
+                <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: colors.gold + "14", alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ fontSize: 22 }}>🏷️</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  {item.marca_completa && (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+                      <Text style={{ fontSize: 15, fontWeight: "800", color: colors.navy }}>{item.marca_completa}</Text>
+                      <View style={{ backgroundColor: colors.gold + "15", borderWidth: 1, borderColor: colors.gold + "35", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 }}>
+                        <Text style={{ fontSize: 10, fontWeight: "700", color: colors.gold }}>RETAIL</Text>
+                      </View>
+                    </View>
+                  )}
+                  {item.descricao_detalhada && (
+                    <Text style={{ fontSize: 12, color: colors.mutedForeground }} numberOfLines={isOpen ? undefined : 2}>{item.descricao_detalhada}</Text>
                   )}
                 </View>
+                <TouchableOpacity
+                  onPress={() => setExpandedId(isOpen ? null : item.id)}
+                  style={{ borderWidth: 1.5, borderColor: isOpen ? colors.gold : colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: isOpen ? colors.gold + "15" : "transparent" }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: isOpen ? colors.gold : colors.mutedForeground }}>
+                    {isOpen ? "Fechar" : "Ver mais"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
-                {/* Revealed data */}
-                {revealed && (
-                  <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10, gap: 8 }}>
-                    {revealed.preco_medio && (
-                      <View>
-                        <Text style={{ fontSize: 10, color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5 }}>Preço Médio</Text>
-                        <Text style={{ fontSize: 22, fontWeight: "800", color: colors.gold }}>{revealed.preco_medio}</Text>
-                      </View>
-                    )}
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14 }}>
-                      {revealed.pais_de_origem && (
-                        <View>
-                          <Text style={{ fontSize: 10, color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5 }}>País de Origem</Text>
-                          <Text style={{ fontSize: 13, fontWeight: "600", color: colors.navy }}>{revealed.pais_de_origem}</Text>
+              {/* Expanded section */}
+              {isOpen && (
+                <View style={{ borderTopWidth: 1, borderTopColor: colors.gold + "40", padding: 14, backgroundColor: colors.gold + "06" }}>
+                  {/* KPI boxes */}
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: colors.gold, letterSpacing: 0.7, marginBottom: 10 }}>DADOS DE PREÇO</Text>
+
+                  {revealed ? (
+                    <View style={{ gap: 12 }}>
+                      {/* Price highlight */}
+                      {revealed.preco_medio && (
+                        <View style={{ flexDirection: "row", gap: 8 }}>
+                          <View style={{ flex: 1, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.gold + "50", borderRadius: 10, padding: 12, alignItems: "center" }}>
+                            <Text style={{ fontSize: 9, color: colors.mutedForeground, marginBottom: 4, letterSpacing: 0.5, textTransform: "uppercase" }}>Preço Médio</Text>
+                            <Text style={{ fontSize: 20, fontWeight: "900", color: colors.gold }}>R$ {revealed.preco_medio}</Text>
+                          </View>
                         </View>
                       )}
-                      {revealed.distribuidor && (
-                        <View>
-                          <Text style={{ fontSize: 10, color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5 }}>Distribuidor</Text>
-                          <Text style={{ fontSize: 13, fontWeight: "600", color: colors.navy }}>{revealed.distribuidor}</Text>
+                      {/* Other KPIs */}
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        {([
+                          { label: "País",        value: revealed.pais_de_origem, icon: "🌍" },
+                          { label: "Distribuidor", value: revealed.distribuidor,  icon: "📦" },
+                        ]).map(kpi => (
+                          <View key={kpi.label} style={{ flex: 1, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, alignItems: "center" }}>
+                            <Text style={{ fontSize: 16, marginBottom: 2 }}>{kpi.icon}</Text>
+                            {kpi.value != null
+                              ? <Text style={{ fontSize: 11, fontWeight: "800", color: colors.navy, textAlign: "center" }} numberOfLines={2}>{kpi.value}</Text>
+                              : <Text style={{ fontSize: 16, fontWeight: "900", color: colors.mutedForeground, letterSpacing: 2 }}>••••</Text>}
+                            <Text style={{ fontSize: 9, color: colors.mutedForeground, marginTop: 2 }}>{kpi.label}</Text>
+                          </View>
+                        ))}
+                      </View>
+                      {/* EAN + Fonte */}
+                      {(revealed.codigo_barras || revealed.fonte) && (
+                        <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8, gap: 2 }}>
+                          {revealed.codigo_barras && (
+                            <Text style={{ fontSize: 11, color: colors.mutedForeground }}>EAN: {revealed.codigo_barras}</Text>
+                          )}
+                          {revealed.fonte && (
+                            <Text style={{ fontSize: 11, color: colors.mutedForeground }}>Fonte: {revealed.fonte}</Text>
+                          )}
                         </View>
                       )}
                     </View>
-                    {revealed.codigo_barras && (
-                      <Text style={{ fontSize: 11, color: colors.mutedForeground }}>EAN: {revealed.codigo_barras}</Text>
-                    )}
-                    {revealed.fonte && (
-                      <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 6 }}>
-                        <Text style={{ fontSize: 11, color: colors.mutedForeground }}>Fonte: {revealed.fonte}</Text>
+                  ) : (
+                    <View style={{ gap: 8 }}>
+                      {/* Blurred KPI placeholders */}
+                      <View style={{ flexDirection: "row", gap: 8, marginBottom: 4 }}>
+                        {(["Preço Médio", "País", "Distribuidor"]).map(lbl => (
+                          <View key={lbl} style={{ flex: 1, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, alignItems: "center" }}>
+                            <Text style={{ fontSize: 16, fontWeight: "900", color: colors.mutedForeground + "80", letterSpacing: 2 }}>••••</Text>
+                            <Text style={{ fontSize: 9, color: colors.mutedForeground, marginTop: 2 }}>{lbl}</Text>
+                          </View>
+                        ))}
                       </View>
-                    )}
-                  </View>
-                )}
-              </View>
-            );
-          })}
-        </>
-      )}
-    </ScrollView>
+                      <TouchableOpacity
+                        onPress={() => void handleReveal(item.id)}
+                        disabled={isRevealing || exhausted}
+                        style={{ paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10, alignItems: "center", backgroundColor: exhausted ? "#e5e7eb" : colors.navy, opacity: isRevealing ? 0.7 : 1 }}
+                      >
+                        {isRevealing
+                          ? <ActivityIndicator size="small" color="#fff" />
+                          : <Text style={{ fontSize: 13, fontWeight: "700", color: exhausted ? colors.mutedForeground : "#fff" }}>
+                              {exhausted ? "🔒 Créditos esgotados" : "🔓 Ver dados (1 crédito)"}
+                            </Text>
+                        }
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+          );
+        })}
+      </>)}
+    </View>
   );
 }
 
