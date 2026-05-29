@@ -957,6 +957,7 @@ const ptBR = {
     loading: "Carregando grupos…",
     request_sent_ok: "Solicitação enviada!",
     request_sent_msg: "Aguarde a aprovação do administrador. Você pode acompanhar o status na lista de grupos.",
+    request_already_pending: "Sua solicitação já está em análise pelo administrador. Você será notificado quando for aprovado.",
     restricted_title: "Grupo restrito",
     restricted_msg: "Este grupo é por convite. Entre em contato com o administrador para solicitar acesso.",
     request_confirm_title: "Solicitar entrada",

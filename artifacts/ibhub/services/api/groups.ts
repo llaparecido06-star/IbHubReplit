@@ -30,6 +30,10 @@ export async function fetchGroups(userId: string, activeCompanyId?: string | nul
       membershipsQuery,
     ]);
     if (groupsRes.error) throw groupsRes.error;
+    // If the memberships query fails, throw instead of silently treating all
+    // groups as "not joined" — that would hide pending badges and let the user
+    // try to re-request a group they already have a pending row for.
+    if (membershipsRes.error) throw membershipsRes.error;
     const membershipMap = new Map<string, string>(
       (membershipsRes.data ?? []).map((m: any) => [m.group_id, m.role])
     );
@@ -172,15 +176,30 @@ export async function joinGroup(groupId: string, userId: string, companyPageId?:
 }
 
 // Inserts a "pending" membership — does NOT grant chat access until admin approves.
-export async function requestGroupJoin(groupId: string, userId: string, companyPageId?: string | null): Promise<boolean> {
+// Returns "ok" | "already_pending" | "already_member" | "error"
+export type RequestJoinResult = "ok" | "already_pending" | "already_member" | "error";
+export async function requestGroupJoin(groupId: string, userId: string, companyPageId?: string | null): Promise<RequestJoinResult> {
   try {
     const cpId = companyPageId ?? null;
+
+    // Pre-check for an existing row before attempting INSERT to give a clear,
+    // actionable result instead of a generic unique-constraint error.
+    const existingQ = cpId
+      ? supabase.from("group_members").select("role").eq("group_id", groupId).eq("user_id", userId).eq("company_page_id", cpId).maybeSingle()
+      : supabase.from("group_members").select("role").eq("group_id", groupId).eq("user_id", userId).is("company_page_id", null).maybeSingle();
+    const { data: existing } = await existingQ;
+    if (existing) {
+      const role = (existing as any).role as string;
+      if (role === "pending") return "already_pending";
+      return "already_member";
+    }
+
     const { error } = await supabase
       .from("group_members")
       .insert({ group_id: groupId, user_id: userId, role: "pending", company_page_id: cpId });
-    if (error) console.warn("requestGroupJoin:", error);
-    return !error;
-  } catch { return false; }
+    if (error) { console.warn("requestGroupJoin:", error); return "error"; }
+    return "ok";
+  } catch { return "error"; }
 }
 
 // Admin approves a pending member — handled server-side to bypass RLS.

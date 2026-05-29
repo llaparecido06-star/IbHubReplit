@@ -19,7 +19,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/context/AuthContext";
-import { Group, fetchGroups, joinGroup, requestGroupJoin, leaveGroup, notifyGroupJoinRequest } from "@/services/api";
+import { Group, fetchGroups, joinGroup, requestGroupJoin, leaveGroup, notifyGroupJoinRequest, RequestJoinResult } from "@/services/api";
 
 type AccessType = "aberto" | "fechado" | "restrito";
 
@@ -114,10 +114,16 @@ export default function GroupsScreen() {
           { text: t("common.cancel"), style: "cancel" },
           {
             text: t("groups.request_btn"), onPress: async () => {
-              const ok = await requestGroupJoin(g.id, userId, activeCompanyId);
-              if (ok) {
+              const result: RequestJoinResult = await requestGroupJoin(g.id, userId, activeCompanyId);
+              if (result === "ok") {
                 void notifyGroupJoinRequest(g.id);
                 Alert.alert(t("groups.request_sent_ok"), t("groups.request_sent_msg"));
+                load();
+              } else if (result === "already_pending") {
+                // Sync local state — may have been stale
+                load();
+                Alert.alert(t("groups.request_sent_ok"), t("groups.request_already_pending"));
+              } else if (result === "already_member") {
                 load();
               } else {
                 Alert.alert(t("common.error"), t("groups.error_request"));
