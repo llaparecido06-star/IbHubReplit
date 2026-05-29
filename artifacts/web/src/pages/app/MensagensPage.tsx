@@ -408,8 +408,10 @@ export default function MensagensPage() {
     setSending(true);
 
     let content = newMsg.trim();
-    // Capture the message_type for the attachment before clearAttach() runs
+    // Capture the message_type and media URL for the attachment before clearAttach() runs
     let attachMsgType: string | undefined;
+    // media_url stored separately so mobile can render video/image natively
+    let attachMediaUrl: string | undefined;
 
     if (attachFile) {
       setUploading(true);
@@ -429,6 +431,7 @@ export default function MensagensPage() {
       const url = await uploadChatAttachment(uploadFile, userId);
       setUploading(false);
       if (url) {
+        attachMediaUrl = url;
         const label = attachFile.name;
         const attachContent = `[attachment]:${url}|${label}`;
         if (content) {
@@ -446,6 +449,9 @@ export default function MensagensPage() {
       const ok = await sendWebMessage(selected.id, userId, content, {
         companyPageId: activeCompany?.id ?? null,
         messageType: isAttach ? attachMsgType : undefined,
+        // Pass mediaUrl so the DB stores media_url — required for mobile to
+        // render video/image natively (message_type + media_url both needed)
+        mediaUrl: isAttach ? attachMediaUrl : undefined,
       });
       if (ok) {
         setMessages(prev => [...prev, {
@@ -454,6 +460,7 @@ export default function MensagensPage() {
           sender_id: userId,
           content,
           message_type: isAttach ? (attachMsgType ?? null) : null,
+          media_url: isAttach ? (attachMediaUrl ?? null) : null,
           created_at: new Date().toISOString(),
           sender: { id: userId, full_name: profile?.full_name ?? "Eu", avatar_url: profile?.avatar_url },
         }]);
