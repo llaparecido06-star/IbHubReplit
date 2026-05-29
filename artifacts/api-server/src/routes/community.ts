@@ -499,8 +499,16 @@ router.post("/community/groups/:id/request-join", async (req: Request, res: Resp
     .insert({ group_id: groupId, user_id: userId, role: "pending", company_page_id: cpId });
 
   if (insertErr) {
-    req.log.error({ supabaseError: insertErr.message }, "request-join insert failed");
-    res.status(500).json({ error: insertErr.message });
+    const isConstraint = insertErr.message?.includes("role_check");
+    req.log.error({ supabaseError: insertErr.message, isConstraint }, "request-join insert failed");
+    if (isConstraint) {
+      res.status(500).json({
+        error: "role_constraint",
+        hint: "Run: ALTER TABLE public.group_members DROP CONSTRAINT IF EXISTS group_members_role_check; ALTER TABLE public.group_members ADD CONSTRAINT group_members_role_check CHECK (role IN ('owner','member','moderator','pending'));",
+      });
+    } else {
+      res.status(500).json({ error: insertErr.message });
+    }
     return;
   }
 
