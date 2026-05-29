@@ -43,6 +43,12 @@ function SendIcon() {
 function UsersIcon() {
   return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
 }
+function LinkIcon() {
+  return <svg width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>;
+}
+function CheckIcon() {
+  return <svg width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>;
+}
 
 export default function GrupoChatPage() {
   const [, params] = useRoute("/app/grupos/:id");
@@ -56,6 +62,14 @@ export default function GrupoChatPage() {
   const [input, setInput]         = useState("");
   const [sending, setSending]     = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [linkCopied, setLinkCopied]   = useState(false);
+
+  const groupLink = `${window.location.origin}/app/grupos/${groupId}`;
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(groupLink).catch(() => {});
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2200);
+  };
 
   const listRef    = useRef<HTMLDivElement>(null);
   const seenIds    = useRef<Set<string>>(new Set());
@@ -169,6 +183,15 @@ export default function GrupoChatPage() {
                 <span style={{ fontSize: 12, color: MUTED }}>{memberCount} {memberCount === 1 ? "membro" : "membros"}</span>
               </div>
             </div>
+            <button
+              onClick={handleCopyLink}
+              title={linkCopied ? "Link copiado!" : "Copiar link do grupo"}
+              style={{ background: "none", border: "none", cursor: "pointer", padding: 6, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: linkCopied ? "#16a34a" : MUTED, transition: "color 0.2s" }}
+              onMouseEnter={e => { if (!linkCopied) (e.currentTarget as HTMLButtonElement).style.color = NAVY; }}
+              onMouseLeave={e => { if (!linkCopied) (e.currentTarget as HTMLButtonElement).style.color = MUTED; }}
+            >
+              {linkCopied ? <CheckIcon /> : <LinkIcon />}
+            </button>
             <button
               onClick={() => setLocation(`/app/grupos/${groupId}/configuracoes`)}
               title="Configurações do grupo"

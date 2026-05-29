@@ -1,4 +1,5 @@
 import * as Haptics from "expo-haptics";
+import * as ExpoLinking from "expo-linking";
 import { useTranslation } from "react-i18next";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -12,6 +13,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -579,6 +581,14 @@ export default function GroupChatScreen() {
   };
 
   // ── 3-dot menu actions ────────────────────────────────────────────────────
+
+  const handleShareGroup = async () => {
+    setMenuVisible(false);
+    try {
+      const link = ExpoLinking.createURL(`group-chat/${id}`);
+      await Share.share({ message: `${groupInfo.name} — ${link}`, url: link });
+    } catch { /* user dismissed */ }
+  };
 
   const handleLeaveGroup = () => {
     setMenuVisible(false);
@@ -1213,6 +1223,11 @@ export default function GroupChatScreen() {
       >
         <Pressable style={styles.menuOverlay} onPress={() => setMenuVisible(false)}>
           <View style={[styles.menuCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+            <TouchableOpacity style={styles.menuItem} onPress={handleShareGroup}>
+              <Feather name="link-2" size={18} color={colors.navy} />
+              <Text style={[styles.menuItemText, { color: colors.navy }]}>{t("group_chat_screen.menu_share_link")}</Text>
+            </TouchableOpacity>
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => {

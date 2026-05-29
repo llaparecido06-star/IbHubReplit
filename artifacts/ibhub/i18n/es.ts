@@ -2388,6 +2388,7 @@ const es = {
     member_count_one: "{{count}} miembro",
     member_count_other: "{{count}} miembros",
     empty_state: "Aún no hay mensajes. ¡Di hola! 👋",
+    menu_share_link: "Compartir grupo",
     menu_settings: "Configuración",
     input_placeholder: "Mensaje…",
     release_to_cancel: "Suelta para cancelar",

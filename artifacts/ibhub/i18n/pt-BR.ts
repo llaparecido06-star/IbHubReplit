@@ -2348,6 +2348,7 @@ const ptBR = {
     member_count_one: "{{count}} membro",
     member_count_other: "{{count}} membros",
     empty_state: "Nenhuma mensagem ainda. Diga olá! 👋",
+    menu_share_link: "Compartilhar grupo",
     menu_settings: "Configurações",
     input_placeholder: "Mensagem…",
     release_to_cancel: "Solte para cancelar",
