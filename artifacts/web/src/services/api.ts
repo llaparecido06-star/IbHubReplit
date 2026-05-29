@@ -1115,6 +1115,7 @@ export interface WebConversation {
   id: string;
   is_group: boolean;
   name: string | null;
+  avatar_url?: string | null;
   last_message: string | null;
   last_message_at: string | null;
   unread_count: number;
@@ -1171,7 +1172,7 @@ export async function fetchWebConversations(
       supabase.rpc("get_my_conversations_participants", { p_user_id: userId }),
       supabase
         .from("conversation_participants")
-        .select("conversation_id, accepted, last_read_at, conversation:conversations(id, is_group, name, created_at, company_page_id)")
+        .select("conversation_id, accepted, last_read_at, conversation:conversations(id, is_group, name, avatar_url, created_at, company_page_id)")
         .eq("user_id", userId),
       supabase.from("company_pages").select("id").eq("owner_id", userId),
     ]);
@@ -1253,6 +1254,7 @@ export async function fetchWebConversations(
         id: convo.id,
         is_group: convo.is_group,
         name: convo.name,
+        avatar_url: (convo as any).avatar_url ?? null,
         last_message: lastContent,
         last_message_at: lastMsg?.created_at ?? convo.created_at,
         unread_count: 0,

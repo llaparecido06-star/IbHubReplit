@@ -492,10 +492,11 @@ export default function MensagensPage() {
       ? (c.company_page?.name ?? "Empresa")
       : (c.name ?? c.participant?.full_name ?? "Conversa");
 
-  const getConvoAvatar = (c: WebConversation) =>
-    showCompanyIdentity(c)
-      ? (c.company_page?.avatar_url ?? null)
-      : (c.participant?.avatar_url ?? null);
+  const getConvoAvatar = (c: WebConversation) => {
+    if (showCompanyIdentity(c)) return c.company_page?.avatar_url ?? null;
+    if (c.is_group) return c.avatar_url ?? null;
+    return c.participant?.avatar_url ?? null;
+  };
 
   const busy = sending || uploading;
   const canSend = (newMsg.trim().length > 0 || attachFile !== null) && !busy;
