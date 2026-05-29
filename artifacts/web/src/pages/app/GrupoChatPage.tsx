@@ -63,6 +63,7 @@ export default function GrupoChatPage() {
   const [groupInfo, setGroupInfo]     = useState<WebGroupInfo | null>(null);
   const [publicGroup, setPublicGroup] = useState<Group | null>(null);
   const [joinState, setJoinState]     = useState<"idle" | "loading" | "done" | "pending">("idle");
+  const [isPending, setIsPending]     = useState(false);
   const [messages, setMessages]       = useState<WebMessage[]>([]);
   const [loading, setLoading]         = useState(true);
   const [input, setInput]         = useState("");
@@ -89,6 +90,26 @@ export default function GrupoChatPage() {
 
   const load = useCallback(async () => {
     if (!groupId || !user?.id) { setLoading(false); return; }
+
+    // Check for pending membership first — pending users must not access the chat.
+    const { data: memberRow } = await supabase
+      .from("group_members")
+      .select("role")
+      .eq("group_id", groupId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if ((memberRow as any)?.role === "pending") {
+      const { data: gr } = await supabase
+        .from("groups")
+        .select("name, avatar_url")
+        .eq("id", groupId)
+        .maybeSingle();
+      if (gr) setPublicGroup(prev => ({ ...(prev ?? {} as any), name: (gr as any).name, avatar_url: (gr as any).avatar_url }));
+      setIsPending(true);
+      setLoading(false);
+      return;
+    }
+
     const [info, msgs] = await Promise.all([
       fetchWebGroupInfo(groupId),
       fetchWebMessages(groupId),
@@ -188,6 +209,35 @@ export default function GrupoChatPage() {
       else setJoinState("idle");
     }
   };
+
+  // ── Pending-approval gate ───────────────────────────────────────────────────
+  if (!loading && isPending && groupId) {
+    const groupName = (publicGroup as any)?.name ?? "Grupo";
+    return (
+      <AppShell>
+        <div style={{ display: "flex", height: "calc(100vh - 0px)", overflow: "hidden", background: BG }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", maxWidth: 800, margin: "0 auto", width: "100%", background: WHITE, borderLeft: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", borderBottom: `1px solid ${BORDER}`, background: WHITE }}>
+              <button onClick={() => setLocation("/app/grupos")} style={{ background: "none", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4 }}>
+                <BackIcon />
+              </button>
+              <span style={{ fontSize: 16, fontWeight: 700, color: NAVY }}>{groupName}</span>
+            </div>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 32, gap: 16, textAlign: "center" }}>
+              <div style={{ width: 72, height: 72, borderRadius: "50%", background: GOLD + "20", border: `2px solid ${GOLD}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32 }}>⏳</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: NAVY }}>Aguardando aprovação</div>
+              <div style={{ fontSize: 14, color: MUTED, maxWidth: 340, lineHeight: 1.6 }}>
+                Sua solicitação foi enviada para o admin do grupo <strong>{groupName}</strong>. Você receberá acesso assim que for aprovado.
+              </div>
+              <button onClick={() => setLocation("/app/grupos")} style={{ marginTop: 8, padding: "10px 24px", borderRadius: 10, background: "transparent", border: `1.5px solid ${GOLD}`, color: GOLD, fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+                Voltar para grupos
+              </button>
+            </div>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
 
   // ── Non-member view ─────────────────────────────────────────────────────────
   if (!loading && !groupInfo && groupId) {

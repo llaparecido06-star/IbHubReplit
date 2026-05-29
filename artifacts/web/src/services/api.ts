@@ -2815,6 +2815,7 @@ export interface Group {
   member_count?: number;
   is_member?: boolean;
   is_owner?: boolean;
+  is_pending?: boolean;
 }
 
 export async function fetchGroups(
@@ -2856,13 +2857,15 @@ export async function fetchGroups(
       return {
         ...g,
         member_count: countResults[i].count ?? 0,
-        is_member: role !== undefined && role !== "pending",
-        is_owner:  g.owner_id === userId,
+        is_member:  role !== undefined && role !== "pending",
+        is_pending: role === "pending",
+        is_owner:   g.owner_id === userId,
       };
     });
 
     const mine    = enriched.filter(g => g.is_member);
-    // Hide "restrito" groups from explore — only members ever see them
+    // Hide "restrito" groups from explore — only members ever see them.
+    // Include pending groups so the user can see their awaiting-approval state.
     const explore = enriched.filter(g => !g.is_member && g.access !== "restrito");
     return { mine, explore };
   } catch (e) {

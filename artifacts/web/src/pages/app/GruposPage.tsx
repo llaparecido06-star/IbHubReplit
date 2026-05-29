@@ -122,6 +122,10 @@ function GroupCard({ group, userId, onJoin, onRequest, onLeave }: {
                 Sair
               </button>
             </div>
+          ) : group.is_pending ? (
+            <span style={{ fontSize: 11, color: MUTED, display: "flex", alignItems: "center", gap: 4 }}>
+              ⏳ Aguardando aprovação
+            </span>
           ) : group.access === "restrito" ? (
             <span style={{ fontSize: 11, color: MUTED, display: "flex", alignItems: "center", gap: 4 }}>
               🛡️ Somente por convite
