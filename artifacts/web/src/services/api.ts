@@ -663,24 +663,27 @@ export async function fetchConnectedUsersWeb(userId: string): Promise<Connection
 
 export async function approveGroupMemberWeb(groupId: string, memberId: string): Promise<boolean> {
   try {
-    const { error } = await supabase
-      .from("group_members")
-      .update({ role: "member" })
-      .eq("group_id", groupId)
-      .eq("user_id", memberId)
-      .eq("role", "pending");
-    return !error;
+    const session = await getCachedSession();
+    if (!session?.access_token) return false;
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? "/api";
+    const res = await fetch(`${apiBase}/community/groups/${groupId}/members/${memberId}/approve`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    return res.ok;
   } catch { return false; }
 }
 
 export async function rejectGroupMemberWeb(groupId: string, memberId: string): Promise<boolean> {
   try {
-    const { error } = await supabase
-      .from("group_members")
-      .delete()
-      .eq("group_id", groupId)
-      .eq("user_id", memberId);
-    return !error;
+    const session = await getCachedSession();
+    if (!session?.access_token) return false;
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? "/api";
+    const res = await fetch(`${apiBase}/community/groups/${groupId}/members/${memberId}/reject`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    return res.ok;
   } catch { return false; }
 }
 
@@ -2923,25 +2926,23 @@ export async function fetchGroupByIdPublic(groupId: string): Promise<Group | nul
 
 export async function requestGroupJoinWeb(
   groupId: string,
-  userId: string,
+  _userId: string,
   companyPageId?: string | null,
 ): Promise<"ok" | "already_pending" | "already_member" | "error"> {
   try {
-    const cpId = companyPageId ?? null;
-    const q = supabase
-      .from("group_members")
-      .select("role")
-      .eq("group_id", groupId)
-      .eq("user_id", userId);
-    const check = cpId ? await q.eq("company_page_id", cpId) : await q.is("company_page_id", null);
-    if ((check.data ?? []).length > 0) {
-      const role = (check.data as any[])[0]?.role;
-      return role === "pending" ? "already_pending" : "already_member";
-    }
-    const { error } = await supabase
-      .from("group_members")
-      .insert({ group_id: groupId, user_id: userId, role: "pending", company_page_id: cpId });
-    return error ? "error" : "ok";
+    const session = await getCachedSession();
+    if (!session?.access_token) return "error";
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? "/api";
+    const res = await fetch(`${apiBase}/community/groups/${groupId}/request-join`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ company_page_id: companyPageId ?? null }),
+    });
+    if (!res.ok) return "error";
+    const data = await res.json() as { status: string };
+    if (data.status === "already_pending")  return "already_pending";
+    if (data.status === "already_member")   return "already_member";
+    return "ok";
   } catch { return "error"; }
 }
 

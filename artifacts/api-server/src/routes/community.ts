@@ -447,6 +447,102 @@ router.post("/community/opportunities/:id/interest", async (req: Request, res: R
 });
 
 /**
+ * POST /community/groups/:id/request-join
+ * Full "request to join closed group" flow using service role key, so it works
+ * regardless of the RLS policy applied to group_members on any environment.
+ * 1. Checks if already pending / already a member.
+ * 2. Inserts a pending row in group_members.
+ * 3. Sends a group_request notification to the group owner.
+ * Returns: { status: "ok" | "already_pending" | "already_member" }
+ */
+router.post("/community/groups/:id/request-join", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+
+  const groupId = req.params.id as string;
+  const { company_page_id: cpId = null } = req.body as { company_page_id?: string | null };
+
+  // Fetch group info
+  const { data: group, error: groupErr } = await supabaseAdmin
+    .from("groups")
+    .select("owner_id, name, access")
+    .eq("id", groupId)
+    .maybeSingle();
+
+  if (groupErr || !group) {
+    res.status(404).json({ error: "Group not found" });
+    return;
+  }
+
+  if (group.access !== "fechado") {
+    res.status(400).json({ error: "request-join only applies to fechado groups" });
+    return;
+  }
+
+  // Check for existing membership / pending request
+  const existing = await supabaseAdmin
+    .from("group_members")
+    .select("role")
+    .eq("group_id", groupId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existing.data) {
+    const status = existing.data.role === "pending" ? "already_pending" : "already_member";
+    res.status(200).json({ status });
+    return;
+  }
+
+  // Insert pending row via service role (bypasses RLS)
+  const { error: insertErr } = await supabaseAdmin
+    .from("group_members")
+    .insert({ group_id: groupId, user_id: userId, role: "pending", company_page_id: cpId });
+
+  if (insertErr) {
+    req.log.error({ supabaseError: insertErr.message }, "request-join insert failed");
+    res.status(500).json({ error: insertErr.message });
+    return;
+  }
+
+  // Owner cannot receive a request about themselves
+  if (group.owner_id === userId) {
+    res.status(200).json({ status: "ok" });
+    return;
+  }
+
+  // Send notification to admin (fire-and-forget so insert errors don't block the response)
+  void (async () => {
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("full_name, username")
+      .eq("id", userId)
+      .maybeSingle();
+
+    const requesterName =
+      (profile as { full_name?: string; username?: string } | null)?.full_name ??
+      (profile as { full_name?: string; username?: string } | null)?.username ??
+      "Alguém";
+
+    await supabaseAdmin.from("notifications").insert({
+      user_id:  group.owner_id,
+      actor_id: userId,
+      type:     "group_request",
+      message:  `solicitou participação no grupo "${group.name as string}"`,
+      metadata: { group_id: groupId },
+    });
+
+    await sendPushToUser({
+      userId: group.owner_id as string,
+      title: `👥 Solicitação para entrar em ${group.name as string}`,
+      body: `${requesterName} quer participar do grupo. Toque para aprovar ou recusar.`,
+      data: { type: "group_request", groupId, deepLink: `/group-settings/${groupId}` },
+    });
+  })();
+
+  res.status(200).json({ status: "ok" });
+});
+
+/**
  * POST /community/groups/:id/notify-request
  * Sends a "join request" notification to the group owner using the service role key
  * (bypasses the v50 RLS policy that blocks direct client-side notification inserts).
@@ -564,6 +660,32 @@ router.post("/community/groups/:id/members/:userId/approve", async (req: Request
       { onConflict: "conversation_id,user_id,company_page_id", ignoreDuplicates: true }
     );
   if (cpErr) req.log.warn({ supabaseError: cpErr.message }, "approve — conversation_participants");
+
+  // Notify the approved user (fire-and-forget)
+  void (async () => {
+    const { data: groupInfo } = await supabaseAdmin
+      .from("groups")
+      .select("name")
+      .eq("id", groupId)
+      .maybeSingle();
+
+    const groupName = (groupInfo as { name?: string } | null)?.name ?? "grupo";
+
+    await supabaseAdmin.from("notifications").insert({
+      user_id:  memberId,
+      actor_id: callerId,
+      type:     "group_approved",
+      message:  `aprovou sua entrada no grupo "${groupName}"`,
+      metadata: { group_id: groupId },
+    });
+
+    await sendPushToUser({
+      userId: memberId,
+      title: `✅ Solicitação aprovada`,
+      body: `Você foi aceito no grupo ${groupName}. Acesse o chat agora!`,
+      data: { type: "group_approved", groupId, deepLink: `/grupos/${groupId}` },
+    });
+  })();
 
   res.status(200).json({ ok: true });
 });

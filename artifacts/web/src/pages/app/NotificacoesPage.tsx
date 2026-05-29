@@ -42,6 +42,7 @@ const TYPE_META: Record<string, { Icon: React.ElementType; color: string; label:
   connection:     { Icon: Users,           color: GOLD,      label: "enviou pedido de conexão" },
   mention:        { Icon: AtSign,          color: "#9b59b6", label: "mencionou você" },
   group_request:  { Icon: UserCheck,       color: "#7c3aed", label: "solicitou entrar no seu grupo" },
+  group_approved: { Icon: UserCheck,       color: "#16a34a", label: "aprovou sua entrada no grupo" },
   poll_vote:      { Icon: BarChart2,       color: "#0ea5e9", label: "votou na sua enquete" },
 };
 
