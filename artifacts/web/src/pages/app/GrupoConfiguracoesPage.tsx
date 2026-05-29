@@ -46,7 +46,9 @@ export default function GrupoConfiguracoesPage() {
   const [, setLocation] = useLocation();
   const { profile, user } = useAuth();
   const groupId = params?.id;
-  const userId  = user?.id ?? profile?.user_id ?? profile?.id;
+  // group_members.user_id stores profiles.id (PK), not the auth UUID —
+  // must match the mobile pattern: profile?.id first.
+  const userId  = profile?.id ?? user?.id ?? "";
 
   const [activeTab, setActiveTab] = useState<ConfigTab>("membros");
   const [name, setName]           = useState("");
