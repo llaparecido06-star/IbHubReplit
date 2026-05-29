@@ -2901,6 +2901,47 @@ export async function createGroup(params: {
   }
 }
 
+export async function fetchGroupByIdPublic(groupId: string): Promise<Group | null> {
+  try {
+    const { data, error } = await supabase
+      .from("groups")
+      .select("*")
+      .eq("id", groupId)
+      .maybeSingle();
+    if (error || !data) return null;
+    const { count } = await supabase
+      .from("group_members")
+      .select("user_id", { count: "exact", head: true })
+      .eq("group_id", groupId)
+      .neq("role", "pending");
+    return { ...(data as any), member_count: count ?? 0 } as Group;
+  } catch { return null; }
+}
+
+export async function requestGroupJoinWeb(
+  groupId: string,
+  userId: string,
+  companyPageId?: string | null,
+): Promise<"ok" | "already_pending" | "already_member" | "error"> {
+  try {
+    const cpId = companyPageId ?? null;
+    const q = supabase
+      .from("group_members")
+      .select("role")
+      .eq("group_id", groupId)
+      .eq("user_id", userId);
+    const check = cpId ? await q.eq("company_page_id", cpId) : await q.is("company_page_id", null);
+    if ((check.data ?? []).length > 0) {
+      const role = (check.data as any[])[0]?.role;
+      return role === "pending" ? "already_pending" : "already_member";
+    }
+    const { error } = await supabase
+      .from("group_members")
+      .insert({ group_id: groupId, user_id: userId, role: "pending", company_page_id: cpId });
+    return error ? "error" : "ok";
+  } catch { return "error"; }
+}
+
 export async function joinGroup(
   groupId: string,
   userId: string,

@@ -8,8 +8,12 @@ import {
   sendWebMessage,
   sendWebAudioMessage,
   fetchWebGroupInfo,
+  fetchGroupByIdPublic,
+  joinGroup,
+  requestGroupJoinWeb,
   WebMessage,
   WebGroupInfo,
+  Group,
 } from "@/services/api";
 import { AudioRecorder } from "@/components/chat/AudioRecorder";
 
@@ -56,9 +60,11 @@ export default function GrupoChatPage() {
   const groupId = params?.id ?? "";
   const { user, activeCompany } = useAuth();
 
-  const [groupInfo, setGroupInfo] = useState<WebGroupInfo | null>(null);
-  const [messages, setMessages]   = useState<WebMessage[]>([]);
-  const [loading, setLoading]     = useState(true);
+  const [groupInfo, setGroupInfo]     = useState<WebGroupInfo | null>(null);
+  const [publicGroup, setPublicGroup] = useState<Group | null>(null);
+  const [joinState, setJoinState]     = useState<"idle" | "loading" | "done" | "pending">("idle");
+  const [messages, setMessages]       = useState<WebMessage[]>([]);
+  const [loading, setLoading]         = useState(true);
   const [input, setInput]         = useState("");
   const [sending, setSending]     = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -87,6 +93,13 @@ export default function GrupoChatPage() {
       fetchWebGroupInfo(groupId),
       fetchWebMessages(groupId),
     ]);
+    if (!info) {
+      // User is not a member (RLS blocks conversations table). Try public group info.
+      const pub = await fetchGroupByIdPublic(groupId);
+      setPublicGroup(pub);
+      setLoading(false);
+      return;
+    }
     setGroupInfo(info);
     const clearKey = `group_cleared_at_${groupId}`;
     const clearedAt = localStorage.getItem(clearKey);
@@ -160,6 +173,81 @@ export default function GrupoChatPage() {
   const handleKey = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
+
+  const handleJoinGroup = async () => {
+    if (!user?.id || !groupId || !publicGroup) return;
+    setJoinState("loading");
+    if (publicGroup.access === "aberto") {
+      const ok = await joinGroup(groupId, user.id, activeCompany?.id ?? null);
+      if (ok) { setJoinState("done"); load(); }
+      else setJoinState("idle");
+    } else {
+      const result = await requestGroupJoinWeb(groupId, user.id, activeCompany?.id ?? null);
+      if (result === "ok" || result === "already_pending") setJoinState("pending");
+      else if (result === "already_member") { setJoinState("idle"); load(); }
+      else setJoinState("idle");
+    }
+  };
+
+  // ── Non-member view ─────────────────────────────────────────────────────────
+  if (!loading && !groupInfo && groupId) {
+    const pg = publicGroup;
+    const notFound = !pg;
+    const accessIcon = pg?.access === "aberto" ? "🌐" : pg?.access === "fechado" ? "🔒" : "⛔";
+    const accessLabel = pg?.access === "aberto" ? "Grupo público" : pg?.access === "fechado" ? "Grupo fechado" : "Grupo restrito";
+    const btnLabel = joinState === "loading" ? "Aguarde…"
+      : joinState === "done"    ? "✓ Entrou!"
+      : joinState === "pending" ? "✓ Solicitado"
+      : pg?.access === "aberto" ? "Entrar no grupo"
+      : pg?.access === "fechado" ? "Solicitar entrada"
+      : null;
+
+    return (
+      <AppShell>
+        <div style={{ display: "flex", height: "calc(100vh - 0px)", overflow: "hidden", background: BG }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", maxWidth: 800, margin: "0 auto", width: "100%", background: WHITE, borderLeft: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", borderBottom: `1px solid ${BORDER}`, background: WHITE }}>
+              <button onClick={() => setLocation("/app/grupos")} style={{ background: "none", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4 }}>
+                <BackIcon />
+              </button>
+              <span style={{ fontSize: 16, fontWeight: 700, color: NAVY }}>{pg?.name ?? "Grupo"}</span>
+            </div>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 32, gap: 16, textAlign: "center" }}>
+              <div style={{ width: 72, height: 72, borderRadius: "50%", background: GOLD + "20", border: `2px solid ${GOLD}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32 }}>👥</div>
+              {notFound ? (
+                <>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: NAVY }}>Grupo não encontrado</div>
+                  <div style={{ fontSize: 14, color: MUTED, maxWidth: 300 }}>Este link pode ter expirado ou o grupo foi removido.</div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: NAVY }}>{pg.name}</div>
+                  {pg.description && <div style={{ fontSize: 14, color: MUTED, maxWidth: 360, lineHeight: 1.5 }}>{pg.description}</div>}
+                  <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 13, color: MUTED }}>
+                    <span>{accessIcon} {accessLabel}</span>
+                    <span>👥 {pg.member_count ?? 0} {(pg.member_count ?? 0) === 1 ? "membro" : "membros"}</span>
+                  </div>
+                  {pg.access === "restrito" ? (
+                    <div style={{ marginTop: 8, padding: "12px 20px", borderRadius: 10, background: "#fee2e2", color: "#b91c1c", fontSize: 14 }}>
+                      Este grupo é privado — você precisa ser convidado.
+                    </div>
+                  ) : btnLabel && (
+                    <button
+                      disabled={joinState !== "idle"}
+                      onClick={handleJoinGroup}
+                      style={{ marginTop: 8, padding: "12px 28px", borderRadius: 10, background: joinState !== "idle" ? GOLD + "80" : GOLD, color: NAVY, border: "none", cursor: joinState !== "idle" ? "default" : "pointer", fontWeight: 700, fontSize: 15 }}
+                    >
+                      {btnLabel}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
 
   const groupName = groupInfo?.name ?? "Grupo";
   const memberCount = groupInfo?.member_count ?? 0;
