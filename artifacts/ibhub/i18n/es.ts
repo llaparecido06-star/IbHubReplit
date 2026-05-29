@@ -962,6 +962,7 @@ const es = {
     loading: "Cargando grupos…",
     request_sent_ok: "¡Solicitud enviada!",
     request_sent_msg: "Espera la aprobación del administrador. Puedes ver el estado en la lista de grupos.",
+    request_sent_label: "Solicitado",
     request_already_pending: "Tu solicitud ya está siendo revisada por el administrador. Serás notificado cuando sea aprobada.",
     restricted_title: "Grupo restringido",
     restricted_msg: "Este grupo es por invitación. Contacta al administrador para solicitar acceso.",

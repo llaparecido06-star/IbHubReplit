@@ -293,9 +293,9 @@ function ExploreGroupCard({ group: g, colors, onJoin }: { group: Group; colors: 
           </View>
         </View>
         {g.is_pending ? (
-          <View style={[styles.joinBtn, { backgroundColor: "#fef3c7", borderWidth: 1.5, borderColor: "#f59e0b", flexDirection: "row", alignItems: "center", gap: 4 }]}>
-            <Feather name="clock" size={12} color="#d97706" />
-            <Text style={[styles.joinBtnText, { color: "#d97706", fontSize: 11 }]}>{t("groups.waiting_pending")}</Text>
+          <View style={[styles.joinBtn, { backgroundColor: "transparent", borderWidth: 1.5, borderColor: colors.mutedForeground, flexDirection: "row", alignItems: "center", gap: 4, opacity: 0.65 }]}>
+            <Feather name="check" size={12} color={colors.mutedForeground} />
+            <Text style={[styles.joinBtnText, { color: colors.mutedForeground }]}>{t("groups.request_sent_label")}</Text>
           </View>
         ) : access === "restrito" ? (
           <View style={[styles.joinBtn, { backgroundColor: colors.background, flexDirection: "row", alignItems: "center", gap: 4 }]}>
