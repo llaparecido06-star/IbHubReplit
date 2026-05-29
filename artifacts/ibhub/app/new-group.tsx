@@ -36,9 +36,9 @@ const CATEGORIES = [
 ];
 
 const ACCESS_OPTIONS: { value: AccessType; label: string; desc: string; icon: any }[] = [
-  { value: "aberto",   label: "Aberto",   desc: "Qualquer pessoa pode entrar",   icon: "globe" },
-  { value: "fechado",  label: "Fechado",  desc: "Precisa de aprovação do admin",  icon: "lock" },
-  { value: "restrito", label: "Restrito", desc: "Somente por convite",           icon: "shield" },
+  { value: "aberto",   label: "Aberto",   desc: "Aparece na busca · qualquer pessoa pode entrar",   icon: "globe" },
+  { value: "fechado",  label: "Fechado",  desc: "Aparece na busca · admin precisa autorizar entrada", icon: "lock" },
+  { value: "restrito", label: "Restrito", desc: "Não aparece na busca · somente por convite",        icon: "shield" },
 ];
 
 export default function NewGroupScreen() {

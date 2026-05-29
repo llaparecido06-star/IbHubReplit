@@ -9,6 +9,7 @@ import {
   createGroup,
   joinGroup,
   leaveGroup,
+  requestGroupJoinWeb,
 } from "@/services/api";
 
 const GOLD   = "#c9a84c";
@@ -43,10 +44,11 @@ function GroupAvatar({ group }: { group: Group }) {
   );
 }
 
-function GroupCard({ group, userId, onJoin, onLeave }: {
+function GroupCard({ group, userId, onJoin, onRequest, onLeave }: {
   group: Group;
   userId: string;
   onJoin: (id: string) => void;
+  onRequest: (id: string) => void;
   onLeave: (id: string) => void;
 }) {
   const [busy, setBusy]     = useState(false);
@@ -56,7 +58,11 @@ function GroupCard({ group, userId, onJoin, onLeave }: {
   const handleJoin = async () => {
     if (busy) return;
     setBusy(true);
-    await onJoin(group.id);
+    if (group.access === "fechado") {
+      await onRequest(group.id);
+    } else {
+      await onJoin(group.id);
+    }
     setBusy(false);
   };
 
@@ -116,13 +122,18 @@ function GroupCard({ group, userId, onJoin, onLeave }: {
                 Sair
               </button>
             </div>
+          ) : group.access === "restrito" ? (
+            <span style={{ fontSize: 11, color: MUTED, display: "flex", alignItems: "center", gap: 4 }}>
+              🛡️ Somente por convite
+            </span>
           ) : (
             <button onClick={handleJoin} disabled={busy} style={{
               fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 8,
-              border: `1px solid ${GOLD}50`, backgroundColor: `${GOLD}15`,
+              border: `1px solid ${GOLD}`,
+              backgroundColor: group.access === "fechado" ? "transparent" : `${GOLD}15`,
               color: GOLD, cursor: "pointer",
             }}>
-              {busy ? "…" : "Participar"}
+              {busy ? "…" : group.access === "fechado" ? "Solicitar entrada" : "Participar"}
             </button>
           )}
         </div>
@@ -155,9 +166,9 @@ function CreateGroupModal({ userId, onClose, onCreated }: CreateGroupModalProps)
   };
 
   const accessOptions: { value: "aberto" | "fechado" | "restrito"; label: string; desc: string; icon: string }[] = [
-    { value: "aberto",   label: "Aberto",   desc: "Qualquer pessoa pode entrar", icon: "🌐" },
-    { value: "fechado",  label: "Fechado",  desc: "Precisa de aprovação",        icon: "🔒" },
-    { value: "restrito", label: "Restrito", desc: "Somente por convite",         icon: "🛡️" },
+    { value: "aberto",   label: "Aberto",   desc: "Aparece na busca · qualquer pessoa pode entrar",    icon: "🌐" },
+    { value: "fechado",  label: "Fechado",  desc: "Aparece na busca · admin precisa autorizar entrada", icon: "🔒" },
+    { value: "restrito", label: "Restrito", desc: "Não aparece na busca · somente por convite",         icon: "🛡️" },
   ];
 
   return (
@@ -277,6 +288,18 @@ export function GruposContent() {
     await load();
   };
 
+  const handleRequest = async (groupId: string) => {
+    const result = await requestGroupJoinWeb(groupId, userId, activeCompany?.id ?? null);
+    if (result === "ok") {
+      window.alert("Solicitação enviada! O admin do grupo precisa aprovar sua entrada.");
+    } else if (result === "already_pending") {
+      window.alert("Você já tem uma solicitação pendente neste grupo.");
+    } else if (result !== "already_member") {
+      window.alert("Não foi possível enviar a solicitação. Tente novamente.");
+    }
+    await load();
+  };
+
   const handleLeave = async (groupId: string) => {
     await leaveGroup(groupId, userId, activeCompany?.id ?? null);
     await load();
@@ -373,7 +396,7 @@ export function GruposContent() {
               </h2>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
                 {filteredMine.map(g => (
-                  <GroupCard key={g.id} group={g} userId={userId} onJoin={handleJoin} onLeave={handleLeave} />
+                  <GroupCard key={g.id} group={g} userId={userId} onJoin={handleJoin} onRequest={handleRequest} onLeave={handleLeave} />
                 ))}
               </div>
             </div>
@@ -387,7 +410,7 @@ export function GruposContent() {
               </h2>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
                 {filteredExplore.map(g => (
-                  <GroupCard key={g.id} group={g} userId={userId} onJoin={handleJoin} onLeave={handleLeave} />
+                  <GroupCard key={g.id} group={g} userId={userId} onJoin={handleJoin} onRequest={handleRequest} onLeave={handleLeave} />
                 ))}
               </div>
             </div>
