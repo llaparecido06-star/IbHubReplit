@@ -860,4 +860,69 @@ router.post("/push/event-rsvp", async (req: Request, res: Response): Promise<voi
   res.json({ sent: 1 });
 });
 
+// ─── POST /push/story-tag ─────────────────────────────────────────────────────
+/**
+ * Sends push notifications to users that were tagged (marcados) in a Story (Momento).
+ * Body: { taggedUserIds: string[], actorName: string, storyId?: string }
+ * Auth: Bearer token (resolves actorId — the story creator)
+ */
+router.post("/push/story-tag", async (req: Request, res: Response): Promise<void> => {
+  const actorId = await resolveUserId(req, res);
+  if (!actorId) return;
+
+  if (!checkRateLimit(actorId)) {
+    res.status(429).json({ error: "Muitas solicitações — tente novamente em breve." });
+    return;
+  }
+
+  const { taggedUserIds, actorName, storyId } = req.body as {
+    taggedUserIds?: string[];
+    actorName?: string;
+    storyId?: string;
+  };
+
+  if (!taggedUserIds?.length || !actorName) {
+    res.status(400).json({ error: "taggedUserIds e actorName são obrigatórios" });
+    return;
+  }
+
+  const recipientIds = taggedUserIds.filter(id => id !== actorId);
+  if (!recipientIds.length) {
+    res.json({ sent: 0, skipped: "actor is the only tagged user" });
+    return;
+  }
+
+  const { data: tokenRows, error: tokensErr } = await supabaseAdmin
+    .from("push_tokens")
+    .select("token")
+    .in("user_id", recipientIds);
+
+  if (tokensErr) {
+    logger.error({ err: tokensErr }, "DB error fetching push tokens for story-tag");
+    res.status(500).json({ error: "Erro ao buscar tokens." });
+    return;
+  }
+
+  const validTokens = (tokenRows ?? [])
+    .map((r: { token: string }) => r.token)
+    .filter((t: string) => typeof t === "string" && t.startsWith("ExponentPushToken["));
+
+  if (validTokens.length === 0) {
+    res.json({ sent: 0, skipped: "no valid tokens for tagged users" });
+    return;
+  }
+
+  const messages: ExpoPushMessage[] = validTokens.map((token) => ({
+    to: token,
+    title: `📍 ${actorName} marcou você em um Momento`,
+    body: "Toque para ver o Momento.",
+    data: { storyId, type: "story_tag", deepLink: storyId ? `/story/${storyId}` : "/" },
+    sound: "default" as const,
+  }));
+
+  await sendExpoPushNotifications(messages);
+  logger.info({ count: messages.length, actorId, recipientCount: recipientIds.length }, "Story-tag push dispatched");
+  res.json({ sent: messages.length });
+});
+
 export default router;

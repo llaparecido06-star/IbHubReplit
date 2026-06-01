@@ -162,6 +162,7 @@ export default function StoryViewerScreen() {
     : IMAGE_DURATION;
 
   const goToNext = useCallback(() => {
+    progressAnimation.current?.stop();
     progressAnim.setValue(0);
     const nextStory = storyIndex + 1;
     if (nextStory < (currentGroup?.stories.length ?? 0)) {
@@ -178,6 +179,7 @@ export default function StoryViewerScreen() {
   }, [storyIndex, groupIndex, currentGroup, groups, progressAnim, router]);
 
   const goToPrev = useCallback(() => {
+    progressAnimation.current?.stop();
     progressAnim.setValue(0);
     if (storyIndex > 0) {
       setStoryIndex(storyIndex - 1);
@@ -248,14 +250,18 @@ export default function StoryViewerScreen() {
 
   const onTouchEnd = (e: GestureResponderEvent) => {
     if (!handleTouchStart.current) return;
-    const dx = e.nativeEvent.pageX - handleTouchStart.current.x;
+    const startX = handleTouchStart.current.x;
+    const dx = e.nativeEvent.pageX - startX;
     const dt = Date.now() - handleTouchStart.current.t;
+    handleTouchStart.current = null;
     isPaused.current = false;
     setIsPlaying(true);
     if (Math.abs(dx) > 60 && dt < 400) {
+      // Horizontal swipe: left = forward, right = back
       if (dx < 0) goToNext(); else goToPrev();
-    } else if (dt < 250 && Math.abs(dx) < 10) {
-      if (e.nativeEvent.pageX < SCREEN_WIDTH / 3) goToPrev(); else goToNext();
+    } else if (dt < 250 && Math.abs(dx) < 15) {
+      // Tap: use the PRESS position (startX) to decide zone, not the release position
+      if (startX < SCREEN_WIDTH / 2) goToPrev(); else goToNext();
     } else {
       startProgress(storyDuration);
     }

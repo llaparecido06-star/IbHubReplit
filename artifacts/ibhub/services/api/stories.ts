@@ -1,5 +1,5 @@
 import { supabase } from "@/context/AuthContext";
-import { fetchCommentProfilesForIds, fetchCompanyPagesForIds } from "./_shared";
+import { fetchCommentProfilesForIds, fetchCompanyPagesForIds, API_URL } from "./_shared";
 import type { AppStory, StoryGroup } from "./types";
 import type { Group } from "./groups";
 
@@ -267,11 +267,21 @@ export async function createStory(
         actor_id: userId,
         type: "story_tag",
         message: `${actorName} marcou você em um Momento`,
-        reference_id: storyId,
       }));
       await supabase.from("notifications").insert(notifs).then(({ error: ne }) => {
         if (ne) console.warn("createStory: notification insert failed", ne);
       });
+      // Send push notification (best-effort)
+      if (API_URL) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          fetch(`${API_URL}/push/story-tag`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+            body: JSON.stringify({ taggedUserIds: taggedIds, actorName, storyId }),
+          }).catch(() => {});
+        }
+      }
     }
 
     return {
@@ -334,11 +344,21 @@ export async function createVideoStoryParts(
         actor_id: userId,
         type: "story_tag",
         message: `${actorName} marcou você em um Momento`,
-        reference_id: firstId,
       }));
       await supabase.from("notifications").insert(notifs).then(({ error: ne }) => {
         if (ne) console.warn("createVideoStoryParts: notification failed", ne);
       });
+      // Send push notification (best-effort)
+      if (API_URL) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          fetch(`${API_URL}/push/story-tag`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+            body: JSON.stringify({ taggedUserIds: taggedIds, actorName, storyId: firstId }),
+          }).catch(() => {});
+        }
+      }
     }
     return true;
   } catch (e) {
