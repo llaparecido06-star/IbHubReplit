@@ -287,8 +287,15 @@ export default function NotificationsScreen() {
       await API.markNotificationRead(notif.id);
     }
 
-    if (notif.type === "group_request" && notif.metadata?.group_id) {
-      router.push(`/group-settings/${notif.metadata.group_id}` as any);
+    if (notif.type === "group_request") {
+      // Navigate to the specific group settings if we have the group ID,
+      // otherwise fall back to the groups list where the owner can manage pending requests.
+      if (notif.metadata?.group_id) {
+        router.push(`/group-settings/${notif.metadata.group_id}` as any);
+      } else {
+        router.push("/groups" as any);
+      }
+      return;
     } else if (notif.type === "story_tag" && notif.metadata?.story_id) {
       router.push(`/story/${notif.metadata.story_id}` as any);
     } else if (notif.type === "company_follow" && (notif as any).target_company_id) {

@@ -205,6 +205,7 @@ function AuthenticatedLayout() {
       <Stack.Screen name="events" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="opportunities" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="groups" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="group-settings/[id]" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="new-group" options={{ presentation: "modal" }} />
       <Stack.Screen name="my-events" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="new-message" options={{ presentation: "modal" }} />
