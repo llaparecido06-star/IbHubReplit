@@ -38,7 +38,7 @@
         "backgroundColor": "#0d1b2a"
       },
       "package": "br.com.ibhub",
-      "versionCode": 30,
+      "versionCode": 31,
       "googleServicesFile": "./google-services.json",
       "allowBackup": false,
       "softwareKeyboardLayoutMode": "pan",
