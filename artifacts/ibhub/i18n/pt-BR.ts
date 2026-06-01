@@ -2054,6 +2054,7 @@ const ptBR = {
     type_mention: "mencionou você",
     type_group_request: "solicitou entrar no seu grupo",
     type_poll_vote: "votou na sua enquete",
+    type_story_tag: "marcou você em um Momento",
     type_default: "nova notificação",
     wine_like: "curtiu sua avaliação do {{wine}}",
     wine_comment: "comentou sua avaliação do {{wine}}",

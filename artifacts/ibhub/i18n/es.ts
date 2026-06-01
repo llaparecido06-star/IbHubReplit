@@ -2059,6 +2059,7 @@ const es = {
     type_mention: "te mencionó",
     type_group_request: "solicitó unirse a tu grupo",
     type_poll_vote: "votó en tu encuesta",
+    type_story_tag: "te etiquetó en un Momento",
     type_default: "nueva notificación",
     wine_like: "le gustó tu reseña del {{wine}}",
     wine_comment: "comentó tu reseña del {{wine}}",

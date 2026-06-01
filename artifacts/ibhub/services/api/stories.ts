@@ -267,6 +267,7 @@ export async function createStory(
         actor_id: userId,
         type: "story_tag",
         message: `${actorName} marcou você em um Momento`,
+        metadata: { story_id: storyId },
       }));
       await supabase.from("notifications").insert(notifs).then(({ error: ne }) => {
         if (ne) console.warn("createStory: notification insert failed", ne);
@@ -344,6 +345,7 @@ export async function createVideoStoryParts(
         actor_id: userId,
         type: "story_tag",
         message: `${actorName} marcou você em um Momento`,
+        metadata: { story_id: firstId },
       }));
       await supabase.from("notifications").insert(notifs).then(({ error: ne }) => {
         if (ne) console.warn("createVideoStoryParts: notification failed", ne);

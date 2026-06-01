@@ -231,7 +231,7 @@ export async function dispatchPushToConversation(
         conversationId,
         title: senderName,
         body: messageBody,
-        data: { conversationId },
+        data: { conversationId, deepLink: `/chat/${conversationId}` },
       }),
     });
   } catch (e) {

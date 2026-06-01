@@ -70,6 +70,7 @@ function NotifRow({
     mention:        { icon: "at-sign",          color: "#9b59b6", label: t("notifications_screen.type_mention") },
     group_request:  { icon: "user-check",       color: "#7c3aed", label: t("notifications_screen.type_group_request") },
     poll_vote:      { icon: "bar-chart-2",      color: "#0ea5e9", label: t("notifications_screen.type_poll_vote") },
+    story_tag:      { icon: "film",             color: "#c9a84c", label: t("notifications_screen.type_story_tag") },
   };
 
   const meta = TYPE_META[notif.type] ?? { icon: "bell", color: colors.gold, label: t("notifications_screen.type_default") };
@@ -288,6 +289,8 @@ export default function NotificationsScreen() {
 
     if (notif.type === "group_request" && notif.metadata?.group_id) {
       router.push(`/group-settings/${notif.metadata.group_id}` as any);
+    } else if (notif.type === "story_tag" && notif.metadata?.story_id) {
+      router.push(`/story/${notif.metadata.story_id}` as any);
     } else if (notif.type === "company_follow" && (notif as any).target_company_id) {
       router.push(`/empresa/${(notif as any).target_company_id}` as any);
     } else if (notif.post_id) {
