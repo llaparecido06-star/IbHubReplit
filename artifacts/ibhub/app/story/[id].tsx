@@ -26,8 +26,9 @@ export default function StoryDeepLinkScreen() {
         if (cancelled) return;
 
         if (!raw) {
-          // Story not found or expired — go back
-          router.back();
+          // Story not found or expired — go back, or fall back to feed if no history
+          if (router.canGoBack()) router.back();
+          else router.replace("/(tabs)" as any);
           return;
         }
 
@@ -73,7 +74,10 @@ export default function StoryDeepLinkScreen() {
           },
         } as any);
       } catch {
-        if (!cancelled) router.back();
+        if (!cancelled) {
+          if (router.canGoBack()) router.back();
+          else router.replace("/(tabs)" as any);
+        }
       }
     })();
 

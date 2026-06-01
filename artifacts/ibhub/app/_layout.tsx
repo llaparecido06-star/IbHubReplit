@@ -211,8 +211,8 @@ function AuthenticatedLayout() {
       <Stack.Screen name="new-message" options={{ presentation: "modal" }} />
       <Stack.Screen name="chat/[id]" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="group-chat/[id]" options={{ animation: "slide_from_right" }} />
-      <Stack.Screen name="story/[id]" options={{ animation: "fade", presentation: "transparentModal" }} />
-      <Stack.Screen name="story-viewer" options={{ animation: "fade", presentation: "transparentModal" }} />
+      <Stack.Screen name="story/[id]" options={{ animation: "fade", presentation: "fullScreenModal" }} />
+      <Stack.Screen name="story-viewer" options={{ animation: "fade", presentation: "fullScreenModal" }} />
       <Stack.Screen name="post/[id]" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="profile/[id]" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="empresa/[id]" options={{ animation: "slide_from_right" }} />
