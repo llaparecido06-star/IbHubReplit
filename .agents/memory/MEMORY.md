@@ -1,0 +1,1 @@
+- [Android double router.replace freeze](android-nav-double-replace.md) — TOKEN_REFRESHED during login causes second router.replace; guard with navInitiated && lastDestination === destination.

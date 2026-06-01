@@ -317,6 +317,17 @@ function RootLayoutNav() {
       return;
     }
 
+    // Guard against double-navigation on Android (and any platform):
+    // After the first router.replace("/(tabs)") fires, there is a brief window
+    // where isAuthPath is still true (pathname hasn't updated yet) but the
+    // session object changes due to a TOKEN_REFRESHED event. Without this
+    // guard the effect would re-run with shouldRedirect=true (isAuthPath &&
+    // same destination) and launch a second async IIFE that calls router.replace
+    // a second time — causing the "advances, freezes, goes back" freeze on Android.
+    if (navInitiated && lastDestination.current === destination) {
+      return;
+    }
+
     // Never auto-redirect from the register screen — it drives its own
     // navigation at the end of the signup flow. Auto-redirecting here would
     // race with the register screen's own router.replace("/(tabs)") and cause
@@ -359,6 +370,7 @@ function RootLayoutNav() {
   }, [
     session, loading, isRecovering, mustChangePassword, manutencao,
     flagsLoading, isAuthPath, needsProfileCompletion, profileChecked, pathname,
+    navInitiated,
   ]);
 
   // Safety-net: if the navigation effect somehow never fires (extreme edge case —
