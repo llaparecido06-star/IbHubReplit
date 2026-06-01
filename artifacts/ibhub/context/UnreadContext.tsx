@@ -25,20 +25,25 @@ export function UnreadProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
 
   /**
-   * Badge count = number of CONVERSATIONS with at least one unread message,
-   * NOT the total number of unread messages.
+   * Badge count = number of CONVERSATIONS with at least one truly unread message.
    *
-   * Example: if 3 conversations each have 10 unread messages, badge = 3, not 30.
+   * Uses the same two-condition filter as fetchConversations to avoid false
+   * positives from old messages where read_at was never set:
+   *   1. read_at IS NULL  — message hasn't been individually marked as read
+   *   2. created_at > last_read_at — message arrived after the last time the
+   *      user opened this conversation (client-side filter using last_read_at
+   *      from conversation_participants)
    *
-   * Two queries total:
-   *  1. conversation_participants → get the user's conversation IDs.
-   *  2. messages → get conversation_ids of unread messages; deduplicate with Set.
+   * Without condition 2, historical messages that pre-date the read_at column
+   * (or whose read_at update failed silently) would produce a permanent false
+   * positive badge that never clears.
    */
   const refreshUnread = useCallback(async (userId: string) => {
     try {
+      // Fetch conversation membership + last_read_at in one query.
       const { data: participations } = await supabase
         .from("conversation_participants")
-        .select("conversation_id")
+        .select("conversation_id, last_read_at")
         .eq("user_id", userId);
 
       const convIds = (participations ?? []).map((p: any) => p.conversation_id as string);
@@ -47,17 +52,35 @@ export function UnreadProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // Fetch only the conversation_id column (no body/payload) for unread messages.
-      // Using Set deduplication we get the count of unique conversations with unread msgs.
-      const { data: unreadMsgs } = await supabase
+      // Build a map: conversation_id → last_read_at (may be null for never-opened convos)
+      const lastReadMap = new Map<string, string | null>(
+        (participations ?? []).map((p: any) => [
+          p.conversation_id as string,
+          (p.last_read_at as string | null) ?? null,
+        ]),
+      );
+
+      // Fetch candidate unread messages (read_at IS NULL, not from self).
+      // We also select created_at so we can apply the last_read_at filter client-side.
+      const { data: candidateMsgs } = await supabase
         .from("messages")
-        .select("conversation_id")
+        .select("conversation_id, created_at")
         .in("conversation_id", convIds)
         .neq("sender_id", userId)
         .is("read_at", null);
 
+      // Apply the last_read_at guard client-side (mirrors fetchConversations logic).
+      // A message is truly unread only if it arrived AFTER the last time the
+      // user opened that conversation.
       const unreadConvCount = new Set(
-        (unreadMsgs ?? []).map((m: any) => m.conversation_id as string),
+        (candidateMsgs ?? [])
+          .filter((m: any) => {
+            const lastRead = lastReadMap.get(m.conversation_id as string);
+            // No last_read_at → conversation was never opened → all messages are unread
+            if (!lastRead) return true;
+            return new Date(m.created_at as string) > new Date(lastRead);
+          })
+          .map((m: any) => m.conversation_id as string),
       ).size;
 
       setUnreadCount(unreadConvCount);
@@ -69,11 +92,6 @@ export function UnreadProvider({ children }: { children: React.ReactNode }) {
   /**
    * Global realtime subscription — active for the entire authenticated session,
    * regardless of which tab/screen the user is on.
-   *
-   * When a new message arrives that is NOT from the current user:
-   *   1. Increment the badge immediately for snappy UX.
-   *   2. Refresh from the DB for accuracy (handles edge cases like
-   *      messages arriving out of order or for conversations not yet loaded).
    */
   useEffect(() => {
     if (!user?.id) return;
@@ -93,9 +111,8 @@ export function UnreadProvider({ children }: { children: React.ReactNode }) {
           // Ignore own messages
           if (msg.sender_id === user.id) return;
 
-          // Refresh from DB — no optimistic +1 here because the badge counts
-          // unique *conversations* with unread messages, not total messages.
-          // Adding +1 per message would inflate the count (e.g. 22 instead of 3).
+          // Refresh from DB — no optimistic +1 because the badge counts
+          // unique conversations with unread messages, not total messages.
           refreshUnread(user.id);
         },
       )
