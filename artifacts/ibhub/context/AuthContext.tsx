@@ -196,14 +196,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchProfile = useCallback(async (userId: string) => {
     // Safety-net: if the Supabase query hangs (network lost mid-session, server
     // timeout, etc.) the finally block never runs and profileChecked stays false,
-    // keeping the loading spinner up forever. This timer fires after 5 s and
+    // keeping the loading spinner up forever. This timer fires after 3 s and
     // unblocks the secondary loading guard in RootLayoutNav regardless.
     let timedOut = false;
     const tid = setTimeout(() => {
       timedOut = true;
-      console.warn(`[fetchProfile] 5s timeout for userId=${userId} — unblocking profileChecked`);
+      console.warn(`[fetchProfile] 3s timeout for userId=${userId} — unblocking profileChecked`);
       setProfileChecked(true);
-    }, 5_000);
+    }, 3_000);
 
     try {
       // Use limit(1) to avoid "multiple rows" error if duplicate profiles exist
@@ -370,10 +370,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Also force profileChecked=true so the secondary loading guard doesn't
     // activate if session is already set when the timeout fires.
     const initTimeoutId = setTimeout(() => {
-      console.warn("[AuthInit] 5s timeout reached — unblocking UI. Session will resolve via onAuthStateChange.");
+      console.warn("[AuthInit] 3s timeout reached — unblocking UI. Session will resolve via onAuthStateChange.");
       resolveLoading();
       setProfileChecked(true);
-    }, 5_000);
+    }, 3_000);
 
     const init = async () => {
       try {

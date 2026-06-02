@@ -281,7 +281,7 @@ function RootLayoutNav() {
   );
 
   useEffect(() => {
-    if (loading || isRecovering || mustChangePassword || flagsLoading) return;
+    if (loading || isRecovering || mustChangePassword) return;
 
     // ── Unauthenticated ────────────────────────────────────────────────────
     if (!session) {
@@ -329,12 +329,15 @@ function RootLayoutNav() {
     }
 
     // Never auto-redirect from the register screen — it drives its own
-    // navigation at the end of the signup flow. Auto-redirecting here would
-    // race with the register screen's own router.replace("/(tabs)") and cause
-    // a visible flash back to the first onboarding step.
+    // navigation at the end of the signup flow. Set lastDestination so that
+    // when the register screen calls router.replace and the pathname changes,
+    // the re-run of this effect finds shouldRedirect=false and sets
+    // navInitiated=true without issuing a second router.replace.
+    // Do NOT call setNavInitiated(true) here: AuthenticatedLayout must not
+    // render until router.replace has been called, otherwise the Stack has
+    // no active route and shows a blank screen.
     if (pathname.includes("register")) {
       lastDestination.current = destination;
-      setNavInitiated(true);
       return;
     }
 
@@ -378,7 +381,7 @@ function RootLayoutNav() {
   // IMPORTANT: also call router.replace so AuthenticatedLayout has an active
   // route. Without this, navInitiated=true renders an empty Stack → white screen.
   useEffect(() => {
-    if (navInitiated || loading || flagsLoading || !session || !profileChecked || isRecovering || mustChangePassword) return;
+    if (navInitiated || loading || !session || !profileChecked || isRecovering || mustChangePassword) return;
     const t = setTimeout(() => {
       console.warn("[RootLayoutNav] navInitiated safety-net fired after 3s — forcing navigation");
       const destination = needsProfileCompletion ? "/social-complete" : "/(tabs)";
@@ -386,23 +389,9 @@ function RootLayoutNav() {
       setNavInitiated(true);
     }, 3_000);
     return () => clearTimeout(t);
-  }, [navInitiated, loading, flagsLoading, session, profileChecked, isRecovering, mustChangePassword, needsProfileCompletion, router]);
+  }, [navInitiated, loading, session, profileChecked, isRecovering, mustChangePassword, needsProfileCompletion, router]);
 
   if (loading) {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0d1b2a" }}>
-        <ActivityIndicator color="#c9a84c" size="large" />
-      </View>
-    );
-  }
-
-  // Feature flags still loading — auth resolved but navigation effect is
-  // blocked on flagsLoading. Without this guard, RootLayoutNav falls through
-  // to <AuthenticatedLayout /> which renders a Stack with no active route
-  // (there is no app/index.tsx), producing a blank/white screen on cold start.
-  // The second open avoids this because the session is cached in AsyncStorage
-  // and the flags query resolves before or simultaneously with auth.
-  if (flagsLoading) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0d1b2a" }}>
         <ActivityIndicator color="#c9a84c" size="large" />

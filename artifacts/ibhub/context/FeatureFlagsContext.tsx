@@ -78,10 +78,12 @@ export function FeatureFlagsProvider({ children }: { children: React.ReactNode }
         setIsLoading(false);
         loadFlags(true);
       } else {
-        // No cache: show spinner until network resolves (first cold start)
+        // No cache: resolve after network completes, or after 2 s (first cold start).
+        // Navigation is no longer blocked on flagsLoading, so this timeout only
+        // affects the first render of manutencao-gated paths.
         const timeoutId = setTimeout(() => {
           if (!cancelled) setIsLoading(false);
-        }, 5_000);
+        }, 2_000);
         loadFlags(false).finally(() => clearTimeout(timeoutId));
       }
     })();
