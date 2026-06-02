@@ -51,14 +51,13 @@ export default function LoginScreen() {
       setLoading(false);
       return;
     }
-    // Navigate immediately while still in the auth-stack context.
-    // This is more reliable than waiting for RootLayoutNav to detect the
-    // session change — that mechanism can fail when the layout tree
-    // transitions from auth stack → loading spinner → authenticated layout,
-    // because router.replace is called during a phase with no active navigator.
-    router.replace("/(tabs)" as any);
-    // Do not call setLoading(false): the screen will be replaced before
-    // the user sees the button revert to "Entrar".
+    // Do NOT call router.replace here. RootLayoutNav's navigation effect
+    // handles the redirect to /(tabs) after onAuthStateChange(SIGNED_IN) fires.
+    // Calling router.replace("/(tabs)") from the login screen while the auth
+    // Stack is still mounted races with the RootLayoutNav IIFE and with the
+    // auth Stack's own `(tabs) redirect` screen — causing the Android "advances,
+    // freezes, snaps back" freeze. Keep loading=true so the button stays
+    // disabled until the screen is replaced by AuthenticatedLayout.
   };
 
   return (
