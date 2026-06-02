@@ -1,53 +1,68 @@
 ---
 name: Android double router.replace freeze
-description: Root cause and fix for the post-login freeze on Android where the screen advances, freezes, and snaps back. Also covers cold-start spinner root causes.
+description: Root cause and fix for the post-login/cold-start loop on Android ("avança 1cm e volta") caused by multiple router.replace calls. Covers all layers found and fixed.
 ---
 
-## Rule
-Never call `router.replace("/(tabs)")` from a screen that lives inside the auth Stack. `RootLayoutNav` handles that navigation via its IIFE. Calling it from the screen itself races with the RootLayoutNav IIFE AND with the auth Stack's `(tabs) redirect` configuration, producing the Android freeze.
+## Core Rule
+Never call `router.replace("/(tabs)")` from inside an auth screen. `RootLayoutNav` is the single source of truth for all post-auth navigation. Any extra `router.replace` races with the IIFE and produces the Android loop.
 
-## Root Cause (four layers, all addressed)
+---
 
-### Layer 1 — PRIMARY: Login screen calling router.replace
-`app/(auth)/login.tsx` was calling `router.replace("/(tabs)")` immediately after `signIn()` returned, while the **auth Stack** was still mounted.
+## Layer 1 — Login screen calling router.replace
+`login.tsx` called `router.replace("/(tabs)")` after `signIn()` returned while the auth Stack was still mounted. The auth Stack has `<Stack.Screen name="(tabs)" redirect />` which snapped back to login, plus `RootLayoutNav`'s IIFE also called it → double replace.
 
-**Fix:** Removed `router.replace` from `app/(auth)/login.tsx`. `RootLayoutNav`'s navigation effect is the single source of truth for post-login navigation.
+**Fix:** Removed `router.replace` from `login.tsx`.
 
-### Layer 2 — SECONDARY: TOKEN_REFRESHED double-IIFE
-After `SIGNED_IN`, Supabase immediately fires `TOKEN_REFRESHED`, changing the `session` object reference. The navigation `useEffect` re-ran with `isAuthPath=true` (pathname not yet updated) and same destination → started a second async IIFE → second `router.replace`.
+---
 
-**Fix:** Added guard `if (navInitiated && lastDestination.current === destination) return;` and `navInitiated` in the effect's deps array.
+## Layer 2 — TOKEN_REFRESHED double-IIFE (the infinite loop)
 
-### Layer 3 — EARLIER: transparentModal
-`story/[id]` and `story-viewer` were registered with `transparentModal`, making the entire Android Stack background transparent. Changed to `fullScreenModal`.
+**Root cause:** TOKEN_REFRESHED (fired by Supabase on Android right after SIGNED_IN) changes the `session` object reference. This re-triggers the nav effect with `isAuthPath=true` (pathname not yet updated), `navInitiated=false`, and `shouldRedirect=true`. The existing guard `if (navInitiated && lastDestination.current === destination) return` does NOT fire because `navInitiated=false`. So a **second IIFE** starts while the first is still awaiting `coldStartDeepLinkPromise`. Both IIFEs call `router.replace("/(tabs)")` → Android "avança 1cm e volta" infinite loop.
 
-### Layer 4 — Cold-start frozen navy screen (navIifePendingRef)
+**Fix:** Added `navIifePendingRef = useRef(false)` with two roles:
+1. **Blocks a second IIFE**: `if (navIifePendingRef.current) return;` immediately before the IIFE start (after `lastDestination.current = destination` is already set, so next re-run sees `shouldRedirect=false`).
+2. **Prevents premature `setNavInitiated(true)` in `!shouldRedirect` branch**: `if (!navIifePendingRef.current) setNavInitiated(true)` — AuthenticatedLayout only renders after `router.replace` has been called inside the IIFE.
 
-**Root cause:** `flagsLoading` (and `manutencao`) in the nav effect's deps array caused the effect to re-run while the `/(tabs)` navigation IIFE was mid-flight (awaiting `coldStartDeepLinkPromise`). When the effect re-ran, `shouldRedirect=false` (because `lastDestination.current` was already set to `"/(tabs)"` before the IIFE started), causing `setNavInitiated(true)` to fire BEFORE `router.replace` was called. `AuthenticatedLayout` then rendered with an empty Stack → frozen navy screen with a tiny gold dot.
+Timeline of `navIifePendingRef`:
+- `false` (initial)
+- `true` — set just before the IIFE starts (guards both roles above)
+- `false` — set inside the IIFE, AFTER `router.replace` is called, BEFORE `setNavInitiated(true)`
 
-**Fix:** Added `navIifePendingRef = useRef(false)` to `RootLayoutNav`:
-- Set to `true` immediately before the `/(tabs)` IIFE starts
-- Set to `false` inside the IIFE, after `router.replace` is called and before `setNavInitiated(true)`
-- The `!shouldRedirect` branch only calls `setNavInitiated(true)` when `!navIifePendingRef.current`
-- Removed `flagsLoading` from the nav effect deps array (it was no longer referenced in the body; `manutencao` still covers the maintenance re-check when flags load)
+---
 
-**Why `flagsLoading` was dangerous in deps:** Even though `flagsLoading` was no longer in the early return (removed in previous fix), keeping it in the deps array meant any state change of `flagsLoading` re-triggered the effect. The transition `true → false` fired mid-IIFE and hit the race. The same race can happen with `manutencao` for logged-in users (it returns `false` while loading, then changes), which is why `navIifePendingRef` is the correct fix regardless of which dep triggers the re-run.
+## Layer 3 — transparentModal
+`story/[id]` registered with `transparentModal` made the entire Android Stack background transparent. Changed to `fullScreenModal`.
 
-## Startup flow after all fixes
+---
 
-Cold start (logged-in user, session cached):
-1. `loading=true` → navy spinner (auth context resolving)
-2. `loading=false`, `session=X`, `profileChecked=true` from cache
-3. `!navInitiated` → navy spinner (ONE frame, ~16ms)
-4. Nav effect fires: `navIifePendingRef=true`, IIFE starts, `await coldStartDeepLinkPromise` (already settled)
-5. IIFE: `router.replace("/(tabs)")`, `navIifePendingRef=false`, `setNavInitiated(true)`
-6. `AuthenticatedLayout` renders with `/(tabs)` active ✓
+## Layer 4 — flagsLoading blocked startup for up to 5s
+`FeatureFlagsContext` started with `isLoading=true`. Both the render path and the nav effect early return blocked on this for up to 5s (no flags cache on first cold start).
 
-## How to apply
-- **Never** call `router.replace` in auth screens for post-login navigation; `RootLayoutNav` handles it.
-- The auth Stack's `<Stack.Screen name="(tabs)" redirect />` is intentional — do NOT remove it.
-- `navInitiated` must remain in the navigation effect's deps array.
-- `flagsLoading` must NOT be in the nav effect deps — it triggers mid-IIFE re-runs that race with `navIifePendingRef`.
-- The register guard must only set `lastDestination.current`, never `navInitiated=true` directly.
-- Safety-net timers: 3s for `fetchProfile`, `AuthInit`, and `RootLayoutNav` safety-net effect.
-- `navIifePendingRef` is the canonical guard against premature `setNavInitiated(true)` calls.
+**Fix:** Removed `if (flagsLoading) return spinner` and `flagsLoading` from nav effect early return. `flagsLoading` also removed from nav effect deps (it was causing mid-IIFE re-runs; `manutencao` is still a dep and covers the maintenance re-check when flags load). Timeout reduced 5s → 2s.
+
+---
+
+## Layer 5 — Register guard set navInitiated=true without router.replace
+The register guard called `setNavInitiated(true)` without calling `router.replace`, rendering `AuthenticatedLayout` with an empty Stack → navy frozen screen.
+
+**Fix:** Register guard now only sets `lastDestination.current = destination` and returns. `setNavInitiated(true)` is set by the `!shouldRedirect` branch when the register screen's own `router.replace` fires and the pathname changes.
+
+---
+
+## Startup timeouts (all reduced)
+- `fetchProfile` timeout: 5s → 3s
+- `AuthInit` timeout: 5s → 3s
+- `FeatureFlagsContext` no-cache timeout: 5s → 2s
+- `RootLayoutNav` safety-net: 3s (unchanged)
+
+---
+
+## How to apply (checklist)
+- **Auth screens**: NEVER call `router.replace` for post-auth navigation. RootLayoutNav handles it.
+- **Auth Stack**: Keep `<Stack.Screen name="(tabs)" redirect />` — do not remove.
+- **`navIifePendingRef`**: The canonical guard against both second-IIFE and premature `setNavInitiated`.
+  - Check `if (navIifePendingRef.current) return` BEFORE starting a new IIFE.
+  - Check `if (!navIifePendingRef.current) setNavInitiated(true)` in the `!shouldRedirect` branch.
+- **`flagsLoading`**: Must NOT be in nav effect deps or early return. Only `manutencao` (derived) covers the flags re-check.
+- **Register guard**: Only sets `lastDestination.current`. No `setNavInitiated(true)`.
+- **`navInitiated`**: Must stay in nav effect deps.

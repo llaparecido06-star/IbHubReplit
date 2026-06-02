@@ -364,6 +364,17 @@ function RootLayoutNav() {
 
     lastDestination.current = destination;
 
+    // Guard: if a navigation IIFE is already in flight (e.g. TOKEN_REFRESHED
+    // fired while the IIFE was awaiting coldStartDeepLinkPromise), do NOT start
+    // a second IIFE. lastDestination is already set above, so the next effect
+    // re-run will find shouldRedirect=false and the !navIifePendingRef.current
+    // check will set navInitiated=true once the IIFE finishes.
+    // Without this guard, two concurrent IIFEs both call router.replace("/(tabs)")
+    // → double-replace → Android "avança 1cm e volta" infinite loop.
+    if (navIifePendingRef.current) {
+      return;
+    }
+
     // For /(tabs), check whether a cold-start notification was tapped.
     // The deep link was pre-fetched at module load so the promise is already
     // settled by the time we get here, keeping navigation instantaneous.
