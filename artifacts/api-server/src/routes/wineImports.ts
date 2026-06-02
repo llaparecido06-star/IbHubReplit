@@ -809,66 +809,89 @@ router.post("/wine-imports/bi/retail-prices/reveal", async (req: Request, res: R
   if (!id?.trim()) return res.status(400).json({ error: "id é obrigatório" });
   const recordId = id.trim();
 
-  // Busca o registro completo na tabela wine_price_list
-  type PriceRow = {
-    id: string;
-    descricao_detalhada: string | null;
-    codigo_barras: string | null;
-    marca_completa: string | null;
-    distribuidor: string | null;
-    pais_de_origem: string | null;
-    preco_medio: string | null;
-    fonte: string | null;
-  };
-  const { data: row, error: rowError } = await supabaseAdmin
-    .from("wine_price_list")
-    .select("id, descricao_detalhada, codigo_barras, marca_completa, distribuidor, pais_de_origem, preco_medio, fonte")
-    .eq("id", recordId)
-    .maybeSingle();
+  try {
+    // Busca o registro completo na tabela wine_price_list
+    type PriceRow = {
+      id: string;
+      descricao_detalhada: string | null;
+      codigo_barras: string | null;
+      marca_completa: string | null;
+      distribuidor: string | null;
+      pais_de_origem: string | null;
+      preco_medio: string | null;
+      fonte: string | null;
+    };
+    const { data: row, error: rowError } = await supabaseAdmin
+      .from("wine_price_list")
+      .select("id, descricao_detalhada, codigo_barras, marca_completa, distribuidor, pais_de_origem, preco_medio, fonte")
+      .eq("id", recordId)
+      .maybeSingle();
 
-  if (rowError) return res.status(500).json({ error: rowError.message });
-  if (!row) return res.status(404).json({ error: "Registro não encontrado" });
+    if (rowError) {
+      req.log.error({ err: rowError, recordId }, "[retail-prices/reveal] wine_price_list query failed");
+      return res.status(500).json({ error: rowError.message });
+    }
+    if (!row) return res.status(404).json({ error: "Registro não encontrado" });
 
-  const priceData = row as PriceRow;
+    const priceData = row as PriceRow;
 
-  // Admins não consomem crédito
-  const { data: profile } = await supabaseAdmin.from("profiles").select("role").eq("id", userId).single();
-  const isAdmin = (profile as { role?: string } | null)?.role === "admin";
-  if (isAdmin) {
-    return res.json({ data: priceData, already_revealed: true, credits_remaining: null, credits_total: 0 });
-  }
+    // Admins não consomem crédito
+    const { data: profile } = await supabaseAdmin.from("profiles").select("role").eq("id", userId).single();
+    const isAdmin = (profile as { role?: string } | null)?.role === "admin";
+    if (isAdmin) {
+      return res.json({ data: priceData, already_revealed: true, credits_remaining: null, credits_total: 0 });
+    }
 
-  // Verifica se já foi revelado este período (repetição gratuita)
-  const { data: logEntry } = await supabaseAdmin
-    .from("bi_reveal_log")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("record_type", "retail_price")
-    .eq("record_key", recordId)
-    .maybeSingle();
+    // Verifica se já foi revelado este período (repetição gratuita)
+    const { data: logEntry, error: logCheckErr } = await supabaseAdmin
+      .from("bi_reveal_log")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("record_type", "retail_price")
+      .eq("record_key", recordId)
+      .maybeSingle();
 
-  if (logEntry) {
+    if (logCheckErr) {
+      req.log.error({ err: logCheckErr }, "[retail-prices/reveal] bi_reveal_log check failed");
+      return res.status(500).json({ error: logCheckErr.message });
+    }
+
+    if (logEntry) {
+      const rc = await getOrCreateRevealCredits(userId);
+      return res.json({ data: priceData, already_revealed: true, credits_remaining: rc.credits_remaining, credits_total: rc.credits_total });
+    }
+
+    // Deduz 1 reveal credit
     const rc = await getOrCreateRevealCredits(userId);
-    return res.json({ data: priceData, already_revealed: true, credits_remaining: rc.credits_remaining, credits_total: rc.credits_total });
+    if (rc.credits_remaining <= 0) {
+      return res.status(402).json({ error: "Sem créditos de revelação", credits_remaining: 0, credits_total: rc.credits_total });
+    }
+
+    const newRemaining = rc.credits_remaining - 1;
+    const { error: updateErr } = await supabaseAdmin
+      .from("bi_reveal_credits")
+      .update({ credits_remaining: newRemaining, updated_at: new Date().toISOString() })
+      .eq("user_id", userId);
+
+    if (updateErr) {
+      req.log.error({ err: updateErr }, "[retail-prices/reveal] bi_reveal_credits update failed");
+      return res.status(500).json({ error: updateErr.message });
+    }
+
+    const { error: insertErr } = await supabaseAdmin.from("bi_reveal_log").insert({
+      user_id: userId, record_type: "retail_price", record_key: recordId,
+    });
+
+    if (insertErr) {
+      req.log.error({ err: insertErr }, "[retail-prices/reveal] bi_reveal_log insert failed");
+      return res.status(500).json({ error: insertErr.message });
+    }
+
+    return res.json({ data: priceData, already_revealed: false, credits_remaining: newRemaining, credits_total: rc.credits_total });
+  } catch (err: unknown) {
+    req.log.error({ err }, "[retail-prices/reveal] unexpected error");
+    return res.status(500).json({ error: "Erro interno ao revelar dados" });
   }
-
-  // Deduz 1 reveal credit
-  const rc = await getOrCreateRevealCredits(userId);
-  if (rc.credits_remaining <= 0) {
-    return res.status(402).json({ error: "Sem créditos de revelação", credits_remaining: 0, credits_total: rc.credits_total });
-  }
-
-  const newRemaining = rc.credits_remaining - 1;
-  await supabaseAdmin
-    .from("bi_reveal_credits")
-    .update({ credits_remaining: newRemaining, updated_at: new Date().toISOString() })
-    .eq("user_id", userId);
-
-  await supabaseAdmin.from("bi_reveal_log").insert({
-    user_id: userId, record_type: "retail_price", record_key: recordId,
-  });
-
-  return res.json({ data: priceData, already_revealed: false, credits_remaining: newRemaining, credits_total: rc.credits_total });
 });
 
 // ── POST /wine-imports/spell-correct ─────────────────────────────────────────
