@@ -275,6 +275,12 @@ function RootLayoutNav() {
   // instead of the blank Stack, eliminating the visible white flash.
   const [navInitiated, setNavInitiated] = useState(false);
 
+  // True while the cold-start IIFE (await coldStartDeepLinkPromise → router.replace)
+  // is in flight. Prevents the !shouldRedirect branch from calling setNavInitiated(true)
+  // before router.replace has been called, which would render AuthenticatedLayout with
+  // an empty Stack (navy frozen screen) when flagsLoading or manutencao changes mid-IIFE.
+  const navIifePendingRef = useRef(false);
+
   // Auth routes that must remain accessible without a session
   const isAuthPath = ["login", "register", "forgot-password", "reset-password", "auth"].some(
     (p) => pathname.includes(p),
@@ -313,7 +319,13 @@ function RootLayoutNav() {
       // Even if we skip the redirect, ensure navInitiated is marked so the
       // loading guard doesn't block AuthenticatedLayout indefinitely when the
       // user is already on the correct screen (e.g. deep-link cold start).
-      setNavInitiated(true);
+      // IMPORTANT: do NOT set navInitiated=true if the navigation IIFE is still
+      // in flight — calling it here would render AuthenticatedLayout before
+      // router.replace completes, producing an empty Stack (navy frozen screen).
+      // The IIFE calls setNavInitiated(true) itself once router.replace is done.
+      if (!navIifePendingRef.current) {
+        setNavInitiated(true);
+      }
       return;
     }
 
@@ -356,6 +368,7 @@ function RootLayoutNav() {
     // The deep link was pre-fetched at module load so the promise is already
     // settled by the time we get here, keeping navigation instantaneous.
     if (destination === "/(tabs)") {
+      navIifePendingRef.current = true;
       (async () => {
         const coldLink = await coldStartDeepLinkPromise;
         if (coldLink && !coldStartLinkConsumed) {
@@ -364,6 +377,7 @@ function RootLayoutNav() {
         } else {
           router.replace("/(tabs)" as any);
         }
+        navIifePendingRef.current = false;
         setNavInitiated(true);
       })();
     } else {
@@ -372,7 +386,7 @@ function RootLayoutNav() {
     }
   }, [
     session, loading, isRecovering, mustChangePassword, manutencao,
-    flagsLoading, isAuthPath, needsProfileCompletion, profileChecked, pathname,
+    isAuthPath, needsProfileCompletion, profileChecked, pathname,
     navInitiated,
   ]);
 
