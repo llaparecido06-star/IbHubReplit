@@ -47,15 +47,8 @@ export default function GroupSettingsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { profile, user } = useAuth();
+  const { profile, user, activeCompany } = useAuth();
   const userId = profile?.id ?? user?.id ?? "";
-
-  const TABS: { key: Tab; label: string }[] = [
-    { key: "membros",   label: t("group_settings_screen.tab_members") },
-    { key: "pendentes", label: t("group_settings_screen.tab_pending") },
-    { key: "convidar",  label: t("group_settings_screen.tab_invite") },
-    { key: "link",      label: t("group_settings_screen.tab_link") },
-  ];
 
   const [activeTab, setActiveTab]       = useState<Tab>("membros");
   const [group, setGroup]               = useState<GroupData>({ name: "Grupo", avatar_url: null, owner_id: "", members: [], access: "aberto" });
@@ -78,6 +71,14 @@ export default function GroupSettingsScreen() {
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
 
   const isOwner = userId === group.owner_id;
+  const isMod   = isOwner || group.members.some(m => m.id === userId && m.role === "admin");
+
+  const TABS = [
+    { key: "membros"   as Tab, label: t("group_settings_screen.tab_members") },
+    ...(isMod ? [{ key: "pendentes" as Tab, label: t("group_settings_screen.tab_pending") }] : []),
+    ...(isMod ? [{ key: "convidar"  as Tab, label: t("group_settings_screen.tab_invite")  }] : []),
+    { key: "link"      as Tab, label: t("group_settings_screen.tab_link") },
+  ];
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -167,11 +168,10 @@ export default function GroupSettingsScreen() {
         { text: t("group_settings_screen.cancel"), style: "cancel" },
         {
           text: t("group_settings_screen.remove_btn"), style: "destructive", onPress: async () => {
-            const { error } = await supabase
-              .from("group_members")
-              .delete()
-              .eq("group_id", id)
-              .eq("user_id", member.id);
+            const [{ error }] = await Promise.all([
+              supabase.from("group_members").delete().eq("group_id", id).eq("user_id", member.id),
+              supabase.from("conversation_participants").delete().eq("conversation_id", id).eq("user_id", member.id),
+            ]);
             if (!error) load();
             else Alert.alert(t("group_settings_screen.error_title"), t("group_settings_screen.error_remove_member"));
           },
@@ -246,7 +246,7 @@ export default function GroupSettingsScreen() {
         { text: t("group_settings_screen.cancel"), style: "cancel" },
         {
           text: t("group_settings_screen.leave_btn"), style: "destructive", onPress: async () => {
-            const ok = await leaveGroup(id, userId);
+            const ok = await leaveGroup(id, userId, activeCompany?.id ?? null);
             if (ok) router.replace("/groups" as any);
             else Alert.alert(t("group_settings_screen.error_title"), t("group_settings_screen.error_leave"));
           },
@@ -318,8 +318,17 @@ export default function GroupSettingsScreen() {
     try {
       const { error } = await supabase
         .from("group_members")
-        .upsert({ group_id: id, user_id: person.id, role: "pending" }, { onConflict: "group_id,user_id" });
+        .upsert({ group_id: id, user_id: person.id, role: "member" }, { onConflict: "group_id,user_id" });
       if (error) throw error;
+      // Grant chat access immediately — without this the invited user appears in
+      // the members list but cannot see group messages (conversation_participants
+      // is the actual gate for chat visibility).
+      await supabase
+        .from("conversation_participants")
+        .upsert(
+          { conversation_id: id, user_id: person.id },
+          { onConflict: "conversation_id,user_id,company_page_id", ignoreDuplicates: true },
+        );
       Alert.alert(t("group_settings_screen.invite_sent_title"), t("group_settings_screen.invite_sent_msg", { name: person.full_name }));
       setInviteResults(prev => prev.filter(r => r.id !== person.id));
     } catch {

@@ -139,7 +139,10 @@ export default function GrupoConfiguracoesPage() {
     if (!groupId || removingId) return;
     if (!confirm("Remover este membro do grupo?")) return;
     setRemovingId(targetUserId);
-    await supabase.from("group_members").delete().eq("group_id", groupId).eq("user_id", targetUserId);
+    await Promise.all([
+      supabase.from("group_members").delete().eq("group_id", groupId).eq("user_id", targetUserId),
+      supabase.from("conversation_participants").delete().eq("conversation_id", groupId).eq("user_id", targetUserId),
+    ]);
     setMembers(prev => prev.filter(m => m.user_id !== targetUserId));
     setRemovingId(null);
   }
