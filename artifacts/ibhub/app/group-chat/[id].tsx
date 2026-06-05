@@ -169,9 +169,11 @@ export default function GroupChatScreen() {
     // Check membership status first — pending members see an approval-wait screen
     const { data: memberRow } = await supabase
       .from("group_members")
-      .select("role")
+      .select("role, company_page_id")
       .eq("group_id", id)
       .eq("user_id", user.id)
+      .order("created_at", { ascending: true })
+      .limit(1)
       .maybeSingle();
 
     if ((memberRow as any)?.role === "pending") {
@@ -180,6 +182,18 @@ export default function GroupChatScreen() {
       setIsPending(true);
       setLoading(false);
       return;
+    }
+
+    // Self-heal: if the user has a valid membership but is missing from
+    // conversation_participants (old data / invite bug), insert the missing row
+    // before loading the conversation — otherwise RLS will block conversations
+    // and messages queries and the chat will appear empty or broken.
+    const isValidMember = memberRow && (memberRow as any).role !== "pending";
+    if (isValidMember) {
+      await supabase.from("conversation_participants").upsert(
+        { conversation_id: id, user_id: user.id, company_page_id: (memberRow as any).company_page_id ?? null },
+        { onConflict: "conversation_id,user_id,company_page_id", ignoreDuplicates: true },
+      );
     }
 
     const [convRes, partRes, groupRes, msgs, clearedAt] = await Promise.all([

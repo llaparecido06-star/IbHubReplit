@@ -94,9 +94,11 @@ export default function GrupoChatPage() {
     // Check for pending membership first — pending users must not access the chat.
     const { data: memberRow } = await supabase
       .from("group_members")
-      .select("role")
+      .select("role, company_page_id")
       .eq("group_id", groupId)
       .eq("user_id", user.id)
+      .order("created_at", { ascending: true })
+      .limit(1)
       .maybeSingle();
     if ((memberRow as any)?.role === "pending") {
       const { data: gr } = await supabase
@@ -116,6 +118,27 @@ export default function GrupoChatPage() {
       supabase.from("group_message_clears").select("cleared_at").eq("user_id", user.id).eq("conversation_id", groupId).maybeSingle(),
     ]);
     if (!info) {
+      // If the user has a valid membership but no conversation_participants row
+      // (old data / invite bug), self-heal by inserting the missing row and retry.
+      const isMember = memberRow && (memberRow as any).role !== "pending";
+      if (isMember) {
+        const cpId = (memberRow as any).company_page_id ?? null;
+        await supabase.from("conversation_participants").upsert(
+          { conversation_id: groupId, user_id: user.id, company_page_id: cpId },
+          { onConflict: "conversation_id,user_id,company_page_id", ignoreDuplicates: true },
+        );
+        const retryInfo = await fetchWebGroupInfo(groupId);
+        if (retryInfo) {
+          setGroupInfo(retryInfo);
+          const clearedAt: string | null = (clearRow.data as any)?.cleared_at ?? null;
+          const filtered = clearedAt ? msgs.filter(m => m.created_at > clearedAt) : msgs;
+          setMessages(filtered);
+          filtered.forEach(m => seenIds.current.add(m.id));
+          setLoading(false);
+          scrollBottom();
+          return;
+        }
+      }
       // User is not a member (RLS blocks conversations table). Try public group info.
       const pub = await fetchGroupByIdPublic(groupId);
       setPublicGroup(pub);
