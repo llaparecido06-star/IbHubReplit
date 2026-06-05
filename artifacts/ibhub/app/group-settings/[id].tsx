@@ -188,8 +188,13 @@ export default function GroupSettingsScreen() {
         { text: t("group_settings_screen.cancel"), style: "cancel" },
         {
           text: t("group_settings_screen.delete_btn"), style: "destructive", onPress: async () => {
-            const { error } = await supabase.from("groups").delete().eq("id", id);
-            if (!error) {
+            // conversations CASCADE → conversation_participants + messages
+            // groups CASCADE → group_members
+            const [r1, r2] = await Promise.all([
+              supabase.from("conversations").delete().eq("id", id),
+              supabase.from("groups").delete().eq("id", id),
+            ]);
+            if (!r1.error && !r2.error) {
               router.replace("/groups" as any);
             } else {
               Alert.alert(t("group_settings_screen.error_title"), t("group_settings_screen.error_delete_group"));

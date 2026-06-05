@@ -186,8 +186,13 @@ export default function GrupoConfiguracoesPage() {
   async function handleDeleteGroup() {
     if (!groupId) return;
     if (!confirm("Tem certeza que deseja excluir este grupo? Todos os membros e mensagens serão removidos permanentemente.")) return;
-    await supabase.from("group_members").delete().eq("group_id", groupId);
-    await supabase.from("groups").delete().eq("id", groupId);
+    // Delete conversations first — its CASCADE removes conversation_participants
+    // and messages. group_members is handled by the CASCADE on groups.
+    // Both operations are independent so we can run them in parallel.
+    await Promise.all([
+      supabase.from("conversations").delete().eq("id", groupId),
+      supabase.from("groups").delete().eq("id", groupId),
+    ]);
     setLocation("/app/mensagens");
   }
 
