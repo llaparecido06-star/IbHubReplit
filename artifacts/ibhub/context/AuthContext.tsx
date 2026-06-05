@@ -3,7 +3,7 @@ import { createClient, Session, User } from "@supabase/supabase-js";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
@@ -193,7 +193,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profileChecked, setProfileChecked]     = useState(false);
   const [activeCompany, setActiveCompany]       = useState<ActiveCompany | null>(null);
 
+  // Guard against concurrent fetchProfile calls (common on Android where
+  // onAuthStateChange fires SIGNED_IN + TOKEN_REFRESHED in quick succession).
+  // Only one fetch runs at a time; subsequent calls for the same userId are
+  // no-ops while the first is in flight.
+  const fetchProfileInFlightRef = useRef<string | null>(null);
+
   const fetchProfile = useCallback(async (userId: string) => {
+    // Guard: if a fetch for this user is already in flight, skip. This prevents
+    // Android's rapid SIGNED_IN → TOKEN_REFRESHED sequence from running two
+    // concurrent queries and creating a profileChecked race condition.
+    if (fetchProfileInFlightRef.current === userId) {
+      console.log(`[fetchProfile] skipping — already in flight for userId=${userId}`);
+      return;
+    }
+    fetchProfileInFlightRef.current = userId;
+
     // Safety-net: if the Supabase query hangs (network lost mid-session, server
     // timeout, etc.) the finally block never runs and profileChecked stays false,
     // keeping the loading spinner up forever. This timer fires after 3 s and
@@ -203,6 +218,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       timedOut = true;
       console.warn(`[fetchProfile] 3s timeout for userId=${userId} — unblocking profileChecked`);
       setProfileChecked(true);
+      fetchProfileInFlightRef.current = null;
     }, 3_000);
 
     try {
@@ -247,6 +263,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error(`[fetchProfile] Exception:`, e?.message);
     } finally {
       clearTimeout(tid);
+      fetchProfileInFlightRef.current = null;
       // setProfileChecked is idempotent — safe to call even if the timeout
       // already fired it. React bails out of re-rendering when state is the
       // same value, so this causes no extra renders.
@@ -563,8 +580,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setProfile(null);
         setNeedsProfileCompletion(false);
-        setProfileChecked(false);
+        // Do NOT reset profileChecked to false here. When session?.user is null,
+        // the !session branch above (line ~481) already set profileChecked=true.
+        // Resetting it here creates a race: _layout.tsx sees session && !profileChecked
+        // (during Android's SIGNED_IN → TOKEN_REFRESHED burst) and hangs on the
+        // spinner indefinitely, causing the infinite login loop.
         clearAuthCache();
+        fetchProfileInFlightRef.current = null;
       }
     });
 
