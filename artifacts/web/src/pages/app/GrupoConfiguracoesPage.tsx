@@ -44,7 +44,7 @@ function Avatar({ src, name, size = 40 }: { src?: string | null; name: string; s
 export default function GrupoConfiguracoesPage() {
   const [, params]      = useRoute("/app/grupos/:id/configuracoes");
   const [, setLocation] = useLocation();
-  const { profile, user } = useAuth();
+  const { profile, user, activeCompany } = useAuth();
   const groupId = params?.id;
   // group_members.user_id stores profiles.id (PK), not the auth UUID —
   // must match the mobile pattern: profile?.id first.
@@ -192,7 +192,7 @@ export default function GrupoConfiguracoesPage() {
     if (!groupId || !userId || leavingGroup) return;
     if (!confirm("Tem certeza que deseja sair deste grupo?")) return;
     setLeavingGroup(true);
-    const ok = await leaveGroup(groupId, userId);
+    const ok = await leaveGroup(groupId, userId, activeCompany?.id ?? null);
     if (ok) {
       setLocation("/app/mensagens");
     } else {
@@ -273,7 +273,7 @@ export default function GrupoConfiguracoesPage() {
   const TABS: { key: ConfigTab; label: string; badge?: number }[] = [
     { key: "membros",   label: "Membros",   badge: members.length },
     ...(isMod ? [{ key: "pendentes" as ConfigTab, label: "Pendentes", badge: pending.length }] : []),
-    ...(isOwner ? [{ key: "convidar" as ConfigTab, label: "Convidar" }] : []),
+    ...(isMod ? [{ key: "convidar" as ConfigTab, label: "Convidar" }] : []),
     { key: "link",      label: "Link" },
   ];
 
