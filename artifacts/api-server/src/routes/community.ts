@@ -80,13 +80,17 @@ router.post("/community/groups", async (req: Request, res: Response): Promise<vo
   // Manually add the owner to group_members and conversation_participants.
   // We do this in the API instead of relying on the DB trigger so the operation
   // works even if the trigger or ON CONFLICT constraint has not been migrated yet.
+  // onConflict must reference the exact 3-column constraint
+  // UNIQUE NULLS NOT DISTINCT (group_id, user_id, company_page_id).
   await supabaseAdmin.from("group_members").upsert(
-    { group_id: groupId, user_id: userId, role: "owner" },
-    { onConflict: "group_id,user_id", ignoreDuplicates: true },
+    { group_id: groupId, user_id: userId, role: "owner", company_page_id: null },
+    { onConflict: "group_id,user_id,company_page_id", ignoreDuplicates: true },
   );
+  // onConflict must reference the exact 3-column constraint
+  // UNIQUE NULLS NOT DISTINCT (conversation_id, user_id, company_page_id).
   await supabaseAdmin.from("conversation_participants").upsert(
-    { conversation_id: groupId, user_id: userId },
-    { onConflict: "conversation_id,user_id", ignoreDuplicates: true },
+    { conversation_id: groupId, user_id: userId, company_page_id: null },
+    { onConflict: "conversation_id,user_id,company_page_id", ignoreDuplicates: true },
   );
 
   res.status(201).json({ group });
@@ -504,7 +508,7 @@ router.post("/community/groups/:id/request-join", async (req: Request, res: Resp
     if (isConstraint) {
       res.status(500).json({
         error: "role_constraint",
-        hint: "Run: ALTER TABLE public.group_members DROP CONSTRAINT IF EXISTS group_members_role_check; ALTER TABLE public.group_members ADD CONSTRAINT group_members_role_check CHECK (role IN ('owner','member','moderator','pending'));",
+        hint: "Run migration v74_fix_role_constraint_and_trigger.sql from artifacts/ibhub/supabase/ in the Supabase SQL editor.",
       });
     } else {
       res.status(500).json({ error: insertErr.message });
