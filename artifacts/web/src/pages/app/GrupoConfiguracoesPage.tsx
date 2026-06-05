@@ -244,6 +244,15 @@ export default function GrupoConfiguracoesPage() {
       .from("group_members")
       .insert({ group_id: groupId, user_id: person.id, role: "member" });
     if (!error) {
+      // Grant chat access so the invited user can see group messages immediately.
+      // Without this, the user appears in the member list but the conversation
+      // remains invisible to them (conversation_participants controls chat access).
+      await supabase
+        .from("conversation_participants")
+        .upsert(
+          { conversation_id: groupId, user_id: person.id },
+          { onConflict: "conversation_id,user_id,company_page_id", ignoreDuplicates: true },
+        );
       setMembers(prev => [...prev, { user_id: person.id, role: "member", profile: { id: person.id, full_name: person.full_name, avatar_url: person.avatar_url, headline: person.headline } }]);
       setSearchResults(prev => prev.filter(p => p.id !== person.id));
     }

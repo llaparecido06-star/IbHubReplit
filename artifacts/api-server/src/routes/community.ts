@@ -640,15 +640,16 @@ router.post("/community/groups/:id/members/:userId/approve", async (req: Request
   const groupId    = req.params.id as string;
   const memberId   = req.params.userId as string;
 
-  // Verify the caller is the group owner
-  const { data: group, error: groupErr } = await supabaseAdmin
-    .from("groups")
-    .select("owner_id")
-    .eq("id", groupId)
-    .maybeSingle();
+  // Verify the caller is the group owner or a moderator
+  const [{ data: group, error: groupErr }, { data: callerMem }] = await Promise.all([
+    supabaseAdmin.from("groups").select("owner_id, name").eq("id", groupId).maybeSingle(),
+    supabaseAdmin.from("group_members").select("role").eq("group_id", groupId).eq("user_id", callerId).maybeSingle(),
+  ]);
 
   if (groupErr || !group) { res.status(404).json({ error: "Group not found" }); return; }
-  if (group.owner_id !== callerId) { res.status(403).json({ error: "Only the group owner can approve members" }); return; }
+  const callerRole = callerMem?.role as string | undefined;
+  const canManage = group.owner_id === callerId || callerRole === "owner" || callerRole === "moderator";
+  if (!canManage) { res.status(403).json({ error: "Only group owners and moderators can approve members" }); return; }
 
   // Promote to member
   const { error: updateErr } = await supabaseAdmin
@@ -709,15 +710,16 @@ router.delete("/community/groups/:id/members/:userId/reject", async (req: Reques
   const groupId  = req.params.id as string;
   const memberId = req.params.userId as string;
 
-  // Verify the caller is the group owner
-  const { data: group, error: groupErr } = await supabaseAdmin
-    .from("groups")
-    .select("owner_id")
-    .eq("id", groupId)
-    .maybeSingle();
+  // Verify the caller is the group owner or a moderator
+  const [{ data: group, error: groupErr }, { data: callerMem }] = await Promise.all([
+    supabaseAdmin.from("groups").select("owner_id").eq("id", groupId).maybeSingle(),
+    supabaseAdmin.from("group_members").select("role").eq("group_id", groupId).eq("user_id", callerId).maybeSingle(),
+  ]);
 
   if (groupErr || !group) { res.status(404).json({ error: "Group not found" }); return; }
-  if (group.owner_id !== callerId) { res.status(403).json({ error: "Only the group owner can reject members" }); return; }
+  const callerRole = callerMem?.role as string | undefined;
+  const canManage = group.owner_id === callerId || callerRole === "owner" || callerRole === "moderator";
+  if (!canManage) { res.status(403).json({ error: "Only group owners and moderators can reject members" }); return; }
 
   const { error: deleteErr } = await supabaseAdmin
     .from("group_members")
