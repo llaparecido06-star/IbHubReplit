@@ -110,9 +110,10 @@ export default function GrupoChatPage() {
       return;
     }
 
-    const [info, msgs] = await Promise.all([
+    const [info, msgs, clearRow] = await Promise.all([
       fetchWebGroupInfo(groupId),
       fetchWebMessages(groupId),
+      supabase.from("group_message_clears").select("cleared_at").eq("user_id", user.id).eq("conversation_id", groupId).maybeSingle(),
     ]);
     if (!info) {
       // User is not a member (RLS blocks conversations table). Try public group info.
@@ -122,8 +123,7 @@ export default function GrupoChatPage() {
       return;
     }
     setGroupInfo(info);
-    const clearKey = `group_cleared_at_${groupId}`;
-    const clearedAt = localStorage.getItem(clearKey);
+    const clearedAt: string | null = (clearRow.data as any)?.cleared_at ?? null;
     const filtered = clearedAt ? msgs.filter(m => m.created_at > clearedAt) : msgs;
     setMessages(filtered);
     filtered.forEach(m => seenIds.current.add(m.id));

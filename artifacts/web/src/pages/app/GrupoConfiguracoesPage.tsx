@@ -225,11 +225,16 @@ export default function GrupoConfiguracoesPage() {
     }
   }
 
-  function handleClearConversation() {
-    if (!groupId) return;
+  async function handleClearConversation() {
+    if (!groupId || !userId) return;
     if (!confirm("Limpar sua visualização desta conversa? As mensagens serão ocultadas para você (outros membros continuam vendo).")) return;
-    const key = `group_cleared_at_${groupId}`;
-    localStorage.setItem(key, new Date().toISOString());
+    const clearedAt = new Date().toISOString();
+    await supabase
+      .from("group_message_clears")
+      .upsert(
+        { user_id: userId, conversation_id: groupId, cleared_at: clearedAt },
+        { onConflict: "user_id,conversation_id" },
+      );
     setClearDone(true);
     setTimeout(() => setClearDone(false), 2500);
   }
