@@ -112,9 +112,9 @@ export default function GrupoConfiguracoesPage() {
     if (allIds.length > 0) {
       const { data: profiles } = await supabase
         .from("profiles")
-        .select("id, user_id, full_name, avatar_url, headline")
-        .in("user_id", allIds);
-      const profileMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p]));
+        .select("id, full_name, avatar_url, headline")
+        .in("id", allIds);
+      const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
       setMembers(activeMems.map((m: any) => ({ user_id: m.user_id, role: m.role, profile: profileMap.get(m.user_id) })));
       setPending(pendingMems.map((m: any) => ({ user_id: m.user_id, role: "pending" as const, profile: profileMap.get(m.user_id) })));
     }
