@@ -30,6 +30,8 @@ interface Member {
   name: string;
   avatar_url: string | null;
   role: "dono" | "admin" | "membro";
+  position: string | null;
+  company: string | null;
 }
 
 interface GroupData {
@@ -98,7 +100,7 @@ export default function GroupSettingsScreen() {
 
     const allIds = [...new Set([...rawMembers.map((m: any) => m.user_id), ...rawPending.map((m: any) => m.user_id)].filter(Boolean))];
     const { data: profiles } = allIds.length > 0
-      ? await supabase.from("profiles").select("id, full_name, avatar_url").in("id", allIds)
+      ? await supabase.from("profiles").select("id, full_name, avatar_url, position, company").in("id", allIds)
       : { data: [] };
 
     const profileMap = new Map<string, any>((profiles ?? []).map((p: any) => [p.id, p]));
@@ -111,6 +113,8 @@ export default function GroupSettingsScreen() {
         name: p?.full_name ?? t("group_settings_screen.member_label"),
         avatar_url: p?.avatar_url ?? null,
         role: isGroupOwner ? "dono" : m.role === "admin" ? "admin" : "membro",
+        position: p?.position ?? null,
+        company: p?.company ?? null,
       };
     });
 
@@ -436,6 +440,11 @@ export default function GroupSettingsScreen() {
                   <Avatar name={member.name} uri={member.avatar_url ?? undefined} size={42} />
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.memberName, { color: colors.navy }]}>{member.name}</Text>
+                    {(member.position || member.company) ? (
+                      <Text style={[styles.roleText, { color: colors.mutedForeground }]} numberOfLines={1}>
+                        {[member.position, member.company].filter(Boolean).join(" · ")}
+                      </Text>
+                    ) : null}
                     {member.role === "dono" && (
                       <View style={styles.roleRow}>
                         <Feather name="star" size={12} color={colors.gold} />
