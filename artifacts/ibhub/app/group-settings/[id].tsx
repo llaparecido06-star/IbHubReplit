@@ -656,7 +656,7 @@ export default function GroupSettingsScreen() {
             </View>
           );
         }
-        const inviteLink = `https://ibhub.com.br/grupo/${id}`;
+        const inviteLink = `https://www.ibhub.com.br/grupo/${id}`;
         const handleShare = async () => {
           try {
             await Share.share({
