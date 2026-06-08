@@ -358,7 +358,7 @@ function GroupCard({ group: g, colors, router, onLeave }: { group: Group; colors
           >
             <Text style={styles.openChatText}>{t("groups.chat")}</Text>
           </TouchableOpacity>
-          {g.is_owner && (
+          {(g.is_owner || g.is_moderator) && (
             <TouchableOpacity
               style={[styles.manageBtn, { borderColor: colors.border }]}
               onPress={() => router.push(`/group-settings/${g.id}`)}

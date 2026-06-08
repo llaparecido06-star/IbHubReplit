@@ -16,6 +16,7 @@ export interface Group {
   is_member?: boolean;
   is_owner?: boolean;
   is_pending?: boolean;
+  is_moderator?: boolean;
 }
 
 export async function fetchGroups(userId: string, activeCompanyId?: string | null): Promise<{ mine: Group[]; explore: Group[] }> {
@@ -49,9 +50,11 @@ export async function fetchGroups(userId: string, activeCompanyId?: string | nul
       return {
         ...g,
         member_count: countResults[i].count ?? 0,
-        is_member:  role !== undefined && role !== "pending",
-        is_pending: role === "pending",
-        is_owner:   g.owner_id === userId,
+        is_member:    role !== undefined && role !== "pending",
+        is_pending:   role === "pending",
+        is_owner:     g.owner_id === userId,
+        // "admin" is the legacy name for moderator used in older rows
+        is_moderator: role === "admin" || role === "moderator",
       };
     });
     return {
