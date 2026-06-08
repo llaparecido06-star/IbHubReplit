@@ -1246,7 +1246,10 @@ export default function GroupChatScreen() {
               style={styles.menuItem}
               onPress={() => {
                 setMenuVisible(false);
-                router.push(`/group-settings/${id}` as any);
+                // Delay navigation until the Modal closing animation finishes;
+                // calling router.push while the Modal is still animating closed
+                // can cause the navigation to be silently swallowed on web/iOS.
+                setTimeout(() => router.push(`/group-settings/${id}` as any), 300);
               }}
             >
               <Feather name="settings" size={18} color={colors.navy} />
