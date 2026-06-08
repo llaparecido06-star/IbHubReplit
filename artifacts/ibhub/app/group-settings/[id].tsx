@@ -1,5 +1,4 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import * as Linking from "expo-linking";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -321,9 +320,16 @@ export default function GroupSettingsScreen() {
   const handleInvite = async (person: { id: string; full_name: string }) => {
     setInvitingId(person.id);
     try {
+      // Must use the 3-column constraint that exists on group_members:
+      // (group_id, user_id, company_page_id). Using only 2 columns causes
+      // PostgreSQL to reject the upsert with "no unique constraint" error.
+      // Invited users always join with personal identity (company_page_id=null).
       const { error } = await supabase
         .from("group_members")
-        .upsert({ group_id: id, user_id: person.id, role: "member" }, { onConflict: "group_id,user_id" });
+        .upsert(
+          { group_id: id, user_id: person.id, role: "member", company_page_id: null },
+          { onConflict: "group_id,user_id,company_page_id" },
+        );
       if (error) throw error;
       // Grant chat access immediately — without this the invited user appears in
       // the members list but cannot see group messages (conversation_participants
@@ -331,7 +337,7 @@ export default function GroupSettingsScreen() {
       await supabase
         .from("conversation_participants")
         .upsert(
-          { conversation_id: id, user_id: person.id },
+          { conversation_id: id, user_id: person.id, company_page_id: null },
           { onConflict: "conversation_id,user_id,company_page_id", ignoreDuplicates: true },
         );
       Alert.alert(t("group_settings_screen.invite_sent_title"), t("group_settings_screen.invite_sent_msg", { name: person.full_name }));
@@ -612,7 +618,36 @@ export default function GroupSettingsScreen() {
         );
 
       case "link": {
-        const inviteLink = Linking.createURL(`group-chat/${id}`);
+        // Restricted groups do not support public share links — anyone who
+        // receives the link would be blocked because they're not a member.
+        // Show an explanatory card and redirect to the invite tab instead.
+        if (group.access === "restrito") {
+          return (
+            <View style={[styles.linkTab, { padding: 16 }]}>
+              <View style={[styles.linkBox, { backgroundColor: "#fff", borderColor: colors.border, flexDirection: "column", alignItems: "flex-start", gap: 8, padding: 16 }]}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Feather name="shield" size={18} color={colors.navy} />
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: colors.navy }}>
+                    {t("group_settings_screen.restricted_no_link_title")}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 13, color: colors.mutedForeground, lineHeight: 18 }}>
+                  {t("group_settings_screen.restricted_no_link_desc")}
+                </Text>
+              </View>
+              {isMod && (
+                <TouchableOpacity
+                  style={[styles.copyBtn, { backgroundColor: colors.gold }]}
+                  onPress={() => setActiveTab("convidar")}
+                >
+                  <Feather name="user-plus" size={16} color="#fff" />
+                  <Text style={styles.copyBtnText}>{t("group_settings_screen.restricted_go_invite_btn")}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          );
+        }
+        const inviteLink = `https://ibhub.com.br/grupo/${id}`;
         const handleShare = async () => {
           try {
             await Share.share({

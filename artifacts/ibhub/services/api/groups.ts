@@ -55,11 +55,14 @@ export async function fetchGroups(userId: string, activeCompanyId?: string | nul
       };
     });
     return {
-      // Full members only (not pending)
-      mine:    enriched.filter(g => g.is_member),
+      // Full members + owners (is_owner covers the edge case where the user is
+      // the group owner but switched to a company identity: their personal
+      // membership (company_page_id=null) is not matched by the company-scoped
+      // membership query, so is_member=false even though they own the group).
+      mine:    enriched.filter(g => g.is_member || g.is_owner),
       // Pending users appear in explore with is_pending=true so they can see the status badge
       // restrito groups are hidden from search/explore — only visible to members
-      explore: enriched.filter(g => !g.is_member && g.access !== "restrito"),
+      explore: enriched.filter(g => !g.is_member && !g.is_owner && g.access !== "restrito"),
     };
   } catch (e) {
     console.warn("fetchGroups:", e);
