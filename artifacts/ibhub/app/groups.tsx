@@ -358,14 +358,14 @@ function GroupCard({ group: g, colors, router, onLeave }: { group: Group; colors
           >
             <Text style={styles.openChatText}>{t("groups.chat")}</Text>
           </TouchableOpacity>
-          {(g.is_owner || g.is_moderator) && (
-            <TouchableOpacity
-              style={[styles.manageBtn, { borderColor: colors.border }]}
-              onPress={() => router.push(`/group-settings/${g.id}`)}
-            >
-              <Text style={[styles.manageBtnText, { color: colors.navy }]}>{t("groups.manage")}</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[styles.manageBtn, { borderColor: colors.border }]}
+            onPress={() => router.push(`/group-settings/${g.id}`)}
+          >
+            <Text style={[styles.manageBtnText, { color: colors.navy }]}>
+              {(g.is_owner || g.is_moderator) ? t("groups.manage") : t("groups.info_btn")}
+            </Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.leaveRow} onPress={onLeave}>
             <Feather name="log-out" size={13} color={colors.mutedForeground} />
             <Text style={[styles.leaveText, { color: colors.mutedForeground }]}>{t("groups.leave")}</Text>

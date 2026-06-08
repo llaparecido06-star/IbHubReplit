@@ -138,7 +138,7 @@ export default function GroupSettingsScreen() {
   useEffect(() => { load(); }, [load]);
 
   const handleChangeAvatar = async () => {
-    if (!isOwner) return;
+    if (!isMod) return;
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
       Alert.alert(t("group_settings_screen.permission_title"), t("group_settings_screen.permission_gallery"));
@@ -163,7 +163,9 @@ export default function GroupSettingsScreen() {
   };
 
   const handleRemoveMember = (member: Member) => {
-    if (!isOwner || member.role === "dono") return;
+    // Mods can remove regular members; only the owner can remove other admins
+    if (!isMod || member.role === "dono") return;
+    if (member.role === "admin" && !isOwner) return;
     Alert.alert(
       t("group_settings_screen.remove_member_title"),
       t("group_settings_screen.remove_member_msg", { name: member.name }),
@@ -359,13 +361,13 @@ export default function GroupSettingsScreen() {
         return (
           <View style={{ gap: 10, padding: 16 }}>
             <View style={{ alignItems: "center", paddingVertical: 12 }}>
-              <TouchableOpacity onPress={handleChangeAvatar} disabled={!isOwner || updating} activeOpacity={isOwner ? 0.8 : 1}>
+              <TouchableOpacity onPress={handleChangeAvatar} disabled={!isMod || updating} activeOpacity={isMod ? 0.8 : 1}>
                 {group.avatar_url ? (
                   <Image source={{ uri: group.avatar_url }} style={styles.groupAvatarLg} />
                 ) : (
                   <Avatar name={group.name} size={72} />
                 )}
-                {isOwner && (
+                {isMod && (
                   <View style={[styles.avatarEditBadge, { backgroundColor: colors.gold }]}>
                     {updating ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="camera" size={13} color="#fff" />}
                   </View>

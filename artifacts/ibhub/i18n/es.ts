@@ -953,6 +953,7 @@ const es = {
     db_error: "No se pudieron cargar los grupos. Inténtalo de nuevo.",
     new_btn: "Nuevo",
     manage: "Gestionar",
+    info_btn: "Ver Miembros",
     chat: "Chat",
     invite_only: "Por invitación",
     no_groups_yet: "Aún no hay grupos",

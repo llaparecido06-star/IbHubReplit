@@ -948,6 +948,7 @@ const ptBR = {
     db_error: "Não foi possível carregar os grupos. Tente novamente.",
     new_btn: "Novo",
     manage: "Gerenciar",
+    info_btn: "Ver Membros",
     chat: "Chat",
     invite_only: "Por convite",
     no_groups_yet: "Ainda não há grupos",
