@@ -1066,6 +1066,9 @@ export default function GroupChatScreen() {
             >
               <Feather name="settings" size={19} color={colors.navy} />
             </TouchableOpacity>
+            <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.headerRight}>
+              <Feather name="more-vertical" size={20} color={colors.navy} />
+            </TouchableOpacity>
           </>
         ) : (
           <>
