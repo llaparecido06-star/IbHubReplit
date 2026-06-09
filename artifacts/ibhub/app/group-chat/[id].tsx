@@ -594,6 +594,19 @@ export default function GroupChatScreen() {
     }
   };
 
+  // ── Navigation helpers ────────────────────────────────────────────────────
+
+  const handleNavigateToSettings = useCallback(() => {
+    if (!id) return;
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      // Use window.location for guaranteed web navigation (bypasses Expo Router state issues)
+      const basePath = window.location.pathname.replace(/\/group-chat\/.*/, "");
+      window.location.href = `${basePath}/group-settings/${id}`;
+    } else {
+      setTimeout(() => router.push(`/group-settings/${id}` as any), 100);
+    }
+  }, [id, router]);
+
   // ── 3-dot menu actions ────────────────────────────────────────────────────
 
   const handleShareGroup = async () => {
@@ -1062,7 +1075,7 @@ export default function GroupChatScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.headerRight}
-              onPress={() => setTimeout(() => router.push(`/group-settings/${id}` as any), 50)}
+              onPress={handleNavigateToSettings}
             >
               <Feather name="settings" size={19} color={colors.navy} />
             </TouchableOpacity>
@@ -1263,10 +1276,7 @@ export default function GroupChatScreen() {
               <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
               <TouchableOpacity
                 style={styles.menuItem}
-                onPress={() => {
-                  setMenuVisible(false);
-                  router.push(`/group-settings/${id}` as any);
-                }}
+                onPress={() => { setMenuVisible(false); handleNavigateToSettings(); }}
               >
                 <Feather name="settings" size={18} color={colors.navy} />
                 <Text style={[styles.menuItemText, { color: colors.navy }]}>{t("group_chat_screen.menu_settings")}</Text>
@@ -1302,10 +1312,7 @@ export default function GroupChatScreen() {
               <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
               <TouchableOpacity
                 style={styles.menuItem}
-                onPress={() => {
-                  setMenuVisible(false);
-                  setTimeout(() => router.push(`/group-settings/${id}` as any), 300);
-                }}
+                onPress={() => { setMenuVisible(false); handleNavigateToSettings(); }}
               >
                 <Feather name="settings" size={18} color={colors.navy} />
                 <Text style={[styles.menuItemText, { color: colors.navy }]}>{t("group_chat_screen.menu_settings")}</Text>
