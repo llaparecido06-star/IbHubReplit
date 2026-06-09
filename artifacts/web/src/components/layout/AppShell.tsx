@@ -861,19 +861,35 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
     { path: `/app/empresa/${activeCompany.id}`, label: "Perfil da Empresa", icon: I.company },
   ] : NAV_ITEMS;
 
+  const isBuscaPage = location.startsWith("/app/busca");
+
   return (
     <div style={{ minHeight: "100vh", backgroundColor: isMobile ? "#f2f3f5" : BG, fontFamily: "'Inter', -apple-system, sans-serif" }}>
       {/* ── Top bar ────────────────────────── */}
       <header style={{
         backgroundColor: WHITE, borderBottom: `1px solid ${BORDER}`,
         position: "sticky", top: 0, zIndex: 200, height: 56,
-        display: "flex", alignItems: "center",
-        padding: isMobile ? "0 12px" : "0 24px",
-        gap: isMobile ? 8 : 16,
       }}>
-        <img src={`${import.meta.env.BASE_URL}logo-ibhub.png`} alt="ibhub" onClick={() => setLocation("/app")} style={{ height: 28, cursor: "pointer", flexShrink: 0, objectFit: "contain" }} />
+        {/* Inner container — same max-width as the feed so logo/search align with content */}
+        <div style={{
+          maxWidth: 1180, margin: "0 auto", height: "100%", width: "100%",
+          display: "flex", alignItems: "center",
+          padding: isMobile ? "0 12px" : "0 24px",
+          gap: isMobile ? 8 : 16,
+          position: "relative",
+          boxSizing: "border-box",
+        }}>
+        {/* Logo — absolutely centered on busca page (desktop), left-aligned otherwise */}
+        {isBuscaPage && !isMobile ? (
+          <div style={{ position: "absolute", left: "50%", transform: "translateX(-50%)" }}>
+            <img src={`${import.meta.env.BASE_URL}logo-ibhub.png`} alt="ibhub" onClick={() => setLocation("/app")} style={{ height: 28, cursor: "pointer", flexShrink: 0, objectFit: "contain" }} />
+          </div>
+        ) : (
+          <img src={`${import.meta.env.BASE_URL}logo-ibhub.png`} alt="ibhub" onClick={() => setLocation("/app")} style={{ height: 28, cursor: "pointer", flexShrink: 0, objectFit: "contain" }} />
+        )}
 
-        {!isMobile && (
+        {/* Search bar — desktop only, hidden on busca page to avoid duplication */}
+        {!isMobile && !isBuscaPage && (
           <div
             style={{ flex: 1, maxWidth: 400, display: "flex", alignItems: "center", gap: 8, backgroundColor: "#f2f2ed", borderRadius: 24, padding: "7px 14px", cursor: "text" }}
             onClick={() => setLocation("/app/busca")}
@@ -893,7 +909,8 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
 
         <div style={{ flex: 1 }} />
 
-        {isMobile && (
+        {/* Mobile search icon — hidden on busca page */}
+        {isMobile && !isBuscaPage && (
           <button onClick={() => setLocation("/app/busca")} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, display: "flex", alignItems: "center", padding: 6 }} title="Buscar">{I.search}</button>
         )}
 
@@ -1166,6 +1183,7 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
             </div>
           )}
         </div>
+        </div>{/* end inner header container */}
       </header>
 
       {/* ── Body ───────────────────────────── */}
