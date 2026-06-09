@@ -100,8 +100,14 @@ export default function GrupoConfiguracoesPage() {
     const rawMems = mems ?? [];
     const me = rawMems.find((m: any) => m.user_id === userId);
     const rawRole = me?.role as string | undefined;
+    // Accept legacy "admin" role (production trigger) as equivalent to "moderator".
+    // Also treat the actual group owner (grp.owner_id) as "owner" regardless of
+    // what group_members.role says, in case of legacy/inconsistent data.
+    const isActualOwner = (grp as any).owner_id === userId;
     const role: MyRole =
-      rawRole === "owner" || rawRole === "moderator" || rawRole === "member" ? rawRole : null;
+      isActualOwner       ? "owner"     :
+      rawRole === "owner" || rawRole === "moderator" || rawRole === "member" ? rawRole :
+      rawRole === "admin" ? "moderator" : null;
     if (!role) { setLocation(`/app/grupos/${groupId}`); return; }
     setMyRole(role);
 

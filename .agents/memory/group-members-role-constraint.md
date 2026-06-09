@@ -13,7 +13,20 @@ All upserts into `group_members` must use the **3-column** conflict target: `gro
 
 **Why:** Using a 2-column onConflict on a table that only has a 3-column unique constraint causes PostgREST to either error or fall back to a plain INSERT.
 
+## Web app role guard
+`GrupoConfiguracoesPage.tsx` has a role gate that redirects non-members back to the chat. It must accept `"admin"` as a valid role (treat as `"moderator"`). Also use `grp.owner_id === userId` as an ownership fallback in case `group_members.role` is stale.
+
+Pattern to follow:
+```js
+const isActualOwner = grp.owner_id === userId;
+const role: MyRole =
+  isActualOwner       ? "owner"     :
+  rawRole === "owner" || rawRole === "moderator" || rawRole === "member" ? rawRole :
+  rawRole === "admin" ? "moderator" : null;
+```
+
 ## How to apply
 - Any new migration that touches the role check constraint must include `'admin'`
 - Any upsert into `group_members` or `conversation_participants` must specify the 3-column onConflict and include `company_page_id: null` (or the actual value) in the payload
 - Migration v74 (`v74_fix_role_constraint_and_trigger.sql`) is the canonical fix — must be run in Supabase SQL Editor for each environment (dev + prod)
+- Any page that gates access by `group_members.role` must handle `"admin"` and also fall back to `groups.owner_id` check
