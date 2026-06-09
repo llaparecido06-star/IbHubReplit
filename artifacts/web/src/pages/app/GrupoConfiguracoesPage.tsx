@@ -302,6 +302,118 @@ export default function GrupoConfiguracoesPage() {
   }
   if (!myRole) return null;
 
+  // ── Flat read-only layout for regular members (no mod/admin powers) ──
+  if (!isMod) {
+    const accessLabel = access === "aberto" ? "Aberto" : access === "fechado" ? "Fechado" : "Restrito";
+    const accessColor = access === "aberto" ? "#16a34a" : access === "fechado" ? "#d97706" : "#7c3aed";
+    const accessBg    = access === "aberto" ? "#dcfce7" : access === "fechado" ? "#fef3c7" : "#ede9fe";
+
+    return (
+      <AppShell>
+        <div style={{ maxWidth: 680, margin: "0 auto", padding: "16px 0 80px" }}>
+          {/* Header */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+            <button onClick={() => setLocation(`/app/grupos/${groupId}`)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, color: NAVY, padding: 0 }}>←</button>
+            <h1 style={{ fontSize: 20, fontWeight: 900, color: NAVY, margin: 0 }}>Configurações do Grupo</h1>
+          </div>
+
+          {/* Group info card (read-only) */}
+          <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <Avatar src={avatarUrl} name={name} size={52} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 17, fontWeight: 800, color: NAVY }}>{name}</div>
+                <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 20, backgroundColor: accessBg, color: accessColor }}>
+                    {accessLabel}
+                  </span>
+                  {category && (
+                    <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 10px", borderRadius: 20, backgroundColor: `${GOLD}18`, color: GOLD }}>
+                      {category}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            {desc && (
+              <div style={{ fontSize: 13, color: MUTED, lineHeight: 1.6, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
+                {desc}
+              </div>
+            )}
+          </div>
+
+          {/* Members list */}
+          <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Membros ({members.length})</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {members.map(m => {
+                const isMe = m.user_id === userId;
+                const goToMember = () => setLocation(isMe ? "/app/perfil" : `/app/usuario/${m.user_id}`);
+                return (
+                  <div key={m.user_id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <span onClick={goToMember} style={{ cursor: "pointer", display: "inline-flex" }}>
+                      <Avatar src={m.profile?.avatar_url} name={m.profile?.full_name ?? "?"} size={40} />
+                    </span>
+                    <div onClick={goToMember} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: NAVY }}>{m.profile?.full_name ?? "Usuário"}</div>
+                      {m.profile?.headline && <div style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.profile.headline}</div>}
+                    </div>
+                    <span style={{
+                      fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6,
+                      backgroundColor: m.role === "owner" ? `${GOLD}20` : (m.role === "moderator" || m.role === "admin") ? "#e0f2fe" : BG,
+                      color: m.role === "owner" ? GOLD : (m.role === "moderator" || m.role === "admin") ? "#0369a1" : MUTED,
+                    }}>
+                      {m.role === "owner" ? "Owner" : (m.role === "moderator" || m.role === "admin") ? "Mod" : "Membro"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Ações */}
+          <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Ações</div>
+            <button
+              onClick={handleToggleMute}
+              disabled={mutingGroup}
+              style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", backgroundColor: isMuted ? "#f1f5f9" : BG, border: `1px solid ${BORDER}`, borderRadius: 12, cursor: "pointer", textAlign: "left" }}
+            >
+              <span style={{ fontSize: 18 }}>{isMuted ? "🔕" : "🔔"}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: NAVY }}>{isMuted ? "Notificações silenciadas" : "Silenciar notificações"}</div>
+                <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{isMuted ? "Toque para reativar" : "Parar de receber notificações deste grupo"}</div>
+              </div>
+            </button>
+            <button
+              onClick={handleClearConversation}
+              style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", backgroundColor: BG, border: `1px solid ${BORDER}`, borderRadius: 12, cursor: "pointer", textAlign: "left" }}
+            >
+              <span style={{ fontSize: 18 }}>{clearDone ? "✅" : "🗑️"}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: NAVY }}>{clearDone ? "Conversa limpa!" : "Limpar conversa"}</div>
+                <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>Oculta as mensagens antigas para você</div>
+              </div>
+            </button>
+          </div>
+
+          {/* Leave group */}
+          <div style={{ backgroundColor: WHITE, border: "1px solid #fecaca", borderRadius: 16, padding: 20 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#dc2626", marginBottom: 8 }}>Sair do grupo</div>
+            <p style={{ fontSize: 13, color: MUTED, margin: "0 0 14px", lineHeight: 1.6 }}>Você perderá o acesso às mensagens e precisará ser convidado novamente para entrar.</p>
+            <button
+              onClick={handleLeaveGroup}
+              disabled={leavingGroup}
+              style={{ padding: "10px 20px", backgroundColor: "#dc2626", color: WHITE, border: "none", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: leavingGroup ? "not-allowed" : "pointer", opacity: leavingGroup ? 0.7 : 1 }}
+            >
+              {leavingGroup ? "Saindo..." : "Sair do grupo"}
+            </button>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
   const TABS: { key: ConfigTab; label: string; badge?: number }[] = [
     { key: "membros",   label: "Membros",   badge: members.length },
     ...(isMod ? [{ key: "pendentes" as ConfigTab, label: "Pendentes", badge: pending.length }] : []),
