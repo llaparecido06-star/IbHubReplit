@@ -54,10 +54,21 @@ function CheckIcon() {
   return <svg width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>;
 }
 
+function useIsMobile() {
+  const [mobile, setMobile] = React.useState(() => typeof window !== "undefined" && window.innerWidth < 768);
+  React.useEffect(() => {
+    const h = () => setMobile(window.innerWidth < 768);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+  return mobile;
+}
+
 export default function GrupoChatPage() {
   const [, params] = useRoute("/app/grupos/:id");
   const [, setLocation] = useLocation();
   const groupId = params?.id ?? "";
+  const isMobile = useIsMobile();
   const { user, activeCompany } = useAuth();
 
   const [groupInfo, setGroupInfo]     = useState<WebGroupInfo | null>(null);
@@ -238,7 +249,7 @@ export default function GrupoChatPage() {
     const groupName = (publicGroup as any)?.name ?? "Grupo";
     return (
       <AppShell>
-        <div style={{ display: "flex", height: "calc(100vh - 0px)", overflow: "hidden", background: BG }}>
+        <div style={{ position: "fixed", top: 56, bottom: isMobile ? 62 : 0, left: 0, right: 0, display: "flex", overflow: "hidden", background: BG }}>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", maxWidth: 800, margin: "0 auto", width: "100%", background: WHITE, borderLeft: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", borderBottom: `1px solid ${BORDER}`, background: WHITE }}>
               <button onClick={() => setLocation("/app/grupos")} style={{ background: "none", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4 }}>
@@ -277,7 +288,7 @@ export default function GrupoChatPage() {
 
     return (
       <AppShell>
-        <div style={{ display: "flex", height: "calc(100vh - 0px)", overflow: "hidden", background: BG }}>
+        <div style={{ position: "fixed", top: 56, bottom: isMobile ? 62 : 0, left: 0, right: 0, display: "flex", overflow: "hidden", background: BG }}>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", maxWidth: 800, margin: "0 auto", width: "100%", background: WHITE, borderLeft: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", borderBottom: `1px solid ${BORDER}`, background: WHITE }}>
               <button onClick={() => setLocation("/app/grupos")} style={{ background: "none", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4 }}>
