@@ -231,16 +231,42 @@ export default function MensagensPage() {
 
   const startConversation = async (targetUser: UserSearchResult) => {
     if (!userId) return;
-    const convId = await getOrCreateWebConversation(userId, targetUser.id);
+    const convId = await getOrCreateWebConversation(userId, targetUser.id, activeCompany?.id ?? null);
     if (!convId) return;
+
     setShowNewConvo(false);
     setUserSearchQuery("");
     setUserSearchResults([]);
-    const freshConvos = await fetchWebConversations(userId, activeCompany?.id ?? null);
-    setConversations(freshConvos);
-    const target = freshConvos.find(c => c.id === convId);
-    if (target) { loadMessages(target); }
-    else { setLocation(`/app/mensagens?conv=${convId}`); }
+
+    // Open the conversation immediately using a minimal object built from
+    // the search result — avoids any timing/filtering race between the API
+    // insert and the list refresh.
+    const immediateConvo: WebConversation = {
+      id: convId,
+      is_group: false,
+      name: null,
+      avatar_url: null,
+      last_message: null,
+      last_message_at: new Date().toISOString(),
+      unread_count: 0,
+      participant: {
+        id: targetUser.id,
+        full_name: targetUser.full_name ?? "",
+        avatar_url: targetUser.avatar_url ?? null,
+      },
+      company_page_id: activeCompany?.id ?? null,
+      company_page: null,
+    };
+    loadMessages(immediateConvo);
+
+    // Refresh the list in the background so the sidebar stays up-to-date.
+    fetchWebConversations(userId, activeCompany?.id ?? null).then(fresh => {
+      setConversations(fresh);
+      // If the full record is now available, upgrade the selected conversation
+      // so it shows proper metadata (e.g. company_page details).
+      const full = fresh.find(c => c.id === convId);
+      if (full) setSelected(full);
+    });
   };
 
   // Attachment state
