@@ -1055,12 +1055,28 @@ export default function GroupChatScreen() {
             </View>
           </View>
         </View>
-        <TouchableOpacity onPress={() => { setShowSearch(v => !v); if (showSearch) setSearchQuery(""); }} style={styles.headerRight}>
-          <Feather name="search" size={19} color={showSearch ? colors.gold : colors.navy} />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.headerRight}>
-          <Feather name="more-vertical" size={20} color={colors.navy} />
-        </TouchableOpacity>
+        {Platform.OS === "web" ? (
+          <>
+            <TouchableOpacity onPress={handleShareGroup} style={styles.headerRight}>
+              <Feather name="link-2" size={19} color={colors.navy} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.headerRight}
+              onPress={() => setTimeout(() => router.push(`/group-settings/${id}` as any), 50)}
+            >
+              <Feather name="settings" size={19} color={colors.navy} />
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <TouchableOpacity onPress={() => { setShowSearch(v => !v); if (showSearch) setSearchQuery(""); }} style={styles.headerRight}>
+              <Feather name="search" size={19} color={showSearch ? colors.gold : colors.navy} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.headerRight}>
+              <Feather name="more-vertical" size={20} color={colors.navy} />
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
       {/* Search bar */}
