@@ -18,6 +18,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
@@ -25,6 +26,16 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { createPost, uploadPostImage, uploadPostVideo, addWineEntry, canPublishAsCompany, sendMentionNotifications } from "@/services/api";
 import { MentionInput } from "@/components/ui/MentionInput";
+
+// On web, KeyboardAvoidingView is a no-op — the browser handles viewport
+// resizing when the virtual keyboard appears. Swapping it for a plain View
+// prevents the "height" behaviour from incorrectly shrinking the scroll area.
+const KeyboardView = Platform.OS === "web"
+  ? ({ children, style }: { children: React.ReactNode; style?: object }) =>
+      <View style={style}>{children}</View>
+  : KeyboardAvoidingView;
+
+const IS_WEB = Platform.OS === "web";
 
 const HASHTAG_SUGGESTIONS = [
   "vinho", "sommelier", "enologia", "degustação",
@@ -93,7 +104,9 @@ export default function CreatePostScreen() {
   const [tastingNotes, setTastingNotes]       = useState("");
   const [showScorePicker, setShowScorePicker] = useState(false);
 
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  // On web the modal overlays everything (no status bar, no visible tab bar).
+  // Use insets.top directly — it's 0 on web and the real status-bar height on native.
+  const topPad = insets.top;
 
   const handleAddImage = async () => {
     if (videoUri) return;
@@ -280,12 +293,18 @@ export default function CreatePostScreen() {
   const maxChars = 1000;
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardView
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? topPad + 50 : 0}
     >
-      <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+      {/* Web-only modal drag handle — mirrors the native card-modal indicator */}
+      {IS_WEB && (
+        <View style={styles.webHandle}>
+          <View style={styles.webHandlePill} />
+        </View>
+      )}
+      <View style={[styles.header, { paddingTop: IS_WEB ? 4 : topPad + 8, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={{ color: colors.mutedForeground, fontSize: 16 }}>{t("create_post_screen.cancel")}</Text>
         </TouchableOpacity>
@@ -363,7 +382,7 @@ export default function CreatePostScreen() {
               value={content}
               onChangeText={setContent}
               maxLength={maxChars}
-              autoFocus
+              autoFocus={!IS_WEB}
               suggestionsPlacement="above"
             />
 
@@ -469,7 +488,7 @@ export default function CreatePostScreen() {
               placeholderTextColor={colors.mutedForeground}
               value={tastingWine}
               onChangeText={setTastingWine}
-              autoFocus
+              autoFocus={!IS_WEB}
             />
             <View style={styles.tastingRow}>
               <TextInput
@@ -590,7 +609,7 @@ export default function CreatePostScreen() {
       </ScrollView>
 
       {mode === "normal" && (
-        <View style={[styles.toolbar, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom + 8 }]}>
+        <View style={[styles.toolbar, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: IS_WEB ? 20 : insets.bottom + 8 }]}>
           <Text style={[styles.charCount, { color: charCount > maxChars * 0.9 ? colors.destructive : colors.mutedForeground }]}>
             {charCount}/{maxChars}
           </Text>
@@ -610,12 +629,14 @@ export default function CreatePostScreen() {
           </View>
         </View>
       )}
-    </KeyboardAvoidingView>
+    </KeyboardView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  webHandle: { alignItems: "center", paddingTop: 10, paddingBottom: 6 },
+  webHandlePill: { width: 36, height: 4, borderRadius: 2, backgroundColor: "#d1d5db" },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1 },
   headerTitle: { fontSize: 16, fontWeight: "700" },
   postBtn: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
