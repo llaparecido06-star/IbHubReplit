@@ -41,6 +41,7 @@ import { usePermissions } from "@/context/PermissionsContext";
 import { PaywallScreen } from "@/components/ui/PaywallScreen";
 import { AdaptiveImage, ReactionPicker, REACTIONS, type ReactionType } from "@/components/feed/PostCard";
 import * as API from "@/services/api";
+import { API_URL } from "@/services/api";
 import { compressPostImage } from "@/utils/compressImage";
 import { usePaginatedQuery } from "@/hooks/usePaginatedQuery";
 import { useMarketFeedBadge } from "@/context/MarketFeedBadgeContext";
@@ -772,7 +773,6 @@ function BiMobileExportadorSearch({ colors, onCreditsUpdate }: { colors: ReturnT
   const { t } = useTranslation();
   const router = useRouter();
   const { session } = useAuth();
-  const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
   const authH = (): HeadersInit => session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 
   const [q, setQ]                   = useState("");
@@ -1047,7 +1047,6 @@ function BiMobileExportadorSearch({ colors, onCreditsUpdate }: { colors: ReturnT
 function BiMobileImportadoresSearch({ colors, onCreditsUpdate }: { colors: ReturnType<typeof useColors>; onCreditsUpdate?: (remaining: number) => void }) {
   const { t } = useTranslation();
   const { session } = useAuth();
-  const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
   const authH = (): HeadersInit => session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 
   const [q, setQ]                   = useState("");
@@ -1269,7 +1268,6 @@ function BiMobileImportadoresSearch({ colors, onCreditsUpdate }: { colors: Retur
 function BiMobileProdutoresSearch({ colors, onCreditsUpdate }: { colors: ReturnType<typeof useColors>; onCreditsUpdate?: (remaining: number) => void }) {
   const { t } = useTranslation();
   const { session } = useAuth();
-  const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
   const authH = (): HeadersInit => session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 
   const [q, setQ]                   = useState("");
@@ -1477,7 +1475,7 @@ function IdealBISearchView({ colors, bottomPad, credits, creditsTotal, creditsLo
     suggestTimer.current = setTimeout(async () => {
       try {
         const res = await fetch(
-          `${process.env.EXPO_PUBLIC_API_URL}/wine-imports/suggestions?q=${encodeURIComponent(q)}`,
+          `${API_URL}/wine-imports/suggestions?q=${encodeURIComponent(q)}`,
           { headers: authHeader() },
         );
         if (!res.ok) return;
@@ -1490,7 +1488,7 @@ function IdealBISearchView({ colors, bottomPad, credits, creditsTotal, creditsLo
 
   const spellCheck = async (sq: string) => {
     try {
-      const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/wine-imports/spell-correct`, {
+      const res = await fetch(`${API_URL}/wine-imports/spell-correct`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeader() },
         body: JSON.stringify({ query: sq, context: "marca" }),
@@ -1513,7 +1511,7 @@ function IdealBISearchView({ colors, bottomPad, credits, creditsTotal, creditsLo
     try {
       const directParam = opts?.direct ? "&direct=true" : "";
       const res = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/wine-imports/search?q=${encodeURIComponent(q)}${directParam}`,
+        `${API_URL}/wine-imports/search?q=${encodeURIComponent(q)}${directParam}`,
         { headers: authHeader() }
       );
       if (res.status === 402) {
@@ -1920,7 +1918,6 @@ interface WinePriceRevealedData {
 
 function BiMobilePrecosRotuloSearch({ colors, onCreditsUpdate }: { colors: ReturnType<typeof useColors>; onCreditsUpdate?: (remaining: number) => void }) {
   const { session } = useAuth();
-  const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
   const authH = (): HeadersInit => session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 
   const [query, setQuery]                           = React.useState("");
@@ -2833,7 +2830,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
   const fetchSharedCredits = useCallback(async () => {
     if (!session?.access_token) return;
     try {
-      const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/wine-imports/credits`, {
+      const res = await fetch(`${API_URL}/wine-imports/credits`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (!res.ok) return;

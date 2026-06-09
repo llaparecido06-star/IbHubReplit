@@ -68,8 +68,7 @@ import { SkeletonProfile } from "@/components/ui/SkeletonCard";
 import EmpresaDashboard from "@/components/EmpresaDashboard";
 import { UserListModal, UserListType } from "@/components/profile/UserListModal";
 import { getCanonicalWebBaseUrl } from "@/utils/canonicalUrl";
-
-const API_URL  = process.env.EXPO_PUBLIC_API_URL ?? "";
+import { API_URL } from "@/services/api";
 const WEB_BASE = getCanonicalWebBaseUrl();
 
 type StatModal = UserListType | null;

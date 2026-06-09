@@ -1,7 +1,14 @@
+import Constants from "expo-constants";
 import { supabase } from "@/context/AuthContext";
 import type { ProfileLite, CommentProfileLite, CompanyPageLite, RawPostRow } from "./types";
 
-export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
+// Priority: explicit env var (EAS / .env file) → app.config.js extra.apiUrl
+// (which resolves from REPLIT_DEV_DOMAIN in dev or falls back to the canonical
+// production domain) → empty string (should never happen in practice).
+export const API_URL: string =
+  (process.env.EXPO_PUBLIC_API_URL as string | undefined) ||
+  (Constants.expoConfig?.extra?.apiUrl as string | undefined) ||
+  "";
 
 export function isNetworkError(e: unknown): boolean {
   const msg = String(e instanceof Error ? e.message : e).toLowerCase();
