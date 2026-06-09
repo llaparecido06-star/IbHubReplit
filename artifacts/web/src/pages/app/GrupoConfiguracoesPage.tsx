@@ -397,6 +397,27 @@ export default function GrupoConfiguracoesPage() {
             </button>
           </div>
 
+          {/* Link — only for aberto / fechado groups */}
+          {access !== "restrito" && (
+            <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Link de Convite</div>
+              <p style={{ fontSize: 13, color: MUTED, margin: "0 0 14px" }}>Compartilhe este link para convidar pessoas para o grupo.</p>
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <input value={inviteLink} readOnly
+                  style={{ flex: 1, padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 13, outline: "none", backgroundColor: BG, color: NAVY }} />
+                <button onClick={handleCopyLink}
+                  style={{ padding: "10px 18px", backgroundColor: linkCopied ? "#16a34a" : GOLD, color: WHITE, border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}>
+                  {linkCopied ? "✓ Copiado!" : "Copiar"}
+                </button>
+              </div>
+              <a href={`https://wa.me/?text=${encodeURIComponent(`Entre no grupo "${name}" no ibhub: ${inviteLink}`)}`}
+                target="_blank" rel="noopener noreferrer"
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 12, padding: "10px 0", backgroundColor: "#dcfce7", color: "#16a34a", border: "1px solid #86efac", borderRadius: 10, fontWeight: 700, fontSize: 13, textDecoration: "none" }}>
+                <span>📲</span> Compartilhar via WhatsApp
+              </a>
+            </div>
+          )}
+
           {/* Leave group */}
           <div style={{ backgroundColor: WHITE, border: "1px solid #fecaca", borderRadius: 16, padding: 20 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: "#dc2626", marginBottom: 8 }}>Sair do grupo</div>
@@ -418,7 +439,7 @@ export default function GrupoConfiguracoesPage() {
     { key: "membros",   label: "Membros",   badge: members.length },
     ...(isMod ? [{ key: "pendentes" as ConfigTab, label: "Pendentes", badge: pending.length }] : []),
     ...(isMod ? [{ key: "convidar" as ConfigTab, label: "Convidar" }] : []),
-    { key: "link",      label: "Link" },
+    ...(access !== "restrito" ? [{ key: "link" as ConfigTab, label: "Link" }] : []),
   ];
 
   return (
