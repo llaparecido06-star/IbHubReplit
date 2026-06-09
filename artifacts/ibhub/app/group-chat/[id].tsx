@@ -1233,7 +1233,7 @@ export default function GroupChatScreen() {
       {Platform.OS === "web" ? (
         menuVisible ? (
           <Pressable
-            style={[styles.menuOverlay, StyleSheet.absoluteFillObject]}
+            style={[styles.menuOverlay, StyleSheet.absoluteFillObject, { zIndex: 999 }]}
             onPress={() => setMenuVisible(false)}
           >
             <View style={[styles.menuCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
