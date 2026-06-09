@@ -1031,19 +1031,7 @@ export default function GroupChatScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.headerBack}>
           <Feather name="arrow-left" size={22} color={colors.navy} />
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.headerLeft}
-          onPress={() => {
-            // On web the navigation call can be swallowed when made synchronously
-            // inside a touch handler — a brief defer avoids this.
-            if (Platform.OS === "web") {
-              setTimeout(() => router.push(`/group-settings/${id}` as any), 50);
-            } else {
-              router.push(`/group-settings/${id}` as any);
-            }
-          }}
-          activeOpacity={0.7}
-        >
+        <View style={styles.headerLeft}>
           {groupInfo.avatar_url ? (
             <Image source={{ uri: groupInfo.avatar_url }} style={styles.headerAvatar} />
           ) : (
@@ -1066,7 +1054,7 @@ export default function GroupChatScreen() {
               )}
             </View>
           </View>
-        </TouchableOpacity>
+        </View>
         <TouchableOpacity onPress={() => { setShowSearch(v => !v); if (showSearch) setSearchQuery(""); }} style={styles.headerRight}>
           <Feather name="search" size={19} color={showSearch ? colors.gold : colors.navy} />
         </TouchableOpacity>
@@ -1236,57 +1224,89 @@ export default function GroupChatScreen() {
         ) : null}
       </View>
 
-      {/* 3-dot menu modal */}
-      <Modal
-        visible={menuVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setMenuVisible(false)}
-      >
-        <Pressable style={styles.menuOverlay} onPress={() => setMenuVisible(false)}>
-          <View style={[styles.menuCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-            <TouchableOpacity style={styles.menuItem} onPress={handleShareGroup}>
-              <Feather name="link-2" size={18} color={colors.navy} />
-              <Text style={[styles.menuItemText, { color: colors.navy }]}>{t("group_chat_screen.menu_share_link")}</Text>
-            </TouchableOpacity>
-            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                if (Platform.OS === "web") {
-                  // On web the Modal manages a browser-history entry. Closing the
-                  // Modal triggers a popstate event which Expo Router intercepts as
-                  // "go back" — cancelling any router.push issued in the same tick
-                  // or inside a setTimeout. Fix: push BEFORE closing the modal so
-                  // the navigation is committed before the popstate fires.
+      {/* 3-dot menu
+          On web: Modal manages a browser-history entry and its popstate event
+          cancels any router.push regardless of ordering/setTimeout — so we
+          render a plain absolute-positioned overlay instead (no history side-effects).
+          On native: Modal works correctly; setTimeout before push waits for the
+          closing animation to finish so the push isn't swallowed. */}
+      {Platform.OS === "web" ? (
+        menuVisible ? (
+          <Pressable
+            style={[styles.menuOverlay, StyleSheet.absoluteFillObject]}
+            onPress={() => setMenuVisible(false)}
+          >
+            <View style={[styles.menuCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+              <TouchableOpacity style={styles.menuItem} onPress={handleShareGroup}>
+                <Feather name="link-2" size={18} color={colors.navy} />
+                <Text style={[styles.menuItemText, { color: colors.navy }]}>{t("group_chat_screen.menu_share_link")}</Text>
+              </TouchableOpacity>
+              <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setMenuVisible(false);
                   router.push(`/group-settings/${id}` as any);
+                }}
+              >
+                <Feather name="settings" size={18} color={colors.navy} />
+                <Text style={[styles.menuItemText, { color: colors.navy }]}>{t("group_chat_screen.menu_settings")}</Text>
+              </TouchableOpacity>
+              <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+              <TouchableOpacity style={styles.menuItem} onPress={handleDeleteMessages}>
+                <Feather name="trash-2" size={18} color="#dc2626" />
+                <Text style={[styles.menuItemText, { color: "#dc2626" }]}>
+                  {isGroupOwner ? t("group_chat_screen.delete_all_btn") : t("group_chat_screen.clear_history_btn")}
+                </Text>
+              </TouchableOpacity>
+              <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+              <TouchableOpacity style={styles.menuItem} onPress={handleLeaveGroup}>
+                <Feather name="log-out" size={18} color="#dc2626" />
+                <Text style={[styles.menuItemText, { color: "#dc2626" }]}>{t("group_chat_screen.leave_btn")}</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        ) : null
+      ) : (
+        <Modal
+          visible={menuVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setMenuVisible(false)}
+        >
+          <Pressable style={styles.menuOverlay} onPress={() => setMenuVisible(false)}>
+            <View style={[styles.menuCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
+              <TouchableOpacity style={styles.menuItem} onPress={handleShareGroup}>
+                <Feather name="link-2" size={18} color={colors.navy} />
+                <Text style={[styles.menuItemText, { color: colors.navy }]}>{t("group_chat_screen.menu_share_link")}</Text>
+              </TouchableOpacity>
+              <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
                   setMenuVisible(false);
-                } else {
-                  setMenuVisible(false);
-                  // On native, wait for the Modal closing animation to finish before
-                  // navigating — pushing while it's animating closed swallows the call.
                   setTimeout(() => router.push(`/group-settings/${id}` as any), 300);
-                }
-              }}
-            >
-              <Feather name="settings" size={18} color={colors.navy} />
-              <Text style={[styles.menuItemText, { color: colors.navy }]}>{t("group_chat_screen.menu_settings")}</Text>
-            </TouchableOpacity>
-            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-            <TouchableOpacity style={styles.menuItem} onPress={handleDeleteMessages}>
-              <Feather name="trash-2" size={18} color="#dc2626" />
-              <Text style={[styles.menuItemText, { color: "#dc2626" }]}>
-                {isGroupOwner ? t("group_chat_screen.delete_all_btn") : t("group_chat_screen.clear_history_btn")}
-              </Text>
-            </TouchableOpacity>
-            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-            <TouchableOpacity style={styles.menuItem} onPress={handleLeaveGroup}>
-              <Feather name="log-out" size={18} color="#dc2626" />
-              <Text style={[styles.menuItemText, { color: "#dc2626" }]}>{t("group_chat_screen.leave_btn")}</Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
-      </Modal>
+                }}
+              >
+                <Feather name="settings" size={18} color={colors.navy} />
+                <Text style={[styles.menuItemText, { color: colors.navy }]}>{t("group_chat_screen.menu_settings")}</Text>
+              </TouchableOpacity>
+              <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+              <TouchableOpacity style={styles.menuItem} onPress={handleDeleteMessages}>
+                <Feather name="trash-2" size={18} color="#dc2626" />
+                <Text style={[styles.menuItemText, { color: "#dc2626" }]}>
+                  {isGroupOwner ? t("group_chat_screen.delete_all_btn") : t("group_chat_screen.clear_history_btn")}
+                </Text>
+              </TouchableOpacity>
+              <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+              <TouchableOpacity style={styles.menuItem} onPress={handleLeaveGroup}>
+                <Feather name="log-out" size={18} color="#dc2626" />
+                <Text style={[styles.menuItemText, { color: "#dc2626" }]}>{t("group_chat_screen.leave_btn")}</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Modal>
+      )}
 
       {/* ── Message Action Sheet (long-press) ─────────────────────────────── */}
       <Modal visible={!!msgActionTarget} transparent animationType="slide" onRequestClose={() => setMsgActionTarget(null)}>
