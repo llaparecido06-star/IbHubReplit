@@ -1033,7 +1033,15 @@ export default function GroupChatScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.headerLeft}
-          onPress={() => router.push(`/group-settings/${id}` as any)}
+          onPress={() => {
+            // On web the navigation call can be swallowed when made synchronously
+            // inside a touch handler — a brief defer avoids this.
+            if (Platform.OS === "web") {
+              setTimeout(() => router.push(`/group-settings/${id}` as any), 50);
+            } else {
+              router.push(`/group-settings/${id}` as any);
+            }
+          }}
           activeOpacity={0.7}
         >
           {groupInfo.avatar_url ? (
@@ -1245,11 +1253,20 @@ export default function GroupChatScreen() {
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => {
-                setMenuVisible(false);
-                // Delay navigation until the Modal closing animation finishes;
-                // calling router.push while the Modal is still animating closed
-                // can cause the navigation to be silently swallowed on web/iOS.
-                setTimeout(() => router.push(`/group-settings/${id}` as any), 300);
+                if (Platform.OS === "web") {
+                  // On web the Modal manages a browser-history entry. Closing the
+                  // Modal triggers a popstate event which Expo Router intercepts as
+                  // "go back" — cancelling any router.push issued in the same tick
+                  // or inside a setTimeout. Fix: push BEFORE closing the modal so
+                  // the navigation is committed before the popstate fires.
+                  router.push(`/group-settings/${id}` as any);
+                  setMenuVisible(false);
+                } else {
+                  setMenuVisible(false);
+                  // On native, wait for the Modal closing animation to finish before
+                  // navigating — pushing while it's animating closed swallows the call.
+                  setTimeout(() => router.push(`/group-settings/${id}` as any), 300);
+                }
               }}
             >
               <Feather name="settings" size={18} color={colors.navy} />
