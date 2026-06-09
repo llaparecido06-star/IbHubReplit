@@ -82,9 +82,11 @@ router.post("/community/groups", async (req: Request, res: Response): Promise<vo
   // works even if the trigger or ON CONFLICT constraint has not been migrated yet.
   // onConflict must reference the exact 3-column constraint
   // UNIQUE NULLS NOT DISTINCT (group_id, user_id, company_page_id).
+  // ignoreDuplicates must be false (the default) so that if the DB trigger already
+  // inserted this user with role='admin' (legacy), the upsert UPDATES it to 'owner'.
   await supabaseAdmin.from("group_members").upsert(
     { group_id: groupId, user_id: userId, role: "owner", company_page_id: null },
-    { onConflict: "group_id,user_id,company_page_id", ignoreDuplicates: true },
+    { onConflict: "group_id,user_id,company_page_id" },
   );
   // onConflict must reference the exact 3-column constraint
   // UNIQUE NULLS NOT DISTINCT (conversation_id, user_id, company_page_id).

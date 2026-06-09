@@ -19,7 +19,7 @@ type ConfigTab = "membros" | "pendentes" | "convidar" | "link";
 
 interface Member {
   user_id: string;
-  role: "owner" | "member" | "moderator" | "pending";
+  role: "owner" | "member" | "moderator" | "admin" | "pending";
   profile?: { id: string; full_name: string | null; avatar_url: string | null; headline: string | null };
 }
 
@@ -74,6 +74,7 @@ export default function GrupoConfiguracoesPage() {
   const [mutingGroup, setMutingGroup] = useState(false);
   const [leavingGroup, setLeavingGroup] = useState(false);
   const [clearDone, setClearDone] = useState(false);
+  const [changingRoleId, setChangingRoleId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const isOwner = myRole === "owner";
@@ -151,6 +152,18 @@ export default function GrupoConfiguracoesPage() {
     ]);
     setMembers(prev => prev.filter(m => m.user_id !== targetUserId));
     setRemovingId(null);
+  }
+
+  async function handleChangeRole(targetUserId: string, newRole: "member" | "moderator") {
+    if (!groupId || changingRoleId) return;
+    setChangingRoleId(targetUserId);
+    await supabase
+      .from("group_members")
+      .update({ role: newRole })
+      .eq("group_id", groupId)
+      .eq("user_id", targetUserId);
+    setMembers(prev => prev.map(m => m.user_id === targetUserId ? { ...m, role: newRole } : m));
+    setChangingRoleId(null);
   }
 
   async function handleApprove(targetUserId: string) {
@@ -420,15 +433,46 @@ export default function GrupoConfiguracoesPage() {
                         <div style={{ fontSize: 14, fontWeight: 600, color: NAVY }}>{m.profile?.full_name ?? "Usuário"}</div>
                         {m.profile?.headline && <div style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.profile.headline}</div>}
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6, backgroundColor: m.role === "owner" ? `${GOLD}20` : BG, color: m.role === "owner" ? GOLD : MUTED }}>
-                          {m.role === "owner" ? "Owner" : m.role === "moderator" ? "Mod" : "Membro"}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        {/* Role badge */}
+                        <span style={{
+                          fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6,
+                          backgroundColor: m.role === "owner" ? `${GOLD}20` : (m.role === "moderator" || m.role === "admin") ? "#e0f2fe" : BG,
+                          color: m.role === "owner" ? GOLD : (m.role === "moderator" || m.role === "admin") ? "#0369a1" : MUTED,
+                        }}>
+                          {m.role === "owner" ? "Owner" : (m.role === "moderator" || m.role === "admin") ? "Mod" : "Membro"}
                         </span>
+                        {/* Owner-only: promote / demote / remove */}
                         {isOwner && !isMe && m.role !== "owner" && (
-                          <button onClick={() => handleRemoveMember(m.user_id)} disabled={removingId === m.user_id}
-                            style={{ padding: "4px 10px", backgroundColor: "#fee2e2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                            Remover
-                          </button>
+                          <>
+                            {(m.role === "member") && (
+                              <button
+                                onClick={() => handleChangeRole(m.user_id, "moderator")}
+                                disabled={changingRoleId === m.user_id}
+                                title="Tornar moderador"
+                                style={{ padding: "4px 10px", backgroundColor: "#e0f2fe", color: "#0369a1", border: "1px solid #bae6fd", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                              >
+                                + Mod
+                              </button>
+                            )}
+                            {(m.role === "moderator" || m.role === "admin") && (
+                              <button
+                                onClick={() => handleChangeRole(m.user_id, "member")}
+                                disabled={changingRoleId === m.user_id}
+                                title="Rebaixar para membro"
+                                style={{ padding: "4px 10px", backgroundColor: BG, color: MUTED, border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                              >
+                                − Mod
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleRemoveMember(m.user_id)}
+                              disabled={removingId === m.user_id}
+                              style={{ padding: "4px 10px", backgroundColor: "#fee2e2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                            >
+                              Remover
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
