@@ -30,6 +30,14 @@ Timeline of `navIifePendingRef`:
 
 ---
 
+## Layer 6 — navInitiatedRef closes the residual race window
+
+**Root cause (residual):** `navIifePendingRef` blocked concurrent IIFEs, but a timing gap remained: after the IIFE sets `navIifePendingRef.current = false` and calls `setNavInitiated(true)`, React commits the state update asynchronously. If TOKEN_REFRESHED fires in that gap, the effect re-runs with `navIifePendingRef=false` AND `navInitiated=false` → guard at line 346 does not fire → third IIFE → loop persists on some Android devices.
+
+**Fix:** Added `navInitiatedRef = useRef(false)` as a synchronous mirror of `navInitiated` state. Set `navInitiatedRef.current = true` BEFORE `navIifePendingRef.current = false` in the IIFE (and before `setNavInitiated(true)` everywhere). Guard updated to `if ((navInitiated || navInitiatedRef.current) && lastDestination.current === destination) return`. The ref is always synchronously true by the time the gap exists, so no second IIFE can start.
+
+---
+
 ## Layer 3 — transparentModal
 `story/[id]` registered with `transparentModal` made the entire Android Stack background transparent. Changed to `fullScreenModal`.
 

@@ -281,6 +281,13 @@ function RootLayoutNav() {
   // an empty Stack (navy frozen screen) when flagsLoading or manutencao changes mid-IIFE.
   const navIifePendingRef = useRef(false);
 
+  // Synchronous mirror of navInitiated state. navInitiated is React state (async commit),
+  // so there is a brief window between navIifePendingRef.current=false and navInitiated
+  // becoming true in which TOKEN_REFRESHED can re-trigger the effect and launch a second
+  // IIFE → double router.replace → Android loop. navInitiatedRef is set synchronously
+  // before navIifePendingRef is reset, closing that window entirely.
+  const navInitiatedRef = useRef(false);
+
   // Auth routes that must remain accessible without a session
   const isAuthPath = ["login", "register", "forgot-password", "reset-password", "auth"].some(
     (p) => pathname.includes(p),
@@ -324,6 +331,7 @@ function RootLayoutNav() {
       // router.replace completes, producing an empty Stack (navy frozen screen).
       // The IIFE calls setNavInitiated(true) itself once router.replace is done.
       if (!navIifePendingRef.current) {
+        navInitiatedRef.current = true;
         setNavInitiated(true);
       }
       return;
@@ -336,7 +344,10 @@ function RootLayoutNav() {
     // guard the effect would re-run with shouldRedirect=true (isAuthPath &&
     // same destination) and launch a second async IIFE that calls router.replace
     // a second time — causing the "advances, freezes, goes back" freeze on Android.
-    if (navInitiated && lastDestination.current === destination) {
+    //
+    // navInitiatedRef (sync) is checked alongside navInitiated (async state) so
+    // the guard fires immediately even before React commits the state update.
+    if ((navInitiated || navInitiatedRef.current) && lastDestination.current === destination) {
       return;
     }
 
@@ -358,6 +369,7 @@ function RootLayoutNav() {
     const completionBlockPaths = ["social-complete", "reset-password", "forgot-password"];
     if (needsProfileCompletion && completionBlockPaths.some(p => pathname.includes(p))) {
       lastDestination.current = destination;
+      navInitiatedRef.current = true;
       setNavInitiated(true);
       return;
     }
@@ -388,10 +400,15 @@ function RootLayoutNav() {
         } else {
           router.replace("/(tabs)" as any);
         }
+        // Set navInitiatedRef BEFORE clearing navIifePendingRef so the guard
+        // at the top of the effect fires synchronously if TOKEN_REFRESHED
+        // re-triggers the effect before React commits setNavInitiated(true).
+        navInitiatedRef.current = true;
         navIifePendingRef.current = false;
         setNavInitiated(true);
       })();
     } else {
+      navInitiatedRef.current = true;
       router.replace(destination as any);
       setNavInitiated(true);
     }
@@ -410,6 +427,7 @@ function RootLayoutNav() {
     const t = setTimeout(() => {
       console.warn("[RootLayoutNav] navInitiated safety-net fired after 3s — forcing navigation");
       const destination = needsProfileCompletion ? "/social-complete" : "/(tabs)";
+      navInitiatedRef.current = true;
       router.replace(destination as any);
       setNavInitiated(true);
     }, 3_000);
