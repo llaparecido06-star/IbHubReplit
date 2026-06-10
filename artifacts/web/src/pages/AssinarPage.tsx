@@ -92,6 +92,12 @@ export default function AssinarPage() {
 
   const { paidPlans, freePlan, getPlanLabel, loading: plansLoading } = usePlans();
 
+  // Lançamento web: somente o plano comunidade_ideal_bi está disponível.
+  // Redireciona para a página de ativação da comunidade.
+  useEffect(() => {
+    setLocation("/comunidade-exclusiva");
+  }, []);
+
   const currentPlan  = profile?.plan ?? "gratuito";
   const hasActiveSub = hasPlanAccess(profile);
   const isFree       = !hasActiveSub;

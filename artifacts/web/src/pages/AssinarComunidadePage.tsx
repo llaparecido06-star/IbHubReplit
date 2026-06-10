@@ -33,7 +33,7 @@ export default function AssinarComunidadePage() {
     try {
       const { data: updated, error: err } = await supabase
         .from("profiles")
-        .update({ plan: "comunidade" })
+        .update({ plan: "comunidade_ideal_bi" })
         .or(`id.eq.${session.user.id},user_id.eq.${session.user.id}`)
         .select("id");
       if (err) throw err;

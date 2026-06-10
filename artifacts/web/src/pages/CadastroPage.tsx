@@ -2,7 +2,6 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { supabase, getCachedSession } from "@/lib/supabase";
-import { usePlans, formatPlanPrice, formatOriginalPrice, calcDiscount } from "@/hooks/usePlans";
 import { applyReferralCode } from "@/services/api";
 
 const TOTAL_STEPS = 3;
@@ -79,8 +78,6 @@ export default function CadastroPage() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
-  const [selectedPlan, setSelectedPlan] = useState("gratuito");
-  const { paidPlans, freePlan, loading: plansLoading } = usePlans();
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("Criando conta...");
   const [error, setError] = useState<string | null>(null);
@@ -209,7 +206,7 @@ export default function CadastroPage() {
           areas_of_expertise: selectedAreas,
           company: company.trim() || null,
           position: role.trim() || null,
-          plan: "gratuito", // always start free; paid plans activate after Stripe payment
+          plan: "comunidade_ideal_bi",
           ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
         }, { onConflict: "id" });
 
@@ -221,7 +218,7 @@ export default function CadastroPage() {
       }
 
       setLoading(false);
-      setLocation("/comunidade-exclusiva");
+      setLocation("/app");
     }
   };
 
@@ -512,83 +509,54 @@ export default function CadastroPage() {
             </div>
           ) : (
             <div style={{ backgroundColor: "#ffffff", borderRadius: 16, padding: 28, boxShadow: "0 4px 24px rgba(13,27,42,0.08)" }}>
-              <h2 style={{ fontSize: 20, fontWeight: 800, color: "#0d1b2a", marginBottom: 4 }}>Invista na sua carreira</h2>
-              <p style={{ fontSize: 14, color: "#8a93a2", marginBottom: 24 }}>Etapa 3 de 3 — Desbloqueie o ibhub completo</p>
+              <h2 style={{ fontSize: 20, fontWeight: 800, color: "#0d1b2a", marginBottom: 4 }}>Seu plano de acesso</h2>
+              <p style={{ fontSize: 14, color: "#8a93a2", marginBottom: 24 }}>Etapa 3 de 3 — Confirme seu plano</p>
 
-              {plansLoading ? (
-                <div style={{ textAlign: "center", padding: "24px 0", color: "#9ca3af" }}>Carregando planos...</div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
-                  {paidPlans.map((plan, idx) => {
-                    const isSelected    = selectedPlan === plan.id;
-                    const isPopular     = idx === 0;
-                    const price         = formatPlanPrice(plan);
-                    const originalPrice = formatOriginalPrice(plan);
-                    const discount      = calcDiscount(plan);
-                    return (
-                      <label key={plan.id} style={{
-                        display: "flex", alignItems: "flex-start", gap: 14,
-                        padding: "14px 16px", borderRadius: 12, cursor: "pointer",
-                        border: isSelected ? "2px solid #c9a84c" : isPopular ? "2px solid rgba(201,168,76,0.4)" : "2px solid #e8eaed",
-                        backgroundColor: isSelected ? "rgba(201,168,76,0.08)" : "#f9fafb",
-                        transition: "all 0.18s", position: "relative",
-                      }}>
-                        <input
-                          type="radio" name="plan" value={plan.id}
-                          checked={isSelected} onChange={() => setSelectedPlan(plan.id)}
-                          style={{ accentColor: "#c9a84c", marginTop: 3 }}
-                        />
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                            <span style={{ fontWeight: 800, fontSize: 15, color: "#0d1b2a" }}>{plan.name}</span>
-                            <div style={{ textAlign: "right" }}>
-                              {originalPrice && (
-                                <div style={{ fontSize: 11, color: "#9ca3af", textDecoration: "line-through" }}>
-                                  De: {originalPrice}
-                                </div>
-                              )}
-                              <div style={{ display: "flex", alignItems: "center", gap: 5, justifyContent: "flex-end" }}>
-                                <span style={{ fontWeight: 800, fontSize: 14, color: "#c9a84c" }}>{price.main}</span>
-                                {discount && (
-                                  <span style={{ backgroundColor: "#d1fae5", color: "#065f46", fontWeight: 800, fontSize: 9, padding: "2px 6px", borderRadius: 6 }}>
-                                    -{discount}%
-                                  </span>
-                                )}
-                              </div>
-                              {price.period && <div style={{ fontWeight: 400, fontSize: 11, color: "#9ca3af" }}>{price.period}</div>}
-                            </div>
-                          </div>
-                          <span style={{ fontSize: 12, color: "#8a93a2" }}>{plan.subtitle}</span>
-                          {plan.description && (
-                            <div style={{ fontSize: 11, color: "#8a93a2", fontStyle: "italic", marginTop: 4, lineHeight: 1.5 }}>
-                              {plan.description}
-                            </div>
-                          )}
-                        </div>
-                        {isPopular && !isSelected && (
-                          <span style={{
-                            position: "absolute", top: -10, right: 12,
-                            backgroundColor: "#c9a84c", color: "#0d1b2a",
-                            fontSize: 9, fontWeight: 800, padding: "3px 10px",
-                            borderRadius: 100, letterSpacing: 1.2,
-                          }}>MAIS POPULAR</span>
-                        )}
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
+              {/* Single plan card: comunidade_ideal_bi */}
+              <div style={{
+                border: "2px solid #c9a84c",
+                borderRadius: 14,
+                padding: "20px 18px",
+                backgroundColor: "rgba(201,168,76,0.05)",
+                marginBottom: 20,
+                position: "relative",
+              }}>
+                {/* Badge */}
+                <span style={{
+                  position: "absolute", top: -11, left: 16,
+                  backgroundColor: "#c9a84c", color: "#0d1b2a",
+                  fontSize: 9, fontWeight: 800, padding: "3px 12px",
+                  borderRadius: 100, letterSpacing: 1.2, textTransform: "uppercase",
+                }}>ACESSO GRATUITO</span>
 
-              {selectedPlan !== "gratuito" && (
-                <div style={{
-                  display: "flex", alignItems: "flex-start", gap: 10,
-                  backgroundColor: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.25)",
-                  borderRadius: 10, padding: "10px 14px", marginBottom: 16,
-                  fontSize: 13, color: "#92713a", lineHeight: 1.5,
-                }}>
-                  💳 Após criar sua conta, você será direcionado para concluir o pagamento via Stripe.
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <span style={{ fontWeight: 800, fontSize: 16, color: "#0d1b2a" }}>Exclusivo Comunidade</span>
+                  <span style={{ fontWeight: 900, fontSize: 18, color: "#c9a84c" }}>Grátis</span>
                 </div>
-              )}
+                <p style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.6, marginBottom: 14 }}>
+                  Acesse a plataforma ibhub gratuitamente como membro fundador da nossa comunidade.
+                </p>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {[
+                    { icon: "✦", label: "Rede profissional do vinho" },
+                    { icon: "◈", label: "Feed exclusivo da comunidade" },
+                    { icon: "▲", label: "Eventos e masterclasses" },
+                    { icon: "◉", label: "Chat direto ilimitado" },
+                    { icon: "◎", label: "Adega virtual" },
+                    { icon: "⬡", label: "Certificações e perfil completo" },
+                  ].map(f => (
+                    <div key={f.label} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "#0d1b2a" }}>
+                      <span style={{ color: "#c9a84c", fontSize: 13, width: 16, textAlign: "center", flexShrink: 0 }}>{f.icon}</span>
+                      <span style={{ fontWeight: 600 }}>{f.label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <p style={{ textAlign: "center", fontSize: 11, color: "#9ca3af", marginTop: 14 }}>
+                  Sem cartão de crédito · Sem cobrança · Acesso imediato
+                </p>
+              </div>
 
               <div style={{ display: "flex", gap: 12 }}>
                 <button
@@ -607,21 +575,7 @@ export default function CadastroPage() {
                     cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1,
                   }}
                 >
-                  {loading ? loadingMsg : selectedPlan !== "gratuito" ? "Criar conta e pagar →" : "Criar minha conta 🍷"}
-                </button>
-              </div>
-
-              {/* Discreet free option */}
-              <div style={{ textAlign: "center", marginTop: 14 }}>
-                <button
-                  onClick={() => { setSelectedPlan("gratuito"); nextStep(); }}
-                  disabled={loading}
-                  style={{
-                    background: "none", border: "none", cursor: "pointer",
-                    color: "#9ca3af", fontSize: 13, textDecoration: "underline",
-                  }}
-                >
-                  {freePlan ? `Continuar com o plano ${freePlan.name} (grátis)` : "Continuar gratuitamente"}
+                  {loading ? loadingMsg : "Criar minha conta 🍷"}
                 </button>
               </div>
             </div>
