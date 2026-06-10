@@ -169,6 +169,28 @@ export default function FeedScreen() {
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
   const firstName = profile?.full_name?.split(" ")[0] ?? "você";
 
+  // ── "Latest ref" pattern for values that should NOT trigger callback recreation ──
+  // session?.access_token changes on every TOKEN_REFRESHED (new JWT string).
+  // If we include it in loadPosts/loadMorePosts/onRefresh deps, those callbacks
+  // are recreated and their useEffects re-fire on every Android token refresh —
+  // reloading the entire feed from scratch multiple times per login session.
+  //
+  // Similarly, profile?.areas_of_expertise is a new array reference on every
+  // fetchProfile call (created with object spread in AuthContext). Including it
+  // in loadSuggestions deps causes suggestions to be re-fetched on every
+  // TOKEN_REFRESHED, even though the actual values haven't changed.
+  //
+  // Solution: store the latest values in refs so callbacks can always access the
+  // current value without adding them to the dependency array.
+  const sessionTokenRef = useRef(session?.access_token);
+  sessionTokenRef.current = session?.access_token;
+
+  const profileAreasRef = useRef<string[]>(profile?.areas_of_expertise ?? []);
+  profileAreasRef.current = profile?.areas_of_expertise ?? [];
+
+  const profileCompanyRef = useRef<string | null>(profile?.company ?? null);
+  profileCompanyRef.current = profile?.company ?? null;
+
   // ── Push-token registration ────────────────────────────────────────────────
   // Deliberately done here (feed screen) instead of _layout.tsx so that the
   // OS permission dialog only appears after the main feed is fully visible.
@@ -256,7 +278,9 @@ export default function FeedScreen() {
     // Try real Supabase data first
     if (user?.id) {
       try {
-        const realPosts = await API.fetchFeedPosts(user.id, activeCompany?.id, 0, FEED_PAGE_SIZE, session?.access_token);
+        // Use sessionTokenRef so a new JWT (TOKEN_REFRESHED) does NOT recreate
+        // this callback and re-fire the loadPosts useEffect every token refresh.
+        const realPosts = await API.fetchFeedPosts(user.id, activeCompany?.id, 0, FEED_PAGE_SIZE, sessionTokenRef.current);
         if (realPosts.length > 0) {
           setPosts(realPosts);
           feedOffsetRef.current = realPosts.length;
@@ -294,14 +318,16 @@ export default function FeedScreen() {
     setPosts([]);
     setHasMoreFeed(false);
     setLoading(false);
-  }, [user?.id, activeCompany?.id, session?.access_token]);
+  // sessionTokenRef is intentionally omitted — it is a ref and never changes
+  // identity; the current value is always read at call time.
+  }, [user?.id, activeCompany?.id]);
 
   const loadMorePosts = useCallback(async () => {
     if (isLoadingMoreRef.current || !hasMoreFeed || !user?.id) return;
     isLoadingMoreRef.current = true;
     setLoadingMore(true);
     try {
-      const more = await API.fetchFeedPosts(user.id, activeCompany?.id, feedOffsetRef.current, FEED_PAGE_SIZE, session?.access_token);
+      const more = await API.fetchFeedPosts(user.id, activeCompany?.id, feedOffsetRef.current, FEED_PAGE_SIZE, sessionTokenRef.current);
       if (more.length > 0) {
         setPosts(prev => {
           const existingIds = new Set(prev.map(p => p.id));
@@ -317,15 +343,20 @@ export default function FeedScreen() {
       setLoadingMore(false);
       isLoadingMoreRef.current = false;
     }
-  }, [user?.id, activeCompany?.id, hasMoreFeed, session?.access_token]);
+  }, [user?.id, activeCompany?.id, hasMoreFeed]);
 
   const loadSuggestions = useCallback(async () => {
     if (!user?.id) return;
-    const areas = profile?.areas_of_expertise ?? [];
-    const company = profile?.company ?? null;
-    const data = await API.fetchSuggestedConnections(user.id, areas, company, 10);
+    // Use refs so that profile changes (new array/object references created by
+    // fetchProfile's object spread on every TOKEN_REFRESHED) do NOT recreate
+    // this callback and spam the suggestions endpoint repeatedly.
+    const data = await API.fetchSuggestedConnections(
+      user.id, profileAreasRef.current, profileCompanyRef.current, 10
+    );
     setSuggestions(data);
-  }, [user?.id, profile?.areas_of_expertise, profile?.company]);
+  // profileAreasRef / profileCompanyRef are intentionally omitted — they are
+  // refs whose identity is stable; the current value is always read at call time.
+  }, [user?.id]);
 
   useEffect(() => { loadSuggestions(); }, [loadSuggestions]);
 
@@ -394,7 +425,7 @@ export default function FeedScreen() {
     isLoadingMoreRef.current = false;
     if (user?.id) {
       try {
-        const realPosts = await API.fetchFeedPosts(user.id, activeCompany?.id, 0, FEED_PAGE_SIZE, session?.access_token);
+        const realPosts = await API.fetchFeedPosts(user.id, activeCompany?.id, 0, FEED_PAGE_SIZE, sessionTokenRef.current);
         if (realPosts.length > 0) {
           setPosts(realPosts);
           feedOffsetRef.current = realPosts.length;
@@ -411,9 +442,27 @@ export default function FeedScreen() {
     setPosts([]);
     setHasMoreFeed(false);
     setRefreshing(false);
-  }, [user?.id, activeCompany?.id, session?.access_token]);
+  }, [user?.id, activeCompany?.id]);
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
+
+  // ── Feed loading safety-net ──────────────────────────────────────────────
+  // `loading` starts as true and is set to false inside loadPosts, which runs
+  // all Supabase fetches without a timeout. If the network hangs indefinitely
+  // (e.g. no connectivity and no cached data), `loading` would never reach
+  // false and the skeleton/spinner would show forever. This safety-net ensures
+  // the screen always unblocks within 10 s, even on total network failure.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLoading(prev => {
+        if (prev) {
+          console.warn("[FeedScreen] loading safety-net fired after 10 s — unblocking feed");
+        }
+        return false;
+      });
+    }, 10_000);
+    return () => clearTimeout(timer);
+  }, []); // intentionally runs once on mount only
 
   // ── Cleanup pending view timers on unmount ──
   useEffect(() => {
