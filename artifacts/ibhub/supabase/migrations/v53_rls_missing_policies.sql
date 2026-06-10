@@ -9,6 +9,7 @@
 --   service_role (que já bypassa o RLS automaticamente).
 --   Bloqueia acesso direto via REST (anon / authenticated).
 -- ────────────────────────────────────────────────────────────
+DROP POLICY IF EXISTS crash_reports_no_direct_access ON public.crash_reports;
 CREATE POLICY crash_reports_no_direct_access ON public.crash_reports
   FOR ALL
   TO anon, authenticated
