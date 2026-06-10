@@ -31,60 +31,90 @@ ALTER FUNCTION public.update_comments_count()                        SET search_
 
 
 -- ────────────────────────────────────────────────────────────
--- 2. REVOKE EXECUTE FROM anon
---    Trigger functions: também revogamos de authenticated
---    (só devem ser chamadas pelo sistema, nunca via REST).
---    RPC functions: revogamos apenas de anon.
+-- 2. REVOKE EXECUTE via PUBLIC
+--    REVOKE FROM anon não funciona se a permissão vem de PUBLIC
+--    (todos os roles herdam de PUBLIC por padrão).
+--    Solução: REVOKE FROM PUBLIC → re-GRANT para authenticated
+--    nas funções que usuários logados precisam chamar.
+--
+--    Trigger functions: REVOKE FROM PUBLIC, sem re-grant
+--    (só são chamadas pelo sistema via trigger, nunca via REST).
+--
+--    RPC functions: REVOKE FROM PUBLIC + GRANT TO authenticated.
 -- ────────────────────────────────────────────────────────────
 
--- Trigger functions — anon + authenticated
-REVOKE EXECUTE ON FUNCTION public.add_group_owner_as_member()             FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.auto_add_group_owner()                  FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.handle_new_user()                       FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.notify_on_comment()                     FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.notify_on_company_follow()              FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.notify_on_connection()                  FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.notify_on_like()                        FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.notify_on_market_comment()              FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.notify_on_market_like()                 FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.prevent_profile_privilege_escalation()  FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.notify_on_follow()                      FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.notify_on_comment_like()                FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.notify_on_connection_accepted()         FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.update_likes_count()                    FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.update_comments_count()                 FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.update_follow_counts()                  FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.update_connections_count()              FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.update_comment_likes_count()            FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.update_opportunity_interests_count()    FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.update_opportunity_applications_count() FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.update_event_attendees_count()          FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.set_wine_cellar_updated_at()            FROM anon, authenticated;
+-- ── Trigger functions — REVOKE FROM PUBLIC (sem re-grant) ──
+REVOKE EXECUTE ON FUNCTION public.add_group_owner_as_member()             FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.auto_add_group_owner()                  FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.handle_new_user()                       FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.notify_on_comment()                     FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.notify_on_company_follow()              FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.notify_on_connection()                  FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.notify_on_like()                        FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.notify_on_market_comment()              FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.notify_on_market_like()                 FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.prevent_profile_privilege_escalation()  FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.notify_on_follow()                      FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.notify_on_comment_like()                FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.notify_on_connection_accepted()         FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.update_likes_count()                    FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.update_comments_count()                 FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.update_follow_counts()                  FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.update_connections_count()              FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.update_comment_likes_count()            FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.update_opportunity_interests_count()    FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.update_opportunity_applications_count() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.update_event_attendees_count()          FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.set_wine_cellar_updated_at()            FROM PUBLIC;
 
--- RPC functions — somente anon (authenticated mantém acesso)
-REVOKE EXECUTE ON FUNCTION public.create_notification(uuid, uuid, text, uuid, text) FROM anon;
-REVOKE EXECUTE ON FUNCTION public.decrement_market_comment_likes(uuid)              FROM anon;
-REVOKE EXECUTE ON FUNCTION public.decrement_post_comments(uuid)                     FROM anon;
-REVOKE EXECUTE ON FUNCTION public.decrement_post_likes(uuid)                        FROM anon;
-REVOKE EXECUTE ON FUNCTION public.get_conversation_messages(uuid)                   FROM anon;
-REVOKE EXECUTE ON FUNCTION public.get_conversation_other_participant(uuid, uuid)    FROM anon;
-REVOKE EXECUTE ON FUNCTION public.get_direct_conversation(uuid, uuid)               FROM anon;
-REVOKE EXECUTE ON FUNCTION public.get_direct_conversation(uuid, uuid, uuid)         FROM anon;
-REVOKE EXECUTE ON FUNCTION public.get_group_member_count(uuid)                      FROM anon;
-REVOKE EXECUTE ON FUNCTION public.get_my_conversations_participants(uuid)           FROM anon;
-REVOKE EXECUTE ON FUNCTION public.get_opportunity_applicants(uuid)                  FROM anon;
-REVOKE EXECUTE ON FUNCTION public.get_post_author(uuid)                             FROM anon;
-REVOKE EXECUTE ON FUNCTION public.increment_market_comment_likes(uuid)              FROM anon;
-REVOKE EXECUTE ON FUNCTION public.increment_opportunity_views(uuid)                 FROM anon;
-REVOKE EXECUTE ON FUNCTION public.increment_post_comments(uuid)                     FROM anon;
-REVOKE EXECUTE ON FUNCTION public.increment_post_likes(uuid)                        FROM anon;
-REVOKE EXECUTE ON FUNCTION public.increment_view_count(uuid)                        FROM anon;
-REVOKE EXECUTE ON FUNCTION public.is_company_page_admin(uuid)                       FROM anon;
-REVOKE EXECUTE ON FUNCTION public.is_conversation_participant(uuid, uuid)           FROM anon;
-REVOKE EXECUTE ON FUNCTION public.is_plan_active(public.profiles)                   FROM anon;
-REVOKE EXECUTE ON FUNCTION public.notify_comment_reply(uuid, uuid, uuid)            FROM anon;
-REVOKE EXECUTE ON FUNCTION public.transfer_company_ownership(uuid, uuid, uuid)      FROM anon;
-REVOKE EXECUTE ON FUNCTION public.wine_community_ratings(text)                      FROM anon;
+-- ── RPC functions — REVOKE FROM PUBLIC + GRANT TO authenticated ──
+REVOKE EXECUTE ON FUNCTION public.create_notification(uuid, uuid, text, uuid, text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.decrement_market_comment_likes(uuid)              FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.decrement_post_comments(uuid)                     FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.decrement_post_likes(uuid)                        FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.get_conversation_messages(uuid)                   FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.get_conversation_other_participant(uuid, uuid)    FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.get_direct_conversation(uuid, uuid)               FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.get_direct_conversation(uuid, uuid, uuid)         FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.get_group_member_count(uuid)                      FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.get_my_conversations_participants(uuid)           FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.get_opportunity_applicants(uuid)                  FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.get_post_author(uuid)                             FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.increment_market_comment_likes(uuid)              FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.increment_opportunity_views(uuid)                 FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.increment_post_comments(uuid)                     FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.increment_post_likes(uuid)                        FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.increment_view_count(uuid)                        FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.is_company_page_admin(uuid)                       FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.is_conversation_participant(uuid, uuid)           FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.is_plan_active(public.profiles)                   FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.notify_comment_reply(uuid, uuid, uuid)            FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.transfer_company_ownership(uuid, uuid, uuid)      FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.wine_community_ratings(text)                      FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.create_notification(uuid, uuid, text, uuid, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.decrement_market_comment_likes(uuid)              TO authenticated;
+GRANT EXECUTE ON FUNCTION public.decrement_post_comments(uuid)                     TO authenticated;
+GRANT EXECUTE ON FUNCTION public.decrement_post_likes(uuid)                        TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_conversation_messages(uuid)                   TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_conversation_other_participant(uuid, uuid)    TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_direct_conversation(uuid, uuid)               TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_direct_conversation(uuid, uuid, uuid)         TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_group_member_count(uuid)                      TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_my_conversations_participants(uuid)           TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_opportunity_applicants(uuid)                  TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_post_author(uuid)                             TO authenticated;
+GRANT EXECUTE ON FUNCTION public.increment_market_comment_likes(uuid)              TO authenticated;
+GRANT EXECUTE ON FUNCTION public.increment_opportunity_views(uuid)                 TO authenticated;
+GRANT EXECUTE ON FUNCTION public.increment_post_comments(uuid)                     TO authenticated;
+GRANT EXECUTE ON FUNCTION public.increment_post_likes(uuid)                        TO authenticated;
+GRANT EXECUTE ON FUNCTION public.increment_view_count(uuid)                        TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_company_page_admin(uuid)                       TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_conversation_participant(uuid, uuid)           TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_plan_active(public.profiles)                   TO authenticated;
+GRANT EXECUTE ON FUNCTION public.notify_comment_reply(uuid, uuid, uuid)            TO authenticated;
+GRANT EXECUTE ON FUNCTION public.transfer_company_ownership(uuid, uuid, uuid)      TO authenticated;
+GRANT EXECUTE ON FUNCTION public.wine_community_ratings(text)                      TO authenticated;
 
 
 -- ────────────────────────────────────────────────────────────
