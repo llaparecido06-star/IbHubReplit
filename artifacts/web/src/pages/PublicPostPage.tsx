@@ -287,7 +287,7 @@ export default function PublicPostPage() {
           </div>
 
           <div style={{ textAlign: "center", marginTop: 28, color: "#aaa", fontSize: 12 }}>
-            <span style={{ fontWeight: 700, color: GOLD }}>ibhub</span> — Rede do Vinho · Brasil
+            <span style={{ fontWeight: 700, color: GOLD }}>IBHUB</span> - A Rede do Vinho · Brasil
           </div>
         </div>
       </div>
