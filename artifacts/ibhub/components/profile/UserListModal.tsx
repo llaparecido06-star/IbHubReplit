@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -41,10 +42,12 @@ export function UserListModal({ visible, type, userId, onClose }: UserListModalP
   const router = useRouter();
   const [users, setUsers] = useState<UserListItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (!visible || !type || !userId) {
       setUsers([]);
+      setSearch("");
       return;
     }
     setLoading(true);
@@ -59,6 +62,10 @@ export function UserListModal({ visible, type, userId, onClose }: UserListModalP
 
   const resolvedTitle = type ? TITLES[type] : "";
   const emptyMessage = type ? EMPTY_MESSAGES[type] : "";
+
+  const filtered = search.trim()
+    ? users.filter(u => (u.full_name ?? u.username ?? "").toLowerCase().includes(search.toLowerCase()))
+    : users;
 
   const handleUserPress = (id: string) => {
     onClose();
@@ -81,38 +88,52 @@ export function UserListModal({ visible, type, userId, onClose }: UserListModalP
             <View style={styles.centered}>
               <ActivityIndicator size="large" color={colors.gold} />
             </View>
-          ) : users.length === 0 ? (
-            <View style={styles.centered}>
-              <Feather name="users" size={36} color={colors.border} />
-              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{emptyMessage}</Text>
-            </View>
           ) : (
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent}>
-              {users.map(u => {
-                const displayName = u.full_name ?? u.username ?? "Usuário";
-                return (
-                  <TouchableOpacity
-                    key={u.id}
-                    style={[styles.userRow, { borderBottomColor: colors.border }]}
-                    onPress={() => handleUserPress(u.id)}
-                    activeOpacity={0.75}
-                  >
-                    <Avatar uri={u.avatar_url} name={displayName} size={44} />
-                    <View style={styles.userInfo}>
-                      <Text style={[styles.userName, { color: colors.navy }]} numberOfLines={1}>
-                        {displayName}
-                      </Text>
-                      {u.username ? (
-                        <Text style={[styles.userHandle, { color: colors.mutedForeground }]} numberOfLines={1}>
-                          @{u.username}
-                        </Text>
-                      ) : null}
-                    </View>
-                    <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+            <>
+              <View style={[styles.searchRow, { borderColor: colors.border }]}>
+                <Feather name="search" size={14} color={colors.mutedForeground} />
+                <TextInput
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder="Buscar..."
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[styles.searchInput, { color: colors.navy }]}
+                />
+              </View>
+              {filtered.length === 0 ? (
+                <View style={styles.centered}>
+                  <Feather name="users" size={36} color={colors.border} />
+                  <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{emptyMessage}</Text>
+                </View>
+              ) : (
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent}>
+                  {filtered.map(u => {
+                    const displayName = u.full_name ?? u.username ?? "Usuário";
+                    return (
+                      <TouchableOpacity
+                        key={u.id}
+                        style={[styles.userRow, { borderBottomColor: colors.border }]}
+                        onPress={() => handleUserPress(u.id)}
+                        activeOpacity={0.75}
+                      >
+                        <Avatar uri={u.avatar_url} name={displayName} size={44} />
+                        <View style={styles.userInfo}>
+                          <Text style={[styles.userName, { color: colors.navy }]} numberOfLines={1}>
+                            {displayName}
+                          </Text>
+                          {u.username ? (
+                            <Text style={[styles.userHandle, { color: colors.mutedForeground }]} numberOfLines={1}>
+                              @{u.username}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              )}
+            </>
           )}
         </Pressable>
       </Pressable>
@@ -151,6 +172,23 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 17,
     fontWeight: "700",
+  },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#f5f5f0",
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    padding: 0,
   },
   centered: {
     alignItems: "center",

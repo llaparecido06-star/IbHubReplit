@@ -605,7 +605,7 @@ export default function ProfileScreen() {
   const insets  = useSafeAreaInsets();
   const { profile, user, signOut, activeCompany } = useAuth();
 
-  const [activeTab,    setActiveTab]    = useState<"feed" | "salvos" | "adega" | "anuncios">("feed");
+  const [activeTab,    setActiveTab]    = useState<"feed" | "salvos" | "adega">("feed");
   const [showComments, setShowComments] = useState<string | null>(null);
   const [showPostMenu, setShowPostMenu] = useState<string | null>(null);
   const [commentText,  setCommentText]  = useState("");
@@ -624,6 +624,8 @@ export default function ProfileScreen() {
   const [loadingData,    setLoadingData]    = useState(true);
   const [refreshing,     setRefreshing]     = useState(false);
   const [liveStats,      setLiveStats]      = useState({ connections: 0, followers: 0, following: 0 });
+  const [coverOverride,  setCoverOverride]  = useState<string | null>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
 
   // Engagement state
   const [profileViews,  setProfileViews]  = useState(0);
@@ -692,6 +694,39 @@ export default function ProfileScreen() {
     setReferralCode(refCode);
     setInviteCount(stats.count);
     setInviteRank(stats.rank);
+  }, [user?.id]);
+
+  const coverUrl = coverOverride ?? (profile as any)?.cover_url ?? null;
+
+  const handleCoverUpload = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: "images",
+      allowsEditing: true,
+      aspect: [3, 1],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets?.[0]?.uri || !user?.id) return;
+    setUploadingCover(true);
+    try {
+      const uri = result.assets[0].uri;
+      const path = `${user.id}/cover.jpg`;
+      const response = await fetch(uri);
+      const arrayBuffer = await response.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      const { error } = await supabase.storage
+        .from("avatars")
+        .upload(path, bytes, { contentType: "image/jpeg", upsert: true });
+      if (!error) {
+        const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
+        const url = `${urlData.publicUrl}?t=${Date.now()}`;
+        await supabase.from("profiles").update({ cover_url: url }).or(`id.eq.${user.id},user_id.eq.${user.id}`);
+        setCoverOverride(url);
+      }
+    } finally {
+      setUploadingCover(false);
+    }
   }, [user?.id]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -945,7 +980,20 @@ export default function ProfileScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />}
     >
       {/* ── Cover ── */}
-      <View style={[styles.cover, { backgroundColor: colors.navyLight, paddingTop: topPad }]} />
+      <View style={[styles.cover, { backgroundColor: colors.navyLight, paddingTop: topPad, overflow: "hidden" }]}>
+        {coverUrl ? (
+          <Image source={{ uri: coverUrl }} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} contentFit="cover" />
+        ) : null}
+        <TouchableOpacity
+          onPress={handleCoverUpload}
+          disabled={uploadingCover}
+          style={styles.coverCameraBtn}
+          accessibilityLabel="Alterar foto de capa"
+        >
+          <Feather name="camera" size={13} color="#fff" />
+          {uploadingCover ? <ActivityIndicator size="small" color="#fff" /> : null}
+        </TouchableOpacity>
+      </View>
 
       {/* ── Profile card ── */}
       <View style={[styles.profileCard, { backgroundColor: "#fff" }]}>
@@ -1254,10 +1302,9 @@ export default function ProfileScreen() {
       {/* ── Profile tabs ── */}
       <View style={[styles.tabRow, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         {([
-          { key: "feed",     label: t("profile.tab_posts").toUpperCase(), icon: null },
-          { key: "anuncios", label: t("profile.tab_ads").toUpperCase(),   icon: "tag" },
-          { key: "salvos",   label: t("profile.tab_saved").toUpperCase(), icon: "bookmark" },
-          { key: "adega",    label: t("profile.tab_cellar").toUpperCase(), icon: "wind" },
+          { key: "feed",   label: t("profile.tab_posts").toUpperCase(),   icon: null },
+          { key: "salvos", label: t("profile.tab_saved").toUpperCase(),   icon: "bookmark" },
+          { key: "adega",  label: t("profile.tab_cellar").toUpperCase(),  icon: "wind" },
         ] as const).map((tab) => (
           <Pressable
             key={tab.key}
@@ -1422,61 +1469,6 @@ export default function ProfileScreen() {
         </View>
       )}
 
-      {/* ── ANÚNCIOS ── */}
-      {activeTab === "anuncios" && (
-        <View style={{ backgroundColor: "#fff" }}>
-          {loadingData ? (
-            <ActivityIndicator color={colors.gold} style={{ marginTop: 40 }} />
-          ) : anuncios.length === 0 ? (
-            <View style={styles.emptyTab}>
-              <Feather name="tag" size={32} color={colors.mutedForeground} />
-              <Text style={[styles.emptyTabTitle, { color: colors.navy }]}>{t("profile.ads_empty_title")}</Text>
-              <Text style={[styles.emptyTabText, { color: colors.mutedForeground }]}>
-                {t("profile.ads_empty_sub")}
-              </Text>
-              <TouchableOpacity
-                style={[styles.emptyTabBtn, { backgroundColor: colors.gold }]}
-                onPress={() => router.push("/opportunities" as any)}
-              >
-                <Text style={styles.emptyTabBtnText}>{t("profile.go_to_market")}</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, gap: 10 }}>
-              {anuncios.map((a) => (
-                <TouchableOpacity
-                  key={a.id}
-                  style={[styles.anuncioRow, { borderColor: colors.border }]}
-                  onPress={() => router.push(`/opportunity/${a.id}` as any)}
-                  activeOpacity={0.85}
-                >
-                  {a.cover_image_url ? (
-                    <Image source={{ uri: a.cover_image_url }} style={styles.anuncioThumb} />
-                  ) : (
-                    <View style={[styles.anuncioThumb, { backgroundColor: colors.border, alignItems: "center", justifyContent: "center" }]}>
-                      <Feather name="image" size={20} color={colors.mutedForeground} />
-                    </View>
-                  )}
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.anuncioTitle, { color: colors.navy }]} numberOfLines={2}>{a.title}</Text>
-                    {a.price ? (
-                      <Text style={[styles.anuncioPrice, { color: colors.gold }]} numberOfLines={1}>{a.price}</Text>
-                    ) : null}
-                    <View style={styles.anuncioMetaRow}>
-                      {a.category ? (
-                        <Text style={[styles.anuncioMeta, { color: colors.mutedForeground }]} numberOfLines={1}>{a.category}</Text>
-                      ) : null}
-                      {!a.is_active ? (
-                        <Text style={[styles.anuncioInactive, { color: "#9ca3af" }]}>· {t("profile.inactive_ad")}</Text>
-                      ) : null}
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
-      )}
 
       {/* ── Comments modal ── */}
       <Modal visible={showComments !== null} transparent animationType="slide" onRequestClose={() => { setShowComments(null); setCommentText(""); }}>
@@ -1545,6 +1537,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container:          { flex: 1 },
   cover:              { height: 130, justifyContent: "flex-end", paddingHorizontal: 16, paddingBottom: 12, alignItems: "flex-end" },
+  coverCameraBtn:     { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(0,0,0,0.4)", borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.5)" },
   settingsBtn:        { padding: 4 },
   settingsIconBtn:    { width: 34, height: 34, borderRadius: 17, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   profileCard:        { padding: 16, gap: 10 },

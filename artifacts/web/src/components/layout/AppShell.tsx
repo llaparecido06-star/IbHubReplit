@@ -696,6 +696,7 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
   const [userMenuOpen, setUserMenuOpen]   = useState(false);
   const [search, setSearch] = useState("");
   const [peopleModal, setPeopleModal] = useState<{ title: string; list: ProfilePerson[] } | null>(null);
+  const [peopleSearch, setPeopleSearch] = useState("");
 
   const displayName = profile?.full_name ?? user?.email?.split("@")[0] ?? "Usuário";
   const username    = profile?.username ? `@${profile.username}` : "";
@@ -1499,20 +1500,26 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
 
       {/* People List Modal */}
       {peopleModal && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setPeopleModal(null)}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => { setPeopleModal(null); setPeopleSearch(""); }}>
           <div style={{ background: WHITE, borderRadius: 16, padding: 24, minWidth: 340, maxWidth: 440, maxHeight: "70vh", overflow: "hidden", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <span style={{ fontSize: 16, fontWeight: 700, color: NAVY }}>{peopleModal.title}</span>
-              <button onClick={() => setPeopleModal(null)} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20 }}>×</button>
+              <button onClick={() => { setPeopleModal(null); setPeopleSearch(""); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20 }}>×</button>
             </div>
-            {peopleModal.list.length === 0 ? (
+            <input
+              value={peopleSearch}
+              onChange={e => setPeopleSearch(e.target.value)}
+              placeholder="Buscar..."
+              style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, color: NAVY, outline: "none", marginBottom: 12 }}
+            />
+            {peopleModal.list.filter(p => !peopleSearch.trim() || p.full_name?.toLowerCase().includes(peopleSearch.toLowerCase())).length === 0 ? (
               <div style={{ textAlign: "center", color: MUTED, fontSize: 14, padding: "24px 0" }}>Nenhuma pessoa encontrada.</div>
             ) : (
               <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
-                {peopleModal.list.map(p => (
+                {peopleModal.list.filter(p => !peopleSearch.trim() || p.full_name?.toLowerCase().includes(peopleSearch.toLowerCase())).map(p => (
                   <div
                     key={p.id}
-                    onClick={() => { setPeopleModal(null); setLocation(p.id === userId ? "/app/perfil" : `/app/usuario/${p.id}`); }}
+                    onClick={() => { setPeopleModal(null); setPeopleSearch(""); setLocation(p.id === userId ? "/app/perfil" : `/app/usuario/${p.id}`); }}
                     style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 10px", borderRadius: 10, cursor: "pointer", transition: "background 0.12s" }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${GOLD}12`; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}

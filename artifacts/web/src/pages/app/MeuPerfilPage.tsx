@@ -86,25 +86,43 @@ function Avatar({ src, name, size = 40 }: { src?: string | null; name: string; s
   );
 }
 
-function PeopleListModal({ title, list, onClose }: { title: string; list: ProfilePerson[]; onClose: () => void }) {
+function PeopleListModal({ title, list, onClose, currentUserId }: { title: string; list: ProfilePerson[]; onClose: () => void; currentUserId?: string }) {
+  const [, setLocation] = useLocation();
+  const [search, setSearch] = useState("");
+  const filtered = search.trim()
+    ? list.filter(p => p.full_name?.toLowerCase().includes(search.toLowerCase()))
+    : list;
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
       <div style={{ background: WHITE, borderRadius: 16, padding: 24, minWidth: 340, maxWidth: 440, maxHeight: "70vh", overflow: "hidden", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: NAVY }}>{title}</span>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20 }}>×</button>
         </div>
-        {list.length === 0 ? (
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Buscar..."
+          style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, color: NAVY, outline: "none", marginBottom: 12 }}
+        />
+        {filtered.length === 0 ? (
           <div style={{ textAlign: "center", color: MUTED, fontSize: 14, padding: "24px 0" }}>Nenhuma pessoa encontrada.</div>
         ) : (
-          <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-            {list.map(p => (
-              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+            {filtered.map(p => (
+              <div
+                key={p.id}
+                onClick={() => { onClose(); setLocation(p.id === currentUserId ? "/app/perfil" : `/app/usuario/${p.id}`); }}
+                style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 10px", borderRadius: 10, cursor: "pointer", transition: "background 0.12s" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${GOLD}12`; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+              >
                 <Avatar src={p.avatar_url} name={p.full_name} size={40} />
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: NAVY }}>{p.full_name}</div>
-                  {p.headline && <div style={{ fontSize: 12, color: MUTED }}>{p.headline}</div>}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.full_name}</div>
+                  {p.headline && <div style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.headline}</div>}
                 </div>
+                <svg width="14" height="14" fill="none" stroke={MUTED} strokeWidth="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
               </div>
             ))}
           </div>
@@ -508,7 +526,7 @@ function MiniPostCard({ post, onDelete, onEdit, onPollUpdate, onLike, onBookmark
   );
 }
 
-type ProfileTab = "publicacoes" | "anuncios" | "sobre";
+type ProfileTab = "publicacoes" | "sobre";
 
 export default function MeuPerfilPage() {
   const { profile, user, loading: authLoading } = useAuth();
@@ -524,6 +542,9 @@ export default function MeuPerfilPage() {
   const [loadingAnuncios, setLoadingAnuncios] = useState(true);
   const [peopleModal, setPeopleModal] = useState<{ title: string; list: ProfilePerson[] } | null>(null);
   const [myCompanyId, setMyCompanyId] = useState<string | null>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const [coverOverride, setCoverOverride] = useState<string | null>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
 
   const userId = profile?.id ?? user?.id ?? "";
   const displayName = profile?.full_name ?? user?.email?.split("@")[0] ?? "Usuário";
@@ -573,6 +594,29 @@ export default function MeuPerfilPage() {
   const openFollowing = async () => {
     const list = await fetchFollowingList(userId);
     setPeopleModal({ title: "Seguindo", list });
+  };
+
+  const coverUrl = coverOverride ?? (profile as any)?.cover_url ?? null;
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !userId) return;
+    setUploadingCover(true);
+    try {
+      const path = `${userId}/cover.jpg`;
+      const { error } = await supabase.storage
+        .from("avatars")
+        .upload(path, file, { contentType: file.type, upsert: true });
+      if (!error) {
+        const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+        const url = `${data.publicUrl}?t=${Date.now()}`;
+        await supabase.from("profiles").update({ cover_url: url }).or(`id.eq.${userId},user_id.eq.${userId}`);
+        setCoverOverride(url);
+      }
+    } finally {
+      setUploadingCover(false);
+      if (coverInputRef.current) coverInputRef.current.value = "";
+    }
   };
 
   const handleDeletePost = async (postId: string) => {
@@ -693,13 +737,23 @@ export default function MeuPerfilPage() {
         <div style={{ backgroundColor: "#f2f3f5", minHeight: "100vh", paddingBottom: 80 }}>
 
           {/* Cover */}
-          <div style={{ height: COVER_H, background: "linear-gradient(135deg, #722f37 0%, #9b3a4a 60%, #c9a84c 100%)", position: "relative" }}>
+          <div style={{ height: COVER_H, background: "linear-gradient(135deg, #722f37 0%, #9b3a4a 60%, #c9a84c 100%)", position: "relative", overflow: "hidden" }}>
+            {coverUrl && <img src={coverUrl} alt="Capa" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
             <button
               onClick={() => setLocation("/minha-conta")}
-              style={{ position: "absolute", top: 14, right: 14, width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(0,0,0,0.28)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+              style={{ position: "absolute", top: 14, right: 14, width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(0,0,0,0.28)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }}
             >
               <span style={{ fontSize: 18 }}>⚙️</span>
             </button>
+            <button
+              onClick={() => coverInputRef.current?.click()}
+              disabled={uploadingCover}
+              title="Alterar foto de capa"
+              style={{ position: "absolute", bottom: 10, left: 14, zIndex: 1, backgroundColor: "rgba(0,0,0,0.4)", border: "1.5px solid rgba(255,255,255,0.6)", borderRadius: 16, padding: "5px 10px", display: "flex", alignItems: "center", gap: 5, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+            >
+              <span>📷</span> {uploadingCover ? "Enviando…" : "Capa"}
+            </button>
+            <input ref={coverInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleCoverUpload} />
           </div>
 
           {/* Profile card */}
@@ -830,8 +884,8 @@ export default function MeuPerfilPage() {
 
           {/* Tabs */}
           <div style={{ backgroundColor: "#fff", display: "flex", borderBottom: `1px solid ${BORDER}`, marginBottom: 10 }}>
-            {(["publicacoes", "anuncios", "sobre"] as ProfileTab[]).map(t => {
-              const labels: Record<ProfileTab, string> = { publicacoes: "Publicações", anuncios: "Anúncios", sobre: "Sobre" };
+            {(["publicacoes", "sobre"] as ProfileTab[]).map(t => {
+              const labels: Record<ProfileTab, string> = { publicacoes: "Publicações", sobre: "Sobre" };
               const active = tab === t;
               return (
                 <button key={t} onClick={() => setTab(t)} style={{
@@ -865,8 +919,6 @@ export default function MeuPerfilPage() {
                   {posts.map(post => <MiniPostCard key={post.id} post={post} onDelete={handleDeletePost} onEdit={handleEditPost} onPollUpdate={handlePollUpdate} onLike={handleLike} onBookmark={handleBookmark} />)}
                 </div>
               )
-            ) : tab === "anuncios" ? (
-              <div style={{ padding: "0 12px" }}>{renderAnunciosTab()}</div>
             ) : (
               <div style={{ backgroundColor: "#fff", padding: "20px 16px" }}>
                 <div style={{ fontSize: 14, fontWeight: 800, color: NAVY, marginBottom: 12 }}>Sobre mim</div>
@@ -905,7 +957,7 @@ export default function MeuPerfilPage() {
         </div>
 
         {peopleModal && (
-          <PeopleListModal title={peopleModal.title} list={peopleModal.list} onClose={() => setPeopleModal(null)} />
+          <PeopleListModal title={peopleModal.title} list={peopleModal.list} onClose={() => setPeopleModal(null)} currentUserId={userId} />
         )}
       </AppShell>
     );
@@ -917,7 +969,18 @@ export default function MeuPerfilPage() {
         {/* Header / Cover */}
         <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden", marginBottom: 16 }}>
           {/* Cover */}
-          <div style={{ height: 100, background: `linear-gradient(135deg, #722f37 0%, #9b3a4a 60%, ${GOLD} 100%)` }} />
+          <div style={{ height: 100, background: `linear-gradient(135deg, #722f37 0%, #9b3a4a 60%, ${GOLD} 100%)`, position: "relative", overflow: "hidden" }}>
+            {coverUrl && <img src={coverUrl} alt="Capa" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
+            <button
+              onClick={() => coverInputRef.current?.click()}
+              disabled={uploadingCover}
+              title="Alterar foto de capa"
+              style={{ position: "absolute", bottom: 8, right: 12, zIndex: 1, backgroundColor: "rgba(0,0,0,0.4)", border: "1.5px solid rgba(255,255,255,0.6)", borderRadius: 16, padding: "5px 12px", display: "flex", alignItems: "center", gap: 6, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+            >
+              <span>📷</span> {uploadingCover ? "Enviando…" : "Alterar capa"}
+            </button>
+            <input ref={coverInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleCoverUpload} />
+          </div>
 
           {/* Avatar + actions */}
           <div style={{ padding: "0 20px 20px", position: "relative" }}>
@@ -972,8 +1035,8 @@ export default function MeuPerfilPage() {
 
         {/* Tabs */}
         <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "0 4px", marginBottom: 16, display: "flex" }}>
-          {(["publicacoes", "anuncios", "sobre"] as ProfileTab[]).map(t => {
-            const labels: Record<ProfileTab, string> = { publicacoes: "Publicações", anuncios: "Anúncios", sobre: "Sobre" };
+          {(["publicacoes", "sobre"] as ProfileTab[]).map(t => {
+            const labels: Record<ProfileTab, string> = { publicacoes: "Publicações", sobre: "Sobre" };
             const active = tab === t;
             return (
               <button key={t} onClick={() => setTab(t)} style={{
@@ -1004,8 +1067,6 @@ export default function MeuPerfilPage() {
           ) : (
             posts.map(post => <MiniPostCard key={post.id} post={post} onDelete={handleDeletePost} onEdit={handleEditPost} onPollUpdate={handlePollUpdate} onLike={handleLike} onBookmark={handleBookmark} />)
           )
-        ) : tab === "anuncios" ? (
-          renderAnunciosTab()
         ) : (
           <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 20 }}>
             <h3 style={{ fontSize: 15, fontWeight: 800, color: NAVY, margin: "0 0 16px" }}>Sobre mim</h3>
@@ -1053,7 +1114,7 @@ export default function MeuPerfilPage() {
       </div>
 
       {peopleModal && (
-        <PeopleListModal title={peopleModal.title} list={peopleModal.list} onClose={() => setPeopleModal(null)} />
+        <PeopleListModal title={peopleModal.title} list={peopleModal.list} onClose={() => setPeopleModal(null)} currentUserId={userId} />
       )}
     </AppShell>
   );
