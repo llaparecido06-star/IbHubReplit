@@ -2742,7 +2742,7 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
   const imgRef = useRef<HTMLInputElement>(null);
   const vidRef = useRef<HTMLInputElement>(null);
 
-  const hasAccess = hasFeature("mercado:idealbi") || isAdmin;
+  const hasAccess = hasFeature("mercado:feed_exclusivo") || hasFeature("mercado:idealbi") || isAdmin;
   const canPost = isAdmin || !!userCompany;
 
   useEffect(() => {
@@ -2927,47 +2927,64 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
 
       {/* Search section — flat 4 mode buttons */}
       {subTab === "search" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {(searchMode === "exportador" || searchMode === "precos") && (
-            <RevealCreditsBar revealCredits={revealCredits} revealCreditsTotal={revealCreditsTotal} loading={revealCreditsLoading} />
-          )}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {([
-              { key: "exportador",   icon: "🌐", label: "Buscar Exportador" },
-              { key: "marca",        icon: "🔍", label: "Buscar por Rótulo" },
-              { key: "importadores", icon: "📦", label: "Buscar Importadores" },
-              { key: "produtores",   icon: "🍇", label: "Buscar Produtor Nacional" },
-              { key: "precos",       icon: "🏷️", label: "Preços Retail" },
-            ] as { key: SearchMode; icon: string; label: string }[]).map(s => {
-              const active = searchMode === s.key;
-              return (
-                <button
-                  key={s.key}
-                  onClick={() => setSearchMode(s.key)}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
-                    padding: "7px 16px", borderRadius: 20, flexShrink: 0,
-                    border: `1px solid ${active ? NAVY : BORDER}`,
-                    backgroundColor: active ? NAVY : WHITE,
-                    color: active ? WHITE : MUTED,
-                    fontWeight: active ? 700 : 500,
-                    fontSize: 13, cursor: "pointer", fontFamily: "inherit",
-                    transition: "all 0.15s",
-                  }}
-                >
-                  <span>{s.icon}</span>
-                  <span>{s.label}</span>
-                </button>
-              );
-            })}
+        !creditsLoading && creditsTotal === 0 ? (
+          <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "40px 24px", textAlign: "center" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
+            <h3 style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Busca por IA</h3>
+            <p style={{ fontSize: 14, color: MUTED, maxWidth: 380, margin: "0 auto 20px", lineHeight: 1.6 }}>
+              Seu plano atual não inclui créditos de Busca por IA. Faça upgrade para pesquisar exportadores,
+              importadores, rótulos e produtores com inteligência artificial.
+            </p>
+            <a
+              href="/assinar"
+              style={{ display: "inline-block", padding: "10px 28px", backgroundColor: GOLD, color: NAVY, borderRadius: 10, fontWeight: 700, fontSize: 14, textDecoration: "none" }}
+            >
+              Ver Planos
+            </a>
           </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {(searchMode === "exportador" || searchMode === "precos") && (
+              <RevealCreditsBar revealCredits={revealCredits} revealCreditsTotal={revealCreditsTotal} loading={revealCreditsLoading} />
+            )}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {([
+                { key: "exportador",   icon: "🌐", label: "Buscar Exportador" },
+                { key: "marca",        icon: "🔍", label: "Buscar por Rótulo" },
+                { key: "importadores", icon: "📦", label: "Buscar Importadores" },
+                { key: "produtores",   icon: "🍇", label: "Buscar Produtor Nacional" },
+                { key: "precos",       icon: "🏷️", label: "Preços Retail" },
+              ] as { key: SearchMode; icon: string; label: string }[]).map(s => {
+                const active = searchMode === s.key;
+                return (
+                  <button
+                    key={s.key}
+                    onClick={() => setSearchMode(s.key)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
+                      padding: "7px 16px", borderRadius: 20, flexShrink: 0,
+                      border: `1px solid ${active ? NAVY : BORDER}`,
+                      backgroundColor: active ? NAVY : WHITE,
+                      color: active ? WHITE : MUTED,
+                      fontWeight: active ? 700 : 500,
+                      fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    <span>{s.icon}</span>
+                    <span>{s.label}</span>
+                  </button>
+                );
+              })}
+            </div>
 
-          {searchMode === "exportador"   && <ExportadorList userId={userId} hasAccess={hasAccess} credits={credits} creditsTotal={creditsTotal} setCredits={setCredits} setCreditsTotal={setCreditsTotal} revealCredits={revealCredits} setRevealCredits={setRevealCredits} setRevealCreditsTotal={setRevealCreditsTotal} />}
-          {searchMode === "marca"        && <MarcaCompletaSearch userId={userId} credits={credits} creditsTotal={creditsTotal} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
-          {searchMode === "importadores" && <ImportadoresSearch userId={userId} credits={credits} creditsTotal={creditsTotal} creditsLoading={creditsLoading} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
-          {searchMode === "produtores"   && <ProdutoresSearch userId={userId} credits={credits} creditsTotal={creditsTotal} creditsLoading={creditsLoading} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
-          {searchMode === "precos"       && <PrecosRotuloSearch hasAccess={hasAccess} revealCredits={revealCredits} setRevealCredits={setRevealCredits} setRevealCreditsTotal={setRevealCreditsTotal} />}
-        </div>
+            {searchMode === "exportador"   && <ExportadorList userId={userId} hasAccess={hasAccess} credits={credits} creditsTotal={creditsTotal} setCredits={setCredits} setCreditsTotal={setCreditsTotal} revealCredits={revealCredits} setRevealCredits={setRevealCredits} setRevealCreditsTotal={setRevealCreditsTotal} />}
+            {searchMode === "marca"        && <MarcaCompletaSearch userId={userId} credits={credits} creditsTotal={creditsTotal} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
+            {searchMode === "importadores" && <ImportadoresSearch userId={userId} credits={credits} creditsTotal={creditsTotal} creditsLoading={creditsLoading} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
+            {searchMode === "produtores"   && <ProdutoresSearch userId={userId} credits={credits} creditsTotal={creditsTotal} creditsLoading={creditsLoading} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
+            {searchMode === "precos"       && <PrecosRotuloSearch hasAccess={hasAccess} revealCredits={revealCredits} setRevealCredits={setRevealCredits} setRevealCreditsTotal={setRevealCreditsTotal} />}
+          </div>
+        )
       )}
 
       {/* Feed — paywall if no plan access */}

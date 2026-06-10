@@ -402,7 +402,20 @@ export default function AdminPlanBuilder() {
 
             {/* ── Dados de Mercado ── */}
             <div style={{ borderBottom: "1px solid #e8eaed", paddingBottom: 18, marginBottom: 18 }}>
-              {sectionLabel("Dados de Mercado (Ideal.BI Feed)")}
+              {sectionLabel("Dados de Mercado (Ideal.BI)")}
+
+              {/* Feed Exclusivo toggle */}
+              <div style={{ marginBottom: 10 }}>
+                {featureToggle("Feed Exclusivo (Ideal.BI)", modal.features.includes("mercado:feed_exclusivo"), () => toggleFeature("mercado:feed_exclusivo"))}
+              </div>
+              <p style={{ fontSize: 11, color: "#aaa", margin: "0 0 14px 2px" }}>
+                Permite acesso ao feed de análises e insights exclusivos publicados pela Ideal.BI.
+              </p>
+
+              {/* AI Search Credits */}
+              {inp("⚡ CRÉDITOS DE BUSCA POR IA / MÊS", "aiCredits", "0", "0 = sem acesso à busca por IA. Renovado dia 1º.")}
+
+              {/* Market categories */}
               {loadingMp ? (
                 <div style={{ color: "#aaa", fontSize: 13, padding: "8px 0" }}>⏳ Carregando categorias...</div>
               ) : marketPerms.length === 0 ? (
