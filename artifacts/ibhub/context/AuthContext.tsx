@@ -55,6 +55,7 @@ interface Profile {
   certifications?: string[] | null;
   subscription_tier?: string | null;
   is_public?: boolean;
+  cover_url?: string | null;
   // Stripe
   stripe_customer_id?: string | null;
   stripe_subscription_id?: string | null;

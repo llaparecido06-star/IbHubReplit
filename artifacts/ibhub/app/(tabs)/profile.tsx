@@ -26,6 +26,7 @@ import { useAuth, supabase } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { friendlyErrorMessage } from "@/hooks/useAsyncAction";
 import * as ImagePicker from "expo-image-picker";
+import CoverCropModal from "@/components/ui/CoverCropModal";
 import {
   CompanyPage,
   CompanyProduct,
@@ -603,7 +604,7 @@ export default function ProfileScreen() {
   const colors  = useColors();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
-  const { profile, user, signOut, activeCompany } = useAuth();
+  const { profile, user, signOut, activeCompany, patchProfile } = useAuth();
 
   const [activeTab,    setActiveTab]    = useState<"feed" | "salvos" | "adega">("feed");
   const [showComments, setShowComments] = useState<string | null>(null);
@@ -626,6 +627,7 @@ export default function ProfileScreen() {
   const [liveStats,      setLiveStats]      = useState({ connections: 0, followers: 0, following: 0 });
   const [coverOverride,  setCoverOverride]  = useState<string | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [pendingCropImage, setPendingCropImage] = useState<{ uri: string; width: number; height: number } | null>(null);
 
   // Engagement state
   const [profileViews,  setProfileViews]  = useState(0);
@@ -703,16 +705,21 @@ export default function ProfileScreen() {
     if (status !== "granted") return;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: "images",
-      allowsEditing: true,
-      aspect: [3, 1],
-      quality: 0.8,
+      allowsEditing: false,
+      quality: 1,
     });
     if (result.canceled || !result.assets?.[0]?.uri || !user?.id) return;
+    const asset = result.assets[0];
+    setPendingCropImage({ uri: asset.uri, width: asset.width ?? 1200, height: asset.height ?? 400 });
+  }, [user?.id]);
+
+  const handleCropConfirm = useCallback(async (croppedUri: string) => {
+    setPendingCropImage(null);
+    if (!user?.id) return;
     setUploadingCover(true);
     try {
-      const uri = result.assets[0].uri;
       const path = `${user.id}/cover.jpg`;
-      const response = await fetch(uri);
+      const response = await fetch(croppedUri);
       const arrayBuffer = await response.arrayBuffer();
       const bytes = new Uint8Array(arrayBuffer);
       const { error } = await supabase.storage
@@ -721,13 +728,19 @@ export default function ProfileScreen() {
       if (!error) {
         const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
         const url = `${urlData.publicUrl}?t=${Date.now()}`;
-        await supabase.from("profiles").update({ cover_url: url }).or(`id.eq.${user.id},user_id.eq.${user.id}`);
-        setCoverOverride(url);
+        const { error: updateError } = await supabase
+          .from("profiles")
+          .update({ cover_url: url })
+          .eq("id", user.id);
+        if (!updateError) {
+          setCoverOverride(url);
+          patchProfile({ cover_url: url });
+        }
       }
     } finally {
       setUploadingCover(false);
     }
-  }, [user?.id]);
+  }, [user?.id, patchProfile]);
 
   useEffect(() => { loadData(); }, [loadData]);
   useEffect(() => { loadEngagement(); }, [loadEngagement]);
@@ -972,6 +985,18 @@ export default function ProfileScreen() {
         </Pressable>
       </Pressable>
     </Modal>
+
+    {pendingCropImage && (
+      <CoverCropModal
+        key={pendingCropImage.uri}
+        visible
+        imageUri={pendingCropImage.uri}
+        imageWidth={pendingCropImage.width}
+        imageHeight={pendingCropImage.height}
+        onConfirm={handleCropConfirm}
+        onCancel={() => setPendingCropImage(null)}
+      />
+    )}
 
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
