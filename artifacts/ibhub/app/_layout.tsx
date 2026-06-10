@@ -45,13 +45,22 @@ SafeNotifications.setNotificationHandler({
 // React tree renders. By the time auth resolves (even from cache), this promise
 // will have settled, letting RootLayoutNav navigate directly to the deep-link
 // destination instead of first landing on /(tabs) and then jumping away.
+//
+// IMPORTANT: getLastNotificationResponseAsync() can hang indefinitely on Android
+// when push notification permissions have not been granted or Google Play Services
+// is unavailable. We race it against a 1.5 s timeout so coldStartDeepLinkPromise
+// always settles promptly and the navigation IIFE is never permanently blocked.
 const coldStartDeepLinkPromise: Promise<string | null> = (async () => {
   try {
-    const response = await SafeNotifications.getLastNotificationResponseAsync();
+    const response = await Promise.race([
+      SafeNotifications.getLastNotificationResponseAsync(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 1_500)),
+    ]);
     if (response) {
       const data = response.notification.request.content.data ?? {};
       const deepLink = (data as { deepLink?: string }).deepLink;
       if (deepLink && typeof deepLink === "string" && deepLink.startsWith("/")) {
+        console.log("[ColdStart] deep-link from notification:", deepLink);
         return deepLink;
       }
     }
@@ -288,12 +297,34 @@ function RootLayoutNav() {
   // before navIifePendingRef is reset, closing that window entirely.
   const navInitiatedRef = useRef(false);
 
+  // Guards the safety-net timer so it is only armed once per login session.
+  // Without this, every TOKEN_REFRESHED event (frequent on Android) changes
+  // `session`, re-runs the safety-net useEffect, cancels the in-flight timeout,
+  // and starts a fresh 3 s timer — so it never fires and the spinner hangs
+  // forever if the main IIFE is also blocked (e.g. coldStartDeepLinkPromise stall).
+  const safetyNetArmed = useRef(false);
+
+  // Reset the armed flag whenever the user logs out so a subsequent login
+  // can re-arm the safety net if needed.
+  useEffect(() => {
+    if (!session) {
+      safetyNetArmed.current = false;
+      console.log("[RootLayoutNav] session cleared — safety-net flag reset");
+    }
+  }, [session]);
+
   // Auth routes that must remain accessible without a session
   const isAuthPath = ["login", "register", "forgot-password", "reset-password", "auth"].some(
     (p) => pathname.includes(p),
   );
 
   useEffect(() => {
+    console.log(
+      `[RootLayoutNav] effect — loading=${loading} session=${!!session} profileChecked=${profileChecked}` +
+      ` navInitiated=${navInitiated} navIifePending=${navIifePendingRef.current}` +
+      ` isAuthPath=${isAuthPath} needsCompletion=${needsProfileCompletion}`
+    );
+
     if (loading || isRecovering || mustChangePassword) return;
 
     // ── Unauthenticated ────────────────────────────────────────────────────
@@ -312,7 +343,10 @@ function RootLayoutNav() {
     // Otherwise, for new social-auth users, needsProfileCompletion starts as false,
     // we navigate to /(tabs), and then a moment later it flips to true and we
     // bounce them to /social-complete — visible flicker.
-    if (!profileChecked) return;
+    if (!profileChecked) {
+      console.log("[RootLayoutNav] waiting for profileChecked…");
+      return;
+    }
 
     // Decide destination once, based on whether the social-auth user still needs
     // to complete their profile. Single source of truth avoids the previous
@@ -390,14 +424,20 @@ function RootLayoutNav() {
     // For /(tabs), check whether a cold-start notification was tapped.
     // The deep link was pre-fetched at module load so the promise is already
     // settled by the time we get here, keeping navigation instantaneous.
+    // NOTE: coldStartDeepLinkPromise is now raced against a 1.5 s timeout so
+    // it always settles — getLastNotificationResponseAsync() can hang on Android.
     if (destination === "/(tabs)") {
       navIifePendingRef.current = true;
+      console.log("[RootLayoutNav] IIFE started — awaiting coldStartDeepLinkPromise");
       (async () => {
         const coldLink = await coldStartDeepLinkPromise;
+        console.log("[RootLayoutNav] IIFE resolved — coldLink:", coldLink ?? "null");
         if (coldLink && !coldStartLinkConsumed) {
           coldStartLinkConsumed = true;
+          console.log("[RootLayoutNav] router.replace →", coldLink);
           router.replace(coldLink as any);
         } else {
+          console.log("[RootLayoutNav] router.replace → /(tabs)");
           router.replace("/(tabs)" as any);
         }
         // Set navInitiatedRef BEFORE clearing navIifePendingRef so the guard
@@ -406,8 +446,10 @@ function RootLayoutNav() {
         navInitiatedRef.current = true;
         navIifePendingRef.current = false;
         setNavInitiated(true);
+        console.log("[RootLayoutNav] navInitiated set to true");
       })();
     } else {
+      console.log("[RootLayoutNav] router.replace →", destination);
       navInitiatedRef.current = true;
       router.replace(destination as any);
       setNavInitiated(true);
@@ -418,20 +460,34 @@ function RootLayoutNav() {
     navInitiated,
   ]);
 
-  // Safety-net: if the navigation effect somehow never fires (extreme edge case —
-  // e.g. coldStartDeepLinkPromise hangs without rejecting), unblock after 3 s.
-  // IMPORTANT: also call router.replace so AuthenticatedLayout has an active
-  // route. Without this, navInitiated=true renders an empty Stack → white screen.
+  // Safety-net: if the navigation effect somehow never fires (e.g. the main IIFE
+  // is blocked), unblock after 3 s.
+  //
+  // CRITICAL: do NOT cancel the timer on re-runs caused by TOKEN_REFRESHED.
+  // On Android, TOKEN_REFRESHED fires repeatedly and changes `session`, which
+  // re-runs this effect and resets the timeout via the cleanup — so it NEVER
+  // fires, leaving the spinner up forever.
+  //
+  // Solution: arm the timer only once via `safetyNetArmed` ref. Subsequent
+  // re-runs from TOKEN_REFRESHED hit the early-return and don't create a new
+  // timer, so the original 3 s countdown runs to completion undisturbed.
+  // The callback checks navInitiatedRef.current to skip if navigation already
+  // happened before the 3 s elapsed.
   useEffect(() => {
     if (navInitiated || loading || !session || !profileChecked || isRecovering || mustChangePassword) return;
-    const t = setTimeout(() => {
-      console.warn("[RootLayoutNav] navInitiated safety-net fired after 3s — forcing navigation");
+    if (safetyNetArmed.current) return;
+    safetyNetArmed.current = true;
+    console.log("[RootLayoutNav] safety-net armed (3 s)");
+    setTimeout(() => {
+      if (navInitiatedRef.current) return;
+      console.warn("[RootLayoutNav] safety-net fired — forcing navigation");
       const destination = needsProfileCompletion ? "/social-complete" : "/(tabs)";
       navInitiatedRef.current = true;
       router.replace(destination as any);
       setNavInitiated(true);
     }, 3_000);
-    return () => clearTimeout(t);
+    // Intentionally no cleanup: we never cancel this timer once armed.
+    // safetyNetArmed.current prevents double-arming on re-runs.
   }, [navInitiated, loading, session, profileChecked, isRecovering, mustChangePassword, needsProfileCompletion, router]);
 
   if (loading) {

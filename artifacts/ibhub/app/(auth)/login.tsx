@@ -41,23 +41,22 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email || !password) { setError(t("auth.login.error_empty")); return; }
+    console.log("[Login] handleLogin — calling signIn");
     setLoading(true);
     setError(null);
     const { error: err } = await signIn(email, password);
     if (err) {
+      console.error("[Login] signIn returned error:", err);
       setError(err.toLowerCase().includes("suspensa") || err.toLowerCase().includes("suspen")
         ? err
         : t("auth.login.error_invalid"));
       setLoading(false);
       return;
     }
-    // Do NOT call router.replace here. RootLayoutNav's navigation effect
-    // handles the redirect to /(tabs) after onAuthStateChange(SIGNED_IN) fires.
-    // Calling router.replace("/(tabs)") from the login screen while the auth
-    // Stack is still mounted races with the RootLayoutNav IIFE and with the
-    // auth Stack's own `(tabs) redirect` screen — causing the Android "advances,
-    // freezes, snaps back" freeze. Keep loading=true so the button stays
-    // disabled until the screen is replaced by AuthenticatedLayout.
+    // signIn returned OK — navigation is driven by RootLayoutNav's useEffect
+    // after onAuthStateChange(SIGNED_IN) fires. Keep loading=true so the button
+    // stays disabled until AuthenticatedLayout replaces the screen.
+    console.log("[Login] signIn OK — handing off to RootLayoutNav for navigation");
   };
 
   return (

@@ -636,26 +636,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clearRecovery = useCallback(() => setIsRecovering(false), []);
 
   const signIn = async (email: string, password: string) => {
+    console.log("[signIn] step 1 — calling signInWithPassword");
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       const msg = error.message ?? "";
+      console.error("[signIn] signInWithPassword error:", msg);
       if (msg.toLowerCase().includes("ban") || msg.toLowerCase().includes("suspend")) {
         return { error: "Sua conta foi suspensa. Entre em contato com o suporte." };
       }
       return { error: msg };
     }
+    console.log("[signIn] step 2 — signInWithPassword OK, calling getUser");
     const { data: { user: authedUser } } = await supabase.auth.getUser();
+    console.log("[signIn] step 3 — getUser returned userId:", authedUser?.id ?? "null");
     if (authedUser) {
-      const { data: prof } = await supabase
+      console.log("[signIn] step 4 — checking is_banned for userId:", authedUser.id);
+      const { data: prof, error: banErr } = await supabase
         .from("profiles")
         .select("is_banned")
         .eq("id", authedUser.id)
         .maybeSingle();
+      if (banErr) console.error("[signIn] is_banned query error:", banErr.message);
+      console.log("[signIn] step 5 — is_banned:", (prof as { is_banned?: boolean } | null)?.is_banned ?? false);
       if ((prof as { is_banned?: boolean } | null)?.is_banned) {
         await supabase.auth.signOut();
         return { error: "Sua conta foi suspensa. Entre em contato com o suporte." };
       }
     }
+    console.log("[signIn] step 6 — returning OK, waiting for onAuthStateChange to drive navigation");
     return { error: null };
   };
 
