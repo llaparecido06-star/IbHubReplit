@@ -60,6 +60,7 @@ import AdminAdmins from "@/pages/admin/AdminAdmins";
 import AdminConfiguracoes from "@/pages/admin/AdminConfiguracoes";
 import AdminEmpresasFeed from "@/pages/admin/AdminEmpresasFeed";
 import AssinarPage from "@/pages/AssinarPage";
+import AssinarComunidadePage from "@/pages/AssinarComunidadePage";
 import AssinarSucessoPage from "@/pages/AssinarSucessoPage";
 import AssinarCanceladoPage from "@/pages/AssinarCanceladoPage";
 import MinhaContaPage from "@/pages/MinhaContaPage";
@@ -376,6 +377,9 @@ function Router() {
       <Route path="/assinar/cancelado" component={AssinarCanceladoPage} />
       <Route path="/assinar">
         <AssinarPage />
+      </Route>
+      <Route path="/comunidade-exclusiva">
+        <PrivateRoute component={AssinarComunidadePage} />
       </Route>
       <Route path="/minha-conta">
         <PrivateRoute component={MinhaContaPage} />

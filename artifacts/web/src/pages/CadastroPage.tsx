@@ -221,11 +221,7 @@ export default function CadastroPage() {
       }
 
       setLoading(false);
-      if (selectedPlan !== "gratuito") {
-        setLocation(`/assinar?plano=${selectedPlan}`);
-      } else {
-        setLocation("/app");
-      }
+      setLocation("/comunidade-exclusiva");
     }
   };
 

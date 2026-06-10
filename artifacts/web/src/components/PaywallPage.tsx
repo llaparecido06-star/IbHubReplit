@@ -55,7 +55,7 @@ export function PaywallPage({ featureName, description, requiredPlan }: PaywallP
           </div>
         )}
         <button
-          onClick={() => setLocation("/assinar")}
+          onClick={() => setLocation("/comunidade-exclusiva")}
           style={{
             background: GOLD, color: "#fff", border: "none",
             borderRadius: 12, padding: "14px 28px",

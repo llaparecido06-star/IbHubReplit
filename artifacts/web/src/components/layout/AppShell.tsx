@@ -1144,7 +1144,7 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
                 {[
                   { label: "Meu Perfil",           path: "/app/perfil",   emoji: "👤" },
                   { label: "Configurações",         path: "/minha-conta",  emoji: "⚙️" },
-                  { label: "Planos e assinaturas",  path: "/assinar",      emoji: "💎" },
+                  { label: "Planos e assinaturas",  path: "/comunidade-exclusiva", emoji: "💎" },
                 ].map(({ label, path, emoji }) => (
                   <button
                     key={path}

@@ -119,7 +119,7 @@ export default function SettingsPage() {
     {
       title: "ASSINATURA",
       rows: [
-        { icon: "⭐", label: "Assinatura", sub: "Gerencie seu plano", to: "/assinar" },
+        { icon: "⭐", label: "Assinatura", sub: "Gerencie seu plano", to: "/comunidade-exclusiva" },
       ],
     },
     {

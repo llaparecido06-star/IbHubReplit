@@ -328,7 +328,7 @@ export default function MinhaContaPage() {
 
             {/* CTA buttons */}
             {(plan === "gratuito" || plan === "basico") && !hasActiveSub ? (
-              <button onClick={() => setLocation("/assinar")} style={{ width: "100%", backgroundColor: GOLD, color: NAVY, border: "none", borderRadius: 10, padding: "14px 0", fontSize: 15, fontWeight: 800, cursor: "pointer" }}>
+              <button onClick={() => setLocation("/comunidade-exclusiva")} style={{ width: "100%", backgroundColor: GOLD, color: NAVY, border: "none", borderRadius: 10, padding: "14px 0", fontSize: 15, fontWeight: 800, cursor: "pointer" }}>
                 ⚡ Fazer upgrade de plano
               </button>
             ) : (
@@ -340,12 +340,12 @@ export default function MinhaContaPage() {
                   </button>
                 )}
                 {!hasActiveSub && (
-                  <button onClick={() => setLocation("/assinar")} style={{ width: "100%", backgroundColor: GOLD, color: NAVY, border: "none", borderRadius: 10, padding: "14px 0", fontSize: 15, fontWeight: 800, cursor: "pointer" }}>
+                  <button onClick={() => setLocation("/comunidade-exclusiva")} style={{ width: "100%", backgroundColor: GOLD, color: NAVY, border: "none", borderRadius: 10, padding: "14px 0", fontSize: 15, fontWeight: 800, cursor: "pointer" }}>
                     🔄 Reativar assinatura
                   </button>
                 )}
                 {hasActiveSub && (
-                  <button onClick={() => setLocation("/assinar")} style={{ width: "100%", backgroundColor: "transparent", color: MUTED, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "12px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                  <button onClick={() => setLocation("/comunidade-exclusiva")} style={{ width: "100%", backgroundColor: "transparent", color: MUTED, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "12px 0", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
                     Ver outros planos
                   </button>
                 )}
