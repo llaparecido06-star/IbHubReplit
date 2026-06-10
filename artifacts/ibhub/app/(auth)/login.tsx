@@ -3,6 +3,7 @@ import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -44,19 +45,30 @@ export default function LoginScreen() {
     console.log("[Login] handleLogin — calling signIn");
     setLoading(true);
     setError(null);
-    const { error: err } = await signIn(email, password);
-    if (err) {
-      console.error("[Login] signIn returned error:", err);
-      setError(err.toLowerCase().includes("suspensa") || err.toLowerCase().includes("suspen")
-        ? err
-        : t("auth.login.error_invalid"));
+    Alert.alert('Debug 1/5', 'Botão de login pressionado.\nEnviando credenciais ao Supabase...');
+    try {
+      const { error: err } = await signIn(email, password);
+      if (err) {
+        console.error("[Login] signIn returned error:", err);
+        Alert.alert('ERRO FATAL', `signIn() retornou erro:\n\n${err}`);
+        setError(err.toLowerCase().includes("suspensa") || err.toLowerCase().includes("suspen")
+          ? err
+          : t("auth.login.error_invalid"));
+        setLoading(false);
+        return;
+      }
+      // signIn returned OK — navigation is driven by RootLayoutNav's useEffect
+      // after onAuthStateChange(SIGNED_IN) fires. Keep loading=true so the button
+      // stays disabled until AuthenticatedLayout replaces the screen.
+      Alert.alert('Debug 2/5', 'signIn() retornou OK!\nAguardando evento SIGNED_IN e carregamento do perfil...\n\nSe travar aqui: o problema está no onAuthStateChange ou no RootLayoutNav.');
+      console.log("[Login] signIn OK — handing off to RootLayoutNav for navigation");
+    } catch (e: any) {
+      const msg = e?.message ?? String(e);
+      console.error("[Login] unhandled exception:", msg);
+      Alert.alert('ERRO FATAL', `Exceção não tratada no handleLogin:\n\n${msg}`);
+      setError(t("auth.login.error_invalid"));
       setLoading(false);
-      return;
     }
-    // signIn returned OK — navigation is driven by RootLayoutNav's useEffect
-    // after onAuthStateChange(SIGNED_IN) fires. Keep loading=true so the button
-    // stays disabled until AuthenticatedLayout replaces the screen.
-    console.log("[Login] signIn OK — handing off to RootLayoutNav for navigation");
   };
 
   return (

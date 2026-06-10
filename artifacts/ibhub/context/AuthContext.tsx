@@ -4,7 +4,7 @@ import * as AppleAuthentication from "expo-apple-authentication";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { Platform } from "react-native";
+import { Alert, Platform } from "react-native";
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -503,7 +503,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setMustChangePassword(session?.user?.user_metadata?.must_change_password === true);
       if (session?.user) {
         writeSessionCache(session);
-        await fetchProfile(session.user.id);
+
+        if (event === "SIGNED_IN") {
+          Alert.alert('Debug 3/5', `SIGNED_IN recebido!\nuserId: ${session.user.id.slice(0, 8)}...\n\nBuscando perfil no banco de dados...`);
+        }
+
+        try {
+          await fetchProfile(session.user.id);
+        } catch (e: any) {
+          Alert.alert('ERRO FATAL', `fetchProfile() lançou exceção:\n\n${e?.message ?? String(e)}`);
+        }
 
         // Safety net: ensure a profile row exists for new social-auth users.
         // A Supabase DB trigger should create it, but this handles the case
@@ -534,19 +543,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 plan: "gratuito",
               });
               console.log(`[SafetyNet] insert result:`, insertErr ? `ERROR: ${insertErr.message}` : "OK");
+              if (insertErr) Alert.alert('ERRO FATAL', `Safety net insert falhou:\n\n${insertErr.message}`);
             } else if (!existing.full_name && googleName) {
               // Profile exists but has no name (trigger didn't set it) → fill it in
               const update: Record<string, string | null> = { user_id: u.id, full_name: googleName };
               if (!existing.avatar_url && googleAvatar) update.avatar_url = googleAvatar;
               const { error: updateErr } = await supabase.from("profiles").update(update).eq("id", existing.id);
               console.log(`[SafetyNet] update full_name result:`, updateErr ? `ERROR: ${updateErr.message}` : "OK");
+              if (updateErr) Alert.alert('ERRO FATAL', `Safety net update falhou:\n\n${updateErr.message}`);
             } else {
               console.log(`[SafetyNet] Profile OK, no changes needed.`);
             }
 
             await fetchProfile(u.id);
+            Alert.alert('Debug 4/5', `Perfil carregado com sucesso!\n\nAguardando RootLayoutNav chamar router.replace()...\n\nSe travar aqui: o problema está no useEffect de navegação em _layout.tsx.`);
           } catch (e: any) {
             console.error(`[SafetyNet] Exception:`, e?.message);
+            Alert.alert('ERRO FATAL', `Exceção no bloco SIGNED_IN (safety net):\n\n${e?.message ?? String(e)}`);
           }
         }
 
@@ -636,35 +649,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clearRecovery = useCallback(() => setIsRecovering(false), []);
 
   const signIn = async (email: string, password: string) => {
-    console.log("[signIn] step 1 — calling signInWithPassword");
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      const msg = error.message ?? "";
-      console.error("[signIn] signInWithPassword error:", msg);
-      if (msg.toLowerCase().includes("ban") || msg.toLowerCase().includes("suspend")) {
-        return { error: "Sua conta foi suspensa. Entre em contato com o suporte." };
+    try {
+      console.log("[signIn] step 1 — calling signInWithPassword");
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        const msg = error.message ?? "";
+        console.error("[signIn] signInWithPassword error:", msg);
+        Alert.alert('ERRO FATAL', `signInWithPassword falhou:\n\n${msg}`);
+        if (msg.toLowerCase().includes("ban") || msg.toLowerCase().includes("suspend")) {
+          return { error: "Sua conta foi suspensa. Entre em contato com o suporte." };
+        }
+        return { error: msg };
       }
+
+      console.log("[signIn] step 2 — signInWithPassword OK, calling getUser");
+      const { data: { user: authedUser }, error: getUserErr } = await supabase.auth.getUser();
+      if (getUserErr) {
+        console.error("[signIn] getUser error:", getUserErr.message);
+        Alert.alert('ERRO FATAL', `getUser() falhou após signIn:\n\n${getUserErr.message}`);
+        return { error: getUserErr.message };
+      }
+      console.log("[signIn] step 3 — getUser returned userId:", authedUser?.id ?? "null");
+
+      if (authedUser) {
+        console.log("[signIn] step 4 — checking is_banned for userId:", authedUser.id);
+        const { data: prof, error: banErr } = await supabase
+          .from("profiles")
+          .select("is_banned")
+          .eq("id", authedUser.id)
+          .maybeSingle();
+        if (banErr) {
+          console.error("[signIn] is_banned query error:", banErr.message);
+          Alert.alert('ERRO FATAL', `Consulta is_banned falhou:\n\n${banErr.message}`);
+          return { error: banErr.message };
+        }
+        console.log("[signIn] step 5 — is_banned:", (prof as { is_banned?: boolean } | null)?.is_banned ?? false);
+        if ((prof as { is_banned?: boolean } | null)?.is_banned) {
+          await supabase.auth.signOut();
+          return { error: "Sua conta foi suspensa. Entre em contato com o suporte." };
+        }
+      }
+
+      console.log("[signIn] step 6 — returning OK, waiting for onAuthStateChange to drive navigation");
+      return { error: null };
+    } catch (e: any) {
+      const msg = e?.message ?? String(e);
+      console.error("[signIn] unhandled exception:", msg);
+      Alert.alert('ERRO FATAL', `Exceção não tratada em signIn():\n\n${msg}`);
       return { error: msg };
     }
-    console.log("[signIn] step 2 — signInWithPassword OK, calling getUser");
-    const { data: { user: authedUser } } = await supabase.auth.getUser();
-    console.log("[signIn] step 3 — getUser returned userId:", authedUser?.id ?? "null");
-    if (authedUser) {
-      console.log("[signIn] step 4 — checking is_banned for userId:", authedUser.id);
-      const { data: prof, error: banErr } = await supabase
-        .from("profiles")
-        .select("is_banned")
-        .eq("id", authedUser.id)
-        .maybeSingle();
-      if (banErr) console.error("[signIn] is_banned query error:", banErr.message);
-      console.log("[signIn] step 5 — is_banned:", (prof as { is_banned?: boolean } | null)?.is_banned ?? false);
-      if ((prof as { is_banned?: boolean } | null)?.is_banned) {
-        await supabase.auth.signOut();
-        return { error: "Sua conta foi suspensa. Entre em contato com o suporte." };
-      }
-    }
-    console.log("[signIn] step 6 — returning OK, waiting for onAuthStateChange to drive navigation");
-    return { error: null };
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {
