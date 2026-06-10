@@ -75,7 +75,7 @@ export default function TermosUsoPage() {
           padding: 24, marginBottom: 20,
         }}>
           <p style={{ fontSize: 15, lineHeight: 1.7, color: "#3d4a5c", margin: 0 }}>
-            Bem-vindo ao <strong>ibhub — Rede do Vinho</strong>. Ao utilizar nosso aplicativo ou plataforma web,
+            Bem-vindo ao <strong>IBHUB - A Rede do Vinho</strong>. Ao utilizar nosso aplicativo ou plataforma web,
             você concorda com os termos e condições descritos abaixo. Por favor, leia atentamente antes de prosseguir.
             Estes termos foram elaborados de acordo com a <strong>Lei Geral de Proteção de Dados (LGPD)</strong> e demais legislações brasileiras aplicáveis.
           </p>
@@ -111,7 +111,7 @@ export default function TermosUsoPage() {
         padding: "20px 24px", textAlign: "center",
       }}>
         <p style={{ fontSize: 13, color: "#9a9a8e", margin: 0 }}>
-          © 2026 ibhub — Rede do Vinho. Todos os direitos reservados.
+          © 2026 IBHUB - A Rede do Vinho. Todos os direitos reservados.
         </p>
       </footer>
     </div>

@@ -107,7 +107,7 @@ export default function PoliticaPrivacidadePage() {
         padding: "20px 24px", textAlign: "center",
       }}>
         <p style={{ fontSize: 13, color: "#9a9a8e", margin: 0 }}>
-          © 2026 ibhub — Rede do Vinho. Todos os direitos reservados.
+          © 2026 IBHUB - A Rede do Vinho. Todos os direitos reservados.
         </p>
       </footer>
     </div>

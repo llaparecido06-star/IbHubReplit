@@ -65,7 +65,7 @@ function CadastroModal({ onClose }: { onClose: () => void }) {
       >
         <div style={{ textAlign: "center", marginBottom: 20 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: GOLD, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>
-            ibhub — Rede do Vinho
+            IBHUB - A Rede do Vinho
           </div>
           <h2 style={{ fontSize: 22, fontWeight: 800, color: NAVY, margin: "0 0 8px" }}>
             Conecte-se ao mercado do vinho

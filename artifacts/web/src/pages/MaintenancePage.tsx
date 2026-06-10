@@ -37,7 +37,7 @@ export default function MaintenancePage() {
       </p>
       <div style={{ width: 48, height: 2, backgroundColor: "rgba(201,168,76,0.3)", borderRadius: 1, marginBottom: 24 }} />
       <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", letterSpacing: 1, margin: "0 0 40px" }}>
-        ibhub — Rede do Vinho
+        IBHUB - A Rede do Vinho
       </p>
 
       {/* Hidden admin bypass — only admins can use this to log in and access the platform */}
