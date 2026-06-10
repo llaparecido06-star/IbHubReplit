@@ -544,7 +544,7 @@ export default function MinhaContaPage() {
       {
         title: "ASSINATURA",
         rows: [
-          { kind: "section", icon: Star,      label: "Assinatura",            sub: "Gerencie seu plano",                  section: "assinatura" },
+          { kind: "route",   icon: Star,      label: "Assinatura",            sub: "Gerencie seu plano",                  href: "/comunidade-exclusiva" },
         ],
       },
       {
@@ -704,7 +704,7 @@ export default function MinhaContaPage() {
           {SECTIONS.map(s => (
             <button
               key={s.key}
-              onClick={() => setActiveSection(s.key)}
+              onClick={() => s.key === "assinatura" ? setLocation("/comunidade-exclusiva") : setActiveSection(s.key)}
               style={{
                 padding: "8px 16px", borderRadius: 20, fontSize: 13, fontWeight: activeSection === s.key ? 700 : 500,
                 border: `1px solid ${activeSection === s.key ? GOLD : BORDER}`,
