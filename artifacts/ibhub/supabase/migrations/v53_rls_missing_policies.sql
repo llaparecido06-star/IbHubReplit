@@ -17,23 +17,23 @@ CREATE POLICY crash_reports_no_direct_access ON public.crash_reports
 
 
 -- ────────────────────────────────────────────────────────────
--- b1_exportadores / b1_importadores / b1_produtores / b1_exportadores_financeiro
+-- bi_exportadores / bi_importadores / bi_produtores / bi_exportadores_financeiro
 --   Tabelas de dados de mercado (estatísticas do setor vitivinícola).
 --   Somente leitura para usuários autenticados.
 --   Escrita exclusivamente via service_role (dashboard/imports).
 -- ────────────────────────────────────────────────────────────
-CREATE POLICY b1_exportadores_select ON public.b1_exportadores
+CREATE POLICY bi_exportadores_select ON public.bi_exportadores
   FOR SELECT TO authenticated
   USING (true);
 
-CREATE POLICY b1_importadores_select ON public.b1_importadores
+CREATE POLICY bi_importadores_select ON public.bi_importadores
   FOR SELECT TO authenticated
   USING (true);
 
-CREATE POLICY b1_produtores_select ON public.b1_produtores
+CREATE POLICY bi_produtores_select ON public.bi_produtores
   FOR SELECT TO authenticated
   USING (true);
 
-CREATE POLICY b1_exportadores_financeiro_select ON public.b1_exportadores_financeiro
+CREATE POLICY bi_exportadores_financeiro_select ON public.bi_exportadores_financeiro
   FOR SELECT TO authenticated
   USING (true);
