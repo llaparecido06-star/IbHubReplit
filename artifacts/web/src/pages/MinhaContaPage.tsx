@@ -44,6 +44,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }
   past_due:  { label: "Pagamento pendente",  color: "#d97706", bg: "#fef3c7" },
   canceled:  { label: "Cancelado",           color: "#dc2626", bg: "#fee2e2" },
   inactive:  { label: "Gratuito",            color: "#6b7280", bg: "#f3f4f6" },
+  annual:    { label: "Plano Anual",         color: "#c9a84c", bg: "#fef9ee" },
 };
 
 type Section = "perfil" | "assinatura" | "seguranca" | "notificacoes" | "privacidade" | "suporte";
@@ -152,12 +153,19 @@ export default function MinhaContaPage() {
   }
 
   const { paidPlans, getPlanLabel } = usePlans();
-  const plan          = profile?.plan ?? "gratuito";
-  const entitleStatus = getEntitlementStatus(profile);
-  const stripeStatus  = profile?.stripe_subscription_status ?? null;
-  const periodEnd     = profile?.stripe_current_period_end ?? null;
-  const status        = stripeStatus ? STATUS_LABELS[stripeStatus] ?? STATUS_LABELS.inactive : STATUS_LABELS.inactive;
-  const hasActiveSub  = entitleStatus === "active" || entitleStatus === "trialing" || entitleStatus === "courtesy";
+  const plan               = profile?.plan ?? "gratuito";
+  const entitleStatus      = getEntitlementStatus(profile);
+  const isAnnual           = entitleStatus === "annual";
+  const annualPlanExpiresAt = (profile as any)?.annual_plan_expires_at ?? null;
+  const stripeStatus       = profile?.stripe_subscription_status ?? null;
+  const periodEnd          = profile?.stripe_current_period_end ?? null;
+  const status             = isAnnual
+    ? STATUS_LABELS.annual
+    : stripeStatus
+      ? STATUS_LABELS[stripeStatus] ?? STATUS_LABELS.inactive
+      : STATUS_LABELS.inactive;
+  const hasStripeSub  = entitleStatus === "active" || entitleStatus === "trialing" || entitleStatus === "courtesy";
+  const hasActiveSub  = hasStripeSub || isAnnual;
   const isPastDue     = entitleStatus === "past_due";
   const currentPlanData = paidPlans.find(p => p.id === plan);
 
@@ -291,11 +299,15 @@ export default function MinhaContaPage() {
                     )}
                   </div>
                 )}
-                {periodEnd && (
+                {isAnnual && annualPlanExpiresAt ? (
                   <div style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>
-                    {hasActiveSub ? "🔄 Renova em" : "⏹ Encerra em"}: <strong>{new Date(periodEnd).toLocaleDateString("pt-BR")}</strong>
+                    📅 Plano Anual · Expira em: <strong>{new Date(annualPlanExpiresAt).toLocaleDateString("pt-BR")}</strong>
                   </div>
-                )}
+                ) : periodEnd ? (
+                  <div style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>
+                    {hasStripeSub ? "🔄 Renova em" : "⏹ Encerra em"}: <strong>{new Date(periodEnd).toLocaleDateString("pt-BR")}</strong>
+                  </div>
+                ) : null}
               </div>
               <div style={{ backgroundColor: status.bg, color: status.color, fontWeight: 700, fontSize: 12, padding: "6px 16px", borderRadius: 100, whiteSpace: "nowrap" }}>
                 {status.label}
@@ -333,7 +345,7 @@ export default function MinhaContaPage() {
               </button>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {(hasActiveSub || isPastDue) && (
+                {(hasStripeSub || isPastDue) && (
                   <button onClick={handlePortal} disabled={portalLoading} style={{ width: "100%", backgroundColor: NAVY, color: WHITE, border: "none", borderRadius: 10, padding: "14px 0", fontSize: 15, fontWeight: 700, cursor: "pointer", opacity: portalLoading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                     <span>⚙️</span>
                     <span>{portalLoading ? "Abrindo portal…" : "Gerenciar assinatura"}</span>
@@ -360,7 +372,7 @@ export default function MinhaContaPage() {
           </Card>
 
           {/* Portal Stripe explanation card */}
-          {(hasActiveSub || isPastDue) && (
+          {(hasStripeSub || isPastDue) && (
             <Card>
               <SectionTitle title="Portal de assinatura Stripe" />
               <p style={{ fontSize: 13, color: MUTED, margin: "0 0 16px", lineHeight: 1.6 }}>

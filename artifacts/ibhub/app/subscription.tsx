@@ -40,6 +40,7 @@ const STATUS_CONFIG: Record<string, { labelKey: string; color: string; bg: strin
   past_due: { labelKey: "subscription.status_past_due", color: "#d97706", bg: "#fef3c7" },
   canceled: { labelKey: "subscription.status_canceled", color: "#dc2626", bg: "#fee2e2" },
   courtesy: { labelKey: "subscription.status_courtesy", color: "#c9a84c", bg: "#fef9ee" },
+  annual:   { labelKey: "subscription.status_annual",   color: "#c9a84c", bg: "#fef9ee" },
 };
 
 export default function SubscriptionScreen() {
@@ -61,11 +62,14 @@ export default function SubscriptionScreen() {
   const courtesyUntil = profile?.courtesy_until ?? null;
   const webBase       = getWebBaseUrl();
 
-  const entitleStatus = getEntitlementStatus(profile);
-  const hasActiveSub  = entitleStatus === "active" || entitleStatus === "trialing" || entitleStatus === "courtesy";
-  const isPastDue     = entitleStatus === "past_due";
-  const isCourtesy    = entitleStatus === "courtesy";
-  const isFree        = entitleStatus === "free";
+  const entitleStatus      = getEntitlementStatus(profile);
+  const isAnnual           = entitleStatus === "annual";
+  const annualPlanExpiresAt = profile?.annual_plan_expires_at ?? null;
+  const hasStripeSub       = entitleStatus === "active" || entitleStatus === "trialing" || entitleStatus === "courtesy";
+  const hasActiveSub       = hasStripeSub || isAnnual;
+  const isPastDue          = entitleStatus === "past_due";
+  const isCourtesy         = entitleStatus === "courtesy";
+  const isFree             = entitleStatus === "free";
   const isIOS         = Platform.OS === "ios";
 
   const statusKey = (entitleStatus !== "free" ? entitleStatus : null) ?? "";
@@ -175,12 +179,17 @@ export default function SubscriptionScreen() {
             <View style={{ flex: 1 }}>
               <Text style={[styles.statusLabel, { color: colors.mutedForeground }]}>{t("subscription.current_plan")}</Text>
               <Text style={[styles.statusPlan, { color: colors.navy }]}>{currentPlanLabel}</Text>
-              {periodEnd && (
+              {isAnnual && annualPlanExpiresAt ? (
                 <Text style={[styles.statusPeriod, { color: colors.mutedForeground }]}>
-                  {hasActiveSub ? t("subscription.renews_on") : t("subscription.encerra_em")}{" "}
+                  {t("subscription.annual_plan_label")} · {t("subscription.expires_on")}{" "}
+                  {new Date(annualPlanExpiresAt).toLocaleDateString()}
+                </Text>
+              ) : periodEnd ? (
+                <Text style={[styles.statusPeriod, { color: colors.mutedForeground }]}>
+                  {hasStripeSub ? t("subscription.renews_on") : t("subscription.encerra_em")}{" "}
                   {new Date(periodEnd).toLocaleDateString()}
                 </Text>
-              )}
+              ) : null}
               {isCourtesy && courtesyUntil && (
                 <Text style={[styles.statusPeriod, { color: colors.mutedForeground }]}>
                   {t("subscription.courtesy_until", { date: new Date(courtesyUntil).toLocaleDateString() })}
@@ -211,7 +220,7 @@ export default function SubscriptionScreen() {
               with App Store guideline 3.1.3 (no anti-steering / external
               purchase management without entitlement). A static notice
               tells users where to manage their subscription instead. */}
-          {(hasActiveSub || isPastDue) && !isIOS && (
+          {(hasStripeSub || isPastDue) && !isIOS && (
             <TouchableOpacity
               style={[styles.manageBtn, { borderColor: colors.border, marginTop: 10 }]}
               onPress={openPortal}
@@ -226,7 +235,7 @@ export default function SubscriptionScreen() {
               </Text>
             </TouchableOpacity>
           )}
-          {(hasActiveSub || isPastDue) && !isIOS && (
+          {(hasStripeSub || isPastDue) && !isIOS && (
             <View style={{ marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {managementChips.map(item => (
                 <View key={item.label} style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: colors.background, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}>
@@ -240,7 +249,7 @@ export default function SubscriptionScreen() {
           {/* Static iOS-only notice for users with active/past_due subs.
               No external link, no button — purely informational so it does
               not violate App Store guideline 3.1.3 (anti-steering). */}
-          {(hasActiveSub || isPastDue) && isIOS && (
+          {(hasStripeSub || isPastDue) && isIOS && (
             <View style={{ marginTop: 10, flexDirection: "row", gap: 8, padding: 10, borderRadius: 8, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border }}>
               <Feather name="info" size={13} color={colors.mutedForeground} />
               <Text style={{ flex: 1, fontSize: 12, color: colors.mutedForeground, lineHeight: 17 }}>

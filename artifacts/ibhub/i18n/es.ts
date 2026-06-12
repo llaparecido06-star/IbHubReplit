@@ -1224,6 +1224,8 @@ const es = {
     status_past_due: "Pago pendiente",
     status_canceled: "Cancelado",
     status_courtesy: "Cortesía",
+    status_annual: "Plan Anual",
+    annual_plan_label: "Plan Anual",
     renews_on: "Se renueva el",
     expires_on: "Vence el",
     encerra_em: "Vence el",

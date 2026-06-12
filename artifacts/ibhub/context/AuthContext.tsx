@@ -62,6 +62,8 @@ interface Profile {
   stripe_subscription_status?: string | null;
   stripe_current_period_end?: string | null;
   courtesy_until?: string | null;
+  annual_plan?: string | null;
+  annual_plan_expires_at?: string | null;
 }
 
 interface ActiveCompany {

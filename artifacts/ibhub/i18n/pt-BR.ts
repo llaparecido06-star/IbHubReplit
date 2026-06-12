@@ -1219,6 +1219,8 @@ const ptBR = {
     status_past_due: "Pagamento pendente",
     status_canceled: "Cancelado",
     status_courtesy: "Cortesia",
+    status_annual: "Plano Anual",
+    annual_plan_label: "Plano Anual",
     renews_on: "Renova em",
     expires_on: "Expira em",
     encerra_em: "Encerra em",
