@@ -739,4 +739,89 @@ router.delete("/community/groups/:id/members/:userId/reject", async (req: Reques
   res.status(200).json({ ok: true });
 });
 
+/**
+ * POST /community/groups/:id/invite
+ * Admin/moderator invites a user directly into a group (any access type).
+ * Uses service role to bypass RLS — the client cannot write group_members
+ * rows for other users or conversation_participants rows on their behalf.
+ */
+router.post("/community/groups/:id/invite", async (req: Request, res: Response): Promise<void> => {
+  const callerId = await resolveUserId(req, res);
+  if (!callerId) return;
+
+  const groupId  = req.params.id as string;
+  const { user_id: targetUserId } = req.body as { user_id?: string };
+
+  if (!targetUserId) {
+    res.status(400).json({ error: "user_id is required" });
+    return;
+  }
+
+  // Verify caller is owner or moderator
+  const [{ data: group, error: groupErr }, { data: callerMem }] = await Promise.all([
+    supabaseAdmin.from("groups").select("owner_id, name").eq("id", groupId).maybeSingle(),
+    supabaseAdmin.from("group_members").select("role").eq("group_id", groupId).eq("user_id", callerId).maybeSingle(),
+  ]);
+
+  if (groupErr || !group) { res.status(404).json({ error: "Group not found" }); return; }
+  const callerRole = callerMem?.role as string | undefined;
+  const canManage = (group as any).owner_id === callerId || callerRole === "owner" || callerRole === "moderator" || callerRole === "admin";
+  if (!canManage) { res.status(403).json({ error: "Only group owners and moderators can invite members" }); return; }
+
+  // Check if already a member
+  const { data: existing } = await supabaseAdmin
+    .from("group_members")
+    .select("role")
+    .eq("group_id", groupId)
+    .eq("user_id", targetUserId)
+    .is("company_page_id", null)
+    .maybeSingle();
+
+  if (existing && existing.role !== "pending") {
+    res.status(200).json({ ok: true, status: "already_member" });
+    return;
+  }
+
+  // Upsert membership with service role (bypasses RLS)
+  const { error: gmErr } = await supabaseAdmin
+    .from("group_members")
+    .upsert(
+      { group_id: groupId, user_id: targetUserId, role: "member", company_page_id: null },
+      { onConflict: "group_id,user_id,company_page_id" },
+    );
+
+  if (gmErr) { res.status(500).json({ error: gmErr.message }); return; }
+
+  // Grant chat access with service role (bypasses RLS)
+  const { error: cpErr } = await supabaseAdmin
+    .from("conversation_participants")
+    .upsert(
+      { conversation_id: groupId, user_id: targetUserId, company_page_id: null },
+      { onConflict: "conversation_id,user_id,company_page_id", ignoreDuplicates: true },
+    );
+
+  if (cpErr) req.log.warn({ supabaseError: cpErr.message }, "invite — conversation_participants");
+
+  // Notify the invited user (fire-and-forget)
+  void (async () => {
+    const groupName = (group as any).name ?? "grupo";
+    await supabaseAdmin.from("notifications").insert({
+      user_id:  targetUserId,
+      actor_id: callerId,
+      type:     "group_invite",
+      message:  `convidou você para o grupo "${groupName}"`,
+      metadata: { group_id: groupId },
+    });
+
+    await sendPushToUser({
+      userId: targetUserId,
+      title: `👥 Convite para grupo`,
+      body: `Você foi convidado para participar do grupo ${groupName}.`,
+      data: { type: "group_invite", groupId, deepLink: `/group-chat/${groupId}` },
+    });
+  })();
+
+  res.status(200).json({ ok: true, status: "invited" });
+});
+
 export default router;

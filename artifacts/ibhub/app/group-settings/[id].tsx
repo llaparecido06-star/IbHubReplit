@@ -21,7 +21,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/context/AuthContext";
-import { uploadGroupAvatar, leaveGroup, approveGroupMember, rejectGroupMember } from "@/services/api";
+import { uploadGroupAvatar, leaveGroup, approveGroupMember, rejectGroupMember, inviteToGroup } from "@/services/api";
 
 type Tab = "membros" | "pendentes" | "convidar" | "link";
 
@@ -326,26 +326,13 @@ export default function GroupSettingsScreen() {
   const handleInvite = async (person: { id: string; full_name: string }) => {
     setInvitingId(person.id);
     try {
-      // Must use the 3-column constraint that exists on group_members:
-      // (group_id, user_id, company_page_id). Using only 2 columns causes
-      // PostgreSQL to reject the upsert with "no unique constraint" error.
-      // Invited users always join with personal identity (company_page_id=null).
-      const { error } = await supabase
-        .from("group_members")
-        .upsert(
-          { group_id: id, user_id: person.id, role: "member", company_page_id: null },
-          { onConflict: "group_id,user_id,company_page_id" },
-        );
-      if (error) throw error;
-      // Grant chat access immediately — without this the invited user appears in
-      // the members list but cannot see group messages (conversation_participants
-      // is the actual gate for chat visibility).
-      await supabase
-        .from("conversation_participants")
-        .upsert(
-          { conversation_id: id, user_id: person.id, company_page_id: null },
-          { onConflict: "conversation_id,user_id,company_page_id", ignoreDuplicates: true },
-        );
+      // Use the API endpoint (service role) so that RLS cannot block writing
+      // group_members / conversation_participants rows for another user.
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("no session");
+      const ok = await inviteToGroup(id, person.id, token);
+      if (!ok) throw new Error("invite failed");
       Alert.alert(t("group_settings_screen.invite_sent_title"), t("group_settings_screen.invite_sent_msg", { name: person.full_name }));
       setInviteResults(prev => prev.filter(r => r.id !== person.id));
     } catch {

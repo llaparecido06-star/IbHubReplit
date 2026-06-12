@@ -166,6 +166,21 @@ export async function fetchGroupHistoryClearedAt(groupId: string, userId: string
   } catch { return null; }
 }
 
+export async function inviteToGroup(groupId: string, targetUserId: string, accessToken: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_URL}/community/groups/${groupId}/invite`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: targetUserId }),
+    });
+    if (!res.ok) { console.error("inviteToGroup:", res.status, await res.text()); return false; }
+    return true;
+  } catch (e) {
+    console.error("inviteToGroup:", e);
+    return false;
+  }
+}
+
 export async function joinGroup(groupId: string, userId: string, companyPageId?: string | null): Promise<boolean> {
   try {
     const cpId = companyPageId ?? null;
