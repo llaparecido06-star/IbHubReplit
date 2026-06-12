@@ -34,6 +34,8 @@ interface Plan {
   sort_order: number;
   delivery_strategy?: string | null;
   stripe_price_id?: string | null;
+  stripe_price_id_annual_onetime?: string | null;
+  stripe_price_id_annual_recurring?: string | null;
   ai_search_credits?: number | null;
   reveal_credits?: number | null;
 }
@@ -52,6 +54,7 @@ interface MarketPermission {
 interface ModalState {
   name: string; subtitle: string; description: string;
   price: string; originalPrice: string; stripeId: string;
+  stripeIdAnnualOnetime: string; stripeIdAnnualRecurring: string;
   aiCredits: string; revealCredits: string; delivery: string; features: string[];
 }
 
@@ -74,6 +77,8 @@ function planToModal(p: Plan): ModalState {
     price: p.price_cents === 0 ? "0" : String(p.price_cents / 100),
     originalPrice: p.original_price_cents ? String(p.original_price_cents / 100) : "",
     stripeId: p.stripe_price_id ?? "",
+    stripeIdAnnualOnetime: p.stripe_price_id_annual_onetime ?? "",
+    stripeIdAnnualRecurring: p.stripe_price_id_annual_recurring ?? "",
     aiCredits: String(p.ai_search_credits ?? 0),
     revealCredits: String(p.reveal_credits ?? 0),
     delivery: p.delivery_strategy ?? "NONE",
@@ -95,7 +100,8 @@ export default function AdminPlanBuilder() {
   const [editPlan, setEditPlan] = useState<Plan | null>(null);
   const [modal, setModal] = useState<ModalState>({
     name: "", subtitle: "", description: "", price: "0", originalPrice: "",
-    stripeId: "", aiCredits: "0", revealCredits: "0", delivery: "NONE", features: [],
+    stripeId: "", stripeIdAnnualOnetime: "", stripeIdAnnualRecurring: "",
+    aiCredits: "0", revealCredits: "0", delivery: "NONE", features: [],
   });
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -139,7 +145,7 @@ export default function AdminPlanBuilder() {
 
   const openNew = () => {
     setEditPlan(null);
-    setModal({ name: "", subtitle: "", description: "", price: "0", originalPrice: "", stripeId: "", aiCredits: "0", revealCredits: "0", delivery: "NONE", features: [] });
+    setModal({ name: "", subtitle: "", description: "", price: "0", originalPrice: "", stripeId: "", stripeIdAnnualOnetime: "", stripeIdAnnualRecurring: "", aiCredits: "0", revealCredits: "0", delivery: "NONE", features: [] });
     setSaveMsg(null);
     setShowModal(true);
   };
@@ -192,6 +198,8 @@ export default function AdminPlanBuilder() {
       price_cents: curr,
       original_price_cents: orig > curr ? orig : null,
       stripe_price_id: modal.stripeId.trim() || null,
+      stripe_price_id_annual_onetime: modal.stripeIdAnnualOnetime.trim() || null,
+      stripe_price_id_annual_recurring: modal.stripeIdAnnualRecurring.trim() || null,
       ai_search_credits: parseInt(modal.aiCredits) || 0,
       reveal_credits: parseInt(modal.revealCredits) || 0,
       delivery_strategy: modal.delivery,
@@ -356,10 +364,22 @@ export default function AdminPlanBuilder() {
                   🏷 De {centsToStr(orig)} por {centsToStr(curr)} · -{discountPct}% de desconto
                 </div>
               )}
-              {inp("STRIPE PRICE ID", "stripeId", "price_1AbCdEfGhI...", "Vazio para planos gratuitos. Comece com 'price_'.")}
+              {inp("STRIPE PRICE ID (mensal)", "stripeId", "price_1AbCdEfGhI...", "Vazio para planos gratuitos. Comece com 'price_'.")}
               {modal.stripeId && !modal.stripeId.startsWith("price_") && (
                 <div style={{ padding: "8px 12px", backgroundColor: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, fontSize: 12, color: "#dc2626", marginTop: -8, marginBottom: 12 }}>
                   ⚠️ Stripe Price ID inválido — deve começar com "price_"
+                </div>
+              )}
+              {inp("STRIPE PRICE ID ANUAL ÚNICO", "stripeIdAnnualOnetime", "price_...", "Pagamento único anual (Profissional/Exclusivo/Enterprise). Cria sessão mode: payment.")}
+              {modal.stripeIdAnnualOnetime && !modal.stripeIdAnnualOnetime.startsWith("price_") && (
+                <div style={{ padding: "8px 12px", backgroundColor: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, fontSize: 12, color: "#dc2626", marginTop: -8, marginBottom: 12 }}>
+                  ⚠️ Price ID anual único inválido — deve começar com "price_"
+                </div>
+              )}
+              {inp("STRIPE PRICE ID ANUAL RECORRENTE", "stripeIdAnnualRecurring", "price_...", "Somente Enterprise. Assinatura mensal recorrente com fidelidade anual (R$ 750/mês).")}
+              {modal.stripeIdAnnualRecurring && !modal.stripeIdAnnualRecurring.startsWith("price_") && (
+                <div style={{ padding: "8px 12px", backgroundColor: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, fontSize: 12, color: "#dc2626", marginTop: -8, marginBottom: 12 }}>
+                  ⚠️ Price ID anual recorrente inválido — deve começar com "price_"
                 </div>
               )}
             </div>

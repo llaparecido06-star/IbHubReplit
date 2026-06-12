@@ -27,6 +27,13 @@ function getWebBaseUrl(): string {
   return getCanonicalWebBaseUrl();
 }
 
+/** Annual discount percentages by plan ID (off accumulated 12× monthly price). */
+const ANNUAL_DISCOUNT_PCT: Record<string, number> = {
+  profissional: 10,
+  empresa:      15,
+  executivo:    20,
+};
+
 const STATUS_CONFIG: Record<string, { labelKey: string; color: string; bg: string }> = {
   active:   { labelKey: "subscription.status_active",   color: "#059669", bg: "#d1fae5" },
   trialing: { labelKey: "subscription.status_trialing", color: "#2563eb", bg: "#dbeafe" },
@@ -44,6 +51,7 @@ export default function SubscriptionScreen() {
   const { paidPlans, freePlan, getPlanLabel, loading: plansLoading } = usePlans();
 
   const [openingBrowser, setOpeningBrowser] = useState(false);
+  const [billingCycle, setBillingCycle]     = useState<"monthly" | "annual">("monthly");
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -70,12 +78,13 @@ export default function SubscriptionScreen() {
     return () => sub.remove();
   }, [refreshProfile]);
 
-  const openPlanPage = async (planId?: string) => {
+  const openPlanPage = async (planId?: string, annual?: boolean) => {
     if (!webBase) {
       Alert.alert(t("subscription.no_connection"), t("subscription.no_connection_msg"));
       return;
     }
-    const url = planId ? `${webBase}/assinar?plano=${planId}` : `${webBase}/assinar`;
+    const annualParam = annual ? "&ciclo=anual" : "";
+    const url = planId ? `${webBase}/assinar?plano=${planId}${annualParam}` : `${webBase}/assinar`;
     setOpeningBrowser(true);
     try {
       const canOpen = await Linking.canOpenURL(url);
@@ -246,7 +255,44 @@ export default function SubscriptionScreen() {
           {hasActiveSub ? t("subscription.other_plans") : t("subscription.upgrade_title")}
         </Text>
 
-        {isIOS ? (
+        {/* Billing cycle toggle */}
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 16, marginTop: 8 }}>
+          <View style={{ flexDirection: "row", backgroundColor: colors.background, borderRadius: 100, borderWidth: 1, borderColor: colors.border, padding: 3 }}>
+            {(["monthly", "annual"] as const).map(cycle => {
+              const isSelected = billingCycle === cycle;
+              return (
+                <TouchableOpacity
+                  key={cycle}
+                  onPress={() => setBillingCycle(cycle)}
+                  style={{
+                    paddingHorizontal: 22, paddingVertical: 8, borderRadius: 100,
+                    backgroundColor: isSelected ? colors.gold : "transparent",
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: isSelected ? "#fff" : colors.mutedForeground }}>
+                    {cycle === "monthly" ? t("subscription.cycle_monthly") : t("subscription.cycle_annual")}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {billingCycle === "annual" && (
+            <View style={{ marginLeft: 10, backgroundColor: "#d1fae5", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 }}>
+              <Text style={{ fontSize: 11, fontWeight: "800", color: "#059669" }}>
+                {t("subscription.annual_savings_badge")}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {isIOS && billingCycle === "annual" ? (
+          <View style={[styles.infoBox, { backgroundColor: `${colors.gold}0A`, borderColor: `${colors.gold}25`, marginBottom: 8 }]}>
+            <Feather name="globe" size={13} color={colors.gold} />
+            <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
+              {t("subscription.annual_ios_notice")}
+            </Text>
+          </View>
+        ) : isIOS ? (
           <View style={[styles.infoBox, { backgroundColor: `${colors.gold}0A`, borderColor: `${colors.gold}25` }]}>
             <Feather name="globe" size={13} color={colors.gold} />
             <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
@@ -266,6 +312,17 @@ export default function SubscriptionScreen() {
             const originalPrice  = formatOriginalPrice(plan);
             const discount       = calcDiscount(plan);
             const generalFeatures = plan.features.filter(f => !f.startsWith("mercado:"));
+
+            // Annual pricing
+            const annualDiscPct    = ANNUAL_DISCOUNT_PCT[plan.id] ?? 0;
+            const isAnnual         = billingCycle === "annual" && annualDiscPct > 0;
+            const annualMonthly    = plan.price_cents * (1 - annualDiscPct / 100);
+            const annualTotal      = annualMonthly * 12;
+            const annualMonthlyStr = `R$ ${(annualMonthly / 100).toFixed(2).replace(".", ",")}`;
+            const annualTotalStr   = `R$ ${(annualTotal / 100).toFixed(2).replace(".", ",")}`;
+            const displayPrice     = isAnnual ? { main: annualMonthlyStr, period: "/mês" } : price;
+            const displayOrig      = isAnnual ? `R$ ${(plan.price_cents / 100).toFixed(2).replace(".", ",")}` : originalPrice;
+            const displayDiscount  = isAnnual ? annualDiscPct : discount;
 
             return (
               <View
@@ -296,22 +353,27 @@ export default function SubscriptionScreen() {
                     <Text style={[styles.planSub, { color: colors.mutedForeground }]}>{plan.subtitle}</Text>
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
-                    {originalPrice && (
+                    {displayOrig && (
                       <Text style={{ fontSize: 12, color: colors.mutedForeground, textDecorationLine: "line-through" }}>
-                        {t("subscription.from_prefix")} {originalPrice}
+                        {t("subscription.from_prefix")} {displayOrig}
                       </Text>
                     )}
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      <Text style={[styles.planPrice, { color: colors.gold }]}>{price.main}</Text>
-                      {discount && (
+                      <Text style={[styles.planPrice, { color: colors.gold }]}>{displayPrice.main}</Text>
+                      {displayDiscount && (
                         <View style={{ backgroundColor: "#d1fae5", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                          <Text style={{ fontSize: 10, fontWeight: "800", color: "#065f46" }}>-{discount}%</Text>
+                          <Text style={{ fontSize: 10, fontWeight: "800", color: "#065f46" }}>-{displayDiscount}%</Text>
                         </View>
                       )}
                     </View>
-                    {price.period && (
+                    {displayPrice.period && (
                       <Text style={[styles.planPeriod, { color: colors.mutedForeground }]}>
-                        {originalPrice ? `${t("subscription.by_prefix")} ${price.main}` : ""}{price.period}
+                        {displayOrig ? `${t("subscription.by_prefix")} ${displayPrice.main}` : ""}{displayPrice.period}
+                      </Text>
+                    )}
+                    {isAnnual && (
+                      <Text style={{ fontSize: 11, color: colors.gold, opacity: 0.75, marginTop: 2, fontWeight: "600" }}>
+                        Total anual: {annualTotalStr}
                       </Text>
                     )}
                   </View>
@@ -342,7 +404,7 @@ export default function SubscriptionScreen() {
                 ) : (
                   <TouchableOpacity
                     style={[styles.selectBtn, { backgroundColor: isPopular ? colors.gold : colors.navy }]}
-                    onPress={() => openPlanPage(plan.id)}
+                    onPress={() => openPlanPage(plan.id, isAnnual)}
                     disabled={openingBrowser}
                     activeOpacity={0.82}
                   >
@@ -351,7 +413,11 @@ export default function SubscriptionScreen() {
                     ) : (
                       <>
                         <Feather name="external-link" size={14} color="#fff" />
-                        <Text style={styles.selectBtnText}>{t("subscription.subscribe_plan", { name: plan.name })}</Text>
+                        <Text style={styles.selectBtnText}>
+                          {isAnnual
+                            ? t("subscription.subscribe_annual", { name: plan.name })
+                            : t("subscription.subscribe_plan", { name: plan.name })}
+                        </Text>
                       </>
                     )}
                   </TouchableOpacity>

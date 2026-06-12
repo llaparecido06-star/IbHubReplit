@@ -280,6 +280,102 @@ router.post("/stripe/create-checkout-session", async (req: Request, res: Respons
   }
 });
 
+// ─── POST /stripe/create-annual-checkout-session ─────────────────────────────
+router.post("/stripe/create-annual-checkout-session", async (req: Request, res: Response) => {
+  const userId = await getUserId(req, res);
+  if (!userId) return;
+
+  const { planId, mode, successUrl, cancelUrl } = req.body as {
+    planId?: string;
+    mode?: "onetime" | "recurring";
+    successUrl?: string;
+    cancelUrl?: string;
+  };
+
+  if (!planId) {
+    res.status(400).json({ error: "planId não informado." });
+    return;
+  }
+  if (mode !== "onetime" && mode !== "recurring") {
+    res.status(400).json({ error: "mode deve ser 'onetime' ou 'recurring'." });
+    return;
+  }
+
+  if (!process.env.STRIPE_SECRET_KEY) {
+    res.status(503).json({ error: "Pagamentos ainda não configurados. Contate o suporte." });
+    return;
+  }
+
+  const { data: planRow } = await supabaseAdmin
+    .from("plans")
+    .select("id, stripe_price_id_annual_onetime, stripe_price_id_annual_recurring")
+    .eq("id", planId)
+    .maybeSingle();
+
+  const planData = planRow as {
+    id: string;
+    stripe_price_id_annual_onetime: string | null;
+    stripe_price_id_annual_recurring: string | null;
+  } | null;
+
+  const priceId = mode === "onetime"
+    ? planData?.stripe_price_id_annual_onetime
+    : planData?.stripe_price_id_annual_recurring;
+
+  if (!priceId || !priceId.startsWith("price_")) {
+    const label = mode === "onetime" ? "único anual" : "recorrente anual";
+    res.status(503).json({
+      error: `Price ID ${label} não configurado para o plano "${planId}". Configure no Plan Builder.`,
+    });
+    return;
+  }
+
+  const webBase        = process.env.WEB_BASE_URL ?? "";
+  const defaultSuccess = `${webBase}/assinar/sucesso?plano=${planId}&ciclo=anual`;
+  const defaultCancel  = `${webBase}/assinar?plano=${planId}&ciclo=anual`;
+  const resolvedSuccess = (successUrl && isAllowedReturnUrl(successUrl)) ? successUrl : defaultSuccess;
+  const resolvedCancel  = (cancelUrl  && isAllowedReturnUrl(cancelUrl))  ? cancelUrl  : defaultCancel;
+
+  try {
+    const stripe = getStripe();
+    const { data: authData } = await supabaseAdmin.auth.admin.getUserById(userId);
+    const email = authData?.user?.email ?? null;
+    const customerId = await getOrCreateCustomer(stripe, userId, email);
+
+    let session: Stripe.Checkout.Session;
+
+    if (mode === "onetime") {
+      session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        mode: "payment",
+        line_items: [{ price: priceId, quantity: 1 }],
+        success_url: resolvedSuccess,
+        cancel_url:  resolvedCancel,
+        metadata: { supabase_user_id: userId, plan: planId, annual_mode: "onetime" },
+        allow_promotion_codes: true,
+        locale: "pt-BR",
+      });
+    } else {
+      session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        mode: "subscription",
+        line_items: [{ price: priceId, quantity: 1 }],
+        success_url: resolvedSuccess,
+        cancel_url:  resolvedCancel,
+        metadata: { supabase_user_id: userId, plan: planId },
+        subscription_data: { metadata: { supabase_user_id: userId, plan: planId } },
+        allow_promotion_codes: true,
+        locale: "pt-BR",
+      });
+    }
+
+    res.json({ url: session.url });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Erro ao criar sessão de checkout anual";
+    res.status(500).json({ error: message });
+  }
+});
+
 // ─── POST /stripe/create-portal-session ──────────────────────────────────────
 router.post("/stripe/create-portal-session", async (req: Request, res: Response) => {
   const userId = await getUserId(req, res);
@@ -483,6 +579,22 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
           const revelationCredits = parseInt(sess.metadata.revelation_credits ?? "0", 10);
           await addOneTimeCredits(userId, aiCredits, revelationCredits);
           req.log.info({ sessionId: sess.id, userId, aiCredits, revelationCredits }, "one-time credits granted");
+          break;
+        }
+
+        // ── One-time annual payment ───────────────────────────────────────────
+        if (sess.metadata?.annual_mode === "onetime") {
+          const plan = sess.metadata?.plan;
+          if (plan) {
+            const expiresAt = new Date();
+            expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+            await supabaseAdmin.from("profiles").update({
+              annual_plan:            plan,
+              annual_plan_expires_at: expiresAt.toISOString(),
+              plan,
+            }).eq("id", userId);
+            void applyPlanChangeToCredits(userId);
+          }
           break;
         }
 

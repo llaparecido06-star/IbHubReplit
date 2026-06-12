@@ -33,6 +33,24 @@ export async function createCheckoutSession(
   return data as { url: string };
 }
 
+export async function createAnnualCheckoutSession(
+  token: string,
+  planId: string,
+  mode: "onetime" | "recurring",
+): Promise<{ url: string }> {
+  const res = await fetch(`${API_BASE}/stripe/create-annual-checkout-session`, {
+    method: "POST",
+    headers: await authHeaders(token),
+    body: JSON.stringify({ planId, mode }),
+  });
+  const data: unknown = await res.json();
+  if (!res.ok) {
+    const msg = (data as { error?: string })?.error ?? "Erro ao iniciar checkout anual";
+    throw new Error(msg);
+  }
+  return data as { url: string };
+}
+
 export async function createPortalSession(
   token: string,
 ): Promise<{ url: string }> {

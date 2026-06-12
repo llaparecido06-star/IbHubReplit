@@ -36,6 +36,8 @@ interface CallerProfile {
   is_admin: boolean;
   courtesy_until: string | null;
   stripe_subscription_status: string | null;
+  annual_plan: string | null;
+  annual_plan_expires_at: string | null;
 }
 
 /**
@@ -44,17 +46,42 @@ interface CallerProfile {
 async function loadCallerProfile(userId: string): Promise<CallerProfile | null> {
   const { data } = await supabaseAdmin
     .from("profiles")
-    .select("plan, is_admin, courtesy_until, stripe_subscription_status")
+    .select("plan, is_admin, courtesy_until, stripe_subscription_status, annual_plan, annual_plan_expires_at")
     .eq("id", userId)
     .maybeSingle();
   if (!data) return null;
-  const p = data as { plan?: string | null; is_admin?: boolean; courtesy_until?: string | null; stripe_subscription_status?: string | null };
+  const p = data as {
+    plan?: string | null;
+    is_admin?: boolean;
+    courtesy_until?: string | null;
+    stripe_subscription_status?: string | null;
+    annual_plan?: string | null;
+    annual_plan_expires_at?: string | null;
+  };
   return {
     plan: p.plan ?? "gratuito",
     is_admin: !!p.is_admin,
     courtesy_until: p.courtesy_until ?? null,
     stripe_subscription_status: p.stripe_subscription_status ?? null,
+    annual_plan: p.annual_plan ?? null,
+    annual_plan_expires_at: p.annual_plan_expires_at ?? null,
   };
+}
+
+/**
+ * Returns true if the caller has an active one-time annual plan purchase.
+ * Annual plan takes precedence over stripe_subscription_status.
+ */
+function isAnnualPlanActive(prof: CallerProfile): boolean {
+  return !!prof.annual_plan_expires_at && new Date(prof.annual_plan_expires_at) > new Date();
+}
+
+/**
+ * Returns the effective plan ID for the profile, accounting for annual entitlement.
+ */
+function effectivePlan(prof: CallerProfile): string {
+  if (isAnnualPlanActive(prof) && prof.annual_plan) return prof.annual_plan;
+  return prof.plan ?? "gratuito";
 }
 
 /**
@@ -78,12 +105,16 @@ export async function checkPlanFeature(
   if (!prof) return false;
   if (prof.is_admin) return true;
   if (isCourtesyActive(prof)) return true;
-  if (prof.stripe_subscription_status === "past_due") return false;
+  if (isAnnualPlanActive(prof)) {
+    // Annual plan is active — skip stripe_subscription_status check, use annual plan's features
+  } else if (prof.stripe_subscription_status === "past_due") {
+    return false;
+  }
 
   const { data: planRow } = await supabaseAdmin
     .from("plans")
     .select("features")
-    .eq("id", prof.plan ?? "gratuito")
+    .eq("id", effectivePlan(prof))
     .maybeSingle();
   const planFeatures: string[] = (planRow as { features?: string[] } | null)?.features ?? [];
   return planFeatures.includes(featureKey);
@@ -137,7 +168,7 @@ export async function requirePlanFeature(
   if (prof.is_admin) return true;
   if (isCourtesyActive(prof)) return true;
 
-  if (prof.stripe_subscription_status === "past_due") {
+  if (!isAnnualPlanActive(prof) && prof.stripe_subscription_status === "past_due") {
     res.status(403).json({ error: "Assinatura com pagamento pendente. Regularize para acessar." });
     return false;
   }
@@ -145,7 +176,7 @@ export async function requirePlanFeature(
   const { data: planRow } = await supabaseAdmin
     .from("plans")
     .select("features")
-    .eq("id", prof.plan ?? "gratuito")
+    .eq("id", effectivePlan(prof))
     .maybeSingle();
   const planFeatures: string[] = (planRow as { features?: string[] } | null)?.features ?? [];
 

@@ -36,3 +36,23 @@ EXPO_PUBLIC_API_URL = "https://d8bcdebb-60bd-4856-affe-92aeed4161f0-00-20sscjpql
 EXPO_PUBLIC_DOMAIN = "ibhub.com.br"
 WEB_BASE_URL = "https://www.ibhub.com.br"
 EXPO_PUBLIC_SENTRY_DSN = "https://cea135cca16eced9ee80329e5fd3753f@o4511429155946496.ingest.us.sentry.io/4511429161713664"
+
+[[ports]]
+localPort = 8080
+externalPort = 8080
+
+[[ports]]
+localPort = 8081
+externalPort = 8081
+
+[[ports]]
+localPort = 22333
+externalPort = 80
+
+[[ports]]
+localPort = 22832
+externalPort = 3000
+
+[[ports]]
+localPort = 23965
+externalPort = 3001

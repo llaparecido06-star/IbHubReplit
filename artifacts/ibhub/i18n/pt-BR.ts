@@ -1264,6 +1264,11 @@ const ptBR = {
     plan_free: "Gratuito",
     ios_notice_body: "Para assinar ou alterar seu plano, acesse ibhub.com.br no seu navegador.",
     ios_hero_sub: "Planos para profissionais e apaixonados por vinho.",
+    cycle_monthly: "Mensal",
+    cycle_annual: "Anual",
+    annual_savings_badge: "Economize até 20%",
+    annual_ios_notice: "Para assinar planos anuais com desconto, acesse ibhub.com.br no seu navegador.",
+    subscribe_annual: "Assinar {{name}} (Anual)",
   },
   paywall: {
     title: "Recurso Premium",

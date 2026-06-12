@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
-import { createCheckoutSession } from "@/services/stripe";
+import { createCheckoutSession, createAnnualCheckoutSession } from "@/services/stripe";
 import { hasPlanAccess } from "@/utils/entitlement";
 import { usePlans, formatPlanPrice, formatOriginalPrice, calcDiscount } from "@/hooks/usePlans";
 
@@ -15,6 +15,13 @@ interface PlanCopy {
   tagline: string;
   highlights: { label: string; desc: string }[];
 }
+
+/** Annual discount percentages by plan ID (off the accumulated 12× monthly price). */
+const ANNUAL_DISCOUNT_PCT: Record<string, number> = {
+  profissional: 10,
+  empresa:      15,
+  executivo:    20,
+};
 
 const PLAN_COPY: Record<string, PlanCopy> = {
   profissional: {
@@ -85,10 +92,11 @@ function PriceDisplay({ priceStr, gold }: { priceStr: string; gold?: boolean }) 
 export default function AssinarPage() {
   const { session, profile } = useAuth();
   const [, setLocation]      = useLocation();
-  const [loading, setLoading] = useState<string | null>(null);
-  const [error, setError]    = useState<string | null>(null);
-  const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const autoTriggered        = useRef(false);
+  const [loading, setLoading]             = useState<string | null>(null);
+  const [error, setError]                 = useState<string | null>(null);
+  const [openFaq, setOpenFaq]             = useState<number | null>(null);
+  const [billingCycle, setBillingCycle]   = useState<"monthly" | "annual">("monthly");
+  const autoTriggered                     = useRef(false);
 
   const { paidPlans, freePlan, getPlanLabel, loading: plansLoading } = usePlans();
 
@@ -102,27 +110,40 @@ export default function AssinarPage() {
   const hasActiveSub = hasPlanAccess(profile);
   const isFree       = !hasActiveSub;
 
-  async function handleAssinar(planId: string) {
+  async function handleAssinar(planId: string, mode: "monthly" | "onetime" | "recurring" = "monthly") {
     if (!session) {
       sessionStorage.setItem("redirect_after_login", `/assinar?plano=${planId}`);
       setLocation("/login");
       return;
     }
-    setLoading(planId);
+    const key = mode === "monthly" ? planId : `${planId}-${mode}`;
+    setLoading(key);
     setError(null);
     try {
-      const { url } = await createCheckoutSession(session.access_token, planId);
+      let url: string;
+      if (mode === "onetime" || mode === "recurring") {
+        const result = await createAnnualCheckoutSession(session.access_token, planId, mode);
+        url = result.url;
+      } else {
+        const result = await createCheckoutSession(session.access_token, planId);
+        url = result.url;
+      }
       window.location.href = url;
     } catch (err: unknown) {
       const raw = err instanceof Error ? err.message : "Erro ao iniciar checkout. Tente novamente.";
       const message = raw.toLowerCase().includes("no such price")
-        ? "Erro de configuração: price ID inválido no Stripe. Verifique o Stripe Price ID no Plan Builder."
+        ? "Erro de configuração: price ID anual não configurado no Plan Builder."
         : raw;
       setError(message);
     } finally {
       setLoading(null);
     }
   }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("ciclo") === "anual") setBillingCycle("annual");
+  }, []);
 
   useEffect(() => {
     if (autoTriggered.current || !session || plansLoading || paidPlans.length === 0) return;
@@ -430,6 +451,50 @@ export default function AssinarPage() {
             </p>
           </div>
 
+          {/* ── Billing cycle toggle ── */}
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 48, marginTop: 8 }}>
+            <div style={{
+              display: "inline-flex", alignItems: "center",
+              background: "rgba(255,255,255,0.05)", borderRadius: 100,
+              border: "1px solid rgba(255,255,255,0.1)", padding: 4, gap: 2,
+            }}>
+              {(["monthly", "annual"] as const).map(cycle => {
+                const isSelected = billingCycle === cycle;
+                return (
+                  <button
+                    key={cycle}
+                    onClick={() => setBillingCycle(cycle)}
+                    style={{
+                      padding: "10px 28px", borderRadius: 100, border: "none",
+                      fontSize: 13, fontWeight: 700, cursor: "pointer",
+                      background: isSelected
+                        ? `linear-gradient(135deg, ${GOLD}, #e8c87a, #c9a84c)`
+                        : "transparent",
+                      color: isSelected ? DEEP : "rgba(255,255,255,0.45)",
+                      transition: "all 0.2s",
+                      letterSpacing: 0.2,
+                      display: "flex", alignItems: "center", gap: 8,
+                    }}
+                  >
+                    {cycle === "monthly" ? "Mensal" : (
+                      <>
+                        Anual
+                        <span style={{
+                          fontSize: 10, fontWeight: 800,
+                          padding: "2px 8px", borderRadius: 20,
+                          background: isSelected ? DEEP : `${GOLD}25`,
+                          color: isSelected ? GOLD : GOLD,
+                          border: `1px solid ${GOLD}40`,
+                          whiteSpace: "nowrap",
+                        }}>Economize até 20%</span>
+                      </>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {error && (
             <div style={{
               background: "rgba(220,38,38,0.12)", border: "1px solid rgba(220,38,38,0.3)",
@@ -468,6 +533,18 @@ export default function AssinarPage() {
                   const origPrice  = formatOriginalPrice(plan);
                   const discount   = calcDiscount(plan);
                   const copy       = PLAN_COPY[planKey] ?? null;
+
+                  // Annual pricing
+                  const annualDiscPct      = ANNUAL_DISCOUNT_PCT[plan.id] ?? 0;
+                  const isAnnual           = billingCycle === "annual" && annualDiscPct > 0;
+                  const annualMonthly      = plan.price_cents * (1 - annualDiscPct / 100);
+                  const annualTotal        = annualMonthly * 12;
+                  const annualMonthlyStr   = `R$ ${(annualMonthly / 100).toFixed(2).replace(".", ",")}`;
+                  const annualTotalStr     = `R$ ${(annualTotal / 100).toFixed(2).replace(".", ",")}`;
+                  const displayPrice       = isAnnual ? { main: annualMonthlyStr, period: "/mês" } : price;
+                  const displayOrigPrice   = isAnnual ? `R$ ${(plan.price_cents / 100).toFixed(2).replace(".", ",")}` : origPrice;
+                  const displayDiscount    = isAnnual ? annualDiscPct : discount;
+                  const hasAnnualRecurring = !!(plan.stripe_price_id_annual_recurring);
 
                   if (isPopular) {
                     return (
@@ -539,25 +616,30 @@ export default function AssinarPage() {
 
                           {/* Price */}
                           <div style={{ marginBottom: 32 }}>
-                            {origPrice && (
+                            {displayOrigPrice && (
                               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", textDecoration: "line-through", marginBottom: 6 }}>
-                                De {origPrice}/mês
+                                De {displayOrigPrice}/mês
                               </div>
                             )}
                             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                              <PriceDisplay priceStr={price.main} gold />
-                              {discount && (
+                              <PriceDisplay priceStr={displayPrice.main} gold />
+                              {displayDiscount && (
                                 <span style={{
                                   background: `${GOLD}20`, color: GOLD,
                                   fontWeight: 800, fontSize: 11,
                                   padding: "3px 10px", borderRadius: 6,
                                   border: `1px solid ${GOLD}35`,
                                   alignSelf: "flex-start", marginTop: 12,
-                                }}>−{discount}%</span>
+                                }}>−{displayDiscount}%</span>
                               )}
                             </div>
-                            {price.period && (
-                              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.28)", marginTop: 4 }}>{price.period}</div>
+                            {displayPrice.period && (
+                              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.28)", marginTop: 4 }}>{displayPrice.period}</div>
+                            )}
+                            {isAnnual && (
+                              <div style={{ fontSize: 12, color: `${GOLD}90`, marginTop: 8, fontWeight: 600 }}>
+                                Total anual: {annualTotalStr}
+                              </div>
                             )}
                           </div>
 
@@ -601,6 +683,46 @@ export default function AssinarPage() {
                               borderRadius: 14, padding: "16px 0", textAlign: "center",
                               color: GOLD, fontWeight: 800, fontSize: 15,
                             }}>✓ Plano atual</div>
+                          ) : isAnnual ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                              <button
+                                className="cta-btn"
+                                onClick={() => handleAssinar(plan.id, "onetime")}
+                                disabled={!!loading}
+                                style={{
+                                  background: `linear-gradient(135deg, ${GOLD} 0%, #e8c87a 50%, #c9a84c 100%)`,
+                                  color: DEEP, border: "none", borderRadius: 14,
+                                  padding: "17px 0", fontSize: 14, fontWeight: 900,
+                                  cursor: !!loading ? "not-allowed" : "pointer",
+                                  opacity: (!!loading && loading !== `${plan.id}-onetime`) ? 0.6 : 1,
+                                  width: "100%", letterSpacing: 0.2,
+                                  boxShadow: `0 6px 32px ${GOLD}45`,
+                                }}
+                              >
+                                {loading === `${plan.id}-onetime` ? "Redirecionando…" : `Pagar ${annualTotalStr} (único anual)`}
+                              </button>
+                              {hasAnnualRecurring && (
+                                <button
+                                  className="cta-btn"
+                                  onClick={() => handleAssinar(plan.id, "recurring")}
+                                  disabled={!!loading}
+                                  style={{
+                                    background: "rgba(255,255,255,0.07)",
+                                    border: `1px solid ${GOLD}40`,
+                                    color: GOLD, borderRadius: 14,
+                                    padding: "14px 0", fontSize: 13, fontWeight: 700,
+                                    cursor: !!loading ? "not-allowed" : "pointer",
+                                    opacity: (!!loading && loading !== `${plan.id}-recurring`) ? 0.5 : 1,
+                                    width: "100%", letterSpacing: 0.2,
+                                  }}
+                                >
+                                  {loading === `${plan.id}-recurring` ? "Redirecionando…" : "Recorrente · R$ 750/mês"}
+                                </button>
+                              )}
+                              <p style={{ textAlign: "center", fontSize: 11.5, color: "rgba(255,255,255,0.25)", marginTop: 4, letterSpacing: 0.2 }}>
+                                Cobrança única · Acesso por 12 meses
+                              </p>
+                            </div>
                           ) : (
                             <button
                               className="cta-btn"
@@ -619,7 +741,7 @@ export default function AssinarPage() {
                               {isLoading ? "Redirecionando…" : `Assinar ${plan.name}`}
                             </button>
                           )}
-                          {!isCurrent && (
+                          {!isCurrent && !isAnnual && (
                             <p style={{ textAlign: "center", fontSize: 11.5, color: "rgba(255,255,255,0.25)", marginTop: 14, letterSpacing: 0.2 }}>
                               Cancele quando quiser · Sem fidelidade
                             </p>
@@ -673,25 +795,30 @@ export default function AssinarPage() {
 
                       {/* Price */}
                       <div style={{ marginBottom: 24 }}>
-                        {origPrice && (
+                        {displayOrigPrice && (
                           <div style={{ fontSize: 12, color: "rgba(255,255,255,0.2)", textDecoration: "line-through", marginBottom: 4 }}>
-                            De {origPrice}/mês
+                            De {displayOrigPrice}/mês
                           </div>
                         )}
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <PriceDisplay priceStr={price.main} />
-                          {discount && (
+                          <PriceDisplay priceStr={displayPrice.main} />
+                          {displayDiscount && (
                             <span style={{
                               background: "rgba(220,38,38,0.15)", color: "#f87171",
                               fontWeight: 700, fontSize: 11,
                               padding: "2px 8px", borderRadius: 5,
                               border: "1px solid rgba(220,38,38,0.2)",
                               alignSelf: "flex-start", marginTop: 12,
-                            }}>−{discount}%</span>
+                            }}>−{displayDiscount}%</span>
                           )}
                         </div>
-                        {price.period && (
-                          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", marginTop: 3 }}>{price.period}</div>
+                        {displayPrice.period && (
+                          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", marginTop: 3 }}>{displayPrice.period}</div>
+                        )}
+                        {isAnnual && (
+                          <div style={{ fontSize: 11.5, color: "rgba(201,168,76,0.7)", marginTop: 6, fontWeight: 600 }}>
+                            Total anual: {annualTotalStr}
+                          </div>
                         )}
                       </div>
 
@@ -732,6 +859,46 @@ export default function AssinarPage() {
                           borderRadius: 12, padding: "14px 0", textAlign: "center",
                           color: "#34d399", fontWeight: 700, fontSize: 14,
                         }}>✓ Plano atual</div>
+                      ) : isAnnual ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          <button
+                            className="cta-btn"
+                            onClick={() => handleAssinar(plan.id, "onetime")}
+                            disabled={!!loading}
+                            style={{
+                              background: "rgba(255,255,255,0.07)",
+                              border: `1px solid ${GOLD}40`,
+                              color: GOLD, borderRadius: 12,
+                              padding: "14px 0", fontSize: 13, fontWeight: 700,
+                              cursor: !!loading ? "not-allowed" : "pointer",
+                              opacity: (!!loading && loading !== `${plan.id}-onetime`) ? 0.5 : 1,
+                              width: "100%", letterSpacing: 0.2,
+                            }}
+                          >
+                            {loading === `${plan.id}-onetime` ? "Redirecionando…" : `Pagar ${annualTotalStr} (único anual)`}
+                          </button>
+                          {hasAnnualRecurring && (
+                            <button
+                              className="cta-btn"
+                              onClick={() => handleAssinar(plan.id, "recurring")}
+                              disabled={!!loading}
+                              style={{
+                                background: "rgba(255,255,255,0.04)",
+                                border: "1px solid rgba(255,255,255,0.12)",
+                                color: "rgba(255,255,255,0.6)", borderRadius: 12,
+                                padding: "12px 0", fontSize: 12, fontWeight: 600,
+                                cursor: !!loading ? "not-allowed" : "pointer",
+                                opacity: (!!loading && loading !== `${plan.id}-recurring`) ? 0.5 : 1,
+                                width: "100%", letterSpacing: 0.2,
+                              }}
+                            >
+                              {loading === `${plan.id}-recurring` ? "Redirecionando…" : "Recorrente · R$ 750/mês"}
+                            </button>
+                          )}
+                          <p style={{ textAlign: "center", fontSize: 11, color: "rgba(255,255,255,0.2)", marginTop: 4 }}>
+                            Cobrança única · Acesso por 12 meses
+                          </p>
+                        </div>
                       ) : (
                         <button
                           className="cta-btn"
@@ -750,7 +917,7 @@ export default function AssinarPage() {
                           {isLoading ? "Redirecionando…" : `Assinar ${plan.name}`}
                         </button>
                       )}
-                      {!isCurrent && (
+                      {!isCurrent && !isAnnual && (
                         <p style={{ textAlign: "center", fontSize: 11, color: "rgba(255,255,255,0.2)", marginTop: 12 }}>
                           Cancele quando quiser · Sem fidelidade
                         </p>

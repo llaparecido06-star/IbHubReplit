@@ -12,6 +12,8 @@ export interface DbPlan {
   is_active: boolean;
   sort_order: number;
   stripe_price_id: string | null;
+  stripe_price_id_annual_onetime?: string | null;
+  stripe_price_id_annual_recurring?: string | null;
   delivery_strategy?: string | null;
 }
 
