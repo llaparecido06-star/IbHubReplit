@@ -31,31 +31,32 @@ const TOTAL_STEPS = 3;
 interface Country {
   flag: string;
   name: string;
+  code: string;  // ISO 3166-1 alpha-2
   ddi: string;
   placeholder: string;
 }
 
 const COUNTRIES: Country[] = [
-  { flag: "🇧🇷", name: "Brasil",          ddi: "+55",  placeholder: "(11) 99999-9999" },
-  { flag: "🇺🇸", name: "Estados Unidos",  ddi: "+1",   placeholder: "(555) 000-0000" },
-  { flag: "🇵🇹", name: "Portugal",        ddi: "+351", placeholder: "912 345 678" },
-  { flag: "🇦🇷", name: "Argentina",       ddi: "+54",  placeholder: "11 1234-5678" },
-  { flag: "🇨🇱", name: "Chile",           ddi: "+56",  placeholder: "9 1234 5678" },
-  { flag: "🇺🇾", name: "Uruguai",         ddi: "+598", placeholder: "9123 4567" },
-  { flag: "🇵🇾", name: "Paraguai",        ddi: "+595", placeholder: "981 234 567" },
-  { flag: "🇧🇴", name: "Bolívia",         ddi: "+591", placeholder: "7123 4567" },
-  { flag: "🇵🇪", name: "Peru",            ddi: "+51",  placeholder: "912 345 678" },
-  { flag: "🇨🇴", name: "Colômbia",        ddi: "+57",  placeholder: "312 345 6789" },
-  { flag: "🇲🇽", name: "México",          ddi: "+52",  placeholder: "55 1234 5678" },
-  { flag: "🇪🇸", name: "Espanha",         ddi: "+34",  placeholder: "612 345 678" },
-  { flag: "🇫🇷", name: "França",          ddi: "+33",  placeholder: "06 12 34 56 78" },
-  { flag: "🇮🇹", name: "Itália",          ddi: "+39",  placeholder: "312 345 6789" },
-  { flag: "🇩🇪", name: "Alemanha",        ddi: "+49",  placeholder: "1512 3456789" },
-  { flag: "🇬🇧", name: "Reino Unido",     ddi: "+44",  placeholder: "7911 123456" },
-  { flag: "🇨🇳", name: "China",           ddi: "+86",  placeholder: "138 0013 8000" },
-  { flag: "🇯🇵", name: "Japão",           ddi: "+81",  placeholder: "90-1234-5678" },
-  { flag: "🇦🇺", name: "Austrália",       ddi: "+61",  placeholder: "0412 345 678" },
-  { flag: "🇿🇦", name: "África do Sul",   ddi: "+27",  placeholder: "71 234 5678" },
+  { flag: "🇧🇷", name: "Brasil",          code: "BR", ddi: "+55",  placeholder: "(11) 99999-9999" },
+  { flag: "🇺🇸", name: "Estados Unidos",  code: "US", ddi: "+1",   placeholder: "(555) 000-0000" },
+  { flag: "🇵🇹", name: "Portugal",        code: "PT", ddi: "+351", placeholder: "912 345 678" },
+  { flag: "🇦🇷", name: "Argentina",       code: "AR", ddi: "+54",  placeholder: "11 1234-5678" },
+  { flag: "🇨🇱", name: "Chile",           code: "CL", ddi: "+56",  placeholder: "9 1234 5678" },
+  { flag: "🇺🇾", name: "Uruguai",         code: "UY", ddi: "+598", placeholder: "9123 4567" },
+  { flag: "🇵🇾", name: "Paraguai",        code: "PY", ddi: "+595", placeholder: "981 234 567" },
+  { flag: "🇧🇴", name: "Bolívia",         code: "BO", ddi: "+591", placeholder: "7123 4567" },
+  { flag: "🇵🇪", name: "Peru",            code: "PE", ddi: "+51",  placeholder: "912 345 678" },
+  { flag: "🇨🇴", name: "Colômbia",        code: "CO", ddi: "+57",  placeholder: "312 345 6789" },
+  { flag: "🇲🇽", name: "México",          code: "MX", ddi: "+52",  placeholder: "55 1234 5678" },
+  { flag: "🇪🇸", name: "Espanha",         code: "ES", ddi: "+34",  placeholder: "612 345 678" },
+  { flag: "🇫🇷", name: "França",          code: "FR", ddi: "+33",  placeholder: "06 12 34 56 78" },
+  { flag: "🇮🇹", name: "Itália",          code: "IT", ddi: "+39",  placeholder: "312 345 6789" },
+  { flag: "🇩🇪", name: "Alemanha",        code: "DE", ddi: "+49",  placeholder: "1512 3456789" },
+  { flag: "🇬🇧", name: "Reino Unido",     code: "GB", ddi: "+44",  placeholder: "7911 123456" },
+  { flag: "🇨🇳", name: "China",           code: "CN", ddi: "+86",  placeholder: "138 0013 8000" },
+  { flag: "🇯🇵", name: "Japão",           code: "JP", ddi: "+81",  placeholder: "90-1234-5678" },
+  { flag: "🇦🇺", name: "Austrália",       code: "AU", ddi: "+61",  placeholder: "0412 345 678" },
+  { flag: "🇿🇦", name: "África do Sul",   code: "ZA", ddi: "+27",  placeholder: "71 234 5678" },
 ];
 
 const AREAS = [
@@ -362,6 +363,7 @@ export default function RegisterScreen() {
           full_name:          fullName.trim(),
           username:           username.toLowerCase().trim(),
           phone:              phoneWithDDI,
+          country:            selectedCountry.code,
           areas_of_expertise: selectedAreas,
           bio:                bio.trim() || null,
           company:            company.trim() || null,
