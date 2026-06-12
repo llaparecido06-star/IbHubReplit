@@ -5,6 +5,212 @@ import { supabase } from "@/lib/supabase";
 const GOLD = "#c9a84c";
 const NAVY = "#0d1b2a";
 
+// ─── Credit Packages ──────────────────────────────────────────────────────────
+
+interface CreditPackage {
+  id: string;
+  label: string;
+  ai_credits: number;
+  revelation_credits: number;
+  price_brl: number;
+  sort_order: number;
+  active: boolean;
+}
+
+const EMPTY_PKG = { label: "", ai_credits: 0, revelation_credits: 0, price_brl_str: "", active: true };
+
+function fmtBRL(centavos: number) {
+  if (!centavos) return "—";
+  return `R$ ${(centavos / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function parseBRL(s: string): number {
+  if (!s) return 0;
+  const n = parseFloat(s.replace(/[R$\s.]/g, "").replace(",", "."));
+  return isNaN(n) ? 0 : Math.round(n * 100);
+}
+
+interface PkgModalState { label: string; ai_credits: number; revelation_credits: number; price_brl_str: string; active: boolean }
+
+function CreditPackagesSection() {
+  const [packages, setPackages] = useState<CreditPackage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editPkg, setEditPkg] = useState<CreditPackage | null>(null);
+  const [pkgModal, setPkgModal] = useState<PkgModalState>(EMPTY_PKG);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from("credit_packages").select("*").order("sort_order", { ascending: true });
+    setPackages((data ?? []) as CreditPackage[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const openNew = () => {
+    setEditPkg(null);
+    setPkgModal(EMPTY_PKG);
+    setMsg(null);
+    setShowModal(true);
+  };
+
+  const openEdit = (pkg: CreditPackage) => {
+    setEditPkg(pkg);
+    setPkgModal({ label: pkg.label, ai_credits: pkg.ai_credits, revelation_credits: pkg.revelation_credits, price_brl_str: String(pkg.price_brl / 100), active: pkg.active });
+    setMsg(null);
+    setShowModal(true);
+  };
+
+  const handleSave = async () => {
+    if (!pkgModal.label.trim()) { setMsg({ type: "error", text: "Rótulo é obrigatório." }); return; }
+    const priceCentavos = parseBRL(pkgModal.price_brl_str);
+    if (priceCentavos <= 0) { setMsg({ type: "error", text: "Preço deve ser maior que zero." }); return; }
+    setSaving(true); setMsg(null);
+    const row = {
+      label: pkgModal.label.trim(),
+      ai_credits: pkgModal.ai_credits,
+      revelation_credits: pkgModal.revelation_credits,
+      price_brl: priceCentavos,
+      active: pkgModal.active,
+    };
+    try {
+      if (editPkg) {
+        const { error } = await supabase.from("credit_packages").update(row).eq("id", editPkg.id);
+        if (error) throw error;
+        setMsg({ type: "success", text: "Pacote atualizado!" });
+      } else {
+        const maxOrder = packages.reduce((m, p) => Math.max(m, p.sort_order), -1);
+        const newId = pkgModal.label.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "") || `pkg_${Date.now()}`;
+        const { error } = await supabase.from("credit_packages").insert({ ...row, id: newId, sort_order: maxOrder + 1 });
+        if (error) throw error;
+        setMsg({ type: "success", text: "Pacote criado!" });
+      }
+      void load();
+    } catch (e) {
+      setMsg({ type: "error", text: e instanceof Error ? e.message : "Erro ao salvar." });
+    } finally { setSaving(false); }
+  };
+
+  const handleToggle = async (pkg: CreditPackage) => {
+    await supabase.from("credit_packages").update({ active: !pkg.active }).eq("id", pkg.id);
+    void load();
+  };
+
+  const handleDelete = async (pkg: CreditPackage) => {
+    if (!confirm(`Excluir pacote "${pkg.label}"?`)) return;
+    await supabase.from("credit_packages").delete().eq("id", pkg.id);
+    void load();
+  };
+
+  const numInp = (label: string, val: number, onChange: (v: number) => void) => (
+    <div style={{ flex: 1 }}>
+      <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#8a93a2", letterSpacing: 0.5, marginBottom: 6 }}>{label}</label>
+      <input type="number" min={0} value={val} onChange={e => onChange(parseInt(e.target.value) || 0)} style={{ width: "100%", padding: "9px 12px", border: "1px solid #e8eaed", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" as const }} />
+    </div>
+  );
+
+  return (
+    <div style={{ marginTop: 48 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <div>
+          <h2 style={{ fontSize: 18, fontWeight: 800, color: NAVY, margin: "0 0 4px" }}>Pacotes de Crédito Avulso</h2>
+          <p style={{ fontSize: 13, color: "#8a93a2", margin: 0 }}>Créditos comprados uma única vez — não expiram na virada do mês</p>
+        </div>
+        <button onClick={openNew} style={{ padding: "9px 18px", backgroundColor: GOLD, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}>+ Novo Pacote</button>
+      </div>
+
+      {loading ? (
+        <div style={{ padding: 40, textAlign: "center", color: "#aaa" }}>⏳ Carregando pacotes...</div>
+      ) : packages.length === 0 ? (
+        <div style={{ padding: 40, textAlign: "center", color: "#aaa" }}>Nenhum pacote cadastrado ainda.</div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12 }}>
+          {packages.map(pkg => (
+            <div key={pkg.id} style={{ backgroundColor: "#fff", border: `1px solid ${pkg.active ? "#e8eaed" : "#f3f4f6"}`, borderRadius: 14, padding: 18, opacity: pkg.active ? 1 : 0.6 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>{pkg.label}</div>
+                <span style={{ fontSize: 10, fontWeight: 700, backgroundColor: pkg.active ? "#d1fae5" : "#f3f4f6", color: pkg.active ? "#059669" : "#6b7280", padding: "2px 8px", borderRadius: 5 }}>
+                  {pkg.active ? "Ativo" : "Inativo"}
+                </span>
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: NAVY, marginBottom: 8 }}>{fmtBRL(pkg.price_brl)}</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const, marginBottom: 12 }}>
+                {pkg.ai_credits > 0 && (
+                  <span style={{ fontSize: 11, backgroundColor: `${GOLD}18`, color: GOLD, padding: "2px 8px", borderRadius: 5, fontWeight: 700 }}>⚡ {pkg.ai_credits} IA</span>
+                )}
+                {pkg.revelation_credits > 0 && (
+                  <span style={{ fontSize: 11, backgroundColor: "#f0fdf4", color: "#059669", padding: "2px 8px", borderRadius: 5, fontWeight: 700 }}>🔓 {pkg.revelation_credits} revelações</span>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={() => openEdit(pkg)} style={{ flex: 2, padding: "7px", backgroundColor: `${NAVY}0f`, color: NAVY, border: "none", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>✏️ Editar</button>
+                <button onClick={() => handleToggle(pkg)} style={{ flex: 2, padding: "7px", backgroundColor: pkg.active ? "#fef2f2" : "#f0fdf4", color: pkg.active ? "#dc2626" : "#16a34a", border: `1px solid ${pkg.active ? "#fca5a5" : "#86efac"}`, borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>{pkg.active ? "Desativar" : "Ativar"}</button>
+                <button onClick={() => handleDelete(pkg)} style={{ padding: "7px 10px", backgroundColor: "#fef2f2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 8, cursor: "pointer", fontSize: 12 }}>🗑</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Package modal */}
+      {showModal && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div style={{ backgroundColor: "#fff", borderRadius: 16, padding: 28, maxWidth: 480, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+              <h2 style={{ fontSize: 17, fontWeight: 800, color: NAVY, margin: 0 }}>{editPkg ? `Editar: ${editPkg.label}` : "Novo Pacote Avulso"}</h2>
+              <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#aaa" }}>✕</button>
+            </div>
+
+            {/* Label */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#8a93a2", letterSpacing: 0.5, marginBottom: 6 }}>RÓTULO DO PACOTE</label>
+              <input value={pkgModal.label} onChange={e => setPkgModal(p => ({ ...p, label: e.target.value }))} placeholder="Ex: Iniciante — 10 créditos" style={{ width: "100%", padding: "9px 12px", border: "1px solid #e8eaed", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" as const }} />
+            </div>
+
+            {/* Credits */}
+            <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
+              {numInp("⚡ CRÉDITOS IA", pkgModal.ai_credits, v => setPkgModal(p => ({ ...p, ai_credits: v })))}
+              {numInp("🔓 REVELAÇÕES", pkgModal.revelation_credits, v => setPkgModal(p => ({ ...p, revelation_credits: v })))}
+            </div>
+
+            {/* Price */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#8a93a2", letterSpacing: 0.5, marginBottom: 6 }}>PREÇO (R$)</label>
+              <p style={{ fontSize: 11, color: "#aaa", margin: "0 0 6px" }}>Ex: 29.90 ou 29,90 — será convertido para centavos automaticamente</p>
+              <input value={pkgModal.price_brl_str} onChange={e => setPkgModal(p => ({ ...p, price_brl_str: e.target.value }))} placeholder="29.90" style={{ width: "100%", padding: "9px 12px", border: "1px solid #e8eaed", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" as const }} />
+              {pkgModal.price_brl_str && parseBRL(pkgModal.price_brl_str) > 0 && (
+                <div style={{ marginTop: 6, fontSize: 12, color: "#059669", fontWeight: 700 }}>= {fmtBRL(parseBRL(pkgModal.price_brl_str))}</div>
+              )}
+            </div>
+
+            {/* Active toggle */}
+            <div onClick={() => setPkgModal(p => ({ ...p, active: !p.active }))} style={{ padding: "10px 14px", border: `1px solid ${pkgModal.active ? GOLD : "#e8eaed"}`, borderRadius: 8, cursor: "pointer", backgroundColor: pkgModal.active ? `${GOLD}0d` : "transparent", display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+              <span style={{ color: pkgModal.active ? GOLD : "#aaa", fontSize: 16 }}>{pkgModal.active ? "☑" : "☐"}</span>
+              <span style={{ fontSize: 13, color: pkgModal.active ? NAVY : "#555" }}>Ativo (visível para compra)</span>
+            </div>
+
+            {msg && (
+              <div style={{ marginBottom: 14, padding: "10px 14px", backgroundColor: msg.type === "success" ? "#f0fdf4" : "#fef2f2", border: `1px solid ${msg.type === "success" ? "#86efac" : "#fca5a5"}`, borderRadius: 8, fontSize: 13, color: msg.type === "success" ? "#16a34a" : "#dc2626" }}>
+                {msg.text}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setShowModal(false)} style={{ flex: 1, padding: "11px", backgroundColor: "#f3f4f6", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>Cancelar</button>
+              <button onClick={handleSave} disabled={saving} style={{ flex: 2, padding: "11px", backgroundColor: GOLD, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 700, opacity: saving ? 0.6 : 1 }}>
+                {saving ? "Salvando..." : editPkg ? "Atualizar Pacote" : "Criar Pacote"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Only features that are actively gated in the app code.
 // Add here when a new feature gate is implemented.
 const ALL_FEATURES = [
@@ -493,6 +699,9 @@ export default function AdminPlanBuilder() {
           </div>
         </div>
       )}
+
+      {/* ── Credit Packages Section ── */}
+      <CreditPackagesSection />
     </AdminShell>
   );
 }

@@ -51,6 +51,28 @@ export async function createAnnualCheckoutSession(
   return data as { url: string };
 }
 
+/**
+ * Upgrade or downgrade an active subscription to a new plan.
+ * Uses Stripe proration: the customer pays only the difference for the
+ * remaining days, and the next renewal stays on the original billing date.
+ */
+export async function upgradeSubscription(
+  token: string,
+  plan: string,
+): Promise<{ ok: boolean; plan: string; status: string; current_period_end: string | null }> {
+  const res = await fetch(`${API_BASE}/stripe/upgrade-subscription`, {
+    method: "POST",
+    headers: await authHeaders(token),
+    body: JSON.stringify({ plan }),
+  });
+  const data: unknown = await res.json();
+  if (!res.ok) {
+    const msg = (data as { error?: string })?.error ?? "Erro ao atualizar assinatura";
+    throw new Error(msg);
+  }
+  return data as { ok: boolean; plan: string; status: string; current_period_end: string | null };
+}
+
 export async function createPortalSession(
   token: string,
 ): Promise<{ url: string }> {

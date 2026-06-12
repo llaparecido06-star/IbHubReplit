@@ -193,6 +193,107 @@ async function getOrCreateCustomer(stripe: Stripe, userId: string, email: string
   return customer.id;
 }
 
+// ─── POST /stripe/upgrade-subscription ───────────────────────────────────────
+/**
+ * Upgrade (or downgrade) an active Stripe subscription to a new plan.
+ *
+ * Uses proration so the customer is charged only the difference for the
+ * remaining days of the current billing cycle, and the full new-plan price
+ * starting from the next renewal date (which is always anchored to the
+ * original subscription creation day).
+ *
+ * Requires:
+ *   - The user must already have an active Stripe subscription (stripe_subscription_id on their profile).
+ *   - The target plan must have a stripe_price_id configured in the plans table.
+ *
+ * Body: { plan: string }   — target plan ID (e.g. "premium")
+ */
+router.post("/stripe/upgrade-subscription", async (req: Request, res: Response) => {
+  const userId = await getUserId(req, res);
+  if (!userId) return;
+
+  const { plan } = req.body as { plan?: string };
+  if (!plan) {
+    res.status(400).json({ error: "Plano não informado." });
+    return;
+  }
+
+  if (!process.env.STRIPE_SECRET_KEY) {
+    res.status(503).json({ error: "Pagamentos ainda não configurados." });
+    return;
+  }
+
+  // Load user's current subscription ID and the target plan's price ID
+  const [profileRes, planPrices] = await Promise.all([
+    supabaseAdmin
+      .from("profiles")
+      .select("stripe_subscription_id")
+      .eq("id", userId)
+      .maybeSingle(),
+    fetchPlanPriceIds(),
+  ]);
+
+  const subscriptionId = (profileRes.data as { stripe_subscription_id: string | null } | null)
+    ?.stripe_subscription_id;
+
+  if (!subscriptionId) {
+    res.status(400).json({
+      error: "Nenhuma assinatura ativa encontrada. Use o checkout para contratar um plano.",
+    });
+    return;
+  }
+
+  const priceId = planPrices.get(plan);
+  if (!priceId || !priceId.startsWith("price_")) {
+    res.status(503).json({
+      error: `Price ID não configurado para o plano "${plan}". Configure no Plan Builder.`,
+    });
+    return;
+  }
+
+  try {
+    const stripe = getStripe();
+
+    // Retrieve current subscription to find the item ID to replace
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+
+    if (subscription.status === "canceled") {
+      res.status(400).json({
+        error: "A assinatura está cancelada. Use o checkout para contratar um novo plano.",
+      });
+      return;
+    }
+
+    const itemId = subscription.items.data[0]?.id;
+    if (!itemId) {
+      res.status(400).json({ error: "Não foi possível identificar o item da assinatura." });
+      return;
+    }
+
+    // Update subscription with proration:
+    // - 'create_prorations' charges/credits the difference for the current period
+    // - The billing_cycle_anchor is preserved (renewal stays on the original day)
+    const updated = await stripe.subscriptions.update(subscriptionId, {
+      items: [{ id: itemId, price: priceId }],
+      proration_behavior: "create_prorations",
+      metadata: { supabase_user_id: userId, plan },
+    });
+
+    req.log.info({ userId, plan, subscriptionId, status: updated.status }, "Subscription upgraded with proration");
+
+    res.json({
+      ok: true,
+      plan,
+      subscription_id: updated.id,
+      status: updated.status,
+      current_period_end: getPeriodEnd(updated),
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Erro ao atualizar assinatura";
+    res.status(500).json({ error: message });
+  }
+});
+
 // ─── POST /stripe/create-checkout-session ─────────────────────────────────────
 router.post("/stripe/create-checkout-session", async (req: Request, res: Response) => {
   const userId = await getUserId(req, res);
