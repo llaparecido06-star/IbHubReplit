@@ -68,7 +68,7 @@ interface TerritoryUser extends Referido {
 interface Territory {
   id: string; partner_id: string; country_code: string; country_name: string;
   country_flag: string | null; notes: string | null; created_at: string;
-  commission_override: number | null;
+  commission_pct: number | null;        // partner_territories.commission_pct (sócio's rate)
   partner_name: string | null; partner_email: string | null;
   partner_username: string | null; partner_referral_code: string | null;
   users: TerritoryUser[];
@@ -407,7 +407,7 @@ function AddTerritoryModal({ open, onClose, onAdded, takenCodes }: {
     const { data, error: dbErr } = await supabase.from("partner_territories").insert(row).select().single();
     setSaving(false);
     if (dbErr) { setError(dbErr.code === "23505" ? "Esse país já tem parceiro." : dbErr.message); return; }
-    onAdded({ ...data, commission_override: selectedPartner.commission_override ?? null, partner_name: selectedPartner.full_name, partner_email: selectedPartner.email, partner_username: selectedPartner.username, partner_referral_code: null, users: [] });
+    onAdded({ ...data, commission_pct: null, partner_name: selectedPartner.full_name, partner_email: selectedPartner.email, partner_username: selectedPartner.username, partner_referral_code: null, users: [] });
     onClose();
   };
 
@@ -482,6 +482,56 @@ function AddTerritoryModal({ open, onClose, onAdded, takenCodes }: {
   );
 }
 
+// ── Territory Commission editor ───────────────────────────────
+function TerritoryCommissionEditor({ territoryId, currentPct, tierPct, onSaved }: {
+  territoryId: string; currentPct: number | null; tierPct: number;
+  onSaved: (v: number | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(currentPct !== null ? String(currentPct) : "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
+  const ref = useRef<HTMLInputElement>(null);
+
+  const startEdit = (e: React.MouseEvent) => { e.stopPropagation(); setValue(currentPct !== null ? String(currentPct) : ""); setError(null); setOk(false); setEditing(true); setTimeout(() => ref.current?.focus(), 50); };
+  const cancel    = (e: React.MouseEvent) => { e.stopPropagation(); setEditing(false); setError(null); };
+  const save = async (e: React.MouseEvent | React.KeyboardEvent, clear = false) => {
+    e.stopPropagation();
+    let newVal: number | null = null;
+    if (!clear) { const p = parseFloat(String(value).replace(",", ".")); if (isNaN(p) || p < 0 || p > 100) { setError("Valor entre 0 e 100."); return; } newVal = Math.round(p * 100) / 100; }
+    setSaving(true); setError(null);
+    const { error: dbErr } = await supabase.from("partner_territories").update({ commission_pct: newVal }).eq("id", territoryId);
+    setSaving(false);
+    if (dbErr) { setError(dbErr.message); return; }
+    setOk(true); setEditing(false); onSaved(newVal); setTimeout(() => setOk(false), 2500);
+  };
+
+  if (editing) return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }} onClick={e => e.stopPropagation()}>
+      <div style={{ display: "flex", alignItems: "center", border: `1px solid ${error ? "#fca5a5" : "#e8eaed"}`, borderRadius: 6, overflow: "hidden", backgroundColor: error ? "#fef2f2" : "#fff" }}>
+        <input ref={ref} type="number" min={0} max={100} step={0.5} value={value} onChange={e => { setValue(e.target.value); setError(null); }} placeholder={String(tierPct)}
+          style={{ padding: "5px 6px", border: "none", fontSize: 13, fontWeight: 700, outline: "none", width: 60, backgroundColor: "transparent" }}
+          onKeyDown={e => { if (e.key === "Enter") void save(e); if (e.key === "Escape") setEditing(false); }} />
+        <span style={{ padding: "5px 8px 5px 0", fontSize: 13, fontWeight: 700, color: "#555" }}>%</span>
+      </div>
+      <button onClick={e => { void save(e); }} disabled={saving} style={{ padding: "5px 12px", backgroundColor: GOLD, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{saving ? "..." : "Salvar"}</button>
+      {currentPct !== null && <button onClick={e => { void save(e, true); }} disabled={saving} style={{ padding: "5px 10px", backgroundColor: "#fef2f2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>↺ Automático</button>}
+      <button onClick={cancel} style={{ padding: "5px 8px", backgroundColor: "#f3f4f6", color: "#6b7280", border: "none", borderRadius: 6, fontSize: 12, cursor: "pointer" }}>✕</button>
+      {error && <span style={{ fontSize: 11, color: "#dc2626" }}>{error}</span>}
+    </div>
+  );
+
+  const isManual = currentPct !== null;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      <CommissionBadge pct={isManual ? currentPct! : tierPct} isManual={isManual} />
+      <button onClick={startEdit} style={{ padding: "3px 8px", backgroundColor: "transparent", border: "1px solid #e8eaed", borderRadius: 5, fontSize: 11, color: "#6b7280", cursor: "pointer" }}>✏ alterar</button>
+      {ok && <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 700 }}>✓ Salvo!</span>}
+    </div>
+  );
+}
+
 // ── Commission split display ──────────────────────────────────
 function CommissionSplit({ grossPct, repPct }: { grossPct: number; repPct: number | null }) {
   const netPct = repPct !== null ? Math.max(0, grossPct - repPct) : grossPct;
@@ -513,7 +563,7 @@ function ParceirosTab() {
     try {
       const { data: terrs, error: err1 } = await supabase
         .from("partner_territories")
-        .select("id, partner_id, country_code, country_name, country_flag, notes, created_at")
+        .select("id, partner_id, country_code, country_name, country_flag, notes, created_at, commission_pct")
         .order("created_at", { ascending: false });
       if (err1) throw err1;
       if (!terrs || terrs.length === 0) { setTerritories([]); setLoading(false); return; }
@@ -566,7 +616,7 @@ function ParceirosTab() {
           };
         });
         return {
-          ...t, commission_override: p?.commission_override ?? null,
+          ...t, commission_pct: (t as { commission_pct?: number | null }).commission_pct ?? null,
           partner_name: p?.full_name ?? null, partner_email: p?.email ?? null,
           partner_username: p?.username ?? null, partner_referral_code: p?.referral_code ?? null,
           users,
@@ -636,8 +686,8 @@ function ParceirosTab() {
             const pagantes = t.users.filter(u => u.plan !== "gratuito" && u.plan !== "free" && !!u.plan).length;
             const convRate = t.users.length > 0 ? Math.round((pagantes / t.users.length) * 100) : 0;
             const tier     = getTier(t.users.length);
-            const effPct   = effectivePct(t.users.length, t.commission_override);
-            const isManual = t.commission_override !== null;
+            const effPct   = effectivePct(t.users.length, t.commission_pct);
+            const isManual = t.commission_pct !== null;
             const comRep   = t.users.filter(u => u.rep_id).length;
 
             return (
@@ -690,7 +740,7 @@ function ParceirosTab() {
                         <div key={s.label} style={{ fontSize: 12 }}><span style={{ color: "#8a93a2" }}>{s.label}: </span><span style={{ fontWeight: 800, color: s.color }}>{s.value}</span></div>
                       ))}
                       <div style={{ marginLeft: "auto" }}>
-                        <CommissionEditor repId={t.partner_id} currentOverride={t.commission_override} tierPct={tier.pct} onSaved={(_, v) => setTerritories(prev => prev.map(tr => tr.id === t.id ? { ...tr, commission_override: v } : tr))} />
+                        <TerritoryCommissionEditor territoryId={t.id} currentPct={t.commission_pct} tierPct={tier.pct} onSaved={v => setTerritories(prev => prev.map(tr => tr.id === t.id ? { ...tr, commission_pct: v } : tr))} />
                       </div>
                     </div>
 
@@ -766,31 +816,34 @@ function RepresentantesTab() {
   const load = async () => {
     setLoading(true); setError(null);
     try {
-      // Load territories for cross-reference
+      // Load territories for cross-reference (commission_pct is the sócio's own rate)
       const { data: terrs } = await supabase.from("partner_territories")
-        .select("country_code, partner_id");
+        .select("country_code, partner_id, commission_pct");
       const terrPartnerIds = [...new Set((terrs ?? []).map(t => t.partner_id as string))];
       const { data: terrPartners } = terrPartnerIds.length > 0
-        ? await supabase.from("profiles").select("id, full_name, commission_override").in("id", terrPartnerIds)
+        ? await supabase.from("profiles").select("id, full_name").in("id", terrPartnerIds)
         : { data: [] };
       const terrPartnerMap = new Map((terrPartners ?? []).map(p => [p.id, p]));
 
-      // For each territory, get user count (for tier)
+      // User counts per territory for auto-tier (only needed when commission_pct is null)
       const terrCounts = new Map<string, number>();
-      if (terrs && terrs.length > 0) {
+      const terrsNeedingCount = (terrs ?? []).filter(t => t.commission_pct == null);
+      if (terrsNeedingCount.length > 0) {
         const countResults = await Promise.all(
-          terrs.map(t => supabase.from("profiles").select("id", { count: "exact", head: true }).eq("country", t.country_code))
+          terrsNeedingCount.map(t => supabase.from("profiles").select("id", { count: "exact", head: true }).eq("country", t.country_code))
         );
-        terrs.forEach((t, i) => { terrCounts.set(t.country_code, countResults[i]?.count ?? 0); });
+        terrsNeedingCount.forEach((t, i) => { terrCounts.set(t.country_code, countResults[i]?.count ?? 0); });
       }
 
       const tIdx = new Map<string, { partner_name: string | null; gross_pct: number; territory_count: number }>();
       (terrs ?? []).forEach(t => {
         const p = terrPartnerMap.get(t.partner_id);
         const cnt = terrCounts.get(t.country_code) ?? 0;
+        // Use territory's own commission_pct; fall back to auto-tier
+        const gross_pct = t.commission_pct != null ? Number(t.commission_pct) : effectivePct(cnt, null);
         tIdx.set(t.country_code, {
           partner_name: p?.full_name ?? null,
-          gross_pct: effectivePct(cnt, p?.commission_override ?? null),
+          gross_pct,
           territory_count: cnt,
         });
       });
@@ -1045,20 +1098,21 @@ function CruzamentoTab() {
     try {
       // Load territories + partners
       const { data: terrs } = await supabase.from("partner_territories")
-        .select("country_code, partner_id");
+        .select("country_code, partner_id, commission_pct");
       const terrPartnerIds = [...new Set((terrs ?? []).map(t => t.partner_id as string))];
       const { data: terrPartners } = terrPartnerIds.length > 0
-        ? await supabase.from("profiles").select("id, full_name, commission_override").in("id", terrPartnerIds)
+        ? await supabase.from("profiles").select("id, full_name").in("id", terrPartnerIds)
         : { data: [] };
       const terrPartnerMap = new Map((terrPartners ?? []).map(p => [p.id, p]));
 
-      // Territory user counts for tier calculation
+      // Only fetch user counts for territories without a fixed commission_pct (auto-tier)
       const terrCounts = new Map<string, number>();
-      if (terrs && terrs.length > 0) {
+      const terrsNeedingCount = (terrs ?? []).filter(t => t.commission_pct == null);
+      if (terrsNeedingCount.length > 0) {
         const countResults = await Promise.all(
-          terrs.map(t => supabase.from("profiles").select("id", { count: "exact", head: true }).eq("country", t.country_code))
+          terrsNeedingCount.map(t => supabase.from("profiles").select("id", { count: "exact", head: true }).eq("country", t.country_code))
         );
-        terrs.forEach((t, i) => { terrCounts.set(t.country_code, countResults[i]?.count ?? 0); });
+        terrsNeedingCount.forEach((t, i) => { terrCounts.set(t.country_code, countResults[i]?.count ?? 0); });
       }
 
       // territory country → socio info
@@ -1066,10 +1120,11 @@ function CruzamentoTab() {
       (terrs ?? []).forEach(t => {
         const p = terrPartnerMap.get(t.partner_id);
         const cnt = terrCounts.get(t.country_code) ?? 0;
+        const gross_pct = t.commission_pct != null ? Number(t.commission_pct) : effectivePct(cnt, null);
         socioByCountry.set(t.country_code, {
           partner_id: t.partner_id,
           partner_name: p?.full_name ?? null,
-          gross_pct: effectivePct(cnt, p?.commission_override ?? null),
+          gross_pct,
         });
       });
 
