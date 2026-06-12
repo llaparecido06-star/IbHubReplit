@@ -22,6 +22,7 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import * as API from "@/services/api";
+import { LowCreditsCard } from "@/components/ui/LowCreditsCard";
 
 const PRODUCT_CATEGORIES = ["Vinho Tinto", "Vinho Branco", "Vinho Rosé", "Espumante", "Licoroso", "Destilado", "Acessório", "Outro"];
 
@@ -183,9 +184,34 @@ export default function WineCellarScreen() {
   const colors  = useColors();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
-  const { user, profile, activeCompany } = useAuth();
+  const { user, profile, activeCompany, session } = useAuth();
   const isCompany = !!activeCompany || profile?.profile_type === "empresa";
   const companyId = activeCompany?.id ?? null;
+  const apiUrl    = process.env.EXPO_PUBLIC_API_URL ?? "";
+
+  const [aiCredits, setAiCredits]         = useState<number | null>(null);
+  const [revealCredits, setRevealCredits] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!session?.access_token) return;
+    const token = session.access_token;
+    void fetch(`${apiUrl}/wine-imports/credits`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { credits_remaining?: number } | null) => {
+        if (d?.credits_remaining !== undefined) setAiCredits(d.credits_remaining);
+      })
+      .catch(() => {});
+    void fetch(`${apiUrl}/wine-imports/bi/reveal-credits`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { credits_remaining?: number } | null) => {
+        if (d?.credits_remaining !== undefined) setRevealCredits(d.credits_remaining);
+      })
+      .catch(() => {});
+  }, [session?.access_token, apiUrl]);
 
   const FILTER_OPTIONS: { key: FilterKey; label: string }[] = [
     { key: "todos",       label: t("wine_cellar_screen.filter_all") },
@@ -533,6 +559,13 @@ export default function WineCellarScreen() {
             </View>
           ))}
         </View>
+
+        {/* Low credits awareness card */}
+        {(aiCredits !== null || revealCredits !== null) && (
+          <View style={{ paddingHorizontal: 12 }}>
+            <LowCreditsCard aiCredits={aiCredits} revealCredits={revealCredits} />
+          </View>
+        )}
 
         {/* Cellar value banner */}
         {cellarValue > 0 && (

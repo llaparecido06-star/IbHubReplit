@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
-import { applyPlanChangeToCredits } from "../lib/creditUtils.js";
+import { applyPlanChangeToCredits, addOneTimeCredits } from "../lib/creditUtils.js";
 
 const router: IRouter = Router();
 
@@ -317,6 +317,107 @@ router.post("/stripe/create-portal-session", async (req: Request, res: Response)
   }
 });
 
+// ─── GET /stripe/credit-packages ─────────────────────────────────────────────
+router.get("/stripe/credit-packages", async (_req: Request, res: Response) => {
+  const { data, error } = await supabaseAdmin
+    .from("credit_packages")
+    .select("id, label, ai_credits, revelation_credits, price_brl, sort_order")
+    .eq("active", true)
+    .order("sort_order", { ascending: true });
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  res.json(data ?? []);
+});
+
+// ─── POST /stripe/create-credit-checkout-session ──────────────────────────────
+router.post("/stripe/create-credit-checkout-session", async (req: Request, res: Response) => {
+  const userId = await getUserId(req, res);
+  if (!userId) return;
+
+  const { packageId, successUrl, cancelUrl } = req.body as {
+    packageId?: string;
+    successUrl?: string;
+    cancelUrl?: string;
+  };
+
+  if (!packageId) {
+    res.status(400).json({ error: "packageId é obrigatório." });
+    return;
+  }
+
+  if (!process.env.STRIPE_SECRET_KEY) {
+    res.status(503).json({ error: "Pagamentos ainda não configurados. Contate o suporte." });
+    return;
+  }
+
+  const { data: pkg, error: pkgErr } = await supabaseAdmin
+    .from("credit_packages")
+    .select("id, label, ai_credits, revelation_credits, price_brl")
+    .eq("id", packageId)
+    .eq("active", true)
+    .maybeSingle() as {
+      data: { id: string; label: string; ai_credits: number; revelation_credits: number; price_brl: number } | null;
+      error: unknown;
+    };
+
+  if (pkgErr || !pkg) {
+    res.status(404).json({ error: "Pacote de créditos não encontrado ou inativo." });
+    return;
+  }
+
+  const webBase = process.env.WEB_BASE_URL ?? "";
+  const resolvedSuccess = (successUrl && isAllowedReturnUrl(successUrl))
+    ? successUrl
+    : `${webBase}/mercado?creditos=comprado`;
+  const resolvedCancel  = (cancelUrl  && isAllowedReturnUrl(cancelUrl))
+    ? cancelUrl
+    : `${webBase}/mercado`;
+
+  try {
+    const stripe = getStripe();
+    const { data: authData } = await supabaseAdmin.auth.admin.getUserById(userId);
+    const email = authData?.user?.email ?? null;
+    const customerId = await getOrCreateCustomer(stripe, userId, email);
+
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: "payment",
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: "brl",
+            unit_amount: pkg.price_brl,
+            product_data: {
+              name: pkg.label,
+              description: [
+                pkg.ai_credits > 0 ? `${pkg.ai_credits} créditos de Busca IA` : null,
+                pkg.revelation_credits > 0 ? `${pkg.revelation_credits} créditos de Revelação` : null,
+              ].filter(Boolean).join(" + ") || pkg.label,
+            },
+          },
+        },
+      ],
+      success_url: resolvedSuccess,
+      cancel_url:  resolvedCancel,
+      metadata: {
+        supabase_user_id:    userId,
+        credit_package_id:   pkg.id,
+        ai_credits:          String(pkg.ai_credits),
+        revelation_credits:  String(pkg.revelation_credits),
+      },
+      locale: "pt-BR",
+    });
+
+    res.json({ url: session.url });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Erro ao criar sessão de checkout";
+    res.status(500).json({ error: message });
+  }
+});
+
 // ─── POST /stripe/webhook ─────────────────────────────────────────────────────
 router.post("/stripe/webhook", async (req: Request, res: Response) => {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -348,10 +449,21 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
   try {
     switch (event.type) {
       case "checkout.session.completed": {
-        const sess        = event.data.object as Stripe.Checkout.Session;
-        const custId      = typeof sess.customer === "string" ? sess.customer : undefined;
-        const userId      = await resolveUserId(sess.metadata?.supabase_user_id, custId);
-        if (userId && sess.subscription) {
+        const sess   = event.data.object as Stripe.Checkout.Session;
+        const custId = typeof sess.customer === "string" ? sess.customer : undefined;
+        const userId = await resolveUserId(sess.metadata?.supabase_user_id, custId);
+        if (!userId) break;
+
+        // ── One-time credit purchase ──────────────────────────────────────────
+        if (sess.metadata?.credit_package_id) {
+          const aiCredits         = parseInt(sess.metadata.ai_credits         ?? "0", 10);
+          const revelationCredits = parseInt(sess.metadata.revelation_credits ?? "0", 10);
+          void addOneTimeCredits(userId, aiCredits, revelationCredits);
+          break;
+        }
+
+        // ── Subscription checkout ─────────────────────────────────────────────
+        if (sess.subscription) {
           const stripe      = getStripe();
           const priceToplan = await buildPriceToplanMap();
           // Expand items so we can resolve plan from price IDs (portal upgrades have no metadata)

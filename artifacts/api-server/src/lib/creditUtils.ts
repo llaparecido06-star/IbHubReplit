@@ -138,6 +138,71 @@ export async function applyPlanChangeToCredits(userId: string): Promise<{
   return { credits_remaining: newRemaining, credits_total: newTotal, changed: true };
 }
 
+/**
+ * Adds one-time (avulso) credits to both AI search and reveal credit balances.
+ * These credits do NOT affect credits_total or period_start —
+ * they are additive on top of the user's current monthly quota.
+ *
+ * Call after a confirmed one-time Stripe payment (mode: "payment").
+ */
+export async function addOneTimeCredits(
+  userId: string,
+  aiCredits: number,
+  revelationCredits: number,
+): Promise<void> {
+  const now = new Date().toISOString();
+
+  if (aiCredits > 0) {
+    const { data: existing } = await supabaseAdmin
+      .from("ai_search_credits")
+      .select("credits_remaining, credits_total")
+      .eq("user_id", userId)
+      .maybeSingle() as { data: { credits_remaining: number; credits_total: number } | null };
+
+    if (!existing) {
+      const planTotal = await getPlanCreditsForUser(userId);
+      await supabaseAdmin.from("ai_search_credits").insert({
+        user_id:           userId,
+        credits_remaining: planTotal + aiCredits,
+        credits_total:     planTotal,
+        period_start:      currentPeriodStart(),
+      });
+    } else {
+      await supabaseAdmin
+        .from("ai_search_credits")
+        .update({ credits_remaining: existing.credits_remaining + aiCredits, updated_at: now })
+        .eq("user_id", userId);
+    }
+  }
+
+  if (revelationCredits > 0) {
+    const period = currentPeriodStart();
+    const { data: existing } = await supabaseAdmin
+      .from("bi_reveal_credits")
+      .select("credits_remaining, credits_total, period_start")
+      .eq("user_id", userId)
+      .maybeSingle() as {
+        data: { credits_remaining: number; credits_total: number; period_start: string } | null;
+      };
+
+    if (!existing) {
+      await supabaseAdmin.from("bi_reveal_credits").insert({
+        user_id:           userId,
+        credits_remaining: revelationCredits,
+        credits_total:     0,
+        period_start:      period,
+      });
+    } else {
+      await supabaseAdmin
+        .from("bi_reveal_credits")
+        .update({ credits_remaining: existing.credits_remaining + revelationCredits, updated_at: now })
+        .eq("user_id", userId);
+    }
+  }
+
+  logger.info({ userId, aiCredits, revelationCredits }, "creditUtils: one-time credits added");
+}
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 function currentPeriodStart(): string {

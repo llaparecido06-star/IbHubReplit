@@ -19,6 +19,8 @@ import {
   fetchBiImportadores, fetchBiExportadores, fetchBiProdutores,
 } from "@/services/api";
 import { formatRelativeDate as timeAgo } from "@/utils/dateUtils";
+import { usePlans } from "@/hooks/usePlans";
+import { CreditShopModal } from "@/components/CreditShopModal";
 
 const GOLD   = "#c9a84c";
 const NAVY   = "#0d1b2a";
@@ -2715,13 +2717,84 @@ function LockedBlock({ title }: { title: string }) {
 
 type SearchMode = "exportador" | "marca" | "importadores" | "produtores" | "precos";
 
+/* ─── Low Credits Card ───────────────────────────────────────────── */
+function LowCreditsCard({
+  credits,
+  revealCredits,
+  showReveal,
+  onBuyCredits,
+  nextPlanName,
+  nextPlanUrl,
+}: {
+  credits: number | null;
+  revealCredits: number | null;
+  showReveal: boolean;
+  onBuyCredits: () => void;
+  nextPlanName: string | null;
+  nextPlanUrl: string;
+}) {
+  const aiLow     = credits !== null && credits <= 3;
+  const revealLow = showReveal && revealCredits !== null && revealCredits <= 3;
+  if (!aiLow && !revealLow) return null;
+
+  return (
+    <div style={{ backgroundColor: `${GOLD}09`, border: `1px solid ${GOLD}40`, borderRadius: 14, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: `${GOLD}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>⚡</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Créditos baixos</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {aiLow && credits !== null && (
+              <span style={{ fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 20, backgroundColor: credits === 0 ? "#fef2f2" : "#fef9ee", color: credits === 0 ? "#dc2626" : "#d97706" }}>
+                ⚡ {credits === 0 ? "Sem créditos IA" : `${credits} crédito${credits === 1 ? "" : "s"} IA restante${credits === 1 ? "" : "s"}`}
+              </span>
+            )}
+            {revealLow && revealCredits !== null && (
+              <span style={{ fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 20, backgroundColor: revealCredits === 0 ? "#fef2f2" : "#fef9ee", color: revealCredits === 0 ? "#dc2626" : "#d97706" }}>
+                🔓 {revealCredits === 0 ? "Sem revelações" : `${revealCredits} revelação${revealCredits === 1 ? "" : "ões"} restante${revealCredits === 1 ? "" : "s"}`}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button
+          onClick={onBuyCredits}
+          style={{ padding: "8px 18px", borderRadius: 10, backgroundColor: GOLD, border: "none", color: NAVY, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}
+        >
+          🛒 Comprar créditos
+        </button>
+        {nextPlanName && (
+          <a
+            href={nextPlanUrl}
+            style={{ padding: "8px 18px", borderRadius: 10, border: `1px solid ${NAVY}30`, backgroundColor: WHITE, color: NAVY, fontWeight: 600, fontSize: 13, textDecoration: "none", display: "flex", alignItems: "center", gap: 6 }}
+          >
+            ⬆️ Fazer upgrade
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) {
   const { hasFeature } = usePermissions();
   const { hasNewPost, checkForNewPosts, markFeedSeen } = useMarketFeedBadge();
+  const { profile } = useAuth();
+  const { paidPlans } = usePlans();
   const [subTab, setSubTab] = useState<"feed" | "search">("feed");
   const [searchMode, setSearchMode] = useState<SearchMode>("exportador");
+  const [showCreditShop, setShowCreditShop] = useState(false);
   const { credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal } = useCredits(userId);
   const { revealCredits, revealCreditsTotal, revealCreditsLoading, setRevealCredits, setRevealCreditsTotal } = useRevealCredits(userId);
+
+  const currentPlanId = profile?.plan ?? "gratuito";
+  const currentPlanIdx = paidPlans.findIndex(p => p.id === currentPlanId);
+  const nextPlan = currentPlanIdx >= 0 && currentPlanIdx < paidPlans.length - 1
+    ? paidPlans[currentPlanIdx + 1]
+    : currentPlanIdx === -1 && paidPlans.length > 0
+      ? paidPlans[0]
+      : null;
   const [posts, setPosts] = useState<MarketPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -2924,6 +2997,20 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
       {subTab === "search" && (
         <CreditsBar credits={credits} creditsTotal={creditsTotal} loading={creditsLoading} />
       )}
+
+      {/* Low credits contextual card */}
+      {subTab === "search" && !creditsLoading && !revealCreditsLoading && (
+        <LowCreditsCard
+          credits={credits}
+          revealCredits={revealCredits}
+          showReveal={searchMode === "exportador" || searchMode === "precos"}
+          onBuyCredits={() => setShowCreditShop(true)}
+          nextPlanName={nextPlan?.name ?? null}
+          nextPlanUrl={nextPlan ? `/assinar?plano=${nextPlan.id}` : "/assinar"}
+        />
+      )}
+
+      {showCreditShop && <CreditShopModal onClose={() => setShowCreditShop(false)} />}
 
       {/* Search section — flat 4 mode buttons */}
       {subTab === "search" && (
