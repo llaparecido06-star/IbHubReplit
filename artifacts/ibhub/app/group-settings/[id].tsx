@@ -152,7 +152,7 @@ export default function GroupSettingsScreen() {
     });
     if (result.canceled || !result.assets[0]) return;
     setUpdating(true);
-    const url = await uploadGroupAvatar(result.assets[0].uri, userId, id);
+    const url = await uploadGroupAvatar(result.assets[0].uri, userId, id, result.assets[0].mimeType ?? undefined);
     if (url) {
       await supabase.from("groups").update({ avatar_url: url }).eq("id", id);
       setGroup(prev => ({ ...prev, avatar_url: url }));

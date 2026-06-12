@@ -73,10 +73,10 @@ export async function fetchGroups(userId: string, activeCompanyId?: string | nul
   }
 }
 
-export async function uploadGroupAvatar(imageUri: string, userId: string, groupId: string): Promise<string | null> {
+export async function uploadGroupAvatar(imageUri: string, userId: string, groupId: string, mimeType?: string): Promise<string | null> {
   try {
-    const ext = imageUri.split(".").pop()?.split("?")[0]?.toLowerCase() ?? "jpg";
-    const mime = ext === "png" ? "image/png" : "image/jpeg";
+    const mime = mimeType ?? (imageUri.split(".").pop()?.split("?")[0]?.toLowerCase() === "png" ? "image/png" : "image/jpeg");
+    const ext  = mime === "image/png" ? "png" : "jpg";
     const filename = `${userId}/groups/${groupId}.${ext}`;
     const response = await fetch(imageUri);
     const arrayBuffer = await response.arrayBuffer();

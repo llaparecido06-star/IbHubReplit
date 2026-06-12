@@ -55,7 +55,8 @@ export default function NewGroupScreen() {
   const [desc, setDesc]           = useState("");
   const [access, setAccess]       = useState<AccessType>("aberto");
   const [loading, setLoading]     = useState(false);
-  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [avatarUri, setAvatarUri]       = useState<string | null>(null);
+  const [avatarMime, setAvatarMime]     = useState<string | undefined>(undefined);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -76,6 +77,7 @@ export default function NewGroupScreen() {
     });
     if (!result.canceled && result.assets[0]) {
       setAvatarUri(result.assets[0].uri);
+      setAvatarMime(result.assets[0].mimeType ?? undefined);
     }
   };
 
@@ -103,7 +105,7 @@ export default function NewGroupScreen() {
     }
     // Upload avatar if selected
     if (avatarUri) {
-      const url = await uploadGroupAvatar(avatarUri, userId, group.id);
+      const url = await uploadGroupAvatar(avatarUri, userId, group.id, avatarMime);
       if (url) {
         await supabase.from("groups").update({ avatar_url: url }).eq("id", group.id);
       }
