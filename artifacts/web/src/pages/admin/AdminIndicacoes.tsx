@@ -616,6 +616,180 @@ function ParceirosTab() {
   );
 }
 
+// ── Add Representante Modal ───────────────────────────────────
+function AddRepresentanteModal({ open, onClose, existingIds, onAdded }: {
+  open: boolean;
+  onClose: () => void;
+  existingIds: string[];
+  onAdded: (rep: Representante) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<{ id: string; full_name: string | null; email: string | null; username: string | null; referral_code: string | null }[]>([]);
+  const [selected, setSelected] = useState<typeof results[0] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!open) { setQuery(""); setResults([]); setSelected(null); setError(null); }
+    else { setTimeout(() => inputRef.current?.focus(), 80); }
+  }, [open]);
+
+  const search = async () => {
+    const q = query.trim();
+    if (q.length < 2) return;
+    setSearching(true);
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, full_name, email, username, referral_code")
+      .or(`full_name.ilike.%${q}%,email.ilike.%${q}%,username.ilike.%${q}%`)
+      .limit(10);
+    setResults((data ?? []).filter(p => !existingIds.includes(p.id)));
+    setSearching(false);
+  };
+
+  // Generate a deterministic referral code from username + random suffix
+  const genCode = (username: string | null): string => {
+    const base = (username ?? "REP").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+    const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+    return `${base}${suffix}`;
+  };
+
+  const handleAdd = async () => {
+    if (!selected) return;
+    if (existingIds.includes(selected.id)) { setError("Esse usuário já é representante."); return; }
+    setSaving(true); setError(null);
+    try {
+      // Ensure referral code
+      let code = selected.referral_code;
+      if (!code) {
+        code = genCode(selected.username);
+        // Keep trying until unique
+        let attempt = 0;
+        while (attempt < 5) {
+          const { error: checkErr, data: existing } = await supabase.from("profiles").select("id").eq("referral_code", code).maybeSingle();
+          if (checkErr || !existing) break;
+          code = genCode(selected.username);
+          attempt++;
+        }
+        const { error: codeErr } = await supabase.from("profiles").update({ referral_code: code }).eq("id", selected.id);
+        if (codeErr) throw codeErr;
+      }
+      // Mark as designated representante (commission_override = 10 = base tier)
+      const { error: commErr } = await supabase.from("profiles").update({ commission_override: 10 }).eq("id", selected.id).is("commission_override", null);
+      if (commErr) throw commErr;
+
+      // Fetch final profile
+      const { data: profile, error: fetchErr } = await supabase.from("profiles").select("id, full_name, email, username, referral_code, commission_override, plan, created_at").eq("id", selected.id).single();
+      if (fetchErr) throw fetchErr;
+
+      onAdded({ id: profile.id, full_name: profile.full_name, email: profile.email, username: profile.username, referral_code: profile.referral_code, commission_override: profile.commission_override ?? null, plan: profile.plan ?? "gratuito", created_at: profile.created_at, referidos: [] });
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao adicionar representante");
+    } finally { setSaving(false); }
+  };
+
+  if (!open) return null;
+  return (
+    <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={onClose}>
+      <div style={{ backgroundColor: "#fff", borderRadius: 16, width: "100%", maxWidth: 480, padding: 28 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: NAVY }}>Novo Representante</div>
+            <div style={{ fontSize: 12, color: "#8a93a2", marginTop: 2 }}>Busque um perfil existente no IBHUB</div>
+          </div>
+          <button onClick={onClose} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 20, color: "#aaa" }}>✕</button>
+        </div>
+
+        {/* Search */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: 12, fontWeight: 700, color: NAVY, display: "block", marginBottom: 6 }}>Buscar perfil</label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ position: "relative", flex: 1 }}>
+              <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "#aaa", fontSize: 15 }}>🔍</span>
+              <input
+                ref={inputRef}
+                value={query}
+                onChange={e => { setQuery(e.target.value); setSelected(null); }}
+                onKeyDown={e => { if (e.key === "Enter") void search(); }}
+                placeholder="Nome, email ou @username..."
+                style={{ width: "100%", padding: "10px 12px 10px 34px", border: "1px solid #e8eaed", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box" }}
+              />
+            </div>
+            <button
+              onClick={() => { void search(); }}
+              disabled={searching || query.trim().length < 2}
+              style={{ padding: "10px 18px", backgroundColor: NAVY, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: query.trim().length < 2 ? 0.5 : 1 }}
+            >{searching ? "..." : "Buscar"}</button>
+          </div>
+        </div>
+
+        {/* Results */}
+        {results.length > 0 && (
+          <div style={{ border: "1px solid #e8eaed", borderRadius: 10, overflow: "hidden", marginBottom: 16 }}>
+            {results.map((p, i) => {
+              const isSel = selected?.id === p.id;
+              return (
+                <div key={p.id} onClick={() => setSelected(isSel ? null : p)}
+                  style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", cursor: "pointer", backgroundColor: isSel ? `${GOLD}12` : "#fff", borderBottom: i < results.length - 1 ? "1px solid #e8eaed" : "none", transition: "background 0.1s" }}>
+                  <Avatar name={p.full_name} email={p.email} size={34} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.full_name ?? p.username ?? "—"}</div>
+                    <div style={{ fontSize: 12, color: "#8a93a2", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.email ?? `@${p.username ?? ""}`}</div>
+                  </div>
+                  {p.referral_code && (
+                    <span style={{ fontSize: 10, fontWeight: 800, backgroundColor: `${GOLD}20`, color: GOLD, padding: "2px 7px", borderRadius: 4, fontFamily: "monospace", flexShrink: 0 }}>{p.referral_code}</span>
+                  )}
+                  <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${isSel ? GOLD : "#d1d5db"}`, backgroundColor: isSel ? GOLD : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.1s" }}>
+                    {isSel && <span style={{ color: "#fff", fontSize: 11, fontWeight: 900, lineHeight: 1 }}>✓</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {results.length === 0 && query.trim().length >= 2 && !searching && (
+          <div style={{ textAlign: "center", padding: "16px 0", color: "#aaa", fontSize: 13, marginBottom: 16 }}>Nenhum perfil encontrado.</div>
+        )}
+
+        {/* Selected preview */}
+        {selected && (
+          <div style={{ padding: "10px 14px", backgroundColor: `${NAVY}06`, border: `1px solid ${NAVY}20`, borderRadius: 10, marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+            <Avatar name={selected.full_name} email={selected.email} size={30} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{selected.full_name ?? selected.username}</div>
+              <div style={{ fontSize: 11, color: "#8a93a2" }}>{selected.email}</div>
+            </div>
+            <div style={{ fontSize: 11, color: "#8a93a2", textAlign: "right" }}>
+              {selected.referral_code
+                ? <span>Código: <span style={{ fontFamily: "monospace", fontWeight: 700, color: GOLD }}>{selected.referral_code}</span></span>
+                : <span style={{ color: "#f59e0b" }}>⚡ Código será gerado automaticamente</span>
+              }
+            </div>
+          </div>
+        )}
+
+        <div style={{ fontSize: 11, color: "#8a93a2", marginBottom: 16, padding: "8px 12px", backgroundColor: "#f9fafb", borderRadius: 8 }}>
+          💡 O usuário receberá comissão de <strong>10%</strong> (tier base). Você pode ajustar depois diretamente na lista.
+        </div>
+
+        {error && <div style={{ padding: "8px 12px", backgroundColor: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, fontSize: 12, color: "#dc2626", marginBottom: 12 }}>{error}</div>}
+
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ padding: "10px 20px", backgroundColor: "#f3f4f6", color: "#555", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancelar</button>
+          <button onClick={() => { void handleAdd(); }} disabled={saving || !selected}
+            style={{ padding: "10px 24px", backgroundColor: NAVY, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer", opacity: !selected ? 0.5 : 1 }}>
+            {saving ? "Adicionando..." : "Designar Representante"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Representantes Tab ────────────────────────────────────────
 function RepresentantesTab() {
   const [representantes, setRepresentantes] = useState<Representante[]>([]);
@@ -624,32 +798,48 @@ function RepresentantesTab() {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filterPlan, setFilterPlan] = useState<"all" | "paid" | "free">("all");
+  const [showAdd, setShowAdd] = useState(false);
 
   const load = async () => {
     setLoading(true); setError(null);
     try {
+      // 1. Profiles that have been invited by someone
       const { data: referidos, error: err1 } = await supabase
         .from("profiles")
         .select("id, full_name, email, username, plan, stripe_subscription_status, stripe_current_period_end, courtesy_until, created_at, invited_by_id")
         .not("invited_by_id", "is", null);
       if (err1) throw err1;
-      if (!referidos || referidos.length === 0) { setRepresentantes([]); setLoading(false); return; }
 
-      const inviterIds = [...new Set(referidos.map(r => r.invited_by_id as string))];
-      const { data: inviters, error: err2 } = await supabase
+      // 2. Profiles explicitly designated as representantes (commission_override IS NOT NULL)
+      const { data: designated, error: err2 } = await supabase
         .from("profiles")
         .select("id, full_name, email, username, referral_code, commission_override, plan, created_at")
-        .in("id", inviterIds);
+        .not("commission_override", "is", null);
       if (err2) throw err2;
 
+      // Build referidos map grouped by inviter
       const map = new Map<string, Referido[]>();
-      for (const r of referidos) {
+      for (const r of (referidos ?? [])) {
         const iid = r.invited_by_id as string;
         if (!map.has(iid)) map.set(iid, []);
         map.get(iid)!.push({ id: r.id, full_name: r.full_name, email: r.email, username: r.username, plan: r.plan ?? "gratuito", stripe_subscription_status: r.stripe_subscription_status, stripe_current_period_end: r.stripe_current_period_end, courtesy_until: r.courtesy_until, created_at: r.created_at });
       }
 
-      const result: Representante[] = (inviters ?? []).map(inv => ({
+      // Union: inviters with referidos + explicitly designated
+      const inviterIds = new Set([...map.keys()]);
+      const allIds = new Set<string>([...inviterIds]);
+      for (const d of (designated ?? [])) allIds.add(d.id);
+
+      if (allIds.size === 0) { setRepresentantes([]); setLoading(false); return; }
+
+      // Fetch full profiles for all representantes
+      const { data: repProfiles, error: err3 } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, username, referral_code, commission_override, plan, created_at")
+        .in("id", [...allIds]);
+      if (err3) throw err3;
+
+      const result: Representante[] = (repProfiles ?? []).map(inv => ({
         id: inv.id, full_name: inv.full_name, email: inv.email, username: inv.username,
         referral_code: inv.referral_code, commission_override: inv.commission_override ?? null,
         plan: inv.plan ?? "gratuito", created_at: inv.created_at,
@@ -697,6 +887,10 @@ function RepresentantesTab() {
             <div style={{ fontSize: 12, color: "#8a93a2", marginTop: 4 }}>{c.label}</div>
           </div>
         ))}
+        <div style={{ backgroundColor: "#fff", border: `2px dashed ${GOLD}60`, borderRadius: 12, padding: "16px 18px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", gap: 6 }} onClick={() => setShowAdd(true)}>
+          <div style={{ fontSize: 24 }}>＋</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: GOLD }}>Novo Representante</div>
+        </div>
       </div>
 
       {/* Search + filter */}
