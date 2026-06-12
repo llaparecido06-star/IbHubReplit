@@ -196,16 +196,16 @@ export default function GroupChatScreen() {
       );
     }
 
-    const [convRes, partRes, groupRes, msgs, clearedAt] = await Promise.all([
+    const [convRes, memberCountRes, groupRes, msgs, clearedAt] = await Promise.all([
       supabase.from("conversations").select("id, name").eq("id", id).maybeSingle(),
-      supabase.from("conversation_participants").select("user_id").eq("conversation_id", id),
+      supabase.from("group_members").select("user_id", { count: "exact", head: true }).eq("group_id", id).neq("role", "pending"),
       supabase.from("groups").select("name, avatar_url, owner_id").eq("id", id).maybeSingle(),
       API.fetchMessages(id, user.id),
       API.fetchGroupHistoryClearedAt(id, user.id),
     ]);
 
     const convName = (convRes.data as any)?.name ?? (groupRes.data as any)?.name ?? t("group_chat_screen.group_label");
-    const memberCount = (partRes.data ?? []).length;
+    const memberCount = memberCountRes.count ?? 0;
     setGroupInfo({
       name: convName,
       member_count: memberCount,
