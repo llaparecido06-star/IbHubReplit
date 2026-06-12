@@ -2725,6 +2725,7 @@ function LowCreditsCard({
   onBuyCredits,
   nextPlanName,
   nextPlanUrl,
+  nextPlanAiCredits,
 }: {
   credits: number | null;
   revealCredits: number | null;
@@ -2732,6 +2733,7 @@ function LowCreditsCard({
   onBuyCredits: () => void;
   nextPlanName: string | null;
   nextPlanUrl: string;
+  nextPlanAiCredits?: number | null;
 }) {
   const aiLow     = credits !== null && credits <= 3;
   const revealLow = showReveal && revealCredits !== null && revealCredits <= 3;
@@ -2769,7 +2771,7 @@ function LowCreditsCard({
             href={nextPlanUrl}
             style={{ padding: "8px 18px", borderRadius: 10, border: `1px solid ${NAVY}30`, backgroundColor: WHITE, color: NAVY, fontWeight: 600, fontSize: 13, textDecoration: "none", display: "flex", alignItems: "center", gap: 6 }}
           >
-            ⬆️ Fazer upgrade
+            ⬆️ Upgrade para {nextPlanName}{nextPlanAiCredits != null ? ` — ${nextPlanAiCredits} créditos IA/mês` : ""}
           </a>
         )}
       </div>
@@ -3007,6 +3009,7 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
           onBuyCredits={() => setShowCreditShop(true)}
           nextPlanName={nextPlan?.name ?? null}
           nextPlanUrl={nextPlan ? `/assinar?plano=${nextPlan.id}` : "/assinar"}
+          nextPlanAiCredits={nextPlan?.ai_search_credits ?? null}
         />
       )}
 

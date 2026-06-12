@@ -13,6 +13,8 @@ export interface DbPlan {
   sort_order: number;
   stripe_price_id: string | null;
   delivery_strategy?: string | null;
+  ai_search_credits?: number | null;
+  reveal_credits?: number | null;
 }
 
 export function formatPlanPrice(plan: DbPlan): { main: string; period?: string } {

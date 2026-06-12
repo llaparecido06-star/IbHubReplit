@@ -1,6 +1,7 @@
--- Migration: credit_packages table
+-- Migration: credit_packages + credit_purchase_log tables
 -- Run this in the Supabase SQL editor (Settings → SQL Editor)
 -- to enable one-time (avulso) AI credit purchases.
+-- Both tables must be created for the feature to work correctly.
 
 CREATE TABLE IF NOT EXISTS credit_packages (
   id                text         PRIMARY KEY,
@@ -25,7 +26,7 @@ VALUES
   ('elite',         'Pacote Elite',         50, 10,120000, 6)
 ON CONFLICT (id) DO NOTHING;
 
--- Enable Row Level Security
+-- Enable Row Level Security on credit_packages
 ALTER TABLE credit_packages ENABLE ROW LEVEL SECURITY;
 
 -- Anyone (including anonymous) can read active packages (for pricing display)
@@ -33,3 +34,18 @@ DROP POLICY IF EXISTS "Public can read active credit packages" ON credit_package
 CREATE POLICY "Public can read active credit packages"
   ON credit_packages FOR SELECT
   USING (active = true);
+
+-- ─── credit_purchase_log ───────────────────────────────────────────────────────
+-- Stores processed Stripe checkout session IDs to prevent double-crediting
+-- when Stripe retries webhook delivery.
+CREATE TABLE IF NOT EXISTS credit_purchase_log (
+  id                   bigserial    PRIMARY KEY,
+  checkout_session_id  text         NOT NULL UNIQUE,   -- Stripe cs_xxx id
+  user_id              uuid         NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  credited_at          timestamptz  NOT NULL DEFAULT now()
+);
+
+-- Only service role (server) should write; no client access needed
+ALTER TABLE credit_purchase_log ENABLE ROW LEVEL SECURITY;
+-- No SELECT/INSERT policies: only the service-role key (used in the API server)
+-- can access this table — client-side users have no access.

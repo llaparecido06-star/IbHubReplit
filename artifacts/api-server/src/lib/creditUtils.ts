@@ -28,6 +28,34 @@ const CREDITS_FALLBACK: Record<string, number> = {
   exclusive:    25,
 };
 
+const REVEAL_CREDITS_FALLBACK: Record<string, number> = {
+  gratuito: 0, free: 0, basico: 0, profissional: 0,
+  premium: 3, empresa: 5, empresas: 5, business: 5,
+  executivo: 15, exclusive: 15,
+};
+
+/**
+ * Returns how many reveal credits the user's current plan grants per month.
+ * Mirrors the logic in wineImports.ts getRevealPlanCredits to stay in sync.
+ */
+async function getRevealPlanCreditCount(userId: string): Promise<number> {
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("plan, reveal_credits_override")
+    .eq("id", userId)
+    .maybeSingle() as { data: { plan?: string | null; reveal_credits_override?: number | null } | null };
+  const override = profile?.reveal_credits_override;
+  if (override != null) return override;
+  const planId = (profile?.plan ?? "free").toLowerCase();
+  const { data: planRow } = await supabaseAdmin
+    .from("plans")
+    .select("reveal_credits")
+    .eq("id", planId)
+    .maybeSingle() as { data: { reveal_credits?: number | null } | null };
+  if (typeof planRow?.reveal_credits === "number") return planRow.reveal_credits;
+  return REVEAL_CREDITS_FALLBACK[planId] ?? 0;
+}
+
 /** Returns how many AI search credits the user's current plan grants per month. */
 export async function getPlanCreditsForUser(userId: string): Promise<number> {
   const { data: profile } = await supabaseAdmin
@@ -186,10 +214,12 @@ export async function addOneTimeCredits(
       };
 
     if (!existing) {
+      // Use the user's plan-based quota as the base total so monthly entitlement is preserved
+      const planTotal = await getRevealPlanCreditCount(userId);
       await supabaseAdmin.from("bi_reveal_credits").insert({
         user_id:           userId,
-        credits_remaining: revelationCredits,
-        credits_total:     0,
+        credits_remaining: planTotal + revelationCredits,
+        credits_total:     planTotal,
         period_start:      period,
       });
     } else {

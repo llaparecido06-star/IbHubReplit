@@ -456,9 +456,31 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
 
         // ── One-time credit purchase ──────────────────────────────────────────
         if (sess.metadata?.credit_package_id) {
+          // Require confirmed payment before granting credits
+          if (sess.payment_status !== "paid") {
+            req.log.warn({ sessionId: sess.id, payment_status: sess.payment_status },
+              "credit checkout session not yet paid — deferring to async_payment_succeeded");
+            break;
+          }
+
+          // Idempotency: insert the session ID; if it conflicts we've already credited this purchase
+          const { data: inserted } = await supabaseAdmin
+            .from("credit_purchase_log")
+            .upsert(
+              { checkout_session_id: sess.id, user_id: userId },
+              { onConflict: "checkout_session_id", ignoreDuplicates: true },
+            )
+            .select("checkout_session_id");
+
+          if (!inserted || inserted.length === 0) {
+            req.log.info({ sessionId: sess.id }, "credit purchase already processed — skipping duplicate webhook");
+            break;
+          }
+
           const aiCredits         = parseInt(sess.metadata.ai_credits         ?? "0", 10);
           const revelationCredits = parseInt(sess.metadata.revelation_credits ?? "0", 10);
-          void addOneTimeCredits(userId, aiCredits, revelationCredits);
+          await addOneTimeCredits(userId, aiCredits, revelationCredits);
+          req.log.info({ sessionId: sess.id, userId, aiCredits, revelationCredits }, "one-time credits granted");
           break;
         }
 
@@ -481,6 +503,35 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
           await supabaseAdmin.from("profiles").update(update).eq("id", userId);
           // Adjust AI credits immediately so the user doesn't wait for next month's reset
           if (plan) void applyPlanChangeToCredits(userId);
+        }
+        break;
+      }
+
+      // Delayed payment methods (e.g. boleto) complete asynchronously — same credit logic
+      case "checkout.session.async_payment_succeeded": {
+        const sess   = event.data.object as Stripe.Checkout.Session;
+        const custId = typeof sess.customer === "string" ? sess.customer : undefined;
+        const userId = await resolveUserId(sess.metadata?.supabase_user_id, custId);
+        if (!userId) break;
+
+        if (sess.metadata?.credit_package_id) {
+          const { data: inserted } = await supabaseAdmin
+            .from("credit_purchase_log")
+            .upsert(
+              { checkout_session_id: sess.id, user_id: userId },
+              { onConflict: "checkout_session_id", ignoreDuplicates: true },
+            )
+            .select("checkout_session_id");
+
+          if (!inserted || inserted.length === 0) {
+            req.log.info({ sessionId: sess.id }, "async credit purchase already processed — skipping");
+            break;
+          }
+
+          const aiCredits         = parseInt(sess.metadata.ai_credits         ?? "0", 10);
+          const revelationCredits = parseInt(sess.metadata.revelation_credits ?? "0", 10);
+          await addOneTimeCredits(userId, aiCredits, revelationCredits);
+          req.log.info({ sessionId: sess.id, userId, aiCredits, revelationCredits }, "async one-time credits granted");
         }
         break;
       }
