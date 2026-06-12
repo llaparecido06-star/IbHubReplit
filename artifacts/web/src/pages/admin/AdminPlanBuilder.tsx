@@ -242,6 +242,8 @@ interface Plan {
   stripe_price_id?: string | null;
   stripe_price_id_annual_onetime?: string | null;
   stripe_price_id_annual_recurring?: string | null;
+  price_cents_annual_onetime?: number | null;
+  price_cents_annual_recurring?: number | null;
   ai_search_credits?: number | null;
   reveal_credits?: number | null;
 }
@@ -261,6 +263,7 @@ interface ModalState {
   name: string; subtitle: string; description: string;
   price: string; originalPrice: string; stripeId: string;
   stripeIdAnnualOnetime: string; stripeIdAnnualRecurring: string;
+  priceAnnualOnetime: string; priceAnnualRecurring: string;
   aiCredits: string; revealCredits: string; delivery: string; features: string[];
 }
 
@@ -285,6 +288,8 @@ function planToModal(p: Plan): ModalState {
     stripeId: p.stripe_price_id ?? "",
     stripeIdAnnualOnetime: p.stripe_price_id_annual_onetime ?? "",
     stripeIdAnnualRecurring: p.stripe_price_id_annual_recurring ?? "",
+    priceAnnualOnetime: p.price_cents_annual_onetime ? String(p.price_cents_annual_onetime / 100) : "",
+    priceAnnualRecurring: p.price_cents_annual_recurring ? String(p.price_cents_annual_recurring / 100) : "",
     aiCredits: String(p.ai_search_credits ?? 0),
     revealCredits: String(p.reveal_credits ?? 0),
     delivery: p.delivery_strategy ?? "NONE",
@@ -307,6 +312,7 @@ export default function AdminPlanBuilder() {
   const [modal, setModal] = useState<ModalState>({
     name: "", subtitle: "", description: "", price: "0", originalPrice: "",
     stripeId: "", stripeIdAnnualOnetime: "", stripeIdAnnualRecurring: "",
+    priceAnnualOnetime: "", priceAnnualRecurring: "",
     aiCredits: "0", revealCredits: "0", delivery: "NONE", features: [],
   });
   const [saving, setSaving] = useState(false);
@@ -351,7 +357,7 @@ export default function AdminPlanBuilder() {
 
   const openNew = () => {
     setEditPlan(null);
-    setModal({ name: "", subtitle: "", description: "", price: "0", originalPrice: "", stripeId: "", stripeIdAnnualOnetime: "", stripeIdAnnualRecurring: "", aiCredits: "0", revealCredits: "0", delivery: "NONE", features: [] });
+    setModal({ name: "", subtitle: "", description: "", price: "0", originalPrice: "", stripeId: "", stripeIdAnnualOnetime: "", stripeIdAnnualRecurring: "", priceAnnualOnetime: "", priceAnnualRecurring: "", aiCredits: "0", revealCredits: "0", delivery: "NONE", features: [] });
     setSaveMsg(null);
     setShowModal(true);
   };
@@ -406,6 +412,8 @@ export default function AdminPlanBuilder() {
       stripe_price_id: modal.stripeId.trim() || null,
       stripe_price_id_annual_onetime: modal.stripeIdAnnualOnetime.trim() || null,
       stripe_price_id_annual_recurring: modal.stripeIdAnnualRecurring.trim() || null,
+      price_cents_annual_onetime: parsePrice(modal.priceAnnualOnetime) || null,
+      price_cents_annual_recurring: parsePrice(modal.priceAnnualRecurring) || null,
       ai_search_credits: parseInt(modal.aiCredits) || 0,
       reveal_credits: parseInt(modal.revealCredits) || 0,
       delivery_strategy: modal.delivery,
@@ -576,16 +584,35 @@ export default function AdminPlanBuilder() {
                   ⚠️ Stripe Price ID inválido — deve começar com "price_"
                 </div>
               )}
-              {inp("STRIPE PRICE ID ANUAL ÚNICO", "stripeIdAnnualOnetime", "price_...", "Pagamento único anual (Profissional/Exclusivo/Enterprise). Cria sessão mode: payment.")}
+              {/* Annual one-time */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, alignItems: "end" }}>
+                <div style={{ flex: 1 }}>{inp("STRIPE PRICE ID ANUAL ÚNICO", "stripeIdAnnualOnetime", "price_...", "Pagamento único anual. Cria sessão mode: payment.")}</div>
+                <div style={{ width: 140, paddingBottom: 12 }}>{inp("PREÇO ANUAL ÚNICO (R$)", "priceAnnualOnetime", "Ex: 1499.90", "Exibição — ex: R$ 1.499,90/ano")}</div>
+              </div>
               {modal.stripeIdAnnualOnetime && !modal.stripeIdAnnualOnetime.startsWith("price_") && (
                 <div style={{ padding: "8px 12px", backgroundColor: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, fontSize: 12, color: "#dc2626", marginTop: -8, marginBottom: 12 }}>
                   ⚠️ Price ID anual único inválido — deve começar com "price_"
                 </div>
               )}
-              {inp("STRIPE PRICE ID ANUAL RECORRENTE", "stripeIdAnnualRecurring", "price_...", "Somente Enterprise. Assinatura mensal recorrente com fidelidade anual (R$ 750/mês).")}
+              {modal.priceAnnualOnetime && parsePrice(modal.priceAnnualOnetime) > 0 && (
+                <div style={{ padding: "6px 12px", backgroundColor: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, fontSize: 12, color: "#059669", marginTop: -8, marginBottom: 12 }}>
+                  💰 {centsToStr(parsePrice(modal.priceAnnualOnetime))}/ano
+                </div>
+              )}
+
+              {/* Annual recurring */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, alignItems: "end" }}>
+                <div style={{ flex: 1 }}>{inp("STRIPE PRICE ID ANUAL RECORRENTE", "stripeIdAnnualRecurring", "price_...", "Assinatura mensal com fidelidade anual.")}</div>
+                <div style={{ width: 140, paddingBottom: 12 }}>{inp("PREÇO/MÊS RECORRENTE (R$)", "priceAnnualRecurring", "Ex: 750.00", "Valor mensal — ex: R$ 750,00/mês")}</div>
+              </div>
               {modal.stripeIdAnnualRecurring && !modal.stripeIdAnnualRecurring.startsWith("price_") && (
                 <div style={{ padding: "8px 12px", backgroundColor: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, fontSize: 12, color: "#dc2626", marginTop: -8, marginBottom: 12 }}>
                   ⚠️ Price ID anual recorrente inválido — deve começar com "price_"
+                </div>
+              )}
+              {modal.priceAnnualRecurring && parsePrice(modal.priceAnnualRecurring) > 0 && (
+                <div style={{ padding: "6px 12px", backgroundColor: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, fontSize: 12, color: "#059669", marginTop: -8, marginBottom: 12 }}>
+                  💰 {centsToStr(parsePrice(modal.priceAnnualRecurring))}/mês
                 </div>
               )}
             </div>
