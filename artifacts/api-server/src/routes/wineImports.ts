@@ -40,9 +40,37 @@ const CREDITS_FALLBACK: Record<string, number> = {
   exclusive:    25,
 };
 
-function currentPeriodStart(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+/**
+ * Compute the ISO date string (YYYY-MM-DD) for the start of the current
+ * billing period, anchored to the user's subscription renewal day.
+ *
+ * @param billingDay  Day-of-month when the subscription renews (1–31).
+ *                    NULL or undefined → defaults to 1 (free users, 1st of month).
+ *
+ * Example: billingDay=15, today=June 20 → "2026-06-15"
+ *          billingDay=15, today=June 10 → "2026-05-15"
+ *          billingDay=31, today=March 5 → "2026-02-28" (clamped to Feb)
+ */
+function currentPeriodStart(billingDay?: number | null): string {
+  const now      = new Date();
+  const todayDay = now.getUTCDate();
+  const anchor   = billingDay && billingDay >= 1 && billingDay <= 31 ? billingDay : 1;
+  const year     = now.getUTCFullYear();
+  const month    = now.getUTCMonth(); // 0-indexed
+
+  if (todayDay >= anchor) {
+    // Period started this month on the anchor day
+    const daysInMonth  = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const effectiveDay = Math.min(anchor, daysInMonth);
+    return `${year}-${String(month + 1).padStart(2, "0")}-${String(effectiveDay).padStart(2, "0")}`;
+  } else {
+    // Period started last month on the anchor day
+    const prevMonth    = month === 0 ? 11 : month - 1;
+    const prevYear     = month === 0 ? year - 1 : year;
+    const daysInPrev   = new Date(Date.UTC(prevYear, prevMonth + 1, 0)).getUTCDate();
+    const effectiveDay = Math.min(anchor, daysInPrev);
+    return `${prevYear}-${String(prevMonth + 1).padStart(2, "0")}-${String(effectiveDay).padStart(2, "0")}`;
+  }
 }
 
 async function getPlanCredits(userId: string): Promise<number> {
@@ -72,13 +100,14 @@ async function getOrCreateCredits(userId: string): Promise<{
   credits_total: number;
   period_start: string;
 }> {
-  const period = currentPeriodStart();
-
-  const { data: existing } = await supabaseAdmin
-    .from("ai_search_credits")
-    .select("credits_remaining, credits_total, period_start")
-    .eq("user_id", userId)
-    .single();
+  // Fetch billing_day and existing credit row in parallel
+  const [billingDayRes, creditsRes] = await Promise.all([
+    supabaseAdmin.from("profiles").select("billing_day").eq("id", userId).maybeSingle(),
+    supabaseAdmin.from("ai_search_credits").select("credits_remaining, credits_total, period_start").eq("user_id", userId).single(),
+  ]);
+  const billingDay = (billingDayRes.data as { billing_day: number | null } | null)?.billing_day ?? null;
+  const period = currentPeriodStart(billingDay);
+  const existing = creditsRes.data;
 
   if (!existing) {
     const total = await getPlanCredits(userId);
@@ -681,12 +710,13 @@ async function getRevealPlanCredits(userId: string): Promise<number> {
 }
 
 async function getOrCreateRevealCredits(userId: string): Promise<{ credits_remaining: number; credits_total: number; period_start: string }> {
-  const period = currentPeriodStart();
-  const { data: existing } = await supabaseAdmin
-    .from("bi_reveal_credits")
-    .select("credits_remaining, credits_total, period_start")
-    .eq("user_id", userId)
-    .single();
+  const [billingDayRes, creditsRes] = await Promise.all([
+    supabaseAdmin.from("profiles").select("billing_day").eq("id", userId).maybeSingle(),
+    supabaseAdmin.from("bi_reveal_credits").select("credits_remaining, credits_total, period_start").eq("user_id", userId).single(),
+  ]);
+  const billingDay = (billingDayRes.data as { billing_day: number | null } | null)?.billing_day ?? null;
+  const period = currentPeriodStart(billingDay);
+  const existing = creditsRes.data;
   if (!existing) {
     const total = await getRevealPlanCredits(userId);
     await supabaseAdmin.from("bi_reveal_credits").insert({

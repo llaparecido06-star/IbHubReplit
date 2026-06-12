@@ -97,7 +97,10 @@ export async function applyPlanChangeToCredits(userId: string): Promise<{
   credits_total: number;
   changed: boolean;
 }> {
-  const newTotal = await getPlanCreditsForUser(userId);
+  const [newTotal, billingDay] = await Promise.all([
+    getPlanCreditsForUser(userId),
+    getBillingDayForUser(userId),
+  ]);
 
   const { data: existing } = await supabaseAdmin
     .from("ai_search_credits")
@@ -107,7 +110,7 @@ export async function applyPlanChangeToCredits(userId: string): Promise<{
       data: { credits_remaining: number; credits_total: number } | null;
     };
 
-  const periodStart = currentPeriodStart();
+  const periodStart = currentPeriodStart(billingDay);
 
   // No row yet — create it with the full new-plan credit amount
   if (!existing) {
@@ -179,6 +182,7 @@ export async function addOneTimeCredits(
   revelationCredits: number,
 ): Promise<void> {
   const now = new Date().toISOString();
+  const billingDay = await getBillingDayForUser(userId);
 
   if (aiCredits > 0) {
     const { data: existing } = await supabaseAdmin
@@ -193,7 +197,7 @@ export async function addOneTimeCredits(
         user_id:           userId,
         credits_remaining: planTotal + aiCredits,
         credits_total:     planTotal,
-        period_start:      currentPeriodStart(),
+        period_start:      currentPeriodStart(billingDay),
       });
     } else {
       await supabaseAdmin
@@ -204,7 +208,7 @@ export async function addOneTimeCredits(
   }
 
   if (revelationCredits > 0) {
-    const period = currentPeriodStart();
+    const period = currentPeriodStart(billingDay);
     const { data: existing } = await supabaseAdmin
       .from("bi_reveal_credits")
       .select("credits_remaining, credits_total, period_start")
@@ -235,9 +239,39 @@ export async function addOneTimeCredits(
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-function currentPeriodStart(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+/**
+ * Compute the ISO date (YYYY-MM-DD) for the start of the current billing period,
+ * anchored to the user's subscription renewal day.
+ * billingDay = null/undefined → 1st of month (free users).
+ */
+function currentPeriodStart(billingDay?: number | null): string {
+  const now      = new Date();
+  const todayDay = now.getUTCDate();
+  const anchor   = billingDay && billingDay >= 1 && billingDay <= 31 ? billingDay : 1;
+  const year     = now.getUTCFullYear();
+  const month    = now.getUTCMonth();
+
+  if (todayDay >= anchor) {
+    const daysInMonth  = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const effectiveDay = Math.min(anchor, daysInMonth);
+    return `${year}-${String(month + 1).padStart(2, "0")}-${String(effectiveDay).padStart(2, "0")}`;
+  } else {
+    const prevMonth    = month === 0 ? 11 : month - 1;
+    const prevYear     = month === 0 ? year - 1 : year;
+    const daysInPrev   = new Date(Date.UTC(prevYear, prevMonth + 1, 0)).getUTCDate();
+    const effectiveDay = Math.min(anchor, daysInPrev);
+    return `${prevYear}-${String(prevMonth + 1).padStart(2, "0")}-${String(effectiveDay).padStart(2, "0")}`;
+  }
+}
+
+/** Fetch the billing anchor day for a user from their profile. Returns null for free users. */
+async function getBillingDayForUser(userId: string): Promise<number | null> {
+  const { data } = await supabaseAdmin
+    .from("profiles")
+    .select("billing_day")
+    .eq("id", userId)
+    .maybeSingle() as { data: { billing_day: number | null } | null };
+  return data?.billing_day ?? null;
 }
 
 async function sendPlanChangePush(

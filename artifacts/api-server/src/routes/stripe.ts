@@ -59,6 +59,20 @@ function getPeriodEnd(sub: Stripe.Subscription): string | null {
 }
 
 /**
+ * Extract the billing anchor day-of-month (1–31) from a Stripe subscription.
+ * Uses billing_cycle_anchor (unix timestamp) which Stripe preserves across upgrades.
+ * Falls back to current_period_start if anchor is absent.
+ * Returns null if neither field is available (safe — callers default to 1st of month).
+ */
+function getBillingDay(sub: Stripe.Subscription): number | null {
+  const anchor = (sub as any).billing_cycle_anchor as number | undefined;
+  const ts = typeof anchor === "number" && isFinite(anchor) ? anchor : null;
+  if (!ts) return null;
+  // Use UTC date — consistent with how Stripe stores timestamps
+  return new Date(ts * 1000).getUTCDate();
+}
+
+/**
  * Determine the plan from a Stripe subscription's price items.
  *
  * Priority:
@@ -707,12 +721,14 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
           const sub  = await stripe.subscriptions.retrieve(sess.subscription as string, {
             expand: ["items.data.price"],
           });
-          const plan = resolvePlanFromSubscription(sub, priceToplan);
+          const plan      = resolvePlanFromSubscription(sub, priceToplan);
           const periodEnd = getPeriodEnd(sub);
+          const billingDay = getBillingDay(sub);
           const update: Record<string, unknown> = {
             stripe_subscription_id:     sub.id,
             stripe_subscription_status: sub.status,
-            ...(periodEnd ? { stripe_current_period_end: periodEnd } : {}),
+            ...(periodEnd   ? { stripe_current_period_end: periodEnd } : {}),
+            ...(billingDay  ? { billing_day: billingDay }               : {}),
           };
           if (plan) update.plan = plan;
           await supabaseAdmin.from("profiles").update(update).eq("id", userId);
@@ -758,11 +774,13 @@ router.post("/stripe/webhook", async (req: Request, res: Response) => {
         const priceToplan = await buildPriceToplanMap();
         const plan        = resolvePlanFromSubscription(sub, priceToplan);
         if (userId) {
-          const periodEnd = getPeriodEnd(sub);
+          const periodEnd  = getPeriodEnd(sub);
+          const billingDay = getBillingDay(sub);
           const update: Record<string, unknown> = {
             stripe_subscription_id:     sub.id,
             stripe_subscription_status: sub.status,
-            ...(periodEnd ? { stripe_current_period_end: periodEnd } : {}),
+            ...(periodEnd  ? { stripe_current_period_end: periodEnd } : {}),
+            ...(billingDay ? { billing_day: billingDay }               : {}),
           };
           if (plan) update.plan = plan;
           await supabaseAdmin.from("profiles").update(update).eq("id", userId);
