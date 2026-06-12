@@ -260,22 +260,28 @@ function AddRepresentanteModal({ open, onClose, existingIds, onAdded }: {
   const [results, setResults] = useState<{ id: string; full_name: string | null; email: string | null; username: string | null; referral_code: string | null }[]>([]);
   const [selected, setSelected] = useState<typeof results[0] | null>(null);
   const [searching, setSearching] = useState(false);
+  const [searched, setSearched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!open) { setQuery(""); setResults([]); setSelected(null); setError(null); }
+    if (!open) { setQuery(""); setResults([]); setSelected(null); setError(null); setSearched(false); }
     else { setTimeout(() => inputRef.current?.focus(), 80); }
   }, [open]);
 
   const search = async () => {
     const q = query.trim(); if (q.length < 2) return;
-    setSearching(true);
-    const { data } = await supabase.from("profiles").select("id, full_name, email, username, referral_code")
-      .or(`full_name.ilike.%${q}%,email.ilike.%${q}%,username.ilike.%${q}%`).limit(10);
-    setResults((data ?? []).filter(p => !existingIds.includes(p.id)));
-    setSearching(false);
+    setSearching(true); setError(null); setSearched(false);
+    try {
+      const { data, error: qErr } = await supabase.from("profiles").select("id, full_name, username, referral_code")
+        .or(`full_name.ilike.%${q}%,username.ilike.%${q}%`).limit(10);
+      if (qErr) { setError(`Erro na busca: ${qErr.message}`); return; }
+      setResults((data ?? []).map(p => ({ ...p, email: null })).filter(p => !existingIds.includes(p.id)));
+      setSearched(true);
+    } finally {
+      setSearching(false);
+    }
   };
 
   const genCode = (username: string | null): string => {
@@ -300,9 +306,9 @@ function AddRepresentanteModal({ open, onClose, existingIds, onAdded }: {
         if (codeErr) throw codeErr;
       }
       await supabase.from("profiles").update({ commission_override: 10 }).eq("id", selected.id).is("commission_override", null);
-      const { data: profile, error: fetchErr } = await supabase.from("profiles").select("id, full_name, email, username, referral_code, commission_override, plan, created_at").eq("id", selected.id).single();
+      const { data: profile, error: fetchErr } = await supabase.from("profiles").select("id, full_name, username, referral_code, commission_override, plan, created_at").eq("id", selected.id).single();
       if (fetchErr) throw fetchErr;
-      onAdded({ id: profile.id, full_name: profile.full_name, email: profile.email, username: profile.username, referral_code: profile.referral_code, commission_override: profile.commission_override ?? null, plan: profile.plan ?? "gratuito", created_at: profile.created_at, referidos: [] });
+      onAdded({ id: profile.id, full_name: profile.full_name, email: null, username: profile.username, referral_code: profile.referral_code, commission_override: profile.commission_override ?? null, plan: profile.plan ?? "gratuito", created_at: profile.created_at, referidos: [] });
       onClose();
     } catch (e) { setError(e instanceof Error ? e.message : "Erro"); }
     finally { setSaving(false); }
@@ -322,7 +328,7 @@ function AddRepresentanteModal({ open, onClose, existingIds, onAdded }: {
             <div style={{ position: "relative", flex: 1 }}>
               <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "#aaa", fontSize: 15 }}>🔍</span>
               <input ref={inputRef} value={query} onChange={e => { setQuery(e.target.value); setSelected(null); }} onKeyDown={e => { if (e.key === "Enter") void search(); }}
-                placeholder="Nome, email ou @username..."
+                placeholder="Nome ou @username..."
                 style={{ width: "100%", padding: "10px 12px 10px 34px", border: "1px solid #e8eaed", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
             </div>
             <button onClick={() => { void search(); }} disabled={searching || query.trim().length < 2} style={{ padding: "10px 18px", backgroundColor: NAVY, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: query.trim().length < 2 ? 0.5 : 1 }}>{searching ? "..." : "Buscar"}</button>
@@ -338,7 +344,7 @@ function AddRepresentanteModal({ open, onClose, existingIds, onAdded }: {
                   <Avatar name={p.full_name} email={p.email} size={34} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.full_name ?? p.username ?? "—"}</div>
-                    <div style={{ fontSize: 12, color: "#8a93a2", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.email}</div>
+                    <div style={{ fontSize: 12, color: "#8a93a2", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>@{p.username}</div>
                   </div>
                   {p.referral_code && <span style={{ fontSize: 10, fontWeight: 800, backgroundColor: `${GOLD}20`, color: GOLD, padding: "2px 7px", borderRadius: 4, fontFamily: "monospace", flexShrink: 0 }}>{p.referral_code}</span>}
                   <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${isSel ? GOLD : "#d1d5db"}`, backgroundColor: isSel ? GOLD : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -348,6 +354,9 @@ function AddRepresentanteModal({ open, onClose, existingIds, onAdded }: {
               );
             })}
           </div>
+        )}
+        {!searching && searched && results.length === 0 && !error && (
+          <div style={{ textAlign: "center", padding: "14px 0", color: "#8a93a2", fontSize: 13, marginBottom: 12 }}>Nenhum resultado para "{query.trim()}"</div>
         )}
         {selected && (
           <div style={{ padding: "10px 14px", backgroundColor: `${NAVY}06`, border: `1px solid ${NAVY}20`, borderRadius: 10, marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
@@ -384,19 +393,25 @@ function AddTerritoryModal({ open, onClose, onAdded, takenCodes }: {
   const [selectedCountry, setSelectedCountry] = useState<typeof ADMIN_COUNTRIES[0] | null>(null);
   const [notes, setNotes] = useState("");
   const [searching, setSearching] = useState(false);
+  const [searched, setSearched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { if (!open) { setPartnerSearch(""); setPartnerResults([]); setSelectedPartner(null); setSelectedCountry(null); setNotes(""); setError(null); } }, [open]);
+  useEffect(() => { if (!open) { setPartnerSearch(""); setPartnerResults([]); setSelectedPartner(null); setSelectedCountry(null); setNotes(""); setError(null); setSearched(false); } }, [open]);
 
   const searchPartners = async () => {
     if (partnerSearch.trim().length < 2) return;
-    setSearching(true);
+    setSearching(true); setError(null); setSearched(false);
     const q = partnerSearch.trim();
-    const { data } = await supabase.from("profiles").select("id, full_name, email, username, commission_override")
-      .or(`full_name.ilike.%${q}%,email.ilike.%${q}%,username.ilike.%${q}%`).limit(8);
-    setPartnerResults(data ?? []);
-    setSearching(false);
+    try {
+      const { data, error: qErr } = await supabase.from("profiles").select("id, full_name, username, commission_override")
+        .or(`full_name.ilike.%${q}%,username.ilike.%${q}%`).limit(8);
+      if (qErr) { setError(`Erro na busca: ${qErr.message}`); return; }
+      setPartnerResults((data ?? []).map(p => ({ ...p, email: null })));
+      setSearched(true);
+    } finally {
+      setSearching(false);
+    }
   };
 
   const handleAdd = async () => {
@@ -422,28 +437,31 @@ function AddTerritoryModal({ open, onClose, onAdded, takenCodes }: {
         <div style={{ marginBottom: 16 }}>
           <label style={{ fontSize: 12, fontWeight: 700, color: NAVY, display: "block", marginBottom: 6 }}>Parceiro (usuário existente)</label>
           <div style={{ display: "flex", gap: 8 }}>
-            <input value={partnerSearch} onChange={e => setPartnerSearch(e.target.value)} placeholder="Buscar por nome ou email..."
+            <input value={partnerSearch} onChange={e => setPartnerSearch(e.target.value)} placeholder="Buscar por nome ou @username..."
               style={{ flex: 1, padding: "9px 12px", border: "1px solid #e8eaed", borderRadius: 8, fontSize: 14, outline: "none" }}
               onKeyDown={e => { if (e.key === "Enter") void searchPartners(); }} />
-            <button onClick={() => { void searchPartners(); }} disabled={searching} style={{ padding: "9px 16px", backgroundColor: NAVY, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{searching ? "..." : "Buscar"}</button>
+            <button onClick={() => { void searchPartners(); }} disabled={searching || partnerSearch.trim().length < 2} style={{ padding: "9px 16px", backgroundColor: NAVY, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: partnerSearch.trim().length < 2 ? 0.5 : 1 }}>{searching ? "..." : "Buscar"}</button>
           </div>
           {partnerResults.length > 0 && (
             <div style={{ border: "1px solid #e8eaed", borderRadius: 8, marginTop: 6, overflow: "hidden" }}>
               {partnerResults.map((p, i) => (
-                <div key={p.id} onClick={() => { setSelectedPartner(p); setPartnerResults([]); setPartnerSearch(p.full_name ?? p.email ?? p.username ?? ""); }}
+                <div key={p.id} onClick={() => { setSelectedPartner(p); setPartnerResults([]); setPartnerSearch(p.full_name ?? p.username ?? ""); }}
                   style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", cursor: "pointer", backgroundColor: selectedPartner?.id === p.id ? `${GOLD}10` : "#fff", borderBottom: i < partnerResults.length - 1 ? "1px solid #e8eaed" : "none" }}>
-                  <Avatar name={p.full_name} email={p.email} size={30} />
-                  <div><div style={{ fontSize: 13, fontWeight: 600, color: NAVY }}>{p.full_name ?? p.username ?? "—"}</div><div style={{ fontSize: 11, color: "#8a93a2" }}>{p.email}</div></div>
+                  <Avatar name={p.full_name} email={null} size={30} />
+                  <div><div style={{ fontSize: 13, fontWeight: 600, color: NAVY }}>{p.full_name ?? p.username ?? "—"}</div><div style={{ fontSize: 11, color: "#8a93a2" }}>@{p.username}</div></div>
                   {selectedPartner?.id === p.id && <span style={{ marginLeft: "auto", color: "#16a34a", fontWeight: 700 }}>✓</span>}
                 </div>
               ))}
             </div>
           )}
+          {!searching && searched && partnerResults.length === 0 && !error && !selectedPartner && (
+            <div style={{ textAlign: "center", padding: "10px 0", color: "#8a93a2", fontSize: 13, marginTop: 6 }}>Nenhum resultado para "{partnerSearch.trim()}"</div>
+          )}
           {selectedPartner && (
             <div style={{ marginTop: 8, padding: "8px 12px", backgroundColor: `${GOLD}10`, border: `1px solid ${GOLD}40`, borderRadius: 8, display: "flex", alignItems: "center", gap: 8 }}>
-              <Avatar name={selectedPartner.full_name} email={selectedPartner.email} size={26} />
+              <Avatar name={selectedPartner.full_name} email={null} size={26} />
               <span style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{selectedPartner.full_name ?? selectedPartner.username}</span>
-              <span style={{ fontSize: 11, color: "#8a93a2" }}>{selectedPartner.email}</span>
+              <span style={{ fontSize: 11, color: "#8a93a2" }}>@{selectedPartner.username}</span>
             </div>
           )}
         </div>
@@ -757,7 +775,7 @@ function ParceirosTab() {
                     ) : t.users.map((u, i) => {
                       const badge = statusBadge(u);
                       const isPaid = u.plan !== "gratuito" && u.plan !== "free" && !!u.plan;
-                      const socioNetPct = u.rep_pct !== null ? Math.max(0, effPct - u.rep_pct) : null;
+                      const socioNetPct = (u.rep_pct ?? null) !== null ? Math.max(0, effPct - u.rep_pct!) : null;
                       return (
                         <div key={u.id} style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr 1fr 1fr 1fr", padding: "11px 20px", alignItems: "center", borderBottom: i === t.users.length - 1 ? "none" : "1px solid #f0f2f4", backgroundColor: "#fff" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
@@ -768,8 +786,8 @@ function ParceirosTab() {
                             </div>
                           </div>
                           <div>
-                            {u.rep_pct !== null
-                              ? <CommissionSplit grossPct={effPct} repPct={u.rep_pct} />
+                            {(u.rep_pct ?? null) !== null
+                              ? <CommissionSplit grossPct={effPct} repPct={u.rep_pct!} />
                               : <PctPill pct={effPct} label="íntegro" color="#16a34a" bg="#dcfce7" border="#86efac" />
                             }
                           </div>
@@ -1033,7 +1051,7 @@ function RepresentantesTab() {
                         const badge = statusBadge(r);
                         const isPaid = r.plan !== "gratuito" && r.plan !== "free" && !!r.plan;
                         const repPct = effectivePct(rep.referidos.length, rep.commission_override);
-                        const socioNet = r.socio_gross_pct !== null ? Math.max(0, r.socio_gross_pct - repPct) : null;
+                        const socioNet = (r.socio_gross_pct ?? null) !== null ? Math.max(0, r.socio_gross_pct! - repPct) : null;
                         return (
                           <div key={r.id} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1.5fr 1fr 1fr 1fr", padding: "11px 20px", alignItems: "center", borderBottom: i === rep.referidos.length - 1 ? "none" : "1px solid #f0f2f4", backgroundColor: "#fff" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
