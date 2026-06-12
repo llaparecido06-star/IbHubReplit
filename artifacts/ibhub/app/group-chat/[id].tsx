@@ -1535,7 +1535,7 @@ const styles = StyleSheet.create({
   msgGroup:        { marginBottom: 12 },
   msgGroupMe:      { alignItems: "flex-end" },
   msgGroupOther:   { alignItems: "flex-start" },
-  msgRow:          { flexDirection: "row", alignItems: "flex-end", gap: 6, maxWidth: "100%" },
+  msgRow:          { flexDirection: "row", alignItems: "flex-end", gap: 6, width: "100%" },
   msgRowMe:        { justifyContent: "flex-end" },
   msgRowOther:     { justifyContent: "flex-start" },
   senderWrap:      { marginBottom: 2 },

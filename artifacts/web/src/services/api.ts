@@ -3332,7 +3332,7 @@ export async function uploadMarketPostImage(file: File, userId: string): Promise
     const ext = file.name.split(".").pop() ?? "jpg";
     // post-images bucket RLS is keyed by uploader uid — path must start with userId
     const path = `${userId}/market/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await supabase.storage.from("post-images").upload(path, file, { contentType: file.type, upsert: true });
+    const { error } = await supabase.storage.from("post-images").upload(path, file, { contentType: file.type, upsert: false });
     if (error) { console.error("uploadMarketPostImage:", error.message); return null; }
     const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(path);
     return urlData?.publicUrl ?? null;
@@ -3350,7 +3350,7 @@ export async function uploadMarketPostVideo(file: File, userId: string): Promise
 
     const uploadPromise = supabase.storage
       .from("post-videos")
-      .upload(path, file, { contentType: file.type, upsert: true });
+      .upload(path, file, { contentType: file.type, upsert: false });
 
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("Video upload timed out after 10 minutes")), 10 * 60 * 1000)
