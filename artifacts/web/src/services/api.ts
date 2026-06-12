@@ -3324,12 +3324,14 @@ export async function fetchCompanyPageByName(name: string): Promise<{ id: string
 export async function uploadMarketPostImage(file: File, userId: string): Promise<string | null> {
   try {
     const ext = file.name.split(".").pop() ?? "jpg";
-    const path = `market/${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await supabase.storage.from("chat-attachments").upload(path, file, { contentType: file.type, upsert: true });
-    if (error) return null;
-    const { data: urlData } = supabase.storage.from("chat-attachments").getPublicUrl(path);
+    // post-images bucket RLS is keyed by uploader uid — path must start with userId
+    const path = `${userId}/market/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage.from("post-images").upload(path, file, { contentType: file.type, upsert: true });
+    if (error) { console.error("uploadMarketPostImage:", error.message); return null; }
+    const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(path);
     return urlData?.publicUrl ?? null;
-  } catch {
+  } catch (e) {
+    console.error("uploadMarketPostImage:", e);
     return null;
   }
 }
@@ -3337,10 +3339,11 @@ export async function uploadMarketPostImage(file: File, userId: string): Promise
 export async function uploadMarketPostVideo(file: File, userId: string): Promise<string | null> {
   try {
     const ext = file.name.split(".").pop() ?? "mp4";
-    const path = `market/video/${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    // post-images bucket RLS is keyed by uploader uid — path must start with userId
+    const path = `${userId}/market/video/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
 
     const uploadPromise = supabase.storage
-      .from("chat-attachments")
+      .from("post-images")
       .upload(path, file, { contentType: file.type, upsert: true });
 
     const timeoutPromise = new Promise<never>((_, reject) =>
@@ -3348,10 +3351,11 @@ export async function uploadMarketPostVideo(file: File, userId: string): Promise
     );
 
     const { error } = await Promise.race([uploadPromise, timeoutPromise]);
-    if (error) return null;
-    const { data: urlData } = supabase.storage.from("chat-attachments").getPublicUrl(path);
+    if (error) { console.error("uploadMarketPostVideo:", error.message); return null; }
+    const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(path);
     return urlData?.publicUrl ?? null;
-  } catch {
+  } catch (e) {
+    console.error("uploadMarketPostVideo:", e);
     return null;
   }
 }
