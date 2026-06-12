@@ -3036,6 +3036,7 @@ export interface MarketComment {
   created_at: string;
   likes_count: number;
   is_liked: boolean;
+  reply_to_id?: string | null;
   author?: {
     id: string;
     full_name?: string | null;
@@ -3238,6 +3239,8 @@ export async function toggleMarketCommentLike(commentId: string, _userId: string
   }
 }
 
+const MARKET_REPLY_PREFIX_RE = /^\[R:([0-9a-f-]{36})\]/i;
+
 export async function fetchMarketComments(postId: string, userId?: string): Promise<MarketComment[]> {
   try {
     const { data, error } = await supabase
@@ -3262,8 +3265,6 @@ export async function fetchMarketComments(postId: string, userId?: string): Prom
         : Promise.resolve({ data: [] }),
     ]);
 
-    // Build map keyed by user_id first, then overlay by profiles.id as fallback
-    // (some older comments stored profiles.id in author_id instead of auth user_id)
     const profileMap = new Map<string, any>();
     for (const p of ((profilesByUserId as any).data ?? [])) profileMap.set(p.user_id, p);
     for (const p of ((profilesById as any).data ?? [])) {
@@ -3272,9 +3273,14 @@ export async function fetchMarketComments(postId: string, userId?: string): Prom
     const likedSet = new Set(((likesRes as any).data ?? []).map((l: any) => l.comment_id as string));
 
     return data.map((c: any) => {
+      const match = MARKET_REPLY_PREFIX_RE.exec(c.content ?? "");
+      const replyToId = match ? match[1] : null;
+      const cleanContent = match ? (c.content as string).slice(match[0].length) : c.content;
       const profile = profileMap.get(c.author_id);
       return {
         ...c,
+        content: cleanContent,
+        reply_to_id: replyToId,
         likes_count: c.likes_count ?? 0,
         is_liked: likedSet.has(c.id),
         author: profile ? {
@@ -3291,14 +3297,14 @@ export async function fetchMarketComments(postId: string, userId?: string): Prom
   }
 }
 
-export async function addMarketComment(postId: string, _authorId: string, content: string): Promise<MarketComment | null> {
+export async function addMarketComment(postId: string, _authorId: string, content: string, replyToId?: string | null): Promise<MarketComment | null> {
   try {
     const { apiBase, token } = await getWebApiBase();
     if (!token) return null;
     const res = await fetch(`${apiBase}/market/posts/${postId}/comments`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, ...(replyToId ? { reply_to_id: replyToId } : {}) }),
     });
     if (!res.ok) return null;
     const json = await res.json() as { comment: MarketComment };
@@ -3343,7 +3349,7 @@ export async function uploadMarketPostVideo(file: File, userId: string): Promise
     const path = `${userId}/market/video/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
 
     const uploadPromise = supabase.storage
-      .from("post-images")
+      .from("post-videos")
       .upload(path, file, { contentType: file.type, upsert: true });
 
     const timeoutPromise = new Promise<never>((_, reject) =>
@@ -3352,7 +3358,7 @@ export async function uploadMarketPostVideo(file: File, userId: string): Promise
 
     const { error } = await Promise.race([uploadPromise, timeoutPromise]);
     if (error) { console.error("uploadMarketPostVideo:", error.message); return null; }
-    const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(path);
+    const { data: urlData } = supabase.storage.from("post-videos").getPublicUrl(path);
     return urlData?.publicUrl ?? null;
   } catch (e) {
     console.error("uploadMarketPostVideo:", e);

@@ -2201,75 +2201,181 @@ function ReactionPicker({ onSelect, onMouseEnter, onMouseLeave }: { onSelect: (r
   );
 }
 
-function MarketCommentItem({ comment, userId }: { comment: MarketComment; userId: string }) {
+function CommentReactionPicker({ onSelect, onMouseEnter, onMouseLeave }: { onSelect: (r: MarketReactionType) => void; onMouseEnter?: () => void; onMouseLeave?: () => void }) {
+  return (
+    <div
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      style={{
+        position: "absolute", bottom: "calc(100% + 4px)", left: 0,
+        backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 30,
+        boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+        display: "flex", gap: 4, padding: "6px 10px", zIndex: 99,
+      }}>
+      {REACTIONS.map(r => (
+        <button
+          key={r.type}
+          onClick={(e) => { e.stopPropagation(); onSelect(r.type); }}
+          title={r.label}
+          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, padding: "4px 5px", borderRadius: 20, transition: "transform 0.15s" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.35)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }}
+        >
+          {r.emoji}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function MarketCommentItem({ comment, userId, onReply, isReply }: { comment: MarketComment; userId: string; onReply?: (comment: MarketComment) => void; isReply?: boolean }) {
   const [, setLocation] = useLocation();
-  const [liked, setLiked] = useState((comment as any).is_liked ?? false);
-  const [likesCount, setLikesCount] = useState((comment as any).likes_count ?? 0);
+  const [liked, setLiked] = useState(comment.is_liked ?? false);
+  const [localReaction, setLocalReaction] = useState<MarketReactionType | null>(null);
+  const [likesCount, setLikesCount] = useState(comment.likes_count ?? 0);
   const [toggling, setToggling] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  const pickerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
   const goToCommentAuthor = () => {
     if (!comment.author?.id) return;
     comment.author.id === userId ? setLocation("/app/perfil") : setLocation(`/app/usuario/${comment.author.id}`);
   };
 
-  const handleCommentLike = async () => {
+  const openPicker = () => { if (pickerTimer.current) clearTimeout(pickerTimer.current); setShowPicker(true); };
+  const schedulePicker = () => { pickerTimer.current = setTimeout(() => setShowPicker(false), 200); };
+
+  const handleCommentLike = async (reaction?: MarketReactionType) => {
     if (toggling || !userId) return;
     setToggling(true);
-    const newLiked = await toggleMarketCommentLike(comment.id, userId, liked);
-    setLiked(newLiked);
-    setLikesCount((c: number) => c + (newLiked ? 1 : -1));
+    setShowPicker(false);
+    const wasLiked = liked;
+    const newLiked = reaction ? true : await toggleMarketCommentLike(comment.id, userId, liked);
+    if (reaction && !wasLiked) {
+      toggleMarketCommentLike(comment.id, userId, false);
+    }
+    setLiked(reaction ? true : newLiked);
+    if (reaction) setLocalReaction(reaction);
+    else if (!newLiked) setLocalReaction(null);
+    setLikesCount((c: number) => {
+      if (reaction && !wasLiked) return c + 1;
+      if (!reaction) return c + (newLiked ? 1 : -1);
+      return c;
+    });
     setToggling(false);
   };
 
   return (
-    <div style={{ display: "flex", gap: 8 }}>
+    <div style={{ display: "flex", gap: 8, marginLeft: isReply ? 36 : 0 }}>
       <div onClick={goToCommentAuthor} style={{ cursor: comment.author?.id ? "pointer" : "default", flexShrink: 0 }}>
-        <MarketPostAvatar src={comment.author?.avatar_url} name={comment.author?.full_name ?? "U"} size={28} />
+        <MarketPostAvatar src={comment.author?.avatar_url} name={comment.author?.full_name ?? "U"} size={isReply ? 24 : 28} />
       </div>
-      <div style={{ flex: 1, backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "8px 12px" }}>
+      <div style={{ flex: 1, backgroundColor: isReply ? "#f5f5f2" : WHITE, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "8px 12px" }}>
         <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "2px 6px", marginBottom: 3 }}>
           <span onClick={goToCommentAuthor} style={{ fontSize: 12, fontWeight: 700, color: NAVY, cursor: comment.author?.id ? "pointer" : "default" }}>{comment.author?.full_name ?? "Usuário"}</span>
           {comment.author?.position && <span style={{ fontSize: 11, color: MUTED }}>· {comment.author.position}</span>}
           {comment.author?.company && <span style={{ fontSize: 11, color: MUTED }}>· {comment.author.company}</span>}
         </div>
         <span style={{ fontSize: 13, color: "#333", lineHeight: 1.5 }}>{comment.content}</span>
-        <div style={{ marginTop: 6, display: "flex", alignItems: "center" }}>
-          <button
-            onClick={handleCommentLike}
-            style={{
-              background: "none", border: "none", cursor: userId ? "pointer" : "default",
-              display: "flex", alignItems: "center", gap: 4, padding: "2px 6px",
-              fontSize: 12, color: liked ? GOLD : MUTED, fontWeight: liked ? 700 : 400, fontFamily: "inherit",
-            }}
-          >
-            {liked ? "❤️" : "🤍"} {likesCount > 0 ? likesCount : ""}
-          </button>
+        <div style={{ marginTop: 5, display: "flex", alignItems: "center", gap: 2 }}>
+          {/* Reaction button with hover picker */}
+          <div ref={pickerRef} style={{ position: "relative" }} onMouseEnter={openPicker} onMouseLeave={schedulePicker}>
+            {showPicker && (
+              <CommentReactionPicker
+                onSelect={r => handleCommentLike(r)}
+                onMouseEnter={openPicker}
+                onMouseLeave={schedulePicker}
+              />
+            )}
+            <button
+              onClick={() => {
+                if (window.matchMedia("(pointer: coarse)").matches && !showPicker) { openPicker(); return; }
+                handleCommentLike();
+              }}
+              style={{
+                background: "none", border: "none", cursor: userId ? "pointer" : "default",
+                display: "flex", alignItems: "center", gap: 4, padding: "2px 8px",
+                fontSize: 12, color: liked ? reactionColor(localReaction) : MUTED,
+                fontWeight: liked ? 700 : 400, fontFamily: "inherit", borderRadius: 6,
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}18`; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+            >
+              {liked ? <span style={{ fontSize: 14 }}>{reactionEmoji(localReaction)}</span> : <span style={{ fontSize: 14 }}>🤍</span>}
+              <span>{liked ? (reactionLabel(localReaction) ?? "") : (likesCount > 0 ? String(likesCount) : "Reagir")}</span>
+              {liked && likesCount > 0 && <span style={{ fontWeight: 400, color: MUTED }}>{likesCount}</span>}
+            </button>
+          </div>
+          {/* Reply button — only on top-level comments */}
+          {!isReply && onReply && (
+            <button
+              onClick={() => onReply(comment)}
+              style={{
+                background: "none", border: "none", cursor: "pointer",
+                fontSize: 12, color: MUTED, fontFamily: "inherit",
+                padding: "2px 8px", borderRadius: 6, transition: "background 0.15s",
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = `${GOLD}18`; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+            >
+              Responder
+            </button>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function MarketPostComments({ postId, userId }: { postId: string; userId: string }) {
+function MarketPostComments({ postId, userId, onCommentAdded }: { postId: string; userId: string; onCommentAdded?: () => void }) {
   const [comments, setComments] = useState<MarketComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<MarketComment | null>(null);
+  const replyInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchMarketComments(postId, userId || undefined)
-      .then(c => { setComments(c); })
+      .then(c => setComments(c))
       .catch(() => {})
-      .finally(() => { setLoading(false); });
+      .finally(() => setLoading(false));
   }, [postId, userId]);
+
+  // Focus reply input when replyingTo changes
+  useEffect(() => {
+    if (replyingTo && replyInputRef.current) replyInputRef.current.focus();
+  }, [replyingTo]);
+
+  const handleReply = (comment: MarketComment) => {
+    setReplyingTo(prev => prev?.id === comment.id ? null : comment);
+  };
 
   const submit = async () => {
     if (!text.trim() || submitting) return;
     setSubmitting(true);
-    const c = await addMarketComment(postId, userId, text.trim());
-    if (c) setComments(prev => [...prev, c]);
+    const c = await addMarketComment(postId, userId, text.trim(), replyingTo?.id ?? null);
+    if (c) {
+      setComments(prev => [...prev, { ...c, reply_to_id: replyingTo?.id ?? null }]);
+      if (!replyingTo) onCommentAdded?.();
+    }
     setText("");
+    setReplyingTo(null);
     setSubmitting(false);
   };
+
+  // Separate top-level comments from replies
+  const topLevel = comments.filter(c => !c.reply_to_id);
+  const repliesMap = new Map<string, MarketComment[]>();
+  for (const c of comments) {
+    if (c.reply_to_id) {
+      const arr = repliesMap.get(c.reply_to_id) ?? [];
+      arr.push(c);
+      repliesMap.set(c.reply_to_id, arr);
+    }
+  }
 
   return (
     <div style={{ borderTop: `1px solid ${BORDER}`, padding: "12px 16px", background: "#fafaf8" }}>
@@ -2279,27 +2385,65 @@ function MarketPostComments({ postId, userId }: { postId: string; userId: string
         <div style={{ fontSize: 12, color: MUTED, padding: "4px 0" }}>Nenhum comentário ainda.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
-          {comments.map(c => (
-            <MarketCommentItem key={c.id} comment={c} userId={userId} />
+          {topLevel.map(c => (
+            <div key={c.id}>
+              <MarketCommentItem comment={c} userId={userId} onReply={handleReply} />
+              {/* Nested replies */}
+              {(repliesMap.get(c.id) ?? []).map(reply => (
+                <div key={reply.id} style={{ marginTop: 6 }}>
+                  <MarketCommentItem comment={reply} userId={userId} isReply />
+                </div>
+              ))}
+              {/* Reply input inline */}
+              {replyingTo?.id === c.id && (
+                <div style={{ marginLeft: 36, marginTop: 6, display: "flex", gap: 8, alignItems: "center" }}>
+                  <span style={{ fontSize: 11, color: MUTED, whiteSpace: "nowrap" }}>↩ {c.author?.full_name ?? ""}:</span>
+                  <input
+                    ref={replyInputRef}
+                    value={text}
+                    onChange={e => setText(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && !e.shiftKey && submit()}
+                    placeholder={`Responder ${c.author?.full_name ?? ""}…`}
+                    style={{ flex: 1, padding: "6px 12px", borderRadius: 20, border: `1px solid ${GOLD}80`, fontSize: 13, outline: "none", fontFamily: "inherit", backgroundColor: WHITE }}
+                  />
+                  <button
+                    onClick={submit}
+                    disabled={!text.trim() || submitting}
+                    style={{ padding: "6px 14px", borderRadius: 20, backgroundColor: GOLD, border: "none", color: NAVY, fontWeight: 700, fontSize: 12, cursor: text.trim() ? "pointer" : "not-allowed", opacity: text.trim() ? 1 : 0.5, fontFamily: "inherit" }}
+                  >
+                    {submitting ? "…" : "Enviar"}
+                  </button>
+                  <button
+                    onClick={() => { setReplyingTo(null); setText(""); }}
+                    style={{ padding: "6px 10px", borderRadius: 20, backgroundColor: "transparent", border: `1px solid ${BORDER}`, color: MUTED, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}
-      <div style={{ display: "flex", gap: 8 }}>
-        <input
-          value={text}
-          onChange={e => setText(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && !e.shiftKey && submit()}
-          placeholder="Escreva um comentário…"
-          style={{ flex: 1, padding: "8px 12px", borderRadius: 20, border: `1px solid ${BORDER}`, fontSize: 13, outline: "none", fontFamily: "inherit" }}
-        />
-        <button
-          onClick={submit}
-          disabled={!text.trim() || submitting}
-          style={{ padding: "8px 16px", borderRadius: 20, backgroundColor: GOLD, border: "none", color: NAVY, fontWeight: 700, fontSize: 13, cursor: text.trim() ? "pointer" : "not-allowed", opacity: text.trim() ? 1 : 0.5, fontFamily: "inherit" }}
-        >
-          Enviar
-        </button>
-      </div>
+      {/* Main comment input (only when not replying inline) */}
+      {!replyingTo && (
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && !e.shiftKey && submit()}
+            placeholder="Escreva um comentário…"
+            style={{ flex: 1, padding: "8px 12px", borderRadius: 20, border: `1px solid ${BORDER}`, fontSize: 13, outline: "none", fontFamily: "inherit" }}
+          />
+          <button
+            onClick={submit}
+            disabled={!text.trim() || submitting}
+            style={{ padding: "8px 16px", borderRadius: 20, backgroundColor: GOLD, border: "none", color: NAVY, fontWeight: 700, fontSize: 13, cursor: text.trim() ? "pointer" : "not-allowed", opacity: text.trim() ? 1 : 0.5, fontFamily: "inherit" }}
+          >
+            Enviar
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -2693,7 +2837,13 @@ function MarketPostCard({ post: initialPost, userId, isAdmin, onLikeToggle, idea
       </div>
 
       {/* Comments section */}
-      {showComments && <MarketPostComments postId={post.id} userId={userId} />}
+      {showComments && (
+        <MarketPostComments
+          postId={post.id}
+          userId={userId}
+          onCommentAdded={() => setPost(p => ({ ...p, comments_count: p.comments_count + 1 }))}
+        />
+      )}
     </div>
   );
 }
