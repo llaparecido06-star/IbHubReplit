@@ -93,9 +93,13 @@ async function getOrCreateCredits(userId: string): Promise<{
 
   if (existing.period_start < period) {
     const total = await getPlanCredits(userId);
+    // Preserve any one-time purchased credits that weren't spent in the previous period.
+    // One-time credits sit above credits_total; they must survive the monthly reset.
+    const oneTimeCarryover = Math.max(0, existing.credits_remaining - existing.credits_total);
+    const newRemaining = total + oneTimeCarryover;
     await supabaseAdmin
       .from("ai_search_credits")
-      .update({ credits_remaining: total, credits_total: total, period_start: period, updated_at: new Date().toISOString() })
+      .update({ credits_remaining: newRemaining, credits_total: total, period_start: period, updated_at: new Date().toISOString() })
       .eq("user_id", userId);
 
     // Notify the user that their AI credits have been renewed for the new period
@@ -108,7 +112,7 @@ async function getOrCreateCredits(userId: string): Promise<{
       });
     }
 
-    return { credits_remaining: total, credits_total: total, period_start: period };
+    return { credits_remaining: newRemaining, credits_total: total, period_start: period };
   }
 
   return existing as { credits_remaining: number; credits_total: number; period_start: string };
@@ -693,10 +697,13 @@ async function getOrCreateRevealCredits(userId: string): Promise<{ credits_remai
   const row = existing as { credits_remaining: number; credits_total: number; period_start: string };
   if (row.period_start < period) {
     const total = await getRevealPlanCredits(userId);
+    // Preserve any one-time purchased reveal credits that weren't spent in the previous period.
+    const oneTimeCarryover = Math.max(0, row.credits_remaining - row.credits_total);
+    const newRemaining = total + oneTimeCarryover;
     await supabaseAdmin.from("bi_reveal_credits")
-      .update({ credits_remaining: total, credits_total: total, period_start: period, updated_at: new Date().toISOString() })
+      .update({ credits_remaining: newRemaining, credits_total: total, period_start: period, updated_at: new Date().toISOString() })
       .eq("user_id", userId);
-    return { credits_remaining: total, credits_total: total, period_start: period };
+    return { credits_remaining: newRemaining, credits_total: total, period_start: period };
   }
   return row;
 }
