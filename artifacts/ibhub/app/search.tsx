@@ -18,6 +18,7 @@ import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/context/AuthContext";
 import { fetchProfilesForIds } from "@/services/api";
 import { useTranslation } from "react-i18next";
+import { LowCreditsCard } from "@/components/ui/LowCreditsCard";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 
@@ -81,15 +82,28 @@ const EMPTY: SearchResults = {
 export default function SearchScreen() {
   const colors   = useColors();
   const router   = useRouter();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const insets   = useSafeAreaInsets();
   const inputRef = useRef<TextInput>(null);
   const { t } = useTranslation();
 
-  const [query,   setQuery]   = useState("");
-  const [filter,  setFilter]  = useState<Filter>("todos");
-  const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<SearchResults>(EMPTY);
+  const [query,     setQuery]     = useState("");
+  const [filter,    setFilter]    = useState<Filter>("todos");
+  const [loading,   setLoading]   = useState(false);
+  const [results,   setResults]   = useState<SearchResults>(EMPTY);
+  const [aiCredits, setAiCredits] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!session?.access_token) return;
+    void fetch(`${API_URL}/wine-imports/credits`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { credits_remaining?: number } | null) => {
+        if (d?.credits_remaining !== undefined) setAiCredits(d.credits_remaining);
+      })
+      .catch(() => {});
+  }, [session?.access_token]);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 20 : 20 + insets.bottom;
@@ -527,6 +541,13 @@ export default function SearchScreen() {
           );
         })}
       </ScrollView>
+
+      {/* Low AI credits banner */}
+      {aiCredits !== null && aiCredits <= 3 && (
+        <View style={{ paddingHorizontal: 12, paddingTop: 10 }}>
+          <LowCreditsCard aiCredits={aiCredits} compact />
+        </View>
+      )}
 
       {/* Results */}
       <ScrollView

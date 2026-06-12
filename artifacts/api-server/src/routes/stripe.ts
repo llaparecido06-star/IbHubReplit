@@ -1,7 +1,9 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
+import { z } from "zod";
 import { applyPlanChangeToCredits, addOneTimeCredits } from "../lib/creditUtils.js";
+import { validateBody } from "../middlewares/validate.js";
 
 const router: IRouter = Router();
 
@@ -332,20 +334,20 @@ router.get("/stripe/credit-packages", async (_req: Request, res: Response) => {
 });
 
 // ─── POST /stripe/create-credit-checkout-session ──────────────────────────────
-router.post("/stripe/create-credit-checkout-session", async (req: Request, res: Response) => {
+const CreditCheckoutSchema = z.object({
+  packageId:  z.string().min(1, "packageId é obrigatório"),
+  successUrl: z.string().url().optional(),
+  cancelUrl:  z.string().url().optional(),
+});
+
+router.post(
+  "/stripe/create-credit-checkout-session",
+  validateBody(CreditCheckoutSchema),
+  async (req: Request, res: Response) => {
   const userId = await getUserId(req, res);
   if (!userId) return;
 
-  const { packageId, successUrl, cancelUrl } = req.body as {
-    packageId?: string;
-    successUrl?: string;
-    cancelUrl?: string;
-  };
-
-  if (!packageId) {
-    res.status(400).json({ error: "packageId é obrigatório." });
-    return;
-  }
+  const { packageId, successUrl, cancelUrl } = req.body as z.infer<typeof CreditCheckoutSchema>;
 
   if (!process.env.STRIPE_SECRET_KEY) {
     res.status(503).json({ error: "Pagamentos ainda não configurados. Contate o suporte." });

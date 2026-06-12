@@ -733,9 +733,10 @@ function useRevealCredits(userId: string) {
 }
 
 /* ─── Reveal Credits Bar ─────────────────────────────────────────── */
-function RevealCreditsBar({ revealCredits, revealCreditsTotal, loading }: { revealCredits: number | null; revealCreditsTotal: number; loading: boolean }) {
+function RevealCreditsBar({ revealCredits, revealCreditsTotal, loading, onBuyCredits }: { revealCredits: number | null; revealCreditsTotal: number; loading: boolean; onBuyCredits?: () => void }) {
   const color = (revealCredits ?? 0) >= 2 ? "#16a34a" : (revealCredits ?? 0) === 1 ? "#d97706" : "#dc2626";
   const bg    = (revealCredits ?? 0) >= 2 ? "#dcfce7" : (revealCredits ?? 0) === 1 ? "#fef3c7" : "#fef2f2";
+  const showBuy = !loading && (revealCredits ?? 0) <= 1 && onBuyCredits;
   return (
     <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "10px 16px", display: "flex", alignItems: "center", gap: 10 }}>
       <span style={{ fontSize: 16 }}>{loading ? "⏳" : "🔓"}</span>
@@ -753,6 +754,14 @@ function RevealCreditsBar({ revealCredits, revealCreditsTotal, loading }: { reve
           </>
         )}
       </div>
+      {showBuy && (
+        <button
+          onClick={onBuyCredits}
+          style={{ flexShrink: 0, padding: "5px 14px", borderRadius: 8, border: "none", backgroundColor: GOLD, color: NAVY, fontWeight: 700, fontSize: 12, cursor: "pointer" }}
+        >
+          Comprar
+        </button>
+      )}
     </div>
   );
 }
@@ -3035,7 +3044,7 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {(searchMode === "exportador" || searchMode === "precos") && (
-              <RevealCreditsBar revealCredits={revealCredits} revealCreditsTotal={revealCreditsTotal} loading={revealCreditsLoading} />
+              <RevealCreditsBar revealCredits={revealCredits} revealCreditsTotal={revealCreditsTotal} loading={revealCreditsLoading} onBuyCredits={() => setShowCreditShop(true)} />
             )}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {([

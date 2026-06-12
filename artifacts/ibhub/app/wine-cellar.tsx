@@ -561,11 +561,24 @@ export default function WineCellarScreen() {
         </View>
 
         {/* Low credits awareness card */}
-        {(aiCredits !== null || revealCredits !== null) && (
-          <View style={{ paddingHorizontal: 12 }}>
-            <LowCreditsCard aiCredits={aiCredits} revealCredits={revealCredits} />
-          </View>
-        )}
+        {(aiCredits !== null || revealCredits !== null) && (() => {
+          const NEXT_PLAN: Record<string, { label: string; aiCredits: number }> = {
+            basic:     { label: "Premium",   aiCredits: 20  },
+            premium:   { label: "Exclusivo", aiCredits: 50  },
+            exclusive: { label: "Business",  aiCredits: 100 },
+          };
+          const next = NEXT_PLAN[profile?.plan ?? "basic"];
+          return (
+            <View style={{ paddingHorizontal: 12 }}>
+              <LowCreditsCard
+                aiCredits={aiCredits}
+                revealCredits={revealCredits}
+                nextPlanLabel={next?.label}
+                nextPlanMonthlyCredits={next?.aiCredits}
+              />
+            </View>
+          );
+        })()}
 
         {/* Cellar value banner */}
         {cellarValue > 0 && (

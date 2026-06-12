@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: stripe
+    description: Stripe payment operations
 paths:
   /healthz:
     get:
@@ -24,7 +26,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /stripe/credit-packages:
+    get:
+      operationId: getCreditPackages
+      tags: [stripe]
+      summary: List active credit packages
+      description: Returns all active one-time credit purchase packages ordered by sort_order
+      responses:
+        "200":
+          description: List of active credit packages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CreditPackage"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /stripe/create-credit-checkout-session:
+    post:
+      operationId: createCreditCheckoutSession
+      tags: [stripe]
+      summary: Create a one-time credit purchase checkout session
+      description: Creates a Stripe Checkout session for purchasing a credit package. Requires authentication.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCreditCheckoutRequest"
+      responses:
+        "200":
+          description: Stripe Checkout session URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutSessionResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Credit package not found or inactive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Payments not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   schemas:
     HealthStatus:
       type: object
@@ -33,4 +106,85 @@ components:
           type: string
       required:
         - status
-
+    CreditPackage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        label:
+          type: string
+        ai_credits:
+          type: integer
+          minimum: 0
+        revelation_credits:
+          type: integer
+          minimum: 0
+        price_brl:
+          type: integer
+          description: Price in BRL centavos (e.g. 2990 = R$29,90)
+        sort_order:
+          type: integer
+        active:
+          type: boolean
+      required:
+        - id
+        - label
+        - ai_credits
+        - revelation_credits
+        - price_brl
+        - sort_order
+        - active
+    CreateCreditCheckoutRequest:
+      type: object
+      properties:
+        packageId:
+          type: string
+          minLength: 1
+          description: UUID of the credit package to purchase
+        successUrl:
+          type: string
+          format: uri
+          description: URL to redirect to after successful payment (must be an allowed domain)
+        cancelUrl:
+          type: string
+          format: uri
+          description: URL to redirect to if payment is cancelled (must be an allowed domain)
+      required:
+        - packageId
+    CheckoutSessionResponse:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Stripe Checkout session URL to redirect the user to
+      required:
+        - url
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+    ValidationErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        issues:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+            required:
+              - field
+              - message
+      required:
+        - error
+        - issues

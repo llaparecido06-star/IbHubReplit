@@ -8,9 +8,11 @@ interface Props {
   aiCredits: number | null;
   revealCredits?: number | null;
   compact?: boolean;
+  nextPlanLabel?: string;
+  nextPlanMonthlyCredits?: number;
 }
 
-export function LowCreditsCard({ aiCredits, revealCredits, compact = false }: Props) {
+export function LowCreditsCard({ aiCredits, revealCredits, compact = false, nextPlanLabel, nextPlanMonthlyCredits }: Props) {
   const colors = useColors();
   const router = useRouter();
 
@@ -62,7 +64,11 @@ export function LowCreditsCard({ aiCredits, revealCredits, compact = false }: Pr
             activeOpacity={0.82}
           >
             <Feather name="arrow-up-circle" size={14} color={colors.navy} />
-            <Text style={[styles.btnSecondaryText, { color: colors.navy }]}>Ver planos</Text>
+            <Text style={[styles.btnSecondaryText, { color: colors.navy }]}>
+              {nextPlanLabel
+                ? `Upgrade para ${nextPlanLabel}${nextPlanMonthlyCredits ? ` — ${nextPlanMonthlyCredits} créditos/mês` : ""}`
+                : "Ver planos"}
+            </Text>
           </TouchableOpacity>
         </View>
       )}
