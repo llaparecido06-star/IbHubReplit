@@ -111,7 +111,7 @@ components:
       properties:
         id:
           type: string
-          format: uuid
+          description: Unique identifier (text key, e.g. "iniciante", "basico")
         label:
           type: string
         ai_credits:
@@ -125,8 +125,6 @@ components:
           description: Price in BRL centavos (e.g. 2990 = R$29,90)
         sort_order:
           type: integer
-        active:
-          type: boolean
       required:
         - id
         - label
@@ -134,7 +132,6 @@ components:
         - revelation_credits
         - price_brl
         - sort_order
-        - active
     CreateCreditCheckoutRequest:
       type: object
       properties:

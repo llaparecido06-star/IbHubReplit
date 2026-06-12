@@ -545,7 +545,7 @@ export default function SearchScreen() {
       {/* Low AI credits banner */}
       {aiCredits !== null && aiCredits <= 3 && (
         <View style={{ paddingHorizontal: 12, paddingTop: 10 }}>
-          <LowCreditsCard aiCredits={aiCredits} compact />
+          <LowCreditsCard aiCredits={aiCredits} />
         </View>
       )}
 

@@ -1,9 +1,9 @@
 import { useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -76,12 +76,7 @@ export default function CreditShopScreen() {
         Alert.alert("Erro", data.error ?? "Erro ao iniciar pagamento.");
         return;
       }
-      const canOpen = await Linking.canOpenURL(data.url);
-      if (canOpen) {
-        await Linking.openURL(data.url);
-      } else {
-        Alert.alert("Erro", "Não foi possível abrir o navegador.");
-      }
+      await WebBrowser.openAuthSessionAsync(data.url, `${webBase}/mercado`);
     } catch {
       Alert.alert("Erro", "Erro ao processar. Tente novamente.");
     } finally {
