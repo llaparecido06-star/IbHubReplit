@@ -12,15 +12,19 @@ interface Tier {
   color: string;
   bg: string;
   border: string;
-  label: string;
   nextAt?: number;
   nextPct?: number;
 }
 
 function getTier(total: number): Tier {
-  if (total >= 200) return { pct: 20, color: WINE,      bg: "#f9f0f1", border: "#e4b5ba", label: "20%",           nextAt: undefined, nextPct: undefined };
-  if (total >= 50)  return { pct: 15, color: "#7c3aed",  bg: "#f5f3ff", border: "#c4b5fd", label: "15%",           nextAt: 200,  nextPct: 20 };
-                    return { pct: 10, color: "#1d4ed8",  bg: "#eff6ff", border: "#bfdbfe", label: "10%",           nextAt: 50,   nextPct: 15 };
+  if (total >= 200) return { pct: 20, color: WINE,     bg: "#f9f0f1", border: "#e4b5ba" };
+  if (total >= 50)  return { pct: 15, color: "#7c3aed", bg: "#f5f3ff", border: "#c4b5fd", nextAt: 200, nextPct: 20 };
+                    return { pct: 10, color: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe", nextAt: 50,  nextPct: 15 };
+}
+
+// A comissão efetiva é o override quando definido, senão o tier automático
+function effectivePct(total: number, override: number | null): number {
+  return override !== null ? override : getTier(total).pct;
 }
 
 // ── Types ─────────────────────────────────────────────────────
@@ -42,6 +46,7 @@ interface Representante {
   email: string | null;
   username: string | null;
   referral_code: string | null;
+  commission_override: number | null;
   plan: string;
   created_at: string;
   referidos: Referido[];
@@ -103,7 +108,6 @@ function Avatar({ name, email, size = 36 }: { name: string | null; email: string
   );
 }
 
-// Validate referral code: 4–20 chars, letters/numbers/hyphens, no spaces
 function validateCode(code: string): string | null {
   if (!code.trim()) return "Código não pode ser vazio.";
   if (code.length < 4) return "Mínimo 4 caracteres.";
@@ -119,7 +123,7 @@ function TierProgress({ total, tier }: { total: number; tier: Tier }) {
   const progress = Math.min(((total - from) / (tier.nextAt - from)) * 100, 100);
   const remaining = tier.nextAt - total;
   return (
-    <div style={{ marginTop: 8 }}>
+    <div style={{ marginTop: 6 }}>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8a93a2", marginBottom: 3 }}>
         <span>{tier.nextPct}% a partir de {tier.nextAt} indicados</span>
         <span>faltam {remaining}</span>
@@ -128,6 +132,27 @@ function TierProgress({ total, tier }: { total: number; tier: Tier }) {
         <div style={{ height: "100%", width: `${progress}%`, backgroundColor: tier.color, borderRadius: 3, transition: "width 0.4s" }} />
       </div>
     </div>
+  );
+}
+
+// ── Commission badge ───────────────────────────────────────────
+function CommissionBadge({ pct, isManual }: { pct: number; isManual: boolean }) {
+  const color  = isManual ? GOLD  : (pct >= 20 ? WINE : pct >= 15 ? "#7c3aed" : "#1d4ed8");
+  const bg     = isManual ? `${GOLD}18` : (pct >= 20 ? "#f9f0f1" : pct >= 15 ? "#f5f3ff" : "#eff6ff");
+  const border = isManual ? `${GOLD}60` : (pct >= 20 ? "#e4b5ba" : pct >= 15 ? "#c4b5fd" : "#bfdbfe");
+  return (
+    <span style={{
+      fontSize: 12, fontWeight: 900, color, backgroundColor: bg,
+      border: `1px solid ${border}`, padding: "3px 10px", borderRadius: 6,
+      display: "inline-flex", alignItems: "center", gap: 5,
+    }}>
+      {pct}% comissão
+      {isManual && (
+        <span style={{ fontSize: 9, fontWeight: 700, backgroundColor: GOLD, color: "#fff", padding: "1px 5px", borderRadius: 3 }}>
+          MANUAL
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -163,7 +188,7 @@ function CodeEditor({
     setError(null);
   };
 
-  const save = async (e: React.MouseEvent) => {
+  const save = async (e: React.MouseEvent | React.KeyboardEvent) => {
     e.stopPropagation();
     const trimmed = value.trim().toUpperCase();
     const err = validateCode(trimmed);
@@ -176,11 +201,7 @@ function CodeEditor({
       .eq("id", repId);
     setSaving(false);
     if (dbErr) {
-      if (dbErr.code === "23505") {
-        setError("Esse código já está em uso. Escolha outro.");
-      } else {
-        setError(dbErr.message);
-      }
+      setError(dbErr.code === "23505" ? "Esse código já está em uso. Escolha outro." : dbErr.message);
       return;
     }
     setSuccess(true);
@@ -191,10 +212,7 @@ function CodeEditor({
 
   if (editing) {
     return (
-      <div
-        style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, flexWrap: "wrap" }} onClick={(e) => e.stopPropagation()}>
         <input
           ref={inputRef}
           value={value}
@@ -207,19 +225,14 @@ function CodeEditor({
             backgroundColor: error ? "#fef2f2" : "#fff",
           }}
           onKeyDown={(e) => {
-            if (e.key === "Enter") { void save(e as unknown as React.MouseEvent); }
+            if (e.key === "Enter") { void save(e); }
             if (e.key === "Escape") { setEditing(false); }
           }}
         />
-        <button
-          onClick={(e) => { void save(e); }}
-          disabled={saving}
-          style={{ padding: "5px 10px", backgroundColor: GOLD, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: saving ? 0.6 : 1 }}
-        >{saving ? "..." : "Salvar"}</button>
-        <button
-          onClick={cancel}
-          style={{ padding: "5px 8px", backgroundColor: "#f3f4f6", color: "#6b7280", border: "none", borderRadius: 6, fontSize: 12, cursor: "pointer" }}
-        >✕</button>
+        <button onClick={(e) => { void save(e); }} disabled={saving} style={{ padding: "5px 10px", backgroundColor: GOLD, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+          {saving ? "..." : "Salvar"}
+        </button>
+        <button onClick={cancel} style={{ padding: "5px 8px", backgroundColor: "#f3f4f6", color: "#6b7280", border: "none", borderRadius: 6, fontSize: 12, cursor: "pointer" }}>✕</button>
         {error && <span style={{ fontSize: 11, color: "#dc2626" }}>{error}</span>}
       </div>
     );
@@ -227,22 +240,141 @@ function CodeEditor({
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-      {currentCode ? (
-        <span style={{
-          fontSize: 11, fontWeight: 800, backgroundColor: `${GOLD}20`, color: GOLD,
-          padding: "2px 8px", borderRadius: 5, fontFamily: "monospace", letterSpacing: 0.5,
-        }}>{currentCode}</span>
-      ) : (
-        <span style={{ fontSize: 11, color: "#aaa", fontStyle: "italic" }}>sem código</span>
-      )}
+      {currentCode
+        ? <span style={{ fontSize: 11, fontWeight: 800, backgroundColor: `${GOLD}20`, color: GOLD, padding: "2px 8px", borderRadius: 5, fontFamily: "monospace", letterSpacing: 0.5 }}>{currentCode}</span>
+        : <span style={{ fontSize: 11, color: "#aaa", fontStyle: "italic" }}>sem código</span>
+      }
+      <button onClick={startEdit} style={{ padding: "2px 7px", backgroundColor: "transparent", border: "1px solid #e8eaed", borderRadius: 5, fontSize: 11, color: "#6b7280", cursor: "pointer" }}>
+        ✏ editar
+      </button>
+      {success && <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 700 }}>✓ Salvo!</span>}
+    </div>
+  );
+}
+
+// ── Commission override editor ────────────────────────────────
+function CommissionEditor({
+  repId,
+  currentOverride,
+  tierPct,
+  onSaved,
+}: {
+  repId: string;
+  currentOverride: number | null;
+  tierPct: number;
+  onSaved: (repId: string, newOverride: number | null) => void;
+}) {
+  const [editing, setEditing]   = useState(false);
+  const [value, setValue]       = useState(currentOverride !== null ? String(currentOverride) : "");
+  const [saving, setSaving]     = useState(false);
+  const [error, setError]       = useState<string | null>(null);
+  const [success, setSuccess]   = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const startEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setValue(currentOverride !== null ? String(currentOverride) : "");
+    setError(null);
+    setSuccess(false);
+    setEditing(true);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
+  const cancel = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditing(false);
+    setError(null);
+  };
+
+  const save = async (e: React.MouseEvent | React.KeyboardEvent, clearOverride = false) => {
+    e.stopPropagation();
+    let newOverride: number | null = null;
+
+    if (!clearOverride) {
+      const parsed = parseFloat(value.replace(",", "."));
+      if (isNaN(parsed) || parsed < 0 || parsed > 100) {
+        setError("Informe um valor entre 0 e 100.");
+        return;
+      }
+      newOverride = Math.round(parsed * 100) / 100;
+    }
+
+    setSaving(true);
+    setError(null);
+    const { error: dbErr } = await supabase
+      .from("profiles")
+      .update({ commission_override: newOverride })
+      .eq("id", repId);
+    setSaving(false);
+
+    if (dbErr) {
+      setError(dbErr.message);
+      return;
+    }
+    setSuccess(true);
+    setEditing(false);
+    onSaved(repId, newOverride);
+    setTimeout(() => setSuccess(false), 2500);
+  };
+
+  if (editing) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 6 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "center", gap: 0, border: `1px solid ${error ? "#fca5a5" : "#e8eaed"}`, borderRadius: 6, overflow: "hidden", backgroundColor: error ? "#fef2f2" : "#fff" }}>
+          <input
+            ref={inputRef}
+            type="number"
+            min={0}
+            max={100}
+            step={0.5}
+            value={value}
+            onChange={(e) => { setValue(e.target.value); setError(null); }}
+            placeholder={String(tierPct)}
+            style={{
+              padding: "5px 9px", border: "none", fontSize: 13, fontWeight: 700,
+              outline: "none", width: 68, backgroundColor: "transparent",
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { void save(e); }
+              if (e.key === "Escape") { setEditing(false); }
+            }}
+          />
+          <span style={{ padding: "5px 9px 5px 0", fontSize: 13, fontWeight: 700, color: "#555" }}>%</span>
+        </div>
+        <button
+          onClick={(e) => { void save(e); }}
+          disabled={saving}
+          style={{ padding: "5px 12px", backgroundColor: GOLD, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: saving ? 0.6 : 1 }}
+        >{saving ? "..." : "Salvar"}</button>
+        {currentOverride !== null && (
+          <button
+            onClick={(e) => { void save(e, true); }}
+            disabled={saving}
+            title="Voltar ao tier automático"
+            style={{ padding: "5px 10px", backgroundColor: "#fef2f2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+          >↺ Automático</button>
+        )}
+        <button onClick={cancel} style={{ padding: "5px 8px", backgroundColor: "#f3f4f6", color: "#6b7280", border: "none", borderRadius: 6, fontSize: 12, cursor: "pointer" }}>✕</button>
+        {error && <span style={{ fontSize: 11, color: "#dc2626" }}>{error}</span>}
+      </div>
+    );
+  }
+
+  const isManual = currentOverride !== null;
+  const displayPct = isManual ? currentOverride! : tierPct;
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+      <CommissionBadge pct={displayPct} isManual={isManual} />
       <button
         onClick={startEdit}
-        title="Editar código de convite"
         style={{
-          padding: "2px 7px", backgroundColor: "transparent", border: "1px solid #e8eaed",
-          borderRadius: 5, fontSize: 11, color: "#6b7280", cursor: "pointer",
+          padding: "3px 8px", backgroundColor: "transparent",
+          border: "1px solid #e8eaed", borderRadius: 5,
+          fontSize: 11, color: "#6b7280", cursor: "pointer",
+          display: "flex", alignItems: "center", gap: 4,
         }}
-      >✏ editar</button>
+      >✏ alterar</button>
       {success && <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 700 }}>✓ Salvo!</span>}
     </div>
   );
@@ -251,9 +383,9 @@ function CodeEditor({
 // ── Main page ─────────────────────────────────────────────────
 export default function AdminIndicacoes() {
   const [representantes, setRepresentantes] = useState<Representante[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState<string | null>(null);
+  const [search, setSearch]     = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filterPlan, setFilterPlan] = useState<"all" | "paid" | "free">("all");
 
@@ -277,7 +409,7 @@ export default function AdminIndicacoes() {
 
       const { data: inviters, error: err2 } = await supabase
         .from("profiles")
-        .select("id, full_name, email, username, referral_code, plan, created_at")
+        .select("id, full_name, email, username, referral_code, commission_override, plan, created_at")
         .in("id", inviterIds);
 
       if (err2) throw err2;
@@ -305,6 +437,7 @@ export default function AdminIndicacoes() {
         email: inv.email,
         username: inv.username,
         referral_code: inv.referral_code,
+        commission_override: inv.commission_override ?? null,
         plan: inv.plan ?? "gratuito",
         created_at: inv.created_at,
         referidos: (map.get(inv.id) ?? []).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
@@ -321,11 +454,12 @@ export default function AdminIndicacoes() {
 
   useEffect(() => { void load(); }, []);
 
-  // Update referral code locally after save
   const handleCodeSaved = (repId: string, newCode: string) => {
-    setRepresentantes((prev) =>
-      prev.map((r) => r.id === repId ? { ...r, referral_code: newCode } : r)
-    );
+    setRepresentantes((prev) => prev.map((r) => r.id === repId ? { ...r, referral_code: newCode } : r));
+  };
+
+  const handleCommissionSaved = (repId: string, newOverride: number | null) => {
+    setRepresentantes((prev) => prev.map((r) => r.id === repId ? { ...r, commission_override: newOverride } : r));
   };
 
   // ── Derived stats ─────────────────────────────────────────
@@ -339,12 +473,12 @@ export default function AdminIndicacoes() {
   const filtered = representantes.filter((rep) => {
     if (search.trim()) {
       const s = search.toLowerCase();
-      const match =
-        (rep.full_name ?? "").toLowerCase().includes(s) ||
-        (rep.email ?? "").toLowerCase().includes(s) ||
-        (rep.username ?? "").toLowerCase().includes(s) ||
-        (rep.referral_code ?? "").toLowerCase().includes(s);
-      if (!match) return false;
+      if (
+        !(rep.full_name ?? "").toLowerCase().includes(s) &&
+        !(rep.email ?? "").toLowerCase().includes(s) &&
+        !(rep.username ?? "").toLowerCase().includes(s) &&
+        !(rep.referral_code ?? "").toLowerCase().includes(s)
+      ) return false;
     }
     if (filterPlan === "paid") return rep.referidos.some(isPlanActive);
     if (filterPlan === "free") return !rep.referidos.some(isPlanActive);
@@ -368,30 +502,29 @@ export default function AdminIndicacoes() {
         </div>
 
         {/* Commission tier legend */}
-        <div style={{
-          backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 12,
-          padding: "14px 18px", marginBottom: 20,
-          display: "flex", gap: 0, flexWrap: "wrap",
-        }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, marginRight: 16, display: "flex", alignItems: "center" }}>
-            Tabela de comissões:
+        <div style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 12, padding: "14px 18px", marginBottom: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#8a93a2", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>
+            Tabela de comissões automáticas
           </div>
-          {[
-            { range: "0 – 49 indicados",   pct: "10%", color: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe" },
-            { range: "50 – 199 indicados",  pct: "15%", color: "#7c3aed", bg: "#f5f3ff", border: "#c4b5fd" },
-            { range: "200+ indicados",      pct: "20%", color: WINE,      bg: "#f9f0f1", border: "#e4b5ba" },
-          ].map((t) => (
-            <div key={t.pct} style={{
-              display: "flex", alignItems: "center", gap: 8, marginRight: 20, marginTop: 2,
-            }}>
-              <span style={{
-                fontSize: 13, fontWeight: 900, color: t.color,
-                backgroundColor: t.bg, border: `1px solid ${t.border}`,
-                padding: "3px 10px", borderRadius: 6,
-              }}>{t.pct}</span>
-              <span style={{ fontSize: 12, color: "#6b7280" }}>{t.range}</span>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+            {[
+              { range: "0 – 49 indicados",  pct: "10%", color: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe" },
+              { range: "50 – 199 indicados", pct: "15%", color: "#7c3aed", bg: "#f5f3ff", border: "#c4b5fd" },
+              { range: "200+ indicados",     pct: "20%", color: WINE,      bg: "#f9f0f1", border: "#e4b5ba" },
+            ].map((t, i, arr) => (
+              <React.Fragment key={t.pct}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 14, fontWeight: 900, color: t.color, backgroundColor: t.bg, border: `1px solid ${t.border}`, padding: "3px 12px", borderRadius: 6 }}>{t.pct}</span>
+                  <span style={{ fontSize: 12, color: "#6b7280" }}>{t.range}</span>
+                </div>
+                {i < arr.length - 1 && <span style={{ color: "#d1d5db", fontSize: 18 }}>→</span>}
+              </React.Fragment>
+            ))}
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, backgroundColor: `${GOLD}12`, border: `1px solid ${GOLD}40`, borderRadius: 8, padding: "6px 12px" }}>
+              <span style={{ fontSize: 11, fontWeight: 800, backgroundColor: GOLD, color: "#fff", padding: "1px 6px", borderRadius: 3 }}>MANUAL</span>
+              <span style={{ fontSize: 12, color: "#6b7280" }}>Sobrescreve o tier automático</span>
             </div>
-          ))}
+          </div>
         </div>
 
         {/* Summary cards */}
@@ -422,15 +555,9 @@ export default function AdminIndicacoes() {
             />
           </div>
           {(["all", "paid", "free"] as const).map((v) => (
-            <button
-              key={v}
-              onClick={() => setFilterPlan(v)}
-              style={{
-                padding: "10px 16px", border: "1px solid #e8eaed", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer",
-                backgroundColor: filterPlan === v ? NAVY : "#fff",
-                color: filterPlan === v ? "#fff" : "#555",
-              }}
-            >{v === "all" ? "Todos" : v === "paid" ? "Com ativos" : "Sem ativos"}</button>
+            <button key={v} onClick={() => setFilterPlan(v)} style={{ padding: "10px 16px", border: "1px solid #e8eaed", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", backgroundColor: filterPlan === v ? NAVY : "#fff", color: filterPlan === v ? "#fff" : "#555" }}>
+              {v === "all" ? "Todos" : v === "paid" ? "Com ativos" : "Sem ativos"}
+            </button>
           ))}
         </div>
 
@@ -459,6 +586,8 @@ export default function AdminIndicacoes() {
               const pagantes = rep.referidos.filter((f) => f.plan !== "gratuito" && f.plan !== "free" && !!f.plan).length;
               const convRate = total > 0 ? Math.round((pagantes / total) * 100) : 0;
               const tier     = getTier(total);
+              const effPct   = effectivePct(total, rep.commission_override);
+              const isManual = rep.commission_override !== null;
 
               return (
                 <div key={rep.id}>
@@ -475,47 +604,42 @@ export default function AdminIndicacoes() {
                   >
                     <Avatar name={rep.full_name} email={rep.email} size={42} />
 
-                    {/* Info + code editor */}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 4 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 3 }}>
                         {rep.full_name ?? rep.username ?? "—"}
                       </div>
                       <div style={{ fontSize: 12, color: "#8a93a2", marginBottom: 6 }}>
                         {rep.email ?? `@${rep.username ?? "—"}`}
                       </div>
-                      {/* Code editor — stop propagation so click doesn't toggle expand */}
-                      <CodeEditor
+
+                      {/* Referral code editor */}
+                      <CodeEditor repId={rep.id} currentCode={rep.referral_code} onSaved={handleCodeSaved} />
+
+                      {/* Commission editor */}
+                      <CommissionEditor
                         repId={rep.id}
-                        currentCode={rep.referral_code}
-                        onSaved={handleCodeSaved}
+                        currentOverride={rep.commission_override}
+                        tierPct={tier.pct}
+                        onSaved={handleCommissionSaved}
                       />
 
-                      {/* Commission tier badge + progress */}
-                      <div style={{ marginTop: 8 }}>
-                        <span style={{
-                          fontSize: 12, fontWeight: 900,
-                          color: tier.color, backgroundColor: tier.bg,
-                          border: `1px solid ${tier.border}`,
-                          padding: "3px 10px", borderRadius: 6,
-                        }}>
-                          {tier.label} comissão
-                        </span>
-                        {tier.pct < 20 && (
-                          <TierProgress total={total} tier={tier} />
-                        )}
-                      </div>
+                      {/* Progress bar (only when on automatic tier and not at max) */}
+                      {!isManual && tier.nextAt && (
+                        <TierProgress total={total} tier={tier} />
+                      )}
                     </div>
 
                     {/* Stats chips */}
                     <div style={{ display: "flex", gap: 10, alignItems: "center", flexShrink: 0, paddingTop: 2 }}>
                       {[
-                        { value: total,    label: "indicados", color: NAVY },
-                        { value: ativos,   label: "ativos",    color: "#16a34a" },
-                        { value: `${convRate}%`, label: "conversão", color: GOLD },
+                        { value: total,            label: "indicados", color: NAVY },
+                        { value: ativos,           label: "ativos",    color: "#16a34a" },
+                        { value: `${convRate}%`,   label: "conversão", color: GOLD },
+                        { value: `${effPct}%`,     label: isManual ? "comissão ✏" : "comissão", color: isManual ? GOLD : tier.color },
                       ].map((s) => (
-                        <div key={s.label} style={{ textAlign: "center", minWidth: 46 }}>
-                          <div style={{ fontSize: 17, fontWeight: 900, color: s.color, lineHeight: 1 }}>{s.value}</div>
-                          <div style={{ fontSize: 10, color: "#aaa", marginTop: 1 }}>{s.label}</div>
+                        <div key={s.label} style={{ textAlign: "center", minWidth: 52 }}>
+                          <div style={{ fontSize: 16, fontWeight: 900, color: s.color, lineHeight: 1 }}>{s.value}</div>
+                          <div style={{ fontSize: 9, color: "#aaa", marginTop: 2 }}>{s.label}</div>
                         </div>
                       ))}
                       <span style={{ color: "#aaa", fontSize: 18, marginLeft: 2 }}>{isOpen ? "▾" : "›"}</span>
@@ -524,22 +648,15 @@ export default function AdminIndicacoes() {
 
                   {/* ── Expanded panel ── */}
                   {isOpen && (
-                    <div style={{
-                      borderBottom: idx < filtered.length - 1 ? "1px solid #e8eaed" : "none",
-                      backgroundColor: "#fafbfc",
-                    }}>
+                    <div style={{ borderBottom: idx < filtered.length - 1 ? "1px solid #e8eaed" : "none", backgroundColor: "#fafbfc" }}>
                       {/* Summary bar */}
-                      <div style={{
-                        display: "flex", gap: 20, flexWrap: "wrap", alignItems: "center",
-                        padding: "12px 20px", borderBottom: "1px solid #e8eaed",
-                        backgroundColor: `${NAVY}05`,
-                      }}>
+                      <div style={{ display: "flex", gap: 20, flexWrap: "wrap", alignItems: "center", padding: "12px 20px", borderBottom: "1px solid #e8eaed", backgroundColor: `${NAVY}05` }}>
                         {[
-                          { label: "Total indicados",  value: total,          color: NAVY },
-                          { label: "Com plano ativo",  value: ativos,         color: "#16a34a" },
-                          { label: "Plano pago",       value: pagantes,       color: GOLD },
-                          { label: "Taxa de conversão",value: `${convRate}%`, color: convRate >= 50 ? "#16a34a" : convRate >= 20 ? GOLD : "#6b7280" },
-                          { label: "Comissão atual",   value: `${tier.pct}%`, color: tier.color },
+                          { label: "Total indicados",  value: total,           color: NAVY },
+                          { label: "Com plano ativo",  value: ativos,          color: "#16a34a" },
+                          { label: "Plano pago",       value: pagantes,        color: GOLD },
+                          { label: "Conversão",        value: `${convRate}%`,  color: convRate >= 50 ? "#16a34a" : convRate >= 20 ? GOLD : "#6b7280" },
+                          { label: isManual ? "Comissão (manual)" : "Comissão (automático)", value: `${effPct}%`, color: isManual ? GOLD : tier.color },
                         ].map((s) => (
                           <div key={s.label} style={{ fontSize: 12 }}>
                             <span style={{ color: "#8a93a2" }}>{s.label}: </span>
@@ -549,69 +666,36 @@ export default function AdminIndicacoes() {
                       </div>
 
                       {/* Table header */}
-                      <div style={{
-                        display: "grid", gridTemplateColumns: "2fr 1.2fr 1fr 1fr 1fr",
-                        padding: "8px 20px", fontSize: 11, fontWeight: 700, color: "#8a93a2",
-                        textTransform: "uppercase" as const, letterSpacing: 0.5,
-                        borderBottom: "1px solid #e8eaed",
-                      }}>
-                        <span>Usuário</span>
-                        <span>Plano</span>
-                        <span>Status</span>
-                        <span>Vence em</span>
-                        <span>Cadastro</span>
+                      <div style={{ display: "grid", gridTemplateColumns: "2fr 1.2fr 1fr 1fr 1fr", padding: "8px 20px", fontSize: 11, fontWeight: 700, color: "#8a93a2", textTransform: "uppercase" as const, letterSpacing: 0.5, borderBottom: "1px solid #e8eaed" }}>
+                        <span>Usuário</span><span>Plano</span><span>Status</span><span>Vence em</span><span>Cadastro</span>
                       </div>
 
                       {/* Referido rows */}
                       {rep.referidos.length === 0 ? (
                         <div style={{ padding: 20, textAlign: "center", color: "#aaa", fontSize: 13 }}>Nenhum indicado ainda.</div>
-                      ) : (
-                        rep.referidos.map((ref, i) => {
-                          const badge  = statusBadge(ref);
-                          const isPaid = ref.plan !== "gratuito" && ref.plan !== "free" && !!ref.plan;
-                          return (
-                            <div key={ref.id} style={{
-                              display: "grid", gridTemplateColumns: "2fr 1.2fr 1fr 1fr 1fr",
-                              padding: "11px 20px", alignItems: "center",
-                              borderBottom: i < rep.referidos.length - 1 ? "1px solid #f0f2f4" : "none",
-                              backgroundColor: "#fff",
-                            }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                                <Avatar name={ref.full_name} email={ref.email} size={28} />
-                                <div style={{ minWidth: 0 }}>
-                                  <div style={{ fontSize: 13, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                    {ref.full_name ?? ref.username ?? "—"}
-                                  </div>
-                                  <div style={{ fontSize: 11, color: "#8a93a2", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                    {ref.email ?? `@${ref.username ?? ref.id.slice(0, 8)}`}
-                                  </div>
-                                </div>
+                      ) : rep.referidos.map((ref, i) => {
+                        const badge  = statusBadge(ref);
+                        const isPaid = ref.plan !== "gratuito" && ref.plan !== "free" && !!ref.plan;
+                        return (
+                          <div key={ref.id} style={{ display: "grid", gridTemplateColumns: "2fr 1.2fr 1fr 1fr 1fr", padding: "11px 20px", alignItems: "center", borderBottom: i < rep.referidos.length - 1 ? "1px solid #f0f2f4" : "none", backgroundColor: "#fff" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                              <Avatar name={ref.full_name} email={ref.email} size={28} />
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ref.full_name ?? ref.username ?? "—"}</div>
+                                <div style={{ fontSize: 11, color: "#8a93a2", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ref.email ?? `@${ref.username ?? ref.id.slice(0, 8)}`}</div>
                               </div>
-
-                              <div>
-                                <span style={{
-                                  fontSize: 12, fontWeight: 700,
-                                  color: isPaid ? planColor(ref.plan) : "#6b7280",
-                                  backgroundColor: isPaid ? `${planColor(ref.plan)}15` : "#f3f4f6",
-                                  padding: "3px 8px", borderRadius: 5,
-                                }}>{planLabel(ref.plan)}</span>
-                              </div>
-
-                              <div>
-                                <span style={{
-                                  fontSize: 11, fontWeight: 700, color: badge.color,
-                                  backgroundColor: badge.bg, border: `1px solid ${badge.border}`,
-                                  padding: "2px 7px", borderRadius: 5,
-                                }}>{badge.label}</span>
-                              </div>
-
-                              <div style={{ fontSize: 12, color: "#555" }}>{planExpiry(ref)}</div>
-
-                              <div style={{ fontSize: 12, color: "#8a93a2" }}>{fmt(ref.created_at)}</div>
                             </div>
-                          );
-                        })
-                      )}
+                            <div>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: isPaid ? planColor(ref.plan) : "#6b7280", backgroundColor: isPaid ? `${planColor(ref.plan)}15` : "#f3f4f6", padding: "3px 8px", borderRadius: 5 }}>{planLabel(ref.plan)}</span>
+                            </div>
+                            <div>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: badge.color, backgroundColor: badge.bg, border: `1px solid ${badge.border}`, padding: "2px 7px", borderRadius: 5 }}>{badge.label}</span>
+                            </div>
+                            <div style={{ fontSize: 12, color: "#555" }}>{planExpiry(ref)}</div>
+                            <div style={{ fontSize: 12, color: "#8a93a2" }}>{fmt(ref.created_at)}</div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
