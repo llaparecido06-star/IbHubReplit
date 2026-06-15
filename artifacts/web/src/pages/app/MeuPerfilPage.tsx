@@ -542,6 +542,8 @@ export default function MeuPerfilPage() {
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverOverride, setCoverOverride] = useState<string | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [adminBadgeKeys, setAdminBadgeKeys] = useState<string[]>([]);
+  const [wineCount, setWineCount] = useState(0);
 
   const userId = profile?.id ?? user?.id ?? "";
   const displayName = profile?.full_name ?? user?.email?.split("@")[0] ?? "Usuário";
@@ -559,6 +561,10 @@ export default function MeuPerfilPage() {
     fetchUserPosts(userId)
       .then(data => { setPosts(data); setLoadingPosts(false); })
       .catch(() => setLoadingPosts(false));
+    supabase.from("user_badges").select("badge_key").eq("user_id", userId)
+      .then(({ data }) => setAdminBadgeKeys((data ?? []).map((r: { badge_key: string }) => r.badge_key)));
+    supabase.from("wine_cellar").select("id", { count: "exact", head: true }).eq("user_id", userId)
+      .then(({ count }) => setWineCount(count ?? 0));
     // Look up the user's company page (if any) so the "Empresa / Minha página"
     // card can route to /app/empresa/:id instead of the route-less /app/empresa.
     (async () => {
@@ -675,6 +681,34 @@ export default function MeuPerfilPage() {
     return Math.round((fields.filter(Boolean).length / fields.length) * 100);
   })();
 
+  const ADMIN_BADGE_DEFS_MAP: Record<string, { icon: string; label: string }> = {
+    representante:       { icon: "🎖️", label: "Representante" },
+    embaixador:          { icon: "🌍", label: "Embaixador" },
+    comunidade:          { icon: "👥", label: "Comunidade" },
+    especialista:        { icon: "🍷", label: "Especialista" },
+    produtor_verificado: { icon: "✅", label: "Produtor Verificado" },
+    sommelier:           { icon: "🍾", label: "Sommelier Certificado" },
+    destaque_editorial:  { icon: "⭐", label: "Destaque Editorial" },
+    parceiro:            { icon: "🤝", label: "Parceiro" },
+  };
+
+  const computedBadges = (() => {
+    const result: { icon: string; label: string; isAdmin: boolean }[] = [];
+    for (const key of adminBadgeKeys) {
+      const def = ADMIN_BADGE_DEFS_MAP[key];
+      if (def) result.push({ ...def, isAdmin: true });
+    }
+    if (posts.length >= 1)      result.push({ icon: "✍️",  label: "Primeiro Post",    isAdmin: false });
+    if (posts.length >= 10)     result.push({ icon: "📝",  label: "Publicador Ativo", isAdmin: false });
+    if (stats.followers >= 10)  result.push({ icon: "🌟",  label: "10 Seguidores",    isAdmin: false });
+    if (stats.followers >= 100) result.push({ icon: "🏆",  label: "100 Seguidores",   isAdmin: false });
+    if (stats.connections >= 5) result.push({ icon: "🤝",  label: "Bem Conectado",    isAdmin: false });
+    if (wineCount >= 5)         result.push({ icon: "🍷",  label: "Enólogo",          isAdmin: false });
+    if (wineCount >= 20)        result.push({ icon: "🥂",  label: "Colecionador",     isAdmin: false });
+    if (completion >= 100)      result.push({ icon: "💎",  label: "Perfil Completo",  isAdmin: false });
+    return result;
+  })();
+
   if (isMobile) {
     const COVER_H = 120;
     return (
@@ -784,6 +818,21 @@ export default function MeuPerfilPage() {
                 {((profile as any).areas_of_expertise as string[]).map(tag => (
                   <span key={tag} style={{ backgroundColor: "#f2f3f5", border: `1px solid ${BORDER}`, borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 600, color: NAVY }}>{tag}</span>
                 ))}
+              </div>
+            )}
+
+            {/* Badges */}
+            {computedBadges.length > 0 && (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Conquistas</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {computedBadges.map(b => (
+                    <div key={b.label} style={{ display: "flex", alignItems: "center", gap: 5, backgroundColor: b.isAdmin ? `${GOLD}18` : "#f2f3f5", border: `1px solid ${b.isAdmin ? GOLD + "40" : BORDER}`, borderRadius: 20, padding: "4px 10px" }}>
+                      <span style={{ fontSize: 14 }}>{b.icon}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: NAVY }}>{b.label}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -975,6 +1024,21 @@ export default function MeuPerfilPage() {
                 </div>
               ))}
             </div>
+
+            {/* Badges */}
+            {computedBadges.length > 0 && (
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${BORDER}` }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Conquistas</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {computedBadges.map(b => (
+                    <div key={b.label} style={{ display: "flex", alignItems: "center", gap: 5, backgroundColor: b.isAdmin ? `${GOLD}18` : "#f2f3f5", border: `1px solid ${b.isAdmin ? GOLD + "40" : BORDER}`, borderRadius: 20, padding: "4px 10px" }}>
+                      <span style={{ fontSize: 14 }}>{b.icon}</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: NAVY }}>{b.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

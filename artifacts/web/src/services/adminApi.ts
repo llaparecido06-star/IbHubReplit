@@ -509,6 +509,53 @@ export async function deleteUser(userId: string): Promise<{ success: boolean; er
   }
 }
 
+// ─── Badges ───────────────────────────────────────────────────────────────────
+
+export interface UserBadgeRow {
+  id: string;
+  user_id: string;
+  badge_key: string;
+  granted_by: string | null;
+  notes: string | null;
+  granted_at: string;
+}
+
+export async function fetchAllUserBadges(): Promise<UserBadgeRow[]> {
+  const { data, error } = await supabase
+    .from("user_badges")
+    .select("*")
+    .order("granted_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as UserBadgeRow[];
+}
+
+export async function fetchUserBadgesByUserId(userId: string): Promise<UserBadgeRow[]> {
+  const { data, error } = await supabase
+    .from("user_badges")
+    .select("*")
+    .eq("user_id", userId)
+    .order("granted_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as UserBadgeRow[];
+}
+
+export async function grantBadge(
+  userId: string,
+  badgeKey: string,
+  grantedBy: string,
+  notes?: string,
+): Promise<boolean> {
+  const { error } = await supabase
+    .from("user_badges")
+    .insert({ user_id: userId, badge_key: badgeKey, granted_by: grantedBy, notes: notes ?? null });
+  return !error;
+}
+
+export async function revokeBadge(badgeId: string): Promise<boolean> {
+  const { error } = await supabase.from("user_badges").delete().eq("id", badgeId);
+  return !error;
+}
+
 export function relativeTime(isoString: string): string {
   const diff = Date.now() - new Date(isoString).getTime();
   const seconds = Math.floor(diff / 1000);

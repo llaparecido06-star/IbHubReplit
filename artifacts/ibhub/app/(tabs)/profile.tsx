@@ -632,6 +632,7 @@ export default function ProfileScreen() {
   const [referralCode,  setReferralCode]  = useState<string | null>(null);
   const [inviteCount,   setInviteCount]   = useState(0);
   const [inviteRank,    setInviteRank]    = useState(0);
+  const [adminBadgeKeys, setAdminBadgeKeys] = useState<string[]>([]);
 
   const isCompany = !!activeCompany || profile?.profile_type === "empresa";
   const name      = profile?.full_name ?? profile?.username ?? "Usuário";
@@ -682,15 +683,17 @@ export default function ProfileScreen() {
 
   const loadEngagement = useCallback(async () => {
     if (!user?.id) return;
-    const [views, refCode, stats] = await Promise.all([
+    const [views, refCode, stats, badgesRes] = await Promise.all([
       fetchProfileViewsThisWeek(user.id),
       ensureReferralCode(user.id),
       fetchMyReferralStats(user.id),
+      supabase.from("user_badges").select("badge_key").eq("user_id", user.id),
     ]);
     setProfileViews(views);
     setReferralCode(refCode);
     setInviteCount(stats.count);
     setInviteRank(stats.rank);
+    setAdminBadgeKeys((badgesRes.data ?? []).map((r: { badge_key: string }) => r.badge_key));
   }, [user?.id]);
 
   const coverUrl = coverOverride ?? (profile as any)?.cover_url ?? null;
@@ -786,19 +789,35 @@ export default function ProfileScreen() {
   };
   const completion = computeCompletion();
 
-  // Badges
-  const badges = [
-    posts.length >= 1    && { icon: "✍️", label: "Primeiro Post" },
-    posts.length >= 10   && { icon: "📝", label: "Publicador Ativo" },
-    (profile?.followers_count ?? 0) >= 10  && { icon: "🌟", label: "10 Seguidores" },
-    (profile?.followers_count ?? 0) >= 100 && { icon: "🏆", label: "100 Seguidores" },
-    (profile?.connections_count ?? 0) >= 5 && { icon: "🤝", label: "Bem Conectado" },
-    wineEntries.length >= 5 && { icon: "🍷", label: "Enólogo" },
-    wineEntries.length >= 20 && { icon: "🥂", label: "Colecionador" },
-    completion >= 100 && { icon: "💎", label: "Perfil Completo" },
-    profileViews >= 10 && { icon: "👁️", label: "Destaque da Semana" },
-    !!referralCode && { icon: "🎁", label: "Embaixador" },
-  ].filter(Boolean) as { icon: string; label: string }[];
+  // Badges — admin-assigned first, then auto-computed
+  const ADMIN_BADGE_DEFS_MOBILE: Record<string, { icon: string; label: string }> = {
+    representante:       { icon: "🎖️", label: "Representante" },
+    embaixador:          { icon: "🌍", label: "Embaixador" },
+    comunidade:          { icon: "👥", label: "Comunidade" },
+    especialista:        { icon: "🍷", label: "Especialista" },
+    produtor_verificado: { icon: "✅", label: "Produtor Verificado" },
+    sommelier:           { icon: "🍾", label: "Sommelier Certificado" },
+    destaque_editorial:  { icon: "⭐", label: "Destaque Editorial" },
+    parceiro:            { icon: "🤝", label: "Parceiro" },
+  };
+
+  const badges: { icon: string; label: string }[] = [
+    ...adminBadgeKeys
+      .map(key => ADMIN_BADGE_DEFS_MOBILE[key] ?? null)
+      .filter((b): b is { icon: string; label: string } => b !== null),
+    ...[
+      posts.length >= 1    && { icon: "✍️", label: "Primeiro Post" },
+      posts.length >= 10   && { icon: "📝", label: "Publicador Ativo" },
+      (profile?.followers_count ?? 0) >= 10  && { icon: "🌟", label: "10 Seguidores" },
+      (profile?.followers_count ?? 0) >= 100 && { icon: "🏆", label: "100 Seguidores" },
+      (profile?.connections_count ?? 0) >= 5 && { icon: "🤝", label: "Bem Conectado" },
+      wineEntries.length >= 5 && { icon: "🍷", label: "Enólogo" },
+      wineEntries.length >= 20 && { icon: "🥂", label: "Colecionador" },
+      completion >= 100 && { icon: "💎", label: "Perfil Completo" },
+      profileViews >= 10 && { icon: "👁️", label: "Destaque da Semana" },
+      !!referralCode && { icon: "🎁", label: "Indicador Ativo" },
+    ].filter(Boolean) as { icon: string; label: string }[],
+  ];
 
   const handleDeletePost = (id: string) => {
     setShowPostMenu(null);
