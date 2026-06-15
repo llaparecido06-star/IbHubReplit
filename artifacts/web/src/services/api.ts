@@ -710,6 +710,7 @@ export interface UserProfile {
   full_name: string;
   username: string | null;
   avatar_url: string | null;
+  cover_url?: string | null;
   bio: string | null;
   headline: string | null;
   position: string | null;
@@ -727,7 +728,7 @@ export async function fetchUserProfile(userId: string): Promise<UserProfile | nu
   try {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, full_name, username, avatar_url, bio, headline, position, company, plan, is_admin, created_at, certifications, areas_of_expertise, profile_type, location")
+      .select("id, full_name, username, avatar_url, cover_url, bio, headline, position, company, plan, is_admin, created_at, certifications, areas_of_expertise, profile_type, location")
       .eq("id", userId)
       .maybeSingle();
     if (error || !data) return null;

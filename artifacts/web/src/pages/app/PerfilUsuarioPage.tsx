@@ -858,9 +858,16 @@ export default function PerfilUsuarioPage() {
 
           {/* Cover */}
           <div style={{ height: 120, background: `linear-gradient(135deg, ${NAVY} 0%, #1e3a5f 60%, #2a4a6b 100%)`, position: "relative", borderRadius: "16px 16px 0 0", overflow: "hidden" }}>
-            <div style={{ position: "absolute", width: 240, height: 240, borderRadius: "50%", top: -90, right: -50, backgroundColor: "rgba(201,168,76,0.12)" }} />
-            <div style={{ position: "absolute", width: 160, height: 160, borderRadius: "50%", bottom: -50, left: -30, backgroundColor: "rgba(201,168,76,0.07)" }} />
-            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 3, backgroundColor: GOLD, opacity: 0.6 }} />
+            {userProfile.cover_url && (
+              <img src={userProfile.cover_url} alt="Capa" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+            )}
+            {!userProfile.cover_url && (
+              <>
+                <div style={{ position: "absolute", width: 240, height: 240, borderRadius: "50%", top: -90, right: -50, backgroundColor: "rgba(201,168,76,0.12)" }} />
+                <div style={{ position: "absolute", width: 160, height: 160, borderRadius: "50%", bottom: -50, left: -30, backgroundColor: "rgba(201,168,76,0.07)" }} />
+                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 3, backgroundColor: GOLD, opacity: 0.6 }} />
+              </>
+            )}
           </div>
 
           {/* Avatar — absolutely positioned to straddle the cover/content boundary */}

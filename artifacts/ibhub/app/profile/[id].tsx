@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
@@ -33,6 +34,7 @@ const FALLBACK_USER = {
   id: "", full_name: "Usuário", username: "usuario",
   headline: "", bio: "", location: "",
   avatar_url: null as string | null,
+  cover_url: null as string | null,
   plan: "gratuito", profile_type: "pessoa",
   followers_count: 0, following_count: 0, connections_count: 0,
   areas_of_expertise: [] as string[], certifications: [] as string[],
@@ -288,9 +290,19 @@ export default function PublicProfileScreen() {
     <View>
       {/* Cover banner */}
       <View style={[styles.cover, { backgroundColor: navyBg, height: COVER_HEIGHT }]}>
-        <View style={[styles.circle1, { backgroundColor: "rgba(201,168,76,0.13)" }]} />
-        <View style={[styles.circle2, { backgroundColor: "rgba(201,168,76,0.07)" }]} />
-        <View style={[styles.goldLine, { backgroundColor: colors.gold }]} />
+        {userProfile.cover_url ? (
+          <Image
+            source={{ uri: userProfile.cover_url }}
+            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+            contentFit="cover"
+          />
+        ) : (
+          <>
+            <View style={[styles.circle1, { backgroundColor: "rgba(201,168,76,0.13)" }]} />
+            <View style={[styles.circle2, { backgroundColor: "rgba(201,168,76,0.07)" }]} />
+            <View style={[styles.goldLine, { backgroundColor: colors.gold }]} />
+          </>
+        )}
       </View>
 
       {/* Profile card */}

@@ -1030,7 +1030,10 @@ export default function ProfileScreen() {
           accessibilityLabel="Alterar foto de capa"
         >
           <Feather name="camera" size={13} color="#fff" />
-          {uploadingCover ? <ActivityIndicator size="small" color="#fff" /> : null}
+          {uploadingCover
+            ? <ActivityIndicator size="small" color="#fff" />
+            : <Text style={{ color: "#fff", fontSize: 11, fontWeight: "600" }}>Alterar capa</Text>
+          }
         </TouchableOpacity>
       </View>
 
