@@ -417,7 +417,7 @@ export default function GrupoChatPage() {
 
   return (
     <AppShell>
-      <div style={{ display: "flex", height: "calc(100vh - 0px)", overflow: "hidden", background: BG }}>
+      <div style={{ position: "fixed", top: 56, bottom: isMobile ? 62 : 0, left: 0, right: 0, display: "flex", overflow: "hidden", background: BG }}>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", maxWidth: 800, margin: "0 auto", width: "100%", background: WHITE, borderLeft: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}` }}>
           {/* Header */}
           <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", borderBottom: `1px solid ${BORDER}`, background: WHITE, flexShrink: 0 }}>
