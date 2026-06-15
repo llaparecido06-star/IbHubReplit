@@ -8,6 +8,7 @@ import {
   fetchWebCompanyPageById,
   updateCompanyPage,
   uploadCompanyLogoWeb,
+  uploadCompanyCoverWeb,
   checkUserCompanyRole,
   fetchWebCompanyMembers,
   addWebCompanyMember,
@@ -471,6 +472,11 @@ export default function GerenciarEmpresaPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [coverPreview, setCoverPreview]   = useState<string | null>(null);
+  const [coverFile, setCoverFile]         = useState<File | null>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+
   const [form, setForm] = useState({
     name:     "",
     username: "",
@@ -499,6 +505,7 @@ export default function GerenciarEmpresaPage() {
         location: c.location ?? "",
       });
       setAvatarPreview(c.avatar_url ?? null);
+      setCoverPreview(c.cover_url ?? null);
     }
     setLoading(false);
   }, [companyId, profile?.id]);
@@ -560,6 +567,13 @@ export default function GerenciarEmpresaPage() {
     setAvatarPreview(URL.createObjectURL(file));
   };
 
+  const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCoverFile(file);
+    setCoverPreview(URL.createObjectURL(file));
+  };
+
   const handleSave = async () => {
     if (!companyId || !company) return;
     if (!form.name.trim()) { setError("Nome da empresa é obrigatório."); return; }
@@ -578,6 +592,18 @@ export default function GerenciarEmpresaPage() {
       }
     }
 
+    let cover_url = company.cover_url;
+    if (coverFile) {
+      setUploadingCover(true);
+      const uploaded = await uploadCompanyCoverWeb(companyId, coverFile, user?.id ?? "");
+      setUploadingCover(false);
+      if (uploaded) {
+        cover_url = uploaded;
+        setCoverPreview(uploaded);
+        setCoverFile(null);
+      }
+    }
+
     const ok = await updateCompanyPage(companyId, {
       name:      form.name.trim(),
       username:  form.username.trim() || undefined,
@@ -586,12 +612,13 @@ export default function GerenciarEmpresaPage() {
       industry:  form.industry || undefined,
       location:  form.location.trim() || undefined,
       avatar_url: avatar_url ?? undefined,
+      cover_url:  cover_url ?? undefined,
     });
 
     setSaving(false);
     if (ok) {
       setSaved(true);
-      setCompany(prev => prev ? { ...prev, ...form, avatar_url: avatar_url ?? prev.avatar_url } : prev);
+      setCompany(prev => prev ? { ...prev, ...form, avatar_url: avatar_url ?? prev.avatar_url, cover_url: cover_url ?? prev.cover_url } : prev);
       setTimeout(() => setSaved(false), 3000);
     } else {
       setError("Erro ao salvar. Tente novamente.");
@@ -684,6 +711,57 @@ export default function GerenciarEmpresaPage() {
                 {avatarFile && (
                   <p style={{ fontSize: 12, color: GOLD, fontWeight: 600, marginTop: 6 }}>
                     ✓ Nova imagem selecionada — será enviada ao salvar.
+                  </p>
+                )}
+              </div>
+
+              {/* Cover photo */}
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 700, color: NAVY, display: "block", marginBottom: 10 }}>
+                  Foto de capa
+                </label>
+                <div
+                  style={{
+                    width: "100%", height: 120, borderRadius: 10, overflow: "hidden",
+                    border: `1.5px solid ${BORDER}`, position: "relative", marginBottom: 10,
+                    background: coverPreview ? "none" : `linear-gradient(135deg, #1a2f4a 0%, ${NAVY} 60%, ${GOLD}55 100%)`,
+                    cursor: "pointer",
+                  }}
+                  onClick={() => coverInputRef.current?.click()}
+                >
+                  {coverPreview && (
+                    <img
+                      src={coverPreview}
+                      alt="Prévia da capa"
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    />
+                  )}
+                  <div style={{
+                    position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                    backgroundColor: "rgba(13,27,42,0.45)", color: WHITE, fontSize: 13, fontWeight: 700, gap: 6,
+                  }}>
+                    📷 {uploadingCover ? "Enviando..." : (coverPreview ? "Trocar capa" : "Adicionar capa")}
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <button
+                    onClick={() => coverInputRef.current?.click()}
+                    style={{ padding: "9px 18px", borderRadius: 10, border: `1.5px solid ${BORDER}`, backgroundColor: WHITE, color: NAVY, fontWeight: 700, cursor: "pointer", fontSize: 13 }}
+                  >
+                    {uploadingCover ? "Enviando..." : (coverPreview ? "Trocar capa" : "Adicionar capa")}
+                  </button>
+                  <p style={{ fontSize: 12, color: MUTED, margin: 0 }}>PNG, JPG ou WEBP. Proporção recomendada: 3:1.</p>
+                </div>
+                <input
+                  ref={coverInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={handleCoverChange}
+                />
+                {coverFile && (
+                  <p style={{ fontSize: 12, color: GOLD, fontWeight: 600, marginTop: 6 }}>
+                    ✓ Nova capa selecionada — será enviada ao salvar.
                   </p>
                 )}
               </div>

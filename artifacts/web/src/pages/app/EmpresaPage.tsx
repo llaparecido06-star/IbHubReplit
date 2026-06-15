@@ -20,6 +20,8 @@ import {
   getOrCreateWebConversation,
   toggleLikePost,
   toggleBookmarkPost,
+  uploadCompanyCoverWeb,
+  updateCompanyPage,
   CompanyPageFull,
   CompanyProduct,
   Post,
@@ -584,6 +586,8 @@ export default function EmpresaPage() {
   const [editingProduct, setEditingProduct]   = useState<CompanyProduct | null>(null);
   const [creatingProduct, setCreatingProduct] = useState(false);
   const [isManager, setIsManager]     = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!companyId) return;
@@ -611,7 +615,7 @@ export default function EmpresaPage() {
       setPostsCount(postsN);
       setIsFollowing(follow);
       // Owner-only: matches company_pages / company_products RLS.
-      setIsManager(!!role.isOwner);
+      setIsManager(role.isOwner || role.role === "editor");
       setLoading(false);
     }).catch(err => {
       console.warn("EmpresaPage load:", err);
@@ -723,9 +727,56 @@ export default function EmpresaPage() {
 
         {/* Company card (parity with personal profile) */}
         <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, overflow: "hidden", marginBottom: 14 }}>
-          <div style={{ height: 130, background: `linear-gradient(135deg, #1a2f4a 0%, ${NAVY} 60%, ${GOLD}55 100%)`, position: "relative" }}>
-            <div style={{ position: "absolute", width: 220, height: 220, borderRadius: "50%", top: -80, right: -40, backgroundColor: "rgba(201,168,76,0.13)" }} />
+          {/* Cover photo */}
+          <div style={{ height: 130, position: "relative", overflow: "hidden" }}>
+            {company.cover_url ? (
+              <img
+                src={company.cover_url}
+                alt="Capa da empresa"
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            ) : (
+              <>
+                <div style={{ width: "100%", height: "100%", background: `linear-gradient(135deg, #1a2f4a 0%, ${NAVY} 60%, ${GOLD}55 100%)` }} />
+                <div style={{ position: "absolute", width: 220, height: 220, borderRadius: "50%", top: -80, right: -40, backgroundColor: "rgba(201,168,76,0.13)" }} />
+              </>
+            )}
             <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 3, backgroundColor: GOLD, opacity: 0.6 }} />
+            {/* Upload overlay — managers only */}
+            {isManager && (
+              <>
+                <input
+                  ref={coverInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file || !companyId || !currentUserId) return;
+                    setCoverUploading(true);
+                    const url = await uploadCompanyCoverWeb(companyId, file, currentUserId);
+                    if (url) {
+                      await updateCompanyPage(companyId, { cover_url: url });
+                      setCompany(prev => prev ? { ...prev, cover_url: url } : prev);
+                    }
+                    setCoverUploading(false);
+                  }}
+                />
+                <button
+                  onClick={() => coverInputRef.current?.click()}
+                  disabled={coverUploading}
+                  style={{
+                    position: "absolute", bottom: 10, right: 10,
+                    padding: "6px 14px", borderRadius: 8, border: "none",
+                    backgroundColor: "rgba(13,27,42,0.72)", color: WHITE,
+                    fontSize: 12, fontWeight: 700, cursor: coverUploading ? "default" : "pointer",
+                    backdropFilter: "blur(4px)", display: "flex", alignItems: "center", gap: 6,
+                  }}
+                >
+                  {coverUploading ? "⏳ Enviando…" : "📷 Alterar capa"}
+                </button>
+              </>
+            )}
           </div>
 
           <div style={{ padding: "0 24px 20px", position: "relative" }}>

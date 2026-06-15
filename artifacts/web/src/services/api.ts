@@ -1767,6 +1767,7 @@ export interface CompanyPageFull {
   name: string;
   username?: string | null;
   avatar_url?: string | null;
+  cover_url?: string | null;
   bio?: string | null;
   website?: string | null;
   industry?: string | null;
@@ -1779,7 +1780,7 @@ export async function fetchWebCompanyPageById(id: string): Promise<CompanyPageFu
   try {
     const { data, error } = await supabase
       .from("company_pages")
-      .select("id, owner_id, name, username, avatar_url, bio, website, industry, location, plan, created_at")
+      .select("id, owner_id, name, username, avatar_url, cover_url, bio, website, industry, location, plan, created_at")
       .eq("id", id)
       .maybeSingle();
     if (error || !data) return null;
@@ -3874,6 +3875,26 @@ export async function uploadCompanyLogoWeb(
   }
 }
 
+export async function uploadCompanyCoverWeb(
+  companyId: string,
+  file: File,
+  userId: string,
+): Promise<string | null> {
+  try {
+    const ext = file.name.split(".").pop() ?? "jpg";
+    const path = `${userId}/company-covers/${companyId}.${ext}`;
+    const { error } = await supabase.storage
+      .from("avatars")
+      .upload(path, file, { contentType: file.type, upsert: true });
+    if (error) { console.warn("uploadCompanyCoverWeb:", error); return null; }
+    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+    return data.publicUrl + `?t=${Date.now()}`;
+  } catch (e) {
+    console.warn("uploadCompanyCoverWeb:", e);
+    return null;
+  }
+}
+
 export async function createCompanyPage(
   ownerId: string,
   data: Pick<CompanyPageFull, "name"> & Partial<Pick<CompanyPageFull, "username" | "bio" | "website" | "industry" | "location">>
@@ -3894,7 +3915,7 @@ export async function createCompanyPage(
 
 export async function updateCompanyPage(
   companyId: string,
-  updates: Partial<Pick<CompanyPageFull, "name" | "bio" | "website" | "industry" | "location" | "username" | "avatar_url">>
+  updates: Partial<Pick<CompanyPageFull, "name" | "bio" | "website" | "industry" | "location" | "username" | "avatar_url" | "cover_url">>
 ): Promise<boolean> {
   try {
     const { error } = await supabase.from("company_pages").update(updates).eq("id", companyId);
