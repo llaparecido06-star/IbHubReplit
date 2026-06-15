@@ -649,6 +649,45 @@ export default function GrupoChatPage() {
           ⚠️ {chatToast}
         </div>
       )}
+
+      {/* Message context menu */}
+      {msgMenu && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 8000 }}
+          onClick={() => setMsgMenu(null)}
+          onContextMenu={(e) => { e.preventDefault(); setMsgMenu(null); }}
+        >
+          <div
+            style={{
+              position: "fixed",
+              top: Math.min(msgMenu.y, window.innerHeight - 80),
+              left: Math.min(msgMenu.x, window.innerWidth - 200),
+              background: WHITE,
+              borderRadius: 10,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+              border: `1px solid ${BORDER}`,
+              overflow: "hidden",
+              minWidth: 180,
+              zIndex: 8001,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => void handleDeleteMessage(msgMenu.msgId)}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", gap: 10,
+                padding: "13px 16px", background: "none", border: "none",
+                cursor: "pointer", fontSize: 14, fontWeight: 600,
+                color: "#dc2626", textAlign: "left",
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "#fef2f2"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "none"; }}
+            >
+              🗑️ Apagar mensagem
+            </button>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }
