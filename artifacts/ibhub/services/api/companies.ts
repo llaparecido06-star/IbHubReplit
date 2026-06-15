@@ -275,12 +275,12 @@ export async function uploadCompanyLogo(companyId: string, uri: string): Promise
     const bytes = new Uint8Array(arrayBuffer);
 
     const { error } = await supabase.storage
-      .from("post-images")
+      .from("avatars")
       .upload(path, bytes, { contentType: mime, upsert: true });
 
     if (error) { console.error("uploadCompanyLogo:", error); return null; }
 
-    const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(path);
+    const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
     return urlData.publicUrl ?? null;
   } catch (e) {
     console.error("uploadCompanyLogo:", e);

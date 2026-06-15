@@ -61,8 +61,6 @@ import {
   ensureReferralCode,
   fetchMyReferralStats,
   fetchCompanyPageById,
-  fetchMyOpportunities,
-  type AppOpportunity,
 } from "@/services/api";
 import { Post, PostCard } from "@/components/feed/PostCard";
 import { SkeletonProfile } from "@/components/ui/SkeletonCard";
@@ -615,7 +613,6 @@ export default function ProfileScreen() {
   const [posts,          setPosts]          = useState<Post[]>([]);
   const [savedPosts,     setSavedPosts]     = useState<Post[]>([]);
   const [wineEntries,    setWineEntries]    = useState<WineEntry[]>([]);
-  const [anuncios,       setAnuncios]       = useState<AppOpportunity[]>([]);
   const [followers,      setFollowers]      = useState<FollowProfile[]>([]);
   const [following,      setFollowing]      = useState<FollowProfile[]>([]);
   const [suggestions,    setSuggestions]    = useState<SuggestedProfile[]>([]);
@@ -662,7 +659,7 @@ export default function ProfileScreen() {
     // Skip heavy personal data when in company mode (we show EmpresaProfileProxy anyway)
     if (isCompany) { setLoadingData(false); setRefreshing(false); return; }
     const areas = profile?.areas_of_expertise ?? [];
-    const [p, saved, wines, fr, fg, sg, ls, ann] = await Promise.all([
+    const [p, saved, wines, fr, fg, sg, ls] = await Promise.all([
       fetchUserPosts(user.id, user.id),
       fetchBookmarkedPosts(user.id),
       fetchWineCellar(user.id),
@@ -670,12 +667,10 @@ export default function ProfileScreen() {
       fetchFollowing(user.id),
       fetchSuggestedConnections(user.id, areas, profile?.company ?? null, 8),
       fetchProfileStats(user.id),
-      fetchMyOpportunities(user.id, "marketplace"),
     ]);
     setPosts(p);
     setSavedPosts(saved);
     setWineEntries(wines);
-    setAnuncios(ann);
     setFollowers(fr);
     setFollowing(fg);
     setFollowingSet(new Set(fg.map((f) => f.id)));
@@ -1668,13 +1663,6 @@ const styles = StyleSheet.create({
   adegaMoreText:      { fontSize: 12, textAlign: "center", marginTop: 4 },
   adegaOpenBtn:       { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, borderRadius: 12 },
   adegaOpenBtnText:   { color: "#fff", fontSize: 15, fontWeight: "700" },
-  anuncioRow:         { flexDirection: "row", alignItems: "center", gap: 12, padding: 10, borderRadius: 12, borderWidth: 1, backgroundColor: "#fff" },
-  anuncioThumb:       { width: 64, height: 64, borderRadius: 8, overflow: "hidden" },
-  anuncioTitle:       { fontSize: 14, fontWeight: "700" },
-  anuncioPrice:       { fontSize: 13, fontWeight: "700", marginTop: 2 },
-  anuncioMetaRow:     { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
-  anuncioMeta:        { fontSize: 12 },
-  anuncioInactive:    { fontSize: 11, fontStyle: "italic" },
   modalOverlay:       { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
   commentsSheet:      { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: "70%" },
   commentsHeader:     { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },

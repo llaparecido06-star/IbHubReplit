@@ -167,6 +167,22 @@ export async function uploadWebPostImage(file: File, userId: string): Promise<st
   }
 }
 
+export async function uploadWineImage(file: File, userId: string): Promise<string | null> {
+  try {
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
+    const path = `${userId}/wines/${Date.now()}.${ext}`;
+    const { data, error } = await supabase.storage
+      .from("post-images")
+      .upload(path, file, { contentType: file.type, upsert: false });
+    if (error) { console.error("uploadWineImage error:", error); return null; }
+    const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(data.path);
+    return urlData?.publicUrl ?? null;
+  } catch (e) {
+    console.error("uploadWineImage:", e);
+    return null;
+  }
+}
+
 export async function uploadWebPostVideo(file: File, userId: string): Promise<string | null> {
   try {
     const ext = file.name.split(".").pop() ?? "mp4";

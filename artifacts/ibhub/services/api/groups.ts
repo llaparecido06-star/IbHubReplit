@@ -82,10 +82,10 @@ export async function uploadGroupAvatar(imageUri: string, userId: string, groupI
     const arrayBuffer = await response.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
     const { data, error } = await supabase.storage
-      .from("post-images")
+      .from("avatars")
       .upload(filename, bytes, { contentType: mime, upsert: true });
     if (error) { console.error("uploadGroupAvatar:", error); return null; }
-    const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(data.path);
+    const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(data.path);
     return urlData.publicUrl ?? null;
   } catch (e) {
     console.error("uploadGroupAvatar:", e);

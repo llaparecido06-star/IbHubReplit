@@ -12,7 +12,7 @@ import {
   createCompanyProduct,
   updateCompanyProduct,
   deleteCompanyProduct,
-  uploadPortfolioImage,
+  uploadWineImage,
 } from "@/services/api";
 import type { ActiveCompany } from "@/context/AuthContext";
 
@@ -166,7 +166,7 @@ function PortfolioManager({ company, userId }: { company: ActiveCompany; userId:
 
     let imageUrl = imagePreview;
     if (imageFile) {
-      const uploaded = await uploadPortfolioImage(imageFile, userId);
+      const uploaded = await uploadWineImage(imageFile, userId);
       if (uploaded) imageUrl = uploaded;
     }
 
