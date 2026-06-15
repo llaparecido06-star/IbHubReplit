@@ -78,7 +78,8 @@ function timeAgo(iso: string): string {
 }
 
 function Avatar({ src, name, size = 40 }: { src?: string | null; name: string; size?: number }) {
-  if (src) return <img src={src} alt={name} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
+  const [broken, setBroken] = React.useState(false);
+  if (src && !broken) return <img src={src} alt={name} onError={() => setBroken(true)} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
   return (
     <div style={{ width: size, height: size, borderRadius: "50%", backgroundColor: "#722f37", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.38, fontWeight: 800, color: WHITE, flexShrink: 0 }}>
       {(name?.[0] ?? "U").toUpperCase()}

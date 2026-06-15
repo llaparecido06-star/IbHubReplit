@@ -12,6 +12,7 @@ import {
   registerForEvent,
   unregisterFromEvent,
   createOpportunity,
+  createEvent,
 } from "@/services/api";
 
 const GOLD = "#c9a84c";
@@ -103,23 +104,51 @@ export default function OportunidadesPage() {
   const [eventoTipo, setEventoTipo] = useState<string | null>(null);
 
   const [showCreate, setShowCreate] = useState(false);
-  const [createTab, setCreateTab] = useState<"marketplace" | "vaga">("marketplace");
+  const [createTab, setCreateTab] = useState<"marketplace" | "vaga" | "evento">("marketplace");
   const [creating, setCreating] = useState(false);
   const [createForm, setCreateForm] = useState({
     title: "", description: "", category: "", company: activeCompany?.name ?? "",
     location: "", price: "", salary: "", contract_type: "",
     contact_email: "", expires_at: "",
+    start_date: "", end_date: "",
+    location_type: "presencial" as "presencial" | "online",
+    entry_type: "gratuito" as "gratuito" | "pago",
   });
 
   const resetCreateForm = () => setCreateForm({
     title: "", description: "", category: "", company: activeCompany?.name ?? "",
     location: "", price: "", salary: "", contract_type: "",
     contact_email: "", expires_at: "",
+    start_date: "", end_date: "",
+    location_type: "presencial" as "presencial" | "online",
+    entry_type: "gratuito" as "gratuito" | "pago",
   });
 
   const handleCreate = async () => {
     if (!user?.id || !createForm.title.trim()) return;
+    if (createTab === "evento" && !createForm.start_date) return;
     setCreating(true);
+
+    if (createTab === "evento") {
+      const result = await createEvent({
+        title: createForm.title.trim(),
+        description: createForm.description.trim() || undefined,
+        start_date: createForm.start_date,
+        end_date: createForm.end_date || undefined,
+        location: createForm.location.trim() || undefined,
+        location_type: createForm.location_type,
+        entry_type: createForm.entry_type,
+        created_by: user.id,
+      });
+      setCreating(false);
+      if (result) {
+        setShowCreate(false);
+        resetCreateForm();
+        loadData();
+      }
+      return;
+    }
+
     const result = await createOpportunity({
       type: createTab,
       title: createForm.title.trim(),
@@ -288,7 +317,7 @@ export default function OportunidadesPage() {
                   if (!canPublish) { setLockedPublish(true); return; }
                   resetCreateForm();
                   setShowCreate(true);
-                  setCreateTab(tab === "vagas" ? "vaga" : "marketplace");
+                  setCreateTab(tab === "vagas" ? "vaga" : tab === "eventos" ? "evento" : "marketplace");
                 }}
                 style={{
                   display: "flex", alignItems: "center", gap: 5,
@@ -372,7 +401,7 @@ export default function OportunidadesPage() {
                             style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden", cursor: "pointer" }}
                           >
                             {item.cover_image_url && (
-                              <img src={item.cover_image_url} alt={item.title} style={{ width: "100%", height: 160, objectFit: "cover" }} />
+                              <img src={item.cover_image_url} alt={item.title} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} style={{ width: "100%", height: 160, objectFit: "cover" }} />
                             )}
                             <div style={{ padding: 14 }}>
                               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
@@ -474,9 +503,10 @@ export default function OportunidadesPage() {
                 <div>
                   <label style={{ fontSize: 13, fontWeight: 700, color: NAVY, display: "block", marginBottom: 8 }}>Tipo *</label>
                   <div style={{ display: "flex", gap: 8 }}>
-                    {([["marketplace", "🛍️ Marketplace"], ["vaga", "💼 Vaga"]] as const).map(([key, label]) => (
-                      <button key={key} onClick={() => setCreateTab(key)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: `1.5px solid ${createTab === key ? GOLD : BORDER}`, backgroundColor: createTab === key ? `${GOLD}15` : WHITE, color: createTab === key ? GOLD : MUTED, fontWeight: createTab === key ? 700 : 500, fontSize: 14, cursor: "pointer" }}>{label}</button>
-                    ))}
+                    {(["marketplace", "vaga", "evento"] as const).map((key) => {
+                      const labels: Record<string, string> = { marketplace: "🛍️ Market", vaga: "💼 Vaga", evento: "📅 Evento" };
+                      return <button key={key} onClick={() => setCreateTab(key)} style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: `1.5px solid ${createTab === key ? GOLD : BORDER}`, backgroundColor: createTab === key ? `${GOLD}15` : WHITE, color: createTab === key ? GOLD : MUTED, fontWeight: createTab === key ? 700 : 500, fontSize: 13, cursor: "pointer" }}>{labels[key]}</button>;
+                    })}
                   </div>
                 </div>
                 <input placeholder="Título *" value={createForm.title} onChange={e => setCreateForm(f => ({ ...f, title: e.target.value }))} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
@@ -496,14 +526,46 @@ export default function OportunidadesPage() {
                     </select>
                   </div>
                 )}
-                <input placeholder="Empresa" value={createForm.company} onChange={e => setCreateForm(f => ({ ...f, company: e.target.value }))} style={{ padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none" }} />
+                {createTab === "evento" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div>
+                      <label style={{ fontSize: 12, color: MUTED, display: "block", marginBottom: 4 }}>Data de início *</label>
+                      <input type="datetime-local" value={createForm.start_date} onChange={e => setCreateForm(f => ({ ...f, start_date: e.target.value }))} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, color: MUTED, display: "block", marginBottom: 4 }}>Data de término</label>
+                      <input type="datetime-local" value={createForm.end_date} onChange={e => setCreateForm(f => ({ ...f, end_date: e.target.value }))} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {(["presencial", "online"] as const).map((lt) => (
+                        <button key={lt} type="button" onClick={() => setCreateForm(f => ({ ...f, location_type: lt }))} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: `1.5px solid ${createForm.location_type === lt ? GOLD : BORDER}`, backgroundColor: createForm.location_type === lt ? `${GOLD}15` : WHITE, color: createForm.location_type === lt ? GOLD : MUTED, fontWeight: createForm.location_type === lt ? 700 : 500, fontSize: 13, cursor: "pointer" }}>
+                          {lt === "presencial" ? "📍 Presencial" : "💻 Online"}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {(["gratuito", "pago"] as const).map((et) => (
+                        <button key={et} type="button" onClick={() => setCreateForm(f => ({ ...f, entry_type: et }))} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: `1.5px solid ${createForm.entry_type === et ? GOLD : BORDER}`, backgroundColor: createForm.entry_type === et ? `${GOLD}15` : WHITE, color: createForm.entry_type === et ? GOLD : MUTED, fontWeight: createForm.entry_type === et ? 700 : 500, fontSize: 13, cursor: "pointer" }}>
+                          {et === "gratuito" ? "🎟️ Gratuito" : "💰 Pago"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {createTab !== "evento" && (
+                  <input placeholder="Empresa" value={createForm.company} onChange={e => setCreateForm(f => ({ ...f, company: e.target.value }))} style={{ padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none" }} />
+                )}
                 <input placeholder="Localização" value={createForm.location} onChange={e => setCreateForm(f => ({ ...f, location: e.target.value }))} style={{ padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none" }} />
-                <input placeholder="E-mail de contato" value={createForm.contact_email} onChange={e => setCreateForm(f => ({ ...f, contact_email: e.target.value }))} style={{ padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none" }} />
-                <div>
-                  <label style={{ fontSize: 12, color: MUTED, display: "block", marginBottom: 4 }}>Expira em</label>
-                  <input type="date" value={createForm.expires_at} onChange={e => setCreateForm(f => ({ ...f, expires_at: e.target.value }))} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
-                </div>
-                <button onClick={handleCreate} disabled={!createForm.title.trim() || creating} style={{ padding: "14px 0", backgroundColor: !createForm.title.trim() || creating ? "#ccc" : GOLD, color: WHITE, border: "none", borderRadius: 12, fontSize: 15, fontWeight: 800, cursor: !createForm.title.trim() || creating ? "not-allowed" : "pointer" }}>
+                {createTab !== "evento" && (
+                  <>
+                    <input placeholder="E-mail de contato" value={createForm.contact_email} onChange={e => setCreateForm(f => ({ ...f, contact_email: e.target.value }))} style={{ padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none" }} />
+                    <div>
+                      <label style={{ fontSize: 12, color: MUTED, display: "block", marginBottom: 4 }}>Expira em</label>
+                      <input type="date" value={createForm.expires_at} onChange={e => setCreateForm(f => ({ ...f, expires_at: e.target.value }))} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${BORDER}`, borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+                    </div>
+                  </>
+                )}
+                <button onClick={handleCreate} disabled={!createForm.title.trim() || creating || (createTab === "evento" && !createForm.start_date)} style={{ padding: "14px 0", backgroundColor: !createForm.title.trim() || creating || (createTab === "evento" && !createForm.start_date) ? "#ccc" : GOLD, color: WHITE, border: "none", borderRadius: 12, fontSize: 15, fontWeight: 800, cursor: !createForm.title.trim() || creating || (createTab === "evento" && !createForm.start_date) ? "not-allowed" : "pointer" }}>
                   {creating ? "Publicando..." : "✓ Publicar oportunidade"}
                 </button>
               </div>
@@ -542,7 +604,7 @@ export default function OportunidadesPage() {
               if (!canPublish) { setLockedPublish(true); return; }
               resetCreateForm();
               setShowCreate(true);
-              setCreateTab(tab === "vagas" ? "vaga" : "marketplace");
+              setCreateTab(tab === "vagas" ? "vaga" : tab === "eventos" ? "evento" : "marketplace");
             }}
             style={{ backgroundColor: GOLD, color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 14, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
           >
@@ -662,6 +724,7 @@ export default function OportunidadesPage() {
                             <img
                               src={item.cover_image_url}
                               alt={item.title}
+                              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                               style={{ width: "100%", height: 140, objectFit: "cover", borderRadius: 10, marginBottom: 12 }}
                             />
                           )}
@@ -825,21 +888,24 @@ export default function OportunidadesPage() {
               <div>
                 <label style={{ fontSize: 13, fontWeight: 700, color: NAVY, display: "block", marginBottom: 8 }}>Tipo *</label>
                 <div style={{ display: "flex", gap: 8 }}>
-                  {([["marketplace", "🛍️ Marketplace"], ["vaga", "💼 Vaga"]] as const).map(([key, label]) => (
-                    <button
-                      key={key}
-                      onClick={() => setCreateTab(key)}
-                      style={{
-                        flex: 1, padding: "10px 0", borderRadius: 10,
-                        border: `1.5px solid ${createTab === key ? GOLD : "#e8eaed"}`,
-                        backgroundColor: createTab === key ? `${GOLD}15` : "#fff",
-                        color: createTab === key ? GOLD : "#555",
-                        fontWeight: createTab === key ? 700 : 500, fontSize: 14, cursor: "pointer",
-                      }}
-                    >
-                      {label}
-                    </button>
-                  ))}
+                  {(["marketplace", "vaga", "evento"] as const).map((key) => {
+                    const labels: Record<string, string> = { marketplace: "🛍️ Marketplace", vaga: "💼 Vaga", evento: "📅 Evento" };
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => setCreateTab(key)}
+                        style={{
+                          flex: 1, padding: "10px 0", borderRadius: 10,
+                          border: `1.5px solid ${createTab === key ? GOLD : "#e8eaed"}`,
+                          backgroundColor: createTab === key ? `${GOLD}15` : "#fff",
+                          color: createTab === key ? GOLD : "#555",
+                          fontWeight: createTab === key ? 700 : 500, fontSize: 14, cursor: "pointer",
+                        }}
+                      >
+                        {labels[key]}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -900,46 +966,90 @@ export default function OportunidadesPage() {
                 </>
               )}
 
+              {/* Evento-specific fields */}
+              {createTab === "evento" && (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div>
+                      <label style={{ fontSize: 12, color: "#8a93a2", display: "block", marginBottom: 4 }}>Data de início *</label>
+                      <input type="datetime-local" value={createForm.start_date} onChange={e => setCreateForm(f => ({ ...f, start_date: e.target.value }))} style={{ width: "100%", padding: "10px 14px", border: "1px solid #e8eaed", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, color: "#8a93a2", display: "block", marginBottom: 4 }}>Data de término</label>
+                      <input type="datetime-local" value={createForm.end_date} onChange={e => setCreateForm(f => ({ ...f, end_date: e.target.value }))} style={{ width: "100%", padding: "10px 14px", border: "1px solid #e8eaed", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {(["presencial", "online"] as const).map((lt) => (
+                        <button key={lt} type="button" onClick={() => setCreateForm(f => ({ ...f, location_type: lt }))} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: `1.5px solid ${createForm.location_type === lt ? GOLD : "#e8eaed"}`, backgroundColor: createForm.location_type === lt ? `${GOLD}15` : "#fff", color: createForm.location_type === lt ? GOLD : "#555", fontWeight: createForm.location_type === lt ? 700 : 500, fontSize: 13, cursor: "pointer" }}>
+                          {lt === "presencial" ? "📍 Presencial" : "💻 Online"}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {(["gratuito", "pago"] as const).map((et) => (
+                        <button key={et} type="button" onClick={() => setCreateForm(f => ({ ...f, entry_type: et }))} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: `1.5px solid ${createForm.entry_type === et ? GOLD : "#e8eaed"}`, backgroundColor: createForm.entry_type === et ? `${GOLD}15` : "#fff", color: createForm.entry_type === et ? GOLD : "#555", fontWeight: createForm.entry_type === et ? 700 : 500, fontSize: 13, cursor: "pointer" }}>
+                          {et === "gratuito" ? "🎟️ Gratuito" : "💰 Pago"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
               {/* Shared bottom fields */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <input
-                  placeholder="Empresa"
-                  value={createForm.company}
-                  onChange={e => setCreateForm(f => ({ ...f, company: e.target.value }))}
-                  style={{ padding: "10px 14px", border: "1px solid #e8eaed", borderRadius: 10, fontSize: 14, outline: "none" }}
-                />
+              {createTab !== "evento" && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <input
+                    placeholder="Empresa"
+                    value={createForm.company}
+                    onChange={e => setCreateForm(f => ({ ...f, company: e.target.value }))}
+                    style={{ padding: "10px 14px", border: "1px solid #e8eaed", borderRadius: 10, fontSize: 14, outline: "none" }}
+                  />
+                  <input
+                    placeholder="Localização"
+                    value={createForm.location}
+                    onChange={e => setCreateForm(f => ({ ...f, location: e.target.value }))}
+                    style={{ padding: "10px 14px", border: "1px solid #e8eaed", borderRadius: 10, fontSize: 14, outline: "none" }}
+                  />
+                </div>
+              )}
+              {createTab === "evento" && (
                 <input
                   placeholder="Localização"
                   value={createForm.location}
                   onChange={e => setCreateForm(f => ({ ...f, location: e.target.value }))}
                   style={{ padding: "10px 14px", border: "1px solid #e8eaed", borderRadius: 10, fontSize: 14, outline: "none" }}
                 />
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <input
-                  placeholder="E-mail de contato"
-                  value={createForm.contact_email}
-                  onChange={e => setCreateForm(f => ({ ...f, contact_email: e.target.value }))}
-                  style={{ padding: "10px 14px", border: "1px solid #e8eaed", borderRadius: 10, fontSize: 14, outline: "none" }}
-                />
-                <div>
-                  <label style={{ fontSize: 12, color: "#8a93a2", display: "block", marginBottom: 4 }}>Expira em</label>
+              )}
+              {createTab !== "evento" && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   <input
-                    type="date"
-                    value={createForm.expires_at}
-                    onChange={e => setCreateForm(f => ({ ...f, expires_at: e.target.value }))}
-                    style={{ width: "100%", padding: "10px 14px", border: "1px solid #e8eaed", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }}
+                    placeholder="E-mail de contato"
+                    value={createForm.contact_email}
+                    onChange={e => setCreateForm(f => ({ ...f, contact_email: e.target.value }))}
+                    style={{ padding: "10px 14px", border: "1px solid #e8eaed", borderRadius: 10, fontSize: 14, outline: "none" }}
                   />
+                  <div>
+                    <label style={{ fontSize: 12, color: "#8a93a2", display: "block", marginBottom: 4 }}>Expira em</label>
+                    <input
+                      type="date"
+                      value={createForm.expires_at}
+                      onChange={e => setCreateForm(f => ({ ...f, expires_at: e.target.value }))}
+                      style={{ width: "100%", padding: "10px 14px", border: "1px solid #e8eaed", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }}
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               <button
                 onClick={handleCreate}
-                disabled={!createForm.title.trim() || creating}
+                disabled={!createForm.title.trim() || creating || (createTab === "evento" && !createForm.start_date)}
                 style={{
-                  padding: "14px 0", backgroundColor: !createForm.title.trim() || creating ? "#ccc" : GOLD,
+                  padding: "14px 0", backgroundColor: !createForm.title.trim() || creating || (createTab === "evento" && !createForm.start_date) ? "#ccc" : GOLD,
                   color: "#fff", border: "none", borderRadius: 12, fontSize: 15, fontWeight: 800,
-                  cursor: !createForm.title.trim() || creating ? "not-allowed" : "pointer", marginTop: 4,
+                  cursor: !createForm.title.trim() || creating || (createTab === "evento" && !createForm.start_date) ? "not-allowed" : "pointer", marginTop: 4,
                 }}
               >
                 {creating ? "Publicando..." : "✓ Publicar oportunidade"}
@@ -1001,7 +1111,7 @@ function EventCard({ ev, onToggle, past = false, highlighted = false }: { ev: Ap
       onClick={() => setLocation(`/app/eventos/${ev.id}`)}
     >
       {ev.cover_image_url && (
-        <img src={ev.cover_image_url} alt={ev.title} style={{ width: "100%", height: 130, objectFit: "cover" }} />
+        <img src={ev.cover_image_url} alt={ev.title} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} style={{ width: "100%", height: 130, objectFit: "cover" }} />
       )}
       <div style={{ padding: 16 }}>
         <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>

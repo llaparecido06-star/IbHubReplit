@@ -34,6 +34,7 @@ export default function OportunidadeDetalhe() {
   const [submitting, setSubmitting] = useState(false);
   const [isInterested, setIsInterested] = useState(false);
   const [myCvSignedUrl, setMyCvSignedUrl] = useState<string | null>(null);
+  const [applyError, setApplyError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -59,7 +60,7 @@ export default function OportunidadeDetalhe() {
       const uploaded = await uploadCV(cvFile, user.id);
       setUploading(false);
       if (!uploaded) {
-        alert("Falha no envio do arquivo. Tente novamente ou use um link.");
+        setApplyError("Falha no envio do arquivo. Tente novamente ou use um link.");
         setSubmitting(false);
         return;
       }
@@ -69,7 +70,7 @@ export default function OportunidadeDetalhe() {
     const ok = await applyToJob(opp.id, user.id, finalCvUrl, message.trim() || null);
     if (!ok) {
       setSubmitting(false);
-      alert("Não foi possível enviar a candidatura. Você já se candidatou?");
+      setApplyError("Não foi possível enviar a candidatura. Você já se candidatou?");
       return;
     }
 
@@ -268,7 +269,7 @@ export default function OportunidadeDetalhe() {
                 </div>
               ) : (
                 <button
-                  onClick={() => setShowApply(true)}
+                  onClick={() => { setApplyError(""); setShowApply(true); }}
                   style={{
                     width: "100%",
                     padding: "14px 0",
@@ -314,7 +315,7 @@ export default function OportunidadeDetalhe() {
         {showApply && (
           <div
             style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
-            onClick={() => setShowApply(false)}
+            onClick={() => { setApplyError(""); setShowApply(false); }}
           >
             <div
               style={{ backgroundColor: "#fff", borderRadius: "22px 22px 0 0", padding: "28px 28px 40px", width: "100%", maxWidth: 600 }}
@@ -428,6 +429,9 @@ export default function OportunidadeDetalhe() {
                   cursor: "pointer",
                 }}
               >{uploading ? "Enviando CV..." : submitting ? "Enviando candidatura..." : "Enviar candidatura"}</button>
+              {applyError && (
+                <p style={{ fontSize: 13, color: "#dc2626", backgroundColor: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", margin: "12px 0 0" }}>{applyError}</p>
+              )}
             </div>
           </div>
         )}
