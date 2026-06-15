@@ -413,6 +413,7 @@ export default function GrupoChatPage() {
 
   const groupName = groupInfo?.name ?? "Grupo";
   const memberCount = groupInfo?.member_count ?? 0;
+  const groupAvatarUrl = groupInfo?.avatar_url ?? null;
 
   return (
     <AppShell>
@@ -423,9 +424,13 @@ export default function GrupoChatPage() {
             <button onClick={() => setLocation("/app/grupos")} style={{ background: "none", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4 }}>
               <BackIcon />
             </button>
-            <div style={{ width: 42, height: 42, borderRadius: "50%", background: GOLD + "20", border: `2px solid ${GOLD}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
-              👥
-            </div>
+            {groupAvatarUrl ? (
+              <img src={groupAvatarUrl} alt={groupName} style={{ width: 42, height: 42, borderRadius: "50%", objectFit: "cover", border: `2px solid ${GOLD}40`, flexShrink: 0 }} />
+            ) : (
+              <div style={{ width: 42, height: 42, borderRadius: "50%", background: GOLD + "20", border: `2px solid ${GOLD}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+                👥
+              </div>
+            )}
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 16, fontWeight: 800, color: NAVY }}>{groupName}</div>
               <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>

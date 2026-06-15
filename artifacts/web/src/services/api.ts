@@ -3677,6 +3677,7 @@ export interface WebGroupInfo {
   id: string;
   name: string | null;
   member_count: number;
+  avatar_url: string | null;
 }
 
 // ─── Post Detail + Comments ──────────────────────────────────────────────────
@@ -4361,15 +4362,17 @@ export async function fetchReferralLeaderboard(limit = 20): Promise<ReferralRank
 
 export async function fetchWebGroupInfo(groupId: string): Promise<WebGroupInfo | null> {
   try {
-    const [convRes, memberCountRes] = await Promise.all([
+    const [convRes, memberCountRes, grpRes] = await Promise.all([
       supabase.from("conversations").select("id, name").eq("id", groupId).maybeSingle(),
       supabase.from("group_members").select("user_id", { count: "exact", head: true }).eq("group_id", groupId).neq("role", "pending"),
+      supabase.from("groups").select("avatar_url").eq("id", groupId).maybeSingle(),
     ]);
     if (!convRes.data) return null;
     return {
       id: (convRes.data as any).id,
       name: (convRes.data as any).name,
       member_count: memberCountRes.count ?? 0,
+      avatar_url: (grpRes.data as any)?.avatar_url ?? null,
     };
   } catch { return null; }
 }

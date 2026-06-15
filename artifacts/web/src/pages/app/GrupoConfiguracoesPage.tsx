@@ -41,6 +41,129 @@ function Avatar({ src, name, size = 40 }: { src?: string | null; name: string; s
   );
 }
 
+const CROP_SIZE = 280;
+
+function CropModal({ src, onConfirm, onCancel }: {
+  src: string;
+  onConfirm: (blob: Blob) => void;
+  onCancel: () => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imgRef    = useRef<HTMLImageElement | null>(null);
+  const [scale, setScale]     = useState(1);
+  const [offset, setOffset]   = useState({ x: 0, y: 0 });
+  const [imgReady, setImgReady] = useState(false);
+  const dragging  = useRef(false);
+  const lastPos   = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    const img = new window.Image();
+    img.src = src;
+    img.onload = () => { imgRef.current = img; setImgReady(true); };
+  }, [src]);
+
+  useEffect(() => {
+    if (!imgReady || !canvasRef.current || !imgRef.current) return;
+    const ctx  = canvasRef.current.getContext("2d")!;
+    const img  = imgRef.current;
+    const base = Math.max(CROP_SIZE / img.naturalWidth, CROP_SIZE / img.naturalHeight);
+    const tot  = base * scale;
+    const dw   = img.naturalWidth  * tot;
+    const dh   = img.naturalHeight * tot;
+    const dx   = CROP_SIZE / 2 - dw / 2 + offset.x;
+    const dy   = CROP_SIZE / 2 - dh / 2 + offset.y;
+    ctx.clearRect(0, 0, CROP_SIZE, CROP_SIZE);
+    ctx.drawImage(img, dx, dy, dw, dh);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, CROP_SIZE, CROP_SIZE);
+    ctx.arc(CROP_SIZE / 2, CROP_SIZE / 2, CROP_SIZE / 2, 0, Math.PI * 2, true);
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.fill("evenodd");
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(CROP_SIZE / 2, CROP_SIZE / 2, CROP_SIZE / 2 - 1, 0, Math.PI * 2);
+    ctx.strokeStyle = GOLD;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+  }, [imgReady, scale, offset]);
+
+  function pos(e: React.MouseEvent | React.TouchEvent) {
+    return "touches" in e
+      ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+      : { x: (e as React.MouseEvent).clientX, y: (e as React.MouseEvent).clientY };
+  }
+  function onStart(e: React.MouseEvent | React.TouchEvent) { dragging.current = true; lastPos.current = pos(e); }
+  function onMove(e: React.MouseEvent | React.TouchEvent) {
+    if (!dragging.current || !lastPos.current) return;
+    if ("touches" in e) e.preventDefault();
+    const p = pos(e);
+    setOffset(prev => ({ x: prev.x + (p.x - lastPos.current!.x), y: prev.y + (p.y - lastPos.current!.y) }));
+    lastPos.current = p;
+  }
+  function onEnd() { dragging.current = false; lastPos.current = null; }
+
+  function handleConfirm() {
+    if (!imgRef.current) return;
+    const out = document.createElement("canvas");
+    out.width = out.height = CROP_SIZE;
+    const oc  = out.getContext("2d")!;
+    const img = imgRef.current;
+    const base = Math.max(CROP_SIZE / img.naturalWidth, CROP_SIZE / img.naturalHeight);
+    const tot  = base * scale;
+    const dw   = img.naturalWidth  * tot;
+    const dh   = img.naturalHeight * tot;
+    const dx   = CROP_SIZE / 2 - dw / 2 + offset.x;
+    const dy   = CROP_SIZE / 2 - dh / 2 + offset.y;
+    oc.save();
+    oc.beginPath();
+    oc.arc(CROP_SIZE / 2, CROP_SIZE / 2, CROP_SIZE / 2, 0, Math.PI * 2);
+    oc.clip();
+    oc.drawImage(img, dx, dy, dw, dh);
+    oc.restore();
+    out.toBlob(blob => { if (blob) onConfirm(blob); }, "image/jpeg", 0.92);
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.78)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ backgroundColor: WHITE, borderRadius: 20, padding: 28, maxWidth: 360, width: "92%", textAlign: "center" }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 18 }}>Ajustar foto do grupo</div>
+        <canvas
+          ref={canvasRef}
+          width={CROP_SIZE}
+          height={CROP_SIZE}
+          style={{ borderRadius: "50%", display: "block", margin: "0 auto", cursor: "grab", userSelect: "none", touchAction: "none" }}
+          onMouseDown={onStart}
+          onMouseMove={onMove}
+          onMouseUp={onEnd}
+          onMouseLeave={onEnd}
+          onTouchStart={onStart}
+          onTouchMove={onMove}
+          onTouchEnd={onEnd}
+        />
+        <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 13 }}>🔍</span>
+          <input type="range" min={0.5} max={3} step={0.02} value={scale}
+            onChange={e => setScale(parseFloat(e.target.value))}
+            style={{ flex: 1, accentColor: GOLD }} />
+          <span style={{ fontSize: 13 }}>🔍</span>
+        </div>
+        <p style={{ fontSize: 12, color: MUTED, margin: "8px 0 20px" }}>Arraste para reposicionar · Slider para zoom</p>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={onCancel}
+            style={{ flex: 1, padding: "11px 0", border: `1px solid ${BORDER}`, borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer", background: "none", color: MUTED }}>
+            Cancelar
+          </button>
+          <button onClick={handleConfirm}
+            style={{ flex: 1, padding: "11px 0", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: "pointer", background: GOLD, color: WHITE }}>
+            ✓ Confirmar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function GrupoConfiguracoesPage() {
   const [, params]      = useRoute("/app/grupos/:id/configuracoes");
   const [, setLocation] = useLocation();
@@ -65,6 +188,8 @@ export default function GrupoConfiguracoesPage() {
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [inviteQuery, setInviteQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
   const [invitingId, setInvitingId] = useState<string | null>(null);
@@ -186,19 +311,21 @@ export default function GrupoConfiguracoesPage() {
     setApprovingId(null);
   }
 
-  async function handleAvatarUpload(file: File) {
+  async function handleAvatarUpload(blob: Blob) {
     if (!groupId || avatarUploading) return;
+    setUploadError(null);
     setAvatarUploading(true);
-    const ext = file.name.split(".").pop() ?? "jpg";
-    const path = `groups/${groupId}/${Date.now()}.${ext}`;
-    const buf = await file.arrayBuffer();
-    const { error } = await supabase.storage.from("avatars").upload(path, new Uint8Array(buf), { contentType: file.type, upsert: true });
-    if (!error) {
-      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
-      const url = `${urlData.publicUrl}?t=${Date.now()}`;
-      await supabase.from("groups").update({ avatar_url: url }).eq("id", groupId);
-      setAvatarUrl(url);
+    const path = `groups/${groupId}/${Date.now()}.jpg`;
+    const { error } = await supabase.storage.from("avatars").upload(path, blob, { contentType: "image/jpeg", upsert: true });
+    if (error) {
+      setUploadError(`Erro ao enviar imagem: ${error.message}`);
+      setAvatarUploading(false);
+      return;
     }
+    const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
+    const url = `${urlData.publicUrl}?t=${Date.now()}`;
+    await supabase.from("groups").update({ avatar_url: url }).eq("id", groupId);
+    setAvatarUrl(url);
     setAvatarUploading(false);
   }
 
@@ -492,8 +619,17 @@ export default function GrupoConfiguracoesPage() {
                     {avatarUploading ? "Enviando..." : "Alterar foto"}
                   </button>
                   <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }}
-                    onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarUpload(f); e.target.value = ""; }} />
+                    onChange={e => {
+                      const f = e.target.files?.[0];
+                      if (f) { const url = URL.createObjectURL(f); setCropSrc(url); }
+                      e.target.value = "";
+                    }} />
                 </div>
+                {uploadError && (
+                  <div style={{ marginTop: 10, fontSize: 13, color: "#b91c1c", backgroundColor: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 12px" }}>
+                    {uploadError}
+                  </div>
+                )}
               </div>
             )}
 
@@ -789,6 +925,21 @@ export default function GrupoConfiguracoesPage() {
           </div>
         )}
       </div>
+
+      {cropSrc && (
+        <CropModal
+          src={cropSrc}
+          onConfirm={async (blob) => {
+            URL.revokeObjectURL(cropSrc);
+            setCropSrc(null);
+            await handleAvatarUpload(blob);
+          }}
+          onCancel={() => {
+            URL.revokeObjectURL(cropSrc);
+            setCropSrc(null);
+          }}
+        />
+      )}
     </AppShell>
   );
 }
