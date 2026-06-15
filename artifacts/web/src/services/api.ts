@@ -3905,6 +3905,123 @@ export async function updateCompanyPage(
   }
 }
 
+// ─── Company Member Management ────────────────────────────────────────────────
+
+export interface WebCompanyMember {
+  company_id: string;
+  user_id: string;
+  role: string;
+  added_at: string;
+  profile: {
+    id: string;
+    full_name: string;
+    avatar_url: string | null;
+    position: string | null;
+    company: string | null;
+  } | null;
+}
+
+export async function fetchWebCompanyMembers(companyId: string): Promise<WebCompanyMember[]> {
+  try {
+    const { data, error } = await supabase
+      .from("company_page_admins")
+      .select("company_id, user_id, role, added_at")
+      .eq("company_id", companyId)
+      .order("added_at", { ascending: true });
+    if (error || !data || data.length === 0) return [];
+    const userIds = [...new Set((data as any[]).map((r: any) => r.user_id).filter(Boolean))];
+    let profileMap = new Map<string, any>();
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url, position, company")
+        .in("id", userIds);
+      (profiles ?? []).forEach((p: any) => profileMap.set(p.id, p));
+    }
+    return (data as any[]).map((row: any) => ({
+      ...row,
+      profile: profileMap.get(row.user_id) ?? null,
+    }));
+  } catch (e) {
+    console.warn("fetchWebCompanyMembers:", e);
+    return [];
+  }
+}
+
+export async function addWebCompanyMember(
+  companyId: string,
+  userId: string,
+  role: string,
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("company_page_admins")
+      .upsert(
+        { company_id: companyId, user_id: userId, role },
+        { onConflict: "company_id,user_id" },
+      );
+    if (error) { console.warn("addWebCompanyMember:", error); return false; }
+    return true;
+  } catch (e) {
+    console.warn("addWebCompanyMember:", e);
+    return false;
+  }
+}
+
+export async function updateWebCompanyMemberRole(
+  companyId: string,
+  userId: string,
+  role: string,
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("company_page_admins")
+      .update({ role })
+      .eq("company_id", companyId)
+      .eq("user_id", userId);
+    if (error) { console.warn("updateWebCompanyMemberRole:", error); return false; }
+    return true;
+  } catch (e) {
+    console.warn("updateWebCompanyMemberRole:", e);
+    return false;
+  }
+}
+
+export async function removeWebCompanyMember(companyId: string, userId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("company_page_admins")
+      .delete()
+      .eq("company_id", companyId)
+      .eq("user_id", userId);
+    if (error) { console.warn("removeWebCompanyMember:", error); return false; }
+    return true;
+  } catch (e) {
+    console.warn("removeWebCompanyMember:", e);
+    return false;
+  }
+}
+
+export async function transferWebCompanyOwnership(
+  pageId: string,
+  newOwnerId: string,
+  currentOwnerId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { data, error } = await supabase.rpc("transfer_company_ownership", {
+      p_page_id:   pageId,
+      p_new_owner: newOwnerId,
+      p_old_owner: currentOwnerId,
+    });
+    if (error) return { ok: false, error: error.message };
+    const result = data as { ok: boolean; error?: string };
+    return result;
+  } catch (e: any) {
+    console.warn("transferWebCompanyOwnership:", e);
+    return { ok: false, error: e?.message ?? "Erro desconhecido" };
+  }
+}
+
 // ─── Account & Settings helpers ──────────────────────────────────────────────
 
 export interface MyReport {
