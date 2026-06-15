@@ -503,7 +503,7 @@ export default function GrupoChatPage() {
                       <span onClick={() => setLocation(`/app/usuario/${msg.sender_id}`)} style={{ fontSize: 11, fontWeight: 700, color: GOLD, cursor: "pointer" }}>{senderName}</span>
                     </div>
                   )}
-                  <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexDirection: isMe ? "row-reverse" : "row" }}>
+                  <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexDirection: isMe ? "row-reverse" : "row", width: "100%" }}>
                     {!isMe && <div onClick={() => setLocation(`/app/usuario/${msg.sender_id}`)} style={{ cursor: "pointer", flexShrink: 0 }}><Avatar src={msg.sender?.avatar_url} name={senderName} size={34} /></div>}
                     <div style={{
                       maxWidth: "72%",
