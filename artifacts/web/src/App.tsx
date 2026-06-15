@@ -37,6 +37,7 @@ import GerenciarEmpresaPage from "@/pages/app/GerenciarEmpresaPage";
 import CriarEmpresaPage from "@/pages/app/CriarEmpresaPage";
 import EmpresaAdminPage from "@/pages/app/EmpresaAdminPage";
 import MeusEventosPage from "@/pages/app/MeusEventosPage";
+import MinhasEmpresasPage from "@/pages/app/MinhasEmpresasPage";
 import EventosPage from "@/pages/app/EventosPage";
 import SettingsPage from "@/pages/app/SettingsPage";
 import NotificationSettingsPage from "@/pages/app/NotificationSettingsPage";
@@ -326,6 +327,9 @@ function Router() {
       </Route>
       <Route path="/app/meus-eventos">
         <PrivateRoute component={MeusEventosPage} />
+      </Route>
+      <Route path="/app/minhas-empresas">
+        <PrivateRoute component={MinhasEmpresasPage} />
       </Route>
       <Route path="/app/eventos">
         <PrivateRoute component={EventosPage} />

@@ -1177,6 +1177,7 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
               <div style={{ borderTop: `1px solid ${BORDER}`, margin: "4px 0", padding: "4px 4px 0" }}>
                 {[
                   { label: "Meu Perfil",           path: "/app/perfil",   emoji: "👤" },
+                  { label: "Minhas Empresas",       path: "/app/minhas-empresas", emoji: "🏢" },
                   { label: "Configurações",         path: "/minha-conta",  emoji: "⚙️" },
                   { label: "Planos e assinaturas",  path: "/comunidade-exclusiva", emoji: "💎" },
                 ].map(({ label, path, emoji }) => (
@@ -1400,7 +1401,7 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
                     {
                       label: companyPages.length > 0 ? `Minhas Empresas (${companyPages.length})` : "Minhas Empresas",
                       icon: <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/><rect x="9" y="2" width="6" height="6" rx="1"/></svg>,
-                      path: companyPages.length > 0 ? "/app/configuracoes" : "/app/criar-empresa",
+                      path: "/app/minhas-empresas",
                       iconBg: `${GOLD}20`,
                     },
                     { label: "Usuários Bloqueados", icon: I.block,    path: "/app/bloqueados",     iconBg: "#e53e3e20" },

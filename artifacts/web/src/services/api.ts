@@ -1861,6 +1861,7 @@ export interface WebCompanyPage {
   name: string;
   avatar_url: string | null;
   owner_id: string;
+  industry?: string | null;
 }
 
 export async function fetchWebCompanyPages(userId: string): Promise<WebCompanyPage[]> {
@@ -1868,7 +1869,7 @@ export async function fetchWebCompanyPages(userId: string): Promise<WebCompanyPa
     // Fetch pages where user is owner
     const ownedRes = await supabase
       .from("company_pages")
-      .select("id, name, avatar_url, owner_id")
+      .select("id, name, avatar_url, owner_id, industry")
       .eq("owner_id", userId);
 
     const owned = (ownedRes.data ?? []) as WebCompanyPage[];
@@ -1884,7 +1885,7 @@ export async function fetchWebCompanyPages(userId: string): Promise<WebCompanyPa
       if (adminIds.length > 0) {
         const { data } = await supabase
           .from("company_pages")
-          .select("id, name, avatar_url, owner_id")
+          .select("id, name, avatar_url, owner_id, industry")
           .in("id", adminIds);
         adminPages = (data ?? []) as WebCompanyPage[];
       }
