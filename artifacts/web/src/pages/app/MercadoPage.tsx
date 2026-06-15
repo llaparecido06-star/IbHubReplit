@@ -132,13 +132,13 @@ function BarChart({ data }: { data: MarketOverview["chart_bar"] }) {
     <div style={{ overflowX: "auto" }}>
       <svg width={W} height={H} style={{ display: "block" }}>
         {yTicks.map((tick, i) => (
-          <g key={i}>
+          <g key={`ytick-${i}`}>
             <line x1={PL} y1={yTop(tick)} x2={W - PR} y2={yTop(tick)} stroke="#e8eaed" strokeWidth={1} />
             <text x={PL - 4} y={yTop(tick) + 4} fontSize={9} fill="#9ca3af" textAnchor="end">{fmtShort(tick)}</text>
           </g>
         ))}
         {data.values.map((v, i) => (
-          <g key={i}>
+          <g key={`bar-${i}`}>
             <rect x={xAt(i)} y={yTop(v)} width={barW} height={yH(v)} fill={GOLD} rx={4} />
             <text x={xAt(i) + barW / 2} y={H - 6} fontSize={10} fill="#9ca3af" textAnchor="middle">{data.labels[i]}</text>
           </g>
