@@ -663,7 +663,7 @@ export default function EmpresaPage() {
     setMsgBusy(true);
     try {
       const convId = await getOrCreateWebConversation(currentUserId, company.owner_id, companyId, false);
-      if (convId) setLocation(`/app/mensagens/${convId}`);
+      if (convId) setLocation(`/app/mensagens?conv=${convId}`);
       else setLocation("/app/mensagens");
     } finally {
       setMsgBusy(false);
