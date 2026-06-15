@@ -529,7 +529,7 @@ export default function GerenciarEmpresaPage() {
     );
   }
 
-  const canEdit = isOwner;
+  const canEdit = isOwner || userRole === "editor";
 
   if (!loading && company && !canEdit) {
     return (
@@ -623,12 +623,12 @@ export default function GerenciarEmpresaPage() {
           )}
         </div>
 
-        {/* Tabs */}
+        {/* Tabs — aba de membros só para proprietário */}
         <div style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: `2px solid ${BORDER}` }}>
           {([
-            { key: "info",    label: "📝 Informações" },
-            { key: "membros", label: "👥 Membros e Funções" },
-          ] as const).map(t => (
+            { key: "info",    label: "📝 Informações",       show: true },
+            { key: "membros", label: "👥 Membros e Funções",  show: isOwner },
+          ] as const).filter(t => t.show).map(t => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
