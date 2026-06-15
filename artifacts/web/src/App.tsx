@@ -62,6 +62,7 @@ import AdminAdmins from "@/pages/admin/AdminAdmins";
 import AdminConfiguracoes from "@/pages/admin/AdminConfiguracoes";
 import AdminEmpresasFeed from "@/pages/admin/AdminEmpresasFeed";
 import AdminBadges from "@/pages/admin/AdminBadges";
+import AdminEmpresasCRM from "@/pages/admin/AdminEmpresasCRM";
 import AssinarPage from "@/pages/AssinarPage";
 import AssinarComunidadePage from "@/pages/AssinarComunidadePage";
 import AssinarSucessoPage from "@/pages/AssinarSucessoPage";
@@ -189,6 +190,7 @@ const ADMIN_SUB_ROUTES: Record<string, React.ComponentType> = {
   "/admin/configuracoes":         AdminConfiguracoes,
   "/admin/empresas-feed":         AdminEmpresasFeed,
   "/admin/badges":                AdminBadges,
+  "/admin/empresas-crm":          AdminEmpresasCRM,
 };
 
 function AdminSubRouter() {

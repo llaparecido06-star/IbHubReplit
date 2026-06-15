@@ -30,6 +30,7 @@ const SECTIONS = [
     title: "USUÁRIOS & RECEITA",
     items: [
       { path: "/admin/crm",                 label: "CRM Usuários",      icon: "👥" },
+      { path: "/admin/empresas-crm",        label: "CRM Empresas",      icon: "🏢" },
       { path: "/admin/badges",             label: "Central de Badges", icon: "🏅" },
       { path: "/admin/indicacoes",          label: "Indicações",        icon: "🔗" },
       { path: "/admin/financeiro",          label: "Financeiro",        icon: "💳" },
