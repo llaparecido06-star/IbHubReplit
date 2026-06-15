@@ -85,6 +85,116 @@ function Avatar({ src, name, size = 40 }: { src?: string | null; name: string; s
   );
 }
 
+const COVER_CW = 480;
+const COVER_CH = 160;
+
+function CoverCropModal({ src, onConfirm, onCancel }: {
+  src: string;
+  onConfirm: (blob: Blob) => void;
+  onCancel: () => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imgRef    = useRef<HTMLImageElement | null>(null);
+  const [scale, setScale]       = useState(1);
+  const [offset, setOffset]     = useState({ x: 0, y: 0 });
+  const [imgReady, setImgReady] = useState(false);
+  const dragging = useRef(false);
+  const lastPos  = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    const img = new window.Image();
+    img.src = src;
+    img.onload = () => { imgRef.current = img; setImgReady(true); };
+  }, [src]);
+
+  useEffect(() => {
+    if (!imgReady || !canvasRef.current || !imgRef.current) return;
+    const ctx  = canvasRef.current.getContext("2d")!;
+    const img  = imgRef.current;
+    const base = Math.max(COVER_CW / img.naturalWidth, COVER_CH / img.naturalHeight);
+    const tot  = base * scale;
+    const dw   = img.naturalWidth  * tot;
+    const dh   = img.naturalHeight * tot;
+    const dx   = COVER_CW / 2 - dw / 2 + offset.x;
+    const dy   = COVER_CH / 2 - dh / 2 + offset.y;
+    ctx.clearRect(0, 0, COVER_CW, COVER_CH);
+    ctx.drawImage(img, dx, dy, dw, dh);
+    ctx.strokeStyle = GOLD;
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(1, 1, COVER_CW - 2, COVER_CH - 2);
+  }, [imgReady, scale, offset]);
+
+  function pos(e: React.MouseEvent | React.TouchEvent) {
+    return "touches" in e
+      ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+      : { x: (e as React.MouseEvent).clientX, y: (e as React.MouseEvent).clientY };
+  }
+  function onStart(e: React.MouseEvent | React.TouchEvent) { dragging.current = true; lastPos.current = pos(e); }
+  function onMove(e: React.MouseEvent | React.TouchEvent) {
+    if (!dragging.current || !lastPos.current) return;
+    if ("touches" in e) e.preventDefault();
+    const p = pos(e);
+    setOffset(prev => ({ x: prev.x + (p.x - lastPos.current!.x), y: prev.y + (p.y - lastPos.current!.y) }));
+    lastPos.current = p;
+  }
+  function onEnd() { dragging.current = false; lastPos.current = null; }
+
+  function handleConfirm() {
+    if (!imgRef.current) return;
+    const out = document.createElement("canvas");
+    out.width = COVER_CW; out.height = COVER_CH;
+    const oc  = out.getContext("2d")!;
+    const img = imgRef.current;
+    const base = Math.max(COVER_CW / img.naturalWidth, COVER_CH / img.naturalHeight);
+    const tot  = base * scale;
+    const dw   = img.naturalWidth  * tot;
+    const dh   = img.naturalHeight * tot;
+    oc.drawImage(img, COVER_CW / 2 - dw / 2 + offset.x, COVER_CH / 2 - dh / 2 + offset.y, dw, dh);
+    out.toBlob(blob => { if (blob) onConfirm(blob); }, "image/jpeg", 0.92);
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.78)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div style={{ backgroundColor: WHITE, borderRadius: 20, padding: 24, maxWidth: 540, width: "100%", textAlign: "center" }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 16 }}>Ajustar foto de capa</div>
+        <div style={{ overflowX: "auto" }}>
+          <canvas
+            ref={canvasRef}
+            width={COVER_CW}
+            height={COVER_CH}
+            style={{ display: "block", margin: "0 auto", maxWidth: "100%", cursor: "grab", userSelect: "none", touchAction: "none", borderRadius: 8 }}
+            onMouseDown={onStart}
+            onMouseMove={onMove}
+            onMouseUp={onEnd}
+            onMouseLeave={onEnd}
+            onTouchStart={onStart}
+            onTouchMove={onMove}
+            onTouchEnd={onEnd}
+          />
+        </div>
+        <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 13 }}>🔍</span>
+          <input type="range" min={0.5} max={4} step={0.02} value={scale}
+            onChange={e => setScale(parseFloat(e.target.value))}
+            style={{ flex: 1, accentColor: GOLD }} />
+          <span style={{ fontSize: 13 }}>🔍</span>
+        </div>
+        <p style={{ fontSize: 12, color: MUTED, margin: "8px 0 18px" }}>Arraste para reposicionar · Slider para zoom</p>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={onCancel}
+            style={{ flex: 1, padding: "11px 0", border: `1px solid ${BORDER}`, borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer", background: "none", color: MUTED }}>
+            Cancelar
+          </button>
+          <button onClick={handleConfirm}
+            style={{ flex: 1, padding: "11px 0", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: "pointer", background: GOLD, color: WHITE }}>
+            ✓ Confirmar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PeopleListModal({ title, list, onClose, currentUserId }: { title: string; list: ProfilePerson[]; onClose: () => void; currentUserId?: string }) {
   const [, setLocation] = useLocation();
   const [search, setSearch] = useState("");
@@ -528,7 +638,7 @@ function MiniPostCard({ post, onDelete, onEdit, onPollUpdate, onLike, onBookmark
 type ProfileTab = "publicacoes" | "sobre";
 
 export default function MeuPerfilPage() {
-  const { profile, user, loading: authLoading } = useAuth();
+  const { profile, user, loading: authLoading, patchProfile } = useAuth();
   const [, setLocation] = useLocation();
   const width = useWindowWidth();
   const isMobile = width < 768;
@@ -542,6 +652,8 @@ export default function MeuPerfilPage() {
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverOverride, setCoverOverride] = useState<string | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [coverCropSrc, setCoverCropSrc] = useState<string | null>(null);
+  const [coverUploadError, setCoverUploadError] = useState<string | null>(null);
   const [adminBadgeKeys, setAdminBadgeKeys] = useState<string[]>([]);
   const [wineCount, setWineCount] = useState(0);
 
@@ -598,24 +710,29 @@ export default function MeuPerfilPage() {
 
   const coverUrl = coverOverride ?? (profile as any)?.cover_url ?? null;
 
-  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !userId) return;
+    if (file) { const url = URL.createObjectURL(file); setCoverCropSrc(url); }
+    e.target.value = "";
+  };
+
+  const handleCoverUpload = async (blob: Blob) => {
+    if (!userId) return;
+    setCoverUploadError(null);
     setUploadingCover(true);
     try {
       const path = `${userId}/cover.jpg`;
       const { error } = await supabase.storage
         .from("avatars")
-        .upload(path, file, { contentType: file.type, upsert: true });
-      if (!error) {
-        const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-        const url = `${data.publicUrl}?t=${Date.now()}`;
-        await supabase.from("profiles").update({ cover_url: url }).or(`id.eq.${userId},user_id.eq.${userId}`);
-        setCoverOverride(url);
-      }
+        .upload(path, blob, { contentType: "image/jpeg", upsert: true });
+      if (error) { setCoverUploadError(`Erro ao enviar: ${error.message}`); return; }
+      const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+      const url = `${data.publicUrl}?t=${Date.now()}`;
+      await supabase.from("profiles").update({ cover_url: url }).or(`id.eq.${userId},user_id.eq.${userId}`);
+      setCoverOverride(url);
+      patchProfile({ cover_url: url } as any);
     } finally {
       setUploadingCover(false);
-      if (coverInputRef.current) coverInputRef.current.value = "";
     }
   };
 
@@ -732,7 +849,7 @@ export default function MeuPerfilPage() {
             >
               <span>📷</span> {uploadingCover ? "Enviando…" : "Capa"}
             </button>
-            <input ref={coverInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleCoverUpload} />
+            <input ref={coverInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleCoverFileSelect} />
           </div>
 
           {/* Profile card */}
@@ -973,7 +1090,12 @@ export default function MeuPerfilPage() {
             >
               <span>📷</span> {uploadingCover ? "Enviando…" : "Alterar capa"}
             </button>
-            <input ref={coverInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleCoverUpload} />
+            <input ref={coverInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleCoverFileSelect} />
+            {coverUploadError && (
+              <div style={{ position: "absolute", bottom: 40, left: 12, right: 12, fontSize: 12, color: "#fff", backgroundColor: "rgba(185,28,28,0.85)", borderRadius: 8, padding: "6px 10px", zIndex: 2 }}>
+                {coverUploadError}
+              </div>
+            )}
           </div>
 
           {/* Avatar + actions */}
@@ -1124,6 +1246,21 @@ export default function MeuPerfilPage() {
 
       {peopleModal && (
         <PeopleListModal title={peopleModal.title} list={peopleModal.list} onClose={() => setPeopleModal(null)} currentUserId={userId} />
+      )}
+
+      {coverCropSrc && (
+        <CoverCropModal
+          src={coverCropSrc}
+          onConfirm={async (blob) => {
+            URL.revokeObjectURL(coverCropSrc);
+            setCoverCropSrc(null);
+            await handleCoverUpload(blob);
+          }}
+          onCancel={() => {
+            URL.revokeObjectURL(coverCropSrc);
+            setCoverCropSrc(null);
+          }}
+        />
       )}
     </AppShell>
   );
