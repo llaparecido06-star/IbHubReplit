@@ -47,6 +47,7 @@ export interface AdminUser {
   is_shadowbanned: boolean;
   areas_of_expertise: string[] | null;
   created_at: string;
+  avatar_url?: string | null;
 }
 
 export interface ModerationPost {
@@ -553,6 +554,56 @@ export async function grantBadge(
 
 export async function revokeBadge(badgeId: string): Promise<boolean> {
   const { error } = await supabase.from("user_badges").delete().eq("id", badgeId);
+  return !error;
+}
+
+export interface BadgeDefinition {
+  id: string;
+  key: string;
+  icon: string;
+  label: string;
+  description: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function fetchBadgeDefinitions(): Promise<BadgeDefinition[]> {
+  const { data, error } = await supabase
+    .from("badge_definitions")
+    .select("*")
+    .order("sort_order", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as BadgeDefinition[];
+}
+
+export async function createBadgeDefinition(
+  def: Pick<BadgeDefinition, "key" | "icon" | "label" | "description">,
+  sortOrder: number,
+): Promise<BadgeDefinition | null> {
+  const { data, error } = await supabase
+    .from("badge_definitions")
+    .insert({ ...def, is_active: true, sort_order: sortOrder })
+    .select()
+    .single();
+  if (error) return null;
+  return data as BadgeDefinition;
+}
+
+export async function updateBadgeDefinition(
+  id: string,
+  updates: Partial<Pick<BadgeDefinition, "icon" | "label" | "description" | "is_active" | "sort_order">>,
+): Promise<boolean> {
+  const { error } = await supabase
+    .from("badge_definitions")
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  return !error;
+}
+
+export async function deleteBadgeDefinition(id: string): Promise<boolean> {
+  const { error } = await supabase.from("badge_definitions").delete().eq("id", id);
   return !error;
 }
 
