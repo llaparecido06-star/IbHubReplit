@@ -23,6 +23,7 @@ const SECTIONS = [
       { path: "/admin/slides-mercado",      label: "Mercado",           icon: "📊" },
       { path: "/admin/empresas-feed",       label: "Empresas Feed",     icon: "📡" },
       { path: "/admin/presentation-slides", label: "Slides de Apres.",  icon: "⧉" },
+      { path: "/admin/publicacoes",          label: "Publicações",       icon: "📌" },
       { path: "/admin/moderacao",           label: "Moderação",         icon: "🛡" },
     ],
   },

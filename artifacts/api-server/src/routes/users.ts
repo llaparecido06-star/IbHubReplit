@@ -219,7 +219,8 @@ router.get("/feed/posts", async (req: Request, res: Response) => {
   // Fetch posts in chronological order — newest first.
   let postsQuery = userClient
     .from("posts")
-    .select("id, user_id, company_page_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count, view_count, location, hashtags, poll, created_at")
+    .select("id, user_id, company_page_id, content, image_url, image_urls, video_url, likes_count, comments_count, shares_count, view_count, location, hashtags, poll, is_pinned, created_at")
+    .order("is_pinned", { ascending: false })
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 

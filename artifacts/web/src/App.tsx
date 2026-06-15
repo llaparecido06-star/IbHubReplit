@@ -48,6 +48,7 @@ import MeusReportsPage from "@/pages/app/MeusReportsPage";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminLogs from "@/pages/admin/AdminLogs";
 import AdminModeracao from "@/pages/admin/AdminModeracao";
+import AdminPublicacoes from "@/pages/admin/AdminPublicacoes";
 import AdminMomentos from "@/pages/admin/AdminMomentos";
 import AdminEventos from "@/pages/admin/AdminEventos";
 import AdminMarketplace from "@/pages/admin/AdminMarketplace";
@@ -180,6 +181,7 @@ const ADMIN_SUB_ROUTES: Record<string, React.ComponentType> = {
   "/admin/marketplace":           AdminMarketplace,
   "/admin/slides-mercado":        AdminSlidesMercado,
   "/admin/presentation-slides":   AdminPresentationSlides,
+  "/admin/publicacoes":           AdminPublicacoes,
   "/admin/moderacao":             AdminModeracao,
   "/admin/crm":                   AdminCRM,
   "/admin/indicacoes":            AdminIndicacoes,

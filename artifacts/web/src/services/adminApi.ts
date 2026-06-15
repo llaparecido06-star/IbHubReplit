@@ -57,6 +57,7 @@ export interface ModerationPost {
   created_at: string;
   user_id: string;
   author_name?: string | null;
+  is_pinned?: boolean;
 }
 
 export interface BroadcastParams {
@@ -325,6 +326,20 @@ export async function fetchRecentPosts(limit = 100, search?: string): Promise<Mo
 export async function deletePost(postId: string): Promise<boolean> {
   try {
     const res = await adminFetch(`/admin/posts/${postId}`, { method: "DELETE" });
+    if (!res.ok) return false;
+    const json = await res.json() as { success?: boolean };
+    return !!json.success;
+  } catch {
+    return false;
+  }
+}
+
+export async function pinPost(postId: string, isPinned: boolean): Promise<boolean> {
+  try {
+    const res = await adminFetch(`/admin/posts/${postId}/pin`, {
+      method: "PATCH",
+      body: JSON.stringify({ is_pinned: isPinned }),
+    });
     if (!res.ok) return false;
     const json = await res.json() as { success?: boolean };
     return !!json.success;

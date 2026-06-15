@@ -465,6 +465,26 @@ router.delete("/admin/posts/:postId", async (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
+// Toggle pin on a post
+router.patch("/admin/posts/:postId/pin", async (req: Request, res: Response) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+
+  const { postId } = req.params as { postId: string };
+  const body = req.body as { is_pinned: boolean };
+  if (typeof body.is_pinned !== "boolean") {
+    res.status(400).json({ error: "is_pinned (boolean) is required" });
+    return;
+  }
+
+  const { error } = await supabaseAdmin.from("posts").update({ is_pinned: body.is_pinned }).eq("id", postId);
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  res.json({ success: true, is_pinned: body.is_pinned });
+});
+
 // List recent posts for moderation
 router.get("/admin/posts", async (req: Request, res: Response) => {
   const adminId = await requireAdmin(req, res);
@@ -475,7 +495,7 @@ router.get("/admin/posts", async (req: Request, res: Response) => {
 
   const { data, error } = await supabaseAdmin
     .from("posts")
-    .select("id, content, image_url, created_at, user_id")
+    .select("id, content, image_url, created_at, user_id, is_pinned")
     .order("created_at", { ascending: false })
     .limit(limit);
 

@@ -43,6 +43,7 @@ export interface Post {
   is_liked?: boolean;
   reaction_type?: ReactionType | null;
   is_bookmarked?: boolean;
+  is_pinned?: boolean;
   created_at: string;
   hashtags?: string[];
   location?: string | null;
