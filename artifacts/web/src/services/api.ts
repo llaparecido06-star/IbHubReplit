@@ -86,18 +86,29 @@ async function _fetchProfilesMap(userIds: string[]): Promise<Map<string, any>> {
   return new Map((data ?? []).map((p: any) => [p.id, p]));
 }
 
+async function _fetchCompanyPagesMap(companyPageIds: string[]): Promise<Map<string, { id: string; name: string; avatar_url: string | null }>> {
+  if (!companyPageIds.length) return new Map();
+  const { data } = await supabase
+    .from("company_pages")
+    .select("id, name, avatar_url")
+    .in("id", companyPageIds);
+  return new Map((data ?? []).map((c: any) => [c.id, { id: c.id, name: c.name, avatar_url: c.avatar_url ?? null }]));
+}
 
-function _normalisePost(raw: any, profileMap: Map<string, any>): Post {
+function _normalisePost(raw: any, profileMap: Map<string, any>, companyPageMap?: Map<string, any>): Post {
   const p = profileMap.get(raw.user_id);
+  const cpId = raw.company_page_id ?? null;
+  const company_page = cpId && companyPageMap ? (companyPageMap.get(cpId) ?? null) : null;
   return {
     ...raw,
+    company_page,
     author: p ? {
       id: p.id,
       full_name: p.full_name,
       username: p.username,
       avatar_url: p.avatar_url,
       headline: [p.position, p.company].filter(Boolean).join(" · ") || null,
-      plan: p.plan ?? "gratuito",
+      plan: p.plan ?? "comunidade_ideal_bi",
       is_shadowbanned: p.is_shadowbanned ?? false,
     } : undefined,
   };
@@ -123,9 +134,11 @@ export async function fetchFeedPosts(currentUserId: string, offset = 0): Promise
 
     const userIds = [...new Set(rawPosts.map((p: any) => p.user_id).filter(Boolean))] as string[];
     const postIds = rawPosts.map((p: any) => p.id) as string[];
+    const companyPageIds = [...new Set(rawPosts.map((p: any) => p.company_page_id).filter(Boolean))] as string[];
 
-    const [profileMap, likedRes, bookmarkRes] = await Promise.all([
+    const [profileMap, companyPageMap, likedRes, bookmarkRes] = await Promise.all([
       _fetchProfilesMap(userIds),
+      _fetchCompanyPagesMap(companyPageIds),
       supabase.from("likes").select("post_id, reaction_type").eq("user_id", currentUserId).is("company_page_id", null).in("post_id", postIds),
       supabase.from("bookmarks").select("post_id").eq("user_id", currentUserId).in("post_id", postIds),
     ]);
@@ -134,7 +147,7 @@ export async function fetchFeedPosts(currentUserId: string, offset = 0): Promise
     const bookmarkedIds = new Set((bookmarkRes.data ?? []).map((b: any) => b.post_id));
 
     return rawPosts.map((raw: any) => {
-      const post = _normalisePost(raw, profileMap) as Post;
+      const post = _normalisePost(raw, profileMap, companyPageMap) as Post;
       if (post.poll) {
         const indices = normalizePollIndices(post.poll.user_votes, currentUserId);
         post.poll = { ...post.poll, user_voted_indices: indices, user_voted_index: indices[0] ?? null };
@@ -225,8 +238,12 @@ export async function createWebPost(params: {
       .select(POST_SELECT)
       .single();
     if (error || !data) return null;
-    const profileMap = await _fetchProfilesMap([data.user_id]);
-    const post = _normalisePost(data, profileMap) as Post;
+    const cpId = (data as any).company_page_id ?? null;
+    const [profileMap, companyPageMap] = await Promise.all([
+      _fetchProfilesMap([data.user_id]),
+      _fetchCompanyPagesMap(cpId ? [cpId] : []),
+    ]);
+    const post = _normalisePost(data, profileMap, companyPageMap) as Post;
     if (post.poll && poll) post.poll = { ...post.poll, user_voted_index: null };
     return post;
   } catch (e) {
@@ -291,13 +308,14 @@ export async function fetchCompanyFeedPosts(companyPageId: string, currentUserId
     if (error || !data || !data.length) return [];
     const userIds = [...new Set(data.map((p: any) => p.user_id).filter(Boolean))] as string[];
     const postIds = data.map((p: any) => p.id) as string[];
-    const [profileMap, likedRes] = await Promise.all([
+    const [profileMap, companyPageMap, likedRes] = await Promise.all([
       _fetchProfilesMap(userIds),
+      _fetchCompanyPagesMap([companyPageId]),
       supabase.from("likes").select("post_id, reaction_type").eq("company_page_id", companyPageId).in("post_id", postIds),
     ]);
     const likedMap = new Map((likedRes.data ?? []).map((l: any) => [l.post_id, l.reaction_type ?? "curtir"]));
     return data.map((raw: any) => ({
-      ..._normalisePost(raw, profileMap),
+      ..._normalisePost(raw, profileMap, companyPageMap),
       is_liked: likedMap.has(raw.id),
       reaction_type: (likedMap.get(raw.id) as ReactionType | undefined) ?? null,
     }));
@@ -434,10 +452,14 @@ export async function fetchSavedPosts(userId: string): Promise<Post[]> {
 
     if (!data || !data.length) return [];
     const userIds = [...new Set(data.map((p: any) => p.user_id).filter(Boolean))] as string[];
-    const profileMap = await _fetchProfilesMap(userIds);
+    const companyPageIds = [...new Set(data.map((p: any) => p.company_page_id).filter(Boolean))] as string[];
+    const [profileMap, companyPageMap] = await Promise.all([
+      _fetchProfilesMap(userIds),
+      _fetchCompanyPagesMap(companyPageIds),
+    ]);
 
     return data.map((raw: any) => ({
-      ..._normalisePost(raw, profileMap),
+      ..._normalisePost(raw, profileMap, companyPageMap),
       is_bookmarked: true,
     }));
   } catch (e) {
@@ -769,8 +791,10 @@ export async function fetchUserPosts(userId: string, currentUserId?: string): Pr
       .limit(20);
     if (error || !data || !data.length) return [];
     const postIds = data.map((p: any) => p.id) as string[];
-    const [profileMap, likedRes, bookmarkRes] = await Promise.all([
+    const companyPageIds = [...new Set(data.map((p: any) => p.company_page_id).filter(Boolean))] as string[];
+    const [profileMap, companyPageMap, likedRes, bookmarkRes] = await Promise.all([
       _fetchProfilesMap([userId]),
+      _fetchCompanyPagesMap(companyPageIds),
       currentUserId
         ? supabase.from("likes").select("post_id, reaction_type").eq("user_id", currentUserId).is("company_page_id", null).in("post_id", postIds)
         : Promise.resolve({ data: [] }),
@@ -781,7 +805,7 @@ export async function fetchUserPosts(userId: string, currentUserId?: string): Pr
     const likedMap = new Map(((likedRes as any).data ?? []).map((l: any) => [l.post_id, l.reaction_type ?? "curtir"]));
     const bookmarkedIds = new Set(((bookmarkRes as any).data ?? []).map((b: any) => b.post_id));
     return data.map((raw: any) => ({
-      ..._normalisePost(raw, profileMap),
+      ..._normalisePost(raw, profileMap, companyPageMap),
       is_liked: likedMap.has(raw.id),
       reaction_type: (likedMap.get(raw.id) as ReactionType | undefined) ?? null,
       is_bookmarked: bookmarkedIds.has(raw.id),
@@ -3598,8 +3622,12 @@ export async function fetchPostById(postId: string, currentUserId?: string, comp
       .eq("id", postId)
       .maybeSingle();
     if (error || !data) return null;
-    const profileMap = await _fetchProfilesMap([data.user_id]);
-    const post = _normalisePost(data, profileMap);
+    const cpId = (data as any).company_page_id ?? null;
+    const [profileMap, companyPageMap] = await Promise.all([
+      _fetchProfilesMap([data.user_id]),
+      _fetchCompanyPagesMap(cpId ? [cpId] : []),
+    ]);
+    const post = _normalisePost(data, profileMap, companyPageMap);
     if (post.poll && currentUserId) {
       const indices = normalizePollIndices(post.poll.user_votes, currentUserId);
       post.poll = { ...post.poll, user_voted_indices: indices, user_voted_index: indices[0] ?? null };
