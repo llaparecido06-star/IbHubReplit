@@ -179,13 +179,13 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
       alert("O vídeo deve ter no máximo 500 MB.");
       return;
     }
-    const MAX_SECONDS = 120;
+    const MAX_SECONDS = 300;
     const vid = document.createElement("video");
     vid.preload = "metadata";
     vid.onloadedmetadata = () => {
       URL.revokeObjectURL(vid.src);
       if (vid.duration > MAX_SECONDS) {
-        alert("O vídeo deve ter no máximo 2 minutos.");
+        alert("O vídeo deve ter no máximo 5 minutos.");
         return;
       }
       setVideoFile(file);
