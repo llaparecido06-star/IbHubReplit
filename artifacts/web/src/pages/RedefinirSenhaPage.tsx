@@ -90,6 +90,25 @@ export default function RedefinirSenhaPage() {
                       fontSize: 15, color: "#0d1b2a", outline: "none", boxSizing: "border-box",
                     }}
                   />
+                  {password.length > 0 && (() => {
+                    const rules = [
+                      { ok: password.length >= 6 && password.length <= 8, label: "6 a 8 caracteres" },
+                      { ok: /[A-Z]/.test(password), label: "1 letra maiúscula" },
+                      { ok: /[a-z]/.test(password), label: "1 letra minúscula" },
+                      { ok: /[0-9]/.test(password), label: "1 número" },
+                      { ok: /[.!@]/.test(password), label: "1 caractere especial (. ! @)" },
+                    ];
+                    return (
+                      <div style={{ marginTop: 8, padding: "10px 12px", background: "#f4f5f7", borderRadius: 8, display: "flex", flexDirection: "column", gap: 5 }}>
+                        {rules.map((r) => (
+                          <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12 }}>
+                            <span style={{ fontSize: 11, color: r.ok ? "#16a34a" : "#aab4c0" }}>{r.ok ? "✔" : "○"}</span>
+                            <span style={{ color: r.ok ? "#16a34a" : "#7a8494", fontWeight: r.ok ? 600 : 400 }}>{r.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div>
                   <label style={{ fontSize: 13, fontWeight: 700, color: "#0d1b2a", display: "block", marginBottom: 6 }}>Confirmar nova senha</label>

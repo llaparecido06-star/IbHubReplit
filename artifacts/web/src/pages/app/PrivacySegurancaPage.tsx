@@ -211,6 +211,25 @@ export default function PrivacySegurancaPage() {
                 autoComplete="new-password"
                 style={inputStyle}
               />
+              {newPassword.length > 0 && (() => {
+                const rules = [
+                  { ok: newPassword.length >= 6 && newPassword.length <= 8, label: "6 a 8 caracteres" },
+                  { ok: /[A-Z]/.test(newPassword), label: "1 letra maiúscula" },
+                  { ok: /[a-z]/.test(newPassword), label: "1 letra minúscula" },
+                  { ok: /[0-9]/.test(newPassword), label: "1 número" },
+                  { ok: /[.!@]/.test(newPassword), label: "1 caractere especial (. ! @)" },
+                ];
+                return (
+                  <div style={{ padding: "10px 12px", background: "#f4f5f7", borderRadius: 8, display: "flex", flexDirection: "column", gap: 5, marginTop: -4 }}>
+                    {rules.map((r) => (
+                      <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12 }}>
+                        <span style={{ fontSize: 11, color: r.ok ? "#16a34a" : "#aab4c0" }}>{r.ok ? "✔" : "○"}</span>
+                        <span style={{ color: r.ok ? "#16a34a" : "#7a8494", fontWeight: r.ok ? 600 : 400 }}>{r.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
               <input
                 type="password"
                 value={confirmPassword}
