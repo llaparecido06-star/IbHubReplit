@@ -328,19 +328,38 @@ export default function MensagensPage() {
           setSelected(null);
           setMessages([]);
         }
-        if (convIdFromUrl) {
-          const target = data.find(c => c.id === convIdFromUrl);
-          if (target) {
-            setSelected(target);
-            fetchWebMessages(target.id, userId).then(setMessages);
-          }
-        }
       })
       .catch(() => setLoading(false));
     // Re-fetch whenever the active identity changes so the conversation list
     // matches the bucket the user is currently acting from.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, authLoading, activeCompany?.id]);
+
+  // Auto-open conversation from ?conv= URL param.
+  // Runs whenever convIdFromUrl changes (e.g. navigating here from a profile
+  // while already on this page) OR when conversations finish loading.
+  useEffect(() => {
+    if (!convIdFromUrl || !userId || authLoading) return;
+    const target = conversations.find(c => c.id === convIdFromUrl);
+    if (target) {
+      // Conversation already in list — select it immediately
+      if (selected?.id !== target.id) {
+        setSelected(target);
+        fetchWebMessages(target.id, userId).then(setMessages);
+      }
+    } else if (!loading) {
+      // Not in list yet (e.g. newly created conversation) — fetch it directly
+      fetchWebConversations(userId, activeCompany?.id ?? null).then(fresh => {
+        setConversations(fresh);
+        const found = fresh.find(c => c.id === convIdFromUrl);
+        if (found) {
+          setSelected(found);
+          fetchWebMessages(found.id, userId).then(setMessages);
+        }
+      }).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [convIdFromUrl, conversations.length, loading]);
 
   const loadMessages = useCallback(async (convo: WebConversation) => {
     // Tear down any existing realtime channel before switching conversations
