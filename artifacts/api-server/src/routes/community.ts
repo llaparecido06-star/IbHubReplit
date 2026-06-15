@@ -824,4 +824,49 @@ router.post("/community/groups/:id/invite", async (req: Request, res: Response):
   res.status(200).json({ ok: true, status: "invited" });
 });
 
+/**
+ * DELETE /community/groups/:groupId/messages/:messageId
+ * Soft-deletes a group chat message. Allowed for:
+ *   - The message sender (own message)
+ *   - Group owner / moderator / admin
+ */
+router.delete("/community/groups/:groupId/messages/:messageId", async (req: Request, res: Response): Promise<void> => {
+  const callerId = await resolveUserId(req, res);
+  if (!callerId) return;
+
+  const { groupId, messageId } = req.params as { groupId: string; messageId: string };
+
+  const { data: msg, error: msgErr } = await supabaseAdmin
+    .from("messages")
+    .select("id, sender_id, conversation_id")
+    .eq("id", messageId)
+    .eq("conversation_id", groupId)
+    .maybeSingle();
+
+  if (msgErr || !msg) { res.status(404).json({ error: "Message not found" }); return; }
+
+  const isSender = (msg as any).sender_id === callerId;
+
+  if (!isSender) {
+    const { data: callerMem } = await supabaseAdmin
+      .from("group_members")
+      .select("role")
+      .eq("group_id", groupId)
+      .eq("user_id", callerId)
+      .maybeSingle();
+    const callerRole = callerMem?.role as string | undefined;
+    const canManage = callerRole === "owner" || callerRole === "moderator" || callerRole === "admin";
+    if (!canManage) { res.status(403).json({ error: "Cannot delete this message" }); return; }
+  }
+
+  const { error: delErr } = await supabaseAdmin
+    .from("messages")
+    .update({ deleted_at: new Date().toISOString(), content: "" })
+    .eq("id", messageId);
+
+  if (delErr) { res.status(500).json({ error: delErr.message }); return; }
+
+  res.json({ ok: true });
+});
+
 export default router;

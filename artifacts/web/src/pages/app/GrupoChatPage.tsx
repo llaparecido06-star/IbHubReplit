@@ -12,6 +12,7 @@ import {
   fetchGroupByIdPublic,
   joinGroup,
   requestGroupJoinWeb,
+  deleteGroupMessage,
   WebMessage,
   WebGroupInfo,
   Group,
@@ -110,6 +111,8 @@ export default function GrupoChatPage() {
   const [isPending, setIsPending]     = useState(false);
   const [messages, setMessages]       = useState<WebMessage[]>([]);
   const [loading, setLoading]         = useState(true);
+  const [myRole, setMyRole]           = useState<string | null>(null);
+  const [msgMenu, setMsgMenu]         = useState<{ msgId: string; x: number; y: number } | null>(null);
   const [input, setInput]         = useState("");
   const [sending, setSending]     = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -149,6 +152,7 @@ export default function GrupoChatPage() {
       .order("created_at", { ascending: true })
       .limit(1)
       .maybeSingle();
+    setMyRole((memberRow as any)?.role ?? null);
     if ((memberRow as any)?.role === "pending") {
       const { data: gr } = await supabase
         .from("groups")
@@ -244,6 +248,19 @@ export default function GrupoChatPage() {
       if (channelRef.current) { supabase.removeChannel(channelRef.current); channelRef.current = null; }
     };
   }, [groupId, user?.id, scrollBottom]);
+
+  const isAdminOrOwner = myRole === "owner" || myRole === "moderator" || myRole === "admin";
+
+  const handleDeleteMessage = async (msgId: string) => {
+    setMsgMenu(null);
+    const ok = await deleteGroupMessage(groupId, msgId);
+    if (ok) {
+      setMessages(prev => prev.filter(m => m.id !== msgId));
+    } else {
+      setChatToast("Não foi possível apagar a mensagem.");
+      setTimeout(() => setChatToast(null), 3000);
+    }
+  };
 
   const handleSend = async () => {
     if ((!input.trim() && !attachFile) || sending || uploading || !user?.id) return;
@@ -496,6 +513,7 @@ export default function GrupoChatPage() {
                   </div>
                 );
               }
+              const canDelete = isMe || isAdminOrOwner;
               nodes.push(
                 <div key={msg.id} style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start" }}>
                   {!isMe && (
@@ -505,15 +523,18 @@ export default function GrupoChatPage() {
                   )}
                   <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexDirection: isMe ? "row-reverse" : "row", width: "100%" }}>
                     {!isMe && <div onClick={() => setLocation(`/app/usuario/${msg.sender_id}`)} style={{ cursor: "pointer", flexShrink: 0 }}><Avatar src={msg.sender?.avatar_url} name={senderName} size={34} /></div>}
-                    <div style={{
-                      maxWidth: "72%",
-                      background: isMe ? NAVY : WHITE,
-                      color: isMe ? WHITE : NAVY,
-                      borderRadius: isMe ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                      padding: msg.media_url ? "8px 10px 10px" : "10px 14px",
-                      border: isMe ? "none" : `1px solid ${BORDER}`,
-                      boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-                    }}>
+                    <div
+                      onContextMenu={canDelete ? (e) => { e.preventDefault(); setMsgMenu({ msgId: msg.id, x: e.clientX, y: e.clientY }); } : undefined}
+                      style={{
+                        maxWidth: "72%",
+                        background: isMe ? NAVY : WHITE,
+                        color: isMe ? WHITE : NAVY,
+                        borderRadius: isMe ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                        padding: msg.media_url ? "8px 10px 10px" : "10px 14px",
+                        border: isMe ? "none" : `1px solid ${BORDER}`,
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                        cursor: canDelete ? "context-menu" : "default",
+                      }}>
                       {msg.media_url && msg.message_type === "audio" && (
                         <audio
                           controls

@@ -1422,6 +1422,23 @@ export async function uploadChatAttachment(file: File, userId: string): Promise<
   }
 }
 
+export async function deleteGroupMessage(groupId: string, messageId: string): Promise<boolean> {
+  try {
+    const session = await getCachedSession();
+    if (!session?.access_token) return false;
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
+      ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
+    const res = await fetch(`${apiBase}/community/groups/${groupId}/messages/${messageId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    return res.ok;
+  } catch (e) {
+    console.warn("deleteGroupMessage:", e);
+    return false;
+  }
+}
+
 export async function deleteWebMessage(messageId: string, senderId: string): Promise<boolean> {
   try {
     const { error } = await supabase
