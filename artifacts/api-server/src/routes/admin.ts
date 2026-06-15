@@ -418,7 +418,7 @@ router.post("/admin/change-plan", async (req: Request, res: Response) => {
     return;
   }
 
-  const VALID_PLANS = ["gratuito", "profissional", "basico", "empresa", "executivo"];
+  const VALID_PLANS = ["gratuito", "comunidade_ideal_bi", "profissional", "basico", "empresa", "executivo"];
   if (!VALID_PLANS.includes(plan)) {
     res.status(400).json({ error: `Invalid plan. Valid values: ${VALID_PLANS.join(", ")}` });
     return;
@@ -625,7 +625,7 @@ router.post("/admin/broadcast-notification", async (req: Request, res: Response)
     return;
   }
 
-  const VALID_SEGMENTS = ["all", "gratuito", "profissional", "basico", "empresa", "executivo"];
+  const VALID_SEGMENTS = ["all", "gratuito", "comunidade_ideal_bi", "profissional", "basico", "empresa", "executivo"];
   const seg = segment ?? "all";
   if (!VALID_SEGMENTS.includes(seg)) {
     res.status(400).json({ error: `Invalid segment. Valid values: ${VALID_SEGMENTS.join(", ")}` });

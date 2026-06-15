@@ -369,9 +369,7 @@ export default function RegisterScreen() {
           company:            company.trim() || null,
           position:           role.trim() || null,
           certifications:     certifications.length > 0 ? certifications : [],
-          // Always start as gratuito — paid plans are activated via Stripe
-          // after the user completes payment in the subscription screen.
-          plan:               "gratuito",
+          plan:               "comunidade_ideal_bi",
           ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
         }, { onConflict: "id" });
 
