@@ -6,6 +6,7 @@ import {
   AtSign, UserCheck, BarChart2, Bell as BellIcon,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { usePermissions } from "@/context/PermissionsContext";
 import { useMarketFeedBadge } from "@/context/MarketFeedBadgeContext";
 import {
   fetchProfileStats,
@@ -687,6 +688,7 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
 /* ─── AppShell ───────────────────────────── */
 export function AppShell({ children, onPostCreated }: { children: React.ReactNode; onPostCreated?: () => void }) {
   const { profile, user, signOut, activeCompany, setActiveCompany } = useAuth();
+  const { hasFeature } = usePermissions();
   const { hasNewPost: hasNewMarketPost } = useMarketFeedBadge();
   const [location, setLocation] = useLocation();
   const [stats, setStats]           = useState({ connections: 0, followers: 0, following: 0 });
@@ -1112,32 +1114,64 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
               </div>
 
               {/* ── Perfil Empresarial ── */}
-              {companyPages.length > 0 && (
-                <div style={{ padding: "0 4px" }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: MUTED, letterSpacing: 0.8, padding: "8px 12px 4px", textTransform: "uppercase" }}>
-                    Perfil Empresarial
-                  </div>
-                  {companyPages.map(cp => (
-                    <button
-                      key={cp.id}
-                      onClick={() => { setActiveCompany(cp); setUserMenuOpen(false); setLocation(`/app/empresa/${cp.id}`); }}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 10, width: "100%",
-                        padding: "8px 12px", border: "none", borderRadius: 8, cursor: "pointer", textAlign: "left",
-                        backgroundColor: activeCompany?.id === cp.id ? `${GOLD}12` : "transparent",
-                        fontFamily: "inherit",
-                      }}
-                    >
-                      <Avatar src={cp.avatar_url} name={cp.name} size={32} bg={GOLD} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: activeCompany?.id === cp.id ? GOLD : NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cp.name}</div>
-                        <div style={{ fontSize: 11, color: MUTED }}>Página empresarial</div>
-                      </div>
-                      {activeCompany?.id === cp.id && <span style={{ color: GOLD, fontSize: 14 }}>✓</span>}
-                    </button>
-                  ))}
+              <div style={{ padding: "0 4px" }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: MUTED, letterSpacing: 0.8, padding: "8px 12px 4px", textTransform: "uppercase" }}>
+                  Perfil Empresarial
                 </div>
-              )}
+                {companyPages.length === 0 && (
+                  <div style={{ padding: "6px 12px 4px", fontSize: 12, color: MUTED, fontStyle: "italic" }}>
+                    Você ainda não tem páginas empresariais.
+                  </div>
+                )}
+                {companyPages.map(cp => (
+                  <button
+                    key={cp.id}
+                    onClick={() => { setActiveCompany(cp); setUserMenuOpen(false); setLocation(`/app/empresa/${cp.id}`); }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10, width: "100%",
+                      padding: "8px 12px", border: "none", borderRadius: 8, cursor: "pointer", textAlign: "left",
+                      backgroundColor: activeCompany?.id === cp.id ? `${GOLD}12` : "transparent",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    <Avatar src={cp.avatar_url} name={cp.name} size={32} bg={GOLD} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: activeCompany?.id === cp.id ? GOLD : NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cp.name}</div>
+                      <div style={{ fontSize: 11, color: MUTED }}>Página empresarial</div>
+                    </div>
+                    {activeCompany?.id === cp.id && <span style={{ color: GOLD, fontSize: 14 }}>✓</span>}
+                  </button>
+                ))}
+                {hasFeature("Criar Página Empresa") ? (
+                  <button
+                    onClick={() => { setUserMenuOpen(false); setLocation("/app/criar-empresa"); }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 8, width: "100%",
+                      padding: "7px 12px", border: "none", borderRadius: 8, cursor: "pointer", textAlign: "left",
+                      backgroundColor: "transparent", fontFamily: "inherit",
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = `${GOLD}12`)}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}
+                  >
+                    <span style={{ fontSize: 15, width: 20, textAlign: "center", color: GOLD, fontWeight: 900 }}>+</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: GOLD }}>Criar nova página</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => { setUserMenuOpen(false); setLocation("/comunidade-exclusiva"); }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 8, width: "100%",
+                      padding: "7px 12px", border: "none", borderRadius: 8, cursor: "pointer", textAlign: "left",
+                      backgroundColor: "transparent", fontFamily: "inherit",
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = BG)}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}
+                  >
+                    <span style={{ fontSize: 14, width: 20, textAlign: "center" }}>🔒</span>
+                    <span style={{ fontSize: 12, color: MUTED }}>Plano Empresarial necessário</span>
+                  </button>
+                )}
+              </div>
 
               {/* ── Links ── */}
               <div style={{ borderTop: `1px solid ${BORDER}`, margin: "4px 0", padding: "4px 4px 0" }}>
@@ -1363,6 +1397,12 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
                   section: "Conta",
                   color: MUTED,
                   items: [
+                    {
+                      label: companyPages.length > 0 ? `Minhas Empresas (${companyPages.length})` : "Minhas Empresas",
+                      icon: <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/><rect x="9" y="2" width="6" height="6" rx="1"/></svg>,
+                      path: companyPages.length > 0 ? "/app/configuracoes" : "/app/criar-empresa",
+                      iconBg: `${GOLD}20`,
+                    },
                     { label: "Usuários Bloqueados", icon: I.block,    path: "/app/bloqueados",     iconBg: "#e53e3e20" },
                     { label: "Configurações",       icon: I.settings, path: "/app/configuracoes",  iconBg: `${NAVY}10`  },
                   ],
