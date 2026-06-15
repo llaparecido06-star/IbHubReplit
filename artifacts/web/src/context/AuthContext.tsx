@@ -183,7 +183,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                       user_id: u.id,
                       full_name: googleName || null,
                       avatar_url: googleAvatar,
-                      plan: "gratuito",
+                      plan: "comunidade_ideal_bi",
                     }).then(() => fetchProfile(u.id));
                   } else if (!existing.full_name && googleName) {
                     const update: Record<string, string | null> = { user_id: u.id, full_name: googleName };

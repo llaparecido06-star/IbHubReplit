@@ -30,13 +30,23 @@ function formatDate(iso: string): string {
   try { return new Date(iso).toLocaleDateString("pt-BR"); } catch { return iso; }
 }
 
+const PLAN_FALLBACK: Record<string, string> = {
+  gratuito: "Gratuito",
+  free: "Gratuito",
+  basico: "Básico",
+  premium: "Premium",
+  exclusive: "Exclusivo",
+  exclusivo: "Exclusivo",
+  business: "Business",
+};
+
 export default function AdminCRM() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
-  const [planEdit, setPlanEdit] = useState("gratuito");
+  const [planEdit, setPlanEdit] = useState("");
   const [isCourtesy, setIsCourtesy] = useState(false);
   const [savingPlan, setSavingPlan] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -77,6 +87,12 @@ export default function AdminCRM() {
     );
   });
 
+  const planDisplayName = (planId: string): string => {
+    const found = planOptions.find((p) => p.id === planId);
+    if (found) return found.name;
+    return PLAN_FALLBACK[planId] ?? planId;
+  };
+
   const selectUser = (user: AdminUser, isSel: boolean) => {
     if (isSel) {
       setSelectedUser(null);
@@ -87,7 +103,7 @@ export default function AdminCRM() {
       setRevealCreditsToAdd("");
     } else {
       setSelectedUser(user);
-      setPlanEdit(user.plan);
+      setPlanEdit(user.plan ?? planOptions[0]?.id ?? "");
       setIsCourtesy(!!user.courtesy_until && new Date(user.courtesy_until) > new Date());
       setResetLinkMsg(null);
       setUserCredits(null);
@@ -270,7 +286,7 @@ export default function AdminCRM() {
                           {user.is_shadowbanned && <span style={{ fontSize: 10, fontWeight: 700, backgroundColor: "#f3f4f6", color: "#6b7280", padding: "1px 6px", borderRadius: 5 }}>SHADOW</span>}
                         </div>
                         <div style={{ fontSize: 12, color: "#8a93a2", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {user.email ?? `@${user.username ?? "—"}`} · {user.plan}
+                          {user.email ?? `@${user.username ?? "—"}`} · {planDisplayName(user.plan)}
                         </div>
                       </div>
                       <span style={{ color: "#aaa", fontSize: 18 }}>{isSel ? "▾" : "›"}</span>
