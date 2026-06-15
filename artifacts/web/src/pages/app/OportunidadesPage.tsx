@@ -79,7 +79,7 @@ const MUTED  = "#8a93a2";
 export default function OportunidadesPage() {
   const { user, profile, activeCompany } = useAuth();
   const { hasFeature } = usePermissions();
-  const canPublish = (profile?.is_admin ?? false) || (!!activeCompany);
+  const canPublish = !!activeCompany;
   const isMobile = useWindowWidth() < 768;
   const [lockedPublish, setLockedPublish] = useState(false);
   const [location, setLocation] = useLocation();
@@ -574,14 +574,17 @@ export default function OportunidadesPage() {
         )}
         {lockedPublish && (
           <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setLockedPublish(false)}>
-            <div style={{ backgroundColor: WHITE, borderRadius: 18, padding: 40, maxWidth: 380, width: "90%", textAlign: "center" }} onClick={e => e.stopPropagation()}>
-              <div style={{ fontSize: 44, marginBottom: 16 }}>🏢</div>
-              <h3 style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Apenas empresas podem publicar</h3>
+            <div style={{ backgroundColor: WHITE, borderRadius: 18, padding: 32, maxWidth: 380, width: "90%", textAlign: "center" }} onClick={e => e.stopPropagation()}>
+              <div style={{ fontSize: 44, marginBottom: 12 }}>🏢</div>
+              <h3 style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Disponível apenas para empresas</h3>
               <p style={{ fontSize: 14, color: MUTED, marginBottom: 24, lineHeight: 1.6 }}>
-                A publicação de vagas, eventos e oportunidades de marketplace é exclusiva para perfis de empresa. Crie uma página de empresa ou alterne para uma já existente no seu perfil para continuar.
+                A publicação de vagas, eventos e oportunidades de marketplace é exclusiva para páginas de empresa. Acesse via sua empresa ou crie uma nova.
               </p>
-              <a href="/app/perfil" style={{ display: "inline-block", padding: "11px 28px", backgroundColor: GOLD, color: NAVY, borderRadius: 10, fontWeight: 800, fontSize: 14, textDecoration: "none" }}>Ir para Perfil</a>
-              <button onClick={() => setLockedPublish(false)} style={{ display: "block", margin: "12px auto 0", background: "none", border: "none", fontSize: 13, color: MUTED, cursor: "pointer" }}>Fechar</button>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <a href="/app/minhas-empresas" onClick={() => setLockedPublish(false)} style={{ display: "block", padding: "11px 28px", backgroundColor: GOLD, color: "#fff", borderRadius: 10, fontWeight: 800, fontSize: 14, textDecoration: "none" }}>🏢 Acessar via Empresa</a>
+                <a href="/app/criar-empresa" onClick={() => setLockedPublish(false)} style={{ display: "block", padding: "11px 28px", backgroundColor: "transparent", color: NAVY, borderRadius: 10, fontWeight: 700, fontSize: 14, textDecoration: "none", border: `1px solid ${BORDER}` }}>+ Criar nova empresa</a>
+              </div>
+              <button onClick={() => setLockedPublish(false)} style={{ display: "block", margin: "14px auto 0", background: "none", border: "none", fontSize: 13, color: MUTED, cursor: "pointer" }}>Fechar</button>
             </div>
           </div>
         )}
@@ -606,9 +609,16 @@ export default function OportunidadesPage() {
               setShowCreate(true);
               setCreateTab(tab === "vagas" ? "vaga" : tab === "eventos" ? "evento" : "marketplace");
             }}
-            style={{ backgroundColor: GOLD, color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 14, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              backgroundColor: canPublish ? GOLD : BG,
+              color: canPublish ? "#fff" : MUTED,
+              border: canPublish ? "none" : `1px solid ${BORDER}`,
+              borderRadius: 10, padding: "10px 18px", fontSize: 14, fontWeight: 700,
+              cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+            }}
           >
-            + Publicar
+            {canPublish ? "+" : "🔒"} {canPublish ? (tab === "eventos" ? "Evento" : "Publicar") : "Publicar"}
           </button>
         </div>
 
@@ -1061,17 +1071,18 @@ export default function OportunidadesPage() {
       {lockedPublish && (
         <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }}
           onClick={() => setLockedPublish(false)}>
-          <div style={{ backgroundColor: "#fff", borderRadius: 18, padding: 40, maxWidth: 380, width: "90%", textAlign: "center" }}
+          <div style={{ backgroundColor: "#fff", borderRadius: 18, padding: 32, maxWidth: 380, width: "90%", textAlign: "center" }}
             onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 44, marginBottom: 16 }}>🏢</div>
-            <h3 style={{ fontSize: 18, fontWeight: 800, color: "#0d1b2a", marginBottom: 8 }}>Apenas empresas podem publicar</h3>
+            <div style={{ fontSize: 44, marginBottom: 12 }}>🏢</div>
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: "#0d1b2a", marginBottom: 8 }}>Disponível apenas para empresas</h3>
             <p style={{ fontSize: 14, color: "#7a8494", marginBottom: 24, lineHeight: 1.6 }}>
-              A publicação de vagas, eventos e oportunidades de marketplace é exclusiva para perfis de empresa. Crie uma página de empresa ou alterne para uma já existente no seu perfil para continuar.
+              A publicação de vagas, eventos e oportunidades de marketplace é exclusiva para páginas de empresa. Acesse via sua empresa ou crie uma nova.
             </p>
-            <a href="/app/perfil" style={{ display: "inline-block", padding: "11px 28px", backgroundColor: "#c9a84c", color: "#0d1b2a", borderRadius: 10, fontWeight: 800, fontSize: 14, textDecoration: "none" }}>
-              Ir para Perfil
-            </a>
-            <button onClick={() => setLockedPublish(false)} style={{ display: "block", margin: "12px auto 0", background: "none", border: "none", fontSize: 13, color: "#7a8494", cursor: "pointer" }}>Fechar</button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <a href="/app/minhas-empresas" onClick={() => setLockedPublish(false)} style={{ display: "block", padding: "11px 28px", backgroundColor: "#c9a84c", color: "#fff", borderRadius: 10, fontWeight: 800, fontSize: 14, textDecoration: "none" }}>🏢 Acessar via Empresa</a>
+              <a href="/app/criar-empresa" onClick={() => setLockedPublish(false)} style={{ display: "block", padding: "11px 28px", backgroundColor: "transparent", color: "#0d1b2a", borderRadius: 10, fontWeight: 700, fontSize: 14, textDecoration: "none", border: "1px solid #e8eaed" }}>+ Criar nova empresa</a>
+            </div>
+            <button onClick={() => setLockedPublish(false)} style={{ display: "block", margin: "14px auto 0", background: "none", border: "none", fontSize: 13, color: "#7a8494", cursor: "pointer" }}>Fechar</button>
           </div>
         </div>
       )}
