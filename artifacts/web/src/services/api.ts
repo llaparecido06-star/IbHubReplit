@@ -1136,6 +1136,13 @@ export interface WebConversation {
   company_page?: { id: string; owner_id: string | null; name: string; avatar_url: string | null } | null;
 }
 
+export interface WebMessageReaction {
+  emoji: string;
+  count: number;
+  mine: boolean;
+  users?: string[];
+}
+
 export interface WebMessage {
   id: string;
   conversation_id: string;
@@ -1145,6 +1152,8 @@ export interface WebMessage {
   created_at: string;
   message_type?: string | null;
   media_url?: string | null;
+  deleted_at?: string | null;
+  reactions?: WebMessageReaction[];
   sender?: { id: string; full_name: string; avatar_url?: string | null };
   /** When the message was authored from a company identity, this
    *  carries the company's display name/avatar so the recipient sees
@@ -1282,7 +1291,7 @@ export async function fetchWebConversations(
   }
 }
 
-export async function fetchWebMessages(conversationId: string): Promise<WebMessage[]> {
+export async function fetchWebMessages(conversationId: string, currentUserId?: string): Promise<WebMessage[]> {
   try {
     // Try the SECURITY DEFINER RPC first (bypasses RLS so all participants see all messages)
     const { data: rpcData, error: rpcError } = await supabase
@@ -1350,6 +1359,35 @@ export async function fetchWebMessages(conversationId: string): Promise<WebMessa
       raw = raw.map(m => ({
         ...m,
         from_company: m.from_company_page_id ? (cpMap.get(m.from_company_page_id) ?? null) : null,
+      }));
+    }
+
+    // Enrich messages with reactions and deleted_at
+    if (raw.length > 0) {
+      const msgIds = raw.map((m: any) => m.id);
+      const [rxnsRes, deletedRes] = await Promise.all([
+        supabase.from("message_reactions").select("message_id, user_id, emoji").in("message_id", msgIds),
+        supabase.from("messages").select("id, deleted_at").in("id", msgIds).not("deleted_at", "is", null),
+      ]);
+      const reactionsMap: Record<string, WebMessageReaction[]> = {};
+      for (const r of (rxnsRes.data ?? []) as any[]) {
+        if (!reactionsMap[r.message_id]) reactionsMap[r.message_id] = [];
+        const ex = reactionsMap[r.message_id].find((x: WebMessageReaction) => x.emoji === r.emoji);
+        if (ex) {
+          ex.count++;
+          if (currentUserId && r.user_id === currentUserId) ex.mine = true;
+          ex.users?.push(r.user_id);
+        } else {
+          reactionsMap[r.message_id].push({ emoji: r.emoji, count: 1, mine: !!(currentUserId && r.user_id === currentUserId), users: [r.user_id] });
+        }
+      }
+      const deletedMap = new Map<string, string>(
+        ((deletedRes.data ?? []) as any[]).map((m: any) => [m.id as string, m.deleted_at as string]),
+      );
+      raw = raw.map((m: any) => ({
+        ...m,
+        reactions: reactionsMap[m.id] ?? [],
+        deleted_at: deletedMap.get(m.id) ?? null,
       }));
     }
 
@@ -1487,6 +1525,65 @@ export async function uploadChatAttachment(file: File, userId: string): Promise<
   } catch (e) {
     console.warn("uploadChatAttachment:", e);
     return null;
+  }
+}
+
+export async function deleteWebMessage(messageId: string, senderId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("messages")
+      .update({ deleted_at: new Date().toISOString(), content: "" })
+      .eq("id", messageId)
+      .eq("sender_id", senderId);
+    return !error;
+  } catch (e) {
+    console.warn("deleteWebMessage:", e);
+    return false;
+  }
+}
+
+export async function toggleWebMessageReaction(
+  messageId: string,
+  userId: string,
+  emoji: string,
+): Promise<boolean> {
+  try {
+    const { data: existing } = await supabase
+      .from("message_reactions")
+      .select("id")
+      .match({ message_id: messageId, user_id: userId, emoji })
+      .maybeSingle();
+    if (existing) {
+      await supabase.from("message_reactions").delete().eq("id", (existing as any).id);
+    } else {
+      await supabase.from("message_reactions").delete().match({ message_id: messageId, user_id: userId });
+      await supabase.from("message_reactions").insert({ message_id: messageId, user_id: userId, emoji });
+    }
+    return true;
+  } catch (e) {
+    console.warn("toggleWebMessageReaction:", e);
+    return false;
+  }
+}
+
+export async function forwardWebMessage(
+  content: string,
+  messageType: string | null | undefined,
+  mediaUrl: string | null | undefined,
+  targetConversationId: string,
+  senderId: string,
+  companyPageId?: string | null,
+): Promise<boolean> {
+  try {
+    const ok = await sendWebMessage(targetConversationId, senderId, content, {
+      companyPageId: companyPageId ?? null,
+      messageType: messageType ?? undefined,
+      mediaUrl: mediaUrl ?? undefined,
+    });
+    return !!ok;
+  } catch (e) {
+    console.warn("forwardWebMessage:", e);
+    return false;
   }
 }
 

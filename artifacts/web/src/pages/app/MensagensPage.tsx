@@ -12,6 +12,9 @@ import {
   sendWebAudioMessage,
   uploadChatAttachment,
   getOrCreateWebConversation,
+  deleteWebMessage,
+  toggleWebMessageReaction,
+  forwardWebMessage,
   WebConversation,
   WebMessage,
 } from "@/services/api";
@@ -28,6 +31,7 @@ const WHITE  = "#ffffff";
 const BG     = "#f5f5f0";
 const BORDER = "#e8e8e3";
 const MUTED  = "#7a8494";
+const REACTION_EMOJIS = ["🍷", "❤️", "👍", "😂", "🔥", "😮"];
 
 function useIsMobile() {
   const [mobile, setMobile] = useState(typeof window !== "undefined" ? window.innerWidth < 768 : false);
@@ -274,6 +278,15 @@ export default function MensagensPage() {
   const [attachPreview, setAttachPreview] = useState<string | null>(null);
   const [uploading, setUploading]         = useState(false);
   const [isRecording, setIsRecording]     = useState(false);
+  const [chatToast, setChatToast]         = useState<string | null>(null);
+  const [hoveredMsgId, setHoveredMsgId]   = useState<string | null>(null);
+  const [reactionPickerId, setReactionPickerId] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ msgId: string; msgContent: string } | null>(null);
+  const [showForwardPicker, setShowForwardPicker] = useState(false);
+  const [forwardMsg, setForwardMsg]       = useState<{ content: string; messageType: string | null; mediaUrl: string | null } | null>(null);
+  const [forwardConvos, setForwardConvos] = useState<WebConversation[]>([]);
+  const [forwardSearch, setForwardSearch] = useState("");
+  const [forwarding, setForwarding]       = useState<string | null>(null);
 
   const bottomRef          = useRef<HTMLDivElement>(null);
   const fileInputRef       = useRef<HTMLInputElement>(null);
@@ -302,7 +315,7 @@ export default function MensagensPage() {
           const target = data.find(c => c.id === convIdFromUrl);
           if (target) {
             setSelected(target);
-            fetchWebMessages(target.id).then(setMessages);
+            fetchWebMessages(target.id, userId).then(setMessages);
           }
         }
       })
@@ -320,7 +333,7 @@ export default function MensagensPage() {
     }
     seenMsgIds.current = new Set();
     setSelected(convo);
-    const msgs = await fetchWebMessages(convo.id);
+    const msgs = await fetchWebMessages(convo.id, userId);
     msgs.forEach(m => seenMsgIds.current.add(m.id));
     setMessages(msgs);
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
@@ -371,6 +384,18 @@ export default function MensagensPage() {
           setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
         },
       )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "messages", filter: `conversation_id=eq.${selected.id}` },
+        (payload) => {
+          const updated = payload.new as any;
+          setMessages(prev => prev.map(m =>
+            m.id === updated.id
+              ? { ...m, content: updated.content ?? m.content, deleted_at: updated.deleted_at ?? null }
+              : m,
+          ));
+        },
+      )
       .subscribe();
 
     realtimeChannelRef.current = ch;
@@ -385,13 +410,19 @@ export default function MensagensPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    if (!chatToast) return;
+    const t = setTimeout(() => setChatToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [chatToast]);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
     const validation = validateChatFile(file);
     if (!validation.ok) {
-      alert(validation.reason);
+      setChatToast(validation.reason ?? "Arquivo inválido.");
       return;
     }
     setAttachFile(file);
@@ -427,6 +458,68 @@ export default function MensagensPage() {
   const clearAttach = () => {
     setAttachFile(null);
     setAttachPreview(null);
+  };
+
+  const handleDeleteMsg = async (forEveryone: boolean) => {
+    if (!deleteConfirm || !userId) return;
+    if (forEveryone) {
+      const ok = await deleteWebMessage(deleteConfirm.msgId, userId);
+      if (ok) {
+        setMessages(prev => prev.map(m =>
+          m.id === deleteConfirm.msgId ? { ...m, deleted_at: new Date().toISOString(), content: "" } : m,
+        ));
+      }
+    } else {
+      setMessages(prev => prev.filter(m => m.id !== deleteConfirm.msgId));
+    }
+    setDeleteConfirm(null);
+  };
+
+  const handleToggleReaction = async (msgId: string, emoji: string) => {
+    if (!userId) return;
+    setReactionPickerId(null);
+    setMessages(prev => prev.map(msg => {
+      if (msg.id !== msgId) return msg;
+      const reactions = [...(msg.reactions ?? [])];
+      const existingMineIdx = reactions.findIndex(r => r.mine);
+      if (existingMineIdx >= 0 && reactions[existingMineIdx].emoji === emoji) {
+        const ex = { ...reactions[existingMineIdx], count: reactions[existingMineIdx].count - 1, mine: false };
+        if (ex.count <= 0) reactions.splice(existingMineIdx, 1);
+        else reactions[existingMineIdx] = ex;
+      } else {
+        if (existingMineIdx >= 0) {
+          const ex = { ...reactions[existingMineIdx], count: reactions[existingMineIdx].count - 1, mine: false };
+          if (ex.count <= 0) reactions.splice(existingMineIdx, 1);
+          else reactions[existingMineIdx] = ex;
+        }
+        const idx = reactions.findIndex(r => r.emoji === emoji);
+        if (idx >= 0) {
+          reactions[idx] = { ...reactions[idx], count: reactions[idx].count + 1, mine: true };
+        } else {
+          reactions.push({ emoji, count: 1, mine: true });
+        }
+      }
+      return { ...msg, reactions };
+    }));
+    await toggleWebMessageReaction(msgId, userId, emoji);
+  };
+
+  const handleInitForward = (msg: WebMessage) => {
+    setHoveredMsgId(null);
+    setForwardMsg({ content: msg.content, messageType: msg.message_type ?? null, mediaUrl: msg.media_url ?? null });
+    setForwardConvos(conversations);
+    setForwardSearch("");
+    setShowForwardPicker(true);
+  };
+
+  const handleForwardMsg = async (targetConvId: string) => {
+    if (!forwardMsg || !userId || forwarding) return;
+    setForwarding(targetConvId);
+    await forwardWebMessage(forwardMsg.content || "", forwardMsg.messageType, forwardMsg.mediaUrl, targetConvId, userId, activeCompany?.id ?? null);
+    setForwarding(null);
+    setShowForwardPicker(false);
+    setForwardMsg(null);
+    setChatToast("✉️ Mensagem encaminhada!");
   };
 
   const handleSend = async () => {
@@ -537,7 +630,22 @@ export default function MensagensPage() {
         )}
         {messages.map(msg => {
           const isMe = msg.sender_id === userId;
-          // Resolve attachment: mobile sends media_url + message_type; web sends [attachment]: in content
+
+          if (msg.deleted_at) {
+            return (
+              <div key={msg.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", gap: 8 }}>
+                {!isMe && <div style={{ width: 30, flexShrink: 0 }} />}
+                <div style={{ maxWidth: "72%" }}>
+                  <div style={{ backgroundColor: BG, color: MUTED, borderRadius: isMe ? "16px 16px 4px 16px" : "16px 16px 16px 4px", padding: "8px 14px", fontSize: 13, border: `1px solid ${BORDER}`, fontStyle: "italic" }}>
+                    🚫 Mensagem apagada
+                  </div>
+                  <div style={{ fontSize: 10, color: MUTED, marginTop: 3, textAlign: isMe ? "right" : "left" }}>{timeAgo(msg.created_at)}</div>
+                </div>
+                {isMe && <div style={{ width: 30, flexShrink: 0 }} />}
+              </div>
+            );
+          }
+
           const mobileMediaUrl = msg.media_url && msg.message_type && msg.message_type !== "text"
             ? msg.media_url : null;
           const attach = mobileMediaUrl
@@ -546,8 +654,6 @@ export default function MensagensPage() {
           const isMedia = !!attach;
           const isImageMsg = msg.message_type === "image" ||
             (isMedia && attach && isImageUrl(attach.url));
-          // When the message was authored from a company identity, render
-          // the company's name/avatar instead of the owner's personal profile.
           const fromCompany = msg.from_company ?? null;
           const displayName   = fromCompany?.name        ?? msg.sender?.full_name ?? "?";
           const displayAvatar = fromCompany?.avatar_url  ?? msg.sender?.avatar_url ?? null;
@@ -558,10 +664,29 @@ export default function MensagensPage() {
               setLocation(`/app/usuario/${msg.sender_id}`);
             }
           };
+          const isHovered = hoveredMsgId === msg.id;
+          const showReactionPicker = reactionPickerId === msg.id;
+          const msgReactions = msg.reactions ?? [];
+
+          const actionBtns = (
+            <div style={{ display: "flex", gap: 1, alignItems: "center", opacity: isHovered ? 1 : 0, pointerEvents: isHovered ? "auto" : "none", transition: "opacity 0.12s", flexShrink: 0 }}>
+              <button onClick={(e) => { e.stopPropagation(); setReactionPickerId(showReactionPicker ? null : msg.id); }} title="Reagir" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, padding: "3px 4px", borderRadius: 6, lineHeight: 1 }}>😊</button>
+              <button onClick={(e) => { e.stopPropagation(); handleInitForward(msg); }} title="Encaminhar" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, padding: "3px 4px", borderRadius: 6, lineHeight: 1 }}>↩️</button>
+              {isMe && (
+                <button onClick={(e) => { e.stopPropagation(); setDeleteConfirm({ msgId: msg.id, msgContent: attach ? "📎 Arquivo" : msg.content }); }} title="Apagar" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, padding: "3px 4px", borderRadius: 6, lineHeight: 1 }}>🗑️</button>
+              )}
+            </div>
+          );
+
           return (
-            <div key={msg.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", gap: 8 }}>
+            <div key={msg.id}
+              style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", gap: 6, alignItems: "flex-end" }}
+              onMouseEnter={() => setHoveredMsgId(msg.id)}
+              onMouseLeave={() => { setHoveredMsgId(null); setReactionPickerId(null); }}
+            >
               {!isMe && <div onClick={onClickSender} style={{ cursor: "pointer", flexShrink: 0, alignSelf: "flex-end" }}><Avatar src={displayAvatar} name={displayName} size={30} /></div>}
-              <div style={{ maxWidth: "76%" }}>
+              {!isMe && actionBtns}
+              <div style={{ maxWidth: "68%" }}>
                 {!isMe && (
                   <div onClick={onClickSender} style={{ fontSize: 11, color: MUTED, marginBottom: 2, cursor: "pointer" }}>{displayName}</div>
                 )}
@@ -579,10 +704,32 @@ export default function MensagensPage() {
                     : (msg.content || "")
                   }
                 </div>
+                {showReactionPicker && (
+                  <div style={{ display: "flex", gap: 4, marginTop: 4, padding: "6px 10px", backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 20, width: "fit-content", marginLeft: isMe ? "auto" : 0, boxShadow: "0 2px 8px rgba(0,0,0,0.10)" }}>
+                    {REACTION_EMOJIS.map(emoji => {
+                      const mine = msgReactions.find(r => r.emoji === emoji && r.mine);
+                      return (
+                        <button key={emoji} onClick={() => handleToggleReaction(msg.id, emoji)} style={{ background: mine ? `${GOLD}20` : "none", border: mine ? `1.5px solid ${GOLD}` : "1px solid transparent", cursor: "pointer", fontSize: 17, padding: "4px 5px", borderRadius: 8, lineHeight: 1, transition: "all 0.1s" }}>
+                          {emoji}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {msgReactions.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4, justifyContent: isMe ? "flex-end" : "flex-start" }}>
+                    {msgReactions.map(r => (
+                      <button key={r.emoji} onClick={() => handleToggleReaction(msg.id, r.emoji)} style={{ padding: "2px 8px", borderRadius: 12, border: r.mine ? `1.5px solid ${GOLD}` : `1px solid ${BORDER}`, backgroundColor: r.mine ? `${GOLD}18` : WHITE, cursor: "pointer", fontSize: 12, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 3 }}>
+                        {r.emoji} <span style={{ fontWeight: 600 }}>{r.count}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div style={{ fontSize: 10, color: MUTED, marginTop: 3, textAlign: isMe ? "right" : "left" }}>
                   {timeAgo(msg.created_at)}
                 </div>
               </div>
+              {isMe && actionBtns}
               {isMe && <Avatar src={profile?.avatar_url} name={profile?.full_name ?? "Eu"} size={30} />}
             </div>
           );
@@ -1037,6 +1184,68 @@ export default function MensagensPage() {
           </div>
         </div>}
       </div>
+      {/* Delete message modal */}
+      {deleteConfirm && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.48)", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setDeleteConfirm(null)}>
+          <div style={{ backgroundColor: WHITE, borderRadius: 14, padding: "28px 24px", maxWidth: 360, width: "100%", boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Apagar mensagem</div>
+            {deleteConfirm.msgContent && (
+              <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.5, margin: "0 0 6px", fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>"{deleteConfirm.msgContent.slice(0, 60)}{deleteConfirm.msgContent.length > 60 ? "…" : ""}"</p>
+            )}
+            <p style={{ fontSize: 14, color: MUTED, margin: "0 0 22px" }}>Escolha como apagar:</p>
+            <div style={{ display: "flex", gap: 8, flexDirection: "column" }}>
+              <button onClick={() => handleDeleteMsg(false)} style={{ padding: "10px 16px", borderRadius: 9, border: `1.5px solid ${BORDER}`, backgroundColor: WHITE, color: NAVY, fontWeight: 600, fontSize: 14, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>Apagar para mim</button>
+              <button onClick={() => handleDeleteMsg(true)} style={{ padding: "10px 16px", borderRadius: 9, border: "none", backgroundColor: "#dc2626", color: WHITE, fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>Apagar para todos</button>
+              <button onClick={() => setDeleteConfirm(null)} style={{ padding: "10px 16px", borderRadius: 9, border: `1.5px solid ${BORDER}`, backgroundColor: WHITE, color: MUTED, fontWeight: 500, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Forward message modal */}
+      {showForwardPicker && forwardMsg && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.48)", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => { setShowForwardPicker(false); setForwardMsg(null); }}>
+          <div style={{ backgroundColor: WHITE, borderRadius: 14, padding: "24px", maxWidth: 400, width: "100%", maxHeight: "80vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: NAVY }}>Encaminhar para…</div>
+              <button onClick={() => { setShowForwardPicker(false); setForwardMsg(null); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: 4, color: MUTED }}>✕</button>
+            </div>
+            <input
+              value={forwardSearch}
+              onChange={e => setForwardSearch(e.target.value)}
+              placeholder="Buscar conversa…"
+              autoFocus
+              style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${BORDER}`, borderRadius: 20, padding: "9px 14px", fontSize: 14, outline: "none", fontFamily: "inherit", backgroundColor: BG, marginBottom: 10 }}
+            />
+            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
+              {forwardConvos
+                .filter(c => (c.name ?? c.participant?.full_name ?? "").toLowerCase().includes(forwardSearch.toLowerCase()))
+                .map(c => {
+                  const name = c.name ?? c.participant?.full_name ?? "Conversa";
+                  const avatar = c.is_group ? c.avatar_url : (c.participant?.avatar_url ?? null);
+                  return (
+                    <button key={c.id} onClick={() => handleForwardMsg(c.id)} disabled={!!forwarding}
+                      style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", border: "none", background: forwarding === c.id ? `${GOLD}10` : "none", borderRadius: 10, cursor: forwarding ? "default" : "pointer", textAlign: "left", fontFamily: "inherit", width: "100%" }}>
+                      <Avatar src={avatar ?? null} name={name} size={38} />
+                      <span style={{ fontSize: 14, fontWeight: 600, color: NAVY, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                      {forwarding === c.id && <span style={{ fontSize: 12, color: GOLD }}>Enviando…</span>}
+                    </button>
+                  );
+                })}
+              {forwardConvos.filter(c => (c.name ?? c.participant?.full_name ?? "").toLowerCase().includes(forwardSearch.toLowerCase())).length === 0 && (
+                <div style={{ padding: 20, textAlign: "center", color: MUTED, fontSize: 13 }}>Nenhuma conversa encontrada</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {chatToast && (
+        <div style={{ position: "fixed", bottom: 88, left: "50%", transform: "translateX(-50%)", backgroundColor: NAVY, color: WHITE, padding: "12px 20px", borderRadius: 10, fontSize: 14, fontWeight: 500, zIndex: 9999, boxShadow: "0 4px 16px rgba(0,0,0,0.18)", maxWidth: 400, textAlign: "center", pointerEvents: "none", whiteSpace: "nowrap" }}>
+          {chatToast}
+        </div>
+      )}
     </AppShell>
   );
 }

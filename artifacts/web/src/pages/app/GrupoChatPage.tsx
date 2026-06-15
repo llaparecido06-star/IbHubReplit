@@ -7,6 +7,7 @@ import {
   fetchWebMessages,
   sendWebMessage,
   sendWebAudioMessage,
+  uploadChatAttachment,
   fetchWebGroupInfo,
   fetchGroupByIdPublic,
   joinGroup,
@@ -15,6 +16,7 @@ import {
   WebGroupInfo,
   Group,
 } from "@/services/api";
+import { validateChatFile, MAX_CHAT_FILE_SIZE, formatFileSize } from "@/constants/chatUploads";
 import { AudioRecorder } from "@/components/chat/AudioRecorder";
 
 const GOLD   = "#c9a84c";
@@ -53,6 +55,20 @@ function LinkIcon() {
 function CheckIcon() {
   return <svg width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>;
 }
+function ClipIcon({ size = 18, color = MUTED }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} fill="none" viewBox="0 0 24 24" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+    </svg>
+  );
+}
+function XIcon({ size = 14, color = MUTED }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} fill="none" viewBox="0 0 24 24" stroke={color} strokeWidth="2.5" strokeLinecap="round">
+      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>
+  );
+}
 
 function useIsMobile() {
   const [mobile, setMobile] = React.useState(() => typeof window !== "undefined" && window.innerWidth < 768);
@@ -81,6 +97,10 @@ export default function GrupoChatPage() {
   const [sending, setSending]     = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [linkCopied, setLinkCopied]   = useState(false);
+  const [attachFile, setAttachFile]       = useState<File | null>(null);
+  const [attachPreview, setAttachPreview] = useState<string | null>(null);
+  const [uploading, setUploading]         = useState(false);
+  const [chatToast, setChatToast]         = useState<string | null>(null);
 
   const groupLink = `https://ibhub.com.br/grupo/${groupId}`;
   const handleCopyLink = () => {
@@ -89,9 +109,10 @@ export default function GrupoChatPage() {
     setTimeout(() => setLinkCopied(false), 2200);
   };
 
-  const listRef    = useRef<HTMLDivElement>(null);
-  const seenIds    = useRef<Set<string>>(new Set());
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const listRef      = useRef<HTMLDivElement>(null);
+  const seenIds      = useRef<Set<string>>(new Set());
+  const channelRef   = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const scrollBottom = useCallback(() => {
     setTimeout(() => {
@@ -208,11 +229,38 @@ export default function GrupoChatPage() {
   }, [groupId, user?.id, scrollBottom]);
 
   const handleSend = async () => {
-    if (!input.trim() || sending || !user?.id) return;
-    const text = input.trim();
+    if ((!input.trim() && !attachFile) || sending || uploading || !user?.id) return;
+    let content = input.trim();
+    let attachMsgType: string | undefined;
+    let attachMediaUrl: string | undefined;
+
+    if (attachFile) {
+      setUploading(true);
+      const v = validateChatFile(attachFile);
+      const resolvedMime = v.ok ? v.mimeType : attachFile.type;
+      if (resolvedMime.startsWith("video/")) attachMsgType = "video";
+      else if (resolvedMime.startsWith("image/")) attachMsgType = "image";
+      else if (resolvedMime.startsWith("audio/")) attachMsgType = "audio";
+      const uploadFile = (v.ok && attachFile.type !== v.mimeType)
+        ? new File([attachFile], attachFile.name, { type: v.mimeType })
+        : attachFile;
+      const url = await uploadChatAttachment(uploadFile, user.id);
+      setUploading(false);
+      if (url) {
+        attachMediaUrl = url;
+        if (!content) content = `[attachment]:${url}|${attachFile.name}`;
+      }
+      clearGroupAttach();
+    }
+
+    const isAttach = content.startsWith("[attachment]:");
     setInput("");
     setSending(true);
-    await sendWebMessage(groupId, user.id, text, { companyPageId: activeCompany?.id ?? null });
+    await sendWebMessage(groupId, user.id, content || "", {
+      companyPageId: activeCompany?.id ?? null,
+      messageType: isAttach ? attachMsgType : undefined,
+      mediaUrl: isAttach ? attachMediaUrl : undefined,
+    });
     setSending(false);
   };
 
@@ -227,6 +275,36 @@ export default function GrupoChatPage() {
 
   const handleKey = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  };
+
+  useEffect(() => {
+    if (!chatToast) return;
+    const t = setTimeout(() => setChatToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [chatToast]);
+
+  const handleGroupFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const validation = validateChatFile(file);
+    if (!validation.ok) {
+      setChatToast(validation.reason ?? "Arquivo inválido.");
+      return;
+    }
+    setAttachFile(file);
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = ev => setAttachPreview(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setAttachPreview(null);
+    }
+  };
+
+  const clearGroupAttach = () => {
+    setAttachFile(null);
+    setAttachPreview(null);
   };
 
   const handleJoinGroup = async () => {
@@ -437,8 +515,45 @@ export default function GrupoChatPage() {
             })}
           </div>
 
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
+            style={{ display: "none" }}
+            onChange={handleGroupFileChange}
+          />
+
+          {/* Attachment preview strip */}
+          {attachFile && (
+            <div style={{ padding: "8px 16px 0", backgroundColor: WHITE, flexShrink: 0 }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, backgroundColor: BG, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "8px 12px", maxWidth: "100%" }}>
+                {attachPreview
+                  ? <img src={attachPreview} alt="preview" style={{ width: 44, height: 44, borderRadius: 6, objectFit: "cover", flexShrink: 0 }} />
+                  : <span style={{ fontSize: 22, flexShrink: 0 }}>📎</span>
+                }
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{attachFile.name}</div>
+                  <div style={{ fontSize: 11, color: MUTED }}>{(attachFile.size / 1024).toFixed(0)} KB · {formatFileSize(MAX_CHAT_FILE_SIZE)} máx.</div>
+                </div>
+                <button onClick={clearGroupAttach} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", flexShrink: 0 }}>
+                  <XIcon size={14} />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Input — WhatsApp style */}
           <div style={{ padding: "12px 16px", borderTop: `1px solid ${BORDER}`, background: WHITE, display: "flex", gap: 8, alignItems: "center" }}>
+            {/* Attachment button */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              aria-label="Anexar arquivo"
+              style={{ flexShrink: 0, width: 38, height: 38, border: `1px solid ${BORDER}`, borderRadius: 19, backgroundColor: WHITE, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", outline: "none" }}
+            >
+              <ClipIcon size={18} color={attachFile ? GOLD : MUTED} />
+            </button>
+
             {/* Text area — hidden while recording */}
             {!isRecording && (
               <textarea
@@ -454,16 +569,16 @@ export default function GrupoChatPage() {
             {/* AudioRecorder: mic when empty, recording UI when active, nothing when typing */}
             <AudioRecorder
               onSend={handleAudioSend}
-              disabled={sending}
-              hasText={!!input.trim()}
+              disabled={sending || uploading}
+              hasText={!!input.trim() || !!attachFile}
               onRecordingChange={setIsRecording}
             />
 
-            {/* Send button — only when text is typed and not recording */}
-            {!isRecording && input.trim() && (
+            {/* Send button — when text or attachment ready and not recording */}
+            {!isRecording && (input.trim() || attachFile) && (
               <button
                 onClick={handleSend}
-                disabled={!input.trim() || sending}
+                disabled={(!input.trim() && !attachFile) || sending || uploading}
                 style={{ width: 42, height: 42, borderRadius: 21, background: NAVY, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: WHITE, flexShrink: 0 }}
               >
                 <SendIcon />
@@ -472,6 +587,13 @@ export default function GrupoChatPage() {
           </div>
         </div>
       </div>
+
+      {/* File validation toast */}
+      {chatToast && (
+        <div style={{ position: "fixed", bottom: 88, left: "50%", transform: "translateX(-50%)", backgroundColor: NAVY, color: WHITE, padding: "12px 20px", borderRadius: 10, fontSize: 14, fontWeight: 500, zIndex: 9999, boxShadow: "0 4px 16px rgba(0,0,0,0.18)", maxWidth: 380, textAlign: "center", pointerEvents: "none" }}>
+          ⚠️ {chatToast}
+        </div>
+      )}
     </AppShell>
   );
 }
