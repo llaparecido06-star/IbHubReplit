@@ -30,6 +30,23 @@ function timeStr(iso: string) {
   return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
+function msgDayKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function chatDateLabel(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((today.getTime() - msgDay.getTime()) / 86400000);
+  if (diffDays === 0) return "Hoje";
+  if (diffDays === 1) return "Ontem";
+  if (diffDays < 7) return d.toLocaleDateString("pt-BR", { weekday: "long" });
+  return d.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" });
+}
+
 function Avatar({ src, name, size = 36 }: { src?: string | null; name: string; size?: number }) {
   const initials = name.split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase();
   if (src) return <img src={src} alt={name} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
@@ -465,10 +482,21 @@ export default function GrupoChatPage() {
                 <div style={{ fontSize: 32, marginBottom: 12 }}>👋</div>
                 <div style={{ fontSize: 14 }}>Nenhuma mensagem ainda. Diga olá!</div>
               </div>
-            ) : messages.map(msg => {
+            ) : messages.flatMap((msg, idx) => {
               const isMe = msg.sender_id === user?.id;
               const senderName = msg.sender?.full_name ?? "Membro";
-              return (
+              const showDateSep = msgDayKey(msg.created_at) !== (idx > 0 ? msgDayKey(messages[idx - 1].created_at) : null);
+              const nodes: React.ReactNode[] = [];
+              if (showDateSep) {
+                nodes.push(
+                  <div key={`date-${msg.id}`} style={{ display: "flex", justifyContent: "center", margin: "4px 0 8px" }}>
+                    <span style={{ background: BORDER, borderRadius: 12, padding: "3px 12px", fontSize: 11, color: MUTED, fontWeight: 500 }}>
+                      {chatDateLabel(msg.created_at)}
+                    </span>
+                  </div>
+                );
+              }
+              nodes.push(
                 <div key={msg.id} style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start" }}>
                   {!isMe && (
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, marginLeft: 44 }}>
@@ -517,6 +545,7 @@ export default function GrupoChatPage() {
                   </div>
                 </div>
               );
+              return nodes;
             })}
           </div>
 

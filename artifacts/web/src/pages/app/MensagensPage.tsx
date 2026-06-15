@@ -43,6 +43,23 @@ function useIsMobile() {
   return mobile;
 }
 
+function msgDayKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function chatDateLabel(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((today.getTime() - msgDay.getTime()) / 86400000);
+  if (diffDays === 0) return "Hoje";
+  if (diffDays === 1) return "Ontem";
+  if (diffDays < 7) return d.toLocaleDateString("pt-BR", { weekday: "long" });
+  return d.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" });
+}
+
 const IMG_EXTS = ["jpg", "jpeg", "png", "gif", "webp", "svg", "avif"];
 function isImageUrl(url: string) {
   try {
@@ -628,11 +645,23 @@ export default function MensagensPage() {
         {messages.length === 0 && (
           <div style={{ textAlign: "center", color: MUTED, fontSize: 13, marginTop: 24 }}>Nenhuma mensagem ainda. Diga olá! 👋</div>
         )}
-        {messages.map(msg => {
+        {messages.flatMap((msg, idx) => {
           const isMe = msg.sender_id === userId;
+          const showDateSep = msgDayKey(msg.created_at) !== (idx > 0 ? msgDayKey(messages[idx - 1].created_at) : null);
+          const nodes: React.ReactNode[] = [];
+
+          if (showDateSep) {
+            nodes.push(
+              <div key={`date-${msg.id}`} style={{ display: "flex", justifyContent: "center", margin: "4px 0 8px" }}>
+                <span style={{ background: "#e8e8e3", borderRadius: 12, padding: "3px 12px", fontSize: 11, color: MUTED, fontWeight: 500 }}>
+                  {chatDateLabel(msg.created_at)}
+                </span>
+              </div>
+            );
+          }
 
           if (msg.deleted_at) {
-            return (
+            nodes.push(
               <div key={msg.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", gap: 8 }}>
                 {!isMe && <div style={{ width: 30, flexShrink: 0 }} />}
                 <div style={{ maxWidth: "72%" }}>
@@ -644,6 +673,7 @@ export default function MensagensPage() {
                 {isMe && <div style={{ width: 30, flexShrink: 0 }} />}
               </div>
             );
+            return nodes;
           }
 
           const mobileMediaUrl = msg.media_url && msg.message_type && msg.message_type !== "text"
@@ -678,7 +708,7 @@ export default function MensagensPage() {
             </div>
           );
 
-          return (
+          nodes.push(
             <div key={msg.id}
               style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", gap: 6, alignItems: "flex-end" }}
               onMouseEnter={() => setHoveredMsgId(msg.id)}
@@ -733,6 +763,7 @@ export default function MensagensPage() {
               {isMe && <Avatar src={profile?.avatar_url} name={profile?.full_name ?? "Eu"} size={30} />}
             </div>
           );
+          return nodes;
         })}
         <div ref={bottomRef} />
       </div>
