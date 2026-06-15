@@ -4361,15 +4361,15 @@ export async function fetchReferralLeaderboard(limit = 20): Promise<ReferralRank
 
 export async function fetchWebGroupInfo(groupId: string): Promise<WebGroupInfo | null> {
   try {
-    const [convRes, partRes] = await Promise.all([
+    const [convRes, memberCountRes] = await Promise.all([
       supabase.from("conversations").select("id, name").eq("id", groupId).maybeSingle(),
-      supabase.from("conversation_participants").select("user_id").eq("conversation_id", groupId),
+      supabase.from("group_members").select("user_id", { count: "exact", head: true }).eq("group_id", groupId).neq("role", "pending"),
     ]);
     if (!convRes.data) return null;
     return {
       id: (convRes.data as any).id,
       name: (convRes.data as any).name,
-      member_count: (partRes.data ?? []).length,
+      member_count: memberCountRes.count ?? 0,
     };
   } catch { return null; }
 }
