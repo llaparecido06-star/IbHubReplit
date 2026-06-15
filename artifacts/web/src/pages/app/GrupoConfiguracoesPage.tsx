@@ -315,7 +315,10 @@ export default function GrupoConfiguracoesPage() {
     if (!groupId || avatarUploading) return;
     setUploadError(null);
     setAvatarUploading(true);
-    const path = `groups/${groupId}/${Date.now()}.jpg`;
+    // avatars_insert policy requires the first path segment to be auth.uid().
+    // Use user?.id (the Supabase auth UUID) as the top-level folder.
+    const authUid = user?.id ?? userId;
+    const path = `${authUid}/groups/${groupId}/${Date.now()}.jpg`;
     const { error } = await supabase.storage.from("avatars").upload(path, blob, { contentType: "image/jpeg", upsert: true });
     if (error) {
       setUploadError(`Erro ao enviar imagem: ${error.message}`);
