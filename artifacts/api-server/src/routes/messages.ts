@@ -426,4 +426,238 @@ router.post("/conversations/direct", validateBody(DirectConversationSchema), asy
   res.json({ conversation_id: newId });
 });
 
+/**
+ * GET /conversations
+ *
+ * Returns the conversation list for the authenticated user, bypassing all
+ * client-side RLS (which has a recursive self-reference on conversation_participants
+ * that causes direct Supabase client queries to return empty results).
+ *
+ * Query params:
+ *   active_company_id  string  (optional) — when set, scopes list to that company's inbox
+ */
+router.get("/conversations", async (req: Request, res: Response): Promise<void> => {
+  const callerId = await resolveUserId(req, res);
+  if (!callerId) return;
+
+  const activeCompanyId = (req.query.active_company_id as string | undefined) ?? null;
+
+  // 1. All conversation IDs this user participates in
+  const { data: cpRows, error: cpError } = await supabaseAdmin
+    .from("conversation_participants")
+    .select("conversation_id")
+    .eq("user_id", callerId);
+
+  if (cpError || !cpRows || cpRows.length === 0) {
+    res.json({ conversations: [] });
+    return;
+  }
+
+  const convIds = (cpRows as { conversation_id: string }[]).map((r) => r.conversation_id);
+
+  // 2. Conversation metadata + owned companies (parallel)
+  const [convosRes, ownedCompaniesRes, allParticipantsRes] = await Promise.all([
+    supabaseAdmin
+      .from("conversations")
+      .select("id, is_group, name, avatar_url, created_at, company_page_id")
+      .in("id", convIds),
+    supabaseAdmin
+      .from("company_pages")
+      .select("id")
+      .eq("owner_id", callerId),
+    supabaseAdmin
+      .from("conversation_participants")
+      .select("conversation_id, user_id")
+      .in("conversation_id", convIds),
+  ]);
+
+  if (!convosRes.data || convosRes.data.length === 0) {
+    res.json({ conversations: [] });
+    return;
+  }
+
+  const ownedCompanyIds = new Set<string>(
+    ((ownedCompaniesRes.data ?? []) as { id: string }[]).map((c) => c.id),
+  );
+
+  // 3. Build other-participant map (conversation_id → other user_id)
+  const otherParticipantMap = new Map<string, string>();
+  for (const row of (allParticipantsRes.data ?? []) as { conversation_id: string; user_id: string }[]) {
+    if (row.user_id !== callerId) {
+      otherParticipantMap.set(row.conversation_id, row.user_id);
+    }
+  }
+
+  // 4. Fetch profiles + company pages (parallel)
+  const otherUserIds = [...new Set(otherParticipantMap.values())];
+  const companyPageIds = [
+    ...new Set(
+      (convosRes.data as any[])
+        .map((c: any) => c.company_page_id as string | null)
+        .filter(Boolean) as string[],
+    ),
+  ];
+
+  const [profilesRes, companyPagesRes] = await Promise.all([
+    otherUserIds.length > 0
+      ? supabaseAdmin.from("profiles").select("id, full_name, avatar_url").in("id", otherUserIds)
+      : Promise.resolve({ data: [] }),
+    companyPageIds.length > 0
+      ? supabaseAdmin
+          .from("company_pages")
+          .select("id, owner_id, name, avatar_url")
+          .in("id", companyPageIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const profileMap = new Map<string, any>(
+    ((profilesRes.data ?? []) as any[]).map((p: any) => [p.id as string, p]),
+  );
+  const companyPageMap = new Map<string, any>(
+    ((companyPagesRes.data ?? []) as any[]).map((c: any) => [c.id as string, c]),
+  );
+
+  // 5. Last message per conversation (fan-out in parallel)
+  const lastMsgResults = await Promise.all(
+    (convosRes.data as any[]).map((convo: any) =>
+      supabaseAdmin
+        .from("messages")
+        .select("content, created_at, message_type")
+        .eq("conversation_id", convo.id as string)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ),
+  );
+
+  // 6. Build result array
+  const results = (convosRes.data as any[]).map((convo: any, i: number) => {
+    const lastMsg = lastMsgResults[i].data as { content: string; created_at: string; message_type: string | null } | null;
+    const lastContent =
+      lastMsg?.message_type === "image" ? "📷 Foto"
+      : lastMsg?.message_type === "video" ? "🎬 Vídeo"
+      : lastMsg?.message_type === "audio" ? "🎤 Áudio"
+      : lastMsg?.message_type === "file"  ? "📎 Arquivo"
+      : (lastMsg?.content ?? null);
+
+    const otherUserId = otherParticipantMap.get(convo.id as string) ?? null;
+    const participant = otherUserId ? (profileMap.get(otherUserId) ?? null) : null;
+    const cpId = (convo.company_page_id as string | null) ?? null;
+    const company_page = cpId ? (companyPageMap.get(cpId) ?? null) : null;
+
+    return {
+      id:               convo.id as string,
+      is_group:         convo.is_group as boolean,
+      name:             (convo.name as string | null) ?? null,
+      avatar_url:       (convo.avatar_url as string | null) ?? null,
+      last_message:     lastContent,
+      last_message_at:  lastMsg?.created_at ?? (convo.created_at as string),
+      unread_count:     0,
+      participant,
+      company_page_id:  cpId,
+      company_page,
+    };
+  });
+
+  const sorted = results.sort(
+    (a, b) => new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime(),
+  );
+
+  // 7. Identity scoping
+  let filtered = sorted;
+  if (activeCompanyId) {
+    filtered = sorted.filter((r) => r.is_group || r.company_page_id === activeCompanyId);
+  } else {
+    filtered = sorted.filter(
+      (r) => r.is_group || !r.company_page_id || !ownedCompanyIds.has(r.company_page_id),
+    );
+  }
+
+  res.json({ conversations: filtered });
+});
+
+/**
+ * GET /conversations/:id/messages
+ *
+ * Returns messages for a conversation, fully enriched with sender profiles,
+ * company identities, and reactions. Uses supabaseAdmin to bypass the recursive
+ * RLS on conversation_participants / messages that blocks direct client queries.
+ */
+router.get("/conversations/:id/messages", async (req: Request, res: Response): Promise<void> => {
+  const callerId = await resolveUserId(req, res);
+  if (!callerId) return;
+
+  const conversationId = req.params.id;
+
+  // Verify caller is a participant
+  const { data: participantRow } = await supabaseAdmin
+    .from("conversation_participants")
+    .select("user_id")
+    .eq("conversation_id", conversationId)
+    .eq("user_id", callerId)
+    .maybeSingle();
+
+  if (!participantRow) {
+    res.status(403).json({ error: "Você não é participante desta conversa." });
+    return;
+  }
+
+  // Fetch messages
+  const { data: messages, error: msgError } = await supabaseAdmin
+    .from("messages")
+    .select("id, conversation_id, sender_id, content, created_at, message_type, media_url, from_company_page_id, deleted_at, reply_to_id")
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: true })
+    .limit(200);
+
+  if (msgError || !messages || messages.length === 0) {
+    res.json({ messages: [], current_user_id: callerId });
+    return;
+  }
+
+  const typedMessages = messages as any[];
+
+  // Parallel: sender profiles, company pages, reactions
+  const senderIds   = [...new Set(typedMessages.map((m: any) => m.sender_id as string))];
+  const cpIds       = [...new Set(typedMessages.map((m: any) => m.from_company_page_id as string | null).filter(Boolean))] as string[];
+  const msgIds      = typedMessages.map((m: any) => m.id as string);
+
+  const [profilesRes, cpRes, reactionsRes] = await Promise.all([
+    supabaseAdmin.from("profiles").select("id, full_name, avatar_url").in("id", senderIds),
+    cpIds.length > 0
+      ? supabaseAdmin.from("company_pages").select("id, name, avatar_url").in("id", cpIds)
+      : Promise.resolve({ data: [] }),
+    supabaseAdmin.from("message_reactions").select("message_id, user_id, emoji").in("message_id", msgIds),
+  ]);
+
+  const profileMap = new Map<string, any>(
+    ((profilesRes.data ?? []) as any[]).map((p: any) => [p.id as string, p]),
+  );
+  const cpMap = new Map<string, any>(
+    ((cpRes.data ?? []) as any[]).map((c: any) => [c.id as string, c]),
+  );
+
+  // Build reactions map (emoji counts, but defer "mine" flag to client — it knows the userId)
+  const reactionsMap: Record<string, { emoji: string; count: number; users: string[] }[]> = {};
+  for (const r of (reactionsRes.data ?? []) as { message_id: string; user_id: string; emoji: string }[]) {
+    if (!reactionsMap[r.message_id]) reactionsMap[r.message_id] = [];
+    const ex = reactionsMap[r.message_id].find((x) => x.emoji === r.emoji);
+    if (ex) {
+      ex.count++;
+      ex.users.push(r.user_id);
+    } else {
+      reactionsMap[r.message_id].push({ emoji: r.emoji, count: 1, users: [r.user_id] });
+    }
+  }
+
+  const enriched = typedMessages.map((m: any) => ({
+    ...m,
+    sender:       profileMap.get(m.sender_id as string) ?? null,
+    from_company: m.from_company_page_id ? (cpMap.get(m.from_company_page_id as string) ?? null) : null,
+    reactions:    reactionsMap[m.id as string] ?? [],
+  }));
+
+  res.json({ messages: enriched, current_user_id: callerId });
+});
+
 export default router;

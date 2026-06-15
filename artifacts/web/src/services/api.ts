@@ -1180,6 +1180,13 @@ export interface WebMessage {
 
 /**
  * Fetch conversations scoped to the user's currently-active identity.
+ *
+ * Routed through the API server (GET /conversations) rather than direct
+ * Supabase queries: the RLS policy on `conversation_participants` has a
+ * self-referential subquery that triggers Postgres infinite-recursion
+ * detection, causing all direct client SELECT calls to return empty rows.
+ * The API server uses supabaseAdmin (service role) to bypass RLS entirely.
+ *
  * - When `activeCompanyId` is provided (user is acting as a company), only
  *   conversations tagged with that company_page_id are returned.
  * - When in personal mode (`activeCompanyId == null`), conversations belonging
@@ -1193,222 +1200,72 @@ export async function fetchWebConversations(
   activeCompanyId?: string | null,
 ): Promise<WebConversation[]> {
   try {
-    // Use SECURITY DEFINER RPC to bypass RLS on conversation_participants (same as mobile)
-    const [participantsRes, convosRes, ownedCompaniesRes] = await Promise.all([
-      supabase.rpc("get_my_conversations_participants", { p_user_id: userId }),
-      supabase
-        .from("conversation_participants")
-        .select("conversation_id, accepted, last_read_at, conversation:conversations(id, is_group, name, avatar_url, created_at, company_page_id)")
-        .eq("user_id", userId),
-      supabase.from("company_pages").select("id").eq("owner_id", userId),
-    ]);
+    const session = await getCachedSession();
+    const token = session?.access_token;
+    if (!token) return [];
 
-    if (convosRes.error || !convosRes.data) return [];
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
+      ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
 
-    const ownedCompanyIds = new Set<string>(
-      ((ownedCompaniesRes.data ?? []) as any[]).map((c: any) => c.id as string),
-    );
+    const params = new URLSearchParams();
+    if (activeCompanyId) params.set("active_company_id", activeCompanyId);
 
-    const participantMap = new Map<string, { other_user_id: string | null }>();
-    for (const row of (participantsRes.data ?? []) as any[]) {
-      participantMap.set(row.conversation_id, { other_user_id: row.other_user_id ?? null });
+    const res = await fetch(`${apiBase}/conversations?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!res.ok) {
+      console.warn("fetchWebConversations server error:", res.status);
+      return [];
     }
 
-    const allOtherIds = [...new Set(
-      [...participantMap.values()].map(v => v.other_user_id).filter(Boolean) as string[]
-    )];
-
-    let profileMap = new Map<string, any>();
-    if (allOtherIds.length > 0) {
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, full_name, avatar_url")
-        .in("id", allOtherIds);
-      profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
-    }
-
-    // Resolve company identities for company-scoped conversations so the
-    // non-owner side renders "Empresa X" instead of the owner's personal
-    // profile (privacy: owner's personal name/avatar would otherwise leak).
-    const convoCompanyIds = [
-      ...new Set(
-        ((convosRes.data ?? []) as any[])
-          .map((r: any) => r.conversation?.company_page_id as string | null | undefined)
-          .filter(Boolean) as string[],
-      ),
-    ];
-    let companyPageMap = new Map<string, { id: string; owner_id: string | null; name: string; avatar_url: string | null }>();
-    if (convoCompanyIds.length > 0) {
-      const { data: cpRows } = await supabase
-        .from("company_pages")
-        .select("id, owner_id, name, avatar_url")
-        .in("id", convoCompanyIds);
-      if (cpRows) {
-        for (const r of cpRows as Array<{ id: string; owner_id: string | null; name: string; avatar_url: string | null }>) {
-          companyPageMap.set(r.id, r);
-        }
-      }
-    }
-
-    const results: WebConversation[] = [];
-    for (const row of convosRes.data as any[]) {
-      const convo = row.conversation;
-      if (!convo) continue;
-
-      const pInfo = participantMap.get(convo.id);
-      const participant = pInfo?.other_user_id ? (profileMap.get(pInfo.other_user_id) ?? null) : null;
-      const cpId = (convo as any).company_page_id ?? null;
-      const company_page = cpId ? (companyPageMap.get(cpId) ?? null) : null;
-
-      const lastMsgRes = await supabase
-        .from("messages")
-        .select("content, created_at, message_type")
-        .eq("conversation_id", convo.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const lastMsg = lastMsgRes.data;
-      const lastContent =
-        lastMsg?.message_type === "image" ? "📷 Foto"
-        : lastMsg?.message_type === "video" ? "🎬 Vídeo"
-        : lastMsg?.message_type === "audio" ? "🎤 Áudio"
-        : lastMsg?.message_type === "file"  ? "📎 Arquivo"
-        : (lastMsg?.content ?? null);
-
-      results.push({
-        id: convo.id,
-        is_group: convo.is_group,
-        name: convo.name,
-        avatar_url: (convo as any).avatar_url ?? null,
-        last_message: lastContent,
-        last_message_at: lastMsg?.created_at ?? convo.created_at,
-        unread_count: 0,
-        participant,
-        company_page_id: cpId,
-        company_page,
-      });
-    }
-
-    const sorted = results.sort(
-      (a, b) => new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime(),
-    );
-
-    // ── Identity scoping (same rules as mobile fetchConversations) ────────────
-    if (activeCompanyId) {
-      // Company mode: only this company's conversations (groups always shown).
-      return sorted.filter(r => r.is_group || r.company_page_id === activeCompanyId);
-    }
-    // Personal mode: drop conversations belonging to companies this user owns
-    // (they'll show up cleanly when the user switches into that company).
-    return sorted.filter(r => r.is_group || !r.company_page_id || !ownedCompanyIds.has(r.company_page_id));
+    const json = (await res.json()) as { conversations: WebConversation[] };
+    return json.conversations ?? [];
   } catch (e) {
     console.warn("fetchWebConversations:", e);
     return [];
   }
 }
 
+/**
+ * Fetch messages for a conversation.
+ *
+ * Routed through the API server (GET /conversations/:id/messages) to bypass
+ * the recursive RLS on `conversation_participants` / `messages` that causes
+ * all direct Supabase client SELECT calls to return empty results.
+ * The server also resolves sender profiles, company identities, and reactions
+ * in a single round-trip. The client applies the "mine" flag on reactions
+ * based on the current user ID.
+ */
 export async function fetchWebMessages(conversationId: string, currentUserId?: string): Promise<WebMessage[]> {
   try {
-    // Try the SECURITY DEFINER RPC first (bypasses RLS so all participants see all messages)
-    const { data: rpcData, error: rpcError } = await supabase
-      .rpc("get_conversation_messages", { p_conversation_id: conversationId });
+    const session = await getCachedSession();
+    const token = session?.access_token;
+    if (!token) return [];
 
-    let raw: any[] | null = null;
-    if (!rpcError && rpcData) {
-      raw = (rpcData as any[]).map((m) => ({
-        id:                   m.id,
-        conversation_id:      m.conversation_id,
-        sender_id:            m.sender_id,
-        content:              m.content ?? "",
-        created_at:           m.created_at,
-        message_type:         m.message_type ?? null,
-        media_url:            m.media_url ?? null,
-        from_company_page_id: m.from_company_page_id ?? null,
-        sender: {
-          id:         m.sender_id,
-          full_name:  m.sender_name   ?? null,
-          avatar_url: m.sender_avatar ?? null,
-        },
-      }));
-    } else {
-      // Fallback: direct query (may only return messages where sender_id = current user due to RLS)
-      console.warn("get_conversation_messages RPC unavailable, using direct query:", rpcError?.message);
-      const { data } = await supabase
-        .from("messages")
-        .select("id, conversation_id, sender_id, content, created_at, message_type, media_url, from_company_page_id")
-        .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: true })
-        .limit(200);
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
+      ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
 
-      if (!data || data.length === 0) return [];
+    const res = await fetch(`${apiBase}/conversations/${conversationId}/messages`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
-      const senderIds = [...new Set(data.map((m: any) => m.sender_id))] as string[];
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, full_name, avatar_url")
-        .in("id", senderIds);
-      const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
-
-      raw = data.map((m: any) => ({
-        ...m,
-        from_company_page_id: m.from_company_page_id ?? null,
-        sender: profileMap.get(m.sender_id) ?? null,
-      }));
+    if (!res.ok) {
+      console.warn("fetchWebMessages server error:", res.status);
+      return [];
     }
 
-    if (!raw) return [];
+    const json = (await res.json()) as { messages: any[]; current_user_id: string };
+    const effectiveUserId = currentUserId ?? json.current_user_id;
 
-    // Resolve company identities for messages authored as a company so the
-    // recipient sees "Empresa X" instead of the owner's personal profile.
-    const fromCpIds = [
-      ...new Set(raw.map(m => m.from_company_page_id).filter(Boolean) as string[]),
-    ];
-    if (fromCpIds.length > 0) {
-      const { data: cpRows } = await supabase
-        .from("company_pages")
-        .select("id, name, avatar_url")
-        .in("id", fromCpIds);
-      const cpMap = new Map<string, { id: string; name: string; avatar_url: string | null }>();
-      for (const c of (cpRows ?? []) as Array<{ id: string; name: string; avatar_url: string | null }>) {
-        cpMap.set(c.id, c);
-      }
-      raw = raw.map(m => ({
-        ...m,
-        from_company: m.from_company_page_id ? (cpMap.get(m.from_company_page_id) ?? null) : null,
-      }));
-    }
-
-    // Enrich messages with reactions and deleted_at
-    if (raw.length > 0) {
-      const msgIds = raw.map((m: any) => m.id);
-      const [rxnsRes, deletedRes] = await Promise.all([
-        supabase.from("message_reactions").select("message_id, user_id, emoji").in("message_id", msgIds),
-        supabase.from("messages").select("id, deleted_at").in("id", msgIds).not("deleted_at", "is", null),
-      ]);
-      const reactionsMap: Record<string, WebMessageReaction[]> = {};
-      for (const r of (rxnsRes.data ?? []) as any[]) {
-        if (!reactionsMap[r.message_id]) reactionsMap[r.message_id] = [];
-        const ex = reactionsMap[r.message_id].find((x: WebMessageReaction) => x.emoji === r.emoji);
-        if (ex) {
-          ex.count++;
-          if (currentUserId && r.user_id === currentUserId) ex.mine = true;
-          ex.users?.push(r.user_id);
-        } else {
-          reactionsMap[r.message_id].push({ emoji: r.emoji, count: 1, mine: !!(currentUserId && r.user_id === currentUserId), users: [r.user_id] });
-        }
-      }
-      const deletedMap = new Map<string, string>(
-        ((deletedRes.data ?? []) as any[]).map((m: any) => [m.id as string, m.deleted_at as string]),
-      );
-      raw = raw.map((m: any) => ({
-        ...m,
-        reactions: reactionsMap[m.id] ?? [],
-        deleted_at: deletedMap.get(m.id) ?? null,
-      }));
-    }
-
-    return raw as WebMessage[];
+    // Apply the "mine" flag on reactions using the resolved user ID
+    return (json.messages ?? []).map((m: any) => ({
+      ...m,
+      reactions: ((m.reactions ?? []) as { emoji: string; count: number; users: string[] }[]).map((r) => ({
+        ...r,
+        mine: !!(effectiveUserId && r.users?.includes(effectiveUserId)),
+      })),
+    })) as WebMessage[];
   } catch (e) {
     console.warn("fetchWebMessages:", e);
     return [];
