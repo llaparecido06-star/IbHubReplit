@@ -787,20 +787,17 @@ export default function MeuPerfilPage() {
     await toggleBookmarkPost(postId, userId, isBookmarked);
   };
 
-  const completion = (() => {
-    if (!profile) return 0;
-    const fields = [
-      !!profile.full_name,
-      !!profile.username,
-      !!(profile as any).headline,
-      !!(profile as any).bio,
-      !!(profile as any).avatar_url,
-      !!((profile as any).areas_of_expertise ?? []).length,
-      !!(((profile as any).certifications ?? []) as string[]).length,
-      !!(profile as any).company || !!(profile as any).position,
-    ];
-    return Math.round((fields.filter(Boolean).length / fields.length) * 100);
+  const completionSteps = (() => {
+    if (!profile) return { perfil: false, plano: false, cargoEmpresa: false };
+    return {
+      perfil:       !!(profile as any).avatar_url && !!profile.full_name,
+      plano:        !!(profile as any).plan,
+      cargoEmpresa: !!(profile as any).company || !!(profile as any).position,
+    };
   })();
+  const completion = Math.round(
+    (Object.values(completionSteps).filter(Boolean).length / 3) * 100
+  );
 
   const ADMIN_BADGE_DEFS_MAP: Record<string, { icon: string; label: string }> = {
     representante:       { icon: "🎖️", label: "Representante" },
@@ -926,9 +923,11 @@ export default function MeuPerfilPage() {
                   <div style={{ height: "100%", width: `${completion}%`, backgroundColor: GOLD, borderRadius: 3 }} />
                 </div>
                 <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>
-                  {completion < 50 ? "Adicione bio, foto e áreas de atuação." :
-                   completion < 80 ? "Quase lá! Adicione certificações ou cargo." :
-                   "Adicione uma certificação para completar 100%."}
+                  {!completionSteps.perfil
+                    ? "Adicione uma foto e seu nome ao perfil."
+                    : !completionSteps.plano
+                    ? "Escolha um plano para continuar."
+                    : "Adicione seu cargo ou empresa para completar."}
                 </div>
               </div>
             )}
