@@ -469,6 +469,59 @@ router.post("/posts/:postId/poll/vote", async (req: Request, res: Response): Pro
 });
 
 /**
+ * POST /posts/:postId/poll/close
+ * Closes a poll immediately. Only the post author may do this.
+ */
+router.post("/posts/:postId/poll/close", async (req: Request, res: Response): Promise<void> => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    res.status(401).json({ error: "Missing authorization" });
+    return;
+  }
+  const token = authHeader.slice(7);
+  const { data: userData, error: userError } = await supabaseAnon.auth.getUser(token);
+  if (userError || !userData?.user) {
+    res.status(401).json({ error: "Invalid or expired token" });
+    return;
+  }
+  const userId = userData.user.id;
+  const { postId } = req.params;
+
+  const { data: row, error: fetchError } = await supabaseAdmin
+    .from("posts")
+    .select("poll, user_id")
+    .eq("id", postId)
+    .single();
+
+  if (fetchError || !row?.poll) {
+    res.status(404).json({ error: "Post or poll not found" });
+    return;
+  }
+
+  if (row.user_id !== userId) {
+    res.status(403).json({ error: "Only the post author can close this poll" });
+    return;
+  }
+
+  const poll = row.poll as { closed: boolean };
+  if (poll.closed) {
+    res.status(400).json({ error: "Poll is already closed" });
+    return;
+  }
+
+  const updatedPoll = { ...poll, closed: true };
+
+  const { error: updateError } = await supabaseAdmin
+    .from("posts")
+    .update({ poll: updatedPoll })
+    .eq("id", postId);
+
+  if (updateError) { res.status(500).json({ error: updateError.message }); return; }
+
+  res.json({ poll: updatedPoll });
+});
+
+/**
  * POST /market-posts/:postId/poll/vote
  * Casts, changes, or removes a vote on an Ideal.BI market post poll.
  * Uses the admin client to bypass RLS.

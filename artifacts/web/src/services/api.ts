@@ -255,6 +255,25 @@ export async function voteOnFeedPoll(postId: string, _userId: string, optionInde
   }
 }
 
+export async function closeFeedPoll(postId: string): Promise<Poll | null> {
+  try {
+    const session = await getCachedSession();
+    if (!session?.access_token) return null;
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
+      ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
+    const res = await fetch(`${apiBase}/posts/${postId}/poll/close`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (!res.ok) return null;
+    const { poll: updatedPoll } = await res.json() as { poll: Poll };
+    return updatedPoll;
+  } catch (e) {
+    console.warn("closeFeedPoll:", e);
+    return null;
+  }
+}
+
 export async function fetchPollVoters(userIds: string[]): Promise<{ id: string; full_name: string | null; avatar_url: string | null; username: string | null }[]> {
   if (!userIds.length) return [];
   const { data } = await supabase.from("profiles").select("id, full_name, avatar_url, username").in("id", userIds);

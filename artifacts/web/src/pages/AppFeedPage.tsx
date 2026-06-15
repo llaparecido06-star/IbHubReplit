@@ -21,6 +21,7 @@ import {
   sendWebConnectionRequest,
   fetchWineCommunityRankings,
   voteOnFeedPoll,
+  closeFeedPoll,
   fetchPollVoters,
   deletePost,
   updatePost,
@@ -193,14 +194,18 @@ export function WineTastingCardWeb({ content }: { content: string }) {
 
 
 /* ─── PollDisplay ───────────────────────── */
-export function PollDisplay({ poll, postId, currentUserId, onVote }: {
+export function PollDisplay({ poll, postId, currentUserId, postAuthorId, onVote, onClosePoll }: {
   poll: Poll;
   postId: string;
   currentUserId: string;
+  postAuthorId?: string;
   onVote: (postId: string, updatedPoll: Poll) => void;
+  onClosePoll?: (postId: string, updatedPoll: Poll) => void;
 }) {
   const [, setLocation] = useLocation();
   const [voting, setVoting] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
   const [showVoters, setShowVoters] = useState(false);
   const [focusedOption, setFocusedOption] = useState<number | null>(null);
   const [voters, setVoters] = useState<{ id: string; full_name: string | null; avatar_url: string | null; username: string | null; optionIndex: number }[]>([]);
@@ -224,12 +229,23 @@ export function PollDisplay({ poll, postId, currentUserId, onVote }: {
     return `Encerra em ${diffD} dia${diffD !== 1 ? "s" : ""}`;
   };
 
+  const isAuthor = !!postAuthorId && postAuthorId === currentUserId;
+
   const handleVote = async (i: number) => {
     if (voting || lockedFromVoting) return;
     setVoting(true);
     const updated = await voteOnFeedPoll(postId, currentUserId, i);
     if (updated) onVote(postId, updated);
     setVoting(false);
+  };
+
+  const handleClosePoll = async () => {
+    if (closing) return;
+    setClosing(true);
+    setConfirmClose(false);
+    const updated = await closeFeedPoll(postId);
+    if (updated) onClosePoll?.(postId, updated);
+    setClosing(false);
   };
 
   // Refetch voters reactively while the modal is open. Keyed on a stable
@@ -346,7 +362,47 @@ export function PollDisplay({ poll, postId, currentUserId, onVote }: {
             Ver todos os votos
           </button>
         )}
+        {isAuthor && !isClosed && (
+          <button
+            onClick={() => setConfirmClose(true)}
+            style={{ background: "none", border: "none", color: "#dc2626", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0, marginLeft: total > 0 ? 0 : "auto" }}
+          >
+            Encerrar enquete
+          </button>
+        )}
       </div>
+
+      {confirmClose && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 2100, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setConfirmClose(false)}
+        >
+          <div
+            style={{ background: "#fff", borderRadius: 16, width: "90%", maxWidth: 360, padding: 28, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 style={{ margin: "0 0 10px", fontSize: 17, fontWeight: 800, color: NAVY }}>Encerrar enquete?</h3>
+            <p style={{ margin: "0 0 22px", fontSize: 14, color: MUTED, lineHeight: 1.5 }}>
+              A enquete será encerrada imediatamente e ninguém poderá mais votar. Esta ação não pode ser desfeita.
+            </p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => setConfirmClose(false)}
+                style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: `1px solid ${BORDER}`, background: "#fff", color: NAVY, fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => void handleClosePoll()}
+                disabled={closing}
+                style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#dc2626", color: "#fff", fontWeight: 700, fontSize: 14, cursor: closing ? "default" : "pointer", opacity: closing ? 0.7 : 1 }}
+              >
+                {closing ? "Encerrando…" : "Encerrar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showVoters && (
         <div style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
@@ -412,6 +468,7 @@ function PostCard({
   onLike,
   onBookmark,
   onPollVote,
+  onClosePoll,
   onOpenLikes,
   onDelete,
   onEdit,
@@ -423,6 +480,7 @@ function PostCard({
   onLike: (id: string, isLiked: boolean, reaction: ReactionType) => void;
   onBookmark: (id: string, isBookmarked: boolean) => void;
   onPollVote: (postId: string, updatedPoll: Poll) => void;
+  onClosePoll?: (postId: string, updatedPoll: Poll) => void;
   onOpenLikes?: (id: string) => void;
   onDelete?: (postId: string) => void;
   onEdit?: (postId: string, newContent: string) => void;
@@ -649,7 +707,14 @@ function PostCard({
 
       {/* Poll */}
       {post.poll && post.poll.options && post.poll.options.length > 0 && (
-        <PollDisplay poll={post.poll} postId={post.id} currentUserId={currentUserId} onVote={onPollVote} />
+        <PollDisplay
+          poll={post.poll}
+          postId={post.id}
+          currentUserId={currentUserId}
+          postAuthorId={post.user_id}
+          onVote={onPollVote}
+          onClosePoll={onClosePoll}
+        />
       )}
 
       {/* Stats */}
@@ -1163,6 +1228,10 @@ export default function AppFeedPage() {
     setPosts(prev => prev.map(p => p.id === postId ? { ...p, poll: updatedPoll } : p));
   }, []);
 
+  const handleClosePoll = useCallback((postId: string, updatedPoll: Poll) => {
+    setPosts(prev => prev.map(p => p.id === postId ? { ...p, poll: updatedPoll } : p));
+  }, []);
+
   const handleConnect = useCallback(async (targetId: string) => {
     if (!userId) return;
     await sendWebConnectionRequest(targetId, userId);
@@ -1285,6 +1354,7 @@ export default function AppFeedPage() {
                   onLike={handleLike}
                   onBookmark={handleBookmark}
                   onPollVote={handlePollVote}
+                  onClosePoll={handleClosePoll}
                   onOpenLikes={(id) => setLikesModalPost({ id, count: posts.find(p => p.id === id)?.likes_count ?? 0 })}
                   onDelete={handleDeletePost}
                   onEdit={handleEditPost}
