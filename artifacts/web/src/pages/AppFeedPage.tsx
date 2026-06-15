@@ -1322,8 +1322,6 @@ export default function AppFeedPage() {
         {!activeCompany && (
           <div style={{ width: 260, flexShrink: 0, display: "none" }} className="feed-right-panel">
             {suggestions.length > 0 && <SuggestionsPanel suggestions={suggestions.slice(0, 4)} onConnect={handleConnect} onFollow={handleFollowSuggestion} viewingAsCompany={!!activeCompany} />}
-            <WineRankingTeaser wines={wineRankings} />
-            <TrendingTopics />
           </div>
         )}
       </div>
