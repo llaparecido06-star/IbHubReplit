@@ -102,7 +102,7 @@ function _normalisePost(raw: any, profileMap: Map<string, any>): Post {
   };
 }
 
-export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
+export async function fetchFeedPosts(currentUserId: string, offset = 0): Promise<Post[]> {
   try {
     // Use the authoritative API server endpoint for shadowban enforcement.
     // The server filters using the admin Supabase client; clients cannot bypass this.
@@ -112,7 +112,7 @@ export async function fetchFeedPosts(currentUserId: string): Promise<Post[]> {
     const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
       ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
 
-    const res = await fetch(`${apiBase}/feed/posts?limit=30`, {
+    const res = await fetch(`${apiBase}/feed/posts?limit=30&offset=${offset}`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
     });
     if (!res.ok) return [];
@@ -3046,13 +3046,13 @@ export interface MarketComment {
   };
 }
 
-export async function fetchMarketPosts(userId?: string): Promise<MarketPost[]> {
+export async function fetchMarketPosts(userId?: string, offset = 0): Promise<MarketPost[]> {
   try {
     const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
       ?? `${window.location.origin}/api`;
     const session = await getCachedSession();
     const token = session?.access_token;
-    const res = await fetch(`${apiBase}/market/posts?limit=30`, {
+    const res = await fetch(`${apiBase}/market/posts?limit=30&offset=${offset}`, {
       headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     });
     if (!res.ok) return [];

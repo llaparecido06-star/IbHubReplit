@@ -2971,6 +2971,8 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
   const [pollDurationOpen, setPollDurationOpen] = useState(false);
   const [pollAllowMultiple, setPollAllowMultiple] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [hasMoreFeed, setHasMoreFeed] = useState(true);
+  const [loadingMoreFeed, setLoadingMoreFeed] = useState(false);
   const [idealbiCompany, setIdealbiCompany] = useState<IdealBICompany | null>(null);
   const [userCompany, setUserCompany] = useState<IdealBICompany | null>(null);
   const imgRef = useRef<HTMLInputElement>(null);
@@ -3019,6 +3021,7 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
     fetchMarketPosts(userId)
       .then(p => {
         setPosts(p);
+        setHasMoreFeed(p.length >= 30);
         if (p.length > 0) checkForNewPosts(p[0].created_at);
       })
       .catch(() => {})
@@ -3116,6 +3119,18 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
 
   const handleUpdated = (id: string, content: string) => {
     setPosts(prev => prev.map(p => p.id === id ? { ...p, content } : p));
+  };
+
+  const loadMoreFeedPosts = async () => {
+    if (loadingMoreFeed || !hasMoreFeed) return;
+    setLoadingMoreFeed(true);
+    try {
+      const more = await fetchMarketPosts(userId, posts.length);
+      setPosts(prev => [...prev, ...more]);
+      setHasMoreFeed(more.length >= 30);
+    } finally {
+      setLoadingMoreFeed(false);
+    }
   };
 
   return (
@@ -3424,18 +3439,42 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
           <p style={{ fontSize: 14, color: MUTED }}>As informações exclusivas de mercado aparecerão aqui.</p>
         </div>
       ) : (
-        posts.map(post => (
-          <MarketPostCard
-            key={post.id}
-            post={post}
-            userId={userId}
-            isAdmin={isAdmin}
-            onLikeToggle={handleLikeToggle}
-            onDelete={handleDelete}
-            onUpdated={handleUpdated}
-            idealbiCompany={idealbiCompany}
-          />
-        ))
+        <>
+          {posts.map(post => (
+            <MarketPostCard
+              key={post.id}
+              post={post}
+              userId={userId}
+              isAdmin={isAdmin}
+              onLikeToggle={handleLikeToggle}
+              onDelete={handleDelete}
+              onUpdated={handleUpdated}
+              idealbiCompany={idealbiCompany}
+            />
+          ))}
+          {hasMoreFeed ? (
+            <div style={{ textAlign: "center", padding: "12px 0 4px" }}>
+              <button
+                onClick={loadMoreFeedPosts}
+                disabled={loadingMoreFeed}
+                style={{
+                  padding: "10px 32px", borderRadius: 22,
+                  border: `1.5px solid ${GOLD}`,
+                  backgroundColor: loadingMoreFeed ? `${GOLD}15` : WHITE,
+                  color: GOLD, fontWeight: 700, fontSize: 14,
+                  cursor: loadingMoreFeed ? "default" : "pointer",
+                  fontFamily: "inherit", transition: "all 0.15s",
+                }}
+              >
+                {loadingMoreFeed ? "Carregando…" : "Carregar mais"}
+              </button>
+            </div>
+          ) : (
+            <div style={{ textAlign: "center", padding: "16px 0 8px", color: MUTED, fontSize: 13 }}>
+              Você viu todas as publicações do feed. 📡
+            </div>
+          )}
+        </>
       )}
       </>
       ))}

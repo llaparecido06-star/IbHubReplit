@@ -1019,6 +1019,10 @@ export default function AppFeedPage() {
   const [suggestions, setSuggestions] = useState<SuggestedProfile[]>([]);
   const [wineRankings, setWineRankings] = useState<WineCommunityRating[]>([]);
   const [loading, setLoading]         = useState(true);
+  const [hasMoreFeed, setHasMoreFeed] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [toast, setToast]             = useState<string | null>(null);
+  const [blockConfirm, setBlockConfirm] = useState<{ authorId: string; authorName: string } | null>(null);
   const [likesModalPost, setLikesModalPost] = useState<{ id: string; count: number } | null>(null);
 
   const userId    = profile?.id ?? user?.id ?? "";
@@ -1045,6 +1049,7 @@ export default function AppFeedPage() {
         companyId ? Promise.resolve([]) : fetchWebSuggestedConnections(userId, userAreas, userCompany, 5),
       ]);
       setPosts(postsData);
+      setHasMoreFeed(postsData.length >= 30);
       if (!companyId) setSuggestions(suggsData);
     } finally {
       setLoading(false);
@@ -1052,11 +1057,29 @@ export default function AppFeedPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, companyId, areasKey, companyKey]);
 
+  const loadMoreFeed = async () => {
+    if (!userId || loadingMore || !hasMoreFeed) return;
+    setLoadingMore(true);
+    try {
+      const more = await fetchFeedPosts(userId, posts.length);
+      setPosts(prev => [...prev, ...more]);
+      setHasMoreFeed(more.length >= 30);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
   useEffect(() => {
     if (!authLoading) load();
   }, [load, authLoading]);
 
   useEffect(() => { fetchWineCommunityRankings().then(setWineRankings); }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   useEffect(() => {
     if (!userId) return;
@@ -1174,15 +1197,20 @@ export default function AppFeedPage() {
   const handleReportPost = useCallback(async (postId: string) => {
     if (!userId) return;
     await reportPost(userId, postId, "conteudo_inapropriado");
-    alert("Denúncia enviada. Obrigado por contribuir com a comunidade.");
+    setToast("Denúncia enviada. Obrigado por contribuir com a comunidade.");
   }, [userId]);
 
-  const handleBlockUser = useCallback(async (authorId: string, authorName: string) => {
+  const handleBlockUser = useCallback((authorId: string, authorName: string) => {
     if (!userId) return;
-    if (!window.confirm(`Bloquear ${authorName}? Você não verá mais as publicações desta pessoa.`)) return;
-    await blockUser(userId, authorId);
-    setPosts(prev => prev.filter(p => p.author?.id !== authorId));
+    setBlockConfirm({ authorId, authorName });
   }, [userId]);
+
+  const confirmBlock = async () => {
+    if (!blockConfirm || !userId) return;
+    await blockUser(userId, blockConfirm.authorId);
+    setPosts(prev => prev.filter(p => p.author?.id !== blockConfirm.authorId));
+    setBlockConfirm(null);
+  };
 
   return (
     <AppShell onPostCreated={load}>
@@ -1248,21 +1276,45 @@ export default function AppFeedPage() {
               <WelcomeCard suggestions={suggestions} onConnect={handleConnect} onFollow={handleFollowSuggestion} viewingAsCompany={!!activeCompany} />
             )
           ) : (
-            posts.map(post => (
-              <PostCard
-                key={post.id}
-                post={post}
-                currentUserId={userId}
-                onLike={handleLike}
-                onBookmark={handleBookmark}
-                onPollVote={handlePollVote}
-                onOpenLikes={(id) => setLikesModalPost({ id, count: posts.find(p => p.id === id)?.likes_count ?? 0 })}
-                onDelete={handleDeletePost}
-                onEdit={handleEditPost}
-                onReport={handleReportPost}
-                onBlock={handleBlockUser}
-              />
-            ))
+            <>
+              {posts.map(post => (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  currentUserId={userId}
+                  onLike={handleLike}
+                  onBookmark={handleBookmark}
+                  onPollVote={handlePollVote}
+                  onOpenLikes={(id) => setLikesModalPost({ id, count: posts.find(p => p.id === id)?.likes_count ?? 0 })}
+                  onDelete={handleDeletePost}
+                  onEdit={handleEditPost}
+                  onReport={handleReportPost}
+                  onBlock={handleBlockUser}
+                />
+              ))}
+              {hasMoreFeed ? (
+                <div style={{ textAlign: "center", padding: "12px 0 4px" }}>
+                  <button
+                    onClick={loadMoreFeed}
+                    disabled={loadingMore}
+                    style={{
+                      padding: "10px 32px", borderRadius: 22,
+                      border: `1.5px solid ${GOLD}`,
+                      backgroundColor: loadingMore ? `${GOLD}15` : WHITE,
+                      color: GOLD, fontWeight: 700, fontSize: 14,
+                      cursor: loadingMore ? "default" : "pointer",
+                      fontFamily: "inherit", transition: "all 0.15s",
+                    }}
+                  >
+                    {loadingMore ? "Carregando…" : "Carregar mais"}
+                  </button>
+                </div>
+              ) : (
+                <div style={{ textAlign: "center", padding: "16px 0 8px", color: MUTED, fontSize: 13 }}>
+                  Você está em dia com o feed. 🍷
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -1289,6 +1341,69 @@ export default function AppFeedPage() {
         visible={!!likesModalPost}
         onClose={() => setLikesModalPost(null)}
       />
+
+      {/* Toast de denúncia */}
+      {toast && (
+        <div style={{
+          position: "fixed", bottom: 88, left: "50%", transform: "translateX(-50%)",
+          backgroundColor: NAVY, color: WHITE, padding: "12px 20px", borderRadius: 10,
+          fontSize: 14, fontWeight: 500, zIndex: 9999,
+          boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
+          maxWidth: 380, textAlign: "center", pointerEvents: "none",
+          whiteSpace: "nowrap",
+        }}>
+          ✅ {toast}
+        </div>
+      )}
+
+      {/* Modal de confirmação de bloqueio */}
+      {blockConfirm && (
+        <div
+          style={{
+            position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.48)",
+            zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
+          }}
+          onClick={() => setBlockConfirm(null)}
+        >
+          <div
+            style={{
+              backgroundColor: WHITE, borderRadius: 14, padding: "28px 24px",
+              maxWidth: 360, width: "100%", boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 10 }}>Bloquear usuário</div>
+            <p style={{ fontSize: 14, color: MUTED, lineHeight: 1.6, margin: "0 0 22px" }}>
+              Bloquear <strong style={{ color: NAVY }}>{blockConfirm.authorName}</strong>?{" "}
+              Você não verá mais as publicações desta pessoa.
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setBlockConfirm(null)}
+                style={{
+                  padding: "9px 20px", borderRadius: 9,
+                  border: `1.5px solid ${BORDER}`, backgroundColor: WHITE,
+                  color: NAVY, fontWeight: 600, fontSize: 14,
+                  cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmBlock}
+                style={{
+                  padding: "9px 20px", borderRadius: 9, border: "none",
+                  backgroundColor: "#dc2626", color: WHITE,
+                  fontWeight: 700, fontSize: 14,
+                  cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                Bloquear
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }
