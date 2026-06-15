@@ -149,7 +149,11 @@ export default function CadastroPage() {
     if (emailState === "taken") return "Esse e-mail já está cadastrado";
     if (emailState === "checking") return "Aguarde a verificação do e-mail";
     if (!password) return "Informe uma senha";
-    if (password.length < 6) return "A senha deve ter no mínimo 6 caracteres";
+    if (password.length < 6 || password.length > 8) return "A senha deve ter entre 6 e 8 caracteres";
+    if (!/[A-Z]/.test(password)) return "A senha deve conter ao menos 1 letra maiúscula";
+    if (!/[a-z]/.test(password)) return "A senha deve conter ao menos 1 letra minúscula";
+    if (!/[0-9]/.test(password)) return "A senha deve conter ao menos 1 número";
+    if (!/[.!@]/.test(password)) return "A senha deve conter ao menos 1 caractere especial (. ! @)";
     if (password !== confirmPassword) return "As senhas não coincidem";
     if (!termsAccepted) return "Aceite os Termos de Uso para continuar";
     if (!ageConfirmed) return "Confirme que você tem 18 anos ou mais";
@@ -176,7 +180,23 @@ export default function CadastroPage() {
       setLoadingMsg("Criando conta...");
 
       const { error: err } = await signUp(email, password, fullName);
-      if (err) { setLoading(false); setError(err); return; }
+      if (err) {
+        setLoading(false);
+        setError(err);
+        const errLower = err.toLowerCase();
+        if (
+          errLower.includes("email") ||
+          errLower.includes("password") ||
+          errLower.includes("senha") ||
+          errLower.includes("weak") ||
+          errLower.includes("fraca") ||
+          errLower.includes("already") ||
+          errLower.includes("cadastrado")
+        ) {
+          setStep(1);
+        }
+        return;
+      }
 
       // Use getCachedSession() instead of supabase.auth.getUser() to avoid
       // re-acquiring the navigator lock right after signInWithPassword released it.
