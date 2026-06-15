@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { linkifyText } from "@/utils/linkify";
 import { useRoute, useLocation, useSearch } from "wouter";
 import VideoPlayer from "@/components/feed/VideoPlayer";
 import { PostActionsBar } from "@/components/feed/PostActionsBar";
@@ -49,22 +50,26 @@ function renderMentionText(
   mentionMap: MentionMap,
   navigate: (path: string) => void,
 ): React.ReactNode {
-  const parts = text.split(/(@[\w.]+)/g);
+  const TOKEN_RE = /(@[\w.]+|https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)])/g;
+  const parts = text.split(TOKEN_RE);
   return parts.map((part, i) => {
     if (/^@[\w.]+$/.test(part)) {
       const entry = mentionMap[part.slice(1).toLowerCase()];
       if (entry) {
         const path = entry.isCompany ? `/app/empresa/${entry.id}` : `/app/usuario/${entry.id}`;
         return (
-          <span
-            key={i}
-            onClick={e => { e.stopPropagation(); navigate(path); }}
-            style={{ color: GOLD, fontWeight: 700, cursor: "pointer" }}
-          >
+          <span key={i} onClick={e => { e.stopPropagation(); navigate(path); }} style={{ color: GOLD, fontWeight: 700, cursor: "pointer" }}>
             {part}
           </span>
         );
       }
+    }
+    if (/^https?:\/\//.test(part)) {
+      return (
+        <a key={i} href={part} target="_blank" rel="noopener noreferrer" style={{ color: GOLD, textDecoration: "underline", wordBreak: "break-all" }} onClick={e => e.stopPropagation()}>
+          {part}
+        </a>
+      );
     }
     return <React.Fragment key={i}>{part}</React.Fragment>;
   });

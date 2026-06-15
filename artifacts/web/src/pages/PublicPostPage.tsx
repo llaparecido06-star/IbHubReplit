@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { linkifyText } from "@/utils/linkify";
 import { useParams, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { fetchPostById, Post } from "@/services/api";
@@ -226,7 +227,7 @@ export default function PublicPostPage() {
                 <WineTastingCardWeb content={post.content} />
               ) : (
                 <p style={{ fontSize: 15, color: NAVY, lineHeight: 1.65, margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                  {post.content}
+                  {linkifyText(post.content ?? "")}
                 </p>
               )}
             </div>

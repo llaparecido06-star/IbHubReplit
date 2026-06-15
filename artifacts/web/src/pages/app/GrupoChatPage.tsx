@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { linkifyText } from "@/utils/linkify";
 import { useRoute, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
@@ -559,7 +560,7 @@ export default function GrupoChatPage() {
                         </a>
                       )}
                       {msg.content && (
-                        <div style={{ fontSize: 14, lineHeight: 1.45, wordBreak: "break-word" }}>{msg.content}</div>
+                        <div style={{ fontSize: 14, lineHeight: 1.45, wordBreak: "break-word" }}>{linkifyText(msg.content)}</div>
                       )}
                       <div style={{ fontSize: 10, color: isMe ? "rgba(255,255,255,0.55)" : MUTED, marginTop: 4, textAlign: "right" }}>{timeStr(msg.created_at)}</div>
                     </div>

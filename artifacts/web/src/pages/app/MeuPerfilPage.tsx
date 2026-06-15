@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { linkifyText } from "@/utils/linkify";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
@@ -483,7 +484,7 @@ function MiniPostCard({ post, onDelete, onEdit, onPollUpdate, onLike, onBookmark
       {/* Text content */}
       {content.trim().length > 0 && (
         <div style={{ padding: "0 16px 12px" }}>
-          <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.65, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{displayContent}</div>
+          <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.65, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{linkifyText(displayContent)}</div>
           {needsTruncation && (
             <button onClick={() => setExpanded(v => !v)} style={{ background: "none", border: "none", color: GOLD, fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "4px 0 0", fontFamily: "inherit" }}>
               {expanded ? "Ver menos" : "Ver mais"}

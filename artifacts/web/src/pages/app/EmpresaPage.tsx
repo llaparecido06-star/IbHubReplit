@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from "react";
+import { linkifyText } from "@/utils/linkify";
 import { useLocation, useParams } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
@@ -144,7 +145,7 @@ function MiniPostCard({ post: initialPost, currentUserId }: { post: Post; curren
             <div style={{ fontSize: 11, color: MUTED }}>{timeAgo(post.created_at)}</div>
           </div>
         </div>
-        {content && <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{displayContent}</div>}
+        {content && <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{linkifyText(displayContent)}</div>}
         {images.length > 0 && (
           <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
             {images.slice(0, 4).map((img, i) => (

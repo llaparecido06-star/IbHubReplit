@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { linkifyText } from "@/utils/linkify";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { useFeatureFlags } from "@/context/FeatureFlagsContext";
@@ -664,7 +665,7 @@ function PostCard({
           <WineTastingCardWeb content={content} />
         ) : (
           <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.65, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-            {displayContent}
+            {linkifyText(displayContent)}
             {isLong && (
               <button
                 onClick={() => setExpanded(!expanded)}

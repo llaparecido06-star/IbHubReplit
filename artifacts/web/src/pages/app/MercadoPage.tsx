@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { linkifyText } from "@/utils/linkify";
 import { Link, useLocation } from "wouter";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/context/AuthContext";
@@ -2277,7 +2278,7 @@ function MarketCommentItem({ comment, userId, onReply, isReply }: { comment: Mar
           {comment.author?.position && <span style={{ fontSize: 11, color: MUTED }}>· {comment.author.position}</span>}
           {comment.author?.company && <span style={{ fontSize: 11, color: MUTED }}>· {comment.author.company}</span>}
         </div>
-        <span style={{ fontSize: 13, color: "#333", lineHeight: 1.5 }}>{comment.content}</span>
+        <span style={{ fontSize: 13, color: "#333", lineHeight: 1.5 }}>{linkifyText(comment.content ?? "")}</span>
         <div style={{ marginTop: 5, display: "flex", alignItems: "center", gap: 2 }}>
           {/* Reaction button with hover picker */}
           <div ref={pickerRef} style={{ position: "relative" }} onMouseEnter={openPicker} onMouseLeave={schedulePicker}>

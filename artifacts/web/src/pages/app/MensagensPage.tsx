@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { linkifyText } from "@/utils/linkify";
 import { useSearch, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
@@ -750,7 +751,7 @@ export default function MensagensPage() {
                 }}>
                   {attach
                     ? <AttachmentBubble url={attach.url} label={attach.label} isMe={isMe} kind={asMessageKind(msg.message_type)} />
-                    : (msg.content || "")
+                    : linkifyText(msg.content || "")
                   }
                 </div>
                 {showReactionPicker && (
