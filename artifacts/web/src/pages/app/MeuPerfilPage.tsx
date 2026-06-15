@@ -728,7 +728,11 @@ export default function MeuPerfilPage() {
       if (error) { setCoverUploadError(`Erro ao enviar: ${error.message}`); return; }
       const { data } = supabase.storage.from("avatars").getPublicUrl(path);
       const url = `${data.publicUrl}?t=${Date.now()}`;
-      await supabase.from("profiles").update({ cover_url: url }).or(`id.eq.${userId},user_id.eq.${userId}`);
+      const { error: dbError } = await supabase
+        .from("profiles")
+        .update({ cover_url: url })
+        .eq("id", userId);
+      if (dbError) { setCoverUploadError(`Erro ao salvar: ${dbError.message}`); return; }
       setCoverOverride(url);
       patchProfile({ cover_url: url } as any);
     } finally {
