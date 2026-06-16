@@ -4,6 +4,7 @@ import { logger } from "../lib/logger";
 import { resolveUserId } from "../lib/planCheck.js";
 import { extractWineName, truncate } from "../lib/winePost.js";
 import { sendPushToUser } from "../lib/pushUtils.js";
+import { sendWebPushToUser } from "../lib/webPushUtils.js";
 
 const router = Router();
 
@@ -923,6 +924,80 @@ router.post("/push/story-tag", async (req: Request, res: Response): Promise<void
   await sendExpoPushNotifications(messages);
   logger.info({ count: messages.length, actorId, recipientCount: recipientIds.length }, "Story-tag push dispatched");
   res.json({ sent: messages.length });
+});
+
+// ─── POST /push/web/subscribe ─────────────────────────────────────────────────
+/**
+ * Saves a browser Web Push subscription for the authenticated user.
+ * Body: { endpoint: string, keys: { p256dh: string, auth: string } }
+ */
+router.post("/push/web/subscribe", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+
+  const { endpoint, keys } = req.body as {
+    endpoint?: string;
+    keys?: { p256dh?: string; auth?: string };
+  };
+
+  if (!endpoint || !keys?.p256dh || !keys?.auth) {
+    res.status(400).json({ error: "endpoint, keys.p256dh e keys.auth são obrigatórios" });
+    return;
+  }
+
+  const { error } = await supabaseAdmin
+    .from("web_push_subscriptions")
+    .upsert(
+      {
+        user_id: userId,
+        endpoint,
+        keys_p256dh: keys.p256dh,
+        keys_auth: keys.auth,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "endpoint" },
+    );
+
+  if (error) {
+    logger.error({ err: error, userId }, "web push: failed to save subscription");
+    res.status(500).json({ error: "Erro ao salvar subscription." });
+    return;
+  }
+
+  logger.info({ userId, endpoint: endpoint.slice(-20) }, "web push: subscription saved");
+  res.json({ ok: true });
+});
+
+// ─── DELETE /push/web/unsubscribe ─────────────────────────────────────────────
+/**
+ * Removes a browser Web Push subscription.
+ * Body: { endpoint: string }
+ */
+router.delete("/push/web/unsubscribe", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+
+  const { endpoint } = req.body as { endpoint?: string };
+
+  if (!endpoint) {
+    res.status(400).json({ error: "endpoint é obrigatório" });
+    return;
+  }
+
+  const { error } = await supabaseAdmin
+    .from("web_push_subscriptions")
+    .delete()
+    .eq("user_id", userId)
+    .eq("endpoint", endpoint);
+
+  if (error) {
+    logger.error({ err: error, userId }, "web push: failed to delete subscription");
+    res.status(500).json({ error: "Erro ao remover subscription." });
+    return;
+  }
+
+  logger.info({ userId, endpoint: endpoint.slice(-20) }, "web push: subscription removed");
+  res.json({ ok: true });
 });
 
 export default router;

@@ -5,6 +5,7 @@ import {
   Edit2, BarChart2, Shield, Bookmark, Bell, Lock, Slash, Star,
   FileText, Mail, AlertCircle, ChevronRight, LogOut,
 } from "lucide-react";
+import { usePushSubscription } from "@/hooks/usePushSubscription";
 
 function useWindowWidth() {
   const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1280);
@@ -105,6 +106,7 @@ export default function MinhaContaPage() {
   const [mobileView, setMobileView] = useState<"menu" | Section>("menu");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const webPush = usePushSubscription();
 
   // Subscription
   const [portalLoading, setPortalLoading] = useState(false);
@@ -408,6 +410,44 @@ export default function MinhaContaPage() {
           <Toggle label="Mensagens diretas"           desc="Notificar quando receber mensagens"        value={notifMsgs}   onChange={v => { setNotifMsgs(v); savePref("notif_msgs", v); }} />
           <Toggle label="Novas oportunidades"         desc="Vagas e eventos do setor"                  value={notifOport}  onChange={v => { setNotifOport(v); savePref("notif_oport", v); }} />
           <Toggle label="Notificações por e-mail"     desc="Receber resumo semanal por e-mail"          value={notifEmail}  onChange={v => { setNotifEmail(v); savePref("notif_email", v); }} />
+
+          {/* Web Push */}
+          {!webPush.isSupported ? null : (
+            <div style={{ paddingBottom: 14, marginBottom: 14, borderBottom: `1px solid ${BORDER}` }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: NAVY }}>Notificações do browser</div>
+                  <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>
+                    {webPush.permission === "denied"
+                      ? "Bloqueado pelo browser — libere nas configurações do site"
+                      : "Receba alertas mesmo com o app fechado"}
+                  </div>
+                </div>
+                <button
+                  onClick={webPush.subscribed ? webPush.unsubscribe : webPush.subscribe}
+                  disabled={webPush.loading || webPush.permission === "denied"}
+                  style={{
+                    width: 44, height: 24, borderRadius: 12, border: "none",
+                    cursor: webPush.permission === "denied" ? "not-allowed" : "pointer",
+                    backgroundColor: webPush.subscribed ? GOLD : "#d1d5db",
+                    position: "relative", transition: "background 0.2s", flexShrink: 0,
+                    opacity: webPush.loading ? 0.6 : 1,
+                  }}
+                >
+                  <div style={{
+                    width: 18, height: 18, borderRadius: "50%", backgroundColor: WHITE,
+                    position: "absolute", top: 3, transition: "left 0.2s",
+                    left: webPush.subscribed ? 23 : 3,
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                  }} />
+                </button>
+              </div>
+              {webPush.error && (
+                <div style={{ fontSize: 12, color: "#dc2626", marginTop: 6 }}>{webPush.error}</div>
+              )}
+            </div>
+          )}
+
           <p style={{ fontSize: 12, color: MUTED, marginTop: 0 }}>Preferências salvas automaticamente.</p>
         </Card>
       );

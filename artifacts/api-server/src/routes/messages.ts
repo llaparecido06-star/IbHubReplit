@@ -4,6 +4,7 @@ import { z } from "zod";
 import { resolveUserId } from "../lib/planCheck.js";
 import { validateBody } from "../middlewares/validate.js";
 import { sendPushToUser } from "../lib/pushUtils.js";
+import { sendWebPushToUser } from "../lib/webPushUtils.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -249,9 +250,9 @@ router.post("/messages/send", validateBody(SendMessageSchema), async (req: Reque
           : message_type === "audio"         ? "🎤 Áudio"
           :                                    "Nova mensagem";
 
-        // 5. Fan out — one push per recipient (sendPushToUser handles token fan-out per user)
+        // 5. Fan out — mobile (Expo) + web push per recipient
         await Promise.all(
-          targetIds.map((userId) =>
+          targetIds.flatMap((userId) => [
             sendPushToUser({
               userId,
               title: `${senderName} em ${groupName}`,
@@ -262,7 +263,13 @@ router.post("/messages/send", validateBody(SendMessageSchema), async (req: Reque
                 deepLink: `/group-chat/${conversation_id}`,
               },
             }),
-          ),
+            sendWebPushToUser(userId, {
+              title: `${senderName} em ${groupName}`,
+              body: preview,
+              url: `/app/grupo-chat/${conversation_id}`,
+              tag: `group-${conversation_id}`,
+            }),
+          ]),
         );
 
         logger.info(

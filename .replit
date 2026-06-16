@@ -36,3 +36,4 @@ EXPO_PUBLIC_API_URL = "https://d8bcdebb-60bd-4856-affe-92aeed4161f0-00-20sscjpql
 EXPO_PUBLIC_DOMAIN = "ibhub.com.br"
 WEB_BASE_URL = "https://www.ibhub.com.br"
 EXPO_PUBLIC_SENTRY_DSN = "https://cea135cca16eced9ee80329e5fd3753f@o4511429155946496.ingest.us.sentry.io/4511429161713664"
+VITE_VAPID_PUBLIC_KEY = "BFTQ892dYjnQEZjdhwx0gep6DYLZtnKydr4-Ra7kuTuolOJGty2fF-JWDpkdJwyxMJ_mkeEn54Oc3VrDX4ezZFU"
