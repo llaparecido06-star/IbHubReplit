@@ -3515,8 +3515,8 @@ export default function MercadoPage() {
   }, [period, mainTab]);
 
   const isAdmin = profile?.is_admin ?? false;
-  // Legacy full-access key OR period-specific key
-  const canMarket = (key: string) => isAdmin || hasFeature(`mercado:${key}`) || hasFeature(`mercado:${key}:${period}`);
+  // Master key grants full access; legacy full-access key OR period-specific key for granular control
+  const canMarket = (key: string) => isAdmin || hasFeature("mercado:idealbi") || hasFeature(`mercado:${key}`) || hasFeature(`mercado:${key}:${period}`);
 
   /* ── Tab / Period definitions ── */
   const PERIODS: { key: Period; label: string }[] = [
@@ -3538,7 +3538,7 @@ export default function MercadoPage() {
           <div style={{ width: 32, height: 32, borderRadius: "50%", border: "3px solid #c9a84c", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
         </div>
       );
-      if (!hasFeature("mercado:apresentacoes") && !(profile?.is_admin)) return (
+      if (!hasFeature("mercado:apresentacoes") && !hasFeature("mercado:idealbi") && !(profile?.is_admin)) return (
         <div style={{ textAlign: "center", padding: "60px 20px" }}>
           <div style={{ fontSize: 44, marginBottom: 16 }}>🔒</div>
           <h3 style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Apresentações de Mercado</h3>

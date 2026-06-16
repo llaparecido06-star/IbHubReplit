@@ -620,7 +620,7 @@ function ApresentacoesView({ colors, bottomPad, session, isAdmin }: { colors: an
   const { t } = useTranslation();
   const router = useRouter();
   const { hasFeature, isLoading: permLoading } = usePermissions();
-  const hasAccess = hasFeature("mercado:apresentacoes") || !!isAdmin;
+  const hasAccess = hasFeature("mercado:apresentacoes") || hasFeature("mercado:idealbi") || !!isAdmin;
 
   const [items, setItems]                   = useState<API.MarketPresentation[]>([]);
   const [loading, setLoading]               = useState(true);
@@ -3349,8 +3349,8 @@ export default function MercadoScreen() {
   useEffect(() => { loadPeriod(period); }, [period, loadPeriod]);
 
   const can = useCallback((key: string): boolean => {
-    // Legacy full-access key (no period suffix) OR period-specific key
-    return hasFeature(`mercado:${key}`) || hasFeature(`mercado:${key}:${period}`);
+    // Master key grants full access; legacy full-access key OR period-specific key for granular control
+    return hasFeature("mercado:idealbi") || hasFeature(`mercado:${key}`) || hasFeature(`mercado:${key}:${period}`);
   }, [hasFeature, period]);
 
   const periods: { key: Period; label: string }[] = [
