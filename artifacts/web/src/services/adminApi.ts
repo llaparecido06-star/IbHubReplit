@@ -23,6 +23,14 @@ export interface AdminStats {
   totalPosts: number;
   activeStories: number;
   activeSubscribers: number;
+  todaySignups: number;
+  yesterdaySignups: number;
+  weekSignups: number;
+}
+
+export interface PlanPoint {
+  plan: string;
+  count: number;
 }
 
 export interface UserGrowthPoint {
@@ -79,13 +87,23 @@ export interface NotificationLog {
 // ─── Stats ────────────────────────────────────────────────────────────────────
 
 export async function fetchAdminStats(): Promise<AdminStats> {
-  const now = new Date().toISOString();
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const yesterdayStart = new Date(todayStart);
+  yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+  const weekStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [usersRes, postsRes, storiesRes, subsRes] = await Promise.all([
+  const [usersRes, postsRes, storiesRes, subsRes, todayRes, yestRes, weekRes] = await Promise.all([
     supabase.from("profiles").select("id", { count: "exact", head: true }),
     supabase.from("posts").select("id", { count: "exact", head: true }),
-    supabase.from("stories").select("id", { count: "exact", head: true }).gt("expires_at", now),
+    supabase.from("stories").select("id", { count: "exact", head: true }).gt("expires_at", now.toISOString()),
     supabase.from("profiles").select("id", { count: "exact", head: true }).neq("plan", "gratuito"),
+    supabase.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", todayStart.toISOString()),
+    supabase.from("profiles").select("id", { count: "exact", head: true })
+      .gte("created_at", yesterdayStart.toISOString())
+      .lt("created_at", todayStart.toISOString()),
+    supabase.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", weekStart),
   ]);
 
   return {
@@ -93,6 +111,9 @@ export async function fetchAdminStats(): Promise<AdminStats> {
     totalPosts: postsRes.count ?? 0,
     activeStories: storiesRes.count ?? 0,
     activeSubscribers: subsRes.count ?? 0,
+    todaySignups: todayRes.count ?? 0,
+    yesterdaySignups: yestRes.count ?? 0,
+    weekSignups: weekRes.count ?? 0,
   };
 }
 
@@ -105,15 +126,34 @@ export async function fetchUserGrowth(): Promise<UserGrowthPoint[]> {
     .gte("created_at", since)
     .order("created_at", { ascending: true });
 
-  if (error || !data || data.length === 0) return [];
-
   const grouped: Record<string, number> = {};
-  for (const row of data as { created_at: string }[]) {
-    const day = row.created_at.slice(0, 10);
-    grouped[day] = (grouped[day] ?? 0) + 1;
+  if (!error && data) {
+    for (const row of data as { created_at: string }[]) {
+      const day = row.created_at.slice(0, 10);
+      grouped[day] = (grouped[day] ?? 0) + 1;
+    }
   }
 
-  return Object.entries(grouped).map(([date, count]) => ({ date, count }));
+  const result: UserGrowthPoint[] = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+    const day = d.toISOString().slice(0, 10);
+    result.push({ date: day, count: grouped[day] ?? 0 });
+  }
+  return result;
+}
+
+export async function fetchPlanBreakdown(): Promise<PlanPoint[]> {
+  const { data, error } = await supabase.from("profiles").select("plan");
+  if (error || !data) return [];
+  const grouped: Record<string, number> = {};
+  for (const row of data as { plan: string | null }[]) {
+    const p = row.plan ?? "gratuito";
+    grouped[p] = (grouped[p] ?? 0) + 1;
+  }
+  return Object.entries(grouped)
+    .map(([plan, count]) => ({ plan, count }))
+    .sort((a, b) => b.count - a.count);
 }
 
 export async function fetchPostsByType(): Promise<PostsByTypePoint[]> {
