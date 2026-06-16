@@ -2913,7 +2913,8 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
   }, []);
   const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 60 }).current;
 
-  const hasAccess = permHasFeature("mercado:idealbi") || isAdmin;
+  const hasAccess = permHasFeature("mercado:feed") || permHasFeature("mercado:idealbi") || isAdmin;
+  const hasSearchAccess = permHasFeature("mercado:busca") || permHasFeature("mercado:idealbi") || isAdmin;
 
   const fetcher = useCallback(
     (offset: number, limit: number) =>
@@ -3036,7 +3037,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
     setPosting(false);
   };
 
-  if (!hasAccess) {
+  if (!hasAccess && !hasSearchAccess) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 16 }}>
         <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: "#c9a84c18", alignItems: "center", justifyContent: "center" }}>
@@ -3211,15 +3212,33 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
       })()}
 
       {idealbiSubTab === "search" ? (
-        <IdealBISearchView
-          colors={colors}
-          bottomPad={bottomPad}
-          credits={sharedCredits}
-          creditsTotal={sharedCreditsTotal}
-          creditsLoading={sharedCreditsLoading}
-          setCredits={setSharedCredits}
-          setCreditsTotal={setSharedCreditsTotal}
-        />
+        !hasSearchAccess ? (
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 16 }}>
+            <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: "#c9a84c18", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 36 }}>🔒</Text>
+            </View>
+            <Text style={{ fontSize: 20, fontWeight: "800", color: colors.navy, textAlign: "center" }}>{t("mercado_screen.idealbi_paywall_title")}</Text>
+            <Text style={{ fontSize: 14, color: colors.mutedForeground, textAlign: "center", lineHeight: 21 }}>
+              {t("mercado_screen.idealbi_paywall_desc")}
+            </Text>
+            <TouchableOpacity
+              style={{ backgroundColor: colors.gold, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 12, alignItems: "center", marginTop: 8 }}
+              onPress={() => router.push("/subscription")}
+            >
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>{t("mercado_screen.locked_see_plans")}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <IdealBISearchView
+            colors={colors}
+            bottomPad={bottomPad}
+            credits={sharedCredits}
+            creditsTotal={sharedCreditsTotal}
+            creditsLoading={sharedCreditsLoading}
+            setCredits={setSharedCredits}
+            setCreditsTotal={setSharedCreditsTotal}
+          />
+        )
       ) : (
         <KeyboardAvoidingView
           style={{ flex: 1 }}
@@ -3348,9 +3367,8 @@ export default function MercadoScreen() {
 
   useEffect(() => { loadPeriod(period); }, [period, loadPeriod]);
 
-  const can = useCallback((key: string): boolean => {
-    // Master key grants full access; legacy full-access key OR period-specific key for granular control
-    return hasFeature("mercado:idealbi") || hasFeature(`mercado:${key}`) || hasFeature(`mercado:${key}:${period}`);
+  const can = useCallback((_key: string): boolean => {
+    return hasFeature("mercado:idealbi") || hasFeature(`mercado:${period}`);
   }, [hasFeature, period]);
 
   const periods: { key: Period; label: string }[] = [

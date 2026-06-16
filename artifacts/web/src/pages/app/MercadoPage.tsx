@@ -2979,7 +2979,8 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
   const imgRef = useRef<HTMLInputElement>(null);
   const vidRef = useRef<HTMLInputElement>(null);
 
-  const hasAccess = hasFeature("mercado:feed_exclusivo") || hasFeature("mercado:idealbi") || isAdmin;
+  const hasAccess = hasFeature("mercado:feed") || hasFeature("mercado:feed_exclusivo") || hasFeature("mercado:idealbi") || isAdmin;
+  const hasSearchAccess = hasFeature("mercado:busca") || hasFeature("mercado:idealbi") || isAdmin;
   const canPost = isAdmin || !!userCompany;
 
   useEffect(() => {
@@ -3192,7 +3193,9 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
 
       {/* Search section — flat 4 mode buttons */}
       {subTab === "search" && (
-        !creditsLoading && creditsTotal === 0 ? (
+        !hasSearchAccess ? (
+          <BiErrorState kind="paywall" />
+        ) : !creditsLoading && creditsTotal === 0 ? (
           <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "40px 24px", textAlign: "center" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
             <h3 style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Busca por IA</h3>
@@ -3243,11 +3246,11 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
               })}
             </div>
 
-            {searchMode === "exportador"   && <ExportadorList userId={userId} hasAccess={hasAccess} credits={credits} creditsTotal={creditsTotal} setCredits={setCredits} setCreditsTotal={setCreditsTotal} revealCredits={revealCredits} setRevealCredits={setRevealCredits} setRevealCreditsTotal={setRevealCreditsTotal} />}
+            {searchMode === "exportador"   && <ExportadorList userId={userId} hasAccess={hasSearchAccess} credits={credits} creditsTotal={creditsTotal} setCredits={setCredits} setCreditsTotal={setCreditsTotal} revealCredits={revealCredits} setRevealCredits={setRevealCredits} setRevealCreditsTotal={setRevealCreditsTotal} />}
             {searchMode === "marca"        && <MarcaCompletaSearch userId={userId} credits={credits} creditsTotal={creditsTotal} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
             {searchMode === "importadores" && <ImportadoresSearch userId={userId} credits={credits} creditsTotal={creditsTotal} creditsLoading={creditsLoading} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
             {searchMode === "produtores"   && <ProdutoresSearch userId={userId} credits={credits} creditsTotal={creditsTotal} creditsLoading={creditsLoading} setCredits={setCredits} setCreditsTotal={setCreditsTotal} />}
-            {searchMode === "precos"       && <PrecosRotuloSearch hasAccess={hasAccess} revealCredits={revealCredits} setRevealCredits={setRevealCredits} setRevealCreditsTotal={setRevealCreditsTotal} />}
+            {searchMode === "precos"       && <PrecosRotuloSearch hasAccess={hasSearchAccess} revealCredits={revealCredits} setRevealCredits={setRevealCredits} setRevealCreditsTotal={setRevealCreditsTotal} />}
           </div>
         )
       )}
@@ -3516,7 +3519,7 @@ export default function MercadoPage() {
 
   const isAdmin = profile?.is_admin ?? false;
   // Master key grants full access; legacy full-access key OR period-specific key for granular control
-  const canMarket = (key: string) => isAdmin || hasFeature("mercado:idealbi") || hasFeature(`mercado:${key}`) || hasFeature(`mercado:${key}:${period}`);
+  const canMarket = (_key: string) => isAdmin || hasFeature("mercado:idealbi") || hasFeature(`mercado:${period}`);
 
   /* ── Tab / Period definitions ── */
   const PERIODS: { key: Period; label: string }[] = [

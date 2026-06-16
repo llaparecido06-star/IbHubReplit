@@ -187,3 +187,67 @@ export async function requirePlanFeature(
 
   return true;
 }
+
+/**
+ * Checks whether a user has access to ANY of the given plan feature keys.
+ * Use when a resource can be unlocked by multiple alternative keys (e.g. master key OR granular key).
+ * Returns `true` if the user is entitled (admin, courtesy, or any key in plan).
+ */
+export async function checkAnyPlanFeature(
+  userId: string,
+  featureKeys: string[],
+): Promise<boolean> {
+  const prof = await loadCallerProfile(userId);
+  if (!prof) return false;
+  if (prof.is_admin) return true;
+  if (isCourtesyActive(prof)) return true;
+  if (!isAnnualPlanActive(prof) && prof.stripe_subscription_status === "past_due") return false;
+
+  const { data: planRow } = await supabaseAdmin
+    .from("plans")
+    .select("features")
+    .eq("id", effectivePlan(prof))
+    .maybeSingle();
+  const planFeatures: string[] = (planRow as { features?: string[] } | null)?.features ?? [];
+  return featureKeys.some(key => planFeatures.includes(key));
+}
+
+/**
+ * Server-side gate that passes if the user has ANY of the provided feature keys.
+ * Use when a route can be unlocked by a master key OR a more granular key.
+ *
+ * Returns `true` if access is granted.
+ * Returns `false` and sends the appropriate 403 response if access is denied.
+ */
+export async function requireAnyPlanFeature(
+  req: Request,
+  res: Response,
+  userId: string,
+  featureKeys: string[],
+): Promise<boolean> {
+  const prof = await loadCallerProfile(userId);
+  if (!prof) {
+    res.status(404).json({ error: "Profile not found" });
+    return false;
+  }
+
+  if (prof.is_admin) return true;
+  if (isCourtesyActive(prof)) return true;
+
+  if (!isAnnualPlanActive(prof) && prof.stripe_subscription_status === "past_due") {
+    res.status(403).json({ error: "Assinatura com pagamento pendente. Regularize para acessar." });
+    return false;
+  }
+
+  const { data: planRow } = await supabaseAdmin
+    .from("plans")
+    .select("features")
+    .eq("id", effectivePlan(prof))
+    .maybeSingle();
+  const planFeatures: string[] = (planRow as { features?: string[] } | null)?.features ?? [];
+
+  if (featureKeys.some(key => planFeatures.includes(key))) return true;
+
+  res.status(403).json({ error: "Plano atual não inclui acesso a esta funcionalidade." });
+  return false;
+}

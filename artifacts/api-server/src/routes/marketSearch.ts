@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { resolveUserId, checkPlanFeature } from "../lib/planCheck.js";
+import { resolveUserId, checkAnyPlanFeature } from "../lib/planCheck.js";
 
 const router: IRouter = Router();
 
@@ -117,7 +117,7 @@ router.get("/market/search/exportadores", async (req: Request, res: Response): P
   const userId = await resolveUserId(req, res);
   if (!userId) return;
 
-  const hasPremium = await checkPlanFeature(userId, "mercado:idealbi");
+  const hasPremium = await checkAnyPlanFeature(userId, ["mercado:idealbi", "mercado:busca"]);
 
   const { q, limit, offset } = parseQueryParams(req);
   const ql = q.toLowerCase();

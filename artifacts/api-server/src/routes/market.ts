@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
-import { resolveUserId, requirePlanFeature, requireAdmin } from "../lib/planCheck.js";
+import { resolveUserId, requirePlanFeature, requireAnyPlanFeature, requireAdmin } from "../lib/planCheck.js";
 import { broadcastPushToAllUsers } from "../lib/pushUtils.js";
 
 const router: IRouter = Router();
@@ -40,7 +40,7 @@ router.get("/market/posts", async (req: Request, res: Response): Promise<void> =
   const userId = await resolveUserId(req, res);
   if (!userId) return;
 
-  const allowed = await requirePlanFeature(req, res, userId, "mercado:idealbi");
+  const allowed = await requireAnyPlanFeature(req, res, userId, ["mercado:idealbi", "mercado:feed"]);
   if (!allowed) return;
 
   const limit = Math.min(parseInt(req.query.limit as string) || 15, 100);
@@ -186,7 +186,7 @@ router.post("/market/posts/:id/like", async (req: Request, res: Response): Promi
   const userId = await resolveUserId(req, res);
   if (!userId) return;
 
-  const allowed = await requirePlanFeature(req, res, userId, "mercado:idealbi");
+  const allowed = await requireAnyPlanFeature(req, res, userId, ["mercado:idealbi", "mercado:feed"]);
   if (!allowed) return;
 
   const postId = req.params.id;
@@ -239,7 +239,7 @@ router.post("/market/posts/:id/comments", async (req: Request, res: Response): P
   const userId = await resolveUserId(req, res);
   if (!userId) return;
 
-  const allowed = await requirePlanFeature(req, res, userId, "mercado:idealbi");
+  const allowed = await requireAnyPlanFeature(req, res, userId, ["mercado:idealbi", "mercado:feed"]);
   if (!allowed) return;
 
   const postId = req.params.id;
@@ -301,7 +301,7 @@ router.post("/market/comments/:id/like", async (req: Request, res: Response): Pr
   const userId = await resolveUserId(req, res);
   if (!userId) return;
 
-  const allowed = await requirePlanFeature(req, res, userId, "mercado:idealbi");
+  const allowed = await requireAnyPlanFeature(req, res, userId, ["mercado:idealbi", "mercado:feed"]);
   if (!allowed) return;
 
   const commentId = req.params.id;
@@ -356,7 +356,7 @@ router.get("/market/bi/importadores", async (req: Request, res: Response): Promi
   const userId = await resolveUserId(req, res);
   if (!userId) return;
 
-  const allowed = await requirePlanFeature(req, res, userId, "mercado:idealbi");
+  const allowed = await requireAnyPlanFeature(req, res, userId, ["mercado:idealbi", "mercado:busca"]);
   if (!allowed) return;
 
   const q = sanitizeBiQuery((req.query.q as string | undefined)?.trim() ?? "");
@@ -392,7 +392,7 @@ router.get("/market/bi/exportadores", async (req: Request, res: Response): Promi
   const userId = await resolveUserId(req, res);
   if (!userId) return;
 
-  const allowed = await requirePlanFeature(req, res, userId, "mercado:idealbi");
+  const allowed = await requireAnyPlanFeature(req, res, userId, ["mercado:idealbi", "mercado:busca"]);
   if (!allowed) return;
 
   const q = sanitizeBiQuery((req.query.q as string | undefined)?.trim() ?? "");
@@ -427,7 +427,7 @@ router.get("/market/bi/produtores", async (req: Request, res: Response): Promise
   const userId = await resolveUserId(req, res);
   if (!userId) return;
 
-  const allowed = await requirePlanFeature(req, res, userId, "mercado:idealbi");
+  const allowed = await requireAnyPlanFeature(req, res, userId, ["mercado:idealbi", "mercado:busca"]);
   if (!allowed) return;
 
   const q = sanitizeBiQuery((req.query.q as string | undefined)?.trim() ?? "");
