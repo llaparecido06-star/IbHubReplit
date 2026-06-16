@@ -104,7 +104,7 @@ export default function GrupoChatPage() {
   const [, setLocation] = useLocation();
   const groupId = params?.id ?? "";
   const isMobile = useIsMobile();
-  const { user, activeCompany } = useAuth();
+  const { user, activeCompany, profile } = useAuth();
 
   const [groupInfo, setGroupInfo]     = useState<WebGroupInfo | null>(null);
   const [publicGroup, setPublicGroup] = useState<Group | null>(null);
@@ -122,6 +122,11 @@ export default function GrupoChatPage() {
   const [attachPreview, setAttachPreview] = useState<string | null>(null);
   const [uploading, setUploading]         = useState(false);
   const [chatToast, setChatToast]         = useState<string | null>(null);
+
+  const typingChannelRef  = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const typingTimersRef   = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const lastTypingSentRef = useRef<number>(0);
+  const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
 
   const groupLink = `https://ibhub.com.br/grupo/${groupId}`;
   const handleCopyLink = () => {
@@ -207,11 +212,21 @@ export default function GrupoChatPage() {
     setLoading(false);
     scrollBottom();
 
-    // Mark conversation read
+    // Fetch unread count before zeroing so AppShell badge decrements correctly
+    const { data: partRow } = await supabase
+      .from("conversation_participants")
+      .select("unread_count")
+      .eq("conversation_id", groupId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const unreadCount = (partRow as any)?.unread_count ?? 0;
     await supabase.from("conversation_participants")
       .update({ last_read_at: new Date().toISOString(), unread_count: 0 })
       .eq("conversation_id", groupId)
       .eq("user_id", user.id);
+    if (unreadCount > 0) {
+      window.dispatchEvent(new CustomEvent("chat-conv-read", { detail: { count: unreadCount } }));
+    }
   }, [groupId, user?.id, scrollBottom]);
 
   useEffect(() => { load(); }, [load]);
@@ -249,6 +264,46 @@ export default function GrupoChatPage() {
       if (channelRef.current) { supabase.removeChannel(channelRef.current); channelRef.current = null; }
     };
   }, [groupId, user?.id, scrollBottom]);
+
+  const broadcastGroupTyping = useCallback(() => {
+    if (!groupId || !user?.id || !typingChannelRef.current) return;
+    const now = Date.now();
+    if (now - lastTypingSentRef.current < 2500) return;
+    lastTypingSentRef.current = now;
+    typingChannelRef.current.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { user_id: user.id, name: profile?.full_name ?? "Alguém" },
+    });
+  }, [groupId, user?.id, profile?.full_name]);
+
+  useEffect(() => {
+    if (!groupId || !user?.id) return;
+    setTypingUsers({});
+    Object.values(typingTimersRef.current).forEach(clearTimeout);
+    typingTimersRef.current = {};
+    const ch = supabase
+      .channel(`typing-group-${groupId}-${user.id}`)
+      .on("broadcast", { event: "typing" }, ({ payload }) => {
+        const { user_id, name } = payload as { user_id: string; name: string };
+        if (user_id === user.id) return;
+        if (typingTimersRef.current[user_id]) clearTimeout(typingTimersRef.current[user_id]);
+        setTypingUsers(prev => ({ ...prev, [user_id]: name }));
+        typingTimersRef.current[user_id] = setTimeout(() => {
+          setTypingUsers(prev => { const n = { ...prev }; delete n[user_id]; return n; });
+          delete typingTimersRef.current[user_id];
+        }, 3000);
+      })
+      .subscribe();
+    typingChannelRef.current = ch;
+    return () => {
+      supabase.removeChannel(ch);
+      typingChannelRef.current = null;
+      setTypingUsers({});
+      Object.values(typingTimersRef.current).forEach(clearTimeout);
+      typingTimersRef.current = {};
+    };
+  }, [groupId, user?.id]);
 
   const isAdminOrOwner = myRole === "owner" || myRole === "moderator" || myRole === "admin";
 
@@ -569,6 +624,14 @@ export default function GrupoChatPage() {
               );
               return nodes;
             })}
+            {Object.keys(typingUsers).length > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 2px 0", opacity: 0.8 }}>
+                <span style={{ fontSize: 14, letterSpacing: 2, color: MUTED }}>•••</span>
+                <span style={{ fontSize: 12, color: MUTED, fontStyle: "italic" }}>
+                  {Object.values(typingUsers).join(", ")} {Object.keys(typingUsers).length === 1 ? "está digitando..." : "estão digitando..."}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Hidden file input */}
@@ -614,7 +677,7 @@ export default function GrupoChatPage() {
             {!isRecording && (
               <textarea
                 value={input}
-                onChange={e => setInput(e.target.value)}
+                onChange={e => { setInput(e.target.value); broadcastGroupTyping(); }}
                 onKeyDown={handleKey}
                 placeholder="Mensagem no grupo…"
                 rows={1}

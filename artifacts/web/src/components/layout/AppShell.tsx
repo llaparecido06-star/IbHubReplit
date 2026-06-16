@@ -717,6 +717,10 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
   // Both profile.id and user.id are checked — senderId can be stored as either depending on path
   const senderSelfIds    = useRef<Set<string>>(new Set());
 
+  // In-app toast for incoming messages when user is not on a chat screen
+  const [chatToast, setChatToast] = useState<{ senderName: string; senderAvatar: string | null; preview: string; convId: string } | null>(null);
+  const chatToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const loadNotifs = useCallback(async () => {
     if (!userId) return;
     setNotifLoading(true);
@@ -735,13 +739,22 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
     senderSelfIds.current = ids;
   }, [profile?.id, user?.id]);
 
+  // Decrement badge when MensagensPage/GrupoChatPage opens a conversation
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { count } = (e as CustomEvent<{ count: number }>).detail;
+      if (count > 0) setChatUnreadTotal(prev => Math.max(0, prev - count));
+    };
+    window.addEventListener("chat-conv-read", handler);
+    return () => window.removeEventListener("chat-conv-read", handler);
+  }, []);
+
   // Refresh chat unread count on mount, identity change and navigation (but NOT while on chat)
   useEffect(() => {
     if (!userId) return;
     const onChat = location.startsWith("/app/mensagens") || location.startsWith("/app/grupos");
     if (onChat) {
-      // User is looking at messages — reset badge and don't re-fetch
-      setChatUnreadTotal(0);
+      // User is on a chat screen — badge decrements via chat-conv-read events, no need to zero
       return;
     }
     fetchWebConversations(userId, activeCompany?.id ?? null).then(convos => {
@@ -766,10 +779,34 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
           const isSelf = senderSelfIds.current.has(msg.sender_id ?? "");
           const inMyConv = chatConvIdsRef.current.has(msg.conversation_id ?? "");
           if (!isSelf && inMyConv) {
-            // Only badge if the user isn't actively looking at chat right now
+            // Only badge + toast if the user isn't actively looking at chat right now
             const onChat = window.location.pathname.includes("/app/mensagens") ||
                            window.location.pathname.includes("/app/grupos");
-            if (!onChat) setChatUnreadTotal(prev => prev + 1);
+            if (!onChat) {
+              setChatUnreadTotal(prev => prev + 1);
+              // Show in-app toast notification with sender info
+              const senderId = (msg as any).sender_id as string | undefined;
+              const convId   = (msg as any).conversation_id as string | undefined;
+              const rawContent = (msg as any).content as string | undefined ?? "";
+              void (async () => {
+                const { data: sp } = await supabase
+                  .from("profiles")
+                  .select("full_name, avatar_url")
+                  .eq("id", senderId ?? "")
+                  .maybeSingle();
+                const preview = rawContent.startsWith("[attachment]:")
+                  ? "📎 Arquivo"
+                  : rawContent || "🎤 Áudio";
+                if (chatToastTimerRef.current) clearTimeout(chatToastTimerRef.current);
+                setChatToast({
+                  senderName:   (sp as any)?.full_name ?? "Alguém",
+                  senderAvatar: (sp as any)?.avatar_url ?? null,
+                  preview:      preview.slice(0, 60),
+                  convId:       convId ?? "",
+                });
+                chatToastTimerRef.current = setTimeout(() => setChatToast(null), 5000);
+              })();
+            }
           }
         },
       )
@@ -1582,6 +1619,44 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
       {/* Click-away overlay */}
       {userMenuOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 199 }} onClick={() => setUserMenuOpen(false)} />
+      )}
+
+      {/* In-app toast for new messages */}
+      {chatToast && (
+        <div
+          onClick={() => { setLocation(`/app/mensagens?conv=${chatToast.convId}`); setChatToast(null); }}
+          style={{
+            position: "fixed",
+            bottom: isMobile ? 80 : 24,
+            right: isMobile ? 12 : 24,
+            left: isMobile ? 12 : "auto",
+            zIndex: 9999,
+            backgroundColor: NAVY,
+            borderRadius: 14,
+            padding: "12px 14px",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            cursor: "pointer",
+            boxShadow: "0 6px 28px rgba(0,0,0,0.28)",
+            maxWidth: 340,
+          }}
+        >
+          {chatToast.senderAvatar
+            ? <img src={chatToast.senderAvatar} style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} alt="" />
+            : <div style={{ width: 40, height: 40, borderRadius: "50%", backgroundColor: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: NAVY, flexShrink: 0 }}>
+                {chatToast.senderName[0]?.toUpperCase() ?? "?"}
+              </div>
+          }
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: WHITE, marginBottom: 2 }}>💬 {chatToast.senderName}</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{chatToast.preview}</div>
+          </div>
+          <button
+            onClick={e => { e.stopPropagation(); setChatToast(null); if (chatToastTimerRef.current) clearTimeout(chatToastTimerRef.current); }}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.4)", fontSize: 20, lineHeight: 1, padding: "0 0 0 4px", flexShrink: 0 }}
+          >×</button>
+        </div>
       )}
     </div>
   );

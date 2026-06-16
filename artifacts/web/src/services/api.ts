@@ -1214,12 +1214,38 @@ export interface WebMessage {
   message_type?: string | null;
   media_url?: string | null;
   deleted_at?: string | null;
+  /** Set when the recipient has opened the conversation after this message was sent. */
+  read_at?: string | null;
   reactions?: WebMessageReaction[];
   sender?: { id: string; full_name: string; avatar_url?: string | null };
   /** When the message was authored from a company identity, this
    *  carries the company's display name/avatar so the recipient sees
    *  "Empresa X" instead of the owner's personal profile. */
   from_company?: { id: string; name: string; avatar_url: string | null } | null;
+}
+
+/**
+ * Mark a conversation as fully read for the current user.
+ * - Sets last_read_at + unread_count=0 in conversation_participants
+ * - Stamps read_at on all unread incoming messages so the sender sees ✓✓
+ */
+export async function markWebConversationRead(conversationId: string, userId: string): Promise<void> {
+  try {
+    const now = new Date().toISOString();
+    await Promise.all([
+      supabase
+        .from("conversation_participants")
+        .update({ last_read_at: now, unread_count: 0 })
+        .eq("conversation_id", conversationId)
+        .eq("user_id", userId),
+      supabase
+        .from("messages")
+        .update({ read_at: now })
+        .eq("conversation_id", conversationId)
+        .neq("sender_id", userId)
+        .is("read_at", null),
+    ]);
+  } catch { /* silent — best-effort */ }
 }
 
 /**

@@ -16,6 +16,7 @@ import {
   deleteWebMessage,
   toggleWebMessageReaction,
   forwardWebMessage,
+  markWebConversationRead,
   WebConversation,
   WebMessage,
 } from "@/services/api";
@@ -311,6 +312,12 @@ export default function MensagensPage() {
   const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const seenMsgIds         = useRef<Set<string>>(new Set());
 
+  // Typing indicator
+  const typingChannelRef  = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const typingTimersRef   = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const lastTypingSentRef = useRef<number>(0);
+  const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
+
   // Parse ?conv=<id> from URL to auto-open a specific conversation
   const convIdFromUrl = new URLSearchParams(searchStr).get("conv");
 
@@ -374,7 +381,13 @@ export default function MensagensPage() {
     msgs.forEach(m => seenMsgIds.current.add(m.id));
     setMessages(msgs);
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
-  }, []);
+    // Mark as read: notify AppShell badge + update DB + clear local badge
+    if (userId && (convo.unread_count ?? 0) > 0) {
+      window.dispatchEvent(new CustomEvent("chat-conv-read", { detail: { count: convo.unread_count } }));
+      setConversations(prev => prev.map(c => c.id === convo.id ? { ...c, unread_count: 0 } : c));
+      void markWebConversationRead(convo.id, userId);
+    }
+  }, [userId]);
 
   // Realtime subscription for the open 1:1 conversation
   useEffect(() => {
@@ -428,7 +441,7 @@ export default function MensagensPage() {
           const updated = payload.new as any;
           setMessages(prev => prev.map(m =>
             m.id === updated.id
-              ? { ...m, content: updated.content ?? m.content, deleted_at: updated.deleted_at ?? null }
+              ? { ...m, content: updated.content ?? m.content, deleted_at: updated.deleted_at ?? null, read_at: updated.read_at ?? m.read_at }
               : m,
           ));
         },
@@ -440,6 +453,46 @@ export default function MensagensPage() {
     return () => {
       supabase.removeChannel(ch);
       realtimeChannelRef.current = null;
+    };
+  }, [selected?.id, userId]);
+
+  const broadcastTyping = useCallback(() => {
+    if (!selected?.id || !userId || !typingChannelRef.current) return;
+    const now = Date.now();
+    if (now - lastTypingSentRef.current < 2500) return;
+    lastTypingSentRef.current = now;
+    typingChannelRef.current.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { user_id: userId, name: profile?.full_name ?? "Alguém" },
+    });
+  }, [selected?.id, userId, profile?.full_name]);
+
+  useEffect(() => {
+    if (!selected?.id || !userId) return;
+    setTypingUsers({});
+    Object.values(typingTimersRef.current).forEach(clearTimeout);
+    typingTimersRef.current = {};
+    const ch = supabase
+      .channel(`typing-dm-${selected.id}-${userId}`)
+      .on("broadcast", { event: "typing" }, ({ payload }) => {
+        const { user_id, name } = payload as { user_id: string; name: string };
+        if (user_id === userId) return;
+        if (typingTimersRef.current[user_id]) clearTimeout(typingTimersRef.current[user_id]);
+        setTypingUsers(prev => ({ ...prev, [user_id]: name }));
+        typingTimersRef.current[user_id] = setTimeout(() => {
+          setTypingUsers(prev => { const n = { ...prev }; delete n[user_id]; return n; });
+          delete typingTimersRef.current[user_id];
+        }, 3000);
+      })
+      .subscribe();
+    typingChannelRef.current = ch;
+    return () => {
+      supabase.removeChannel(ch);
+      typingChannelRef.current = null;
+      setTypingUsers({});
+      Object.values(typingTimersRef.current).forEach(clearTimeout);
+      typingTimersRef.current = {};
     };
   }, [selected?.id, userId]);
 
@@ -775,8 +828,13 @@ export default function MensagensPage() {
                     ))}
                   </div>
                 )}
-                <div style={{ fontSize: 10, color: MUTED, marginTop: 3, textAlign: isMe ? "right" : "left" }}>
+                <div style={{ fontSize: 10, color: MUTED, marginTop: 3, textAlign: isMe ? "right" : "left", display: "flex", alignItems: "center", justifyContent: isMe ? "flex-end" : "flex-start", gap: 4 }}>
                   {timeAgo(msg.created_at)}
+                  {isMe && !msg.deleted_at && (
+                    <span style={{ fontSize: 11, color: msg.read_at ? GOLD : "#ccc", fontWeight: 700, letterSpacing: -0.5 }} title={msg.read_at ? "Lida" : "Enviada"}>
+                      {msg.read_at ? "✓✓" : "✓"}
+                    </span>
+                  )}
                 </div>
               </div>
               {isMe && actionBtns}
@@ -785,6 +843,14 @@ export default function MensagensPage() {
           );
           return nodes;
         })}
+        {Object.keys(typingUsers).length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 2px", opacity: 0.8 }}>
+            <span style={{ fontSize: 14, letterSpacing: 2, color: MUTED }}>•••</span>
+            <span style={{ fontSize: 12, color: MUTED, fontStyle: "italic" }}>
+              {Object.values(typingUsers).join(", ")} {Object.keys(typingUsers).length === 1 ? "está digitando..." : "estão digitando..."}
+            </span>
+          </div>
+        )}
         <div ref={bottomRef} />
       </div>
 
@@ -824,7 +890,7 @@ export default function MensagensPage() {
         {!isRecording && (
           <input
             value={newMsg}
-            onChange={e => setNewMsg(e.target.value)}
+            onChange={e => { setNewMsg(e.target.value); broadcastTyping(); }}
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
             placeholder="Mensagem…"
             style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 24, padding: "10px 16px", fontSize: 14, outline: "none", fontFamily: "inherit", backgroundColor: "#f9f9f7" }}
