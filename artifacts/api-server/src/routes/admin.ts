@@ -418,9 +418,13 @@ router.post("/admin/change-plan", async (req: Request, res: Response) => {
     return;
   }
 
-  const VALID_PLANS = ["gratuito", "comunidade_ideal_bi", "profissional", "basico", "empresa", "executivo"];
-  if (!VALID_PLANS.includes(plan)) {
-    res.status(400).json({ error: `Invalid plan. Valid values: ${VALID_PLANS.join(", ")}` });
+  const { data: planRows } = await supabaseAdmin
+    .from("plans")
+    .select("id")
+    .eq("id", plan)
+    .maybeSingle();
+  if (!planRows) {
+    res.status(400).json({ error: `Plano "${plan}" não encontrado. Verifique os planos cadastrados no Plan Builder.` });
     return;
   }
 
