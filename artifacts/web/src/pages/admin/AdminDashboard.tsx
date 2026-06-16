@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { AdminShell } from "@/components/layout/AdminShell";
+import { useLocation } from "wouter";
 import {
   fetchAdminStats,
   fetchUserGrowth,
   fetchPostsByType,
   fetchPlanBreakdown,
+  fetchCreditDailyStats,
   AdminStats,
   UserGrowthPoint,
   PostsByTypePoint,
   PlanPoint,
+  CreditDailyPoint,
 } from "@/services/adminApi";
 
 const GOLD = "#c9a84c";
@@ -285,27 +288,31 @@ function KpiCard({ icon, iconBg, label, value, sub, delta, deltaColor: dColor, h
 }
 
 export default function AdminDashboard() {
+  const [, setLocation] = useLocation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [growth, setGrowth] = useState<UserGrowthPoint[]>([]);
   const [postTypes, setPostTypes] = useState<PostsByTypePoint[]>([]);
   const [plans, setPlans] = useState<PlanPoint[]>([]);
+  const [creditDaily, setCreditDaily] = useState<CreditDailyPoint[]>([]);
 
   const loadData = async () => {
     setLoading(true);
     setError(false);
     try {
-      const [s, g, p, pl] = await Promise.all([
+      const [s, g, p, pl, cd] = await Promise.all([
         fetchAdminStats(),
         fetchUserGrowth(),
         fetchPostsByType(),
         fetchPlanBreakdown(),
+        fetchCreditDailyStats(30),
       ]);
       setStats(s);
       setGrowth(g);
       setPostTypes(p);
       setPlans(pl);
+      setCreditDaily(cd);
     } catch {
       setError(true);
     } finally {
@@ -421,7 +428,52 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Row 4 — Posts por tipo + Breakdown de planos */}
+            {/* Row 4 — Créditos de Mercado IA (resumo) */}
+            {creditDaily.length > 0 && (() => {
+              const today = new Date().toISOString().slice(0, 10);
+              const todayRow = creditDaily.find((d) => d.date === today);
+              const total30 = creditDaily.reduce((s, d) => s + d.total, 0);
+              const aiTotal = creditDaily.reduce((s, d) => s + d.ai_search, 0);
+              const rvTotal = creditDaily.reduce((s, d) => s + d.bi_reveal, 0);
+              const todayTotal = todayRow?.total ?? 0;
+              return (
+                <div style={{ backgroundColor: NAVY, borderRadius: 14, padding: 20, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 42, height: 42, backgroundColor: "rgba(201,168,76,0.15)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🧠</div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>Créditos de Mercado IA</div>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>últimos 30 dias</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 22, fontWeight: 900, color: GOLD }}>{todayTotal}</div>
+                      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Hoje</div>
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 22, fontWeight: 900, color: "#fff" }}>{total30}</div>
+                      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Total 30d</div>
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 22, fontWeight: 900, color: GOLD }}>{aiTotal}</div>
+                      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Busca IA</div>
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 22, fontWeight: 900, color: "#a5b4fc" }}>{rvTotal}</div>
+                      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.05em" }}>BI Reveal</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setLocation("/admin/creditos-mercado")}
+                    style={{ padding: "8px 18px", backgroundColor: GOLD, border: "none", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}
+                  >
+                    Ver detalhes →
+                  </button>
+                </div>
+              );
+            })()}
+
+            {/* Row 5 — Posts por tipo + Breakdown de planos */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
               <div style={{ backgroundColor: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14, padding: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>

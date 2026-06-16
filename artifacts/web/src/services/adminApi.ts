@@ -156,6 +156,49 @@ export async function fetchPlanBreakdown(): Promise<PlanPoint[]> {
     .sort((a, b) => b.count - a.count);
 }
 
+// ─── Credit Analytics ─────────────────────────────────────────────────────────
+
+export interface CreditDailyPoint {
+  date: string;
+  ai_search: number;
+  bi_reveal: number;
+  total: number;
+}
+
+export interface CreditUserStat {
+  user_id: string;
+  full_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+  plan: string | null;
+  ai_search: number;
+  bi_reveal: number;
+  total: number;
+  last_used: string;
+}
+
+export async function fetchCreditDailyStats(days = 30): Promise<CreditDailyPoint[]> {
+  try {
+    const res = await adminFetch(`/admin/credits/daily?days=${days}`);
+    if (!res.ok) return [];
+    const json = await res.json() as { daily: CreditDailyPoint[] };
+    return json.daily ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchCreditTopUsers(days = 30, limit = 20): Promise<CreditUserStat[]> {
+  try {
+    const res = await adminFetch(`/admin/credits/top-users?days=${days}&limit=${limit}`);
+    if (!res.ok) return [];
+    const json = await res.json() as { users: CreditUserStat[] };
+    return json.users ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchPostsByType(): Promise<PostsByTypePoint[]> {
   const { data, error } = await supabase
     .from("posts")

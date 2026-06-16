@@ -1200,4 +1200,106 @@ router.patch("/admin/company-pages/:id/market-access", async (req: Request, res:
   res.json(data);
 });
 
+/**
+ * GET /admin/credits/daily?days=30
+ * Returns daily credit usage (ai_search + bi_reveal) for the last N days.
+ */
+router.get("/admin/credits/daily", async (req: Request, res: Response): Promise<void> => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+
+  const days = Math.min(parseInt((req.query.days as string) || "30", 10), 90);
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabaseAdmin
+    .from("ai_credit_usage_log")
+    .select("credit_type, created_at")
+    .gte("created_at", since)
+    .order("created_at", { ascending: true });
+
+  if (error) { res.status(500).json({ error: error.message }); return; }
+
+  const dayMap: Record<string, { ai_search: number; bi_reveal: number }> = {};
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    dayMap[d] = { ai_search: 0, bi_reveal: 0 };
+  }
+
+  for (const row of (data ?? []) as { credit_type: string; created_at: string }[]) {
+    const day = row.created_at.slice(0, 10);
+    if (dayMap[day]) {
+      if (row.credit_type === "ai_search") dayMap[day].ai_search++;
+      else if (row.credit_type === "bi_reveal") dayMap[day].bi_reveal++;
+    }
+  }
+
+  const daily = Object.entries(dayMap).map(([date, counts]) => ({
+    date,
+    ai_search: counts.ai_search,
+    bi_reveal: counts.bi_reveal,
+    total: counts.ai_search + counts.bi_reveal,
+  }));
+
+  res.json({ daily });
+});
+
+/**
+ * GET /admin/credits/top-users?days=30&limit=20
+ * Returns top users by credit consumption in the given period.
+ */
+router.get("/admin/credits/top-users", async (req: Request, res: Response): Promise<void> => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+
+  const days  = Math.min(parseInt((req.query.days as string)  || "30", 10), 90);
+  const limit = Math.min(parseInt((req.query.limit as string) || "20", 10), 50);
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: logs, error } = await supabaseAdmin
+    .from("ai_credit_usage_log")
+    .select("user_id, credit_type, created_at")
+    .gte("created_at", since);
+
+  if (error) { res.status(500).json({ error: error.message }); return; }
+
+  const userMap: Record<string, { ai_search: number; bi_reveal: number; last_used: string }> = {};
+  for (const row of (logs ?? []) as { user_id: string; credit_type: string; created_at: string }[]) {
+    if (!userMap[row.user_id]) userMap[row.user_id] = { ai_search: 0, bi_reveal: 0, last_used: row.created_at };
+    if (row.credit_type === "ai_search") userMap[row.user_id].ai_search++;
+    else if (row.credit_type === "bi_reveal") userMap[row.user_id].bi_reveal++;
+    if (row.created_at > userMap[row.user_id].last_used) userMap[row.user_id].last_used = row.created_at;
+  }
+
+  const topUsers = Object.entries(userMap)
+    .map(([uid, c]) => ({ uid, ...c, total: c.ai_search + c.bi_reveal }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, limit);
+
+  if (topUsers.length === 0) { res.json({ users: [] }); return; }
+
+  const { data: profiles } = await supabaseAdmin
+    .from("profiles")
+    .select("id, full_name, username, avatar_url, plan")
+    .in("id", topUsers.map((u) => u.uid));
+
+  const pm = Object.fromEntries(
+    ((profiles ?? []) as { id: string; full_name: string | null; username: string | null; avatar_url: string | null; plan: string | null }[])
+      .map((p) => [p.id, p])
+  );
+
+  res.json({
+    users: topUsers.map((u) => ({
+      user_id:    u.uid,
+      full_name:  pm[u.uid]?.full_name  ?? null,
+      username:   pm[u.uid]?.username   ?? null,
+      avatar_url: pm[u.uid]?.avatar_url ?? null,
+      plan:       pm[u.uid]?.plan       ?? null,
+      ai_search:  u.ai_search,
+      bi_reveal:  u.bi_reveal,
+      total:      u.total,
+      last_used:  u.last_used,
+    })),
+  });
+});
+
 export default router;

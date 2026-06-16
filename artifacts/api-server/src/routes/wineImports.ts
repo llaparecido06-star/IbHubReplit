@@ -187,6 +187,14 @@ async function extractBrandName(userQuery: string): Promise<string | null> {
  * Credit-gated search for BI tables. Consumes 1 credit per search (not per "load more").
  * "Load more" calls pass offset>0 and do NOT consume credits.
  */
+async function logCreditUsage(userId: string, creditType: "ai_search" | "bi_reveal"): Promise<void> {
+  try {
+    await supabaseAdmin.from("ai_credit_usage_log").insert({ user_id: userId, credit_type: creditType, credits_used: 1 });
+  } catch {
+    // Non-critical — log failure must not block the main request
+  }
+}
+
 async function consumeCredit(userId: string): Promise<{ credits_remaining: number; credits_total: number } | null> {
   const current = await getOrCreateCredits(userId);
   if (current.credits_remaining <= 0) return null;
@@ -195,6 +203,7 @@ async function consumeCredit(userId: string): Promise<{ credits_remaining: numbe
     .from("ai_search_credits")
     .update({ credits_remaining: newRemaining, updated_at: new Date().toISOString() })
     .eq("user_id", userId);
+  void logCreditUsage(userId, "ai_search");
   return { credits_remaining: newRemaining, credits_total: current.credits_total };
 }
 
@@ -663,6 +672,7 @@ router.get("/wine-imports/search", async (req: Request, res: Response) => {
       .from("ai_search_credits")
       .update({ credits_remaining: newRemaining, updated_at: new Date().toISOString() })
       .eq("user_id", userId);
+    void logCreditUsage(userId, "ai_search");
 
     return res.json({
       data: rows,
@@ -820,6 +830,7 @@ router.post("/wine-imports/bi/exportadores/reveal", async (req: Request, res: Re
     .from("bi_reveal_credits")
     .update({ credits_remaining: newRemaining, updated_at: new Date().toISOString() })
     .eq("user_id", userId);
+  void logCreditUsage(userId, "bi_reveal");
 
   await supabaseAdmin.from("bi_reveal_log").insert({
     user_id: userId, record_type: "exportador", record_key: exportadorName,
@@ -914,6 +925,7 @@ router.post("/wine-imports/bi/retail-prices/reveal", async (req: Request, res: R
       req.log.error({ err: updateErr }, "[retail-prices/reveal] bi_reveal_credits update failed");
       return res.status(500).json({ error: updateErr.message });
     }
+    void logCreditUsage(userId, "bi_reveal");
 
     const { error: insertErr } = await supabaseAdmin.from("bi_reveal_log").insert({
       user_id: userId, record_type: "retail_price", record_key: recordId,
