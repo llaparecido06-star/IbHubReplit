@@ -190,10 +190,74 @@ router.post("/messages/send", validateBody(SendMessageSchema), async (req: Reque
 
   res.json({ data });
 
+  // ── DM push fan-out (fire-and-forget) ───────────────────────────────────────
+  // Sends mobile (Expo) + web push to the other participant(s) in a DM.
+  if (!conversation.is_group) {
+    void (async () => {
+      try {
+        const [participantsRes, senderRes] = await Promise.all([
+          supabaseAdmin
+            .from("conversation_participants")
+            .select("user_id")
+            .eq("conversation_id", conversation_id)
+            .neq("user_id", sender_id),
+          supabaseAdmin
+            .from("profiles")
+            .select("full_name, username")
+            .eq("id", sender_id)
+            .maybeSingle(),
+        ]);
+
+        const recipientIds = ((participantsRes.data ?? []) as { user_id: string }[])
+          .map((p) => p.user_id)
+          .filter((uid) => uid !== callerId);
+
+        if (recipientIds.length === 0) return;
+
+        const senderName =
+          (senderRes.data as { full_name?: string; username?: string } | null)?.full_name
+          ?? (senderRes.data as { full_name?: string; username?: string } | null)?.username
+          ?? "Alguém";
+
+        const preview =
+          message_type === "text" && content ? content.slice(0, 80)
+          : message_type === "image"         ? "📷 Foto"
+          : message_type === "video"         ? "🎥 Vídeo"
+          : message_type === "audio"         ? "🎤 Áudio"
+          :                                    "Nova mensagem";
+
+        await Promise.all(
+          recipientIds.flatMap((userId) => [
+            sendPushToUser({
+              userId,
+              title: senderName,
+              body: preview,
+              data: {
+                type: "direct_message",
+                conversationId: conversation_id,
+                deepLink: `/mensagens/${conversation_id}`,
+              },
+            }),
+            sendWebPushToUser(userId, {
+              title: senderName,
+              body: preview,
+              url: `/app/mensagens/${conversation_id}`,
+              tag: `dm-${conversation_id}`,
+            }),
+          ]),
+        );
+
+        logger.info(
+          { conversationId: conversation_id, recipients: recipientIds.length },
+          "dm push: fan-out complete",
+        );
+      } catch (err) {
+        logger.error({ err, conversationId: conversation_id }, "dm push: fan-out error");
+      }
+    })();
+  }
+
   // ── Group push fan-out (fire-and-forget, does not block the response) ──────
-  // Only runs for group conversations. Direct-chat push is handled client-side
-  // via dispatchPushToConversation. Group chats have no client-side dispatch,
-  // so the server fans out to all non-muted participants here.
   if (conversation.is_group) {
     void (async () => {
       try {
