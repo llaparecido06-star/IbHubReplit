@@ -63,12 +63,7 @@
       "backgroundColor": "#0d1b2a"
     },
     "plugins": [
-      [
-        "expo-router",
-        {
-          "origin": "https://ibhub.com.br/"
-        }
-      ],
+      "expo-router",
       "expo-font",
       "expo-web-browser",
       [
