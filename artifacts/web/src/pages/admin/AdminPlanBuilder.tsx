@@ -657,58 +657,46 @@ export default function AdminPlanBuilder() {
             <div style={{ borderBottom: "1px solid #e8eaed", paddingBottom: 18, marginBottom: 18 }}>
               {sectionLabel("Dados de Mercado (Ideal.BI)")}
 
-              {/* Feed Exclusivo toggle */}
-              <div style={{ marginBottom: 10 }}>
-                {featureToggle("Feed Exclusivo (Ideal.BI)", modal.features.includes("mercado:feed_exclusivo"), () => toggleFeature("mercado:feed_exclusivo"))}
+              {/* Master key */}
+              <div style={{ marginBottom: 6 }}>
+                {featureToggle("🔑 Chave Mestra — libera todas as seções abaixo (mercado:idealbi)", modal.features.includes("mercado:idealbi"), () => toggleFeature("mercado:idealbi"), "#10b981")}
               </div>
               <p style={{ fontSize: 11, color: "#aaa", margin: "0 0 14px 2px" }}>
-                Permite acesso ao feed de análises e insights exclusivos publicados pela Ideal.BI.
+                Equivale a marcar todas as opções abaixo de uma vez. Use para planos de acesso completo.
+              </p>
+
+              {/* Main tabs */}
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#8a93a2", marginBottom: 8, textTransform: "uppercase" as const, letterSpacing: 0.8 }}>Abas Principais</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
+                {featureToggle("📡 Feed (mercado:feed) — posts e análises Ideal.BI", modal.features.includes("mercado:feed"), () => toggleFeature("mercado:feed"))}
+                {featureToggle("🔍 Busca (mercado:busca) — importadores, exportadores e produtores", modal.features.includes("mercado:busca"), () => toggleFeature("mercado:busca"))}
+                {featureToggle("📊 Relatórios (mercado:apresentacoes) — apresentações e relatórios", modal.features.includes("mercado:apresentacoes"), () => toggleFeature("mercado:apresentacoes"))}
+              </div>
+
+              {/* Visão Geral period pills */}
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#8a93a2", marginBottom: 8, textTransform: "uppercase" as const, letterSpacing: 0.8 }}>Visão Geral — por Período</div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" as const }}>
+                {(["ano", "trimestre", "mes"] as const).map(pd => {
+                  const key = `mercado:${pd}` as string;
+                  const active = modal.features.includes(key);
+                  return (
+                    <div key={pd} onClick={() => toggleFeature(key)} style={{
+                      padding: "6px 18px", border: `1px solid ${active ? GOLD : "#e8eaed"}`, borderRadius: 20,
+                      cursor: "pointer", backgroundColor: active ? `${GOLD}12` : "transparent",
+                      fontSize: 12, fontWeight: active ? 700 : 400, color: active ? GOLD : "#666",
+                      userSelect: "none" as const,
+                    }}>
+                      {PERIOD_LABELS[pd]}
+                    </div>
+                  );
+                })}
+              </div>
+              <p style={{ fontSize: 11, color: "#aaa", margin: "0 0 14px 2px" }}>
+                Libera a aba Visão Geral apenas para o período selecionado. Ex: plano com só "Mês" não vê Ano nem Trimestre.
               </p>
 
               {/* AI Search Credits */}
               {inp("⚡ CRÉDITOS DE BUSCA POR IA / MÊS", "aiCredits", "0", "0 = sem acesso à busca por IA. Renovado dia 1º.")}
-
-              {/* Market categories */}
-              {loadingMp ? (
-                <div style={{ color: "#aaa", fontSize: 13, padding: "8px 0" }}>⏳ Carregando categorias...</div>
-              ) : marketPerms.length === 0 ? (
-                <div style={{ color: "#aaa", fontSize: 13, padding: "8px 0" }}>
-                  Nenhuma categoria de mercado cadastrada ainda. Crie em <strong>Mercado → Categorias</strong>.
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  {marketPerms.map(mp => {
-                    const available = mp.periods && mp.periods.length > 0 ? mp.periods : ["mes", "trimestre", "ano"];
-                    return (
-                      <div key={mp.id}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 6 }}>{mp.title}</div>
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>
-                          {available.map(pd => {
-                            const key = `mercado:${mp.id}:${pd}`;
-                            const legacyKey = `mercado:${mp.id}`;
-                            const active = modal.features.includes(key) || modal.features.includes(legacyKey);
-                            return (
-                              <div key={pd} onClick={() => handleTogglePeriod(mp, pd)} style={{
-                                padding: "5px 16px",
-                                border: `1px solid ${active ? "#10b981" : "#e8eaed"}`,
-                                borderRadius: 20,
-                                cursor: "pointer",
-                                backgroundColor: active ? "#10b98112" : "transparent",
-                                fontSize: 12,
-                                fontWeight: active ? 700 : 400,
-                                color: active ? "#10b981" : "#666",
-                                userSelect: "none" as const,
-                              }}>
-                                {PERIOD_LABELS[pd] ?? pd}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
 
             {saveMsg && (
