@@ -45,7 +45,7 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
       setIsLoading(false);
       return;
     }
-    if (entitle === "past_due" || entitle === "free") {
+    if (entitle === "past_due") {
       setFeatures([]);
       setIsLoading(false);
       return;
