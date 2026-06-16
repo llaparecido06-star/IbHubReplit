@@ -9,16 +9,35 @@ self.addEventListener("push", (event) => {
   }
 
   const title = payload.title ?? "ibhub";
-  const options = {
-    body: payload.body ?? "",
-    icon: "/favicon-ibhub.png",
-    badge: "/favicon-ibhub.png",
-    data: { url: payload.url ?? "/" },
-    tag: payload.tag ?? "ibhub-push",
-    renotify: true,
-  };
+  const targetUrl = payload.url ?? "/";
+  const tag = payload.tag ?? "ibhub-push";
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  // If the user already has the app open on this exact conversation,
+  // skip the system notification (the in-app toast already handles it).
+  event.waitUntil(
+    clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((windowClients) => {
+        const isConvOpen = windowClients.some((c) => {
+          if (!c.url.includes(self.location.origin)) return false;
+          // For DM tags like "dm-<id>" or group tags like "group-<id>",
+          // check if the client URL contains that conversation id.
+          const convId = tag.replace(/^(dm|group)-/, "");
+          return convId && c.url.includes(convId) && c.visibilityState === "visible";
+        });
+
+        if (isConvOpen) return; // suppress — user is already watching
+
+        return self.registration.showNotification(title, {
+          body: payload.body ?? "",
+          icon: "/favicon-ibhub.png",
+          badge: "/favicon-ibhub.png",
+          data: { url: targetUrl },
+          tag,
+          renotify: true,
+        });
+      })
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {

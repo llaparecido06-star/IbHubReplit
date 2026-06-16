@@ -295,6 +295,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    // Unsubscribe web push before clearing session so we still have the token
+    if ("serviceWorker" in navigator && "PushManager" in window) {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          const { data: { session: sess } } = await supabase.auth.getSession();
+          if (sess) {
+            await fetch("/api/push/web/unsubscribe", {
+              method: "DELETE",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${sess.access_token}`,
+              },
+              body: JSON.stringify({ endpoint: sub.endpoint }),
+            }).catch(() => {});
+          }
+          await sub.unsubscribe().catch(() => {});
+        }
+      } catch {}
+    }
     // scope:'local' clears storage without a network call — works even offline
     try { await supabase.auth.signOut({ scope: "local" }); } catch {}
     setSession(null);
