@@ -10,7 +10,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, usePathname, type Href } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -435,11 +435,9 @@ function RootLayoutNav() {
         if (coldLink && !coldStartLinkConsumed) {
           coldStartLinkConsumed = true;
           console.log("[RootLayoutNav] router.replace →", coldLink);
-          Alert.alert('Debug 5/5', `Navegando via deep link:\n${coldLink}`);
           router.replace(coldLink as any);
         } else {
           console.log("[RootLayoutNav] router.replace → /(tabs)");
-          Alert.alert('Debug 5/5', 'Navegando para /(tabs)...\n\nSe este alerta aparecer mas o app travar, o problema está no router.replace() em si.');
           router.replace("/(tabs)" as any);
         }
         // Set navInitiatedRef BEFORE clearing navIifePendingRef so the guard
@@ -452,7 +450,6 @@ function RootLayoutNav() {
       })();
     } else {
       console.log("[RootLayoutNav] router.replace →", destination);
-      Alert.alert('Debug 5/5', `Navegando para:\n${destination}`);
       navInitiatedRef.current = true;
       router.replace(destination as any);
       setNavInitiated(true);
@@ -485,7 +482,6 @@ function RootLayoutNav() {
       if (navInitiatedRef.current) return;
       console.warn("[RootLayoutNav] safety-net fired — forcing navigation");
       const destination = needsProfileCompletion ? "/social-complete" : "/(tabs)";
-      Alert.alert('⚠️ Safety-net', `O safety-net de 3 s disparou!\n\nIsso significa que o useEffect de navegação normal não chamou router.replace a tempo.\n\nForçando navegação para:\n${destination}`);
       navInitiatedRef.current = true;
       router.replace(destination as any);
       setNavInitiated(true);
