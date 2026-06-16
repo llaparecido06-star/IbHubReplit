@@ -16,27 +16,12 @@ function getOS(): "ios" | "android" | "desktop" {
 
 export default function GrupoRedirect() {
   const { id } = useParams<{ id: string }>();
-  const [phase, setPhase] = useState<"opening" | "fallback">("opening");
+  const [phase] = useState<"opening" | "fallback">("opening");
 
   useEffect(() => {
     if (!id) return;
-    const os = getOS();
-
-    if (os === "desktop") {
-      window.location.replace(`/app/grupos/${id}`);
-      return;
-    }
-
-    const deepLink = `ibhub://group-chat/${id}`;
-    window.location.href = deepLink;
-
-    const timer = setTimeout(() => setPhase("fallback"), 2000);
-    const onVisibility = () => { if (document.hidden) clearTimeout(timer); };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
+    // Always open the web version — app not yet available in stores
+    window.location.replace(`/app/grupos/${id}`);
   }, [id]);
 
   const os = getOS();
