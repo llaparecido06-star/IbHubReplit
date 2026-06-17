@@ -856,7 +856,24 @@ router.get("/conversations", async (req: Request, res: Response): Promise<void> 
     };
   });
 
-  const sorted = results.sort(
+  // 6b. Deduplicate DMs: legacy data may have multiple conversation rows for the same
+  // user pair. Collapse them into a single thread — keep the most recently active one.
+  const dmByParticipant = new Map<string, (typeof results)[0]>();
+  const deduped: (typeof results) = [];
+  for (const r of results) {
+    if (r.is_group) {
+      deduped.push(r);
+      continue;
+    }
+    const key = (r.participant as any)?.id ?? `orphan:${r.id}`;
+    const existing = dmByParticipant.get(key);
+    if (!existing || new Date(r.last_message_at ?? 0) > new Date(existing.last_message_at ?? 0)) {
+      dmByParticipant.set(key, r);
+    }
+  }
+  deduped.push(...dmByParticipant.values());
+
+  const sorted = deduped.sort(
     (a, b) => new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime(),
   );
 

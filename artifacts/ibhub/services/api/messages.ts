@@ -310,6 +310,21 @@ export async function fetchConversations(userId: string, activeCompanyId?: strin
       }
     }
 
+    // ── Deduplicate DMs ────────────────────────────────────────────────────────
+    // Legacy data may have multiple conversation rows for the same user pair.
+    // Collapse them into a single thread — keep the most recently active one.
+    const dmByParticipant = new Map<string, AppConversation>();
+    const deduped: AppConversation[] = [];
+    for (const r of results) {
+      if (r.is_group) { deduped.push(r); continue; }
+      const key = r.participant?.id ?? `orphan:${r.id}`;
+      const existing = dmByParticipant.get(key);
+      if (!existing || new Date(r.last_message_at ?? 0) > new Date(existing.last_message_at ?? 0)) {
+        dmByParticipant.set(key, r);
+      }
+    }
+    deduped.push(...dmByParticipant.values());
+
     // ── Identity filter (personal vs company) ─────────────────────────────────
     // Conversations are tagged at creation with company_page_id (null = personal).
     // Group chats (is_group=true) always appear in both modes.
@@ -318,7 +333,7 @@ export async function fetchConversations(userId: string, activeCompanyId?: strin
     // PERSONAL MODE → show ALL conversations the user participates in.
     //   Filtering out company-tagged DMs in personal mode caused those conversations
     //   to silently disappear (legacy data had many DMs tagged with company_page_id).
-    const sorted = results.sort(
+    const sorted = deduped.sort(
       (a, b) => new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime(),
     );
     if (activeCompanyId) {
