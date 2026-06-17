@@ -1174,6 +1174,8 @@ export interface WebConversation {
   avatar_url?: string | null;
   last_message: string | null;
   last_message_at: string | null;
+  /** Name of the sender of the last message (groups only, for "SenderName: preview" display). */
+  last_message_sender_name?: string | null;
   unread_count: number;
   participant: { id: string; full_name: string; avatar_url?: string | null } | null;
   /**
@@ -3005,21 +3007,28 @@ export async function requestGroupJoinWeb(
 
 export async function joinGroup(
   groupId: string,
-  userId: string,
+  _userId: string,
   companyPageId?: string | null,
 ): Promise<boolean> {
   try {
-    const cpId = companyPageId ?? null;
-    const [{ error: gmErr }, { error: cpErr }] = await Promise.all([
-      supabase.from("group_members").insert({ group_id: groupId, user_id: userId, role: "member", company_page_id: cpId }),
-      supabase.from("conversation_participants").upsert(
-        { conversation_id: groupId, user_id: userId, company_page_id: cpId },
-        { onConflict: "conversation_id,user_id,company_page_id", ignoreDuplicates: true }
-      ),
-    ]);
-    if (cpErr) console.warn("joinGroup conversation_participants:", cpErr);
-    return !gmErr;
-  } catch {
+    const session = await getCachedSession();
+    if (!session?.access_token) return false;
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.origin}/api`;
+    const res = await fetch(`${apiBase}/community/groups/${groupId}/join`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ company_page_id: companyPageId ?? null }),
+    });
+    if (!res.ok) {
+      console.warn("joinGroup:", res.status, await res.text().catch(() => ""));
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn("joinGroup:", e);
     return false;
   }
 }

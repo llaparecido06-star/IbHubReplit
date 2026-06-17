@@ -544,19 +544,82 @@ router.get("/conversations", async (req: Request, res: Response): Promise<void> 
     req.log.error({ supabaseError: cpError.message }, "[conversations] fetch participants error");
   }
 
-  if (!cpRows || cpRows.length === 0) {
+  // 1b. Backfill: ensure conversation_participants rows exist for all group memberships.
+  // Users who joined groups before joinGroup was updated to use supabaseAdmin will have
+  // group_members rows but no conversation_participants rows — so their groups are invisible
+  // in the conversations list. This self-heals that data on every load.
+  const existingConvIdSet = new Set<string>(
+    (cpRows ?? []).map((r: any) => r.conversation_id as string),
+  );
+
+  const { data: groupMemberships } = await supabaseAdmin
+    .from("group_members")
+    .select("group_id")
+    .or(participantIds.map((id) => `user_id.eq.${id}`).join(","))
+    .neq("role", "pending");
+
+  const memberGroupIds = ((groupMemberships ?? []) as { group_id: string }[]).map((r) => r.group_id);
+  const missingGroupIds = memberGroupIds.filter((id) => !existingConvIdSet.has(id));
+
+  if (missingGroupIds.length > 0) {
+    // Ensure conversations rows exist for these groups (older groups may be missing them)
+    const { data: groupRows } = await supabaseAdmin
+      .from("groups")
+      .select("id, name, avatar_url")
+      .in("id", missingGroupIds);
+
+    const convUpserts = ((groupRows ?? []) as { id: string; name: string; avatar_url: string | null }[]).map((g) => ({
+      id: g.id,
+      is_group: true,
+      name: g.name,
+      avatar_url: g.avatar_url ?? null,
+    }));
+
+    if (convUpserts.length > 0) {
+      await supabaseAdmin
+        .from("conversations")
+        .upsert(convUpserts, { onConflict: "id", ignoreDuplicates: true });
+    }
+
+    // Upsert the missing participant rows so GET /conversations returns them
+    const cpUpserts = missingGroupIds.map((id) => ({
+      conversation_id: id,
+      user_id: effectiveProfileId,
+      company_page_id: null as string | null,
+    }));
+
+    const { error: backfillErr } = await supabaseAdmin
+      .from("conversation_participants")
+      .upsert(cpUpserts, { onConflict: "conversation_id,user_id,company_page_id", ignoreDuplicates: true });
+
+    if (backfillErr) {
+      req.log.warn({ supabaseError: backfillErr.message }, "[conversations] backfill participants warn");
+    }
+
+    missingGroupIds.forEach((id) => existingConvIdSet.add(id));
+  }
+
+  if (existingConvIdSet.size === 0) {
     res.json({ conversations: [] });
     return;
   }
 
-  const convIds = (cpRows as { conversation_id: string }[]).map((r) => r.conversation_id);
+  const convIds = [...existingConvIdSet];
 
-  // 2. Conversation metadata + owned companies (parallel)
-  const [convosRes, ownedCompaniesRes, allParticipantsRes] = await Promise.all([
+  // 2. Conversation metadata + owned companies (parallel).
+  // We also query `groups` directly for ALL of the user's group memberships as a
+  // reliable fallback — older groups may not have a corresponding `conversations` row.
+  const [convosRes, groupsDirectRes, ownedCompaniesRes, allParticipantsRes] = await Promise.all([
     supabaseAdmin
       .from("conversations")
       .select("id, is_group, name, avatar_url, created_at, company_page_id")
       .in("id", convIds),
+    memberGroupIds.length > 0
+      ? supabaseAdmin
+          .from("groups")
+          .select("id, name, avatar_url, created_at")
+          .in("id", memberGroupIds)
+      : Promise.resolve({ data: [] as any[], error: null }),
     supabaseAdmin
       .from("company_pages")
       .select("id")
@@ -567,7 +630,22 @@ router.get("/conversations", async (req: Request, res: Response): Promise<void> 
       .in("conversation_id", convIds),
   ]);
 
-  if (!convosRes.data || convosRes.data.length === 0) {
+  // Merge conversations-table rows with any groups not yet present there.
+  const convosDataFromTable = (convosRes.data ?? []) as any[];
+  const convosInTableSet = new Set<string>(convosDataFromTable.map((c: any) => c.id as string));
+  const supplementGroups = ((groupsDirectRes.data ?? []) as any[])
+    .filter((g: any) => !convosInTableSet.has(g.id as string))
+    .map((g: any) => ({
+      id:              g.id as string,
+      is_group:        true,
+      name:            (g.name as string | null) ?? null,
+      avatar_url:      (g.avatar_url as string | null) ?? null,
+      created_at:      g.created_at as string,
+      company_page_id: null as string | null,
+    }));
+  const allConvosData: any[] = [...convosDataFromTable, ...supplementGroups];
+
+  if (allConvosData.length === 0) {
     res.json({ conversations: [] });
     return;
   }
@@ -591,7 +669,7 @@ router.get("/conversations", async (req: Request, res: Response): Promise<void> 
   const otherUserIds = [...new Set(otherParticipantMap.values())];
   const companyPageIds = [
     ...new Set(
-      (convosRes.data as any[])
+      allConvosData
         .map((c: any) => c.company_page_id as string | null)
         .filter(Boolean) as string[],
     ),
@@ -618,10 +696,10 @@ router.get("/conversations", async (req: Request, res: Response): Promise<void> 
 
   // 5. Last message per conversation (fan-out in parallel)
   const lastMsgResults = await Promise.all(
-    (convosRes.data as any[]).map((convo: any) =>
+    allConvosData.map((convo: any) =>
       supabaseAdmin
         .from("messages")
-        .select("content, created_at, message_type")
+        .select("content, created_at, message_type, sender_id")
         .eq("conversation_id", convo.id as string)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -629,9 +707,30 @@ router.get("/conversations", async (req: Request, res: Response): Promise<void> 
     ),
   );
 
+  // 5b. Batch-fetch sender names for the last message of group conversations.
+  // Used by the MiniChatPanel "Grupos" tab to show "SenderName: preview".
+  const groupSenderIds = new Set<string>();
+  allConvosData.forEach((convo: any, i: number) => {
+    if (convo.is_group) {
+      const sid = (lastMsgResults[i].data as any)?.sender_id as string | undefined;
+      if (sid) groupSenderIds.add(sid);
+    }
+  });
+
+  const senderNameMap = new Map<string, string>();
+  if (groupSenderIds.size > 0) {
+    const { data: senderProfiles } = await supabaseAdmin
+      .from("profiles")
+      .select("id, full_name, username")
+      .in("id", [...groupSenderIds]);
+    for (const p of (senderProfiles ?? []) as { id: string; full_name: string | null; username: string | null }[]) {
+      senderNameMap.set(p.id, p.full_name ?? p.username ?? "Alguém");
+    }
+  }
+
   // 6. Build result array
-  const results = (convosRes.data as any[]).map((convo: any, i: number) => {
-    const lastMsg = lastMsgResults[i].data as { content: string; created_at: string; message_type: string | null } | null;
+  const results = allConvosData.map((convo: any, i: number) => {
+    const lastMsg = lastMsgResults[i].data as { content: string; created_at: string; message_type: string | null; sender_id: string | null } | null;
     const lastContent =
       lastMsg?.message_type === "image" ? "📷 Foto"
       : lastMsg?.message_type === "video" ? "🎬 Vídeo"
@@ -644,16 +743,21 @@ router.get("/conversations", async (req: Request, res: Response): Promise<void> 
     const cpId = (convo.company_page_id as string | null) ?? null;
     const company_page = cpId ? (companyPageMap.get(cpId) ?? null) : null;
 
+    const lastMsgSenderId = lastMsg?.sender_id ?? null;
+    const last_message_sender_name =
+      convo.is_group && lastMsgSenderId ? (senderNameMap.get(lastMsgSenderId) ?? null) : null;
+
     return {
-      id:               convo.id as string,
-      is_group:         convo.is_group as boolean,
-      name:             (convo.name as string | null) ?? null,
-      avatar_url:       (convo.avatar_url as string | null) ?? null,
-      last_message:     lastContent,
-      last_message_at:  lastMsg?.created_at ?? (convo.created_at as string),
-      unread_count:     0,
+      id:                       convo.id as string,
+      is_group:                 convo.is_group as boolean,
+      name:                     (convo.name as string | null) ?? null,
+      avatar_url:               (convo.avatar_url as string | null) ?? null,
+      last_message:             lastContent,
+      last_message_at:          lastMsg?.created_at ?? (convo.created_at as string),
+      last_message_sender_name,
+      unread_count:             0,
       participant,
-      company_page_id:  cpId,
+      company_page_id:          cpId,
       company_page,
     };
   });

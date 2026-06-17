@@ -557,6 +557,75 @@ router.post("/community/groups/:id/request-join", async (req: Request, res: Resp
 });
 
 /**
+ * POST /community/groups/:id/join
+ *
+ * Directly joins an open ("aberto") group. Uses supabaseAdmin to insert both
+ * group_members and conversation_participants, bypassing the RLS policy on
+ * conversation_participants that prevents client-side inserts (the same issue
+ * that caused GET /conversations to be moved to the API server).
+ *
+ * Body: { company_page_id?: string | null }
+ * Returns: { ok: true } or { status: "already_member" }
+ */
+router.post("/community/groups/:id/join", async (req: Request, res: Response): Promise<void> => {
+  const userId = await resolveUserId(req, res);
+  if (!userId) return;
+
+  const groupId = req.params.id as string;
+  const { company_page_id: cpId = null } = req.body as { company_page_id?: string | null };
+
+  const { data: group, error: groupErr } = await supabaseAdmin
+    .from("groups")
+    .select("id, access, name")
+    .eq("id", groupId)
+    .maybeSingle();
+
+  if (groupErr || !group) {
+    res.status(404).json({ error: "Group not found" });
+    return;
+  }
+
+  if (group.access !== "aberto") {
+    res.status(400).json({ error: "Direct join only applies to aberto groups. Use request-join for fechado groups." });
+    return;
+  }
+
+  const { data: existing } = await supabaseAdmin
+    .from("group_members")
+    .select("role")
+    .eq("group_id", groupId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existing && existing.role !== "pending") {
+    res.status(200).json({ status: "already_member" });
+    return;
+  }
+
+  const [{ error: gmErr }, { error: cpErr }] = await Promise.all([
+    supabaseAdmin.from("group_members").upsert(
+      { group_id: groupId, user_id: userId, role: "member", company_page_id: cpId },
+      { onConflict: "group_id,user_id,company_page_id" },
+    ),
+    supabaseAdmin.from("conversation_participants").upsert(
+      { conversation_id: groupId, user_id: userId, company_page_id: cpId },
+      { onConflict: "conversation_id,user_id,company_page_id", ignoreDuplicates: true },
+    ),
+  ]);
+
+  if (gmErr) {
+    req.log.error({ supabaseError: gmErr.message }, "join group — group_members insert");
+    res.status(500).json({ error: gmErr.message });
+    return;
+  }
+  if (cpErr) {
+    req.log.warn({ supabaseError: cpErr.message }, "join group — conversation_participants insert");
+  }
+
+  res.status(200).json({ ok: true });
+});
+
+/**
  * POST /community/groups/:id/notify-request
  * Sends a "join request" notification to the group owner using the service role key
  * (bypasses the v50 RLS policy that blocks direct client-side notification inserts).

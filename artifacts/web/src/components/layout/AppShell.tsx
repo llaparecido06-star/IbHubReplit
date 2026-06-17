@@ -27,7 +27,9 @@ import {
   Poll,
   sendMentionNotifications,
   fetchWebConversations,
+  WebConversation,
 } from "@/services/api";
+import { MiniChatPanel } from "@/components/chat/MiniChatPanel";
 import { MentionTextArea } from "@/components/MentionTextArea";
 
 const GOLD   = "#c9a84c";
@@ -694,7 +696,8 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
   const [stats, setStats]           = useState({ connections: 0, followers: 0, following: 0 });
   const [companyPages, setCompanyPages] = useState<WebCompanyPage[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const isMobile = useWindowWidth() < 768;
+  const windowWidth = useWindowWidth();
+  const isMobile = windowWidth < 768;
   const [userMenuOpen, setUserMenuOpen]   = useState(false);
   const [search, setSearch] = useState("");
   const [peopleModal, setPeopleModal] = useState<{ title: string; list: ProfilePerson[] } | null>(null);
@@ -720,6 +723,13 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
   // In-app toast for incoming messages when user is not on a chat screen
   const [chatToast, setChatToast] = useState<{ senderName: string; senderAvatar: string | null; preview: string; convId: string } | null>(null);
   const chatToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Mini chat panel (desktop right column)
+  const [miniChatConvs, setMiniChatConvs] = useState<WebConversation[]>([]);
+  const [miniChatPulseId, setMiniChatPulseId] = useState<string | null>(null);
+  const miniChatPulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Ref so the Realtime handler (closed over userId only) can call the latest load function
+  const loadMiniChatRef = useRef<(() => Promise<void>) | null>(null);
 
   const loadNotifs = useCallback(async () => {
     if (!userId) return;
@@ -764,6 +774,22 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
     });
   }, [userId, activeCompany?.id, location]);
 
+  // Mini chat panel: load conversations (up to 8) and keep ref fresh for Realtime handler
+  const loadMiniChatConvs = useCallback(async () => {
+    if (!userId) return;
+    const convos = await fetchWebConversations(userId, activeCompany?.id ?? null);
+    setMiniChatConvs(convos.slice(0, 8));
+  }, [userId, activeCompany?.id]);
+
+  useEffect(() => {
+    loadMiniChatRef.current = loadMiniChatConvs;
+  }, [loadMiniChatConvs]);
+
+  useEffect(() => {
+    if (!userId || location.startsWith("/app/mensagens")) return;
+    loadMiniChatConvs();
+  }, [userId, activeCompany?.id, location, loadMiniChatConvs]);
+
   // Realtime: increment badge immediately when a new message arrives from someone else
   useEffect(() => {
     if (!userId) return;
@@ -779,6 +805,15 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
           const isSelf = senderSelfIds.current.has(msg.sender_id ?? "");
           const inMyConv = chatConvIdsRef.current.has(msg.conversation_id ?? "");
           if (!isSelf && inMyConv) {
+            const convId = (msg as any).conversation_id as string | undefined;
+            // Refresh mini chat panel and pulse the incoming conversation badge
+            void loadMiniChatRef.current?.().then(() => {
+              if (convId) {
+                setMiniChatPulseId(convId);
+                if (miniChatPulseTimerRef.current) clearTimeout(miniChatPulseTimerRef.current);
+                miniChatPulseTimerRef.current = setTimeout(() => setMiniChatPulseId(null), 1200);
+              }
+            });
             // Only badge + toast if the user isn't actively looking at chat right now
             const onChat = window.location.pathname.includes("/app/mensagens") ||
                            window.location.pathname.includes("/app/grupos");
@@ -786,7 +821,6 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
               setChatUnreadTotal(prev => prev + 1);
               // Show in-app toast notification with sender info
               const senderId = (msg as any).sender_id as string | undefined;
-              const convId   = (msg as any).conversation_id as string | undefined;
               const rawContent = (msg as any).content as string | undefined ?? "";
               void (async () => {
                 const { data: sp } = await supabase
@@ -1498,6 +1532,17 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
         {/* ── Main ─────────────────────────── */}
         <main style={{ flex: 1, minWidth: 0, padding: isMobile ? "0 0 70px" : undefined }}>{children}</main>
       </div>
+
+      {/* ── Mini Chat Floating Widget (LinkedIn-style, desktop only, hidden on /app/mensagens) ── */}
+      {!isMobile && !location.startsWith("/app/mensagens") && (
+        <MiniChatPanel
+          convs={miniChatConvs}
+          pulseConvId={miniChatPulseId}
+          totalUnread={chatUnreadTotal}
+          onConversationClick={id => setLocation(`/app/mensagens?conv=${id}`)}
+          onViewAll={() => setLocation("/app/mensagens")}
+        />
+      )}
 
       {/* ── Mobile Bottom Tab Bar ─────────── */}
       {isMobile && (
