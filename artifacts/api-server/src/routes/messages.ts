@@ -748,13 +748,19 @@ router.get("/conversations", async (req: Request, res: Response): Promise<void> 
     ((ownedCompaniesRes.data ?? []) as { id: string }[]).map((c) => c.id),
   );
 
-  // 3. Build other-participant map (conversation_id → other user_id)
+  // 3. Build other-participant map (DMs only: conversation_id → other user_id)
+  // and member count map (groups: conversation_id → total participant count).
   // Exclude both callerId (auth.uid) and effectiveProfileId (profile.id) so legacy
   // users don't see themselves listed as the "other" participant in their own DMs.
   const callerIdSet = new Set(participantIds);
   const otherParticipantMap = new Map<string, string>();
+  const memberCountMap = new Map<string, number>();
+  const convIsGroup = new Map<string, boolean>(allConvosData.map((c: any) => [c.id as string, c.is_group as boolean]));
   for (const row of (allParticipantsRes.data ?? []) as { conversation_id: string; user_id: string }[]) {
-    if (!callerIdSet.has(row.user_id)) {
+    // Count all participants for groups
+    memberCountMap.set(row.conversation_id, (memberCountMap.get(row.conversation_id) ?? 0) + 1);
+    // Only build the "other" participant for non-group DMs
+    if (!callerIdSet.has(row.user_id) && !convIsGroup.get(row.conversation_id)) {
       otherParticipantMap.set(row.conversation_id, row.user_id);
     }
   }
@@ -849,6 +855,7 @@ router.get("/conversations", async (req: Request, res: Response): Promise<void> 
       last_message:             lastContent,
       last_message_at:          lastMsg?.created_at ?? (convo.created_at as string),
       last_message_sender_name,
+      member_count:             convo.is_group ? (memberCountMap.get(convo.id as string) ?? null) : null,
       unread_count:             0,
       participant,
       company_page_id:          cpId,

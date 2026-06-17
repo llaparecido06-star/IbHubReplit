@@ -110,7 +110,7 @@ function GroupCard({ group, userId, onJoin, onRequest, onLeave }: {
                 </span>
               )}
               <button
-                onClick={() => setLocation(`/app/grupos/${group.id}`)}
+                onClick={() => setLocation(`/app/mensagens?conv=${group.id}`)}
                 style={{ fontSize: 12, fontWeight: 700, padding: "5px 12px", borderRadius: 8, border: "none", backgroundColor: NAVY, color: "#fff", cursor: "pointer" }}
               >
                 💬 Chat

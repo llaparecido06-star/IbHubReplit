@@ -1176,6 +1176,8 @@ export interface WebConversation {
   last_message_at: string | null;
   /** Name of the sender of the last message (groups only, for "SenderName: preview" display). */
   last_message_sender_name?: string | null;
+  /** Number of participants in a group conversation (null for DMs). */
+  member_count?: number | null;
   unread_count: number;
   participant: { id: string; full_name: string; avatar_url?: string | null } | null;
   /**

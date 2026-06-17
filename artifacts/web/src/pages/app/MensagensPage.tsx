@@ -1025,7 +1025,7 @@ export default function MensagensPage() {
                 style={{ flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
               >
                 <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{getConvoName(selected)}</div>
-                <div style={{ fontSize: 12, color: MUTED }}>{selected.participant ? "Profissional do vinho" : selected.is_group ? "Grupo" : ""}</div>
+                <div style={{ fontSize: 12, color: MUTED }}>{selected.participant ? "Profissional do vinho" : selected.is_group ? (selected.member_count ? `${selected.member_count} membros` : "Grupo") : ""}</div>
               </button>
               {/* 3-dot options menu */}
               <div ref={convMenuRef} style={{ position: "relative", flexShrink: 0 }}>
@@ -1435,8 +1435,8 @@ export default function MensagensPage() {
                     style={{ flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
                   >
                     <div style={{ fontSize: 14, fontWeight: 800, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{getConvoName(selected)}</div>
-                    {selected.participant && <div style={{ fontSize: 12, color: MUTED }}>Profissional do vinho</div>}
-                    {selected.is_group && <div style={{ fontSize: 11, color: MUTED }}>Grupo</div>}
+                    {selected.participant && !selected.is_group && <div style={{ fontSize: 12, color: MUTED }}>Profissional do vinho</div>}
+                    {selected.is_group && <div style={{ fontSize: 11, color: MUTED }}>{selected.member_count ? `${selected.member_count} membros` : "Grupo"}</div>}
                   </button>
                   {/* 3-dot options menu */}
                   <div ref={convMenuRef} style={{ position: "relative", flexShrink: 0 }}>
