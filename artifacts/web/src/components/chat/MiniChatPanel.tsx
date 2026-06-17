@@ -119,6 +119,7 @@ export function MiniChatPanel({
         .minichat-badge-pulse { animation: minichat-pulse 0.6s ease; }
         .minichat-row         { transition: background 0.12s; }
         .minichat-row:hover   { background: #f5f4f0 !important; }
+        .minichat-header:hover { background: #f9f6ee !important; }
       `}</style>
 
       {/*
@@ -142,23 +143,26 @@ export function MiniChatPanel({
         {/* ── Header (always visible; acts as title when panel is open) ── */}
         <div
           onClick={() => setOpen(o => !o)}
+          className="minichat-header"
           style={{
-            backgroundColor: NAVY,
-            color: WHITE,
+            backgroundColor: WHITE,
+            color: NAVY,
             padding: "10px 14px",
             display: "flex", alignItems: "center", justifyContent: "space-between",
             cursor: "pointer",
             userSelect: "none",
+            borderBottom: open ? `2px solid ${GOLD}` : `2px solid ${GOLD}40`,
+            transition: "border-color 0.2s, background 0.15s",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <MsgIcon />
+            <span style={{ color: GOLD, display: "flex", alignItems: "center" }}><MsgIcon /></span>
             <span style={{ fontSize: 13, fontWeight: 700 }}>Mensagens</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {totalUnread > 0 && (
               <span style={{
-                backgroundColor: RED, color: WHITE,
+                backgroundColor: GOLD, color: NAVY,
                 borderRadius: 10, minWidth: 18, height: 18,
                 fontSize: 10, fontWeight: 800,
                 display: "flex", alignItems: "center", justifyContent: "center",
@@ -167,7 +171,9 @@ export function MiniChatPanel({
                 {totalUnread > 9 ? "9+" : totalUnread}
               </span>
             )}
-            <ChevronIcon open={open} />
+            <span style={{ color: MUTED, display: "flex", alignItems: "center" }}>
+              <ChevronIcon open={open} />
+            </span>
           </div>
         </div>
 
