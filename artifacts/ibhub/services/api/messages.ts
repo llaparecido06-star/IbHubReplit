@@ -315,19 +315,16 @@ export async function fetchConversations(userId: string, activeCompanyId?: strin
     // Group chats (is_group=true) always appear in both modes.
     //
     // COMPANY MODE  → only show conversations owned by the active company page.
-    // PERSONAL MODE → show personal conversations (company_page_id IS NULL) PLUS
-    //   any company conversations where this user is the non-owner participant
-    //   (e.g. a regular user who messaged a company page from their profile).
-    //   Conversations belonging to companies that the user OWNS are excluded so
-    //   they appear cleanly in company mode instead.
+    // PERSONAL MODE → show ALL conversations the user participates in.
+    //   Filtering out company-tagged DMs in personal mode caused those conversations
+    //   to silently disappear (legacy data had many DMs tagged with company_page_id).
     const sorted = results.sort(
       (a, b) => new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime(),
     );
     if (activeCompanyId) {
       return sorted.filter(r => r.is_group || r.company_page_id === activeCompanyId);
     }
-    // Personal mode: exclude conversations that belong to a company this user owns
-    return sorted.filter(r => r.is_group || !r.company_page_id || !ownedCompanyIds.has(r.company_page_id));
+    return sorted;
   } catch (e) {
     console.error("fetchConversations:", e);
     return [];

@@ -662,6 +662,83 @@ router.get("/conversations", async (req: Request, res: Response): Promise<void> 
     }));
   const allConvosData: any[] = [...convosDataFromTable, ...supplementGroups];
 
+  // Catch-all: any convId not yet covered — either a group whose conversation row
+  // was never created, or a DM that was inserted directly into conversation_participants
+  // (e.g. by the mobile app) without a corresponding conversations row.
+  const coveredIds = new Set<string>(allConvosData.map((c: any) => c.id as string));
+  const uncoveredIds = convIds.filter((id) => !coveredIds.has(id));
+
+  if (uncoveredIds.length > 0) {
+    // Try the groups table first — uncovered IDs may be group IDs
+    const { data: fallbackGroups } = await supabaseAdmin
+      .from("groups")
+      .select("id, name, avatar_url, created_at")
+      .in("id", uncoveredIds);
+
+    const foundGroupIds = new Set<string>();
+    for (const g of (fallbackGroups ?? []) as any[]) {
+      foundGroupIds.add(g.id as string);
+      allConvosData.push({
+        id:              g.id as string,
+        is_group:        true,
+        name:            (g.name as string | null) ?? null,
+        avatar_url:      (g.avatar_url as string | null) ?? null,
+        created_at:      g.created_at as string,
+        company_page_id: null as string | null,
+      });
+    }
+
+    // Remaining IDs are DMs whose conversations row doesn't exist yet.
+    // Backfill conversations rows immediately (fire-and-forget) so future
+    // calls will find them via the normal convosDataFromTable path.
+    const orphanDmIds = uncoveredIds.filter((id) => !foundGroupIds.has(id));
+    if (orphanDmIds.length > 0) {
+      supabaseAdmin
+        .from("conversations")
+        .upsert(
+          orphanDmIds.map((id) => ({ id, is_group: false })),
+          { onConflict: "id", ignoreDuplicates: true },
+        )
+        .then(({ error }) => {
+          if (error) req.log.warn({ supabaseError: error.message }, "[conversations] orphan-DM backfill warn");
+        });
+    }
+    // Build minimal entries — participant + last-message data is fetched later
+    // from allParticipantsRes / lastMsgResults so these will render correctly.
+    for (const id of orphanDmIds) {
+      allConvosData.push({
+        id,
+        is_group:        false,
+        name:            null,
+        avatar_url:      null,
+        created_at:      new Date(0).toISOString(),
+        company_page_id: null as string | null,
+      });
+    }
+
+    req.log.info(
+      {
+        uncovered: uncoveredIds.length,
+        recoveredAsGroups: foundGroupIds.size,
+        recoveredAsDMs: orphanDmIds.length,
+      },
+      "[conversations] catch-all",
+    );
+  }
+
+  req.log.info(
+    {
+      convIds_total: convIds.length,
+      convosDataFromTable: convosDataFromTable.length,
+      supplementGroups: supplementGroups.length,
+      catchAll: uncoveredIds.length,
+      allConvosData: allConvosData.length,
+      memberGroupIds: memberGroupIds.length,
+      missingGroupIds: missingGroupIds.length,
+    },
+    "[conversations] data-build",
+  );
+
   if (allConvosData.length === 0) {
     res.json({ conversations: [] });
     return;
