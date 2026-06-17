@@ -57,11 +57,34 @@ The register guard called `setNavInitiated(true)` without calling `router.replac
 
 ---
 
-## Startup timeouts (all reduced)
-- `fetchProfile` timeout: 5s → 3s
-- `AuthInit` timeout: 5s → 3s
-- `FeatureFlagsContext` no-cache timeout: 5s → 2s
-- `RootLayoutNav` safety-net: 3s (unchanged)
+## Layer 7 — navInitiated NOT reset on session clear (re-login blank screen)
+
+**Root cause:** On logout, `navInitiated` (React state) was never reset to `false`. On the subsequent re-login, the render immediately returned `<AuthenticatedLayout />` (because `!navInitiated = false`) before the navigation IIFE called `router.replace("/(tabs)")`. The `Stack` inside `AuthenticatedLayout` had no active route → blank screen flash or brief navy screen on every re-login.
+
+**Fix:** Added `setNavInitiated(false)` and `navInitiatedRef.current = false` to the `session=null` cleanup effect alongside the existing `safetyNetArmed.current = false` reset. `safetyNetArmed` was already correctly reset, so re-arming the 2s safety-net on re-login also works correctly.
+
+---
+
+## Layer 8 — PushNotificationHandler.handleLastResponse without timeout
+
+**Root cause:** `handleLastResponse` inside `PushNotificationHandler` called `getLastNotificationResponseAsync()` again (after `coldStartDeepLinkPromise` already consumed it with a 1.5s timeout). Without a timeout, on Android without Google Play Services this async call could hang indefinitely and become an orphan — navigating unexpectedly when it finally resolves, possibly after logout/re-login.
+
+**Fix:** Added `Promise.race` with a 1.5s timeout, matching the pattern used in `coldStartDeepLinkPromise`.
+
+---
+
+## Debug alerts — the paradox (commit 8905026)
+Debug `Alert.alert` calls added to `login.tsx` to diagnose the freeze were placed EXACTLY where the freeze happened. On Android, `Alert.alert` is synchronous/blocking on the JS thread. This blocked `onAuthStateChange(SIGNED_IN)` from completing its work. The alerts were simultaneously diagnosing AND causing the freeze. Removed in subsequent session.
+
+---
+
+## Startup timeouts (current values)
+- `fetchProfile` timeout: 2s
+- `AuthInit` timeout: 3s  
+- `FeatureFlagsContext` no-cache timeout: 2s
+- `coldStartDeepLinkPromise` timeout: 1.5s
+- `PushNotificationHandler.handleLastResponse` timeout: 1.5s
+- `RootLayoutNav` safety-net: 2s
 
 ---
 
@@ -73,4 +96,5 @@ The register guard called `setNavInitiated(true)` without calling `router.replac
   - Check `if (!navIifePendingRef.current) setNavInitiated(true)` in the `!shouldRedirect` branch.
 - **`flagsLoading`**: Must NOT be in nav effect deps or early return. Only `manutencao` (derived) covers the flags re-check.
 - **Register guard**: Only sets `lastDestination.current`. No `setNavInitiated(true)`.
-- **`navInitiated`**: Must stay in nav effect deps.
+- **`navInitiated`**: Must stay in nav effect deps. Must be reset to `false` when `session` clears.
+- **Any `getLastNotificationResponseAsync()` call**: Always race against 1.5s timeout.

@@ -139,7 +139,15 @@ function PushNotificationHandler() {
     const handleLastResponse = async () => {
       if (coldStartLinkConsumed) return;
       try {
-        const response = await SafeNotifications.getLastNotificationResponseAsync();
+        // Race against a 1.5 s timeout — getLastNotificationResponseAsync() can
+        // hang indefinitely on Android when Google Play Services is unavailable
+        // or push permissions have not been granted. Without the timeout, this
+        // async call becomes an orphan that could deep-link navigate unexpectedly
+        // whenever it finally resolves (potentially after logout/re-login).
+        const response = await Promise.race([
+          SafeNotifications.getLastNotificationResponseAsync(),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 1_500)),
+        ]);
         if (response) {
           const data = response.notification.request.content.data ?? {};
           const deepLink = (data as { deepLink?: string }).deepLink;
@@ -304,12 +312,16 @@ function RootLayoutNav() {
   // forever if the main IIFE is also blocked (e.g. coldStartDeepLinkPromise stall).
   const safetyNetArmed = useRef(false);
 
-  // Reset the armed flag whenever the user logs out so a subsequent login
-  // can re-arm the safety net if needed.
+  // Reset nav and safety-net flags whenever the user logs out so a subsequent
+  // login starts fresh. Without resetting navInitiated, re-login renders
+  // AuthenticatedLayout immediately (navInitiated=true from previous session)
+  // before router.replace has been called → empty Stack → blank screen flash.
   useEffect(() => {
     if (!session) {
       safetyNetArmed.current = false;
-      console.log("[RootLayoutNav] session cleared — safety-net flag reset");
+      navInitiatedRef.current = false;
+      setNavInitiated(false);
+      console.log("[RootLayoutNav] session cleared — nav and safety-net flags reset");
     }
   }, [session]);
 
@@ -472,7 +484,7 @@ function RootLayoutNav() {
   ]);
 
   // Safety-net: if the navigation effect somehow never fires (e.g. the main IIFE
-  // is blocked), unblock after 3 s.
+  // is blocked), unblock after 2 s.
   //
   // CRITICAL: do NOT cancel the timer on re-runs caused by TOKEN_REFRESHED.
   // On Android, TOKEN_REFRESHED fires repeatedly and changes `session`, which
