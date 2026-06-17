@@ -21,7 +21,7 @@ export default function GrupoRedirect() {
   useEffect(() => {
     if (!id) return;
     // Always open the web version — app not yet available in stores
-    window.location.replace(`/app/grupos/${id}`);
+    window.location.replace(`/app/mensagens?conv=${id}`);
   }, [id]);
 
   const os = getOS();
@@ -119,7 +119,7 @@ export default function GrupoRedirect() {
       </a>
 
       <a
-        href={`/app/grupos/${id}`}
+        href={`/app/mensagens?conv=${id}`}
         style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", textDecoration: "underline" }}
       >
         Continuar na versão web
