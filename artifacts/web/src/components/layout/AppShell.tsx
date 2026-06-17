@@ -793,6 +793,13 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
     loadMiniChatConvs();
   }, [userId, activeCompany?.id, location, loadMiniChatConvs]);
 
+  // Refresh mini panel when the user sends a message (own messages don't trigger Realtime)
+  useEffect(() => {
+    const handler = () => { void loadMiniChatConvs(); };
+    window.addEventListener("chat-message-sent", handler);
+    return () => window.removeEventListener("chat-message-sent", handler);
+  }, [loadMiniChatConvs]);
+
   // Realtime: increment badge immediately when a new message arrives from someone else
   useEffect(() => {
     if (!userId) return;

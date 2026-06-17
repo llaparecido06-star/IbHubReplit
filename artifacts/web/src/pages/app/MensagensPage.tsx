@@ -280,6 +280,10 @@ export default function MensagensPage() {
       company_page_id: activeCompany?.id ?? null,
       company_page: null,
     };
+    // Add to sidebar immediately so it's visible before the background refresh returns.
+    setConversations(prev =>
+      prev.some(c => c.id === convId) ? prev : [immediateConvo, ...prev]
+    );
     loadMessages(immediateConvo);
 
     // Refresh the list in the background so the sidebar stays up-to-date.
@@ -672,6 +676,13 @@ export default function MensagensPage() {
         mediaUrl: isAttach ? attachMediaUrl : undefined,
       });
       if (ok) {
+        const now = new Date().toISOString();
+        const preview = isAttach
+          ? (attachMsgType === "image" ? "📷 Foto"
+            : attachMsgType === "video" ? "🎬 Vídeo"
+            : attachMsgType === "audio" ? "🎤 Áudio"
+            : "📎 Arquivo")
+          : content;
         setMessages(prev => [...prev, {
           id: `tmp-${Date.now()}`,
           conversation_id: selected.id,
@@ -679,10 +690,18 @@ export default function MensagensPage() {
           content,
           message_type: isAttach ? (attachMsgType ?? null) : null,
           media_url: isAttach ? (attachMediaUrl ?? null) : null,
-          created_at: new Date().toISOString(),
+          created_at: now,
           sender: { id: userId, full_name: profile?.full_name ?? "Eu", avatar_url: profile?.avatar_url },
         }]);
         setNewMsg("");
+        // Move conversation to top of sidebar with updated preview
+        setConversations(prev => {
+          const base = prev.find(c => c.id === selected.id) ?? selected;
+          const updated: WebConversation = { ...base, last_message: preview, last_message_at: now };
+          return [updated, ...prev.filter(c => c.id !== selected.id)];
+        });
+        // Tell AppShell to refresh the mini chat panel
+        window.dispatchEvent(new CustomEvent("chat-message-sent"));
       }
     }
     setSending(false);
