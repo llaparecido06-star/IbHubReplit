@@ -200,6 +200,22 @@ function GroupCard({ g }: { g: GroupResult }) {
   );
 }
 
+function SuggestionHeader({ label, icon, href }: { label: string; icon: string; href?: string }) {
+  const [, setLocation] = useLocation();
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px 6px", borderBottom: `1px solid ${BORDER}`, background: BG }}>
+      <span style={{ fontSize: 12, fontWeight: 700, color: NAVY, letterSpacing: "0.03em", display: "flex", alignItems: "center", gap: 6 }}>
+        <span>{icon}</span>{label}
+      </span>
+      {href && (
+        <button onClick={() => setLocation(href)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, color: GOLD, fontWeight: 700, fontFamily: "inherit", padding: 0 }}>
+          Ver mais →
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function BuscaPage() {
   const { user, loading: authLoading } = useAuth();
   const myId = user?.id ?? "";
@@ -210,6 +226,7 @@ export default function BuscaPage() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [results, setResults] = useState<SearchResults>(EMPTY);
+  const [suggestions, setSuggestions] = useState<{ pessoas: PersonResult[]; empresas: CompanyResult[]; publicacoes: PostResult[] }>({ pessoas: [], empresas: [], publicacoes: [] });
   const inputRef = useRef<HTMLInputElement>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didAutoSearch = useRef(false);
@@ -326,6 +343,46 @@ export default function BuscaPage() {
     }
   }, [initialQuery, myId, runSearch]);
 
+  useEffect(() => {
+    if (!myId) return;
+    (async () => {
+      const [pRes, eRes, postRes] = await Promise.all([
+        supabase.from("profiles").select("id, full_name, username, avatar_url, headline, plan")
+          .eq("profile_type", "pessoa").neq("id", myId).order("created_at", { ascending: false }).limit(4),
+        supabase.from("company_pages").select("id, name, avatar_url, industry")
+          .order("created_at", { ascending: false }).limit(4),
+        supabase.from("posts").select("id, content, created_at, likes_count, comments_count, user_id, company_page_id")
+          .is("parent_id", null).order("created_at", { ascending: false }).limit(4),
+      ]);
+
+      const posts = (postRes.data ?? []) as any[];
+      const userIds = [...new Set(posts.filter((p: any) => !p.company_page_id).map((p: any) => p.user_id).filter(Boolean))] as string[];
+      const companyIds = [...new Set(posts.filter((p: any) => p.company_page_id).map((p: any) => p.company_page_id).filter(Boolean))] as string[];
+
+      const [{ data: profData }, { data: compData }] = await Promise.all([
+        userIds.length ? supabase.from("profiles").select("id, full_name, avatar_url").in("id", userIds) : Promise.resolve({ data: [] }),
+        companyIds.length ? supabase.from("company_pages").select("id, name, avatar_url").in("id", companyIds) : Promise.resolve({ data: [] }),
+      ]);
+
+      const pMap = new Map((profData ?? []).map((p: any) => [p.id, p]));
+      const cMap = new Map((compData ?? []).map((c: any) => [c.id, c]));
+
+      const postsWithAuthors: PostResult[] = posts.map((p: any) => {
+        if (p.company_page_id && cMap.has(p.company_page_id)) {
+          const c = cMap.get(p.company_page_id);
+          return { ...p, author: { id: c.id, full_name: c.name, avatar_url: c.avatar_url, isCompany: true } };
+        }
+        return { ...p, author: p.user_id ? (pMap.get(p.user_id) ?? null) : null };
+      });
+
+      setSuggestions({
+        pessoas:     (pRes.data ?? []) as PersonResult[],
+        empresas:    (eRes.data ?? []) as CompanyResult[],
+        publicacoes: postsWithAuthors,
+      });
+    })();
+  }, [myId]);
+
   const handleChange = (q: string) => {
     setQuery(q);
     if (debounce.current) clearTimeout(debounce.current);
@@ -412,10 +469,36 @@ export default function BuscaPage() {
           {loading ? (
             <div style={{ textAlign: "center", padding: 80, color: MUTED }}>⏳ Buscando…</div>
           ) : !searched ? (
-            <div style={{ textAlign: "center", padding: 80 }}>
-              <div style={{ fontSize: 52, marginBottom: 16 }}>🍷</div>
-              <p style={{ fontSize: 16, fontWeight: 700, color: NAVY, margin: "0 0 8px" }}>Busca Global ibhub</p>
-              <p style={{ fontSize: 13, color: MUTED, margin: 0 }}>Pesquise pessoas, empresas, publicações, vagas, eventos e grupos da rede do vinho</p>
+            <div>
+              {/* Pessoas para conectar */}
+              {suggestions.pessoas.length > 0 && (
+                <>
+                  <SuggestionHeader icon="👤" label="Pessoas para conectar" href="/app/busca" />
+                  {suggestions.pessoas.map(p => <PersonCard key={p.id} p={p} currentUserId={myId} />)}
+                </>
+              )}
+              {/* Empresas para seguir */}
+              {suggestions.empresas.length > 0 && (
+                <>
+                  <SuggestionHeader icon="🏢" label="Empresas para seguir" href="/app/busca" />
+                  {suggestions.empresas.map(c => <EmpresaCard key={c.id} c={c} />)}
+                </>
+              )}
+              {/* Publicações recentes */}
+              {suggestions.publicacoes.length > 0 && (
+                <>
+                  <SuggestionHeader icon="📝" label="Publicações recentes" href="/app/feed" />
+                  {suggestions.publicacoes.map(p => <PostCard key={p.id} p={p} />)}
+                </>
+              )}
+              {/* Fallback se ainda não carregou */}
+              {suggestions.pessoas.length === 0 && suggestions.empresas.length === 0 && suggestions.publicacoes.length === 0 && (
+                <div style={{ textAlign: "center", padding: 80 }}>
+                  <div style={{ fontSize: 52, marginBottom: 16 }}>🍷</div>
+                  <p style={{ fontSize: 16, fontWeight: 700, color: NAVY, margin: "0 0 8px" }}>Busca Global ibhub</p>
+                  <p style={{ fontSize: 13, color: MUTED, margin: 0 }}>Pesquise pessoas, empresas, publicações, vagas, eventos e grupos da rede do vinho</p>
+                </div>
+              )}
             </div>
           ) : !hasResults ? (
             <div style={{ textAlign: "center", padding: 80 }}>
