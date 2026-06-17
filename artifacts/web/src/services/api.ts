@@ -1488,11 +1488,19 @@ export async function deleteGroupMessage(groupId: string, messageId: string): Pr
   }
 }
 
-export async function deleteWebConversation(convId: string, userId: string): Promise<boolean> {
+export async function deleteWebConversation(convId: string, _userId: string): Promise<boolean> {
   try {
-    const url = new URL(`/api/conversations/${convId}`, window.location.origin);
-    url.searchParams.set("userId", userId);
-    const res = await fetch(url.toString(), { method: "DELETE" });
+    const session = await getCachedSession();
+    const token = session?.access_token;
+    if (!token) return false;
+
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)
+      ?? `${window.location.origin.replace(/:\d+$/, "")}/api`;
+
+    const res = await fetch(`${apiBase}/conversations/${convId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
     return res.ok;
   } catch (e) {
     console.warn("deleteWebConversation:", e);

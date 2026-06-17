@@ -10,7 +10,6 @@ import {
   fetchWebConversations,
   fetchWebMessages,
   sendWebMessage,
-  sendWebAudioMessage,
   uploadChatAttachment,
   getOrCreateWebConversation,
   deleteWebMessage,
@@ -22,7 +21,6 @@ import {
   WebMessage,
 } from "@/services/api";
 import { validateChatFile, formatFileSize, MAX_CHAT_FILE_SIZE } from "@/constants/chatUploads";
-import { AudioRecorder } from "@/components/chat/AudioRecorder";
 
 interface UserSearchResult { id: string; full_name: string; headline?: string | null; avatar_url?: string | null; }
 
@@ -310,7 +308,6 @@ export default function MensagensPage() {
   const [attachFile, setAttachFile]       = useState<File | null>(null);
   const [attachPreview, setAttachPreview] = useState<string | null>(null);
   const [uploading, setUploading]         = useState(false);
-  const [isRecording, setIsRecording]     = useState(false);
   const [chatToast, setChatToast]         = useState<string | null>(null);
   const [hoveredMsgId, setHoveredMsgId]   = useState<string | null>(null);
   const [hoveredConvId, setHoveredConvId] = useState<string | null>(null);
@@ -584,26 +581,6 @@ export default function MensagensPage() {
     } else {
       setAttachPreview(null);
     }
-  };
-
-  const handleAudioSend = async (blob: Blob, mimeType: string) => {
-    if (!selected || !userId) return;
-    const result = await sendWebAudioMessage(selected.id, userId, blob, mimeType, {
-      companyPageId: activeCompany?.id ?? null,
-    });
-    if (!result.success || !result.mediaUrl) {
-      throw new Error("Não foi possível enviar o áudio. Tente novamente.");
-    }
-    setMessages(prev => [...prev, {
-      id: `tmp-${Date.now()}`,
-      conversation_id: selected.id,
-      sender_id: userId,
-      content: "",
-      message_type: "audio",
-      media_url: result.mediaUrl,
-      created_at: new Date().toISOString(),
-      sender: { id: userId, full_name: profile?.full_name ?? "Eu", avatar_url: profile?.avatar_url },
-    } as WebMessage]);
   };
 
   const clearAttach = () => {
@@ -983,27 +960,17 @@ export default function MensagensPage() {
           <ClipIcon size={18} color={attachFile ? GOLD : MUTED} />
         </button>
 
-        {/* Text input — hidden while recording */}
-        {!isRecording && (
-          <input
-            value={newMsg}
-            onChange={e => { setNewMsg(e.target.value); broadcastTyping(); }}
-            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-            placeholder="Mensagem…"
-            style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 24, padding: "10px 16px", fontSize: 14, outline: "none", fontFamily: "inherit", backgroundColor: "#f9f9f7" }}
-          />
-        )}
-
-        {/* AudioRecorder: mic when empty, recording UI when active, nothing when typing */}
-        <AudioRecorder
-          onSend={handleAudioSend}
-          disabled={busy}
-          hasText={!!newMsg.trim() || !!attachFile}
-          onRecordingChange={setIsRecording}
+        {/* Text input */}
+        <input
+          value={newMsg}
+          onChange={e => { setNewMsg(e.target.value); broadcastTyping(); }}
+          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+          placeholder="Mensagem…"
+          style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 24, padding: "10px 16px", fontSize: 14, outline: "none", fontFamily: "inherit", backgroundColor: "#f9f9f7" }}
         />
 
-        {/* Send button — only when there's text/attachment and not recording */}
-        {!isRecording && canSend && (
+        {/* Send button */}
+        {canSend && (
           <button
             onClick={handleSend}
             disabled={!canSend}
@@ -1030,10 +997,16 @@ export default function MensagensPage() {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
               </button>
               <Avatar src={getConvoAvatar(selected)} name={getConvoName(selected)} size={42} />
-              <div style={{ minWidth: 0 }}>
+              <button
+                onClick={() => selected.is_group
+                  ? setLocation(`/app/grupos/${selected.id}/configuracoes`)
+                  : selected.participant && setLocation(`/app/usuario/${selected.participant.id}`)
+                }
+                style={{ minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
+              >
                 <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{getConvoName(selected)}</div>
-                <div style={{ fontSize: 12, color: MUTED }}>{selected.participant ? "Profissional do vinho" : selected.is_group ? "Grupo" : ""}</div>
-              </div>
+                <div style={{ fontSize: 12, color: MUTED }}>{selected.participant ? "Profissional do vinho" : selected.is_group ? "Grupo · toque para configurações" : ""}</div>
+              </button>
             </div>
             {threadJSX}
           </div>
@@ -1417,10 +1390,17 @@ export default function MensagensPage() {
                 {/* Thread header */}
                 <div style={{ padding: "12px 16px", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
                   <Avatar src={getConvoAvatar(selected)} name={getConvoName(selected)} size={38} />
-                  <div>
+                  <button
+                    onClick={() => selected.is_group
+                      ? setLocation(`/app/grupos/${selected.id}/configuracoes`)
+                      : selected.participant && setLocation(`/app/usuario/${selected.participant.id}`)
+                    }
+                    style={{ background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
+                  >
                     <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{getConvoName(selected)}</div>
                     {selected.participant && <div style={{ fontSize: 12, color: MUTED }}>Profissional do vinho</div>}
-                  </div>
+                    {selected.is_group && <div style={{ fontSize: 11, color: MUTED }}>Grupo · clique para configurações</div>}
+                  </button>
                 </div>
                 {threadJSX}
               </>
