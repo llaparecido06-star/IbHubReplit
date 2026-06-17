@@ -601,6 +601,16 @@ function PostCard({
           <div style={{ fontSize: 11, color: "#b0b7c3", marginTop: 2 }}>{formatRelativeDate(post.created_at)}</div>
         </div>
 
+        {/* 📌 Pin indicator */}
+        {post.is_pinned && (
+          <div title="Publicação fixada" style={{ flexShrink: 0, display: "flex", alignItems: "center", padding: "2px 0" }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="17" x2="12" y2="22"/>
+              <path d="M5 17H19V16A2 2 0 0 0 17 14V11L19 10V8H5V10L7 11V14A2 2 0 0 0 5 16Z"/>
+            </svg>
+          </div>
+        )}
+
         {/* ⋮ menu */}
         <div ref={menuRef} style={{ position: "relative", flexShrink: 0 }}>
           <button
