@@ -784,13 +784,13 @@ router.get("/conversations", async (req: Request, res: Response): Promise<void> 
   );
 
   // 7. Identity scoping
+  // When a specific company is active, show only that company's conversations + groups.
+  // In personal mode (no activeCompanyId), show EVERYTHING the user participates in —
+  // including conversations accidentally tagged with company_page_id from legacy behavior.
+  // Filtering company-tagged DMs out of personal view caused them to silently disappear.
   let filtered = sorted;
   if (activeCompanyId) {
     filtered = sorted.filter((r) => r.is_group || r.company_page_id === activeCompanyId);
-  } else {
-    filtered = sorted.filter(
-      (r) => r.is_group || !r.company_page_id || !ownedCompanyIds.has(r.company_page_id),
-    );
   }
 
   req.log.info(
