@@ -313,6 +313,7 @@ export default function MensagensPage() {
   const [hoveredConvId, setHoveredConvId] = useState<string | null>(null);
   const [deleteConvConfirm, setDeleteConvConfirm] = useState<WebConversation | null>(null);
   const [deletingConvId, setDeletingConvId] = useState<string | null>(null);
+  const [showConvMenu, setShowConvMenu] = useState(false);
   const [reactionPickerId, setReactionPickerId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ msgId: string; msgContent: string } | null>(null);
   const [showForwardPicker, setShowForwardPicker] = useState(false);
@@ -322,6 +323,7 @@ export default function MensagensPage() {
   const [forwarding, setForwarding]       = useState<string | null>(null);
 
   const bottomRef          = useRef<HTMLDivElement>(null);
+  const convMenuRef        = useRef<HTMLDivElement>(null);
   const fileInputRef       = useRef<HTMLInputElement>(null);
   const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const seenMsgIds         = useRef<Set<string>>(new Set());
@@ -564,6 +566,17 @@ export default function MensagensPage() {
     return () => clearTimeout(t);
   }, [chatToast]);
 
+  useEffect(() => {
+    if (!showConvMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (convMenuRef.current && !convMenuRef.current.contains(e.target as Node)) {
+        setShowConvMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showConvMenu]);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -605,12 +618,13 @@ export default function MensagensPage() {
 
   const handleDeleteConv = async () => {
     if (!deleteConvConfirm || !userId) return;
-    setDeletingConvId(deleteConvConfirm.id);
+    const convId = deleteConvConfirm.id;   // capture before state updates — avoids stale closure after await
+    setDeletingConvId(convId);
     setDeleteConvConfirm(null);
-    const ok = await deleteWebConversation(deleteConvConfirm.id, userId);
+    const ok = await deleteWebConversation(convId, userId);
     if (ok) {
-      setConversations(prev => prev.filter(c => c.id !== deleteConvConfirm.id));
-      if (selected?.id === deleteConvConfirm.id) {
+      setConversations(prev => prev.filter(c => c.id !== convId));
+      if (selected?.id === convId) {
         setSelected(null);
         setMessages([]);
       }
@@ -1002,11 +1016,28 @@ export default function MensagensPage() {
                   ? setLocation(`/app/grupos/${selected.id}/configuracoes`)
                   : selected.participant && setLocation(`/app/usuario/${selected.participant.id}`)
                 }
-                style={{ minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
+                style={{ flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
               >
                 <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{getConvoName(selected)}</div>
-                <div style={{ fontSize: 12, color: MUTED }}>{selected.participant ? "Profissional do vinho" : selected.is_group ? "Grupo · toque para configurações" : ""}</div>
+                <div style={{ fontSize: 12, color: MUTED }}>{selected.participant ? "Profissional do vinho" : selected.is_group ? "Grupo" : ""}</div>
               </button>
+              {/* 3-dot options menu */}
+              <div ref={convMenuRef} style={{ position: "relative", flexShrink: 0 }}>
+                <button onClick={() => setShowConvMenu(v => !v)} title="Mais opções"
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: "6px 10px", borderRadius: 8, color: NAVY, fontSize: 22, lineHeight: 1, display: "flex", alignItems: "center" }}>⋮</button>
+                {showConvMenu && (
+                  <div style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: "0 4px 16px rgba(0,0,0,0.14)", minWidth: 215, zIndex: 200, overflow: "hidden" }}>
+                    {selected.is_group
+                      ? <button onClick={() => { setShowConvMenu(false); setLocation(`/app/grupos/${selected.id}/configuracoes`); }} style={{ display: "block", width: "100%", padding: "12px 16px", background: "none", border: "none", textAlign: "left", cursor: "pointer", fontSize: 14, fontFamily: "inherit", color: NAVY }}>⚙️ Configurações do grupo</button>
+                      : selected.participant
+                        ? <button onClick={() => { setShowConvMenu(false); setLocation(`/app/usuario/${selected.participant!.id}`); }} style={{ display: "block", width: "100%", padding: "12px 16px", background: "none", border: "none", textAlign: "left", cursor: "pointer", fontSize: 14, fontFamily: "inherit", color: NAVY }}>👤 Ver perfil</button>
+                        : null}
+                    <button onClick={() => { setShowConvMenu(false); setMessages([]); }} style={{ display: "block", width: "100%", padding: "12px 16px", background: "none", border: `none`, borderTop: `1px solid ${BORDER}`, textAlign: "left", cursor: "pointer", fontSize: 14, fontFamily: "inherit", color: NAVY }}>🧹 Limpar conversa</button>
+                    <button onClick={() => { setShowConvMenu(false); setDeleteConvConfirm(selected); }} style={{ display: "block", width: "100%", padding: "12px 16px", background: "none", border: "none", borderTop: `1px solid ${BORDER}`, textAlign: "left", cursor: "pointer", fontSize: 14, fontFamily: "inherit", color: "#dc2626" }}>🗑️ Apagar conversa</button>
+                    <button onClick={() => { setShowConvMenu(false); setChatToast("Denúncia registrada. Obrigado pelo feedback!"); }} style={{ display: "block", width: "100%", padding: "12px 16px", background: "none", border: "none", borderTop: `1px solid ${BORDER}`, textAlign: "left", cursor: "pointer", fontSize: 14, fontFamily: "inherit", color: NAVY }}>🚩 Denunciar</button>
+                  </div>
+                )}
+              </div>
             </div>
             {threadJSX}
           </div>
@@ -1395,12 +1426,29 @@ export default function MensagensPage() {
                       ? setLocation(`/app/grupos/${selected.id}/configuracoes`)
                       : selected.participant && setLocation(`/app/usuario/${selected.participant.id}`)
                     }
-                    style={{ background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
+                    style={{ flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
                   >
-                    <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{getConvoName(selected)}</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{getConvoName(selected)}</div>
                     {selected.participant && <div style={{ fontSize: 12, color: MUTED }}>Profissional do vinho</div>}
-                    {selected.is_group && <div style={{ fontSize: 11, color: MUTED }}>Grupo · clique para configurações</div>}
+                    {selected.is_group && <div style={{ fontSize: 11, color: MUTED }}>Grupo</div>}
                   </button>
+                  {/* 3-dot options menu */}
+                  <div ref={convMenuRef} style={{ position: "relative", flexShrink: 0 }}>
+                    <button onClick={() => setShowConvMenu(v => !v)} title="Mais opções"
+                      style={{ background: "none", border: "none", cursor: "pointer", padding: "6px 10px", borderRadius: 8, color: NAVY, fontSize: 20, lineHeight: 1, display: "flex", alignItems: "center" }}>⋮</button>
+                    {showConvMenu && (
+                      <div style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: "0 4px 16px rgba(0,0,0,0.14)", minWidth: 215, zIndex: 200, overflow: "hidden" }}>
+                        {selected.is_group
+                          ? <button onClick={() => { setShowConvMenu(false); setLocation(`/app/grupos/${selected.id}/configuracoes`); }} style={{ display: "block", width: "100%", padding: "12px 16px", background: "none", border: "none", textAlign: "left", cursor: "pointer", fontSize: 14, fontFamily: "inherit", color: NAVY }}>⚙️ Configurações do grupo</button>
+                          : selected.participant
+                            ? <button onClick={() => { setShowConvMenu(false); setLocation(`/app/usuario/${selected.participant!.id}`); }} style={{ display: "block", width: "100%", padding: "12px 16px", background: "none", border: "none", textAlign: "left", cursor: "pointer", fontSize: 14, fontFamily: "inherit", color: NAVY }}>👤 Ver perfil</button>
+                            : null}
+                        <button onClick={() => { setShowConvMenu(false); setMessages([]); }} style={{ display: "block", width: "100%", padding: "12px 16px", background: "none", border: "none", borderTop: `1px solid ${BORDER}`, textAlign: "left", cursor: "pointer", fontSize: 14, fontFamily: "inherit", color: NAVY }}>🧹 Limpar conversa</button>
+                        <button onClick={() => { setShowConvMenu(false); setDeleteConvConfirm(selected); }} style={{ display: "block", width: "100%", padding: "12px 16px", background: "none", border: "none", borderTop: `1px solid ${BORDER}`, textAlign: "left", cursor: "pointer", fontSize: 14, fontFamily: "inherit", color: "#dc2626" }}>🗑️ Apagar conversa</button>
+                        <button onClick={() => { setShowConvMenu(false); setChatToast("Denúncia registrada. Obrigado pelo feedback!"); }} style={{ display: "block", width: "100%", padding: "12px 16px", background: "none", border: "none", borderTop: `1px solid ${BORDER}`, textAlign: "left", cursor: "pointer", fontSize: 14, fontFamily: "inherit", color: NAVY }}>🚩 Denunciar</button>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 {threadJSX}
               </>
