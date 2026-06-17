@@ -714,7 +714,7 @@ export default function MensagensPage() {
   const threadJSX = selected ? (
     <>
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: 10, backgroundColor: "#f9f9f7" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10, backgroundColor: "#f0ede8" }}>
         {messages.length === 0 && (
           <div style={{ textAlign: "center", color: MUTED, fontSize: 13, marginTop: 24 }}>Nenhuma mensagem ainda. Diga olá! 👋</div>
         )}
@@ -928,12 +928,14 @@ export default function MensagensPage() {
           <input ref={fileInputRef} type="file" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" style={{ display: "none" }} onChange={handleFileChange} />
           <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 56px)" }}>
             {/* Thread header */}
-            <div style={{ backgroundColor: WHITE, borderBottom: `1px solid ${BORDER}`, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0, position: "sticky", top: 56, zIndex: 20 }}>
-              <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 24, color: GOLD, lineHeight: 1, padding: "0 8px 0 0", flexShrink: 0 }}>‹</button>
-              <Avatar src={getConvoAvatar(selected)} name={getConvoName(selected)} size={40} />
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>{getConvoName(selected)}</div>
-                {selected.participant && <div style={{ fontSize: 12, color: MUTED }}>Profissional do vinho</div>}
+            <div style={{ backgroundColor: WHITE, borderBottom: `1px solid ${BORDER}`, padding: "10px 12px 10px 6px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0, position: "sticky", top: 56, zIndex: 20, boxShadow: "0 1px 8px rgba(13,27,42,0.07)" }}>
+              <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 8, borderRadius: 8, flexShrink: 0 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+              </button>
+              <Avatar src={getConvoAvatar(selected)} name={getConvoName(selected)} size={42} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{getConvoName(selected)}</div>
+                <div style={{ fontSize: 12, color: MUTED }}>{selected.participant ? "Profissional do vinho" : selected.is_group ? "Grupo" : ""}</div>
               </div>
             </div>
             {threadJSX}

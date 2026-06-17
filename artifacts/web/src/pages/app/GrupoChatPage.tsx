@@ -510,44 +510,47 @@ export default function GrupoChatPage() {
       <div style={{ position: "fixed", top: 56, bottom: isMobile ? 62 : 0, left: 0, right: 0, display: "flex", overflow: "hidden", background: BG }}>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", maxWidth: 800, margin: "0 auto", width: "100%", background: WHITE, borderLeft: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}` }}>
           {/* Header */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", borderBottom: `1px solid ${BORDER}`, background: WHITE, flexShrink: 0 }}>
-            <button onClick={() => setLocation("/app/grupos")} style={{ background: "none", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 12px 11px 8px", borderBottom: `1px solid ${BORDER}`, background: WHITE, flexShrink: 0, boxShadow: "0 1px 8px rgba(13,27,42,0.07)" }}>
+            <button onClick={() => setLocation("/app/grupos")} style={{ background: "none", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 8, borderRadius: 8, flexShrink: 0 }}>
               <BackIcon />
             </button>
-            {groupAvatarUrl ? (
-              <img src={groupAvatarUrl} alt={groupName} style={{ width: 42, height: 42, borderRadius: "50%", objectFit: "cover", border: `2px solid ${GOLD}40`, flexShrink: 0 }} />
-            ) : (
-              <div style={{ width: 42, height: 42, borderRadius: "50%", background: GOLD + "20", border: `2px solid ${GOLD}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
-                👥
-              </div>
-            )}
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: NAVY }}>{groupName}</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
-                <UsersIcon />
-                <span style={{ fontSize: 12, color: MUTED }}>{memberCount} {memberCount === 1 ? "membro" : "membros"}</span>
+            <div
+              onClick={() => setLocation(`/app/grupos/${groupId}/configuracoes`)}
+              style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, cursor: "pointer", minWidth: 0 }}
+            >
+              {groupAvatarUrl ? (
+                <img src={groupAvatarUrl} alt={groupName} style={{ width: 46, height: 46, borderRadius: "50%", objectFit: "cover", border: `2px solid ${GOLD}55`, flexShrink: 0 }} />
+              ) : (
+                <div style={{ width: 46, height: 46, borderRadius: "50%", background: `${GOLD}18`, border: `2px solid ${GOLD}45`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
+                  👥
+                </div>
+              )}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.25 }}>{groupName}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
+                  <UsersIcon />
+                  <span style={{ fontSize: 12, color: MUTED }}>{memberCount} {memberCount === 1 ? "membro" : "membros"}</span>
+                </div>
               </div>
             </div>
-            <button
-              onClick={handleCopyLink}
-              title={linkCopied ? "Link copiado!" : "Copiar link do grupo"}
-              style={{ background: "none", border: "none", cursor: "pointer", padding: 6, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: linkCopied ? "#16a34a" : MUTED, transition: "color 0.2s" }}
-              onMouseEnter={e => { if (!linkCopied) (e.currentTarget as HTMLButtonElement).style.color = NAVY; }}
-              onMouseLeave={e => { if (!linkCopied) (e.currentTarget as HTMLButtonElement).style.color = MUTED; }}
-            >
-              {linkCopied ? <CheckIcon /> : <LinkIcon />}
-            </button>
-            <button
-              onClick={() => setLocation(`/app/grupos/${groupId}/configuracoes`)}
-              title="Configurações do grupo"
-              style={{ background: "none", border: "none", cursor: "pointer", padding: 6, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: MUTED, fontSize: 20, lineHeight: 1 }}
-              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = NAVY; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = MUTED; }}
-            >⚙️</button>
+            <div style={{ display: "flex", gap: 0, flexShrink: 0 }}>
+              <button
+                onClick={handleCopyLink}
+                title={linkCopied ? "Link copiado!" : "Copiar link"}
+                style={{ background: "none", border: "none", cursor: "pointer", padding: 8, borderRadius: 8, display: "flex", alignItems: "center", color: linkCopied ? "#16a34a" : MUTED }}
+              >
+                {linkCopied ? <CheckIcon /> : <LinkIcon />}
+              </button>
+              <button
+                onClick={() => setLocation(`/app/grupos/${groupId}/configuracoes`)}
+                title="Configurações"
+                style={{ background: "none", border: "none", cursor: "pointer", padding: 8, borderRadius: 8, display: "flex", alignItems: "center", color: MUTED, fontSize: 20, lineHeight: 1 }}
+              >⚙️</button>
+            </div>
           </div>
 
           {/* Messages */}
-          <div ref={listRef} style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div ref={listRef} style={{ flex: 1, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 0, background: "#eae6df" }}>
             {loading ? (
               <div style={{ textAlign: "center", padding: 60, color: MUTED }}>⏳ Carregando mensagens…</div>
             ) : messages.length === 0 ? (
@@ -560,64 +563,94 @@ export default function GrupoChatPage() {
               const senderName = msg.sender?.full_name ?? "Membro";
               const showDateSep = msgDayKey(msg.created_at) !== (idx > 0 ? msgDayKey(messages[idx - 1].created_at) : null);
               const nodes: React.ReactNode[] = [];
+
+              const prevMsg = idx > 0 ? messages[idx - 1] : null;
+              const nextMsg = idx < messages.length - 1 ? messages[idx + 1] : null;
+              const prevSameSender = !showDateSep && prevMsg?.sender_id === msg.sender_id;
+              const nextSameSender = nextMsg?.sender_id === msg.sender_id && msgDayKey(nextMsg.created_at) === msgDayKey(msg.created_at);
+              const isGroupStart = !prevSameSender;
+              const isGroupEnd = !nextSameSender;
+
+              const myRadius = isGroupStart && isGroupEnd ? "18px 4px 18px 18px"
+                : isGroupStart ? "18px 4px 6px 18px"
+                : isGroupEnd ? "6px 18px 18px 18px"
+                : "6px 6px 6px 18px";
+              const theirRadius = isGroupStart && isGroupEnd ? "4px 18px 18px 18px"
+                : isGroupStart ? "4px 18px 6px 6px"
+                : isGroupEnd ? "6px 18px 18px 6px"
+                : "6px 18px 6px 6px";
+
               if (showDateSep) {
                 nodes.push(
-                  <div key={`date-${msg.id}`} style={{ display: "flex", justifyContent: "center", margin: "4px 0 8px" }}>
-                    <span style={{ background: BORDER, borderRadius: 12, padding: "3px 12px", fontSize: 11, color: MUTED, fontWeight: 500 }}>
+                  <div key={`date-${msg.id}`} style={{ display: "flex", justifyContent: "center", margin: "14px 0 10px" }}>
+                    <span style={{ background: "rgba(11,20,26,0.22)", borderRadius: 16, padding: "4px 14px", fontSize: 11, color: WHITE, fontWeight: 600 }}>
                       {chatDateLabel(msg.created_at)}
                     </span>
                   </div>
                 );
               }
+
               const canDelete = isMe || isAdminOrOwner;
+              const verticalMargin = isGroupEnd ? "0 0 8px 0" : "0 0 2px 0";
+
               nodes.push(
-                <div key={msg.id} style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start" }}>
-                  {!isMe && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, marginLeft: 44 }}>
-                      <span onClick={() => setLocation(`/app/usuario/${msg.sender_id}`)} style={{ fontSize: 11, fontWeight: 700, color: GOLD, cursor: "pointer" }}>{senderName}</span>
+                <div key={msg.id} style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start", margin: verticalMargin }}>
+                  {!isMe && isGroupStart && (
+                    <div style={{ marginLeft: 44, marginBottom: 3 }}>
+                      <span
+                        onClick={() => setLocation(`/app/usuario/${msg.sender_id}`)}
+                        style={{ fontSize: 12, fontWeight: 700, color: GOLD, cursor: "pointer" }}
+                      >{senderName}</span>
                     </div>
                   )}
-                  <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexDirection: isMe ? "row-reverse" : "row", width: "100%" }}>
-                    {!isMe && <div onClick={() => setLocation(`/app/usuario/${msg.sender_id}`)} style={{ cursor: "pointer", flexShrink: 0 }}><Avatar src={msg.sender?.avatar_url} name={senderName} size={34} /></div>}
+                  <div style={{ display: "flex", alignItems: "flex-end", gap: 6, flexDirection: isMe ? "row-reverse" : "row" }}>
+                    {!isMe && (
+                      <div style={{ width: 34, flexShrink: 0, alignSelf: "flex-end" }}>
+                        {isGroupEnd ? (
+                          <div onClick={() => setLocation(`/app/usuario/${msg.sender_id}`)} style={{ cursor: "pointer" }}>
+                            <Avatar src={msg.sender?.avatar_url} name={senderName} size={34} />
+                          </div>
+                        ) : (
+                          <div style={{ width: 34, height: 34 }} />
+                        )}
+                      </div>
+                    )}
                     <div
                       onContextMenu={canDelete ? (e) => { e.preventDefault(); setMsgMenu({ msgId: msg.id, x: e.clientX, y: e.clientY }); } : undefined}
                       style={{
-                        maxWidth: "72%",
-                        background: isMe ? NAVY : WHITE,
-                        color: isMe ? WHITE : NAVY,
-                        borderRadius: isMe ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                        padding: msg.media_url ? "8px 10px 10px" : "10px 14px",
+                        maxWidth: "78%",
+                        background: isMe ? GOLD : WHITE,
+                        color: NAVY,
+                        borderRadius: isMe ? myRadius : theirRadius,
+                        padding: msg.media_url ? "8px 10px 8px" : "9px 13px",
                         border: isMe ? "none" : `1px solid ${BORDER}`,
-                        boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.09)",
                         cursor: canDelete ? "context-menu" : "default",
+                        wordBreak: "break-word",
                       }}>
                       {msg.media_url && msg.message_type === "audio" && (
-                        <audio
-                          controls
-                          src={msg.media_url}
-                          style={{ display: "block", width: 240, maxWidth: "100%", marginBottom: msg.content ? 6 : 0 }}
-                        />
+                        <audio controls src={msg.media_url} style={{ display: "block", width: 220, maxWidth: "100%", marginBottom: msg.content ? 6 : 0 }} />
                       )}
                       {msg.media_url && msg.message_type === "image" && (
-                        <img src={msg.media_url} alt="" style={{ display: "block", maxWidth: 280, maxHeight: 280, borderRadius: 8, marginBottom: msg.content ? 6 : 0 }} />
+                        <img src={msg.media_url} alt="" style={{ display: "block", maxWidth: 260, maxHeight: 260, borderRadius: 8, marginBottom: msg.content ? 6 : 0 }} />
                       )}
                       {msg.media_url && msg.message_type === "video" && (
-                        <video controls src={msg.media_url} style={{ display: "block", maxWidth: 320, maxHeight: 320, borderRadius: 8, marginBottom: msg.content ? 6 : 0 }} />
+                        <video controls src={msg.media_url} style={{ display: "block", maxWidth: 280, maxHeight: 280, borderRadius: 8, marginBottom: msg.content ? 6 : 0 }} />
                       )}
                       {msg.media_url && (msg.message_type === "file" || (msg.message_type !== "audio" && msg.message_type !== "image" && msg.message_type !== "video" && msg.message_type !== "text" && msg.message_type)) && (
                         <a
                           href={msg.media_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 8, background: isMe ? "rgba(255,255,255,0.12)" : BG, color: isMe ? WHITE : NAVY, textDecoration: "none", fontSize: 13, marginBottom: msg.content ? 6 : 0 }}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 8, background: isMe ? "rgba(255,255,255,0.28)" : BG, color: NAVY, textDecoration: "none", fontSize: 13, marginBottom: msg.content ? 6 : 0 }}
                         >
                           📎 <span>Abrir anexo</span>
                         </a>
                       )}
                       {msg.content && (
-                        <div style={{ fontSize: 14, lineHeight: 1.45, wordBreak: "break-word" }}>{linkifyText(msg.content)}</div>
+                        <div style={{ fontSize: 14, lineHeight: 1.5, wordBreak: "break-word" }}>{linkifyText(msg.content)}</div>
                       )}
-                      <div style={{ fontSize: 10, color: isMe ? "rgba(255,255,255,0.55)" : MUTED, marginTop: 4, textAlign: "right" }}>{timeStr(msg.created_at)}</div>
+                      <div style={{ fontSize: 10, color: isMe ? `${NAVY}80` : MUTED, marginTop: 3, textAlign: "right" }}>{timeStr(msg.created_at)}</div>
                     </div>
                   </div>
                 </div>
@@ -625,10 +658,12 @@ export default function GrupoChatPage() {
               return nodes;
             })}
             {Object.keys(typingUsers).length > 0 && (
-              <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 2px 0", opacity: 0.8 }}>
-                <span style={{ fontSize: 14, letterSpacing: 2, color: MUTED }}>•••</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 2px 0", marginLeft: 44 }}>
+                <div style={{ background: WHITE, borderRadius: "4px 18px 18px 18px", padding: "9px 14px", border: `1px solid ${BORDER}`, boxShadow: "0 1px 2px rgba(0,0,0,0.07)" }}>
+                  <span style={{ fontSize: 13, letterSpacing: 3, color: MUTED }}>•••</span>
+                </div>
                 <span style={{ fontSize: 12, color: MUTED, fontStyle: "italic" }}>
-                  {Object.values(typingUsers).join(", ")} {Object.keys(typingUsers).length === 1 ? "está digitando..." : "estão digitando..."}
+                  {Object.values(typingUsers).join(", ")} {Object.keys(typingUsers).length === 1 ? "está digitando…" : "estão digitando…"}
                 </span>
               </div>
             )}
@@ -662,9 +697,8 @@ export default function GrupoChatPage() {
             </div>
           )}
 
-          {/* Input — WhatsApp style */}
-          <div style={{ padding: "12px 16px", borderTop: `1px solid ${BORDER}`, background: WHITE, display: "flex", gap: 8, alignItems: "center" }}>
-            {/* Attachment button */}
+          {/* Input bar */}
+          <div style={{ padding: "10px 12px 12px", borderTop: `1px solid ${BORDER}`, background: WHITE, display: "flex", gap: 8, alignItems: "center", boxShadow: "0 -1px 6px rgba(13,27,42,0.04)" }}>
             <button
               onClick={() => fileInputRef.current?.click()}
               aria-label="Anexar arquivo"
@@ -673,7 +707,6 @@ export default function GrupoChatPage() {
               <ClipIcon size={18} color={attachFile ? GOLD : MUTED} />
             </button>
 
-            {/* Text area — hidden while recording */}
             {!isRecording && (
               <textarea
                 value={input}
@@ -681,11 +714,12 @@ export default function GrupoChatPage() {
                 onKeyDown={handleKey}
                 placeholder="Mensagem no grupo…"
                 rows={1}
-                style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 22, padding: "10px 16px", fontSize: 14, fontFamily: "inherit", outline: "none", resize: "none", maxHeight: 100, background: BG, color: NAVY }}
+                style={{ flex: 1, border: `1.5px solid ${BORDER}`, borderRadius: 22, padding: "10px 16px", fontSize: 14, fontFamily: "inherit", outline: "none", resize: "none", maxHeight: 120, background: "#f7f5f0", color: NAVY, lineHeight: 1.45, transition: "border-color 0.15s" }}
+                onFocus={e => { e.currentTarget.style.borderColor = `${GOLD}80`; }}
+                onBlur={e => { e.currentTarget.style.borderColor = BORDER; }}
               />
             )}
 
-            {/* AudioRecorder: mic when empty, recording UI when active, nothing when typing */}
             <AudioRecorder
               onSend={handleAudioSend}
               disabled={sending || uploading}
@@ -693,14 +727,13 @@ export default function GrupoChatPage() {
               onRecordingChange={setIsRecording}
             />
 
-            {/* Send button — when text or attachment ready and not recording */}
             {!isRecording && (input.trim() || attachFile) && (
               <button
                 onClick={handleSend}
                 disabled={(!input.trim() && !attachFile) || sending || uploading}
-                style={{ width: 42, height: 42, borderRadius: 21, background: NAVY, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: WHITE, flexShrink: 0 }}
+                style={{ width: 42, height: 42, borderRadius: 21, background: GOLD, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: NAVY, flexShrink: 0, boxShadow: "0 2px 8px rgba(201,168,76,0.35)" }}
               >
-                <SendIcon />
+                {sending || uploading ? <span style={{ fontSize: 13 }}>⏳</span> : <SendIcon />}
               </button>
             )}
           </div>
