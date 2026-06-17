@@ -327,6 +327,7 @@ export default function MensagensPage() {
   const fileInputRef       = useRef<HTMLInputElement>(null);
   const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const seenMsgIds         = useRef<Set<string>>(new Set());
+  const activeConvIdRef    = useRef<string | null>(null); // guards against stale async fetches
 
   // Typing indicator
   const typingChannelRef  = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -436,8 +437,13 @@ export default function MensagensPage() {
       realtimeChannelRef.current = null;
     }
     seenMsgIds.current = new Set();
+    activeConvIdRef.current = convo.id;
     setSelected(convo);
+    setMessages([]); // clear immediately so stale messages from the previous thread never bleed into the new header
     const msgs = await fetchWebMessages(convo.id, userId);
+    // Guard: if the user switched to another conversation while this fetch was in
+    // flight, discard the result — it belongs to a conversation that's no longer active.
+    if (activeConvIdRef.current !== convo.id) return;
     msgs.forEach(m => seenMsgIds.current.add(m.id));
     setMessages(msgs);
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
