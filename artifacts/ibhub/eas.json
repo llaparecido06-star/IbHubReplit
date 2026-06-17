@@ -44,6 +44,11 @@
   },
   "submit": {
     "production": {
+      "ios": {
+        "appleId": "lianertesjr@gmail.com",
+        "ascAppId": "6764379485",
+        "appleTeamId": "M8B2ST942V"
+      },
       "android": {
         "serviceAccountKeyPath": "./google-services-key.json",
         "track": "internal",
