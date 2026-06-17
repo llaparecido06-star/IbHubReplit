@@ -489,10 +489,16 @@ router.post("/conversations/direct", validateBody(DirectConversationSchema), asy
   }
 
   // Insert BOTH participant rows using supabaseAdmin (no RLS restrictions).
-  await supabaseAdmin.from("conversation_participants").insert([
+  const { error: cpInsertError } = await supabaseAdmin.from("conversation_participants").insert([
     { conversation_id: newId, user_id: user_id_1, accepted: true },
     { conversation_id: newId, user_id: user_id_2, accepted: recipientAccepted },
   ]);
+
+  if (cpInsertError) {
+    req.log.error({ supabaseError: cpInsertError.message }, "[conversations/direct] insert participants failed");
+    res.status(500).json({ error: "Falha ao adicionar participantes à conversa." });
+    return;
+  }
 
   res.json({ conversation_id: newId });
 });
@@ -513,13 +519,32 @@ router.get("/conversations", async (req: Request, res: Response): Promise<void> 
 
   const activeCompanyId = (req.query.active_company_id as string | undefined) ?? null;
 
-  // 1. All conversation IDs this user participates in
+  // Resolve the effective profile.id for this caller.
+  // For legacy users, profile.id (the row PK) may differ from auth.uid() (callerId),
+  // because conversation_participants rows were inserted using profile.id (user_id_1 from
+  // the web client) while callerId is always auth.uid(). We must check both.
+  const { data: callerProfileRow } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .or(`id.eq.${callerId},user_id.eq.${callerId}`)
+    .limit(1)
+    .maybeSingle();
+
+  const effectiveProfileId = (callerProfileRow as { id: string } | null)?.id ?? callerId;
+  const participantIds = [...new Set([callerId, effectiveProfileId])];
+  const participantFilter = participantIds.map((id) => `user_id.eq.${id}`).join(",");
+
+  // 1. All conversation IDs this user participates in (check both auth.uid and profile.id)
   const { data: cpRows, error: cpError } = await supabaseAdmin
     .from("conversation_participants")
     .select("conversation_id")
-    .eq("user_id", callerId);
+    .or(participantFilter);
 
-  if (cpError || !cpRows || cpRows.length === 0) {
+  if (cpError) {
+    req.log.error({ supabaseError: cpError.message }, "[conversations] fetch participants error");
+  }
+
+  if (!cpRows || cpRows.length === 0) {
     res.json({ conversations: [] });
     return;
   }
@@ -552,9 +577,12 @@ router.get("/conversations", async (req: Request, res: Response): Promise<void> 
   );
 
   // 3. Build other-participant map (conversation_id → other user_id)
+  // Exclude both callerId (auth.uid) and effectiveProfileId (profile.id) so legacy
+  // users don't see themselves listed as the "other" participant in their own DMs.
+  const callerIdSet = new Set(participantIds);
   const otherParticipantMap = new Map<string, string>();
   for (const row of (allParticipantsRes.data ?? []) as { conversation_id: string; user_id: string }[]) {
-    if (row.user_id !== callerId) {
+    if (!callerIdSet.has(row.user_id)) {
       otherParticipantMap.set(row.conversation_id, row.user_id);
     }
   }
@@ -660,12 +688,27 @@ router.get("/conversations/:id/messages", async (req: Request, res: Response): P
 
   const conversationId = req.params.id;
 
-  // Verify caller is a participant
+  // Resolve the effective profile.id for this caller (same legacy-profile handling
+  // as GET /conversations: participant rows may have been inserted with profile.id
+  // instead of auth.uid() when user_id_1 was sourced from profile?.id on the web).
+  const { data: callerProfileRow } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .or(`id.eq.${callerId},user_id.eq.${callerId}`)
+    .limit(1)
+    .maybeSingle();
+
+  const effectiveProfileId = (callerProfileRow as { id: string } | null)?.id ?? callerId;
+  const participantIds = [...new Set([callerId, effectiveProfileId])];
+  const participantFilter = participantIds.map((id) => `user_id.eq.${id}`).join(",");
+
+  // Verify caller is a participant (check both auth.uid and profile.id)
   const { data: participantRow } = await supabaseAdmin
     .from("conversation_participants")
     .select("user_id")
     .eq("conversation_id", conversationId)
-    .eq("user_id", callerId)
+    .or(participantFilter)
+    .limit(1)
     .maybeSingle();
 
   if (!participantRow) {
