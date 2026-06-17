@@ -9,12 +9,22 @@
       "distribution": "internal",
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://jbvzjjdecwzomucnmzsn.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpidnpqamRlY3d6b211Y25tenNuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1MDAxODgsImV4cCI6MjA5MTA3NjE4OH0.aT4yUVcJQ-U2GB5ohLBWCqyJBEhV7FYbyM-sCUvrYrQ",
+        "EXPO_PUBLIC_API_URL": "https://www.ibhub.com.br/api"
       }
     },
     "simulator": {
       "distribution": "internal",
       "ios": {
         "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://jbvzjjdecwzomucnmzsn.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpidnpqamRlY3d6b211Y25tenNuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1MDAxODgsImV4cCI6MjA5MTA3NjE4OH0.aT4yUVcJQ-U2GB5ohLBWCqyJBEhV7FYbyM-sCUvrYrQ",
+        "EXPO_PUBLIC_API_URL": "https://www.ibhub.com.br/api"
       }
     },
     "preview": {
@@ -24,6 +34,11 @@
       },
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://jbvzjjdecwzomucnmzsn.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpidnpqamRlY3d6b211Y25tenNuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1MDAxODgsImV4cCI6MjA5MTA3NjE4OH0.aT4yUVcJQ-U2GB5ohLBWCqyJBEhV7FYbyM-sCUvrYrQ",
+        "EXPO_PUBLIC_API_URL": "https://www.ibhub.com.br/api"
       }
     },
     "production": {
@@ -32,6 +47,8 @@
         "disabled": true
       },
       "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://jbvzjjdecwzomucnmzsn.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpidnpqamRlY3d6b211Y25tenNuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1MDAxODgsImV4cCI6MjA5MTA3NjE4OH0.aT4yUVcJQ-U2GB5ohLBWCqyJBEhV7FYbyM-sCUvrYrQ",
         "EXPO_PUBLIC_API_URL": "https://www.ibhub.com.br/api"
       },
       "ios": {
