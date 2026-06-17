@@ -430,28 +430,39 @@ function RootLayoutNav() {
       navIifePendingRef.current = true;
       console.log("[RootLayoutNav] IIFE started — awaiting coldStartDeepLinkPromise");
       (async () => {
-        const coldLink = await coldStartDeepLinkPromise;
-        console.log("[RootLayoutNav] IIFE resolved — coldLink:", coldLink ?? "null");
-        if (coldLink && !coldStartLinkConsumed) {
-          coldStartLinkConsumed = true;
-          console.log("[RootLayoutNav] router.replace →", coldLink);
-          router.replace(coldLink as any);
-        } else {
-          console.log("[RootLayoutNav] router.replace → /(tabs)");
-          router.replace("/(tabs)" as any);
+        try {
+          const coldLink = await coldStartDeepLinkPromise;
+          console.log("[RootLayoutNav] IIFE resolved — coldLink:", coldLink ?? "null");
+          if (coldLink && !coldStartLinkConsumed) {
+            coldStartLinkConsumed = true;
+            console.log("[RootLayoutNav] router.replace →", coldLink);
+            router.replace(coldLink as any);
+          } else {
+            console.log("[RootLayoutNav] router.replace → /(tabs)");
+            router.replace("/(tabs)" as any);
+          }
+        } catch (e) {
+          console.error("[RootLayoutNav] router.replace threw:", e);
+        } finally {
+          // Always mark navInitiated — even if router.replace threw. The safety
+          // net and subsequent re-renders will handle the actual navigation.
+          // Set navInitiatedRef BEFORE clearing navIifePendingRef so the guard
+          // at the top of the effect fires synchronously if TOKEN_REFRESHED
+          // re-triggers the effect before React commits setNavInitiated(true).
+          navInitiatedRef.current = true;
+          navIifePendingRef.current = false;
+          setNavInitiated(true);
+          console.log("[RootLayoutNav] navInitiated set to true");
         }
-        // Set navInitiatedRef BEFORE clearing navIifePendingRef so the guard
-        // at the top of the effect fires synchronously if TOKEN_REFRESHED
-        // re-triggers the effect before React commits setNavInitiated(true).
-        navInitiatedRef.current = true;
-        navIifePendingRef.current = false;
-        setNavInitiated(true);
-        console.log("[RootLayoutNav] navInitiated set to true");
       })();
     } else {
       console.log("[RootLayoutNav] router.replace →", destination);
       navInitiatedRef.current = true;
-      router.replace(destination as any);
+      try {
+        router.replace(destination as any);
+      } catch (e) {
+        console.error("[RootLayoutNav] router.replace (non-tabs) threw:", e);
+      }
       setNavInitiated(true);
     }
   }, [
@@ -477,15 +488,15 @@ function RootLayoutNav() {
     if (navInitiated || loading || !session || !profileChecked || isRecovering || mustChangePassword) return;
     if (safetyNetArmed.current) return;
     safetyNetArmed.current = true;
-    console.log("[RootLayoutNav] safety-net armed (3 s)");
+    console.log("[RootLayoutNav] safety-net armed (2 s)");
     setTimeout(() => {
       if (navInitiatedRef.current) return;
       console.warn("[RootLayoutNav] safety-net fired — forcing navigation");
       const destination = needsProfileCompletion ? "/social-complete" : "/(tabs)";
       navInitiatedRef.current = true;
-      router.replace(destination as any);
+      try { router.replace(destination as any); } catch (e) { console.error("[RootLayoutNav] safety-net replace threw:", e); }
       setNavInitiated(true);
-    }, 3_000);
+    }, 2_000);
     // Intentionally no cleanup: we never cancel this timer once armed.
     // safetyNetArmed.current prevents double-arming on re-runs.
   }, [navInitiated, loading, session, profileChecked, isRecovering, mustChangePassword, needsProfileCompletion, router]);

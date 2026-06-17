@@ -219,10 +219,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let timedOut = false;
     const tid = setTimeout(() => {
       timedOut = true;
-      console.warn(`[fetchProfile] 3s timeout for userId=${userId} — unblocking profileChecked`);
+      console.warn(`[fetchProfile] 2s timeout for userId=${userId} — unblocking profileChecked`);
       setProfileChecked(true);
       fetchProfileInFlightRef.current = null;
-    }, 3_000);
+    }, 2_000);
 
     try {
       // Use limit(1) to avoid "multiple rows" error if duplicate profiles exist
@@ -252,6 +252,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           Array.isArray(d.areas_of_expertise) ? d.areas_of_expertise :
           Array.isArray(d.areas) ? d.areas : [];
         const profileData = { ...d, headline, areas_of_expertise } as Profile;
+        if (d.is_banned === true) {
+          console.warn(`[fetchProfile] userId=${userId} is banned — signing out`);
+          AsyncStorage.setItem("account_suspended", "true").catch(() => {});
+          supabase.auth.signOut().catch(() => {});
+          return;
+        }
         setProfile(profileData);
         setNeedsProfileCompletion(!isProfileComplete(profileData));
         writeProfileCache(profileData);
@@ -542,17 +548,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 plan: "gratuito",
               });
               console.log(`[SafetyNet] insert result:`, insertErr ? `ERROR: ${insertErr.message}` : "OK");
+              await fetchProfile(u.id);
             } else if (!existing.full_name && googleName) {
               // Profile exists but has no name (trigger didn't set it) → fill it in
               const update: Record<string, string | null> = { user_id: u.id, full_name: googleName };
               if (!existing.avatar_url && googleAvatar) update.avatar_url = googleAvatar;
               const { error: updateErr } = await supabase.from("profiles").update(update).eq("id", existing.id);
               console.log(`[SafetyNet] update full_name result:`, updateErr ? `ERROR: ${updateErr.message}` : "OK");
+              await fetchProfile(u.id);
             } else {
               console.log(`[SafetyNet] Profile OK, no changes needed.`);
+              // Profile already loaded by the fetchProfile call above — no need to re-fetch.
             }
-
-            await fetchProfile(u.id);
           } catch (e: any) {
             console.error(`[SafetyNet] Exception:`, e?.message);
           }
@@ -645,49 +652,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      console.log("[signIn] step 1 — calling signInWithPassword");
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         const msg = error.message ?? "";
-        console.error("[signIn] signInWithPassword error:", msg);
         if (msg.toLowerCase().includes("ban") || msg.toLowerCase().includes("suspend")) {
           return { error: "Sua conta foi suspensa. Entre em contato com o suporte." };
         }
         return { error: msg };
       }
-
-      console.log("[signIn] step 2 — signInWithPassword OK, calling getUser");
-      const { data: { user: authedUser }, error: getUserErr } = await supabase.auth.getUser();
-      if (getUserErr) {
-        console.error("[signIn] getUser error:", getUserErr.message);
-        return { error: getUserErr.message };
-      }
-      console.log("[signIn] step 3 — getUser returned userId:", authedUser?.id ?? "null");
-
-      if (authedUser) {
-        console.log("[signIn] step 4 — checking is_banned for userId:", authedUser.id);
-        const { data: prof, error: banErr } = await supabase
-          .from("profiles")
-          .select("is_banned")
-          .eq("id", authedUser.id)
-          .maybeSingle();
-        if (banErr) {
-          console.error("[signIn] is_banned query error:", banErr.message);
-          return { error: banErr.message };
-        }
-        console.log("[signIn] step 5 — is_banned:", (prof as { is_banned?: boolean } | null)?.is_banned ?? false);
-        if ((prof as { is_banned?: boolean } | null)?.is_banned) {
-          await supabase.auth.signOut();
-          return { error: "Sua conta foi suspensa. Entre em contato com o suporte." };
-        }
-      }
-
-      console.log("[signIn] step 6 — returning OK, waiting for onAuthStateChange to drive navigation");
+      // Navigation is driven by RootLayoutNav after onAuthStateChange(SIGNED_IN) fires.
+      // Ban detection happens inside fetchProfile (called by onAuthStateChange).
       return { error: null };
     } catch (e: any) {
-      const msg = e?.message ?? String(e);
-      console.error("[signIn] unhandled exception:", msg);
-      return { error: msg };
+      return { error: e?.message ?? String(e) };
     }
   };
 
