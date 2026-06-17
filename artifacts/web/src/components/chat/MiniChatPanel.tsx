@@ -146,7 +146,7 @@ export function MiniChatPanel({
           className="minichat-header"
           style={{
             backgroundColor: GOLD,
-            color: WHITE,
+            color: "#1a1a1a",
             padding: "11px 14px",
             display: "flex", alignItems: "center", justifyContent: "space-between",
             cursor: "pointer",
@@ -155,7 +155,7 @@ export function MiniChatPanel({
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ color: WHITE, display: "flex", alignItems: "center" }}><MsgIcon /></span>
+            <span style={{ color: "#1a1a1a", display: "flex", alignItems: "center" }}><MsgIcon /></span>
             <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.01em" }}>Mensagens</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
