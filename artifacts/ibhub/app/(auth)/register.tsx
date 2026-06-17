@@ -776,7 +776,7 @@ export default function RegisterScreen() {
                 </View>
               )}
 
-              {selectedPlan !== "gratuito" && (
+              {selectedPlan !== "gratuito" && Platform.OS !== "ios" && (
                 <View style={styles.paymentNotice}>
                   <Feather name="credit-card" size={14} color="#c9a84c" />
                   <Text style={styles.paymentNoticeText}>
