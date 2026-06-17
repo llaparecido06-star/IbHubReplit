@@ -1000,4 +1000,59 @@ router.get("/conversations/:id/messages", async (req: Request, res: Response): P
   res.json({ messages: enriched, current_user_id: callerId });
 });
 
+/**
+ * DELETE /conversations/:id
+ *
+ * Removes the caller from a conversation (leaves it). Removes the row(s) from
+ * conversation_participants for this user. If the conversation is a group, also
+ * removes the user from group_members.
+ */
+router.delete("/conversations/:id", async (req: Request, res: Response): Promise<void> => {
+  const callerId = await resolveUserId(req, res);
+  if (!callerId) return;
+
+  const conversationId = req.params.id;
+
+  // Resolve effective profile ID (same pattern as GET /conversations).
+  const { data: profileRow } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .or(`id.eq.${callerId},user_id.eq.${callerId}`)
+    .limit(1)
+    .maybeSingle();
+
+  const effectiveProfileId: string = profileRow?.id ?? callerId;
+
+  // Remove all participant rows for this user in this conversation.
+  const idsToRemove = [...new Set([callerId, effectiveProfileId])];
+  const { error: participantError } = await supabaseAdmin
+    .from("conversation_participants")
+    .delete()
+    .eq("conversation_id", conversationId)
+    .in("user_id", idsToRemove);
+
+  if (participantError) {
+    req.log.error({ err: participantError }, "leave conversation: participant delete failed");
+    res.status(500).json({ error: "Failed to leave conversation" });
+    return;
+  }
+
+  // If the conversation is a group, remove from group_members too.
+  const { data: groupRow } = await supabaseAdmin
+    .from("conversations")
+    .select("type, group_id")
+    .eq("id", conversationId)
+    .maybeSingle();
+
+  if (groupRow?.type === "group" && groupRow?.group_id) {
+    await supabaseAdmin
+      .from("group_members")
+      .delete()
+      .eq("group_id", groupRow.group_id)
+      .in("user_id", idsToRemove);
+  }
+
+  res.json({ ok: true });
+});
+
 export default router;

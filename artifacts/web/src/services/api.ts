@@ -1488,6 +1488,18 @@ export async function deleteGroupMessage(groupId: string, messageId: string): Pr
   }
 }
 
+export async function deleteWebConversation(convId: string, userId: string): Promise<boolean> {
+  try {
+    const url = new URL(`/api/conversations/${convId}`, window.location.origin);
+    url.searchParams.set("userId", userId);
+    const res = await fetch(url.toString(), { method: "DELETE" });
+    return res.ok;
+  } catch (e) {
+    console.warn("deleteWebConversation:", e);
+    return false;
+  }
+}
+
 export async function deleteWebMessage(messageId: string, senderId: string): Promise<boolean> {
   try {
     const { error } = await supabase

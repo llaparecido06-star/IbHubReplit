@@ -14,6 +14,7 @@ import {
   uploadChatAttachment,
   getOrCreateWebConversation,
   deleteWebMessage,
+  deleteWebConversation,
   toggleWebMessageReaction,
   forwardWebMessage,
   markWebConversationRead,
@@ -312,6 +313,9 @@ export default function MensagensPage() {
   const [isRecording, setIsRecording]     = useState(false);
   const [chatToast, setChatToast]         = useState<string | null>(null);
   const [hoveredMsgId, setHoveredMsgId]   = useState<string | null>(null);
+  const [hoveredConvId, setHoveredConvId] = useState<string | null>(null);
+  const [deleteConvConfirm, setDeleteConvConfirm] = useState<WebConversation | null>(null);
+  const [deletingConvId, setDeletingConvId] = useState<string | null>(null);
   const [reactionPickerId, setReactionPickerId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ msgId: string; msgContent: string } | null>(null);
   const [showForwardPicker, setShowForwardPicker] = useState(false);
@@ -620,6 +624,21 @@ export default function MensagensPage() {
       setMessages(prev => prev.filter(m => m.id !== deleteConfirm.msgId));
     }
     setDeleteConfirm(null);
+  };
+
+  const handleDeleteConv = async () => {
+    if (!deleteConvConfirm || !userId) return;
+    setDeletingConvId(deleteConvConfirm.id);
+    setDeleteConvConfirm(null);
+    const ok = await deleteWebConversation(deleteConvConfirm.id, userId);
+    if (ok) {
+      setConversations(prev => prev.filter(c => c.id !== deleteConvConfirm.id));
+      if (selected?.id === deleteConvConfirm.id) {
+        setSelected(null);
+        setMessages([]);
+      }
+    }
+    setDeletingConvId(null);
   };
 
   const handleToggleReaction = async (msgId: string, emoji: string) => {
@@ -1118,37 +1137,57 @@ export default function MensagensPage() {
             ) : (
               <>
                 {filteredConvos.map((convo, i) => (
-                  <button
+                  <div
                     key={convo.id}
-                    onClick={() => loadMessages(convo)}
-                    style={{
-                      display: "flex", alignItems: "center", width: "100%", padding: "14px 16px", gap: 14,
-                      border: "none", borderBottom: i < filteredConvos.length - 1 || newUserResults.length > 0 ? `1px solid ${BORDER}` : "none",
-                      backgroundColor: "transparent", cursor: "pointer", textAlign: "left", fontFamily: "inherit",
-                    }}
+                    style={{ position: "relative" }}
+                    onMouseEnter={() => setHoveredConvId(convo.id)}
+                    onMouseLeave={() => setHoveredConvId(null)}
                   >
-                    <Avatar src={getConvoAvatar(convo)} name={getConvoName(convo)} size={52} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
-                        <span style={{ fontSize: 15, fontWeight: convo.unread_count > 0 ? 800 : 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "65%" }}>
-                          {getConvoName(convo)}
-                        </span>
-                        {convo.last_message_at && (
-                          <span style={{ fontSize: 11, color: MUTED, flexShrink: 0 }}>{timeAgo(convo.last_message_at)}</span>
-                        )}
+                    <button
+                      onClick={() => loadMessages(convo)}
+                      style={{
+                        display: "flex", alignItems: "center", width: "100%", padding: "14px 16px", gap: 14,
+                        border: "none", borderBottom: i < filteredConvos.length - 1 || newUserResults.length > 0 ? `1px solid ${BORDER}` : "none",
+                        backgroundColor: "transparent", cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                        paddingRight: hoveredConvId === convo.id ? 52 : 16,
+                      }}
+                    >
+                      <Avatar src={getConvoAvatar(convo)} name={getConvoName(convo)} size={52} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                          <span style={{ fontSize: 15, fontWeight: convo.unread_count > 0 ? 800 : 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "65%" }}>
+                            {getConvoName(convo)}
+                          </span>
+                          {convo.last_message_at && (
+                            <span style={{ fontSize: 11, color: MUTED, flexShrink: 0 }}>{timeAgo(convo.last_message_at)}</span>
+                          )}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <span style={{ fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, fontWeight: convo.unread_count > 0 ? 600 : 400, color: convo.unread_count > 0 ? NAVY : MUTED }}>
+                            {convo.last_message ?? "Iniciar conversa"}
+                          </span>
+                          {convo.unread_count > 0 && (
+                            <div style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: GOLD, color: WHITE, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginLeft: 8 }}>
+                              {convo.unread_count}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span style={{ fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, fontWeight: convo.unread_count > 0 ? 600 : 400, color: convo.unread_count > 0 ? NAVY : MUTED }}>
-                          {convo.last_message ?? "Iniciar conversa"}
-                        </span>
-                        {convo.unread_count > 0 && (
-                          <div style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: GOLD, color: WHITE, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginLeft: 8 }}>
-                            {convo.unread_count}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </button>
+                    </button>
+                    {hoveredConvId === convo.id && (
+                      <button
+                        onClick={e => { e.stopPropagation(); setDeleteConvConfirm(convo); }}
+                        title="Apagar conversa"
+                        style={{
+                          position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
+                          width: 32, height: 32, borderRadius: 8, border: "none",
+                          backgroundColor: "#fee2e2", color: "#dc2626",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          cursor: "pointer", fontSize: 15, flexShrink: 0,
+                        }}
+                      >🗑</button>
+                    )}
+                  </div>
                 ))}
                 {userSearchLoading && (
                   <div style={{ padding: "10px 16px", fontSize: 12, color: MUTED }}>Buscando pessoas…</div>
@@ -1276,39 +1315,59 @@ export default function MensagensPage() {
               ) : (
                 <>
                   {filteredConvos.map(convo => (
-                    <button
+                    <div
                       key={convo.id}
-                      onClick={() => loadMessages(convo)}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 10, width: "100%",
-                        padding: "12px 14px", border: "none", textAlign: "left",
-                        backgroundColor: selected?.id === convo.id ? `${GOLD}12` : "transparent",
-                        borderLeft: selected?.id === convo.id ? `3px solid ${GOLD}` : "3px solid transparent",
-                        cursor: "pointer", fontFamily: "inherit",
-                      }}
+                      style={{ position: "relative" }}
+                      onMouseEnter={() => setHoveredConvId(convo.id)}
+                      onMouseLeave={() => setHoveredConvId(null)}
                     >
-                      <Avatar src={getConvoAvatar(convo)} name={getConvoName(convo)} size={42} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 140 }}>
-                            {getConvoName(convo)}
-                          </span>
-                          {convo.last_message_at && (
-                            <span style={{ fontSize: 11, color: MUTED, flexShrink: 0 }}>{timeAgo(convo.last_message_at)}</span>
+                      <button
+                        onClick={() => loadMessages(convo)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 10, width: "100%",
+                          padding: "12px 14px", border: "none", textAlign: "left",
+                          backgroundColor: selected?.id === convo.id ? `${GOLD}12` : "transparent",
+                          borderLeft: selected?.id === convo.id ? `3px solid ${GOLD}` : "3px solid transparent",
+                          cursor: "pointer", fontFamily: "inherit",
+                          paddingRight: hoveredConvId === convo.id ? 44 : 14,
+                        }}
+                      >
+                        <Avatar src={getConvoAvatar(convo)} name={getConvoName(convo)} size={42} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 140 }}>
+                              {getConvoName(convo)}
+                            </span>
+                            {convo.last_message_at && (
+                              <span style={{ fontSize: 11, color: MUTED, flexShrink: 0 }}>{timeAgo(convo.last_message_at)}</span>
+                            )}
+                          </div>
+                          {convo.last_message && (
+                            <div style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>
+                              {convo.last_message}
+                            </div>
                           )}
                         </div>
-                        {convo.last_message && (
-                          <div style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>
-                            {convo.last_message}
+                        {convo.unread_count > 0 && (
+                          <div style={{ width: 18, height: 18, borderRadius: "50%", backgroundColor: GOLD, color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            {convo.unread_count}
                           </div>
                         )}
-                      </div>
-                      {convo.unread_count > 0 && (
-                        <div style={{ width: 18, height: 18, borderRadius: "50%", backgroundColor: GOLD, color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          {convo.unread_count}
-                        </div>
+                      </button>
+                      {hoveredConvId === convo.id && (
+                        <button
+                          onClick={e => { e.stopPropagation(); setDeleteConvConfirm(convo); }}
+                          title="Apagar conversa"
+                          style={{
+                            position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+                            width: 28, height: 28, borderRadius: 7, border: "none",
+                            backgroundColor: "#fee2e2", color: "#dc2626",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            cursor: "pointer", fontSize: 13, flexShrink: 0,
+                          }}
+                        >🗑</button>
                       )}
-                    </button>
+                    </div>
                   ))}
                   {userSearchLoading && (
                     <div style={{ padding: "8px 14px", fontSize: 11, color: MUTED }}>Buscando pessoas…</div>
@@ -1369,6 +1428,23 @@ export default function MensagensPage() {
           </div>
         </div>}
       </div>
+      {/* Delete conversation modal */}
+      {deleteConvConfirm && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.48)", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setDeleteConvConfirm(null)}>
+          <div style={{ backgroundColor: WHITE, borderRadius: 14, padding: "28px 24px", maxWidth: 360, width: "100%", boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Apagar conversa</div>
+            <p style={{ fontSize: 14, color: MUTED, margin: "0 0 6px" }}>
+              Conversa com <strong style={{ color: NAVY }}>{(deleteConvConfirm.name ?? deleteConvConfirm.participant?.full_name ?? "esta pessoa")}</strong>
+            </p>
+            <p style={{ fontSize: 13, color: MUTED, margin: "0 0 22px" }}>Você sairá desta conversa. As mensagens só serão removidas para você.</p>
+            <div style={{ display: "flex", gap: 8, flexDirection: "column" }}>
+              <button onClick={handleDeleteConv} style={{ padding: "10px 16px", borderRadius: 9, border: "none", backgroundColor: "#dc2626", color: WHITE, fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>Apagar conversa</button>
+              <button onClick={() => setDeleteConvConfirm(null)} style={{ padding: "10px 16px", borderRadius: 9, border: `1.5px solid ${BORDER}`, backgroundColor: WHITE, color: MUTED, fontWeight: 500, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete message modal */}
       {deleteConfirm && (
         <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.48)", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setDeleteConfirm(null)}>
