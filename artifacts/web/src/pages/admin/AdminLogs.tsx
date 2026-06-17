@@ -54,12 +54,13 @@ const TYPE_ICON_COLOR: Record<ActivityType, string> = {
 };
 
 export default function AdminLogs() {
-  const [loading, setLoading]     = useState(true);
-  const [allLogs, setAllLogs]     = useState<ActivityLog[]>([]);
-  const [search, setSearch]       = useState("");
-  const [filter, setFilter]       = useState("");
+  const [loading, setLoading]       = useState(true);
+  const [allLogs, setAllLogs]       = useState<ActivityLog[]>([]);
+  const [search, setSearch]         = useState("");
+  const [filter, setFilter]         = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
-  const [days, setDays]           = useState(7);
+  const [days, setDays]             = useState(7);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const loadData = useCallback(async (d: number) => {
     setLoading(true);
@@ -238,52 +239,98 @@ export default function AdminLogs() {
                   Nenhuma atividade encontrada
                 </div>
               ) : (
-                filteredLogs.map((log, i) => (
-                  <div
-                    key={log.id}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "40px 1fr 120px 80px",
-                      alignItems: "center",
-                      gap: 0,
-                      padding: "12px 18px",
-                      borderBottom: i < filteredLogs.length - 1 ? "1px solid #e8eaed" : "none",
-                    }}
-                  >
-                    {/* Avatar */}
-                    <div style={{ width: 34, height: 34, borderRadius: "50%", backgroundColor: NAVY, display: "flex", alignItems: "center", justifyContent: "center", color: GOLD, fontSize: 13, fontWeight: 800 }}>
-                      {log.initial}
-                    </div>
+                filteredLogs.map((log, i) => {
+                  const isExpanded = expandedId === log.id;
+                  const hasDetail = !!log.detail;
+                  const isLast = i === filteredLogs.length - 1;
+                  return (
+                    <div key={log.id} style={{ borderBottom: isLast ? "none" : "1px solid #e8eaed" }}>
+                      {/* Main row */}
+                      <div
+                        onClick={() => hasDetail && setExpandedId(isExpanded ? null : log.id)}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "40px 1fr 120px 90px",
+                          alignItems: "center",
+                          gap: 0,
+                          padding: "12px 18px",
+                          cursor: hasDetail ? "pointer" : "default",
+                          backgroundColor: isExpanded ? "#fafbfc" : "transparent",
+                          transition: "background-color 0.1s",
+                        }}
+                        onMouseEnter={e => { if (hasDetail) (e.currentTarget as HTMLElement).style.backgroundColor = "#f5f6f8"; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = isExpanded ? "#fafbfc" : "transparent"; }}
+                      >
+                        {/* Avatar */}
+                        <div style={{ width: 34, height: 34, borderRadius: "50%", backgroundColor: NAVY, display: "flex", alignItems: "center", justifyContent: "center", color: GOLD, fontSize: 13, fontWeight: 800 }}>
+                          {log.initial}
+                        </div>
 
-                    {/* Text */}
-                    <div style={{ fontSize: 13, color: "#333", lineHeight: 1.4, paddingRight: 12 }}>
-                      {log.text}
-                    </div>
+                        {/* Text */}
+                        <div style={{ fontSize: 13, color: "#333", lineHeight: 1.4, paddingRight: 12 }}>
+                          {log.text}
+                        </div>
 
-                    {/* Category badge */}
-                    <div>
-                      <span style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 5,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        padding: "3px 10px",
-                        borderRadius: 100,
-                        backgroundColor: `${TYPE_ICON_COLOR[log.type]}18`,
-                        color: TYPE_ICON_COLOR[log.type],
-                      }}>
-                        <span style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: TYPE_ICON_COLOR[log.type], display: "inline-block" }} />
-                        {log.type}
-                      </span>
-                    </div>
+                        {/* Category badge */}
+                        <div>
+                          <span style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            padding: "3px 10px",
+                            borderRadius: 100,
+                            backgroundColor: `${TYPE_ICON_COLOR[log.type]}18`,
+                            color: TYPE_ICON_COLOR[log.type],
+                          }}>
+                            <span style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: TYPE_ICON_COLOR[log.type], display: "inline-block" }} />
+                            {log.type}
+                          </span>
+                        </div>
 
-                    {/* Time */}
-                    <div style={{ fontSize: 11, color: "#aaa", textAlign: "right" }}>
-                      {relativeTime(log.created_at)}
+                        {/* Time + chevron */}
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
+                          <span style={{ fontSize: 11, color: "#aaa" }}>{relativeTime(log.created_at)}</span>
+                          {hasDetail && (
+                            <span style={{
+                              fontSize: 10,
+                              color: "#bbb",
+                              transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                              transition: "transform 0.15s",
+                              display: "inline-block",
+                              lineHeight: 1,
+                            }}>▼</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Expanded detail */}
+                      {isExpanded && log.detail && (
+                        <div style={{
+                          padding: "10px 18px 14px 72px",
+                          backgroundColor: "#fafbfc",
+                          borderTop: "1px dashed #e8eaed",
+                        }}>
+                          <div style={{
+                            fontSize: 13,
+                            color: "#444",
+                            lineHeight: 1.6,
+                            backgroundColor: "#fff",
+                            border: "1px solid #e8eaed",
+                            borderLeft: `3px solid ${TYPE_ICON_COLOR[log.type]}`,
+                            borderRadius: 8,
+                            padding: "10px 14px",
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-word",
+                          }}>
+                            {log.detail}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 

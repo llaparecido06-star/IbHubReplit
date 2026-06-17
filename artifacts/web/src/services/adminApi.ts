@@ -502,6 +502,7 @@ export interface ActivityLog {
   text: string;
   iconColor: string;
   created_at: string;
+  detail?: string | null;
 }
 
 export interface ActivityCounts {
@@ -526,6 +527,12 @@ function resolveProfileName(profile: unknown): string | null {
   return (profile as { full_name: string | null }).full_name;
 }
 
+function truncateDetail(s: string | null | undefined, max = 220): string | null {
+  if (!s?.trim()) return null;
+  const clean = s.trim();
+  return clean.length > max ? clean.slice(0, max) + "…" : clean;
+}
+
 export async function fetchActivityLogs(days = 7): Promise<ActivityLog[]> {
   const since = days === 0 ? null : new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
@@ -536,62 +543,93 @@ export async function fetchActivityLogs(days = 7): Promise<ActivityLog[]> {
 
   const [regsRes, likesRes, followsRes, connRes, commentsRes, postsRes, messagesRes, marketRes] = await Promise.all([
     withPeriod(supabase.from("profiles").select("id, full_name, created_at")).order("created_at", { ascending: false }).limit(100),
-    withPeriod(supabase.from("likes").select("id, created_at, profile:profiles!likes_user_id_fkey(full_name)")).order("created_at", { ascending: false }).limit(100),
-    withPeriod(supabase.from("follows").select("id, created_at, profile:profiles!follows_follower_id_fkey(full_name)")).order("created_at", { ascending: false }).limit(100),
-    withPeriod(supabase.from("connections").select("id, created_at, profile:profiles!connections_requester_id_fkey(full_name)")).order("created_at", { ascending: false }).limit(100),
-    withPeriod(supabase.from("comments").select("id, created_at, user_id")).order("created_at", { ascending: false }).limit(100),
-    withPeriod(supabase.from("posts").select("id, created_at, user_id")).order("created_at", { ascending: false }).limit(100),
-    withPeriod(supabase.from("messages").select("id, created_at, sender_id").is("deleted_at", null)).order("created_at", { ascending: false }).limit(100),
-    withPeriod(supabase.from("market_posts").select("id, created_at, user_id")).order("created_at", { ascending: false }).limit(100),
+    withPeriod(supabase.from("likes").select("id, created_at, post_id, profile:profiles!likes_user_id_fkey(full_name)")).order("created_at", { ascending: false }).limit(100),
+    withPeriod(supabase.from("follows").select("id, created_at, following_id, profile:profiles!follows_follower_id_fkey(full_name)")).order("created_at", { ascending: false }).limit(100),
+    withPeriod(supabase.from("connections").select("id, created_at, receiver_id, profile:profiles!connections_requester_id_fkey(full_name)")).order("created_at", { ascending: false }).limit(100),
+    withPeriod(supabase.from("comments").select("id, created_at, user_id, content")).order("created_at", { ascending: false }).limit(100),
+    withPeriod(supabase.from("posts").select("id, created_at, user_id, content")).order("created_at", { ascending: false }).limit(100),
+    withPeriod(supabase.from("messages").select("id, created_at, sender_id, content").is("deleted_at", null)).order("created_at", { ascending: false }).limit(100),
+    withPeriod(supabase.from("market_posts").select("id, created_at, author_id, content")).order("created_at", { ascending: false }).limit(100),
   ]);
 
   const directUserIds = [
     ...(commentsRes.data ?? []).map((r: any) => r.user_id),
     ...(postsRes.data ?? []).map((r: any) => r.user_id),
     ...(messagesRes.data ?? []).map((r: any) => r.sender_id),
-    ...(marketRes.data ?? []).map((r: any) => r.user_id),
+    ...(marketRes.data ?? []).map((r: any) => r.author_id),
   ].filter(Boolean) as string[];
 
+  const likedPostIds = [...new Set((likesRes.data ?? []).map((r: any) => r.post_id).filter(Boolean))] as string[];
+  const followingIds = [...new Set((followsRes.data ?? []).map((r: any) => r.following_id).filter(Boolean))] as string[];
+  const receiverIds  = [...new Set((connRes.data ?? []).map((r: any) => r.receiver_id).filter(Boolean))] as string[];
+
+  const [profilesRes, likedPostsRes, followingProfilesRes, receiverProfilesRes] = await Promise.all([
+    directUserIds.length > 0
+      ? supabase.from("profiles").select("id, full_name").in("id", [...new Set(directUserIds)])
+      : Promise.resolve({ data: [] as Array<{ id: string; full_name: string | null }> }),
+    likedPostIds.length > 0
+      ? supabase.from("posts").select("id, content").in("id", likedPostIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; content: string | null }> }),
+    followingIds.length > 0
+      ? supabase.from("profiles").select("id, full_name").in("id", followingIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; full_name: string | null }> }),
+    receiverIds.length > 0
+      ? supabase.from("profiles").select("id, full_name").in("id", receiverIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; full_name: string | null }> }),
+  ]);
+
   const profileMap = new Map<string, string>();
-  if (directUserIds.length > 0) {
-    const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", [...new Set(directUserIds)]);
-    for (const p of (profiles ?? []) as Array<{ id: string; full_name: string | null }>) {
-      profileMap.set(p.id, p.full_name ?? "Usuário");
-    }
+  for (const p of (profilesRes.data ?? []) as Array<{ id: string; full_name: string | null }>) {
+    profileMap.set(p.id, p.full_name ?? "Usuário");
+  }
+  const likedPostMap = new Map<string, string | null>();
+  for (const p of (likedPostsRes.data ?? []) as Array<{ id: string; content: string | null }>) {
+    likedPostMap.set(p.id, p.content);
+  }
+  const followingProfileMap = new Map<string, string>();
+  for (const p of (followingProfilesRes.data ?? []) as Array<{ id: string; full_name: string | null }>) {
+    followingProfileMap.set(p.id, p.full_name ?? "Usuário");
+  }
+  const receiverProfileMap = new Map<string, string>();
+  for (const p of (receiverProfilesRes.data ?? []) as Array<{ id: string; full_name: string | null }>) {
+    receiverProfileMap.set(p.id, p.full_name ?? "Usuário");
   }
 
   const logs: ActivityLog[] = [];
 
   for (const row of ((regsRes.data ?? []) as Array<{ id: string; full_name: string | null; created_at: string }>)) {
-    logs.push({ id: `reg-${row.id}`, type: "Cadastro", initial: getLogInitial(row.full_name), text: `${row.full_name ?? "Usuário"} se cadastrou na plataforma`, iconColor: "#059669", created_at: row.created_at });
+    logs.push({ id: `reg-${row.id}`, type: "Cadastro", initial: getLogInitial(row.full_name), text: `${row.full_name ?? "Usuário"} se cadastrou na plataforma`, iconColor: "#059669", created_at: row.created_at, detail: null });
   }
-  for (const row of ((likesRes.data ?? []) as Array<{ id: string; created_at: string; profile: unknown }>)) {
+  for (const row of ((likesRes.data ?? []) as Array<{ id: string; created_at: string; post_id: string | null; profile: unknown }>)) {
     const name = resolveProfileName(row.profile);
-    logs.push({ id: `like-${row.id}`, type: "Curtida", initial: getLogInitial(name), text: `${name ?? "Usuário"} curtiu uma publicação`, iconColor: "#e11d48", created_at: row.created_at });
+    const postContent = row.post_id ? likedPostMap.get(row.post_id) : null;
+    logs.push({ id: `like-${row.id}`, type: "Curtida", initial: getLogInitial(name), text: `${name ?? "Usuário"} curtiu uma publicação`, iconColor: "#e11d48", created_at: row.created_at, detail: truncateDetail(postContent) });
   }
-  for (const row of ((followsRes.data ?? []) as Array<{ id: string; created_at: string; profile: unknown }>)) {
+  for (const row of ((followsRes.data ?? []) as Array<{ id: string; created_at: string; following_id: string | null; profile: unknown }>)) {
     const name = resolveProfileName(row.profile);
-    logs.push({ id: `follow-${row.id}`, type: "Seguiu", initial: getLogInitial(name), text: `${name ?? "Usuário"} seguiu alguém`, iconColor: "#059669", created_at: row.created_at });
+    const targetName = row.following_id ? followingProfileMap.get(row.following_id) : null;
+    logs.push({ id: `follow-${row.id}`, type: "Seguiu", initial: getLogInitial(name), text: `${name ?? "Usuário"} seguiu alguém`, iconColor: "#059669", created_at: row.created_at, detail: targetName ? `Seguiu: ${targetName}` : null });
   }
-  for (const row of ((connRes.data ?? []) as Array<{ id: string; created_at: string; profile: unknown }>)) {
+  for (const row of ((connRes.data ?? []) as Array<{ id: string; created_at: string; receiver_id: string | null; profile: unknown }>)) {
     const name = resolveProfileName(row.profile);
-    logs.push({ id: `conn-${row.id}`, type: "Conexão", initial: getLogInitial(name), text: `${name ?? "Usuário"} enviou pedido de conexão`, iconColor: "#7c3aed", created_at: row.created_at });
+    const targetName = row.receiver_id ? receiverProfileMap.get(row.receiver_id) : null;
+    logs.push({ id: `conn-${row.id}`, type: "Conexão", initial: getLogInitial(name), text: `${name ?? "Usuário"} enviou pedido de conexão`, iconColor: "#7c3aed", created_at: row.created_at, detail: targetName ? `Pedido enviado para: ${targetName}` : null });
   }
-  for (const row of ((commentsRes.data ?? []) as Array<{ id: string; created_at: string; user_id: string }>)) {
+  for (const row of ((commentsRes.data ?? []) as Array<{ id: string; created_at: string; user_id: string; content: string | null }>)) {
     const name = profileMap.get(row.user_id) ?? "Usuário";
-    logs.push({ id: `comment-${row.id}`, type: "Comentário", initial: getLogInitial(name), text: `${name} comentou em uma publicação`, iconColor: "#0ea5e9", created_at: row.created_at });
+    logs.push({ id: `comment-${row.id}`, type: "Comentário", initial: getLogInitial(name), text: `${name} comentou em uma publicação`, iconColor: "#0ea5e9", created_at: row.created_at, detail: truncateDetail(row.content) });
   }
-  for (const row of ((postsRes.data ?? []) as Array<{ id: string; created_at: string; user_id: string }>)) {
+  for (const row of ((postsRes.data ?? []) as Array<{ id: string; created_at: string; user_id: string; content: string | null }>)) {
     const name = profileMap.get(row.user_id) ?? "Usuário";
-    logs.push({ id: `post-${row.id}`, type: "Publicação", initial: getLogInitial(name), text: `${name} publicou no feed`, iconColor: "#f59e0b", created_at: row.created_at });
+    logs.push({ id: `post-${row.id}`, type: "Publicação", initial: getLogInitial(name), text: `${name} publicou no feed`, iconColor: "#f59e0b", created_at: row.created_at, detail: truncateDetail(row.content) });
   }
-  for (const row of ((messagesRes.data ?? []) as Array<{ id: string; created_at: string; sender_id: string }>)) {
+  for (const row of ((messagesRes.data ?? []) as Array<{ id: string; created_at: string; sender_id: string; content: string | null }>)) {
     const name = profileMap.get(row.sender_id) ?? "Usuário";
-    logs.push({ id: `msg-${row.id}`, type: "Chat", initial: getLogInitial(name), text: `${name} enviou uma mensagem no chat`, iconColor: "#6366f1", created_at: row.created_at });
+    logs.push({ id: `msg-${row.id}`, type: "Chat", initial: getLogInitial(name), text: `${name} enviou uma mensagem no chat`, iconColor: "#6366f1", created_at: row.created_at, detail: truncateDetail(row.content) });
   }
-  for (const row of ((marketRes.data ?? []) as Array<{ id: string; created_at: string; user_id: string }>)) {
-    const name = profileMap.get(row.user_id) ?? "Usuário";
-    logs.push({ id: `market-${row.id}`, type: "Mercado", initial: getLogInitial(name), text: `${name} publicou no Mercado`, iconColor: "#c9a84c", created_at: row.created_at });
+  for (const row of ((marketRes.data ?? []) as Array<{ id: string; created_at: string; author_id: string; content: string | null }>)) {
+    const name = profileMap.get(row.author_id) ?? "Usuário";
+    logs.push({ id: `market-${row.id}`, type: "Mercado", initial: getLogInitial(name), text: `${name} publicou no Mercado`, iconColor: "#c9a84c", created_at: row.created_at, detail: truncateDetail(row.content) });
   }
 
   logs.sort((a, b) => b.created_at.localeCompare(a.created_at));
