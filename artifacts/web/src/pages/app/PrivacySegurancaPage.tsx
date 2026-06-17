@@ -213,11 +213,10 @@ export default function PrivacySegurancaPage() {
               />
               {newPassword.length > 0 && (() => {
                 const rules = [
-                  { ok: newPassword.length >= 6 && newPassword.length <= 8, label: "6 a 8 caracteres" },
+                  { ok: newPassword.length >= 6, label: "Mínimo 6 caracteres" },
                   { ok: /[A-Z]/.test(newPassword), label: "1 letra maiúscula" },
                   { ok: /[a-z]/.test(newPassword), label: "1 letra minúscula" },
                   { ok: /[0-9]/.test(newPassword), label: "1 número" },
-                  { ok: /[.!@]/.test(newPassword), label: "1 caractere especial (. ! @)" },
                 ];
                 return (
                   <div style={{ padding: "10px 12px", background: "#f4f5f7", borderRadius: 8, display: "flex", flexDirection: "column", gap: 5, marginTop: -4 }}>

@@ -149,11 +149,10 @@ export default function CadastroPage() {
     if (emailState === "taken") return "Esse e-mail já está cadastrado";
     if (emailState === "checking") return "Aguarde a verificação do e-mail";
     if (!password) return "Informe uma senha";
-    if (password.length < 6 || password.length > 8) return "A senha deve ter entre 6 e 8 caracteres";
+    if (password.length < 6) return "A senha deve ter pelo menos 6 caracteres";
     if (!/[A-Z]/.test(password)) return "A senha deve conter ao menos 1 letra maiúscula";
     if (!/[a-z]/.test(password)) return "A senha deve conter ao menos 1 letra minúscula";
     if (!/[0-9]/.test(password)) return "A senha deve conter ao menos 1 número";
-    if (!/[.!@]/.test(password)) return "A senha deve conter ao menos 1 caractere especial (. ! @)";
     if (password !== confirmPassword) return "As senhas não coincidem";
     if (!termsAccepted) return "Aceite os Termos de Uso para continuar";
     if (!ageConfirmed) return "Confirme que você tem 18 anos ou mais";
@@ -371,11 +370,10 @@ export default function CadastroPage() {
                   </div>
                   {password.length > 0 && (() => {
                     const rules = [
-                      { ok: password.length >= 6 && password.length <= 8, label: "6 a 8 caracteres" },
+                      { ok: password.length >= 6, label: "Mínimo 6 caracteres" },
                       { ok: /[A-Z]/.test(password), label: "1 letra maiúscula" },
                       { ok: /[a-z]/.test(password), label: "1 letra minúscula" },
                       { ok: /[0-9]/.test(password), label: "1 número" },
-                      { ok: /[.!@]/.test(password), label: "1 caractere especial (. ! @)" },
                     ];
                     return (
                       <div style={{ marginTop: 8, padding: "10px 12px", background: "#f4f5f7", borderRadius: 8, display: "flex", flexDirection: "column", gap: 5 }}>
