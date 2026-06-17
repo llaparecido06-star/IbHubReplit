@@ -119,7 +119,7 @@ export function MiniChatPanel({
         .minichat-badge-pulse { animation: minichat-pulse 0.6s ease; }
         .minichat-row         { transition: background 0.12s; }
         .minichat-row:hover   { background: #f5f4f0 !important; }
-        .minichat-header:hover { background: #f9f6ee !important; }
+        .minichat-header:hover { background: #b8943d !important; }
       `}</style>
 
       {/*
@@ -145,24 +145,23 @@ export function MiniChatPanel({
           onClick={() => setOpen(o => !o)}
           className="minichat-header"
           style={{
-            backgroundColor: WHITE,
-            color: NAVY,
-            padding: "10px 14px",
+            backgroundColor: GOLD,
+            color: WHITE,
+            padding: "11px 14px",
             display: "flex", alignItems: "center", justifyContent: "space-between",
             cursor: "pointer",
             userSelect: "none",
-            borderBottom: open ? `2px solid ${GOLD}` : `2px solid ${GOLD}40`,
-            transition: "border-color 0.2s, background 0.15s",
+            transition: "background 0.15s",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ color: GOLD, display: "flex", alignItems: "center" }}><MsgIcon /></span>
-            <span style={{ fontSize: 13, fontWeight: 700 }}>Mensagens</span>
+            <span style={{ color: WHITE, display: "flex", alignItems: "center" }}><MsgIcon /></span>
+            <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.01em" }}>Mensagens</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {totalUnread > 0 && (
               <span style={{
-                backgroundColor: GOLD, color: NAVY,
+                backgroundColor: NAVY, color: WHITE,
                 borderRadius: 10, minWidth: 18, height: 18,
                 fontSize: 10, fontWeight: 800,
                 display: "flex", alignItems: "center", justifyContent: "center",
@@ -171,7 +170,7 @@ export function MiniChatPanel({
                 {totalUnread > 9 ? "9+" : totalUnread}
               </span>
             )}
-            <span style={{ color: MUTED, display: "flex", alignItems: "center" }}>
+            <span style={{ color: "rgba(255,255,255,0.8)", display: "flex", alignItems: "center" }}>
               <ChevronIcon open={open} />
             </span>
           </div>
