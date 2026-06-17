@@ -225,7 +225,7 @@ export default function GrupoChatPage() {
       .eq("conversation_id", groupId)
       .eq("user_id", user.id);
     if (unreadCount > 0) {
-      window.dispatchEvent(new CustomEvent("chat-conv-read", { detail: { count: unreadCount } }));
+      window.dispatchEvent(new CustomEvent("chat-conv-read", { detail: { count: unreadCount, convId: groupId } }));
     }
   }, [groupId, user?.id, scrollBottom]);
 

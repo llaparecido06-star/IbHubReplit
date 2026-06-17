@@ -749,11 +749,14 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
     senderSelfIds.current = ids;
   }, [profile?.id, user?.id]);
 
-  // Decrement badge when MensagensPage/GrupoChatPage opens a conversation
+  // Decrement badge + sync mini panel when MensagensPage/GrupoChatPage opens a conversation
   useEffect(() => {
     const handler = (e: Event) => {
-      const { count } = (e as CustomEvent<{ count: number }>).detail;
+      const { count, convId } = (e as CustomEvent<{ count: number; convId?: string }>).detail;
       if (count > 0) setChatUnreadTotal(prev => Math.max(0, prev - count));
+      if (convId) {
+        setMiniChatConvs(prev => prev.map(c => c.id === convId ? { ...c, unread_count: 0 } : c));
+      }
     };
     window.addEventListener("chat-conv-read", handler);
     return () => window.removeEventListener("chat-conv-read", handler);

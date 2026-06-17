@@ -348,22 +348,31 @@ export default function MensagensPage() {
   // while already on this page) OR when conversations finish loading.
   useEffect(() => {
     if (!convIdFromUrl || !userId || authLoading) return;
+
+    function openAndRead(convo: WebConversation) {
+      setSelected(convo);
+      fetchWebMessages(convo.id, userId).then(msgs => {
+        msgs.forEach(m => seenMsgIds.current.add(m.id));
+        setMessages(msgs);
+        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+        if ((convo.unread_count ?? 0) > 0) {
+          window.dispatchEvent(new CustomEvent("chat-conv-read", { detail: { count: convo.unread_count, convId: convo.id } }));
+          setConversations(prev => prev.map(c => c.id === convo.id ? { ...c, unread_count: 0 } : c));
+          void markWebConversationRead(convo.id, userId);
+        }
+      });
+    }
+
     const target = conversations.find(c => c.id === convIdFromUrl);
     if (target) {
       // Conversation already in list — select it immediately
-      if (selected?.id !== target.id) {
-        setSelected(target);
-        fetchWebMessages(target.id, userId).then(setMessages);
-      }
+      if (selected?.id !== target.id) openAndRead(target);
     } else if (!loading) {
       // Not in list yet (e.g. newly created conversation) — fetch it directly
       fetchWebConversations(userId, activeCompany?.id ?? null).then(fresh => {
         setConversations(fresh);
         const found = fresh.find(c => c.id === convIdFromUrl);
-        if (found) {
-          setSelected(found);
-          fetchWebMessages(found.id, userId).then(setMessages);
-        }
+        if (found) openAndRead(found);
       }).catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -383,7 +392,7 @@ export default function MensagensPage() {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     // Mark as read: notify AppShell badge + update DB + clear local badge
     if (userId && (convo.unread_count ?? 0) > 0) {
-      window.dispatchEvent(new CustomEvent("chat-conv-read", { detail: { count: convo.unread_count } }));
+      window.dispatchEvent(new CustomEvent("chat-conv-read", { detail: { count: convo.unread_count, convId: convo.id } }));
       setConversations(prev => prev.map(c => c.id === convo.id ? { ...c, unread_count: 0 } : c));
       void markWebConversationRead(convo.id, userId);
     }
