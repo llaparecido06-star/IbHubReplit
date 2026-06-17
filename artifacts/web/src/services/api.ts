@@ -1279,6 +1279,7 @@ export async function fetchWebConversations(
 
     const res = await fetch(`${apiBase}/conversations?${params.toString()}`, {
       headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
     });
 
     if (!res.ok) {
@@ -1315,6 +1316,7 @@ export async function fetchWebMessages(conversationId: string, currentUserId?: s
 
     const res = await fetch(`${apiBase}/conversations/${conversationId}/messages`, {
       headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
     });
 
     if (!res.ok) {
