@@ -234,7 +234,7 @@ export default function GrupoConfiguracoesPage() {
       isActualOwner       ? "owner"     :
       rawRole === "owner" || rawRole === "moderator" || rawRole === "member" ? rawRole :
       rawRole === "admin" ? "moderator" : null;
-    if (!role) { setLocation(`/app/grupos/${groupId}`); return; }
+    if (!role) { setLocation(`/app/grupos`); return; }
     setMyRole(role);
 
     const activeMems  = rawMems.filter((m: any) => m.role !== "pending");
@@ -443,7 +443,7 @@ export default function GrupoConfiguracoesPage() {
         <div style={{ maxWidth: 680, margin: "0 auto", padding: "16px 0 80px" }}>
           {/* Header */}
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-            <button onClick={() => setLocation(`/app/grupos/${groupId}`)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, color: NAVY, padding: 0 }}>←</button>
+            <button onClick={() => setLocation(`/app/mensagens?conv=${groupId}`)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, color: NAVY, padding: 0 }}>←</button>
             <h1 style={{ fontSize: 20, fontWeight: 900, color: NAVY, margin: 0 }}>Configurações do Grupo</h1>
           </div>
 
@@ -577,7 +577,7 @@ export default function GrupoConfiguracoesPage() {
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "16px 0 80px" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-          <button onClick={() => setLocation(`/app/grupos/${groupId}`)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, color: NAVY, padding: 0 }}>←</button>
+          <button onClick={() => setLocation(`/app/mensagens?conv=${groupId}`)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, color: NAVY, padding: 0 }}>←</button>
           <h1 style={{ fontSize: 20, fontWeight: 900, color: NAVY, margin: 0 }}>Configurações do Grupo</h1>
         </div>
 
