@@ -799,6 +799,25 @@ export async function deleteBadgeDefinition(id: string): Promise<boolean> {
   return !error;
 }
 
+export interface DailyLoginEntry {
+  id: string;
+  full_name: string;
+  avatar_url: string | null;
+  last_sign_in_at: string | null;
+}
+
+export interface DailyLoginStats {
+  todayCount: number;
+  recentCount: number;
+  recentLogins: DailyLoginEntry[];
+}
+
+export async function fetchDailyLoginStats(): Promise<DailyLoginStats> {
+  const res = await adminFetch("/admin/daily-logins");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json() as Promise<DailyLoginStats>;
+}
+
 export function relativeTime(isoString: string): string {
   const diff = Date.now() - new Date(isoString).getTime();
   const seconds = Math.floor(diff / 1000);

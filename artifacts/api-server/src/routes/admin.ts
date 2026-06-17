@@ -1306,4 +1306,61 @@ router.get("/admin/credits/top-users", async (req: Request, res: Response): Prom
   });
 });
 
+// ─── GET /admin/daily-logins ──────────────────────────────────────────────────
+/** Returns today's login count, users active in the last 30 min, and a list
+ *  of recent logins (sorted by last_sign_in_at desc). Admin-only. */
+router.get("/admin/daily-logins", async (req: Request, res: Response): Promise<void> => {
+  const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(
+    (req.headers.authorization ?? "").replace("Bearer ", ""),
+  );
+  if (authErr || !user) { res.status(401).json({ error: "Não autenticado." }); return; }
+
+  const { data: profile } = await supabaseAdmin
+    .from("profiles").select("is_admin").eq("id", user.id).maybeSingle() as { data: { is_admin: boolean } | null };
+  if (!profile?.is_admin) { res.status(403).json({ error: "Acesso negado." }); return; }
+
+  // Fetch all auth users (paginated)
+  const allUsers: Array<{ id: string; email?: string; last_sign_in_at: string | null }> = [];
+  let page = 1;
+  while (true) {
+    const { data: authPage, error: authPageErr } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000, page });
+    if (authPageErr || !authPage?.users?.length) break;
+    allUsers.push(...authPage.users.map((u) => ({ id: u.id, email: u.email, last_sign_in_at: u.last_sign_in_at ?? null })));
+    if (authPage.users.length < 1000) break;
+    page++;
+  }
+
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  const thirtyMinAgo = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
+
+  const todayUsers   = allUsers.filter((u) => u.last_sign_in_at && u.last_sign_in_at >= todayStart);
+  const recentUsers  = allUsers.filter((u) => u.last_sign_in_at && u.last_sign_in_at >= thirtyMinAgo);
+
+  // Enrich today's logins with profile names
+  const todayIds = todayUsers.map((u) => u.id);
+  const { data: profiles } = await supabaseAdmin
+    .from("profiles")
+    .select("id, full_name, avatar_url")
+    .in("id", todayIds) as { data: Array<{ id: string; full_name: string | null; avatar_url: string | null }> | null };
+
+  const pm = new Map((profiles ?? []).map((p) => [p.id, p]));
+
+  const recentLogins = todayUsers
+    .sort((a, b) => (b.last_sign_in_at ?? "").localeCompare(a.last_sign_in_at ?? ""))
+    .slice(0, 50)
+    .map((u) => ({
+      id: u.id,
+      full_name: pm.get(u.id)?.full_name ?? u.email ?? "Usuário",
+      avatar_url: pm.get(u.id)?.avatar_url ?? null,
+      last_sign_in_at: u.last_sign_in_at,
+    }));
+
+  res.json({
+    todayCount:   todayUsers.length,
+    recentCount:  recentUsers.length,
+    recentLogins,
+  });
+});
+
 export default router;
