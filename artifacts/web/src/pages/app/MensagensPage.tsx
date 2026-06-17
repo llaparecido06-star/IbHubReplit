@@ -256,7 +256,11 @@ export default function MensagensPage() {
 
   const startConversation = async (targetUser: UserSearchResult) => {
     if (!userId) return;
-    const convId = await getOrCreateWebConversation(userId, targetUser.id, activeCompany?.id ?? null);
+    // Always pass null for company_page_id: conversations started from the
+    // personal-inbox search box are always personal DMs (company_page_id = null).
+    // Passing activeCompany?.id here would tag the DM as a company conversation,
+    // making it invisible in personal mode on subsequent loads.
+    const convId = await getOrCreateWebConversation(userId, targetUser.id, null);
     if (!convId) return;
 
     setUserSearchResults([]);
@@ -278,7 +282,7 @@ export default function MensagensPage() {
         full_name: targetUser.full_name ?? "",
         avatar_url: targetUser.avatar_url ?? null,
       },
-      company_page_id: activeCompany?.id ?? null,
+      company_page_id: null,
       company_page: null,
     };
     // Add to sidebar immediately so it's visible before the background refresh returns.
@@ -377,11 +381,46 @@ export default function MensagensPage() {
       // Conversation already in list — select it immediately
       if (selected?.id !== target.id) openAndRead(target);
     } else if (!loading) {
-      // Not in list yet (e.g. newly created conversation) — fetch it directly
+      // Not in list yet — refresh. This handles newly-created conversations
+      // and also the case where identity-scoping filtered the conv out.
       fetchWebConversations(userId, activeCompany?.id ?? null).then(fresh => {
-        setConversations(fresh);
         const found = fresh.find(c => c.id === convIdFromUrl);
-        if (found) openAndRead(found);
+        if (found) {
+          setConversations(fresh);
+          openAndRead(found);
+        } else {
+          // Still not in the server list (e.g. company-tagged DM opened in
+          // personal mode). Preserve the current list but open the messages
+          // pane directly — the user should still be able to read and reply.
+          setConversations(prev => {
+            if (prev.find(c => c.id === convIdFromUrl)) return prev;
+            const placeholder: WebConversation = {
+              id: convIdFromUrl as string,
+              is_group: false,
+              name: null,
+              avatar_url: null,
+              last_message: null,
+              last_message_at: new Date().toISOString(),
+              unread_count: 0,
+              participant: null,
+              company_page_id: null,
+              company_page: null,
+            };
+            return [placeholder, ...fresh];
+          });
+          openAndRead({
+            id: convIdFromUrl as string,
+            is_group: false,
+            name: null,
+            avatar_url: null,
+            last_message: null,
+            last_message_at: new Date().toISOString(),
+            unread_count: 0,
+            participant: null,
+            company_page_id: null,
+            company_page: null,
+          });
+        }
       }).catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

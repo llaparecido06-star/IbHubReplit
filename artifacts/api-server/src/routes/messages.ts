@@ -436,7 +436,8 @@ router.post("/conversations/direct", validateBody(DirectConversationSchema), asy
     .filter((id: string) => cp1Ids.has(id));
 
   if (shared.length > 0) {
-    // Return the first matching direct conversation.
+    // First try an exact match on company_page_id so personal and company
+    // inboxes stay separate when the user deliberately switches context.
     const { data: convos } = await supabaseAdmin
       .from("conversations")
       .select("id")
@@ -447,6 +448,22 @@ router.post("/conversations/direct", validateBody(DirectConversationSchema), asy
     const existing = (convos ?? [])[0];
     if (existing) {
       res.json({ conversation_id: existing.id });
+      return;
+    }
+
+    // Fallback: no exact-match found (e.g. a company-tagged DM exists but
+    // the caller is now requesting a personal one). Return the existing DM
+    // regardless of company_page_id rather than creating a duplicate thread
+    // — this preserves message history.
+    const { data: anyConvos } = await supabaseAdmin
+      .from("conversations")
+      .select("id")
+      .in("id", shared)
+      .eq("is_group", false);
+
+    const anyExisting = (anyConvos ?? [])[0];
+    if (anyExisting) {
+      res.json({ conversation_id: anyExisting.id });
       return;
     }
   }
@@ -775,6 +792,17 @@ router.get("/conversations", async (req: Request, res: Response): Promise<void> 
       (r) => r.is_group || !r.company_page_id || !ownedCompanyIds.has(r.company_page_id),
     );
   }
+
+  req.log.info(
+    {
+      callerId,
+      effectiveProfileId,
+      participantConvCount: existingConvIdSet.size,
+      filteredConvCount: filtered.length,
+      activeCompanyId: activeCompanyId ?? null,
+    },
+    "[conversations] list",
+  );
 
   res.json({ conversations: filtered });
 });
