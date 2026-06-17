@@ -6,7 +6,7 @@
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "ibhub",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "backgroundColor": "#0d1b2a",
     "splash": {
@@ -99,7 +99,7 @@
             "newArchEnabled": true
           },
           "ios": {
-            "newArchEnabled": false
+            "newArchEnabled": true
           }
         }
       ]

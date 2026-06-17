@@ -1,2 +1,3 @@
 - [Android double router.replace freeze](android-nav-double-replace.md) — TOKEN_REFRESHED during login causes second router.replace; guard with navInitiated && lastDestination === destination.
 - [Group members role constraint](group-members-role-constraint.md) — production trigger uses legacy 'admin' role; constraint must include it; onConflict must use 3-column key.
+- [iOS never worked — newArchEnabled conflict](ios-new-arch-conflict.md) — expo-build-properties plugin overrides root-level newArchEnabled; Reanimated 4.x requires New Architecture; fix in expo-build-properties iOS section.
