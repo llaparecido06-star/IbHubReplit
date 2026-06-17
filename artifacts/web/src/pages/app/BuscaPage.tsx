@@ -3,7 +3,7 @@ import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import { supabase, getCachedSession } from "@/lib/supabase";
-import { sendWebConnectionRequest } from "@/services/api";
+import { sendWebConnectionRequest, toggleCompanyFollow } from "@/services/api";
 
 const GOLD   = "#c9a84c";
 const NAVY   = "#0d1b2a";
@@ -22,7 +22,7 @@ const PLAN_LABELS: Record<string, { label: string; color: string }> = {
 type Filter = "todos" | "pessoas" | "publicacoes" | "empresas" | "vagas" | "eventos" | "grupos";
 
 interface PersonResult   { id: string; full_name: string | null; username: string | null; avatar_url: string | null; headline: string | null; plan: string | null; }
-interface CompanyResult  { id: string; name: string; avatar_url: string | null; industry: string | null; }
+interface CompanyResult  { id: string; name: string; avatar_url: string | null; industry: string | null; isCompanyPage?: boolean; }
 interface PostResult     { id: string; content: string; created_at: string; likes_count: number; comments_count: number; user_id?: string | null; company_page_id?: string | null; author?: { id: string; full_name: string | null; avatar_url: string | null; isCompany?: boolean } | null; }
 interface VagaResult     { id: string; title: string; description: string | null; company: string | null; location: string | null; contract_type: string | null; created_at: string; }
 interface EventResult    { id: string; title: string; description: string | null; start_date: string; location: string | null; entry_type: string; }
@@ -33,7 +33,12 @@ interface SearchResults {
   empresas: CompanyResult[]; vagas: VagaResult[];
   eventos: EventResult[]; grupos: GroupResult[];
 }
-const EMPTY: SearchResults = { pessoas: [], publicacoes: [], empresas: [], vagas: [], eventos: [], grupos: [] };
+interface SuggestionState {
+  pessoas: PersonResult[]; empresas: CompanyResult[]; publicacoes: PostResult[];
+  vagas: VagaResult[]; eventos: EventResult[]; grupos: GroupResult[];
+}
+const EMPTY_RESULTS: SearchResults = { pessoas: [], publicacoes: [], empresas: [], vagas: [], eventos: [], grupos: [] };
+const EMPTY_SUGGESTIONS: SuggestionState = { pessoas: [], empresas: [], publicacoes: [], vagas: [], eventos: [], grupos: [] };
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -77,17 +82,25 @@ function SectionHeader({ label, count }: { label: string; count: number }) {
   );
 }
 
-function PersonCard({ p, isEmpresa = false, currentUserId }: { p: PersonResult; isEmpresa?: boolean; currentUserId: string }) {
+function PersonCard({
+  p, isEmpresa = false, currentUserId,
+  isSent, onSent,
+}: {
+  p: PersonResult; isEmpresa?: boolean; currentUserId: string;
+  isSent: boolean; onSent: () => void;
+}) {
   const [, setLocation] = useLocation();
-  const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
   const plan = PLAN_LABELS[p.plan ?? ""];
   const isSelf = p.id === currentUserId;
 
   const handleConnect = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (sent || isSelf) return;
+    if (isSent || isSelf || loading) return;
+    setLoading(true);
     await sendWebConnectionRequest(p.id, currentUserId);
-    setSent(true);
+    onSent();
+    setLoading(false);
   };
 
   return (
@@ -104,18 +117,40 @@ function PersonCard({ p, isEmpresa = false, currentUserId }: { p: PersonResult; 
       {!isEmpresa && !isSelf && (
         <button
           onClick={handleConnect}
-          disabled={sent}
-          style={{ padding: "6px 14px", background: sent ? "#e8f5e9" : NAVY, color: sent ? "#16a34a" : WHITE, border: "none", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: sent ? "default" : "pointer", flexShrink: 0, fontFamily: "inherit" }}
+          disabled={isSent || loading}
+          style={{
+            padding: "6px 14px",
+            background: isSent ? "#e8f5e9" : NAVY,
+            color: isSent ? "#16a34a" : WHITE,
+            border: "none", borderRadius: 7, fontSize: 12, fontWeight: 700,
+            cursor: isSent || loading ? "default" : "pointer",
+            flexShrink: 0, fontFamily: "inherit", opacity: loading ? 0.6 : 1,
+          }}
         >
-          {sent ? "✓ Enviado" : "Conectar"}
+          {isSent ? "✓ Enviado" : loading ? "…" : "Conectar"}
         </button>
       )}
     </Row>
   );
 }
 
-function EmpresaCard({ c }: { c: CompanyResult }) {
+function EmpresaCard({
+  c, isFollowing, onToggleFollow, currentUserId,
+}: {
+  c: CompanyResult; isFollowing: boolean; onToggleFollow: () => void; currentUserId: string;
+}) {
   const [, setLocation] = useLocation();
+  const [loadingFollow, setLoadingFollow] = useState(false);
+
+  const handleFollow = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (loadingFollow || !currentUserId) return;
+    setLoadingFollow(true);
+    await toggleCompanyFollow(c.id, currentUserId, isFollowing);
+    onToggleFollow();
+    setLoadingFollow(false);
+  };
+
   return (
     <Row onClick={() => setLocation(`/app/empresa/${c.id}`)}>
       <Avatar src={c.avatar_url} name={c.name ?? "?"} size={44} />
@@ -123,12 +158,23 @@ function EmpresaCard({ c }: { c: CompanyResult }) {
         <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
         {c.industry && <div style={{ fontSize: 12, color: MUTED, marginTop: 1 }}>{c.industry}</div>}
       </div>
-      <button
-        onClick={e => { e.stopPropagation(); setLocation(`/app/empresa/${c.id}`); }}
-        style={{ padding: "6px 14px", background: "#f0f4ff", color: NAVY, border: "none", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0, fontFamily: "inherit" }}
-      >
-        Ver página
-      </button>
+      {c.isCompanyPage !== false && (
+        <button
+          onClick={handleFollow}
+          disabled={loadingFollow}
+          style={{
+            padding: "6px 14px",
+            background: isFollowing ? BG : NAVY,
+            color: isFollowing ? NAVY : WHITE,
+            border: isFollowing ? `1.5px solid ${BORDER}` : "none",
+            borderRadius: 7, fontSize: 12, fontWeight: 700,
+            cursor: loadingFollow ? "default" : "pointer",
+            flexShrink: 0, fontFamily: "inherit", opacity: loadingFollow ? 0.6 : 1,
+          }}
+        >
+          {isFollowing ? "✓ Seguindo" : "Seguir"}
+        </button>
+      )}
     </Row>
   );
 }
@@ -188,8 +234,9 @@ function EventCard({ ev }: { ev: EventResult }) {
 }
 
 function GroupCard({ g }: { g: GroupResult }) {
+  const [, setLocation] = useLocation();
   return (
-    <Row>
+    <Row onClick={() => setLocation("/app/grupos")}>
       <div style={{ width: 40, height: 40, borderRadius: 10, background: GOLD + "20", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>👥</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{g.name}</div>
@@ -200,15 +247,17 @@ function GroupCard({ g }: { g: GroupResult }) {
   );
 }
 
-function SuggestionHeader({ label, icon, href }: { label: string; icon: string; href?: string }) {
-  const [, setLocation] = useLocation();
+function SuggestionHeader({ label, icon, onVerMais }: { label: string; icon: string; onVerMais?: () => void }) {
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px 6px", borderBottom: `1px solid ${BORDER}`, background: BG }}>
       <span style={{ fontSize: 12, fontWeight: 700, color: NAVY, letterSpacing: "0.03em", display: "flex", alignItems: "center", gap: 6 }}>
         <span>{icon}</span>{label}
       </span>
-      {href && (
-        <button onClick={() => setLocation(href)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, color: GOLD, fontWeight: 700, fontFamily: "inherit", padding: 0 }}>
+      {onVerMais && (
+        <button
+          onClick={onVerMais}
+          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, color: GOLD, fontWeight: 700, fontFamily: "inherit", padding: 0 }}
+        >
           Ver mais →
         </button>
       )}
@@ -220,13 +269,22 @@ export default function BuscaPage() {
   const { user, loading: authLoading } = useAuth();
   const myId = user?.id ?? "";
   const searchString = useSearch();
+  const [, setLocation] = useLocation();
   const initialQuery = new URLSearchParams(searchString).get("q") ?? "";
   const [query,   setQuery]   = useState(initialQuery);
   const [filter,  setFilter]  = useState<Filter>("todos");
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
-  const [results, setResults] = useState<SearchResults>(EMPTY);
-  const [suggestions, setSuggestions] = useState<{ pessoas: PersonResult[]; empresas: CompanyResult[]; publicacoes: PostResult[] }>({ pessoas: [], empresas: [], publicacoes: [] });
+  const [results, setResults] = useState<SearchResults>(EMPTY_RESULTS);
+  const [suggestions, setSuggestions] = useState<SuggestionState>(EMPTY_SUGGESTIONS);
+
+  // Tracks which person IDs the current user has already sent/established connections to.
+  // Pre-loaded from DB on mount so it persists across navigation and re-renders.
+  const [sentConnectionIds, setSentConnectionIds] = useState<Set<string>>(new Set());
+
+  // Tracks which company_page IDs the current user already follows.
+  const [followedCompanyIds, setFollowedCompanyIds] = useState<Set<string>>(new Set());
+
   const inputRef = useRef<HTMLInputElement>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didAutoSearch = useRef(false);
@@ -245,7 +303,7 @@ export default function BuscaPage() {
 
   const runSearch = useCallback(async (q: string, f: Filter) => {
     const trimmed = q.trim();
-    if (!trimmed) { setResults(EMPTY); setSearched(false); return; }
+    if (!trimmed) { setResults(EMPTY_RESULTS); setSearched(false); return; }
     if (!myId) return;
     setLoading(true);
     setSearched(true);
@@ -258,9 +316,9 @@ export default function BuscaPage() {
         supabase.from("company_pages").select("id, name, avatar_url, industry").ilike("name", `%${trimmed}%`).limit(lim(20)),
         supabase.from("profiles").select("id, full_name, avatar_url, headline").or(`full_name.ilike.%${trimmed}%,headline.ilike.%${trimmed}%`).eq("profile_type", "empresa").limit(lim(10)),
       ]);
-      const companies = (cRes.data ?? []) as CompanyResult[];
-      const profileEmpresas = (pRes.data ?? []).map((p: any): CompanyResult => ({
-        id: p.id, name: p.full_name ?? "?", avatar_url: p.avatar_url, industry: p.headline ?? null,
+      const companies = ((cRes.data ?? []) as any[]).map(c => ({ ...c, isCompanyPage: true })) as CompanyResult[];
+      const profileEmpresas = ((pRes.data ?? []) as any[]).map((p): CompanyResult => ({
+        id: p.id, name: p.full_name ?? "?", avatar_url: p.avatar_url, industry: p.headline ?? null, isCompanyPage: false,
       }));
       const seen = new Set(companies.map(c => c.id));
       return { data: [...companies, ...profileEmpresas.filter(p => !seen.has(p.id))] };
@@ -305,33 +363,46 @@ export default function BuscaPage() {
         (isAll || f === "pessoas")
           ? supabase.from("profiles").select("id, full_name, username, avatar_url, headline, plan").or(`full_name.ilike.%${trimmed}%,username.ilike.%${trimmed}%,headline.ilike.%${trimmed}%`).eq("profile_type", "pessoa").neq("id", myId).limit(lim(30))
           : Promise.resolve({ data: [] }),
-
         (isAll || f === "publicacoes") ? searchPostsViaApi() : Promise.resolve({ data: [] }),
-
         (isAll || f === "empresas") ? searchEmpresas() : Promise.resolve({ data: [] }),
-
         (isAll || f === "vagas")
           ? supabase.from("opportunities").select("id, title, description, company, location, contract_type, created_at").or(`title.ilike.%${trimmed}%,company.ilike.%${trimmed}%`).eq("type", "vaga").eq("is_active", true).order("created_at", { ascending: false }).limit(lim(20))
           : Promise.resolve({ data: [] }),
-
         (isAll || f === "eventos")
           ? supabase.from("events").select("id, title, description, start_date, location, entry_type").or(`title.ilike.%${trimmed}%,location.ilike.%${trimmed}%`).eq("is_active", true).order("start_date", { ascending: true }).limit(lim(20))
           : Promise.resolve({ data: [] }),
-
         (isAll || f === "grupos")
           ? supabase.from("groups").select("id, name, description, members_count, category").or(`name.ilike.%${trimmed}%,description.ilike.%${trimmed}%`).limit(lim(20))
           : Promise.resolve({ data: [] }),
       ]);
 
+      const newEmpresas = (resE.data ?? []) as CompanyResult[];
       setResults({
         pessoas:     (resP.data   ?? []) as PersonResult[],
         publicacoes: (resPub.data ?? []) as PostResult[],
-        empresas:    (resE.data   ?? []) as CompanyResult[],
+        empresas:    newEmpresas,
         vagas:       (resV.data   ?? []) as VagaResult[],
         eventos:     (resEv.data  ?? []) as EventResult[],
         grupos:      (resG.data   ?? []) as GroupResult[],
       });
-    } catch { setResults(EMPTY); }
+
+      // Update follow status for any new companies in search results
+      const newCompanyPageIds = newEmpresas.filter(c => c.isCompanyPage !== false).map(c => c.id);
+      if (newCompanyPageIds.length && myId) {
+        const { data: followData } = await supabase
+          .from("company_follows")
+          .select("company_id")
+          .eq("user_id", myId)
+          .in("company_id", newCompanyPageIds);
+        if (followData?.length) {
+          setFollowedCompanyIds(prev => {
+            const next = new Set(prev);
+            (followData as any[]).forEach(f => next.add(f.company_id));
+            return next;
+          });
+        }
+      }
+    } catch { setResults(EMPTY_RESULTS); }
 
     setLoading(false);
   }, [myId]);
@@ -343,30 +414,34 @@ export default function BuscaPage() {
     }
   }, [initialQuery, myId, runSearch]);
 
+  // Load all suggestion categories on mount and pre-fetch connection/follow statuses
   useEffect(() => {
     if (!myId) return;
     (async () => {
-      const [pRes, eRes, postRes] = await Promise.all([
+      const [pRes, eRes, postRes, vagaRes, eventoRes, grupoRes] = await Promise.all([
         supabase.from("profiles").select("id, full_name, username, avatar_url, headline, plan")
-          .eq("profile_type", "pessoa").neq("id", myId).order("created_at", { ascending: false }).limit(4),
+          .eq("profile_type", "pessoa").neq("id", myId).order("created_at", { ascending: false }).limit(8),
         supabase.from("company_pages").select("id, name, avatar_url, industry")
-          .order("created_at", { ascending: false }).limit(4),
+          .order("created_at", { ascending: false }).limit(8),
         supabase.from("posts").select("id, content, created_at, likes_count, comments_count, user_id, company_page_id")
-          .is("parent_id", null).order("created_at", { ascending: false }).limit(4),
+          .is("parent_id", null).order("created_at", { ascending: false }).limit(6),
+        supabase.from("opportunities").select("id, title, description, company, location, contract_type, created_at")
+          .eq("type", "vaga").eq("is_active", true).order("created_at", { ascending: false }).limit(8),
+        supabase.from("events").select("id, title, description, start_date, location, entry_type")
+          .eq("is_active", true).order("start_date", { ascending: true }).limit(8),
+        supabase.from("groups").select("id, name, description, members_count, category").limit(8),
       ]);
 
+      // Enrich posts with author info
       const posts = (postRes.data ?? []) as any[];
-      const userIds = [...new Set(posts.filter((p: any) => !p.company_page_id).map((p: any) => p.user_id).filter(Boolean))] as string[];
-      const companyIds = [...new Set(posts.filter((p: any) => p.company_page_id).map((p: any) => p.company_page_id).filter(Boolean))] as string[];
-
+      const userIds = [...new Set(posts.filter(p => !p.company_page_id).map(p => p.user_id).filter(Boolean))] as string[];
+      const companyIds = [...new Set(posts.filter(p => p.company_page_id).map(p => p.company_page_id).filter(Boolean))] as string[];
       const [{ data: profData }, { data: compData }] = await Promise.all([
         userIds.length ? supabase.from("profiles").select("id, full_name, avatar_url").in("id", userIds) : Promise.resolve({ data: [] }),
         companyIds.length ? supabase.from("company_pages").select("id, name, avatar_url").in("id", companyIds) : Promise.resolve({ data: [] }),
       ]);
-
       const pMap = new Map((profData ?? []).map((p: any) => [p.id, p]));
       const cMap = new Map((compData ?? []).map((c: any) => [c.id, c]));
-
       const postsWithAuthors: PostResult[] = posts.map((p: any) => {
         if (p.company_page_id && cMap.has(p.company_page_id)) {
           const c = cMap.get(p.company_page_id);
@@ -375,11 +450,51 @@ export default function BuscaPage() {
         return { ...p, author: p.user_id ? (pMap.get(p.user_id) ?? null) : null };
       });
 
+      const pessoas = (pRes.data ?? []) as PersonResult[];
+      const empresas = ((eRes.data ?? []) as any[]).map(c => ({ ...c, isCompanyPage: true })) as CompanyResult[];
+
       setSuggestions({
-        pessoas:     (pRes.data ?? []) as PersonResult[],
-        empresas:    (eRes.data ?? []) as CompanyResult[],
+        pessoas,
+        empresas,
         publicacoes: postsWithAuthors,
+        vagas:    (vagaRes.data   ?? []) as VagaResult[],
+        eventos:  (eventoRes.data ?? []) as EventResult[],
+        grupos:   (grupoRes.data  ?? []) as GroupResult[],
       });
+
+      // Pre-fetch connection statuses — mark people with existing connections/requests as "sent"
+      const personIds = pessoas.map(p => p.id);
+      if (personIds.length) {
+        const { data: connData } = await supabase
+          .from("connections")
+          .select("requester_id, receiver_id, status")
+          .or(
+            `and(requester_id.eq.${myId},receiver_id.in.(${personIds.join(",")})),` +
+            `and(requester_id.in.(${personIds.join(",")}),receiver_id.eq.${myId})`
+          );
+        if (connData?.length) {
+          const initialSent = new Set<string>();
+          (connData as any[]).forEach(c => {
+            // Mark as sent: any pending (we sent) or accepted connection
+            if (c.requester_id === myId) initialSent.add(c.receiver_id);
+            else initialSent.add(c.requester_id);
+          });
+          setSentConnectionIds(initialSent);
+        }
+      }
+
+      // Pre-fetch which suggestion companies the user already follows
+      const companyPageIds = empresas.map(c => c.id);
+      if (companyPageIds.length) {
+        const { data: followData } = await supabase
+          .from("company_follows")
+          .select("company_id")
+          .eq("user_id", myId)
+          .in("company_id", companyPageIds);
+        if (followData?.length) {
+          setFollowedCompanyIds(new Set((followData as any[]).map(f => f.company_id)));
+        }
+      }
     })();
   }, [myId]);
 
@@ -392,6 +507,20 @@ export default function BuscaPage() {
   const handleFilter = (f: Filter) => {
     setFilter(f);
     if (query.trim()) runSearch(query, f);
+    // If no query, just switch filter — the suggestions view handles the rest
+  };
+
+  const markSent = (personId: string) => {
+    setSentConnectionIds(prev => new Set(prev).add(personId));
+  };
+
+  const toggleFollowed = (companyId: string) => {
+    setFollowedCompanyIds(prev => {
+      const next = new Set(prev);
+      if (next.has(companyId)) next.delete(companyId);
+      else next.add(companyId);
+      return next;
+    });
   };
 
   const totalCount =
@@ -399,6 +528,9 @@ export default function BuscaPage() {
     results.vagas.length + results.eventos.length + results.grupos.length;
 
   const hasResults = totalCount > 0;
+
+  // Which suggestion sections to show when !searched (no query)
+  const showAll = filter === "todos";
 
   return (
     <AppShell>
@@ -420,7 +552,7 @@ export default function BuscaPage() {
                 style={{ flex: 1, border: "none", background: "transparent", outline: "none", fontSize: 15, color: NAVY, fontFamily: "inherit" }}
               />
               {query && (
-                <button onClick={() => { setQuery(""); setResults(EMPTY); setSearched(false); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 18, padding: 0, lineHeight: 1 }}>×</button>
+                <button onClick={() => { setQuery(""); setResults(EMPTY_RESULTS); setSearched(false); }} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 18, padding: 0, lineHeight: 1 }}>×</button>
               )}
             </div>
           </div>
@@ -464,34 +596,89 @@ export default function BuscaPage() {
           </div>
         </div>
 
-        {/* Results */}
+        {/* Results / Suggestions */}
         <div style={{ background: WHITE }}>
           {loading ? (
             <div style={{ textAlign: "center", padding: 80, color: MUTED }}>⏳ Buscando…</div>
           ) : !searched ? (
+            /* ── Suggestions view (no active search query) ── */
             <div>
               {/* Pessoas para conectar */}
-              {suggestions.pessoas.length > 0 && (
+              {(showAll || filter === "pessoas") && suggestions.pessoas.length > 0 && (
                 <>
-                  <SuggestionHeader icon="👤" label="Pessoas para conectar" href="/app/busca" />
-                  {suggestions.pessoas.map(p => <PersonCard key={p.id} p={p} currentUserId={myId} />)}
+                  <SuggestionHeader
+                    icon="👤"
+                    label="Pessoas para conectar"
+                    onVerMais={showAll ? () => handleFilter("pessoas") : undefined}
+                  />
+                  {(showAll ? suggestions.pessoas.slice(0, 4) : suggestions.pessoas).map(p => (
+                    <PersonCard
+                      key={p.id} p={p} currentUserId={myId}
+                      isSent={sentConnectionIds.has(p.id)}
+                      onSent={() => markSent(p.id)}
+                    />
+                  ))}
                 </>
               )}
+
               {/* Empresas para seguir */}
-              {suggestions.empresas.length > 0 && (
+              {(showAll || filter === "empresas") && suggestions.empresas.length > 0 && (
                 <>
-                  <SuggestionHeader icon="🏢" label="Empresas para seguir" href="/app/busca" />
-                  {suggestions.empresas.map(c => <EmpresaCard key={c.id} c={c} />)}
+                  <SuggestionHeader
+                    icon="🏢"
+                    label="Empresas para seguir"
+                    onVerMais={showAll ? () => handleFilter("empresas") : undefined}
+                  />
+                  {(showAll ? suggestions.empresas.slice(0, 4) : suggestions.empresas).map(c => (
+                    <EmpresaCard
+                      key={c.id} c={c}
+                      currentUserId={myId}
+                      isFollowing={followedCompanyIds.has(c.id)}
+                      onToggleFollow={() => toggleFollowed(c.id)}
+                    />
+                  ))}
                 </>
               )}
+
               {/* Publicações recentes */}
-              {suggestions.publicacoes.length > 0 && (
+              {(showAll || filter === "publicacoes") && suggestions.publicacoes.length > 0 && (
                 <>
-                  <SuggestionHeader icon="📝" label="Publicações recentes" href="/app/feed" />
-                  {suggestions.publicacoes.map(p => <PostCard key={p.id} p={p} />)}
+                  <SuggestionHeader
+                    icon="📝"
+                    label="Publicações recentes"
+                    onVerMais={showAll ? () => setLocation("/app/feed") : undefined}
+                  />
+                  {(showAll ? suggestions.publicacoes.slice(0, 4) : suggestions.publicacoes).map(p => (
+                    <PostCard key={p.id} p={p} />
+                  ))}
                 </>
               )}
-              {/* Fallback se ainda não carregou */}
+
+              {/* Vagas */}
+              {(filter === "vagas") && suggestions.vagas.length > 0 && (
+                <>
+                  <SuggestionHeader icon="💼" label="Vagas em destaque" />
+                  {suggestions.vagas.map(v => <VagaCard key={v.id} v={v} />)}
+                </>
+              )}
+
+              {/* Eventos */}
+              {(filter === "eventos") && suggestions.eventos.length > 0 && (
+                <>
+                  <SuggestionHeader icon="📅" label="Próximos eventos" />
+                  {suggestions.eventos.map(ev => <EventCard key={ev.id} ev={ev} />)}
+                </>
+              )}
+
+              {/* Grupos */}
+              {(filter === "grupos") && suggestions.grupos.length > 0 && (
+                <>
+                  <SuggestionHeader icon="👥" label="Grupos para participar" />
+                  {suggestions.grupos.map(g => <GroupCard key={g.id} g={g} />)}
+                </>
+              )}
+
+              {/* Fallback — ainda carregando ou sem dados */}
               {suggestions.pessoas.length === 0 && suggestions.empresas.length === 0 && suggestions.publicacoes.length === 0 && (
                 <div style={{ textAlign: "center", padding: 80 }}>
                   <div style={{ fontSize: 52, marginBottom: 16 }}>🍷</div>
@@ -507,43 +694,51 @@ export default function BuscaPage() {
               <p style={{ fontSize: 13, color: MUTED, margin: 0 }}>Tente outro termo de busca</p>
             </div>
           ) : (
+            /* ── Search results ── */
             <>
-              {/* Pessoas */}
               {results.pessoas.length > 0 && (filter === "todos" || filter === "pessoas") && (
                 <>
                   <SectionHeader label="Pessoas" count={results.pessoas.length} />
-                  {results.pessoas.map(p => <PersonCard key={p.id} p={p} currentUserId={myId} />)}
+                  {results.pessoas.map(p => (
+                    <PersonCard
+                      key={p.id} p={p} currentUserId={myId}
+                      isSent={sentConnectionIds.has(p.id)}
+                      onSent={() => markSent(p.id)}
+                    />
+                  ))}
                 </>
               )}
-              {/* Empresas */}
               {results.empresas.length > 0 && (filter === "todos" || filter === "empresas") && (
                 <>
                   <SectionHeader label="Empresas" count={results.empresas.length} />
-                  {results.empresas.map(c => <EmpresaCard key={c.id} c={c} />)}
+                  {results.empresas.map(c => (
+                    <EmpresaCard
+                      key={c.id} c={c}
+                      currentUserId={myId}
+                      isFollowing={followedCompanyIds.has(c.id)}
+                      onToggleFollow={() => toggleFollowed(c.id)}
+                    />
+                  ))}
                 </>
               )}
-              {/* Publicações */}
               {results.publicacoes.length > 0 && (filter === "todos" || filter === "publicacoes") && (
                 <>
                   <SectionHeader label="Publicações" count={results.publicacoes.length} />
                   {results.publicacoes.map(p => <PostCard key={p.id} p={p} />)}
                 </>
               )}
-              {/* Vagas */}
               {results.vagas.length > 0 && (filter === "todos" || filter === "vagas") && (
                 <>
                   <SectionHeader label="Vagas" count={results.vagas.length} />
                   {results.vagas.map(v => <VagaCard key={v.id} v={v} />)}
                 </>
               )}
-              {/* Eventos */}
               {results.eventos.length > 0 && (filter === "todos" || filter === "eventos") && (
                 <>
                   <SectionHeader label="Eventos" count={results.eventos.length} />
                   {results.eventos.map(ev => <EventCard key={ev.id} ev={ev} />)}
                 </>
               )}
-              {/* Grupos */}
               {results.grupos.length > 0 && (filter === "todos" || filter === "grupos") && (
                 <>
                   <SectionHeader label="Grupos" count={results.grupos.length} />
