@@ -666,15 +666,10 @@ export async function respondToConnectionWeb(connectionId: string, action: "acce
       { onConflict: "follower_id,following_id" },
     );
 
-    // 3. Notify the requester that their request was accepted
-    await supabase.from("notifications").insert({
-      user_id:  requester_id,
-      actor_id: receiver_id,
-      type:     "connection_accepted",
-      message:  "aceitou seu pedido de conexão",
-    });
-
-    // 4. Unlock any existing direct conversation between the two users
+    // 3. Unlock any existing direct conversation between the two users
+    // NOTE: the "aceitou sua solicitação de conexão" notification is created
+    // automatically by the Supabase trigger notify_on_connection_accepted
+    // when status is updated to "accepted" — no manual insert needed here.
     const { data: convs } = await supabase
       .from("conversation_participants")
       .select("conversation_id")

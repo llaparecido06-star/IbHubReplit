@@ -1009,7 +1009,7 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
                 </span>
                 {unreadCount > 0 && (
                   <button onClick={handleMarkAllRead} style={{ background: "none", border: "none", cursor: "pointer", color: GOLD, fontSize: 12, fontWeight: 700, fontFamily: "inherit" }}>
-                    Marcar lidas
+                    Marcar como lidas
                   </button>
                 )}
               </div>
