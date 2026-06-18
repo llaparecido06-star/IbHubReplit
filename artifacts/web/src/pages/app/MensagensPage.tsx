@@ -808,7 +808,7 @@ export default function MensagensPage() {
   const threadJSX = selected ? (
     <>
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10, backgroundColor: "#f0ede8" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12, backgroundColor: "#f0ede8" }}>
         {messages.length === 0 && (
           <div style={{ textAlign: "center", color: MUTED, fontSize: 13, marginTop: 24 }}>Nenhuma mensagem ainda. Diga olá! 👋</div>
         )}
@@ -820,7 +820,7 @@ export default function MensagensPage() {
           if (showDateSep) {
             nodes.push(
               <div key={`date-${msg.id}`} style={{ display: "flex", justifyContent: "center", margin: "4px 0 8px" }}>
-                <span style={{ background: "#e8e8e3", borderRadius: 12, padding: "3px 12px", fontSize: 11, color: MUTED, fontWeight: 500 }}>
+                <span style={{ background: "#e8e8e3", borderRadius: 12, padding: "4px 14px", fontSize: 12, color: MUTED, fontWeight: 500 }}>
                   {chatDateLabel(msg.created_at)}
                 </span>
               </div>
@@ -881,18 +881,18 @@ export default function MensagensPage() {
               onMouseEnter={() => setHoveredMsgId(msg.id)}
               onMouseLeave={() => { setHoveredMsgId(null); setReactionPickerId(null); }}
             >
-              {!isMe && <div onClick={onClickSender} style={{ cursor: "pointer", flexShrink: 0, alignSelf: "flex-end" }}><Avatar src={displayAvatar} name={displayName} size={30} /></div>}
+              {!isMe && <div onClick={onClickSender} style={{ cursor: "pointer", flexShrink: 0, alignSelf: "flex-end" }}><Avatar src={displayAvatar} name={displayName} size={34} /></div>}
               {!isMe && actionBtns}
               <div style={{ maxWidth: "68%" }}>
                 {!isMe && (
-                  <div onClick={onClickSender} style={{ fontSize: 11, color: MUTED, marginBottom: 2, cursor: "pointer" }}>{displayName}</div>
+                  <div onClick={onClickSender} style={{ fontSize: 12, color: MUTED, marginBottom: 3, cursor: "pointer" }}>{displayName}</div>
                 )}
                 <div style={{
                   backgroundColor: isMe ? GOLD : WHITE,
                   color: NAVY,
                   borderRadius: isMe ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                  padding: isMedia ? (isImageMsg ? "4px" : "8px") : "10px 14px",
-                  fontSize: 14, lineHeight: 1.55,
+                  padding: isMedia ? (isImageMsg ? "4px" : "10px") : "12px 16px",
+                  fontSize: 15, lineHeight: 1.55,
                   border: isMe ? "none" : `1px solid ${BORDER}`,
                   boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
                 }}>
@@ -922,7 +922,7 @@ export default function MensagensPage() {
                     ))}
                   </div>
                 )}
-                <div style={{ fontSize: 10, color: MUTED, marginTop: 3, textAlign: isMe ? "right" : "left", display: "flex", alignItems: "center", justifyContent: isMe ? "flex-end" : "flex-start", gap: 4 }}>
+                <div style={{ fontSize: 11, color: MUTED, marginTop: 3, textAlign: isMe ? "right" : "left", display: "flex", alignItems: "center", justifyContent: isMe ? "flex-end" : "flex-start", gap: 4 }}>
                   {timeAgo(msg.created_at)}
                   {isMe && !msg.deleted_at && (
                     <span style={{ fontSize: 11, color: msg.read_at ? GOLD : "#ccc", fontWeight: 700, letterSpacing: -0.5 }} title={msg.read_at ? "Lida" : "Enviada"}>
@@ -932,7 +932,7 @@ export default function MensagensPage() {
                 </div>
               </div>
               {isMe && actionBtns}
-              {isMe && <Avatar src={profile?.avatar_url} name={profile?.full_name ?? "Eu"} size={30} />}
+              {isMe && <Avatar src={profile?.avatar_url} name={profile?.full_name ?? "Eu"} size={34} />}
             </div>
           );
           return nodes;
@@ -969,15 +969,15 @@ export default function MensagensPage() {
       )}
 
       {/* Input bar — WhatsApp style */}
-      <div style={{ padding: "10px 16px 14px", borderTop: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0, backgroundColor: WHITE }}>
+      <div style={{ padding: "12px 18px 16px", borderTop: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0, backgroundColor: WHITE }}>
         {/* Attachment button — always visible */}
         <button
           onClick={() => fileInputRef.current?.click()}
           aria-label="Anexar arquivo"
           title={`Anexar arquivo (até ${formatFileSize(MAX_CHAT_FILE_SIZE)})`}
-          style={{ flexShrink: 0, width: 38, height: 38, border: `1px solid ${BORDER}`, borderRadius: 19, backgroundColor: WHITE, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", outline: "none" }}
+          style={{ flexShrink: 0, width: 42, height: 42, border: `1px solid ${BORDER}`, borderRadius: 21, backgroundColor: WHITE, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", outline: "none" }}
         >
-          <ClipIcon size={18} color={attachFile ? GOLD : MUTED} />
+          <ClipIcon size={20} color={attachFile ? GOLD : MUTED} />
         </button>
 
         {/* Text input */}
@@ -986,7 +986,7 @@ export default function MensagensPage() {
           onChange={e => { setNewMsg(e.target.value); broadcastTyping(); }}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
           placeholder="Mensagem…"
-          style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 24, padding: "10px 16px", fontSize: 14, outline: "none", fontFamily: "inherit", backgroundColor: "#f9f9f7" }}
+          style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 24, padding: "12px 18px", fontSize: 15, outline: "none", fontFamily: "inherit", backgroundColor: "#f9f9f7" }}
         />
 
         {/* Send button */}
@@ -994,7 +994,7 @@ export default function MensagensPage() {
           <button
             onClick={handleSend}
             disabled={!canSend}
-            style={{ flexShrink: 0, width: 42, height: 42, border: "none", borderRadius: 21, backgroundColor: GOLD, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", outline: "none" }}
+            style={{ flexShrink: 0, width: 46, height: 46, border: "none", borderRadius: 23, backgroundColor: GOLD, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", outline: "none" }}
           >
             {busy ? <span style={{ fontSize: 13 }}>⏳</span> : <SendIcon size={18} color={WHITE} />}
           </button>
@@ -1289,15 +1289,15 @@ export default function MensagensPage() {
         {chatTab === "mensagens" && <div style={{ display: "flex", height: "calc(100vh - 200px)", backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 16, overflow: "hidden" }}>
 
           {/* ── Sidebar ── */}
-          <div style={{ width: 280, flexShrink: 0, borderRight: `1px solid ${BORDER}`, display: "flex", flexDirection: "column" }}>
-            <div style={{ padding: "12px 12px 8px", display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ display: "flex", gap: 6 }}>
+          <div style={{ width: 300, flexShrink: 0, borderRight: `1px solid ${BORDER}`, display: "flex", flexDirection: "column" }}>
+            <div style={{ padding: "14px 14px 10px", display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8 }}>
                 <input
                   ref={searchInputRef}
                   value={search}
                   onChange={e => handleSearchChange(e.target.value)}
                   placeholder="Buscar conversas ou pessoas..."
-                  style={{ flex: 1, minWidth: 0, border: `1px solid ${BORDER}`, borderRadius: 20, padding: "8px 14px", fontSize: 13, outline: "none", backgroundColor: BG, fontFamily: "inherit" }}
+                  style={{ flex: 1, minWidth: 0, border: `1px solid ${BORDER}`, borderRadius: 20, padding: "10px 16px", fontSize: 14, outline: "none", backgroundColor: BG, fontFamily: "inherit" }}
                 />
                 <button
                   onClick={() => searchInputRef.current?.focus()}
@@ -1334,32 +1334,32 @@ export default function MensagensPage() {
                       <button
                         onClick={() => loadMessages(convo)}
                         style={{
-                          display: "flex", alignItems: "center", gap: 10, width: "100%",
-                          padding: "12px 14px", border: "none", textAlign: "left",
+                          display: "flex", alignItems: "center", gap: 12, width: "100%",
+                          padding: "14px 16px", border: "none", textAlign: "left",
                           backgroundColor: selected?.id === convo.id ? `${GOLD}12` : "transparent",
                           borderLeft: selected?.id === convo.id ? `3px solid ${GOLD}` : "3px solid transparent",
                           cursor: "pointer", fontFamily: "inherit",
-                          paddingRight: hoveredConvId === convo.id ? 44 : 14,
+                          paddingRight: hoveredConvId === convo.id ? 44 : 16,
                         }}
                       >
-                        <Avatar src={getConvoAvatar(convo)} name={getConvoName(convo)} size={42} />
+                        <Avatar src={getConvoAvatar(convo)} name={getConvoName(convo)} size={46} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                            <span style={{ fontSize: 13, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 140 }}>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 150 }}>
                               {getConvoName(convo)}
                             </span>
                             {convo.last_message_at && (
-                              <span style={{ fontSize: 11, color: MUTED, flexShrink: 0 }}>{timeAgo(convo.last_message_at)}</span>
+                              <span style={{ fontSize: 12, color: MUTED, flexShrink: 0 }}>{timeAgo(convo.last_message_at)}</span>
                             )}
                           </div>
                           {convo.last_message && (
-                            <div style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>
+                            <div style={{ fontSize: 13, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>
                               {convo.last_message}
                             </div>
                           )}
                         </div>
                         {convo.unread_count > 0 && (
-                          <div style={{ width: 18, height: 18, borderRadius: "50%", backgroundColor: GOLD, color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <div style={{ width: 20, height: 20, borderRadius: "50%", backgroundColor: GOLD, color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                             {convo.unread_count}
                           </div>
                         )}
@@ -1392,18 +1392,18 @@ export default function MensagensPage() {
                           key={u.id}
                           onClick={() => startConversation(u)}
                           style={{
-                            display: "flex", alignItems: "center", gap: 10, width: "100%",
-                            padding: "10px 14px", border: "none", textAlign: "left",
+                            display: "flex", alignItems: "center", gap: 12, width: "100%",
+                            padding: "12px 16px", border: "none", textAlign: "left",
                             backgroundColor: "transparent", borderLeft: "3px solid transparent",
                             cursor: "pointer", fontFamily: "inherit",
                           }}
                           onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = BG; }}
                           onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent"; }}
                         >
-                          <Avatar src={u.avatar_url} name={u.full_name} size={42} />
+                          <Avatar src={u.avatar_url} name={u.full_name} size={46} />
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.full_name}</div>
-                            {u.headline && <div style={{ fontSize: 11, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>{u.headline}</div>}
+                            <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.full_name}</div>
+                            {u.headline && <div style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>{u.headline}</div>}
                           </div>
                         </button>
                       ))}
@@ -1425,8 +1425,8 @@ export default function MensagensPage() {
             ) : (
               <>
                 {/* Thread header */}
-                <div style={{ padding: "12px 16px", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                  <Avatar src={getConvoAvatar(selected)} name={getConvoName(selected)} size={38} />
+                <div style={{ padding: "14px 18px", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                  <Avatar src={getConvoAvatar(selected)} name={getConvoName(selected)} size={44} />
                   <button
                     onClick={() => selected.is_group
                       ? setLocation(`/app/grupos/${selected.id}/configuracoes`)
@@ -1434,9 +1434,9 @@ export default function MensagensPage() {
                     }
                     style={{ flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
                   >
-                    <div style={{ fontSize: 14, fontWeight: 800, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{getConvoName(selected)}</div>
-                    {selected.participant && !selected.is_group && <div style={{ fontSize: 12, color: MUTED }}>Profissional do vinho</div>}
-                    {selected.is_group && <div style={{ fontSize: 11, color: MUTED }}>{selected.member_count ? `${selected.member_count} membros` : "Grupo"}</div>}
+                    <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{getConvoName(selected)}</div>
+                    {selected.participant && !selected.is_group && <div style={{ fontSize: 13, color: MUTED }}>Profissional do vinho</div>}
+                    {selected.is_group && <div style={{ fontSize: 12, color: MUTED }}>{selected.member_count ? `${selected.member_count} membros` : "Grupo"}</div>}
                   </button>
                   {/* 3-dot options menu */}
                   <div ref={convMenuRef} style={{ position: "relative", flexShrink: 0 }}>
