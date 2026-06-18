@@ -947,6 +947,16 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
 
   const isBuscaPage = location.startsWith("/app/busca");
 
+  // Width of the central feed column (where the post composer lives) so the
+  // header search bar can match it and left-align above the composer. The feed
+  // lives inside the 1180px container, after the 250px sidebar + 20px gap, and —
+  // in personal mode on wide screens — is bounded on the right by a 16px gap +
+  // the 300px suggestions panel.
+  const headerContainerW = Math.min(windowWidth, 1180);
+  const headerFeedAreaW = headerContainerW - 32 /* body padding */ - 250 /* sidebar */ - 20 /* gap */;
+  const headerRightPanelShown = !activeCompany && windowWidth >= 1024;
+  const headerFeedColumnW = Math.max(220, headerRightPanelShown ? headerFeedAreaW - 16 - 300 : headerFeedAreaW);
+
   return (
     <div style={{ minHeight: "100vh", backgroundColor: isMobile ? "#f2f3f5" : BG, fontFamily: "'Inter', -apple-system, sans-serif" }}>
       {/* ── Top bar ────────────────────────── */}
@@ -963,32 +973,41 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
           position: "relative",
           boxSizing: "border-box",
         }}>
-        {/* Logo — absolutely centered on busca page (desktop), left-aligned otherwise */}
-        {isBuscaPage && !isMobile ? (
+        {/* Logo + search — desktop: the search bar matches the width of the feed
+            column (post composer) and left-aligns above it; the logo sits just to
+            its left, over the sidebar/gap area. */}
+        {!isMobile && !isBuscaPage ? (
+          <>
+            {/* Logo zone — width = sidebar (250) + gap (20) − header padding (24) − inter-gap (16),
+                with the logo right-aligned so it sits immediately left of the feed column. */}
+            <div style={{ width: 246, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+              <img src={`${import.meta.env.BASE_URL}logo-ibhub.png`} alt="ibhub" onClick={() => setLocation("/app")} style={{ height: 28, cursor: "pointer", flexShrink: 0, objectFit: "contain" }} />
+            </div>
+            {/* Search — same width as the feed column, left-aligned above the composer */}
+            <div
+              style={{ flex: `0 1 ${headerFeedColumnW}px`, minWidth: 0, display: "flex", alignItems: "center", gap: 8, backgroundColor: "#f2f2ed", borderRadius: 24, padding: "7px 14px", cursor: "text" }}
+              onClick={() => setLocation("/app/busca")}
+            >
+              {I.search}
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && search.trim()) setLocation("/app/busca"); }}
+                onClick={e => { e.stopPropagation(); setLocation("/app/busca"); }}
+                placeholder="Buscar pessoas, empresas, hashtags..."
+                readOnly
+                style={{ border: "none", background: "none", outline: "none", fontSize: 13, color: NAVY, width: "100%", cursor: "pointer" }}
+              />
+            </div>
+          </>
+        ) : isBuscaPage && !isMobile ? (
+          /* Busca page (desktop): logo absolutely centered, no search bar */
           <div style={{ position: "absolute", left: "50%", transform: "translateX(-50%)" }}>
             <img src={`${import.meta.env.BASE_URL}logo-ibhub.png`} alt="ibhub" onClick={() => setLocation("/app")} style={{ height: 28, cursor: "pointer", flexShrink: 0, objectFit: "contain" }} />
           </div>
         ) : (
+          /* Mobile: logo left-aligned in flow */
           <img src={`${import.meta.env.BASE_URL}logo-ibhub.png`} alt="ibhub" onClick={() => setLocation("/app")} style={{ height: 28, cursor: "pointer", flexShrink: 0, objectFit: "contain" }} />
-        )}
-
-        {/* Search bar — desktop only, hidden on busca page to avoid duplication */}
-        {!isMobile && !isBuscaPage && (
-          <div
-            style={{ flex: 1, maxWidth: 400, display: "flex", alignItems: "center", gap: 8, backgroundColor: "#f2f2ed", borderRadius: 24, padding: "7px 14px", cursor: "text" }}
-            onClick={() => setLocation("/app/busca")}
-          >
-            {I.search}
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && search.trim()) setLocation("/app/busca"); }}
-              onClick={e => { e.stopPropagation(); setLocation("/app/busca"); }}
-              placeholder="Buscar pessoas, empresas, hashtags..."
-              readOnly
-              style={{ border: "none", background: "none", outline: "none", fontSize: 13, color: NAVY, width: "100%", cursor: "pointer" }}
-            />
-          </div>
         )}
 
         <div style={{ flex: 1 }} />
@@ -999,11 +1018,11 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
         )}
 
         {!isMobile && profile?.is_admin && (
-          <button onClick={() => setLocation("/admin")} style={{ background: "none", border: `1px solid ${GOLD}55`, borderRadius: 7, padding: "5px 10px", fontSize: 12, fontWeight: 700, color: GOLD, cursor: "pointer" }}>⚙ Admin</button>
+          <button onClick={() => setLocation("/admin")} style={{ background: "none", border: `1px solid ${GOLD}55`, borderRadius: 7, padding: "5px 10px", fontSize: 12, fontWeight: 700, color: GOLD, cursor: "pointer", flexShrink: 0 }}>⚙ Admin</button>
         )}
 
         {/* ── Notification Bell ── */}
-        <div ref={notifRef} style={{ position: "relative" }}>
+        <div ref={notifRef} style={{ position: "relative", flexShrink: 0 }}>
           <button
             onClick={() => {
               if (isMobile) {
@@ -1157,7 +1176,7 @@ export function AppShell({ children, onPostCreated }: { children: React.ReactNod
         )}
 
         {/* ── Profile / Company dropdown ── */}
-        <div style={{ position: "relative" }}>
+        <div style={{ position: "relative", flexShrink: 0 }}>
           <button
             onClick={() => setUserMenuOpen(!userMenuOpen)}
             style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "2px 4px", borderRadius: 8 }}
