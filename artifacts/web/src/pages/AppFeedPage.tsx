@@ -573,13 +573,13 @@ function PostCard({
       )}
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "14px 16px 10px" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "16px 18px 12px" }}>
         <div onClick={goToAuthor} style={{ cursor: "pointer" }}>
-          <Avatar src={authorAvatar} name={authorName} size={42} />
+          <Avatar src={authorAvatar} name={authorName} size={48} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <span onClick={goToAuthor} style={{ fontSize: 14, fontWeight: 800, color: NAVY, cursor: "pointer" }}
+            <span onClick={goToAuthor} style={{ fontSize: 15, fontWeight: 800, color: NAVY, cursor: "pointer" }}
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.textDecoration = "underline"; }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.textDecoration = "none"; }}>
               {authorName}
@@ -594,11 +594,11 @@ function PostCard({
             )}
           </div>
           {!companyPage && post.author?.headline && (
-            <div style={{ fontSize: 12, color: MUTED, marginTop: 1 }} title={post.author.headline}>
+            <div style={{ fontSize: 13, color: MUTED, marginTop: 1 }} title={post.author.headline}>
               {post.author.headline}
             </div>
           )}
-          <div style={{ fontSize: 11, color: "#b0b7c3", marginTop: 2 }}>{formatRelativeDate(post.created_at)}</div>
+          <div style={{ fontSize: 12, color: "#b0b7c3", marginTop: 2 }}>{formatRelativeDate(post.created_at)}</div>
         </div>
 
         {/* 📌 Pin indicator */}
@@ -670,11 +670,11 @@ function PostCard({
       </div>
 
       {/* Content */}
-      <div style={{ padding: "0 16px 12px" }}>
+      <div style={{ padding: "0 18px 14px" }}>
         {isWinePost ? (
           <WineTastingCardWeb content={content} />
         ) : (
-          <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.65, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+          <div style={{ fontSize: 15, color: NAVY, lineHeight: 1.65, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
             {linkifyText(displayContent)}
             {isLong && (
               <button
@@ -690,9 +690,9 @@ function PostCard({
 
       {/* Hashtags */}
       {post.hashtags && post.hashtags.length > 0 && (
-        <div style={{ padding: "0 16px 10px", display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <div style={{ padding: "0 18px 12px", display: "flex", flexWrap: "wrap", gap: 6 }}>
           {post.hashtags.slice(0, 5).map((tag) => (
-            <span key={tag} style={{ fontSize: 12, color: "#1a56db", fontWeight: 600 }}>#{tag}</span>
+            <span key={tag} style={{ fontSize: 13, color: "#1a56db", fontWeight: 600 }}>#{tag}</span>
           ))}
         </div>
       )}
@@ -730,11 +730,11 @@ function PostCard({
 
       {/* Stats */}
       {(post.likes_count > 0 || post.comments_count > 0) && (
-        <div style={{ display: "flex", gap: 12, padding: "8px 16px", fontSize: 12, color: MUTED, borderTop: `1px solid ${BORDER}` }}>
+        <div style={{ display: "flex", gap: 12, padding: "10px 18px", fontSize: 13, color: MUTED, borderTop: `1px solid ${BORDER}` }}>
           {post.likes_count > 0 && (
             <button
               onClick={() => onOpenLikes?.(post.id)}
-              style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 12, padding: 0 }}
+              style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 13, padding: 0 }}
             >
               <span>{post.is_liked ? reactionEmoji(post.reaction_type ?? "saude") : "👍"}</span>
               {post.likes_count}
@@ -881,19 +881,19 @@ function PostTrigger({
   const name = activeCompany ? activeCompany.name : (profile?.full_name ?? "Usuário");
   const avatarSrc = activeCompany ? activeCompany.avatar_url : profile?.avatar_url;
   return (
-    <div className="feed-post-trigger" style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 14, marginBottom: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <Avatar src={avatarSrc} name={name} size={40} bg={activeCompany ? GOLD : "#722f37"} />
+    <div className="feed-post-trigger" style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 18, marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <Avatar src={avatarSrc} name={name} size={46} bg={activeCompany ? GOLD : "#722f37"} />
         <button onClick={openModal} style={{
-          flex: 1, textAlign: "left", padding: "10px 16px",
+          flex: 1, textAlign: "left", padding: "12px 16px",
           backgroundColor: BG, border: `1px solid ${BORDER}`,
-          borderRadius: 24, fontSize: 14, color: MUTED,
+          borderRadius: 24, fontSize: 15, color: MUTED,
           cursor: "pointer", fontFamily: "inherit",
         }}>
           O que está acontecendo no mundo do vinho?
         </button>
       </div>
-      <div style={{ display: "flex", gap: 4, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
+      <div style={{ display: "flex", gap: 4, marginTop: 14, paddingTop: 14, borderTop: `1px solid ${BORDER}` }}>
         {[
           { label: "Foto",     icon: <ImageIcon />,    tab: "foto" },
           { label: "Vídeo",    icon: <WineGlassIcon />, tab: "video" },
@@ -901,9 +901,9 @@ function PostTrigger({
           { label: "🍷 Vinho", icon: null,              tab: "vinho" },
         ].map(item => (
           <button key={item.label} onClick={openModal} style={{
-            display: "flex", alignItems: "center", gap: 5, padding: "5px 12px",
+            display: "flex", alignItems: "center", gap: 5, padding: "6px 13px",
             background: "none", border: `1px solid ${BORDER}`, borderRadius: 20,
-            fontSize: 12, color: MUTED, cursor: "pointer", fontFamily: "inherit",
+            fontSize: 13, color: MUTED, cursor: "pointer", fontFamily: "inherit",
           }}>
             {item.icon}{item.label}
           </button>
@@ -931,18 +931,18 @@ function SuggestionsPanel({ suggestions, onConnect, onFollow, viewingAsCompany }
       padding: "16px",
       marginBottom: 14,
     }}>
-      <h3 style={{ fontSize: 14, fontWeight: 800, color: NAVY, marginBottom: 14, margin: "0 0 14px" }}>
+      <h3 style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 14, margin: "0 0 14px" }}>
         Pessoas que você pode conhecer
       </h3>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {suggestions.map((s) => (
-          <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div onClick={() => goTo(s)} style={{ cursor: "pointer", flexShrink: 0 }}>
-              <Avatar src={s.avatar_url} name={s.full_name} size={40} />
+              <Avatar src={s.avatar_url} name={s.full_name} size={44} />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div onClick={() => goTo(s)} style={{ fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: "pointer" }}>{s.full_name}</div>
-              {s.headline && <div style={{ fontSize: 11, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.headline}</div>}
+              <div onClick={() => goTo(s)} style={{ fontSize: 14, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: "pointer" }}>{s.full_name}</div>
+              {s.headline && <div style={{ fontSize: 12, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.headline}</div>}
               {s.company_match ? (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 700, color: "#1a56db", background: "#1a56db15", borderRadius: 6, padding: "1px 6px", marginTop: 2 }}>
                   💼 Mesma empresa
@@ -989,7 +989,7 @@ function ConnectBtn({ profile, onConnect, onFollow, viewingAsCompany }: {
         onClick={handleFollow}
         style={{
           flexShrink: 0,
-          fontSize: 12, fontWeight: 700, padding: "5px 12px", borderRadius: 8,
+          fontSize: 13, fontWeight: 700, padding: "7px 14px", borderRadius: 8,
           cursor: "pointer",
           backgroundColor: following ? "transparent" : `${GOLD}15`,
           color: following ? MUTED : GOLD,
@@ -1007,7 +1007,7 @@ function ConnectBtn({ profile, onConnect, onFollow, viewingAsCompany }: {
       disabled={status !== "none"}
       style={{
         flexShrink: 0,
-        fontSize: 12, fontWeight: 700, padding: "5px 12px", borderRadius: 8,
+        fontSize: 13, fontWeight: 700, padding: "7px 14px", borderRadius: 8,
         cursor: status === "none" ? "pointer" : "default",
         backgroundColor: status === "none" ? NAVY : "#f5f5f0",
         color: status === "none" ? WHITE : MUTED,
@@ -1033,23 +1033,23 @@ function WineRankingTeaser({ wines }: { wines: WineCommunityRating[] }) {
     <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16, marginBottom: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <span style={{ fontSize: 18 }}>🍷</span>
-        <h3 style={{ fontSize: 14, fontWeight: 800, color: NAVY, margin: 0 }}>Ranking da Comunidade</h3>
+        <h3 style={{ fontSize: 15, fontWeight: 800, color: NAVY, margin: 0 }}>Ranking da Comunidade</h3>
       </div>
       {top.length === 0 ? (
         <div style={{ fontSize: 13, color: MUTED, textAlign: "center", padding: "12px 0" }}>Sem avaliações ainda</div>
       ) : top.map((w, i) => (
         <div key={w.ean} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
           <div style={{
-            width: 24, height: 24, borderRadius: "50%",
+            width: 26, height: 26, borderRadius: "50%",
             backgroundColor: medalColors[i],
-            color: "#fff", fontSize: 10, fontWeight: 800,
+            color: "#fff", fontSize: 11, fontWeight: 800,
             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
           }}>#{i + 1}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{w.name}</div>
-            <div style={{ fontSize: 10, color: GOLD, letterSpacing: 1 }}>{stars(w.avg_rating)}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{w.name}</div>
+            <div style={{ fontSize: 11, color: GOLD, letterSpacing: 1 }}>{stars(w.avg_rating)}</div>
           </div>
-          <div style={{ fontSize: 11, fontWeight: 800, color: GOLD }}>{w.total_ratings}×</div>
+          <div style={{ fontSize: 12, fontWeight: 800, color: GOLD }}>{w.total_ratings}×</div>
         </div>
       ))}
       <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 10, textAlign: "center" }}>
@@ -1327,8 +1327,8 @@ export default function AppFeedPage() {
         </div>
       ) : (
         <div className="feed-greeting" style={{ marginBottom: 14 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 900, color: NAVY, margin: "0 0 2px" }}>Olá, {firstName} 👋</h1>
-          <p style={{ fontSize: 13, color: MUTED, margin: 0 }}>Veja as últimas atualizações</p>
+          <h1 style={{ fontSize: 22, fontWeight: 900, color: NAVY, margin: "0 0 2px" }}>Olá, {firstName} 👋</h1>
+          <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>Veja as últimas atualizações</p>
         </div>
       )}
 
