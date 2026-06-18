@@ -941,8 +941,8 @@ function SuggestionsPanel({ suggestions, onConnect, onFollow, viewingAsCompany }
               <Avatar src={s.avatar_url} name={s.full_name} size={44} />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div onClick={() => goTo(s)} style={{ fontSize: 14, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: "pointer" }}>{s.full_name}</div>
-              {s.headline && <div style={{ fontSize: 12, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.headline}</div>}
+              <div onClick={() => goTo(s)} style={{ fontSize: 14, fontWeight: 700, color: NAVY, lineHeight: 1.3, cursor: "pointer" }}>{s.full_name}</div>
+              {s.headline && <div style={{ fontSize: 12, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 1 }}>{s.headline}</div>}
               {s.company_match ? (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 700, color: "#1a56db", background: "#1a56db15", borderRadius: 6, padding: "1px 6px", marginTop: 2 }}>
                   💼 Mesma empresa
@@ -1401,7 +1401,7 @@ export default function AppFeedPage() {
 
         {/* ── Right panel ─── (only in personal mode) */}
         {!activeCompany && (
-          <div style={{ width: 260, flexShrink: 0, display: "none" }} className="feed-right-panel">
+          <div style={{ width: 300, flexShrink: 0, display: "none" }} className="feed-right-panel">
             {suggestions.length > 0 && <SuggestionsPanel suggestions={suggestions.slice(0, 4)} onConnect={handleConnect} onFollow={handleFollowSuggestion} viewingAsCompany={!!activeCompany} />}
           </div>
         )}

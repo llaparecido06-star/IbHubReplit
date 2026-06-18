@@ -131,7 +131,7 @@ export function MiniChatPanel({
        */}
       <div style={{
         position: "fixed", bottom: 0, right: 24,
-        width: 304,
+        width: 340,
         zIndex: 400,
         fontFamily: "'Inter', -apple-system, sans-serif",
         borderRadius: "14px 14px 0 0",
