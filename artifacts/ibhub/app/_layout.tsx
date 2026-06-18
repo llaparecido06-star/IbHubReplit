@@ -222,7 +222,7 @@ function AppStack() {
       <Stack.Screen name="story-viewer" options={{ animation: "fade", presentation: "fullScreenModal" }} />
       <Stack.Screen name="post/[id]" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="profile/[id]" options={{ animation: "slide_from_right" }} />
-      <Stack.Screen name="empresa/[id]" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="empresa" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="event/[id]" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="job/[id]" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="opportunity/[id]" options={{ animation: "slide_from_right" }} />
