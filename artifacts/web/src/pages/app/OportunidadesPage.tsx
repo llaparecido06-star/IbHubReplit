@@ -403,14 +403,14 @@ export default function OportunidadesPage() {
                             {item.cover_image_url && (
                               <img src={item.cover_image_url} alt={item.title} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} style={{ width: "100%", height: 160, objectFit: "cover" }} />
                             )}
-                            <div style={{ padding: 14 }}>
+                            <div style={{ padding: 16 }}>
                               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                                {novo && <span style={{ backgroundColor: "#dcfce7", color: "#16a34a", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>Novo</span>}
-                                {urgente && <span style={{ backgroundColor: "#fef2f2", color: "#dc2626", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>Urgente</span>}
-                                {item.category && <span style={{ backgroundColor: BG, color: MUTED, fontSize: 11, padding: "2px 8px", borderRadius: 6 }}>{item.category}</span>}
+                                {novo && <span style={{ backgroundColor: "#dcfce7", color: "#16a34a", fontSize: 12, fontWeight: 700, padding: "2px 9px", borderRadius: 6 }}>Novo</span>}
+                                {urgente && <span style={{ backgroundColor: "#fef2f2", color: "#dc2626", fontSize: 12, fontWeight: 700, padding: "2px 9px", borderRadius: 6 }}>Urgente</span>}
+                                {item.category && <span style={{ backgroundColor: BG, color: MUTED, fontSize: 12, padding: "2px 9px", borderRadius: 6 }}>{item.category}</span>}
                               </div>
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                                <span style={{ fontSize: 16, fontWeight: 700, color: NAVY, flex: 1, lineHeight: 1.3 }}>{item.title}</span>
+                                <span style={{ fontSize: 16, fontWeight: 700, color: NAVY, flex: 1, lineHeight: 1.35 }}>{item.title}</span>
                                 <button onClick={e => { e.stopPropagation(); handleToggleSave(item); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, padding: "0 0 0 8px", color: item.is_saved ? GOLD : MUTED }}>
                                   {item.is_saved ? "🔖" : "📎"}
                                 </button>
@@ -436,16 +436,16 @@ export default function OportunidadesPage() {
                           <div
                             key={item.id}
                             onClick={() => setLocation(`/app/oportunidades/${item.id}`)}
-                            style={{ backgroundColor: WHITE, border: `1px solid ${item.is_applied ? GOLD : BORDER}`, borderRadius: 14, padding: 14, cursor: "pointer" }}
+                            style={{ backgroundColor: WHITE, border: `1px solid ${item.is_applied ? GOLD : BORDER}`, borderRadius: 14, padding: 16, cursor: "pointer" }}
                           >
                             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                              {nova && <span style={{ backgroundColor: "#dcfce7", color: "#16a34a", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>Nova</span>}
+                              {nova && <span style={{ backgroundColor: "#dcfce7", color: "#16a34a", fontSize: 12, fontWeight: 700, padding: "2px 9px", borderRadius: 6 }}>Nova</span>}
                               {item.location && (
-                                <span style={{ backgroundColor: isRemote ? "#ede9fe" : "#f0f9ff", color: isRemote ? "#7c3aed" : "#0369a1", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>
+                                <span style={{ backgroundColor: isRemote ? "#ede9fe" : "#f0f9ff", color: isRemote ? "#7c3aed" : "#0369a1", fontSize: 12, fontWeight: 700, padding: "2px 9px", borderRadius: 6 }}>
                                   {isRemote ? "Remoto" : "Presencial"}
                                 </span>
                               )}
-                              {item.contract_type && <span style={{ backgroundColor: BG, color: MUTED, fontSize: 11, padding: "2px 8px", borderRadius: 6 }}>{item.contract_type}</span>}
+                              {item.contract_type && <span style={{ backgroundColor: BG, color: MUTED, fontSize: 12, padding: "2px 9px", borderRadius: 6 }}>{item.contract_type}</span>}
                             </div>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                               <span style={{ fontSize: 16, fontWeight: 700, color: NAVY, flex: 1 }}>{item.title}</span>
@@ -739,12 +739,12 @@ export default function OportunidadesPage() {
                             />
                           )}
                           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                            {novo && <span style={{ backgroundColor: "#dcfce7", color: "#16a34a", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>Novo</span>}
-                            {urgente && <span style={{ backgroundColor: "#fef2f2", color: "#dc2626", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>Urgente</span>}
-                            {item.category && <span style={{ backgroundColor: "#f2f3f5", color: "#555", fontSize: 11, padding: "2px 8px", borderRadius: 6 }}>{item.category}</span>}
+                            {novo && <span style={{ backgroundColor: "#dcfce7", color: "#16a34a", fontSize: 12, fontWeight: 700, padding: "2px 9px", borderRadius: 6 }}>Novo</span>}
+                            {urgente && <span style={{ backgroundColor: "#fef2f2", color: "#dc2626", fontSize: 12, fontWeight: 700, padding: "2px 9px", borderRadius: 6 }}>Urgente</span>}
+                            {item.category && <span style={{ backgroundColor: "#f2f3f5", color: "#555", fontSize: 12, padding: "2px 9px", borderRadius: 6 }}>{item.category}</span>}
                           </div>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                            <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0, flex: 1, lineHeight: 1.3 }}>{item.title}</h3>
+                            <h3 style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: 0, flex: 1, lineHeight: 1.35 }}>{item.title}</h3>
                             <button
                               onClick={(e) => { e.stopPropagation(); handleToggleSave(item); }}
                               style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, padding: "0 0 0 8px" }}
@@ -785,14 +785,14 @@ export default function OportunidadesPage() {
                           onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "none")}
                         >
                           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                            {nova && <span style={{ backgroundColor: "#dcfce7", color: "#16a34a", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>Nova</span>}
+                            {nova && <span style={{ backgroundColor: "#dcfce7", color: "#16a34a", fontSize: 12, fontWeight: 700, padding: "2px 9px", borderRadius: 6 }}>Nova</span>}
                             {item.location && (
-                              <span style={{ backgroundColor: isRemote ? "#ede9fe" : "#f0f9ff", color: isRemote ? "#7c3aed" : "#0369a1", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>
+                              <span style={{ backgroundColor: isRemote ? "#ede9fe" : "#f0f9ff", color: isRemote ? "#7c3aed" : "#0369a1", fontSize: 12, fontWeight: 700, padding: "2px 9px", borderRadius: 6 }}>
                                 {isRemote ? "Remoto" : "Presencial"}
                               </span>
                             )}
                             {item.contract_type && (
-                              <span style={{ backgroundColor: "#f2f3f5", color: "#555", fontSize: 11, padding: "2px 8px", borderRadius: 6 }}>{item.contract_type}</span>
+                              <span style={{ backgroundColor: "#f2f3f5", color: "#555", fontSize: 12, padding: "2px 9px", borderRadius: 6 }}>{item.contract_type}</span>
                             )}
                           </div>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

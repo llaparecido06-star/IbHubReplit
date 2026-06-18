@@ -447,17 +447,17 @@ function MiniPostCard({ post, onDelete, onEdit, onPollUpdate, onLike, onBookmark
       <LikesModal postId={post.id} likesCount={post.likes_count} visible={likesModalOpen} onClose={() => setLikesModalOpen(false)} />
 
       {/* Header — author row (avatar + name + plan badge + headline + timestamp) */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "14px 16px 10px" }}>
-        <Avatar src={authorAvatar} name={authorName} size={42} />
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "16px 16px 10px" }}>
+        <Avatar src={authorAvatar} name={authorName} size={46} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{authorName}</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>{authorName}</span>
             <PlanBadge plan={(profile as any)?.plan} />
           </div>
           {authorHeadline && (
-            <div style={{ fontSize: 12, color: MUTED, marginTop: 1 }} title={authorHeadline}>{authorHeadline}</div>
+            <div style={{ fontSize: 13, color: MUTED, marginTop: 1 }} title={authorHeadline}>{authorHeadline}</div>
           )}
-          <div style={{ fontSize: 11, color: "#b0b7c3", marginTop: 2 }}>{timeAgo(post.created_at)}</div>
+          <div style={{ fontSize: 12, color: "#b0b7c3", marginTop: 2 }}>{timeAgo(post.created_at)}</div>
         </div>
         <div style={{ position: "relative", flexShrink: 0 }}>
           <button onClick={() => setShowMenu(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 20, lineHeight: 1, padding: "2px 6px", borderRadius: 6 }} title="Opções">⋮</button>
@@ -484,7 +484,7 @@ function MiniPostCard({ post, onDelete, onEdit, onPollUpdate, onLike, onBookmark
       {/* Text content */}
       {content.trim().length > 0 && (
         <div style={{ padding: "0 16px 12px" }}>
-          <div style={{ fontSize: 14, color: NAVY, lineHeight: 1.65, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{linkifyText(displayContent)}</div>
+          <div style={{ fontSize: 15, color: NAVY, lineHeight: 1.65, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{linkifyText(displayContent)}</div>
           {needsTruncation && (
             <button onClick={() => setExpanded(v => !v)} style={{ background: "none", border: "none", color: GOLD, fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "4px 0 0", fontFamily: "inherit" }}>
               {expanded ? "Ver menos" : "Ver mais"}
@@ -497,7 +497,7 @@ function MiniPostCard({ post, onDelete, onEdit, onPollUpdate, onLike, onBookmark
       {post.hashtags && post.hashtags.length > 0 && (
         <div style={{ padding: "0 16px 10px", display: "flex", flexWrap: "wrap", gap: 6 }}>
           {post.hashtags.slice(0, 5).map((tag) => (
-            <span key={tag} style={{ fontSize: 12, color: "#1a56db", fontWeight: 600 }}>#{tag}</span>
+            <span key={tag} style={{ fontSize: 13, color: "#1a56db", fontWeight: 600 }}>#{tag}</span>
           ))}
         </div>
       )}
@@ -897,8 +897,8 @@ export default function MeuPerfilPage() {
                     onClick={s.onClick}
                     style={{ flex: 1, textAlign: "center", cursor: s.onClick ? "pointer" : "default" }}
                   >
-                    <div style={{ fontSize: 17, fontWeight: 900, color: GOLD }}>{s.value}</div>
-                    <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{s.label}</div>
+                    <div style={{ fontSize: 18, fontWeight: 900, color: GOLD }}>{s.value}</div>
+                    <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{s.label}</div>
                   </div>
                   {i < arr.length - 1 && <div style={{ width: 1, backgroundColor: BORDER, margin: "0 2px" }} />}
                 </React.Fragment>
@@ -907,7 +907,7 @@ export default function MeuPerfilPage() {
 
             {/* Bio */}
             {bio && (
-              <p style={{ fontSize: 14, color: NAVY, lineHeight: 1.65, margin: "14px 0 0", whiteSpace: "pre-wrap" }}>{bio}</p>
+              <p style={{ fontSize: 15, color: NAVY, lineHeight: 1.65, margin: "14px 0 0", whiteSpace: "pre-wrap" }}>{bio}</p>
             )}
 
             {/* Completion bar */}
@@ -945,12 +945,12 @@ export default function MeuPerfilPage() {
             {/* Badges */}
             {computedBadges.length > 0 && (
               <div style={{ marginTop: 14 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Conquistas</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Conquistas</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {computedBadges.map(b => (
                     <div key={b.label} style={{ display: "flex", alignItems: "center", gap: 5, backgroundColor: b.isAdmin ? `${GOLD}18` : "#f2f3f5", border: `1px solid ${b.isAdmin ? GOLD + "40" : BORDER}`, borderRadius: 20, padding: "4px 10px" }}>
                       <span style={{ fontSize: 14 }}>{b.icon}</span>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: NAVY }}>{b.label}</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: NAVY }}>{b.label}</span>
                     </div>
                   ))}
                 </div>
@@ -990,8 +990,8 @@ export default function MeuPerfilPage() {
                   style={{ flex: 1, backgroundColor: "#f8fafc", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "12px 8px", cursor: "pointer", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}
                 >
                   <span style={{ fontSize: 20 }}>{card.icon}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{card.label}</span>
-                  <span style={{ fontSize: 11, color: MUTED }}>{card.sub}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{card.label}</span>
+                  <span style={{ fontSize: 12, color: MUTED }}>{card.sub}</span>
                 </button>
               ))}
             </div>
@@ -1118,13 +1118,13 @@ export default function MeuPerfilPage() {
             {/* Name + plan */}
             <div style={{ marginTop: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <h1 style={{ fontSize: 20, fontWeight: 900, color: NAVY, margin: 0 }}>{displayName}</h1>
+                <h1 style={{ fontSize: 22, fontWeight: 900, color: NAVY, margin: 0 }}>{displayName}</h1>
                 <PlanBadge plan={(profile as any)?.plan} />
               </div>
               {username && <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>{username}</div>}
-              {headline && <div style={{ fontSize: 14, color: MUTED, marginTop: 4 }}>{headline}</div>}
+              {headline && <div style={{ fontSize: 15, color: MUTED, marginTop: 4 }}>{headline}</div>}
               {(position || company) && (
-                <div style={{ fontSize: 13, color: NAVY, marginTop: 4 }}>
+                <div style={{ fontSize: 14, color: NAVY, marginTop: 4 }}>
                   {[position, company].filter(Boolean).join(" · ")}
                 </div>
               )}
@@ -1146,7 +1146,7 @@ export default function MeuPerfilPage() {
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = "0.8"; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}>
                   <div style={{ fontSize: 18, fontWeight: 900, color: GOLD }}>{s.value}</div>
-                  <div style={{ fontSize: 11, color: MUTED }}>{s.label}</div>
+                  <div style={{ fontSize: 12, color: MUTED }}>{s.label}</div>
                 </div>
               ))}
             </div>
@@ -1154,7 +1154,7 @@ export default function MeuPerfilPage() {
             {/* Badges */}
             {computedBadges.length > 0 && (
               <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${BORDER}` }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Conquistas</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Conquistas</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {computedBadges.map(b => (
                     <div key={b.label} style={{ display: "flex", alignItems: "center", gap: 5, backgroundColor: b.isAdmin ? `${GOLD}18` : "#f2f3f5", border: `1px solid ${b.isAdmin ? GOLD + "40" : BORDER}`, borderRadius: 20, padding: "4px 10px" }}>
@@ -1204,11 +1204,11 @@ export default function MeuPerfilPage() {
           )
         ) : (
           <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 20 }}>
-            <h3 style={{ fontSize: 15, fontWeight: 800, color: NAVY, margin: "0 0 16px" }}>Sobre mim</h3>
+            <h3 style={{ fontSize: 16, fontWeight: 800, color: NAVY, margin: "0 0 16px" }}>Sobre mim</h3>
             {bio ? (
-              <p style={{ fontSize: 14, color: NAVY, lineHeight: 1.7, margin: "0 0 16px" }}>{bio}</p>
+              <p style={{ fontSize: 15, color: NAVY, lineHeight: 1.7, margin: "0 0 16px" }}>{bio}</p>
             ) : (
-              <p style={{ fontSize: 14, color: MUTED, margin: "0 0 16px" }}>Nenhuma bio adicionada ainda.</p>
+              <p style={{ fontSize: 15, color: MUTED, margin: "0 0 16px" }}>Nenhuma bio adicionada ainda.</p>
             )}
 
             {(position || company) && (
@@ -1219,7 +1219,7 @@ export default function MeuPerfilPage() {
                     <span style={{ fontSize: 16 }}>🏢</span>
                   </div>
                   <div>
-                    {position && <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{position}</div>}
+                    {position && <div style={{ fontSize: 15, fontWeight: 700, color: NAVY }}>{position}</div>}
                     {company && <div style={{ fontSize: 13, color: MUTED }}>{company}</div>}
                   </div>
                 </div>

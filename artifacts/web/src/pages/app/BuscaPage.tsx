@@ -67,7 +67,7 @@ function Row({ children, onClick }: { children: React.ReactNode; onClick?: () =>
       onClick={onClick}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 20px", background: hover && onClick ? BG : WHITE, borderBottom: `1px solid ${BORDER}`, cursor: onClick ? "pointer" : "default", transition: "background 0.12s" }}
+      style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 20px", background: hover && onClick ? BG : WHITE, borderBottom: `1px solid ${BORDER}`, cursor: onClick ? "pointer" : "default", transition: "background 0.12s" }}
     >
       {children}
     </div>
@@ -105,14 +105,14 @@ function PersonCard({
 
   return (
     <Row onClick={() => setLocation(isEmpresa ? `/app/empresa/${p.id}` : `/app/usuario/${p.id}`)}>
-      <Avatar src={p.avatar_url} name={p.full_name ?? "?"} size={44} />
+      <Avatar src={p.avatar_url} name={p.full_name ?? "?"} size={48} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.full_name ?? "—"}</span>
-          {plan && <span style={{ fontSize: 10, fontWeight: 700, color: plan.color, background: plan.color + "18", borderRadius: 5, padding: "1px 5px", flexShrink: 0 }}>{plan.label}</span>}
+          <span style={{ fontSize: 15, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.full_name ?? "—"}</span>
+          {plan && <span style={{ fontSize: 11, fontWeight: 700, color: plan.color, background: plan.color + "18", borderRadius: 5, padding: "1px 6px", flexShrink: 0 }}>{plan.label}</span>}
         </div>
-        {p.headline && <div style={{ fontSize: 12, color: MUTED, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.headline}</div>}
-        {p.username && <div style={{ fontSize: 11, color: MUTED }}>@{p.username}</div>}
+        {p.headline && <div style={{ fontSize: 13, color: MUTED, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.headline}</div>}
+        {p.username && <div style={{ fontSize: 12, color: MUTED }}>@{p.username}</div>}
       </div>
       {!isEmpresa && !isSelf && (
         <button
@@ -153,10 +153,10 @@ function EmpresaCard({
 
   return (
     <Row onClick={() => setLocation(`/app/empresa/${c.id}`)}>
-      <Avatar src={c.avatar_url} name={c.name ?? "?"} size={44} />
+      <Avatar src={c.avatar_url} name={c.name ?? "?"} size={48} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
-        {c.industry && <div style={{ fontSize: 12, color: MUTED, marginTop: 1 }}>{c.industry}</div>}
+        <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
+        {c.industry && <div style={{ fontSize: 13, color: MUTED, marginTop: 1 }}>{c.industry}</div>}
       </div>
       {c.isCompanyPage !== false && (
         <button
@@ -189,16 +189,16 @@ function PostCard({ p }: { p: PostResult }) {
   };
   return (
     <Row onClick={() => setLocation(`/app/posts/${p.id}`)}>
-      {p.author && <span onClick={goToAuthor} style={{ cursor: "pointer", display: "inline-flex" }}><Avatar src={p.author.avatar_url} name={authorName} size={40} /></span>}
+      {p.author && <span onClick={goToAuthor} style={{ cursor: "pointer", display: "inline-flex" }}><Avatar src={p.author.avatar_url} name={authorName} size={44} /></span>}
       <div style={{ flex: 1, minWidth: 0 }}>
         {p.author && (
           <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
-            <span onClick={goToAuthor} style={{ fontSize: 13, fontWeight: 700, color: NAVY, cursor: "pointer" }}>{authorName}</span>
-            {p.author.isCompany && <span style={{ fontSize: 10, color: MUTED, background: BG, borderRadius: 4, padding: "1px 5px" }}>Empresa</span>}
+            <span onClick={goToAuthor} style={{ fontSize: 14, fontWeight: 700, color: NAVY, cursor: "pointer" }}>{authorName}</span>
+            {p.author.isCompany && <span style={{ fontSize: 11, color: MUTED, background: BG, borderRadius: 4, padding: "1px 6px" }}>Empresa</span>}
           </div>
         )}
-        <div style={{ fontSize: 13, color: "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.content}</div>
-        <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>❤️ {p.likes_count} · 💬 {p.comments_count} · {timeAgo(p.created_at)}</div>
+        <div style={{ fontSize: 14, color: "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.content}</div>
+        <div style={{ fontSize: 12, color: MUTED, marginTop: 3 }}>❤️ {p.likes_count} · 💬 {p.comments_count} · {timeAgo(p.created_at)}</div>
       </div>
     </Row>
   );
@@ -208,11 +208,11 @@ function VagaCard({ v }: { v: VagaResult }) {
   const [, setLocation] = useLocation();
   return (
     <Row onClick={() => setLocation("/app/oportunidades")}>
-      <div style={{ width: 40, height: 40, borderRadius: 10, background: NAVY + "12", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>💼</div>
+      <div style={{ width: 44, height: 44, borderRadius: 10, background: NAVY + "12", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>💼</div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.title}</div>
-        {v.company && <div style={{ fontSize: 12, color: MUTED }}>{v.company}{v.location ? ` · ${v.location}` : ""}</div>}
-        {v.contract_type && <div style={{ fontSize: 11, color: GOLD, marginTop: 2 }}>{v.contract_type}</div>}
+        <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.title}</div>
+        {v.company && <div style={{ fontSize: 13, color: MUTED }}>{v.company}{v.location ? ` · ${v.location}` : ""}</div>}
+        {v.contract_type && <div style={{ fontSize: 12, color: GOLD, marginTop: 2 }}>{v.contract_type}</div>}
       </div>
     </Row>
   );
@@ -223,11 +223,11 @@ function EventCard({ ev }: { ev: EventResult }) {
   const date = new Date(ev.start_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
   return (
     <Row onClick={() => setLocation("/app/oportunidades")}>
-      <div style={{ width: 40, height: 40, borderRadius: 10, background: WINE + "12", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>📅</div>
+      <div style={{ width: 44, height: 44, borderRadius: 10, background: WINE + "12", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>📅</div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.title}</div>
-        <div style={{ fontSize: 12, color: MUTED }}>{date}{ev.location ? ` · ${ev.location}` : ""}</div>
-        {ev.entry_type === "paid" && <div style={{ fontSize: 11, color: GOLD, marginTop: 2 }}>Pago</div>}
+        <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.title}</div>
+        <div style={{ fontSize: 13, color: MUTED }}>{date}{ev.location ? ` · ${ev.location}` : ""}</div>
+        {ev.entry_type === "paid" && <div style={{ fontSize: 12, color: GOLD, marginTop: 2 }}>Pago</div>}
       </div>
     </Row>
   );
@@ -237,11 +237,11 @@ function GroupCard({ g }: { g: GroupResult }) {
   const [, setLocation] = useLocation();
   return (
     <Row onClick={() => setLocation("/app/grupos")}>
-      <div style={{ width: 40, height: 40, borderRadius: 10, background: GOLD + "20", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>👥</div>
+      <div style={{ width: 44, height: 44, borderRadius: 10, background: GOLD + "20", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>👥</div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{g.name}</div>
-        {g.description && <div style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.description}</div>}
-        <div style={{ fontSize: 11, color: MUTED, marginTop: 1 }}>{g.members_count} membros{g.category ? ` · ${g.category}` : ""}</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: NAVY }}>{g.name}</div>
+        {g.description && <div style={{ fontSize: 13, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.description}</div>}
+        <div style={{ fontSize: 12, color: MUTED, marginTop: 1 }}>{g.members_count} membros{g.category ? ` · ${g.category}` : ""}</div>
       </div>
     </Row>
   );

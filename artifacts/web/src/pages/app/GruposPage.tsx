@@ -33,12 +33,12 @@ function getCategoryColor(cat: string) {
 
 function GroupAvatar({ group }: { group: Group }) {
   if (group.avatar_url) {
-    return <img src={group.avatar_url} alt={group.name} style={{ width: 44, height: 44, borderRadius: 10, objectFit: "cover" }} />;
+    return <img src={group.avatar_url} alt={group.name} style={{ width: 48, height: 48, borderRadius: 10, objectFit: "cover" }} />;
   }
   const color = getCategoryColor(group.category);
   const initials = group.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
   return (
-    <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: color + "20", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color }}>
+    <div style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: color + "20", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 800, color }}>
       {initials || "G"}
     </div>
   );
@@ -82,11 +82,11 @@ function GroupCard({ group, userId, onJoin, onRequest, onLeave }: {
           <GroupAvatar group={group} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 6, flexWrap: "wrap" }}>
-              <h3 style={{ fontSize: 14, fontWeight: 800, color: NAVY, margin: 0, flex: 1 }}>{group.name}</h3>
+              <h3 style={{ fontSize: 15, fontWeight: 800, color: NAVY, margin: 0, flex: 1 }}>{group.name}</h3>
             </div>
             <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 10, backgroundColor: color + "18", color, fontWeight: 700, padding: "2px 8px", borderRadius: 100 }}>{group.category}</span>
-              <span style={{ fontSize: 10, backgroundColor: "#f3f4f6", color: MUTED, fontWeight: 600, padding: "2px 8px", borderRadius: 100 }}>
+              <span style={{ fontSize: 11, backgroundColor: color + "18", color, fontWeight: 700, padding: "2px 8px", borderRadius: 100 }}>{group.category}</span>
+              <span style={{ fontSize: 11, backgroundColor: "#f3f4f6", color: MUTED, fontWeight: 600, padding: "2px 8px", borderRadius: 100 }}>
                 {ACCESS_ICON[group.access]} {ACCESS_LABEL[group.access]}
               </span>
             </div>
@@ -94,13 +94,13 @@ function GroupCard({ group, userId, onJoin, onRequest, onLeave }: {
         </div>
 
         {group.description && (
-          <p style={{ fontSize: 12, color: MUTED, margin: "0 0 10px", lineHeight: 1.5 }}>
+          <p style={{ fontSize: 13, color: MUTED, margin: "0 0 10px", lineHeight: 1.5 }}>
             {group.description.length > 100 ? group.description.slice(0, 100) + "…" : group.description}
           </p>
         )}
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 11, color: MUTED }}>👥 {(group.member_count ?? 0).toLocaleString("pt-BR")} membro{group.member_count !== 1 ? "s" : ""}</span>
+          <span style={{ fontSize: 12, color: MUTED }}>👥 {(group.member_count ?? 0).toLocaleString("pt-BR")} membro{group.member_count !== 1 ? "s" : ""}</span>
 
           {group.is_member ? (
             <div style={{ display: "flex", gap: 6 }}>

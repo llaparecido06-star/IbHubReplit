@@ -118,11 +118,11 @@ function NotifRow({ notif, onRead, onAccept, onReject }: {
 
       {/* Content */}
       <div style={{ flex: 1 }}>
-        <p style={{ margin: 0, fontSize: 14, color: NAVY, lineHeight: 1.45 }}>
+        <p style={{ margin: 0, fontSize: 15, color: NAVY, lineHeight: 1.5 }}>
           <strong>{actorName}</strong>{" "}
           {buildNotifMessage(notif, typeLabel)}
         </p>
-        <p style={{ margin: "4px 0 0", fontSize: 12, color: MUTED }}>{timeAgo(notif.created_at)}</p>
+        <p style={{ margin: "5px 0 0", fontSize: 12, color: MUTED }}>{timeAgo(notif.created_at)}</p>
 
         {/* Connection actions */}
         {isPending && (
@@ -206,7 +206,7 @@ export default function NotificacoesPage() {
         {/* Header */}
         <div style={{ padding: "24px 20px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${BORDER}`, background: WHITE, position: "sticky", top: 0, zIndex: 10 }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: NAVY }}>
+            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: NAVY }}>
               Notificações
               {unreadCount > 0 && (
                 <span style={{ marginLeft: 10, background: GOLD, color: WHITE, borderRadius: 12, fontSize: 12, fontWeight: 700, padding: "2px 8px" }}>

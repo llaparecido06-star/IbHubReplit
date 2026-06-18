@@ -622,7 +622,7 @@ export default function AdegaPage() {
             <div key={k.label} style={{ backgroundColor: "#fff", border: "1px solid #e8eaed", borderRadius: 14, padding: 18, textAlign: "center" }}>
               <div style={{ fontSize: 28, marginBottom: 4 }}>{k.icon}</div>
               <div style={{ fontSize: 28, fontWeight: 900, color: k.color }}>{k.val}</div>
-              <div style={{ fontSize: 12, color: "#8a93a2" }}>{k.label}</div>
+              <div style={{ fontSize: 13, color: "#8a93a2" }}>{k.label}</div>
             </div>
           ))}
         </div>
@@ -720,15 +720,15 @@ export default function AdegaPage() {
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-                        <h3 style={{ fontSize: 16, fontWeight: 700, color: NAVY, margin: 0 }}>{wine.name}</h3>
-                        <span style={{ backgroundColor: sc.bg, color: sc.color, fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 5 }}>
+                        <h3 style={{ fontSize: 17, fontWeight: 700, color: NAVY, margin: 0 }}>{wine.name}</h3>
+                        <span style={{ backgroundColor: sc.bg, color: sc.color, fontSize: 12, fontWeight: 700, padding: "2px 9px", borderRadius: 6 }}>
                           {STATUS_OPTIONS.find((s) => s.key === wine.status)?.label}
                         </span>
-                        {wine.is_private && <span style={{ fontSize: 11, color: "#aaa" }}>🔒</span>}
+                        {wine.is_private && <span style={{ fontSize: 12, color: "#aaa" }}>🔒</span>}
                       </div>
                       {wine.producer && (
-                        <p style={{ fontSize: 13, color: "#8a93a2", margin: "0 0 4px" }}>
+                        <p style={{ fontSize: 14, color: "#8a93a2", margin: "0 0 5px" }}>
                           {wine.producer}{wine.vintage ? ` · ${wine.vintage}` : ""}
                         </p>
                       )}
@@ -739,14 +739,14 @@ export default function AdegaPage() {
                         {wine.drink_by && <span>⏰ Beber até: {new Date(wine.drink_by).toLocaleDateString("pt-BR")}</span>}
                       </div>
                       {wine.rating > 0 && (
-                        <div style={{ display: "flex", gap: 2, marginTop: 6 }}>
+                        <div style={{ display: "flex", gap: 2, marginTop: 7 }}>
                           {[1,2,3,4,5].map((s) => (
-                            <span key={s} style={{ color: s <= wine.rating ? GOLD : "#e8eaed", fontSize: 14 }}>★</span>
+                            <span key={s} style={{ color: s <= wine.rating ? GOLD : "#e8eaed", fontSize: 16 }}>★</span>
                           ))}
                         </div>
                       )}
                       {wine.notes && (
-                        <p style={{ fontSize: 12, color: "#aaa", margin: "6px 0 0", fontStyle: "italic" }}>"{wine.notes}"</p>
+                        <p style={{ fontSize: 13, color: "#aaa", margin: "7px 0 0", fontStyle: "italic" }}>"{wine.notes}"</p>
                       )}
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 12 }}>
