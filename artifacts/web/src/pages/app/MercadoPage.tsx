@@ -3529,20 +3529,23 @@ export default function MercadoPage() {
     { key: "trimestre", label: "Trimestre" },
     { key: "ano", label: "Ano" },
   ];
-  const TABS: { key: MercadoTab; label: string; icon: string }[] = [
-    { key: "feed",          label: "Feed",          icon: "📡" },
-    { key: "visao",         label: "Visão Geral",   icon: "📊" },
-    { key: "busca",         label: "Buscador",      icon: "🔎" },
-    { key: "apresentacoes", label: "Apresentações", icon: "📋" },
+  const ALL_TABS: { key: MercadoTab; label: string; mobileLabel: string; icon: string }[] = [
+    { key: "feed",          label: "Feed",          mobileLabel: "Feed",      icon: "📡" },
+    { key: "visao",         label: "Visão Geral",   mobileLabel: "Visão",     icon: "📊" },
+    { key: "busca",         label: "Buscador",      mobileLabel: "Busca",     icon: "🔎" },
+    { key: "apresentacoes", label: "Apresentações", mobileLabel: "Relatórios", icon: "📋" },
   ];
+  const TABS = ALL_TABS.filter(t =>
+    t.key !== "apresentacoes" || isAdmin || hasFeature("mercado:apresentacoes")
+  );
 
   /* ── Shared content renderer ── */
   const renderContent = () => {
     if (mainTab === "feed") return (
-      <IdealBIFeed userId={user?.id ?? ""} isAdmin={profile?.is_admin ?? false} mode="feed" />
+      <IdealBIFeed key="feed-tab" userId={user?.id ?? ""} isAdmin={profile?.is_admin ?? false} mode="feed" />
     );
     if (mainTab === "busca") return (
-      <IdealBIFeed userId={user?.id ?? ""} isAdmin={profile?.is_admin ?? false} mode="search" />
+      <IdealBIFeed key="busca-tab" userId={user?.id ?? ""} isAdmin={profile?.is_admin ?? false} mode="search" />
     );
     if (mainTab === "apresentacoes") {
       if (permLoading) return (
@@ -3849,7 +3852,7 @@ export default function MercadoPage() {
                       <span style={{ position: "absolute", top: -2, right: -4, width: 7, height: 7, borderRadius: "50%", backgroundColor: "#dc2626", display: "inline-block" }} />
                     )}
                   </span>
-                  {t.label}
+                  {t.mobileLabel}
                 </button>
               );
             })}
