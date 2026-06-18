@@ -1,4 +1,4 @@
-- [Android double router.replace freeze](android-nav-double-replace.md) — TOKEN_REFRESHED during login causes second router.replace; guard with navInitiated && lastDestination === destination.
+- [Android post-login freeze](android-nav-double-replace.md) — never swap the root navigator by auth state; keep ONE permanent Stack with all routes mounted + a single redirect effect.
 - [Group members role constraint](group-members-role-constraint.md) — production trigger uses legacy 'admin' role; constraint must include it; onConflict must use 3-column key.
 - [iOS never worked — newArchEnabled conflict](ios-new-arch-conflict.md) — expo-build-properties plugin overrides root-side newArchEnabled; Reanimated 4.x requires New Architecture; fix in expo-build-properties iOS section.
 - [conversation_participants RLS blocks direct inserts](conversation-participants-rls.md) — any client-side INSERT/UPSERT to conversation_participants silently fails; always use the API server (supabaseAdmin) for those writes.

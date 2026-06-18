@@ -7,10 +7,10 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack, useRouter, usePathname, type Href } from "expo-router";
+import { Stack, useRouter, usePathname, useSegments, type Href } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -40,39 +40,10 @@ SafeNotifications.setNotificationHandler({
   }),
 });
 
-// ── Cold-start notification pre-fetch ────────────────────────────────────────
-// Read the last notification response immediately at module load — before any
-// React tree renders. By the time auth resolves (even from cache), this promise
-// will have settled, letting RootLayoutNav navigate directly to the deep-link
-// destination instead of first landing on /(tabs) and then jumping away.
-//
-// IMPORTANT: getLastNotificationResponseAsync() can hang indefinitely on Android
-// when push notification permissions have not been granted or Google Play Services
-// is unavailable. We race it against a 1.5 s timeout so coldStartDeepLinkPromise
-// always settles promptly and the navigation IIFE is never permanently blocked.
-const coldStartDeepLinkPromise: Promise<string | null> = (async () => {
-  try {
-    const response = await Promise.race([
-      SafeNotifications.getLastNotificationResponseAsync(),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 1_500)),
-    ]);
-    if (response) {
-      const data = response.notification.request.content.data ?? {};
-      const deepLink = (data as { deepLink?: string }).deepLink;
-      if (deepLink && typeof deepLink === "string" && deepLink.startsWith("/")) {
-        console.log("[ColdStart] deep-link from notification:", deepLink);
-        return deepLink;
-      }
-    }
-  } catch {
-    // Not available in Expo Go
-  }
-  return null;
-})();
-
-// Tracks whether RootLayoutNav has already consumed the cold-start deep link.
-// PushNotificationHandler checks this flag to avoid double-navigating.
-let coldStartLinkConsumed = false;
+// Cold-start deep links (app launched by tapping a push notification) are
+// handled entirely by PushNotificationHandler below, once the authenticated
+// user is available. RootLayoutNav no longer consumes the cold-start link, so
+// there is a single owner and no risk of double-navigation.
 
 // ── Background unread badge syncer ──────────────────────────────────────────
 function UnreadSyncer() {
@@ -132,12 +103,10 @@ function PushNotificationHandler() {
     // here — it is done in the feed screen after navigation has settled, so
     // the OS permission dialog never appears mid-onboarding.
     //
-    // NOTE: RootLayoutNav pre-reads getLastNotificationResponseAsync() at
-    // module load and navigates directly to the deep-link destination before
-    // this component mounts. If it has already consumed the cold-start link,
-    // we skip this call entirely to prevent double-navigation.
+    // This handler is the SOLE owner of cold-start deep links: it reads the
+    // last notification response once the authenticated user is available and
+    // navigates to the deep-link destination.
     const handleLastResponse = async () => {
-      if (coldStartLinkConsumed) return;
       try {
         // Race against a 1.5 s timeout — getLastNotificationResponseAsync() can
         // hang indefinitely on Android when Google Play Services is unavailable
@@ -204,11 +173,32 @@ SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
-function AuthenticatedLayout() {
-  const isDesktop = useIsDesktop();
+// Full-screen navy overlay shown on top of the (always-mounted) navigator while
+// auth is resolving or while a redirect to the correct area is in flight. It is
+// purely cosmetic — the navigator underneath is always live.
+function LoadingOverlay() {
+  return (
+    <View
+      style={[
+        StyleSheet.absoluteFillObject,
+        { alignItems: "center", justifyContent: "center", backgroundColor: "#0d1b2a" },
+      ]}
+    >
+      <ActivityIndicator color="#c9a84c" size="large" />
+    </View>
+  );
+}
 
-  const stack = (
+// ── Single permanent navigator ──────────────────────────────────────────────
+// Every route — auth screens AND authenticated screens — is registered here and
+// the Stack is ALWAYS mounted, regardless of auth state. This is the core of the
+// post-login freeze fix: because the navigator is never torn down or swapped
+// based on auth state, router.replace() always has a mounted target and can
+// never silently fail and strand the user on a blank navy screen.
+function AppStack() {
+  return (
     <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="social-complete" options={{ headerShown: false }} />
       <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -247,326 +237,137 @@ function AuthenticatedLayout() {
       <Stack.Screen name="admin" options={{ headerShown: false }} />
     </Stack>
   );
-
-  if (isDesktop) {
-    return (
-      <>
-        <UnreadSyncer />
-        <PushNotificationHandler />
-        <MaintenanceGuard />
-        <View style={{ flex: 1, flexDirection: "row" }}>
-          <SidebarNav />
-          <View style={{ flex: 1 }}>
-            {stack}
-          </View>
-        </View>
-      </>
-    );
-  }
-
-  return (
-    <>
-      <UnreadSyncer />
-      <PushNotificationHandler />
-      <MaintenanceGuard />
-      {stack}
-    </>
-  );
 }
 
 function RootLayoutNav() {
-  const { session, loading, isRecovering, mustChangePassword, needsProfileCompletion, profileChecked } = useAuth();
-  const { isEnabled, isLoading: flagsLoading } = useFeatureFlags();
+  const {
+    session,
+    loading,
+    isRecovering,
+    mustChangePassword,
+    needsProfileCompletion,
+    profileChecked,
+  } = useAuth();
+  const { isEnabled } = useFeatureFlags();
   const router = useRouter();
+  const segments = useSegments();
   const pathname = usePathname();
-  // Track the last destination we navigated to so we can re-navigate when the
-  // intended destination changes (e.g. needsProfileCompletion flips during OAuth).
-  const lastDestination = useRef<string | null>(null);
+  const isDesktop = useIsDesktop();
   const manutencao = isEnabled("manutencao");
 
-  // True once router.replace() has been called at least once for an authenticated
-  // user. On cold start with a cached session, loading + profileChecked resolve
-  // synchronously, but the navigation useEffect runs *after* the first render —
-  // leaving AuthenticatedLayout with an empty Stack for one frame (white screen).
-  // Keeping this false until navigation fires means we show the navy spinner
-  // instead of the blank Stack, eliminating the visible white flash.
-  const [navInitiated, setNavInitiated] = useState(false);
+  // Auth is "ready" once the session state is known and — when logged in — the
+  // first profile fetch has resolved. Both conditions have upstream timeouts in
+  // AuthContext, so authReady always settles within a few seconds.
+  const authReady = !loading && !(session && !profileChecked);
 
-  // True while the cold-start IIFE (await coldStartDeepLinkPromise → router.replace)
-  // is in flight. Prevents the !shouldRedirect branch from calling setNavInitiated(true)
-  // before router.replace has been called, which would render AuthenticatedLayout with
-  // an empty Stack (navy frozen screen) when flagsLoading or manutencao changes mid-IIFE.
-  const navIifePendingRef = useRef(false);
-
-  // Synchronous mirror of navInitiated state. navInitiated is React state (async commit),
-  // so there is a brief window between navIifePendingRef.current=false and navInitiated
-  // becoming true in which TOKEN_REFRESHED can re-trigger the effect and launch a second
-  // IIFE → double router.replace → Android loop. navInitiatedRef is set synchronously
-  // before navIifePendingRef is reset, closing that window entirely.
-  const navInitiatedRef = useRef(false);
-
-  // Guards the safety-net timer so it is only armed once per login session.
-  // Without this, every TOKEN_REFRESHED event (frequent on Android) changes
-  // `session`, re-runs the safety-net useEffect, cancels the in-flight timeout,
-  // and starts a fresh 3 s timer — so it never fires and the spinner hangs
-  // forever if the main IIFE is also blocked (e.g. coldStartDeepLinkPromise stall).
-  const safetyNetArmed = useRef(false);
-
-  // Reset nav and safety-net flags whenever the user logs out so a subsequent
-  // login starts fresh. Without resetting navInitiated, re-login renders
-  // AuthenticatedLayout immediately (navInitiated=true from previous session)
-  // before router.replace has been called → empty Stack → blank screen flash.
+  // Single source of truth for auth-driven navigation. The navigator is always
+  // mounted (see render below), so these redirects can never fail silently.
+  // There are no refs, no "navInitiated" latch, and no safety-net timers — the
+  // previous design's many guard layers existed only to paper over the
+  // conditional-Stack-swap bug that this permanent Stack removes entirely.
   useEffect(() => {
-    if (!session) {
-      safetyNetArmed.current = false;
-      navInitiatedRef.current = false;
-      setNavInitiated(false);
-      console.log("[RootLayoutNav] session cleared — nav and safety-net flags reset");
+    if (!authReady) return;
+
+    // The register screen owns its entire navigation flow: the account is
+    // created mid-form (so the user becomes authenticated while still on
+    // register) and register.tsx self-navigates to /subscription or /(tabs)
+    // when done. Never redirect away from it — in particular, a transient
+    // needsProfileCompletion=true must not bounce the user to /social-complete.
+    if (pathname.includes("register")) return;
+
+    const root = segments[0] as string | undefined;
+    const inAuthGroup = root === "(auth)";
+    const onAuthCallback = root === "auth"; // app/auth/callback.tsx (OAuth)
+    const onMaintenance = root === "maintenance";
+    const onSocialComplete = root === "social-complete";
+    const onGate = root === undefined; // transient: no route resolved yet
+
+    // Password recovery / forced password change always takes precedence.
+    if (isRecovering || mustChangePassword) {
+      if (!pathname.includes("reset-password")) {
+        router.replace("/(auth)/reset-password" as any);
+      }
+      return;
     }
-  }, [session]);
 
-  // Auth routes that must remain accessible without a session
-  const isAuthPath = ["login", "register", "forgot-password", "reset-password", "auth"].some(
-    (p) => pathname.includes(p),
-  );
-
-  useEffect(() => {
-    console.log(
-      `[RootLayoutNav] effect — loading=${loading} session=${!!session} profileChecked=${profileChecked}` +
-      ` navInitiated=${navInitiated} navIifePending=${navIifePendingRef.current}` +
-      ` isAuthPath=${isAuthPath} needsCompletion=${needsProfileCompletion}`
-    );
-
-    if (loading || isRecovering || mustChangePassword) return;
-
-    // ── Unauthenticated ────────────────────────────────────────────────────
+    // ── Unauthenticated ──
     if (!session) {
-      lastDestination.current = null;
-      if (manutencao && !isAuthPath) {
-        router.replace("/maintenance" as any);
-      } else if (!manutencao && !isAuthPath) {
+      if (onAuthCallback) return; // let the OAuth callback finish exchanging the code
+      if (manutencao) {
+        if (!onMaintenance && !inAuthGroup) router.replace("/maintenance" as any);
+      } else if (!inAuthGroup) {
         router.replace("/(auth)/login" as any);
       }
       return;
     }
 
-    // ── Authenticated ──────────────────────────────────────────────────────
-    // Wait for the first profile fetch to complete before deciding destination.
-    // Otherwise, for new social-auth users, needsProfileCompletion starts as false,
-    // we navigate to /(tabs), and then a moment later it flips to true and we
-    // bounce them to /social-complete — visible flicker.
-    if (!profileChecked) {
-      console.log("[RootLayoutNav] waiting for profileChecked…");
+    // ── Authenticated ──
+    // Social-auth users who still need to finish their profile go to social-complete.
+    if (needsProfileCompletion) {
+      if (!onSocialComplete) router.replace("/social-complete" as any);
       return;
     }
 
-    // Decide destination once, based on whether the social-auth user still needs
-    // to complete their profile. Single source of truth avoids the previous
-    // double-effect race.
-    const destination = needsProfileCompletion ? "/social-complete" : "/(tabs)";
-
-    // Don't override screens the user explicitly navigated to (settings, profile, etc.).
-    // Only redirect when on an auth screen or when the destination actually changed.
-    const shouldRedirect = isAuthPath || lastDestination.current !== destination;
-    if (!shouldRedirect) {
-      // Even if we skip the redirect, ensure navInitiated is marked so the
-      // loading guard doesn't block AuthenticatedLayout indefinitely when the
-      // user is already on the correct screen (e.g. deep-link cold start).
-      // IMPORTANT: do NOT set navInitiated=true if the navigation IIFE is still
-      // in flight — calling it here would render AuthenticatedLayout before
-      // router.replace completes, producing an empty Stack (navy frozen screen).
-      // The IIFE calls setNavInitiated(true) itself once router.replace is done.
-      if (!navIifePendingRef.current) {
-        navInitiatedRef.current = true;
-        setNavInitiated(true);
-      }
-      return;
-    }
-
-    // Guard against double-navigation on Android (and any platform):
-    // After the first router.replace("/(tabs)") fires, there is a brief window
-    // where isAuthPath is still true (pathname hasn't updated yet) but the
-    // session object changes due to a TOKEN_REFRESHED event. Without this
-    // guard the effect would re-run with shouldRedirect=true (isAuthPath &&
-    // same destination) and launch a second async IIFE that calls router.replace
-    // a second time — causing the "advances, freezes, goes back" freeze on Android.
-    //
-    // navInitiatedRef (sync) is checked alongside navInitiated (async state) so
-    // the guard fires immediately even before React commits the state update.
-    if ((navInitiated || navInitiatedRef.current) && lastDestination.current === destination) {
-      return;
-    }
-
-    // Never auto-redirect from the register screen — it drives its own
-    // navigation at the end of the signup flow. Set lastDestination so that
-    // when the register screen calls router.replace and the pathname changes,
-    // the re-run of this effect finds shouldRedirect=false and sets
-    // navInitiated=true without issuing a second router.replace.
-    // Do NOT call setNavInitiated(true) here: AuthenticatedLayout must not
-    // render until router.replace has been called, otherwise the Stack has
-    // no active route and shows a blank screen.
-    if (pathname.includes("register")) {
-      lastDestination.current = destination;
-      return;
-    }
-
-    // Edge case: needsProfileCompletion=true but already on social-complete or
-    // an auth screen → don't bounce the user off it.
-    const completionBlockPaths = ["social-complete", "reset-password", "forgot-password"];
-    if (needsProfileCompletion && completionBlockPaths.some(p => pathname.includes(p))) {
-      lastDestination.current = destination;
-      navInitiatedRef.current = true;
-      setNavInitiated(true);
-      return;
-    }
-
-    lastDestination.current = destination;
-
-    // Guard: if a navigation IIFE is already in flight (e.g. TOKEN_REFRESHED
-    // fired while the IIFE was awaiting coldStartDeepLinkPromise), do NOT start
-    // a second IIFE. lastDestination is already set above, so the next effect
-    // re-run will find shouldRedirect=false and the !navIifePendingRef.current
-    // check will set navInitiated=true once the IIFE finishes.
-    // Without this guard, two concurrent IIFEs both call router.replace("/(tabs)")
-    // → double-replace → Android "avança 1cm e volta" infinite loop.
-    if (navIifePendingRef.current) {
-      return;
-    }
-
-    // For /(tabs), check whether a cold-start notification was tapped.
-    // The deep link was pre-fetched at module load so the promise is already
-    // settled by the time we get here, keeping navigation instantaneous.
-    // NOTE: coldStartDeepLinkPromise is now raced against a 1.5 s timeout so
-    // it always settles — getLastNotificationResponseAsync() can hang on Android.
-    if (destination === "/(tabs)") {
-      navIifePendingRef.current = true;
-      console.log("[RootLayoutNav] IIFE started — awaiting coldStartDeepLinkPromise");
-      (async () => {
-        try {
-          const coldLink = await coldStartDeepLinkPromise;
-          console.log("[RootLayoutNav] IIFE resolved — coldLink:", coldLink ?? "null");
-          if (coldLink && !coldStartLinkConsumed) {
-            coldStartLinkConsumed = true;
-            console.log("[RootLayoutNav] router.replace →", coldLink);
-            router.replace(coldLink as any);
-          } else {
-            console.log("[RootLayoutNav] router.replace → /(tabs)");
-            router.replace("/(tabs)" as any);
-          }
-        } catch (e) {
-          console.error("[RootLayoutNav] router.replace threw:", e);
-        } finally {
-          // Always mark navInitiated — even if router.replace threw. The safety
-          // net and subsequent re-renders will handle the actual navigation.
-          // Set navInitiatedRef BEFORE clearing navIifePendingRef so the guard
-          // at the top of the effect fires synchronously if TOKEN_REFRESHED
-          // re-triggers the effect before React commits setNavInitiated(true).
-          navInitiatedRef.current = true;
-          navIifePendingRef.current = false;
-          setNavInitiated(true);
-          console.log("[RootLayoutNav] navInitiated set to true");
-        }
-      })();
-    } else {
-      console.log("[RootLayoutNav] router.replace →", destination);
-      navInitiatedRef.current = true;
-      try {
-        router.replace(destination as any);
-      } catch (e) {
-        console.error("[RootLayoutNav] router.replace (non-tabs) threw:", e);
-      }
-      setNavInitiated(true);
+    // Authenticated with a complete profile: move them off the auth / callback /
+    // maintenance / gate screens into the app. We deliberately do NOT redirect
+    // from the register screen (it drives its own post-signup navigation, which
+    // may target /subscription) nor from any in-app screen the user opened.
+    if (onGate || onMaintenance || onAuthCallback || (inAuthGroup && !pathname.includes("register"))) {
+      router.replace("/(tabs)" as any);
     }
   }, [
-    session, loading, isRecovering, mustChangePassword, manutencao,
-    isAuthPath, needsProfileCompletion, profileChecked, pathname,
-    navInitiated,
+    authReady,
+    session,
+    isRecovering,
+    mustChangePassword,
+    needsProfileCompletion,
+    manutencao,
+    segments,
+    pathname,
+    router,
   ]);
 
-  // Safety-net: if the navigation effect somehow never fires (e.g. the main IIFE
-  // is blocked), unblock after 2 s.
-  //
-  // CRITICAL: do NOT cancel the timer on re-runs caused by TOKEN_REFRESHED.
-  // On Android, TOKEN_REFRESHED fires repeatedly and changes `session`, which
-  // re-runs this effect and resets the timeout via the cleanup — so it NEVER
-  // fires, leaving the spinner up forever.
-  //
-  // Solution: arm the timer only once via `safetyNetArmed` ref. Subsequent
-  // re-runs from TOKEN_REFRESHED hit the early-return and don't create a new
-  // timer, so the original 3 s countdown runs to completion undisturbed.
-  // The callback checks navInitiatedRef.current to skip if navigation already
-  // happened before the 3 s elapsed.
-  useEffect(() => {
-    if (navInitiated || loading || !session || !profileChecked || isRecovering || mustChangePassword) return;
-    if (safetyNetArmed.current) return;
-    safetyNetArmed.current = true;
-    console.log("[RootLayoutNav] safety-net armed (2 s)");
-    setTimeout(() => {
-      if (navInitiatedRef.current) return;
-      console.warn("[RootLayoutNav] safety-net fired — forcing navigation");
-      const destination = needsProfileCompletion ? "/social-complete" : "/(tabs)";
-      navInitiatedRef.current = true;
-      try { router.replace(destination as any); } catch (e) { console.error("[RootLayoutNav] safety-net replace threw:", e); }
-      setNavInitiated(true);
-    }, 2_000);
-    // Intentionally no cleanup: we never cancel this timer once armed.
-    // safetyNetArmed.current prevents double-arming on re-runs.
-  }, [navInitiated, loading, session, profileChecked, isRecovering, mustChangePassword, needsProfileCompletion, router]);
+  // Whether the current route matches the correct area for the current auth
+  // state. While false we keep the navy overlay up so the user never sees a
+  // flash of the wrong screen during the (near-instant) redirect above. This is
+  // derived purely from current state + route, so it can never get permanently
+  // stuck: once the redirect lands the user in the right area it flips to true.
+  const onCorrectArea = (() => {
+    const root = segments[0] as string | undefined;
+    const inAuthGroup = root === "(auth)";
+    // The register screen owns its entire flow (the account is created mid-form,
+    // so the user is briefly authenticated while still on register). Never cover
+    // it with the overlay or we would hide register's own loading UI.
+    if (pathname.includes("register")) return true;
+    if (isRecovering || mustChangePassword) return pathname.includes("reset-password");
+    if (!session) return inAuthGroup || root === "auth" || root === "maintenance";
+    if (needsProfileCompletion) return root === "social-complete";
+    return !inAuthGroup; // authenticated: any non-auth screen is fine
+  })();
 
-  if (loading) {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0d1b2a" }}>
-        <ActivityIndicator color="#c9a84c" size="large" />
+  const showOverlay = !authReady || !onCorrectArea;
+  const showSidebar = isDesktop && !!session && !isRecovering && !mustChangePassword;
+
+  return (
+    <>
+      {!!session && !isRecovering && !mustChangePassword && (
+        <>
+          <UnreadSyncer />
+          <PushNotificationHandler />
+          <MaintenanceGuard />
+        </>
+      )}
+
+      <View style={{ flex: 1, flexDirection: showSidebar ? "row" : "column" }}>
+        {showSidebar && <SidebarNav key="sidebar" />}
+        <View key="appstack" style={{ flex: 1 }}>
+          <AppStack />
+        </View>
       </View>
-    );
-  }
 
-  // Session was just established (e.g. OAuth SIGNED_IN fired) but the first
-  // profile fetch hasn't completed yet. Show a loading screen instead of
-  // briefly flashing AuthenticatedLayout with no valid route (blank screen).
-  if (session && !profileChecked) {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0d1b2a" }}>
-        <ActivityIndicator color="#c9a84c" size="large" />
-      </View>
-    );
-  }
-
-  if (isRecovering || mustChangePassword) {
-    return (
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)/reset-password" options={{ headerShown: false }} />
-      </Stack>
-    );
-  }
-
-  if (!session) {
-    return (
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        {/* auth/callback handles the OAuth deep-link on Android; must be in
-            both stacks so Expo Router never shows "This screen doesn't exist" */}
-        <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" redirect />
-        <Stack.Screen name="maintenance" options={{ headerShown: false }} />
-        <Stack.Screen name="terms-of-use" options={{ animation: "slide_from_right" }} />
-        <Stack.Screen name="privacy-policy" options={{ animation: "slide_from_right" }} />
-      </Stack>
-    );
-  }
-
-  // Auth is fully resolved and session exists, but router.replace() hasn't
-  // fired yet (useEffect runs after render). Show the navy spinner to prevent
-  // the one-frame blank white screen from the empty Stack in AuthenticatedLayout.
-  if (!navInitiated) {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0d1b2a" }}>
-        <ActivityIndicator color="#c9a84c" size="large" />
-      </View>
-    );
-  }
-
-  return <AuthenticatedLayout />;
+      {showOverlay && <LoadingOverlay />}
+    </>
+  );
 }
 
 function RootLayout() {
