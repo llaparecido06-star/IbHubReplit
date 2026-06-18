@@ -31,7 +31,7 @@ const BORDER = "#e8e8e3";
 const WHITE  = "#fff";
 const BG     = "#f5f4ef";
 
-type MercadoTab = "visao" | "idealbi" | "apresentacoes";
+type MercadoTab = "feed" | "visao" | "busca" | "apresentacoes";
 
 // ─── Simple SVG charts ────────────────────────────────────────────────────────
 
@@ -2939,12 +2939,12 @@ function LowCreditsCard({
   );
 }
 
-function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) {
+function IdealBIFeed({ userId, isAdmin, mode }: { userId: string; isAdmin: boolean; mode?: "feed" | "search" }) {
   const { hasFeature } = usePermissions();
   const { hasNewPost, checkForNewPosts, markFeedSeen } = useMarketFeedBadge();
   const { profile } = useAuth();
   const { paidPlans } = usePlans();
-  const [subTab, setSubTab] = useState<"feed" | "search">("feed");
+  const [subTab, setSubTab] = useState<"feed" | "search">(mode ?? "feed");
   const [searchMode, setSearchMode] = useState<SearchMode>("exportador");
   const [showCreditShop, setShowCreditShop] = useState(false);
   const { credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal } = useCredits(userId);
@@ -3138,38 +3138,40 @@ function IdealBIFeed({ userId, isAdmin }: { userId: string; isAdmin: boolean }) 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-      {/* Sub-tabs: Feed | Busca */}
-      <div style={{ display: "flex", gap: 8, paddingBottom: 4 }}>
-        {([
-          { key: "feed",   label: "Feed",  icon: "📡" },
-          { key: "search", label: "Busca", icon: "🔎" },
-        ] as const).map(t => (
-          <button
-            key={t.key}
-            onClick={() => setSubTab(t.key)}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "8px 18px", borderRadius: 20,
-              border: subTab === t.key ? `2px solid ${GOLD}` : `1px solid ${BORDER}`,
-              backgroundColor: subTab === t.key ? `${GOLD}12` : WHITE,
-              color: subTab === t.key ? GOLD : MUTED,
-              fontWeight: subTab === t.key ? 700 : 500,
-              fontSize: 14, cursor: "pointer", fontFamily: "inherit",
-              transition: "all 0.15s",
-              position: "relative",
-            }}
-          >
-            <span>{t.icon}</span>
-            <span>{t.label}</span>
-            {t.key === "feed" && hasNewPost && subTab !== "feed" && (
-              <span style={{
-                width: 8, height: 8, borderRadius: "50%",
-                backgroundColor: "#dc2626", flexShrink: 0,
-              }} />
-            )}
-          </button>
-        ))}
-      </div>
+      {/* Sub-tabs: Feed | Busca — only when both modes are available */}
+      {!mode && (
+        <div style={{ display: "flex", gap: 8, paddingBottom: 4 }}>
+          {([
+            { key: "feed",   label: "Feed",  icon: "📡" },
+            { key: "search", label: "Busca", icon: "🔎" },
+          ] as const).map(t => (
+            <button
+              key={t.key}
+              onClick={() => setSubTab(t.key)}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "8px 18px", borderRadius: 20,
+                border: subTab === t.key ? `2px solid ${GOLD}` : `1px solid ${BORDER}`,
+                backgroundColor: subTab === t.key ? `${GOLD}12` : WHITE,
+                color: subTab === t.key ? GOLD : MUTED,
+                fontWeight: subTab === t.key ? 700 : 500,
+                fontSize: 14, cursor: "pointer", fontFamily: "inherit",
+                transition: "all 0.15s",
+                position: "relative",
+              }}
+            >
+              <span>{t.icon}</span>
+              <span>{t.label}</span>
+              {t.key === "feed" && hasNewPost && subTab !== "feed" && (
+                <span style={{
+                  width: 8, height: 8, borderRadius: "50%",
+                  backgroundColor: "#dc2626", flexShrink: 0,
+                }} />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Credits bar — only on Busca sub-tab, between sub-tabs and buscadores */}
       {subTab === "search" && (
@@ -3504,7 +3506,7 @@ export default function MercadoPage() {
   const { hasFeature, isLoading: permLoading } = usePermissions();
   const { hasNewPost: hasNewMarketPost } = useMarketFeedBadge();
   const [period, setPeriod] = useState<Period>("ano");
-  const [mainTab, setMainTab] = useState<MercadoTab>("visao");
+  const [mainTab, setMainTab] = useState<MercadoTab>("feed");
   const isMobile = useWindowWidth() < 768;
   const [data, setData] = useState<MarketOverview>(MARKET_FALLBACK.ano);
   const [loading, setLoading] = useState(false);
@@ -3528,13 +3530,20 @@ export default function MercadoPage() {
     { key: "ano", label: "Ano" },
   ];
   const TABS: { key: MercadoTab; label: string; icon: string }[] = [
-    { key: "visao",         label: "Visão Geral", icon: "📊" },
-    { key: "idealbi",       label: "Ideal.BI",    icon: "📡" },
-    { key: "apresentacoes", label: "Relatórios",  icon: "📋" },
+    { key: "feed",          label: "Feed",          icon: "📡" },
+    { key: "visao",         label: "Visão Geral",   icon: "📊" },
+    { key: "busca",         label: "Buscador",      icon: "🔎" },
+    { key: "apresentacoes", label: "Apresentações", icon: "📋" },
   ];
 
   /* ── Shared content renderer ── */
   const renderContent = () => {
+    if (mainTab === "feed") return (
+      <IdealBIFeed userId={user?.id ?? ""} isAdmin={profile?.is_admin ?? false} mode="feed" />
+    );
+    if (mainTab === "busca") return (
+      <IdealBIFeed userId={user?.id ?? ""} isAdmin={profile?.is_admin ?? false} mode="search" />
+    );
     if (mainTab === "apresentacoes") {
       if (permLoading) return (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 200 }}>
@@ -3555,9 +3564,6 @@ export default function MercadoPage() {
       );
       return <ApresentacoesPanel isAdmin={profile?.is_admin ?? false} />;
     }
-    if (mainTab === "idealbi") return (
-      <IdealBIFeed userId={user?.id ?? ""} isAdmin={profile?.is_admin ?? false} />
-    );
     if (loading) return (
       <div style={{ textAlign: "center", padding: 60, color: "#aaa" }}>⏳ Carregando dados...</div>
     );
@@ -3826,7 +3832,7 @@ export default function MercadoPage() {
           <div style={{ position: "sticky", top: 113, zIndex: 99, backgroundColor: WHITE, borderBottom: `1px solid ${BORDER}`, display: "flex", padding: "8px 10px", gap: 4 }}>
             {TABS.map(t => {
               const active = mainTab === t.key;
-              const showDot = t.key === "idealbi" && hasNewMarketPost && !active;
+              const showDot = t.key === "feed" && hasNewMarketPost && !active;
               return (
                 <button key={t.key} onClick={() => setMainTab(t.key)} style={{
                   flex: 1, padding: "8px 6px", borderRadius: 8,
@@ -3902,7 +3908,7 @@ export default function MercadoPage() {
           <div style={{ display: "flex", gap: 8, marginBottom: 20, borderBottom: "2px solid #e8eaed" }}>
             {TABS.map((t) => {
               const active = mainTab === t.key;
-              const showDot = t.key === "idealbi" && hasNewMarketPost && !active;
+              const showDot = t.key === "feed" && hasNewMarketPost && !active;
               return (
                 <button key={t.key} onClick={() => setMainTab(t.key)} style={{
                   background: "none", border: "none", padding: "10px 16px",
