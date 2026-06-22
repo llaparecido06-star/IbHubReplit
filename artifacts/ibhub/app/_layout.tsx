@@ -29,16 +29,12 @@ import { installGlobalErrorHandler, reportCrash } from "@/lib/crashReporter";
 // reports them to our own crash_reports table.
 installGlobalErrorHandler();
 
-// Must be called once at module load, before any notification can arrive.
-// Without this, notifications received while the app is foregrounded are
-// silently discarded — no banner appears on iOS or Android.
-SafeNotifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false, // badge managed manually via UnreadContext
-  }),
-});
+// NOTE: the foreground notification handler used to be registered here at module
+// load. That is now done in a post-mount effect (see RootLayout) so that NO
+// native notification work runs during module evaluation / app boot. On iOS the
+// call is a no-op for now — registering the handler triggers a native
+// `addListener` that throws an NSException at startup under the New Architecture
+// and crashes the app (see utils/safeNotifications.ts for the full explanation).
 
 // Cold-start deep links (app launched by tapping a push notification) are
 // handled entirely by PushNotificationHandler below, once the authenticated
@@ -390,6 +386,21 @@ function RootLayout() {
   useEffect(() => {
     // Restore persisted language before first render
     initLocale();
+  }, []);
+
+  useEffect(() => {
+    // Register the foreground notification handler once, AFTER mount (never at
+    // module-eval). Without this, foreground notifications are silently dropped
+    // on Android. On iOS this is a no-op for now — the native addListener it
+    // triggers crashes the app at startup under the New Architecture
+    // (see utils/safeNotifications.ts).
+    SafeNotifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false, // badge managed manually via UnreadContext
+      }),
+    });
   }, []);
 
   const fontsReady = fontsLoaded || !!fontError || fontTimeout;

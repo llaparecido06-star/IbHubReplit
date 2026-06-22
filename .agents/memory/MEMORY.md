@@ -2,4 +2,5 @@
 - [Group members role constraint](group-members-role-constraint.md) — production trigger uses legacy 'admin' role; constraint must include it; onConflict must use 3-column key.
 - [iOS never worked — newArchEnabled conflict](ios-new-arch-conflict.md) — expo-build-properties plugin overrides root-side newArchEnabled; Reanimated 4.x requires New Architecture; fix in expo-build-properties iOS section.
 - [conversation_participants RLS blocks direct inserts](conversation-participants-rls.md) — any client-side INSERT/UPSERT to conversation_participants silently fails; always use the API server (supabaseAdmin) for those writes.
+- [iOS void-TurboModule startup crash](ios-notifications-void-crash.md) — a void native method that throws at boot crashes iOS (New Arch) via off-thread Hermes; JS try/catch can't catch it; expo-notifications emitter methods are the trigger, async methods are safe.
 - [expo-build-properties SDK version mismatch](expo-build-properties-sdk-version.md) — use `~` not `^`; SDK 54 needs ~1.0.10, not ^56.x; wrong version silently corrupts iOS + Android native builds.
