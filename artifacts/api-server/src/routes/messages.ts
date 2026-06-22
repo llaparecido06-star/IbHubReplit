@@ -419,16 +419,39 @@ router.post("/conversations/direct", validateBody(DirectConversationSchema), asy
   }
 
   // Check for an existing direct conversation between the two users.
-  // We query conversation_participants for conversations where BOTH users are listed.
+  // Legacy data stores some participants by auth.uid() and others by
+  // profile.id, so the SAME human can appear under two ids. If we only match
+  // the raw ids passed in, a second "open chat" with the alternate id misses
+  // the existing thread and spawns a duplicate conversation row (the root
+  // cause of fragmented histories). Resolve every equivalent id for BOTH
+  // sides first, then match participants against those id sets.
+  const resolveAliases = async (ids: string[]): Promise<string[]> => {
+    const set = new Set(ids.filter(Boolean));
+    if (set.size === 0) return [];
+    const list = [...set];
+    const { data } = await supabaseAdmin
+      .from("profiles")
+      .select("id, user_id")
+      .or(`id.in.(${list.join(",")}),user_id.in.(${list.join(",")})`);
+    for (const row of (data ?? []) as Array<{ id: string | null; user_id: string | null }>) {
+      if (row.id) set.add(row.id);
+      if (row.user_id) set.add(row.user_id);
+    }
+    return [...set];
+  };
+
+  const side1Ids = await resolveAliases([callerId, user_id_1]);
+  const side2Ids = await resolveAliases([user_id_2]);
+
   const { data: cp1Rows } = await supabaseAdmin
     .from("conversation_participants")
     .select("conversation_id")
-    .or(`user_id.eq.${user_id_1},user_id.eq.${callerId}`);
+    .in("user_id", side1Ids);
 
   const { data: cp2Rows } = await supabaseAdmin
     .from("conversation_participants")
     .select("conversation_id")
-    .eq("user_id", user_id_2);
+    .in("user_id", side2Ids);
 
   const cp1Ids = new Set((cp1Rows ?? []).map((r: any) => r.conversation_id));
   const shared = (cp2Rows ?? [])
@@ -874,8 +897,18 @@ router.get("/conversations", async (req: Request, res: Response): Promise<void> 
     }
     const key = (r.participant as any)?.id ?? `orphan:${r.id}`;
     const existing = dmByParticipant.get(key);
-    if (!existing || new Date(r.last_message_at ?? 0) > new Date(existing.last_message_at ?? 0)) {
+    if (!existing) {
       dmByParticipant.set(key, r);
+    } else {
+      const rt = new Date(r.last_message_at ?? 0).getTime();
+      const et = new Date(existing.last_message_at ?? 0).getTime();
+      // Most recently active wins; on an exact tie fall back to a stable id
+      // comparison so EVERY request (mini-chat panel + full messages page)
+      // resolves the same winner. Otherwise the deduped id can flip between
+      // loads and a ?conv= deep-link lands on a row that isn't in the list.
+      if (rt > et || (rt === et && r.id < existing.id)) {
+        dmByParticipant.set(key, r);
+      }
     }
   }
   deduped.push(...dmByParticipant.values());

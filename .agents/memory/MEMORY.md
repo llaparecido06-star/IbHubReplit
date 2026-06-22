@@ -7,3 +7,4 @@
 - [iOS crash build correlation](ios-crash-build-correlation.md) — a repeat iOS crash right after a fix is usually a PRE-FIX build; correlate build number + crash time vs fix-commit time before assuming the fix failed.
 - [iOS void-TurboModule RN patch](ios-void-turbomodule-rn-patch.md) — robust fix for the void-native-throws-at-boot Hermes crash is a pnpm patch of RN's performVoidMethodInvocation (suppress+log, not convertNSExceptionToJSError); watch the (void)runtime + lockfile patch_hash gotchas.
 - [RN nested link Text needs stopPropagation](rn-link-text-stoppropagation.md) — a `<Text onPress>` link inside a parent Pressable can double-fire (open link AND trigger parent); call `e.stopPropagation()` in the link handler.
+- [DM conversation duplication](dm-conversation-dedup.md) — chat shows fragmented history/blank header because dup conversation rows exist per pair; alias-resolve both users (auth.uid<->profile.id) on lookup, don't rely on GET dedup.

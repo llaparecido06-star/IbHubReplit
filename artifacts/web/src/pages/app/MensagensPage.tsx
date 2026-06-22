@@ -366,24 +366,14 @@ export default function MensagensPage() {
   useEffect(() => {
     if (!convIdFromUrl || !userId || authLoading) return;
 
-    function openAndRead(convo: WebConversation) {
-      setSelected(convo);
-      fetchWebMessages(convo.id, userId).then(msgs => {
-        msgs.forEach(m => seenMsgIds.current.add(m.id));
-        setMessages(msgs);
-        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
-        if ((convo.unread_count ?? 0) > 0) {
-          window.dispatchEvent(new CustomEvent("chat-conv-read", { detail: { count: convo.unread_count, convId: convo.id } }));
-          setConversations(prev => prev.map(c => c.id === convo.id ? { ...c, unread_count: 0 } : c));
-          void markWebConversationRead(convo.id, userId);
-        }
-      });
-    }
-
+    // Open the conversation through loadMessages so the ?conv= deep-link path
+    // gets the SAME hardening as a manual click: realtime teardown, seen-id
+    // reset, activeConvIdRef stale-guard, and an immediate message clear. This
+    // is what prevents a previous thread's messages from briefly showing under
+    // a new (or blank) header while the fetch is in flight.
     const target = conversations.find(c => c.id === convIdFromUrl);
     if (target) {
-      // Conversation already in list — select it immediately
-      if (selected?.id !== target.id) openAndRead(target);
+      if (selected?.id !== target.id) void loadMessages(target);
     } else if (!loading) {
       // Not in list yet — refresh. This handles newly-created conversations
       // and also the case where identity-scoping filtered the conv out.
@@ -391,28 +381,12 @@ export default function MensagensPage() {
         const found = fresh.find(c => c.id === convIdFromUrl);
         if (found) {
           setConversations(fresh);
-          openAndRead(found);
+          void loadMessages(found);
         } else {
           // Still not in the server list (e.g. company-tagged DM opened in
           // personal mode). Preserve the current list but open the messages
           // pane directly — the user should still be able to read and reply.
-          setConversations(prev => {
-            if (prev.find(c => c.id === convIdFromUrl)) return prev;
-            const placeholder: WebConversation = {
-              id: convIdFromUrl as string,
-              is_group: false,
-              name: null,
-              avatar_url: null,
-              last_message: null,
-              last_message_at: new Date().toISOString(),
-              unread_count: 0,
-              participant: null,
-              company_page_id: null,
-              company_page: null,
-            };
-            return [placeholder, ...fresh];
-          });
-          openAndRead({
+          const placeholder: WebConversation = {
             id: convIdFromUrl as string,
             is_group: false,
             name: null,
@@ -423,7 +397,9 @@ export default function MensagensPage() {
             participant: null,
             company_page_id: null,
             company_page: null,
-          });
+          };
+          setConversations(prev => prev.find(c => c.id === convIdFromUrl) ? prev : [placeholder, ...fresh]);
+          void loadMessages(placeholder);
         }
       }).catch(() => {});
     }
