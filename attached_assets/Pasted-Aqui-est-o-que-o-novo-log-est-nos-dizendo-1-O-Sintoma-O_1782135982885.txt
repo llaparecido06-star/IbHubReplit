@@ -1,0 +1,30 @@
+Aqui está o que o novo log está nos dizendo:
+
+1. O Sintoma
+O aplicativo morreu novamente por memória (EXC_BAD_ACCESS), mas agora reclamando do endereço 0x0000000000000010. Em linguagem de computador, isso significa que o aplicativo tentou ler um dado que é completamente nulo (vazio). O motor foi buscar algo que simplesmente não existia.
+
+2. A Causa Raiz: O Fantasma Continua
+Se você olhar a Thread 3 desse novo log, vai ver exatamente as mesmas linhas do crash anterior:
+
+convertNSExceptionToJSError
+
+JSObject::putComputedWithReceiver_RJS
+
+Isso confirma o seguinte cenário: logo no momento zero da abertura, algum módulo nativo do iOS estourou um erro grave (NSException). O motor Hermes tentou ser proativo e converter esse erro do iPhone para o formato JavaScript para te avisar, mas ao fazer isso, tropeçou em um dado nulo e causou o fechamento fatal do app antes de mostrar qualquer aviso.
+
+Por que a correção do Replit não funcionou?
+A alteração do Replit mudou a forma como o código JavaScript chama as notificações (o tal do lazy loading). O problema é que o React Native possui um sistema chamado Auto-linking.
+
+Isso significa que, no momento em que o app é compilado e abre no iPhone, o sistema operacional iOS tenta carregar e inicializar as bibliotecas nativas de qualquer forma, independentemente do JavaScript ter "chamado" ou não.
+Existem duas possibilidades agora:
+
+A biblioteca do expo-notifications ainda está quebrando no carregamento nativo, apesar do drible no JS.
+
+O vilão é outro. Pode ser outro módulo pesado (como navegação, autenticação, banco de dados local ou tela de splash) que está faltando configuração no iOS.
+
+Como descobrir o verdadeiro culpado
+Como o erro fatal acontece bem na conversão da mensagem, o TestFlight "engole" o texto que nos diria exatamente qual biblioteca falhou. Para pegar o erro antes dele ser mascarado, precisamos de uma abordagem mais investigativa:
+
+Revisão de Permissões (Info.plist): Se o seu app usa câmera, galeria de fotos ou localização, o iOS exige que você tenha as descrições exatas do motivo no arquivo de configuração do iPhone. Se faltar isso, o app quebra na largada.
+
+Isolamento de Módulos: Remova ou comente provisoriamente no código as últimas bibliotecas de terceiros que você instalou para compilar o app e veja se ele passa da tela de abertura.

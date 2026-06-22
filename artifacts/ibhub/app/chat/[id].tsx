@@ -28,6 +28,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
+import { LinkText } from "@/components/LinkText";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/context/AuthContext";
@@ -978,7 +979,7 @@ export default function ChatScreen() {
                 })()
               ) : (
                 <>
-                  <Text style={[st.bubbleText, { color: isMe ? "#fff" : colors.foreground }]}>{item.content}</Text>
+                  <LinkText style={[st.bubbleText, { color: isMe ? "#fff" : colors.foreground }]} linkStyle={{ color: isMe ? "#fff" : colors.gold, textDecorationLine: "underline" }}>{item.content}</LinkText>
                   <Text style={[st.bubbleTime, { color: isMe ? "#ffffff66" : colors.mutedForeground }]}>
                     {formatTime(item.created_at)}
                   </Text>

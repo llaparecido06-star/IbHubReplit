@@ -22,6 +22,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@/components/ui/Icon";
 import { WineTastingCard, canParseWine } from "@/components/feed/PostRichContent";
+import { LinkText, splitLinks, openLink } from "@/components/LinkText";
 import { PollBlock } from "@/components/feed/PollBlock";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth, supabase } from "@/context/AuthContext";
@@ -76,7 +77,24 @@ function MentionText({ text, mentionMap, style }: { text: string; mentionMap: Me
             );
           }
         }
-        return <Text key={i}>{part}</Text>;
+        return (
+          <Text key={i}>
+            {splitLinks(part).map((seg, j) =>
+              seg.url ? (
+                <Text
+                  key={j}
+                  style={{ color: colors.gold, textDecorationLine: "underline" }}
+                  onPress={(e) => { e.stopPropagation(); openLink(seg.url!); }}
+                  suppressHighlighting
+                >
+                  {seg.text}
+                </Text>
+              ) : (
+                seg.text
+              ),
+            )}
+          </Text>
+        );
       })}
     </Text>
   );
@@ -627,7 +645,7 @@ export default function PostDetailScreen() {
                 {post.content && canParseWine(post.content) ? (
                   <WineTastingCard content={post.content} />
                 ) : (
-                  <Text style={[styles.postContentPreview, { color: colors.foreground }]}>{post.content}</Text>
+                  <LinkText style={[styles.postContentPreview, { color: colors.foreground }]}>{post.content}</LinkText>
                 )}
 
                 {/* Poll */}

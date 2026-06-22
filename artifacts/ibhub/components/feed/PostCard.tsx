@@ -21,6 +21,7 @@ import { formatRelativeDate } from "@/utils/dateUtils";
 import { AntDesign, Feather, MaterialCommunityIcons } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { WineTastingCard, canParseWine } from "@/components/feed/PostRichContent";
+import { LinkText } from "@/components/LinkText";
 import { PollBlock } from "@/components/feed/PollBlock";
 import { useColors } from "@/hooks/useColors";
 import { createReport, hidePost, blockUser, checkIsFollowing, toggleFollow } from "@/services/api";
@@ -435,9 +436,9 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
             <WineTastingCard content={post.content} />
           ) : (
             <>
-              <Text style={[styles.content, { color: colors.foreground }]}>
+              <LinkText style={[styles.content, { color: colors.foreground }]}>
                 {displayContent}
-              </Text>
+              </LinkText>
               {isLong && (
                 <TouchableOpacity onPress={() => setExpanded(!expanded)}>
                   <Text style={[styles.seeMore, { color: colors.gold }]}>

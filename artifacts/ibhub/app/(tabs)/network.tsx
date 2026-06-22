@@ -40,6 +40,7 @@ import { useAuth, supabase } from "@/context/AuthContext";
 import { usePermissions } from "@/context/PermissionsContext";
 import { PaywallScreen } from "@/components/ui/PaywallScreen";
 import { AdaptiveImage, ReactionPicker, REACTIONS, type ReactionType } from "@/components/feed/PostCard";
+import { LinkText } from "@/components/LinkText";
 import * as API from "@/services/api";
 import { API_URL } from "@/services/api";
 import { compressPostImage } from "@/utils/compressImage";
@@ -49,8 +50,7 @@ import { useMarketFeedBadge } from "@/context/MarketFeedBadgeContext";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Period    = "mes" | "trimestre" | "ano";
-type MercadoTab = "visao" | "apresentacoes" | "idealbi";
-type IdealBISubTab = "feed" | "search";
+type MercadoTab = "idealbi" | "visao" | "inteligencia";
 
 // ─── Ideal.BI Search Mock Data ─────────────────────────────────────────────────
 interface WineDistribuidor {
@@ -2239,7 +2239,7 @@ function MarketCommentItem({
                 <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{subtitle}</Text>
               ) : null}
             </View>
-            <Text style={{ fontSize: 13, lineHeight: 19, color: colors.foreground }}>{comment.content}</Text>
+            <LinkText style={{ fontSize: 13, lineHeight: 19, color: colors.foreground }}>{comment.content}</LinkText>
           </View>
 
           {/* Actions row */}
@@ -2700,9 +2700,9 @@ function MarketPostCardMobile({ post: initialPost, userId, onLikeToggle, colors,
       </View>
 
       {/* Content */}
-      <Text style={{ fontSize: 14, lineHeight: 22, color: colors.foreground, paddingHorizontal: 14, paddingBottom: hasMedia || hasPoll ? 10 : 14 }}>
+      <LinkText style={{ fontSize: 14, lineHeight: 22, color: colors.foreground, paddingHorizontal: 14, paddingBottom: hasMedia || hasPoll ? 10 : 14 }}>
         {post.content}
-      </Text>
+      </LinkText>
 
       {post.image_url ? (
         <AdaptiveImage uri={post.image_url} width={IDEAL_CARD_W} style={{ borderRadius: 0 }} />
@@ -2817,32 +2817,8 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
 }) {
   const { t } = useTranslation();
   const router = useRouter();
-  const { session } = useAuth();
   const { hasFeature: permHasFeature } = usePermissions();
-  const [idealbiSubTab, setIdealbiSubTab] = useState<IdealBISubTab>("feed");
-  const { hasNewPost, checkForNewPosts, markFeedSeen } = useMarketFeedBadge();
-
-  /* ── Shared credits state (fetched here so the pill is always visible) ── */
-  const [sharedCredits, setSharedCredits]           = useState<number | null>(null);
-  const [sharedCreditsTotal, setSharedCreditsTotal] = useState(3);
-  const [sharedCreditsLoading, setSharedCreditsLoading] = useState(true);
-
-  const fetchSharedCredits = useCallback(async () => {
-    if (!session?.access_token) return;
-    try {
-      const res = await fetch(`${API_URL}/wine-imports/credits`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (!res.ok) return;
-      const json = await res.json() as { credits_remaining: number; credits_total: number };
-      setSharedCredits(json.credits_remaining);
-      setSharedCreditsTotal(json.credits_total);
-    } catch {} finally {
-      setSharedCreditsLoading(false);
-    }
-  }, [session?.access_token]);
-
-  useEffect(() => { void fetchSharedCredits(); }, [fetchSharedCredits]);
+  const { checkForNewPosts, markFeedSeen } = useMarketFeedBadge();
 
   const [newContent, setNewContent] = useState("");
   const [mediaUri, setMediaUri] = useState<string | null>(null);
@@ -2914,7 +2890,6 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
   const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 60 }).current;
 
   const hasAccess = permHasFeature("mercado:feed") || permHasFeature("mercado:idealbi") || isAdmin;
-  const hasSearchAccess = permHasFeature("mercado:busca") || permHasFeature("mercado:idealbi") || isAdmin;
 
   const fetcher = useCallback(
     (offset: number, limit: number) =>
@@ -2936,10 +2911,8 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
 
   // When the user switches to Feed, mark as seen
   useEffect(() => {
-    if (idealbiSubTab === "feed") {
-      void markFeedSeen();
-    }
-  }, [idealbiSubTab, markFeedSeen]);
+    void markFeedSeen();
+  }, [markFeedSeen]);
 
   const handleLikeToggle = (id: string, liked: boolean, reactionType: string | null, count: number) => {
     setPosts(prev => prev.map(p => p.id === id ? { ...p, user_liked: liked, reaction_type: reactionType, likes_count: count } : p));
@@ -3037,7 +3010,7 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
     setPosting(false);
   };
 
-  if (!hasAccess && !hasSearchAccess) {
+  if (!hasAccess) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 16 }}>
         <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: "#c9a84c18", alignItems: "center", justifyContent: "center" }}>
@@ -3162,84 +3135,6 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Sub-tab bar: Feed | 🔍 IA */}
-      <View style={[styles.periodRow, { backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border }]}>
-        {([
-          { key: "feed",   label: "Feed"  },
-          { key: "search", label: "🔍 IA" },
-        ] as { key: IdealBISubTab; label: string }[]).map(tab => {
-          const active = idealbiSubTab === tab.key;
-          const showDot = tab.key === "feed" && hasNewPost && !active;
-          return (
-            <TouchableOpacity
-              key={tab.key}
-              style={[styles.periodBtn, active && [styles.periodBtnActive, { backgroundColor: colors.gold }]]}
-              onPress={() => setIdealbiSubTab(tab.key)}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-                <Text style={[styles.periodBtnText, { color: active ? "#fff" : colors.mutedForeground }]}>
-                  {tab.label}
-                </Text>
-                {showDot && (
-                  <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#dc2626" }} />
-                )}
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {/* Credits pill — visible only on IA sub-tab, between sub-tabs and buscadores */}
-      {idealbiSubTab === "search" && (() => {
-        const c = sharedCredits;
-        const total = sharedCreditsTotal;
-        const pillColor = c === null || c >= 2 ? "#16a34a" : c === 1 ? "#d97706" : "#dc2626";
-        const pillBg    = c === null || c >= 2 ? "#dcfce7" : c === 1 ? "#fef3c7" : "#fef2f2";
-        return (
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 2 }}>
-            {sharedCreditsLoading ? (
-              <ActivityIndicator size="small" color={colors.gold} />
-            ) : (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: pillBg, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 }}>
-                <Feather name="zap" size={13} color={pillColor} />
-                <Text style={{ fontSize: 12, fontWeight: "700", color: pillColor }}>
-                  {c ?? "—"}/{total} {t("mercado_screen.bi_credits_pill_label")}
-                </Text>
-              </View>
-            )}
-          </View>
-        );
-      })()}
-
-      {idealbiSubTab === "search" ? (
-        !hasSearchAccess ? (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 16 }}>
-            <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: "#c9a84c18", alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ fontSize: 36 }}>🔒</Text>
-            </View>
-            <Text style={{ fontSize: 20, fontWeight: "800", color: colors.navy, textAlign: "center" }}>{t("mercado_screen.idealbi_paywall_title")}</Text>
-            <Text style={{ fontSize: 14, color: colors.mutedForeground, textAlign: "center", lineHeight: 21 }}>
-              {t("mercado_screen.idealbi_paywall_desc")}
-            </Text>
-            <TouchableOpacity
-              style={{ backgroundColor: colors.gold, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 12, alignItems: "center", marginTop: 8 }}
-              onPress={() => router.push("/subscription")}
-            >
-              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>{t("mercado_screen.locked_see_plans")}</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <IdealBISearchView
-            colors={colors}
-            bottomPad={bottomPad}
-            credits={sharedCredits}
-            creditsTotal={sharedCreditsTotal}
-            creditsLoading={sharedCreditsLoading}
-            setCredits={setSharedCredits}
-            setCreditsTotal={setSharedCreditsTotal}
-          />
-        )
-      ) : (
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined}
@@ -3302,7 +3197,6 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
           }
         />
         </KeyboardAvoidingView>
-      )}
     </View>
   );
 }
@@ -3337,6 +3231,119 @@ function LockedSection({ title, icon, colors }: { title: string; icon: string; c
   );
 }
 
+function InteligenciaView({ colors, bottomPad, session, isAdmin }: {
+  colors: ReturnType<typeof useColors>; bottomPad: number; session: any; isAdmin: boolean;
+}) {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const { hasFeature: permHasFeature } = usePermissions();
+  const [subTab, setSubTab] = useState<"busca" | "apresentacoes">("busca");
+
+  /* ── Shared credits state for the Busca (IA) sub-tab ── */
+  const [credits, setCredits]           = useState<number | null>(null);
+  const [creditsTotal, setCreditsTotal] = useState(3);
+  const [creditsLoading, setCreditsLoading] = useState(true);
+
+  const fetchCredits = useCallback(async () => {
+    if (!session?.access_token) return;
+    try {
+      const res = await fetch(`${API_URL}/wine-imports/credits`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) return;
+      const json = await res.json() as { credits_remaining: number; credits_total: number };
+      setCredits(json.credits_remaining);
+      setCreditsTotal(json.credits_total);
+    } catch {} finally {
+      setCreditsLoading(false);
+    }
+  }, [session?.access_token]);
+
+  useEffect(() => { void fetchCredits(); }, [fetchCredits]);
+
+  const hasSearchAccess = permHasFeature("mercado:busca") || permHasFeature("mercado:idealbi") || isAdmin;
+
+  return (
+    <View style={{ flex: 1 }}>
+      {/* Sub-tab bar: Busca | Apresentações */}
+      <View style={[styles.periodRow, { backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border }]}>
+        {([
+          { key: "busca",         label: t("mercado_screen.tab_busca")         },
+          { key: "apresentacoes", label: t("mercado_screen.tab_apresentacoes") },
+        ] as { key: "busca" | "apresentacoes"; label: string }[]).map(tab => {
+          const active = subTab === tab.key;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={[styles.periodBtn, active && [styles.periodBtnActive, { backgroundColor: colors.gold }]]}
+              onPress={() => setSubTab(tab.key)}
+            >
+              <Text style={[styles.periodBtnText, { color: active ? "#fff" : colors.mutedForeground }]}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {subTab === "busca" ? (
+        !hasSearchAccess ? (
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 16 }}>
+            <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: "#c9a84c18", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 36 }}>🔒</Text>
+            </View>
+            <Text style={{ fontSize: 20, fontWeight: "800", color: colors.navy, textAlign: "center" }}>{t("mercado_screen.idealbi_paywall_title")}</Text>
+            <Text style={{ fontSize: 14, color: colors.mutedForeground, textAlign: "center", lineHeight: 21 }}>
+              {t("mercado_screen.idealbi_paywall_desc")}
+            </Text>
+            <TouchableOpacity
+              style={{ backgroundColor: colors.gold, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 12, alignItems: "center", marginTop: 8 }}
+              onPress={() => router.push("/subscription")}
+            >
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>{t("mercado_screen.locked_see_plans")}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            {/* Credits pill */}
+            {(() => {
+              const c = credits;
+              const total = creditsTotal;
+              const pillColor = c === null || c >= 2 ? "#16a34a" : c === 1 ? "#d97706" : "#dc2626";
+              const pillBg    = c === null || c >= 2 ? "#dcfce7" : c === 1 ? "#fef3c7" : "#fef2f2";
+              return (
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 2 }}>
+                  {creditsLoading ? (
+                    <ActivityIndicator size="small" color={colors.gold} />
+                  ) : (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: pillBg, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 }}>
+                      <Feather name="zap" size={13} color={pillColor} />
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: pillColor }}>
+                        {c ?? "—"}/{total} {t("mercado_screen.bi_credits_pill_label")}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              );
+            })()}
+            <IdealBISearchView
+              colors={colors}
+              bottomPad={bottomPad}
+              credits={credits}
+              creditsTotal={creditsTotal}
+              creditsLoading={creditsLoading}
+              setCredits={setCredits}
+              setCreditsTotal={setCreditsTotal}
+            />
+          </>
+        )
+      ) : (
+        <ApresentacoesView colors={colors} bottomPad={bottomPad} session={session} isAdmin={isAdmin} />
+      )}
+    </View>
+  );
+}
+
 export default function MercadoScreen() {
   const { t } = useTranslation();
   const colors  = useColors();
@@ -3345,7 +3352,7 @@ export default function MercadoScreen() {
   const { hasNewPost } = useMarketFeedBadge();
 
   const [period,       setPeriod]       = useState<Period>("ano");
-  const [mainTab,      setMainTab]      = useState<MercadoTab>("visao");
+  const [mainTab,      setMainTab]      = useState<MercadoTab>("idealbi");
   const [data,         setData]         = useState<API.MarketOverview>(FALLBACK.ano);
   const [loading,      setLoading]      = useState(false);
   const { hasFeature } = usePermissions();
@@ -3405,9 +3412,9 @@ export default function MercadoScreen() {
       {/* Main Tabs */}
       <View style={[styles.mainTabRow, { backgroundColor: "#fff", borderBottomColor: colors.border }]}>
         {([
-          { key: "visao",         label: t("mercado_screen.tab_visao"),         icon: "bar-chart-2" },
-          { key: "apresentacoes", label: t("mercado_screen.tab_apresentacoes"), icon: "monitor"     },
-          { key: "idealbi",       label: t("mercado_screen.tab_idealbi"),       icon: "radio"       },
+          { key: "idealbi",      label: t("mercado_screen.tab_idealbi"),      icon: "radio"       },
+          { key: "visao",        label: t("mercado_screen.tab_visao"),        icon: "bar-chart-2" },
+          { key: "inteligencia", label: t("mercado_screen.tab_inteligencia"), icon: "search"      },
         ] as { key: MercadoTab; label: string; icon: any }[]).map(tab => {
           const isActive = mainTab === tab.key;
           const showDot  = tab.key === "idealbi" && hasNewPost && !isActive;
@@ -3438,8 +3445,8 @@ export default function MercadoScreen() {
           colors={colors}
           bottomPad={bottomPad}
         />
-      ) : mainTab === "apresentacoes" ? (
-        <ApresentacoesView colors={colors} bottomPad={bottomPad} session={session} isAdmin={profile?.is_admin ?? false} />
+      ) : mainTab === "inteligencia" ? (
+        <InteligenciaView colors={colors} bottomPad={bottomPad} session={session} isAdmin={profile?.is_admin ?? false} />
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: bottomPad }} showsVerticalScrollIndicator={false}>
 

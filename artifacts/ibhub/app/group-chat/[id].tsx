@@ -27,6 +27,7 @@ import * as ImagePicker from "expo-image-picker";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { Feather } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
+import { LinkText } from "@/components/LinkText";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/context/AuthContext";
@@ -969,7 +970,7 @@ export default function GroupChatScreen() {
                   </View>
                 ) : (
                   <View style={{ paddingHorizontal: 14, paddingVertical: 10 }}>
-                    <Text style={[styles.bubbleText, { color: isMe ? "#fff" : colors.foreground }]}>{item.content}</Text>
+                    <LinkText style={[styles.bubbleText, { color: isMe ? "#fff" : colors.foreground }]} linkStyle={{ color: isMe ? "#fff" : colors.gold, textDecorationLine: "underline" }}>{item.content}</LinkText>
                     <Text style={[styles.bubbleTime, { color: isMe ? "#ffffff88" : colors.mutedForeground }]}>{time}</Text>
                   </View>
                 )}

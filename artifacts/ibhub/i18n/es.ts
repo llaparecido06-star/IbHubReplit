@@ -2630,6 +2630,8 @@ const es = {
     tab_visao: "Resumen",
     tab_apresentacoes: "Presentaciones",
     tab_idealbi: "Ideal.BI",
+    tab_inteligencia: "Inteligencia",
+    tab_busca: "Búsqueda",
     period_mes: "Último Mes",
     period_trimestre: "Trimestre (YTD)",
     period_ano: "Último Año",

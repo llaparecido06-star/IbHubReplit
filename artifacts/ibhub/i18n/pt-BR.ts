@@ -2608,6 +2608,8 @@ const ptBR = {
     tab_visao: "Visão Geral",
     tab_apresentacoes: "Apresentações",
     tab_idealbi: "Ideal.BI",
+    tab_inteligencia: "Inteligência",
+    tab_busca: "Busca",
     period_mes: "Último Mês",
     period_trimestre: "Trimestre (YTD)",
     period_ano: "Último Ano",
