@@ -69,6 +69,8 @@ export default function MessagesScreen() {
   const [startingChat, setStartingChat] = useState<string | null>(null);
   const [accepting,    setAccepting]    = useState<string | null>(null);
   const [followUpMap,  setFollowUpMap]  = useState<Record<string, string>>({});
+  const [convoUserResults, setConvoUserResults] = useState<{ id: string; full_name: string; avatar_url: string | null; headline: string | null }[]>([]);
+  const [convoUserLoading, setConvoUserLoading] = useState(false);
 
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 84 : 84 + insets.bottom;
@@ -197,6 +199,25 @@ export default function MessagesScreen() {
     return () => clearTimeout(t2);
   }, [userSearch, user?.id]);
 
+  // Inline people search from the MAIN search bar (Mensagens tab) so the user can
+  // start a new conversation directly from search, without opening the "new" card.
+  useEffect(() => {
+    if (mainTab !== "mensagens" || !search.trim() || !user?.id) {
+      setConvoUserResults([]);
+      setConvoUserLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setConvoUserLoading(true);
+    const t3 = setTimeout(async () => {
+      const res = await API.searchChatContacts(search, user.id);
+      if (cancelled) return;
+      setConvoUserResults(res);
+      setConvoUserLoading(false);
+    }, 300);
+    return () => { cancelled = true; clearTimeout(t3); };
+  }, [search, mainTab, user?.id]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await load();
@@ -240,6 +261,18 @@ export default function MessagesScreen() {
     const name = c.name ?? c.participant?.full_name ?? "";
     return name.toLowerCase().includes(search.toLowerCase());
   });
+
+  // People matched by the main search who don't already have a thread — offered as
+  // "start a new conversation" results right below the matching conversations.
+  // Exclude ALL existing threads (accepted + pending requests), not just accepted,
+  // so someone you already have a pending chat with isn't offered as "new".
+  const existingParticipantIds = new Set(
+    convos.map((c) => c.participant?.id).filter(Boolean) as string[],
+  );
+  const newConvoUsers =
+    mainTab === "mensagens" && search.trim()
+      ? convoUserResults.filter((u) => !existingParticipantIds.has(u.id))
+      : [];
 
   const requestCount = requests.length;
   const justNowLabel = t("messages.just_now");
@@ -358,7 +391,7 @@ export default function MessagesScreen() {
           <Feather name="search" size={15} color={colors.mutedForeground} />
           <TextInput
             style={[styles.searchInput, { color: colors.foreground }]}
-            placeholder={mainTab === "mensagens" ? t("messages.search_convos") : t("messages.search_requests")}
+            placeholder={mainTab === "mensagens" ? t("messages.search_convos_people") : t("messages.search_requests")}
             placeholderTextColor={colors.mutedForeground}
             value={search}
             onChangeText={setSearch}
@@ -416,6 +449,14 @@ export default function MessagesScreen() {
                   {t("messages.no_requests_sub")}
                 </Text>
               </View>
+            ) : search.trim() ? (
+              convoUserLoading || newConvoUsers.length > 0 ? null : (
+                <View style={styles.empty}>
+                  <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
+                    {t("messages.no_results")}
+                  </Text>
+                </View>
+              )
             ) : (
               <View style={styles.empty}>
                 <View style={[styles.emptyIcon, { backgroundColor: colors.gold + "18" }]}>
@@ -434,6 +475,39 @@ export default function MessagesScreen() {
                 </TouchableOpacity>
               </View>
             )
+          }
+          ListFooterComponent={
+            mainTab === "mensagens" && !!search.trim() && (convoUserLoading || newConvoUsers.length > 0) ? (
+              <View style={styles.newConvoSection}>
+                <Text style={[styles.newConvoSectionTitle, { color: colors.mutedForeground }]}>
+                  {t("messages.start_new_chat_section")}
+                </Text>
+                {convoUserLoading && newConvoUsers.length === 0 ? (
+                  <ActivityIndicator size="small" color={colors.gold} style={{ marginVertical: 12 }} />
+                ) : (
+                  newConvoUsers.map((u) => (
+                    <TouchableOpacity
+                      key={u.id}
+                      style={[styles.newConvoUserRow, { borderBottomColor: colors.border }]}
+                      onPress={() => handleStartChat(u.id)}
+                      disabled={startingChat === u.id}
+                    >
+                      <Avatar uri={u.avatar_url} name={u.full_name} size={46} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.userName, { color: colors.navy }]} numberOfLines={1}>{u.full_name}</Text>
+                        {!!u.headline && (
+                          <Text style={[styles.userSub, { color: colors.mutedForeground }]} numberOfLines={1}>{u.headline}</Text>
+                        )}
+                      </View>
+                      {startingChat === u.id
+                        ? <ActivityIndicator size="small" color={colors.gold} />
+                        : <Feather name="edit" size={16} color={colors.gold} />
+                      }
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+            ) : null
           }
         />
       )}
@@ -648,6 +722,9 @@ const styles = StyleSheet.create({
   emptySub:     { fontSize: 14, textAlign: "center", lineHeight: 20 },
   newConvoBtn:  { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, marginTop: 8 },
   newConvoBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  newConvoSection:      { backgroundColor: "#fff", paddingTop: 8 },
+  newConvoSectionTitle: { fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, paddingHorizontal: 16, paddingVertical: 8 },
+  newConvoUserRow:      { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 11, borderBottomWidth: StyleSheet.hairlineWidth },
 });
 
 export { TabErrorBoundary as ErrorBoundary } from "@/components/TabErrorBoundary";
