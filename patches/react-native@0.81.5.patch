@@ -1,0 +1,50 @@
+diff --git a/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm b/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm
+index 2a677974ca8a929849109f294bddcb239bb202d0..28f31adc57874081a2e6637d8ae86bcbfa50c048 100644
+--- a/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm
++++ b/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm
+@@ -415,6 +415,10 @@ void ObjCTurboModule::performVoidMethodInvocation(
+     NSInvocation *inv,
+     NSMutableArray *retainedObjectsForInvocation)
+ {
++  // [RNVoidTurboModuleGuard] `runtime` is intentionally unused: the only former
++  // use was convertNSExceptionToJSError(runtime, ...) in the @catch below, which
++  // we removed to stop off-thread Hermes corruption. Silence -Wunused-parameter.
++  (void)runtime;
+   __weak id<RCTBridgeModule> weakModule = instance_;
+   const char *moduleName = name_.c_str();
+   std::string methodNameStr{methodName};
+@@ -432,14 +436,33 @@ void ObjCTurboModule::performVoidMethodInvocation(
+       TurboModulePerfLogger::asyncMethodCallExecutionStart(moduleName, methodName, asyncCallCounter);
+     }
+ 
++    BOOL nativeVoidException = NO;
+     @try {
+       [inv invokeWithTarget:strongModule];
+     } @catch (NSException *exception) {
+-      throw convertNSExceptionToJSError(runtime, exception, std::string{moduleName}, methodNameStr);
++      // [RNVoidTurboModuleGuard] Do NOT rethrow as a JS error here. Under the
++      // New Architecture on iOS this block may run on a background dispatch
++      // queue, and convertNSExceptionToJSError() mutates the Hermes runtime off
++      // the JS thread — corrupting the VM and crashing the app at startup with
++      // EXC_BAD_ACCESS before the user can even reach the login screen. A void
++      // native method has no return value to satisfy, so we suppress + log the
++      // native exception instead of letting it take down the whole app.
++      nativeVoidException = YES;
++      NSLog(@"[RNVoidTurboModuleGuard] Suppressed NSException in %s.%s: %@: %@\n%@",
++            moduleName, methodName, exception.name, exception.reason, exception.callStackSymbols);
+     } @finally {
+       [retainedObjectsForInvocation removeAllObjects];
+     }
+ 
++    if (nativeVoidException) {
++      if (shouldVoidMethodsExecuteSync_) {
++        TurboModulePerfLogger::syncMethodCallExecutionEnd(moduleName, methodName);
++      } else {
++        TurboModulePerfLogger::asyncMethodCallExecutionEnd(moduleName, methodName, asyncCallCounter);
++      }
++      return;
++    }
++
+     if (shouldVoidMethodsExecuteSync_) {
+       TurboModulePerfLogger::syncMethodCallExecutionEnd(moduleName, methodName);
+     } else {
