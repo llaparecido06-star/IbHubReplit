@@ -20,9 +20,15 @@ export default function TabLayout() {
   const isDesktop = useIsDesktop();
   const { t } = useTranslation();
 
+  // Both iOS and Android run edge-to-edge, so the tab bar must reserve space for
+  // the device's bottom safe-area inset (home indicator on iOS, system nav bar on
+  // Android) or the last row of icons/labels gets drawn under the system buttons.
+  // We fold insets.bottom into BOTH the total height and the bottom padding so the
+  // content sits above the inset. On devices that report a zero inset (Android
+  // gesture navigation), the base padding keeps the layout from collapsing.
   const tabBarHeight = Platform.select({
     ios:     54 + insets.bottom,
-    android: 62,
+    android: 62 + insets.bottom,
     default: 62,
   });
 
@@ -44,7 +50,7 @@ export default function TabLayout() {
           shadowOffset: { width: 0, height: -2 },
           shadowRadius: 8,
           height: tabBarHeight,
-          paddingBottom: Platform.select({ ios: insets.bottom || 8, android: 10, default: 8 }),
+          paddingBottom: Platform.select({ ios: insets.bottom || 8, android: insets.bottom + 10, default: 8 }),
           paddingTop: 6,
         },
         tabBarLabelStyle: {
