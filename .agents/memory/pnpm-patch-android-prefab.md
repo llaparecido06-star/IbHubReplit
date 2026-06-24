@@ -18,12 +18,14 @@ a command-line argument; its option parser splits on `=` and dies with
 as a pnpm patch; it silently regressed Android even though the patch only edits
 an iOS-only file (`RCTTurboModule.mm`).
 
-**How to apply instead:** apply iOS-only RN source patches at EAS build time via
-the `eas-build-post-install` npm script (runs after install, before native
-compile, for both platforms when EAS is launched from the app dir). Keep the
-root `pnpm-lock.yaml` free of `patch_hash` (verify: `rg -c patch_hash
-pnpm-lock.yaml` → 0; resolved `react-native`/`react-native-gesture-handler`
-paths must contain no `patch_hash=`).
+**How to apply instead:** deliver iOS-only RN source patches via an Expo config
+plugin (`withDangerousMod(['ios'])`) registered in `app.json`, which runs during
+`expo prebuild` before native compile. Do NOT rely on the `eas-build-post-install`
+npm hook alone: in this pnpm monorepo EAS runs install/hooks from the ROOT
+package.json, so a per-app hook silently never fires and an unpatched binary ships
+(keep the npm hook only as a redundant backup). Keep the root `pnpm-lock.yaml`
+free of `patch_hash` (verify: `rg -c patch_hash pnpm-lock.yaml` → 0; resolved
+`react-native`/`gesture-handler` paths must contain no `patch_hash=`).
 
 **Patcher gotchas (pure Node, no `patch` binary — it's absent in some images):**
 - Break the pnpm store hardlink before writing (rm + write a fresh inode) so you

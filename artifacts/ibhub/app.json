@@ -2,7 +2,7 @@
   "expo": {
     "name": "IBHUB - A Rede do Vinho",
     "slug": "ibhub",
-    "version": "1.1.5",
+    "version": "1.1.6",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "ibhub",
@@ -17,7 +17,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "br.com.ibhub",
-      "buildNumber": "19",
+      "buildNumber": "20",
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -39,7 +39,7 @@
         "backgroundColor": "#0d1b2a"
       },
       "package": "br.com.ibhub",
-      "versionCode": 45,
+      "versionCode": 46,
       "googleServicesFile": "./google-services.json",
       "allowBackup": false,
       "softwareKeyboardLayoutMode": "pan",
@@ -93,6 +93,7 @@
       "./plugins/with-privacy-manifest",
       "./plugins/with-folly-coroutines-fix",
       "./plugins/with-ipad-popover-fix",
+      "./plugins/with-rn-turbomodule-void-guard",
       [
         "expo-build-properties",
         {
@@ -100,7 +101,8 @@
             "newArchEnabled": true
           },
           "ios": {
-            "newArchEnabled": true
+            "newArchEnabled": true,
+            "buildReactNativeFromSource": true
           }
         }
       ]

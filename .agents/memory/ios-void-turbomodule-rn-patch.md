@@ -25,12 +25,14 @@ function `ObjCTurboModule::performVoidMethodInvocation`. In the `@catch
 log it (NSLog) and `return` cleanly (a void method has no return value to
 satisfy). This neutralizes the entire crash class while keeping the app alive.
 
-**Persist for EAS:** use `pnpm patch react-native@<ver>` → edit → `pnpm
-patch-commit`. This writes `patches/react-native@<ver>.patch` and
-`pnpm.patchedDependencies` (root package.json) + lockfile `patch_hash`. EAS
-compiles RN from source via CocoaPods, so the patched `.mm` is recompiled and the
-fix takes effect in the binary. newArchEnabled cannot be turned off here
-(Reanimated 4.x requires New Architecture), so this patch is the path.
+**Persist for EAS (delivery matters — see `ios-prebuilt-rncore-defeats-patch.md`):**
+do NOT use `pnpm patch` (breaks Android prefab) and do NOT rely on the
+`eas-build-post-install` npm hook alone (in this pnpm monorepo EAS runs
+install/hooks from the ROOT package.json, so a per-app hook never fires — that
+shipped an unpatched binary once). Deliver the `.mm` edit via an Expo config
+plugin (`withDangerousMod(['ios'])`) registered in `app.json` (always runs during
+`expo prebuild`), AND force source-built core, or the recompiled `.mm` never
+lands. newArchEnabled cannot be turned off (Reanimated 4.x requires New Arch).
 
 **Gotchas (both cost real time):**
 - Removing the `convertNSExceptionToJSError(runtime, ...)` call leaves the

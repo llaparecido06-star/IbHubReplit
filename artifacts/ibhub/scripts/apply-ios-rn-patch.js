@@ -11,10 +11,18 @@
 //   the iOS startup-crash fix by re-applying it here — after install, before the
 //   native build — WITHOUT polluting the store directory names.
 //
+// This module is invoked from TWO places so the patch ALWAYS lands:
+//   1. The `eas-build-post-install` npm hook (CLI: `node apply-ios-rn-patch.js`).
+//      In a pnpm monorepo EAS may read lifecycle hooks from the ROOT package.json
+//      and never run the per-app hook, so this path is best-effort.
+//   2. The Expo config plugin `plugins/with-rn-turbomodule-void-guard.js`, which
+//      runs during `expo prebuild` (always executed on EAS managed builds) and
+//      calls `applyPatch()` directly. This is the reliable path.
+//
 // Pure Node (no external `patch` binary) so it runs on any EAS build image.
 // Idempotent: skips if the marker is already present.
-// Fails loudly (non-zero exit) on anything unexpected, so we never ship an
-// accidentally-unpatched iOS build.
+// Fails loudly (throws -> non-zero exit / failed prebuild) on anything
+// unexpected, so we never ship an accidentally-unpatched iOS build.
 
 const fs = require("fs");
 const path = require("path");
@@ -84,22 +92,28 @@ const EDITS = [
   },
 ];
 
+// Throw (not process.exit) so callers — both the CLI and the Expo config plugin
+// — propagate the failure. An uncaught throw in the CLI still exits non-zero.
 function fail(message) {
-  console.error(`[apply-ios-rn-patch] ${message}`);
-  process.exit(1);
+  throw new Error(`[apply-ios-rn-patch] ${message}`);
 }
 
-function main() {
+// Resolve the on-disk react-native package directory from the given lookup paths.
+function resolveReactNativeDir(fromPaths) {
   let rnPkgJson;
   try {
     rnPkgJson = require.resolve("react-native/package.json", {
-      paths: [__dirname],
+      paths: fromPaths,
     });
   } catch (error) {
     fail(`could not resolve react-native: ${error.message}`);
   }
+  return path.dirname(rnPkgJson);
+}
 
-  const target = path.join(path.dirname(rnPkgJson), TARGET_RELATIVE);
+// Apply the iOS RCTTurboModule.mm patch into the given react-native directory.
+function applyPatch(reactNativeDir) {
+  const target = path.join(reactNativeDir, TARGET_RELATIVE);
   if (!fs.existsSync(target)) {
     fail(`target file not found: ${target}`);
   }
@@ -158,8 +172,19 @@ function main() {
   console.log("[apply-ios-rn-patch] React Native iOS fix applied successfully.");
 }
 
+function main() {
+  const reactNativeDir = resolveReactNativeDir([__dirname]);
+  applyPatch(reactNativeDir);
+}
+
 if (require.main === module) {
   main();
 }
 
-module.exports = { EDITS, MARKER, TARGET_RELATIVE };
+module.exports = {
+  EDITS,
+  MARKER,
+  TARGET_RELATIVE,
+  applyPatch,
+  resolveReactNativeDir,
+};

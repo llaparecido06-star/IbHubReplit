@@ -1,40 +1,51 @@
 ---
-name: Expo SDK 54 prebuilt RN core defeats node_modules source patches (iOS)
-description: Why patching react-native .mm source has zero effect on iOS under Expo SDK 54, and the env-var fix to make it land.
+name: Making the iOS React Native .mm patch actually land in the EAS binary
+description: Two independent requirements that must BOTH hold or the RCTTurboModule.mm void-guard patch silently never reaches the shipped iOS binary.
 ---
 
-On Expo SDK 54 / RN 0.81 iOS, patching React Native C++/ObjC++ source in
-`node_modules` (e.g. `RCTTurboModule.mm` via an `eas-build-post-install` script)
-has **ZERO effect on the shipped binary by default** — the build links a
-**prebuilt React core** (`React-Core-prebuilt` pod; crash Binary Images show
-`React.framework` + `ReactNativeDependencies.framework`), so the patched source
-is never compiled.
+The iOS void-TurboModule Hermes crash fix is a source patch to
+`RCTTurboModule.mm` (see `ios-void-turbomodule-rn-patch.md`). For that patch to
+exist in the shipped binary, TWO independent things must hold. Miss either and
+the crash stack still shows the pristine `throw convertNSExceptionToJSError`
+(`performVoidMethodInvocation` @ `:438`) — patched local `node_modules` +
+unpatched crash stack = the patch never compiled, NOT a bad patch.
 
-**Tell-tale sign:** after "applying" a source patch, the crash stack still shows
-the SAME unpatched line numbers (e.g. `convertNSExceptionToJSError` @
-`RCTTurboModule.mm:221` ← `performVoidMethodInvocation` @ `:438`). Patched local
-`node_modules` + unpatched crash stack = prebuilt core bypass, NOT a bad patch.
+## Requirement 1 — React core must compile from SOURCE
+On Expo SDK 54 / RN 0.81 the build links a **prebuilt React core**
+(`React-Core-prebuilt` pod; crash Binary Images show `React.framework` +
+`ReactNativeDependencies.framework`) by default, so `node_modules` source is
+never compiled. `scripts/cocoapods/rncore.rb` flips to prebuilt when
+`ENV["RCT_USE_PREBUILT_RNCORE"] == "1"`. Force source: in `eas.json`
+`build.<profile>.env` set `"RCT_USE_PREBUILT_RNCORE": "0"` AND add
+`expo-build-properties` `ios.buildReactNativeFromSource: true` (the
+Expo-supported declarative control). Deps are independent (`RCT_USE_RN_DEP`,
+`scripts/cocoapods/rndependencies.rb`); keep `"RCT_USE_RN_DEP": "1"` to keep
+third-party deps prebuilt (avoids the slow boost/folly compile) — though
+`buildReactNativeFromSource` may pull deps from source too. Correctness > speed.
 
-**Root cause (from RN pod scripts):** `scripts/cocoapods/rncore.rb` defaults
-`@@build_from_source = true`, but flips to prebuilt when
-`ENV["RCT_USE_PREBUILT_RNCORE"] == "1"` (which Expo SDK 54 / EAS sets for fast
-builds). Deps are controlled independently by `ENV["RCT_USE_RN_DEP"]` (prebuilt
-when `"1"`), in `scripts/cocoapods/rndependencies.rb`.
+## Requirement 2 — the patch must actually be APPLIED during the build
+Deliver the edit via an **Expo config plugin** (`withDangerousMod(['ios'])`)
+registered in `app.json`. Config plugins ALWAYS run during `expo prebuild` on EAS
+managed builds (proven by sibling `with-folly-coroutines-fix`), and the dangerous
+mod runs before CocoaPods/xcodebuild, so the patched `node_modules` source is what
+compiles. Patch `node_modules/react-native` (not generated `ios/Pods`) — for a
+source build, React-Core's podspec reads sources from `node_modules`.
 
-**Fix:** in `eas.json` `build.<profile>.env` set
-`"RCT_USE_PREBUILT_RNCORE": "0"` (forces RN core to compile from source so the
-patch lands). Keep `"RCT_USE_RN_DEP": "1"` so third-party deps stay prebuilt —
-source-core + prebuilt-deps is a supported matrix and avoids the slow
-boost/folly compile. Keep the post-install patch script.
+**Why NOT the `eas-build-post-install` npm hook alone:** in a pnpm monorepo EAS
+runs `pnpm install` AND npm lifecycle hooks from the ROOT package.json. A per-app
+hook in `artifacts/<app>/package.json` silently never fires → an unpatched binary
+ships. Keep the npm hook only as a redundant backup; the config plugin is the
+reliable path.
 
 **Why:** the off-thread void-TurboModule NSException → `convertNSExceptionToJSError`
 → Hermes mutation crash is generic (any native void method can trigger it; JS
 guards like `safeNotifications` only cover known modules). The C++ suppression
-patch is the only generic safety net, and it requires source-built core.
+patch is the only generic safety net, and it requires BOTH requirements above.
 
-**How to apply / verify:** after the next EAS build, check the iOS build log for
-`[apply-ios-rn-patch] ... applied successfully`, confirm pods are NOT using
-`React-Core-prebuilt`, and that core is built from source. Trade-off: iOS builds
-are noticeably slower. If it STILL crashes, read the `RNVoidTurboModuleGuard`
-NSLog line — it prints the exact `moduleName.methodName` of the throwing native
-call so you can target the real culprit module directly.
+## Verify
+After the next EAS build, check the iOS log for `[apply-ios-rn-patch] ... applied
+successfully` (or "already fully patched"), confirm pods are NOT using
+`React-Core-prebuilt`, and that the new crash (if any) no longer maps `:438` to
+the throw. If it STILL crashes, read the `RNVoidTurboModuleGuard` NSLog line — it
+prints the exact `moduleName.methodName` of the throwing native call so you can
+target the real culprit module directly.
