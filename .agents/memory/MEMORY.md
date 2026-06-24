@@ -10,3 +10,4 @@
 - [RN nested link Text needs stopPropagation](rn-link-text-stoppropagation.md) — a `<Text onPress>` link inside a parent Pressable can double-fire (open link AND trigger parent); call `e.stopPropagation()` in the link handler.
 - [getSession() hangs on RN](supabase-getsession-hang-rn.md) — don't await getSession() unbounded; .from() survives on cached token (only API tabs freeze); fix: timeout-raced getSessionSafe + AuthContext-seeded cache.
 - [DM conversation duplication](dm-conversation-dedup.md) — chat shows fragmented history/blank header because dup conversation rows exist per pair; alias-resolve both users (auth.uid<->profile.id) on lookup, don't rely on GET dedup.
+- [Expo SDK54 prebuilt RN core defeats source patches](ios-prebuilt-rncore-defeats-patch.md) — iOS links React-Core-prebuilt by default; node_modules .mm patches never compile unless eas.json env sets RCT_USE_PREBUILT_RNCORE=0 (keep RCT_USE_RN_DEP=1).
