@@ -29,9 +29,6 @@
       "esbuild",
       "msw",
       "unrs-resolver"
-    ],
-    "patchedDependencies": {
-      "react-native@0.81.5": "patches/react-native@0.81.5.patch"
-    }
+    ]
   }
 }

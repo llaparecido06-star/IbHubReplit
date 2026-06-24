@@ -8,7 +8,8 @@
     "build": "node scripts/build.js",
     "serve": "node server/serve.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "eas-build-pre-install": "if [ -n \"$GOOGLE_SERVICES_JSON\" ]; then echo \"$GOOGLE_SERVICES_JSON\" > ./google-services.json; fi"
+    "eas-build-pre-install": "if [ -n \"$GOOGLE_SERVICES_JSON\" ]; then echo \"$GOOGLE_SERVICES_JSON\" > ./google-services.json; fi",
+    "eas-build-post-install": "node scripts/apply-ios-rn-patch.js"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
