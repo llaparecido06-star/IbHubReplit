@@ -1,5 +1,5 @@
 import { supabase } from "@/context/AuthContext";
-import { API_URL } from "./_shared";
+import { getSessionSafe, API_URL } from "./_shared";
 
 // ─── Groups ───────────────────────────────────────────────────────────────────
 
@@ -104,7 +104,7 @@ export async function createGroup(params: {
   try {
     let token = accessToken;
     if (!token) {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await getSessionSafe();
       token = session?.access_token;
     }
     if (!token) return null;
@@ -226,7 +226,7 @@ export async function requestGroupJoin(groupId: string, userId: string, companyP
 // Admin approves a pending member — handled server-side to bypass RLS.
 export async function approveGroupMember(groupId: string, memberId: string): Promise<boolean> {
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
+    const { data: sessionData } = await getSessionSafe();
     const token = sessionData?.session?.access_token;
     if (!token) return false;
     const res = await fetch(`${API_URL}/community/groups/${groupId}/members/${memberId}/approve`, {
@@ -241,7 +241,7 @@ export async function approveGroupMember(groupId: string, memberId: string): Pro
 // Admin rejects a pending member — removes the pending group_members row.
 export async function rejectGroupMember(groupId: string, memberId: string): Promise<boolean> {
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
+    const { data: sessionData } = await getSessionSafe();
     const token = sessionData?.session?.access_token;
     if (!token) return false;
     const res = await fetch(`${API_URL}/community/groups/${groupId}/members/${memberId}/reject`, {
@@ -255,7 +255,7 @@ export async function rejectGroupMember(groupId: string, memberId: string): Prom
 
 export async function notifyGroupJoinRequest(groupId: string): Promise<void> {
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
+    const { data: sessionData } = await getSessionSafe();
     const token = sessionData?.session?.access_token;
     if (!token) return;
     await fetch(`${API_URL}/community/groups/${groupId}/notify-request`, {

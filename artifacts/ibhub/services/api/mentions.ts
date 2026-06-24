@@ -1,5 +1,5 @@
 import { supabase } from "@/context/AuthContext";
-import { API_URL } from "./_shared";
+import { getSessionSafe, API_URL } from "./_shared";
 
 // ─── MENTIONS ────────────────────────────────────────────────────────────────
 
@@ -90,7 +90,7 @@ export async function sendMentionNotifications(
 
     // Fire push notification (best-effort)
     if (API_URL && mentionedUserIds.length) {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await getSessionSafe();
       if (session?.access_token) {
         fetch(`${API_URL}/push/mention`, {
           method: "POST",

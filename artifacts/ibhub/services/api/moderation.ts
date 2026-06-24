@@ -1,7 +1,7 @@
 import { supabase } from "@/context/AuthContext";
 import * as FileSystem from "expo-file-system";
 import { Platform } from "react-native";
-import { API_URL, fetchCommentProfilesForIds, fetchProfilesForIds } from "./_shared";
+import { getSessionSafe, API_URL, fetchCommentProfilesForIds, fetchProfilesForIds } from "./_shared";
 import type { AppMessage } from "./types";
 
 // ─── REPORTS ─────────────────────────────────────────────────────────────────
@@ -263,7 +263,7 @@ export async function getOrCreateDirectConversation(
     // Create the conversation via the API server using supabaseAdmin.
     // This ensures BOTH participant rows are inserted without RLS restrictions,
     // fixing the bug where the client-side RLS prevented inserting the recipient's row.
-    const { data: sessionData } = await supabase.auth.getSession();
+    const { data: sessionData } = await getSessionSafe();
     const token = sessionData?.session?.access_token;
     if (!token) { console.error("getOrCreateDirectConversation: no session token"); return null; }
 
@@ -313,7 +313,7 @@ export async function uploadChatMedia(
     let token = opts?.accessToken;
     let userId = opts?.userId;
     if (!token || !userId) {
-      const { data: sessionData } = await supabase.auth.getSession();
+      const { data: sessionData } = await getSessionSafe();
       token = token ?? sessionData?.session?.access_token;
       userId = userId ?? sessionData?.session?.user?.id;
     }
@@ -382,7 +382,7 @@ export async function sendMediaMessage(
   try {
     let token = accessToken;
     if (!token) {
-      const { data: sessionData } = await supabase.auth.getSession();
+      const { data: sessionData } = await getSessionSafe();
       token = sessionData?.session?.access_token;
     }
 

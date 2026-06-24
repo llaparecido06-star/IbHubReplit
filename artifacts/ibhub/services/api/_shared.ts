@@ -1,5 +1,7 @@
 import Constants from "expo-constants";
+import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/context/AuthContext";
+import { getCachedSession, setCachedSession } from "./_session";
 import type { ProfileLite, CommentProfileLite, CompanyPageLite, RawPostRow } from "./types";
 
 // Priority: explicit env var (EAS / .env file) → app.config.js extra.apiUrl
@@ -31,6 +33,44 @@ export async function guardedFetch(input: RequestInfo, init?: RequestInit): Prom
     throw new Error("Verifique sua conexão e tente novamente.");
   } finally {
     clearTimeout(timer);
+  }
+}
+
+// Drop-in, hang-proof replacement for `supabase.auth.getSession()`.
+//
+// On React Native, getSession() can stall indefinitely when an in-flight token
+// refresh holds the auth lock (autoRefreshToken: true). Direct `supabase.from()`
+// queries keep working off the client's cached token, but any code that AWAITS
+// getSession() before an API fetch would hang forever — leaving the screen stuck
+// on an infinite loading spinner (this is why only the feed loaded while every
+// API-backed tab froze). This races the real call against a short timeout and
+// falls back to the last session captured by AuthContext, so it ALWAYS resolves.
+// Returns the same `{ data: { session } }` shape as the real method.
+const GET_SESSION_TIMEOUT_MS = 4000;
+
+// `expires_at` is a Unix epoch in SECONDS. Unknown expiry → treat as usable.
+// We never want the stalled-getSession fallback to hand out an already-expired
+// JWT (it would just 401), so the cached session is dropped once it's expired.
+function isSessionExpired(s: Session | null): boolean {
+  if (!s) return true;
+  if (!s.expires_at) return false;
+  return Date.now() >= s.expires_at * 1000;
+}
+
+export async function getSessionSafe(): Promise<{ data: { session: Session | null } }> {
+  const fallback = (): { data: { session: Session | null } } => {
+    const cached = getCachedSession();
+    return { data: { session: isSessionExpired(cached) ? null : cached } };
+  };
+  try {
+    const timeout = new Promise<{ data: { session: Session | null } }>((resolve) => {
+      setTimeout(() => resolve(fallback()), GET_SESSION_TIMEOUT_MS);
+    });
+    const res = await Promise.race([supabase.auth.getSession(), timeout]);
+    if (res.data.session) setCachedSession(res.data.session);
+    return { data: { session: res.data.session ?? fallback().data.session } };
+  } catch {
+    return fallback();
   }
 }
 

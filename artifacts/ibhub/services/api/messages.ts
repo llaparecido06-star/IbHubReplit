@@ -1,5 +1,5 @@
 import { supabase } from "@/context/AuthContext";
-import { API_URL, fetchCommentProfilesForIds } from "./_shared";
+import { getSessionSafe, API_URL, fetchCommentProfilesForIds } from "./_shared";
 import type { AppConversation, AppMessage, AppMessageReaction } from "./types";
 import type { Group } from "./groups";
 import { sendMediaMessage } from "./moderation";
@@ -130,7 +130,7 @@ export async function sendMessage(
   opts?: { reply_to_id?: string; message_type?: string; metadata?: Record<string, any>; companyPageId?: string | null; accessToken?: string },
 ): Promise<AppMessage | null> {
   try {
-    const token = opts?.accessToken ?? (await supabase.auth.getSession()).data?.session?.access_token;
+    const token = opts?.accessToken ?? (await getSessionSafe()).data?.session?.access_token;
 
     const body: Record<string, any> = {
       conversation_id: conversationId,

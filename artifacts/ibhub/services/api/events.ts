@@ -1,11 +1,11 @@
 import { supabase } from "@/context/AuthContext";
 import { compressPostImage } from "@/utils/compressImage";
-import { API_URL, fetchProfilesForIds } from "./_shared";
+import { getSessionSafe, API_URL, fetchProfilesForIds } from "./_shared";
 
 async function _dispatchEventPush(path: string, body: Record<string, string>): Promise<void> {
   if (!API_URL) return;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await getSessionSafe();
     const token = session?.access_token;
     if (!token) return;
     await fetch(`${API_URL}${path}`, {

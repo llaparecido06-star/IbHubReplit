@@ -81,9 +81,14 @@ export default function MessagesScreen() {
 
   const load = useCallback(async () => {
     if (!user?.id) { setLoading(false); return; }
-    const data = await API.fetchConversations(user.id, activeCompany?.id ?? null);
-    setConvos(data);
-    setLoading(false);
+    try {
+      const data = await API.fetchConversations(user.id, activeCompany?.id ?? null);
+      setConvos(data);
+    } catch (e) {
+      console.error("messages load:", e);
+    } finally {
+      setLoading(false);
+    }
   }, [user?.id, activeCompany?.id]);
 
   useEffect(() => { load(); }, [load]);

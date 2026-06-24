@@ -1,7 +1,7 @@
 import { supabase } from "@/context/AuthContext";
 import { Post } from "@/components/feed/PostCard";
 import { compressLogoImage } from "@/utils/compressImage";
-import { API_URL, POST_SELECT_BASE, attachAuthorsToPosts, fetchCommentProfilesForIds, fetchCompanyPagesForIds, fetchProfilesForIds, isNetworkError } from "./_shared";
+import { getSessionSafe, API_URL, POST_SELECT_BASE, attachAuthorsToPosts, fetchCommentProfilesForIds, fetchCompanyPagesForIds, fetchProfilesForIds, isNetworkError } from "./_shared";
 import type { AppStory } from "./types";
 import type { AppEvent } from "./events";
 import type { AppOpportunity } from "./opportunities";
@@ -116,7 +116,7 @@ export async function createCompanyPage(params: {
   location?: string;
 }): Promise<CompanyPage | null> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await getSessionSafe();
     if (!session?.access_token) return null;
     const res = await fetch(`${API_URL}/community/companies`, {
       method: "POST",
@@ -261,7 +261,7 @@ export async function removeCompanyPageAdmin(companyId: string, userId: string):
 
 export async function uploadCompanyLogo(companyId: string, uri: string): Promise<string | null> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await getSessionSafe();
     const userId = session?.user?.id;
     if (!userId) { console.error("uploadCompanyLogo: no session"); return null; }
 
@@ -498,7 +498,7 @@ export async function deleteCompanyProduct(productId: string): Promise<boolean> 
 
 export async function uploadProductImage(productId: string, uri: string): Promise<string | null> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await getSessionSafe();
     const userId = session?.user?.id;
     if (!userId) { console.error("uploadProductImage: no session"); return null; }
 
@@ -556,7 +556,7 @@ export async function toggleCompanyFollow(companyId: string, userId: string, isC
 async function _dispatchCompanyPush(path: string, body: Record<string, string>): Promise<void> {
   if (!API_URL) return;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await getSessionSafe();
     const token = session?.access_token;
     if (!token) return;
     await fetch(`${API_URL}${path}`, {

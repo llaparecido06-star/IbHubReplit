@@ -1,5 +1,5 @@
 import { supabase } from "@/context/AuthContext";
-import { API_URL, fetchCommentProfilesForIds, fetchCompanyPagesForIds, fetchProfilesForIds, guardedFetch, isNetworkError } from "./_shared";
+import { getSessionSafe, API_URL, fetchCommentProfilesForIds, fetchCompanyPagesForIds, fetchProfilesForIds, guardedFetch, isNetworkError } from "./_shared";
 
 // ─── OPPORTUNITIES ─────────────────────────────────────────────────────────────
 
@@ -247,7 +247,7 @@ export async function createOpportunity(
   userId: string,
 ): Promise<AppOpportunity | null> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await getSessionSafe();
     if (!session?.access_token) return null;
     const res = await guardedFetch(`${API_URL}/community/opportunities`, {
       method: "POST",
@@ -305,7 +305,7 @@ export async function getCvSignedUrl(
   }
   const storagePath = cvValue.slice(CV_STORAGE_PREFIX.length);
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
+    const { data: sessionData } = await getSessionSafe();
     const token = sessionData?.session?.access_token;
     if (!token) return null;
     const res = await fetch(`${API_URL}/cv/signed-url`, {
@@ -355,7 +355,7 @@ export async function applyToJob(
   message: string | null,
 ): Promise<boolean> {
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
+    const { data: sessionData } = await getSessionSafe();
     const token = sessionData?.session?.access_token;
 
     const res = await fetch(`${API_URL}/community/opportunities/${opportunityId}/apply`, {
@@ -386,7 +386,7 @@ export async function expressInterest(
   _message: string | null,
 ): Promise<boolean> {
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
+    const { data: sessionData } = await getSessionSafe();
     const token = sessionData?.session?.access_token;
 
     const res = await fetch(`${API_URL}/community/opportunities/${opportunityId}/interest`, {

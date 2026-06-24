@@ -1,5 +1,5 @@
 import { supabase } from "@/context/AuthContext";
-import { API_URL } from "./_shared";
+import { getSessionSafe, API_URL } from "./_shared";
 
 // ─── MARKET PRESENTATIONS ────────────────────────────────────────────────────
 
@@ -368,7 +368,7 @@ export interface MarketPostLiker {
 
 export async function fetchMarketPosts(userId?: string, offset = 0, limit = 15): Promise<MarketPost[]> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await getSessionSafe();
     if (!session?.access_token) return [];
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     const res = await fetch(`${API_URL}/market/posts?${params}`, {
@@ -442,7 +442,7 @@ export async function createMarketPost(
   pollAllowMultiple?: boolean,
 ): Promise<MarketPost | null> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await getSessionSafe();
     if (!session?.access_token) return null;
     const res = await fetch(`${API_URL}/market/posts`, {
       method: "POST",
@@ -482,7 +482,7 @@ export async function voteOnMarketPoll(
   optionId: string,
 ): Promise<{ poll_options: MarketPollOption[]; user_poll_votes: string[] } | null> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await getSessionSafe();
     if (!session?.access_token) return null;
     const res = await fetch(`${API_URL}/market-posts/${postId}/poll/vote`, {
       method: "POST",
@@ -528,7 +528,7 @@ export async function uploadMarketPostMediaBase64(
 ): Promise<string | null> {
   try {
     const apiUrl = process.env.EXPO_PUBLIC_API_URL!;
-    const { data: sessionData } = await supabase.auth.getSession();
+    const { data: sessionData } = await getSessionSafe();
     const token = sessionData?.session?.access_token;
     if (!token) return null;
 
@@ -558,7 +558,7 @@ export async function toggleMarketPostReaction(
   currentCount: number,
 ): Promise<{ user_liked: boolean; reaction_type: string | null; likes_count: number }> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await getSessionSafe();
     if (!session?.access_token) return { user_liked: !!currentReaction, reaction_type: currentReaction, likes_count: currentCount };
     const res = await fetch(`${API_URL}/market/posts/${postId}/like`, {
       method: "POST",
@@ -583,7 +583,7 @@ const REPLY_PREFIX_RE = /^\[R:([0-9a-f-]{36})\]/i;
 
 export async function fetchMarketComments(postId: string, currentUserId?: string): Promise<MarketComment[]> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await getSessionSafe();
     const uid = currentUserId ?? session?.user?.id;
 
     const { data, error } = await supabase
@@ -651,7 +651,7 @@ export async function toggleMarketCommentLike(
   currentlyLiked: boolean,
 ): Promise<{ is_liked: boolean; likes_count: number } | null> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await getSessionSafe();
     if (!session?.access_token) return null;
     const res = await fetch(`${API_URL}/market/comments/${commentId}/like`, {
       method: "POST",
@@ -707,7 +707,7 @@ export async function addMarketComment(
   replyToId?: string | null,
 ): Promise<MarketComment | null> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await getSessionSafe();
     if (!session?.access_token) return null;
     const res = await fetch(`${API_URL}/market/posts/${postId}/comments`, {
       method: "POST",

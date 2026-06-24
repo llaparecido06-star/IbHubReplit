@@ -1,5 +1,5 @@
 import { supabase } from "@/context/AuthContext";
-import { fetchCommentProfilesForIds, fetchCompanyPagesForIds, API_URL } from "./_shared";
+import { getSessionSafe, fetchCommentProfilesForIds, fetchCompanyPagesForIds, API_URL } from "./_shared";
 import type { AppStory, StoryGroup } from "./types";
 import type { Group } from "./groups";
 
@@ -274,7 +274,7 @@ export async function createStory(
       });
       // Send push notification (best-effort)
       if (API_URL) {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await getSessionSafe();
         if (session?.access_token) {
           fetch(`${API_URL}/push/story-tag`, {
             method: "POST",
@@ -352,7 +352,7 @@ export async function createVideoStoryParts(
       });
       // Send push notification (best-effort)
       if (API_URL) {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await getSessionSafe();
         if (session?.access_token) {
           fetch(`${API_URL}/push/story-tag`, {
             method: "POST",

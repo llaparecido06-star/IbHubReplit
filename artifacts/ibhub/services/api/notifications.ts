@@ -1,5 +1,5 @@
 import { supabase } from "@/context/AuthContext";
-import { API_URL, fetchCommentProfilesForIds } from "./_shared";
+import { getSessionSafe, API_URL, fetchCommentProfilesForIds } from "./_shared";
 import type { AppNotification } from "./types";
 import { extractWineName } from "@/utils/winePost";
 
@@ -216,7 +216,7 @@ export async function dispatchPushToConversation(
 ): Promise<void> {
   if (!API_URL) return;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await getSessionSafe();
     if (!session?.access_token) return;
 
     // Server verifies caller is a participant, resolves recipients, and looks up

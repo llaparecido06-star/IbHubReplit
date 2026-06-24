@@ -3,7 +3,7 @@ import { Post } from "@/components/feed/PostCard";
 import { compressPostImage } from "@/utils/compressImage";
 import * as FileSystem from "expo-file-system";
 import { Platform } from "react-native";
-import { API_URL, COMMENT_SELECT_BASE, POST_SELECT_BASE, attachAuthorsToPosts, fetchCommentProfilesForIds, fetchCompanyPagesForIds, fetchProfilesForIds, guardedFetch, isNetworkError, normaliseAuthor, normalizePollIndices } from "./_shared";
+import { getSessionSafe, API_URL, COMMENT_SELECT_BASE, POST_SELECT_BASE, attachAuthorsToPosts, fetchCommentProfilesForIds, fetchCompanyPagesForIds, fetchProfilesForIds, guardedFetch, isNetworkError, normaliseAuthor, normalizePollIndices } from "./_shared";
 import type { AppComment, RawPostRow } from "./types";
 
 type LikeRow = { post_id: string; reaction_type?: string | null };
@@ -30,7 +30,7 @@ async function _dispatchSocialPush(opts: {
   if (!API_URL) return;
   if (opts.companyPageId) return;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await getSessionSafe();
     const token = session?.access_token;
     if (!token) return;
 
@@ -66,7 +66,7 @@ async function _dispatchSocialPush(opts: {
 async function _dispatchPush(path: string, body: Record<string, string>): Promise<void> {
   if (!API_URL) return;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await getSessionSafe();
     const token = session?.access_token;
     if (!token) return;
     await fetch(`${API_URL}${path}`, {
@@ -94,7 +94,7 @@ export async function fetchFeedPosts(
     // within code triggered by onAuthStateChange, which still holds the
     // supabase-js internal auth lock — causing a deadlock / indefinite hang
     // that leaves the feed skeleton visible forever.
-    const token = accessToken ?? (await supabase.auth.getSession()).data.session?.access_token;
+    const token = accessToken ?? (await getSessionSafe()).data.session?.access_token;
     if (!token) return [];
 
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
@@ -176,7 +176,7 @@ export async function uploadPostVideo(videoUri: string, userId: string): Promise
     const ext = videoUri.split(".").pop()?.split("?")[0]?.toLowerCase() ?? "mp4";
     const mime = ext === "mov" ? "video/quicktime" : "video/mp4";
 
-    const { data: sessionData } = await supabase.auth.getSession();
+    const { data: sessionData } = await getSessionSafe();
     const token = sessionData?.session?.access_token;
     if (!token) return null;
 
@@ -400,7 +400,7 @@ export async function incrementViewCount(postId: string): Promise<void> {
 export async function fetchNewPostsSince(since: string, currentUserId: string, activeCompanyId?: string | null): Promise<Post[]> {
   try {
     // Use the authoritative API server endpoint (same as fetchFeedPosts) with a `since` filter.
-    const session = (await supabase.auth.getSession()).data.session;
+    const session = (await getSessionSafe()).data.session;
     if (!session?.access_token) return [];
 
     const params = new URLSearchParams({ limit: "20", since });
@@ -647,7 +647,7 @@ export async function voteOnPoll(
   optionIndex: number,
 ): Promise<{ indices: number[]; options: { text: string; votes: number }[]; total_votes: number; user_votes: Record<string, number | number[]> } | null> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await getSessionSafe();
     if (!session?.access_token) return null;
     const res = await fetch(`${API_URL}/posts/${postId}/poll/vote`, {
       method: "POST",

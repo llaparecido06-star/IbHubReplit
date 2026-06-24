@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient, Session, User } from "@supabase/supabase-js";
+import { setCachedSession } from "@/services/api/_session";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
@@ -418,6 +419,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Cache hit — show the app instantly, validate session in background.
           console.log(`[AuthInit] Cache hit for userId=${cachedAuth.userId}. Unblocking UI.`);
           setSession(cachedAuth.session);
+          // Seed the API-layer session cache NOW (before the background
+          // getSession() validation below). If that getSession() stalls,
+          // getSessionSafe() can still fall back to this cached session
+          // instead of treating the user as logged-out → empty tabs.
+          setCachedSession(cachedAuth.session);
           setUser(cachedAuth.session.user);
           setMustChangePassword(cachedAuth.session.user?.user_metadata?.must_change_password === true);
 
@@ -435,6 +441,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const { data: { session: freshSession } } = await supabase.auth.getSession();
           if (freshSession) {
             setSession(freshSession);
+            setCachedSession(freshSession);
             setUser(freshSession.user);
             setMustChangePassword(freshSession.user?.user_metadata?.must_change_password === true);
             writeSessionCache(freshSession);
@@ -443,6 +450,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Cached session was stale / refresh token expired → sign the user out.
             console.warn("[AuthInit] Cached session is no longer valid — clearing.");
             setSession(null);
+            setCachedSession(null);
             setUser(null);
             setProfile(null);
             setNeedsProfileCompletion(false);
@@ -453,6 +461,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // No cache (first install, after explicit sign-out) → normal blocking flow.
           const { data: { session } } = await supabase.auth.getSession();
           setSession(session);
+          setCachedSession(session);
           setUser(session?.user ?? null);
           setMustChangePassword(session?.user?.user_metadata?.must_change_password === true);
 
@@ -508,6 +517,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfileChecked(true);
       }
       setSession(session);
+      setCachedSession(session);
       setUser(session?.user ?? null);
       setMustChangePassword(session?.user?.user_metadata?.must_change_password === true);
       if (session?.user) {
