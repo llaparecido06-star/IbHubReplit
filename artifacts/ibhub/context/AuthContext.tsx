@@ -201,7 +201,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profileChecked, setProfileChecked]     = useState(false);
   const [activeCompany, setActiveCompany]       = useState<ActiveCompany | null>(null);
   const [bootPct, setBootPct]                   = useState<number>(15);
-  const [bootLabel, setBootLabel]               = useState<string>("Iniciando…");
+  // "Splash ok" porque esta label só aparece no overlay APÓS o splash nativo ter
+  // sido escondido (hideAsync dispara quando fontsReady=true, que é o gatilho
+  // para o full tree renderizar e o AuthContext montar).
+  const [bootLabel, setBootLabel]               = useState<string>("Splash ok — iniciando…");
   const setBootStep = (pct: number, label: string) => { setBootPct(pct); setBootLabel(label); };
 
   // Guard against concurrent fetchProfile calls (common on Android where
@@ -516,6 +519,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // 2. Auth state changes (including PASSWORD_RECOVERY and OAuth SIGNED_IN)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log(`[AuthState] event=${event} userId=${session?.user?.id ?? "null"}`);
+      // Checkpoint de diagnóstico iOS: se o overlay ainda estiver visível
+      // quando INITIAL_SESSION chega, ele avança para 95% antes de sumir.
+      // Se sumir antes (fluxo normal), este setBootStep não é visto — tudo certo.
+      if (event === "INITIAL_SESSION") {
+        setBootStep(95, `INITIAL_SESSION — ${session ? "sessão ativa" : "sem sessão"}`);
+      }
       if (event === "PASSWORD_RECOVERY") {
         setIsRecovering(true);
       }
