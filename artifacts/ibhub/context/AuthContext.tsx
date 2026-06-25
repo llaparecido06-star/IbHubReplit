@@ -90,6 +90,10 @@ interface AuthContextType {
    * (which would cause a brief flash of /(tabs) followed by /social-complete).
    */
   profileChecked: boolean;
+  /** Percentual do boot (0–100). Temporário — remover após estabilizar iOS. */
+  bootPct: number;
+  /** Rótulo do passo atual do boot. Temporário. */
+  bootLabel: string;
   activeCompany: ActiveCompany | null;
   setActiveCompany: (company: ActiveCompany | null) => void;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -196,6 +200,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [needsProfileCompletion, setNeedsProfileCompletion] = useState(false);
   const [profileChecked, setProfileChecked]     = useState(false);
   const [activeCompany, setActiveCompany]       = useState<ActiveCompany | null>(null);
+  const [bootPct, setBootPct]                   = useState<number>(15);
+  const [bootLabel, setBootLabel]               = useState<string>("Iniciando…");
+  const setBootStep = (pct: number, label: string) => { setBootPct(pct); setBootLabel(label); };
 
   // Guard against concurrent fetchProfile calls (common on Android where
   // onAuthStateChange fires SIGNED_IN + TOKEN_REFRESHED in quick succession).
@@ -398,6 +405,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // activate if session is already set when the timeout fires.
     const initTimeoutId = setTimeout(() => {
       console.warn("[AuthInit] 3s timeout reached — unblocking UI. Session will resolve via onAuthStateChange.");
+      setBootStep(88, "Timeout (3s) — aguardando onAuthStateChange…");
       resolveLoading();
       setProfileChecked(true);
     }, 3_000);
@@ -405,11 +413,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const init = async () => {
       try {
         // ── Deep link must be resolved first to avoid session-state races ──────
+        setBootStep(25, "Verificando URL inicial…");
         const initialUrl = await Linking.getInitialURL();
         if (initialUrl) await handleDeepLink(initialUrl);
 
         // ── Cache-first: seed state from AsyncStorage before any network call ──
         // Reading both caches in parallel keeps this as fast as possible.
+        setBootStep(40, "Lendo cache local…");
         const [cachedAuth, cachedProfile] = await Promise.all([
           readSessionCache(),
           readProfileCache(),
@@ -417,6 +427,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (cachedAuth) {
           // Cache hit — show the app instantly, validate session in background.
+          setBootStep(55, "Cache encontrado — validando sessão…");
           console.log(`[AuthInit] Cache hit for userId=${cachedAuth.userId}. Unblocking UI.`);
           setSession(cachedAuth.session);
           // Seed the API-layer session cache NOW (before the background
@@ -435,6 +446,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           clearTimeout(initTimeoutId);
           resolveLoading();
+          setBootStep(70, "Carregando perfil…");
 
           // Background validation: confirm the session is still valid and
           // refresh profile data. This updates the UI without blocking it.
@@ -459,6 +471,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         } else {
           // No cache (first install, after explicit sign-out) → normal blocking flow.
+          setBootStep(55, "Verificando sessão com servidor…");
           const { data: { session } } = await supabase.auth.getSession();
           setSession(session);
           setCachedSession(session);
@@ -471,6 +484,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // who still need to complete their profile on /social-complete).
           clearTimeout(initTimeoutId);
           resolveLoading();
+          setBootStep(70, "Carregando perfil…");
 
           if (session?.user) {
             writeSessionCache(session);
@@ -487,11 +501,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // and profileChecked are unblocked so the secondary guard in
         // RootLayoutNav never stays active indefinitely.
         console.error("[AuthInit] Unhandled error during init:", e?.message ?? e);
+        setBootStep(88, `Erro: ${e?.message ?? "desconhecido"}`);
         clearTimeout(initTimeoutId);
         setProfileChecked(true);
       } finally {
         // resolveLoading is idempotent — safe to call again as a fallback in
         // case an exception was thrown before the explicit call above.
+        setBootStep(90, "Preparando navegação…");
         resolveLoading();
       }
     };
@@ -931,7 +947,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider
       value={{
         session, user, profile, loading, isRecovering, mustChangePassword, needsProfileCompletion,
-        profileChecked,
+        profileChecked, bootPct, bootLabel,
         activeCompany, setActiveCompany,
         signIn, signUp, signInWithGoogle, signInWithApple, signOut,
         resetPassword, updatePassword, clearRecovery, clearProfileCompletion,

@@ -10,7 +10,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, usePathname, useSegments, type Href } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -173,6 +173,7 @@ const queryClient = new QueryClient();
 // auth is resolving or while a redirect to the correct area is in flight. It is
 // purely cosmetic — the navigator underneath is always live.
 function LoadingOverlay() {
+  const { bootPct, bootLabel } = useAuth();
   return (
     <View
       style={[
@@ -181,6 +182,15 @@ function LoadingOverlay() {
       ]}
     >
       <ActivityIndicator color="#c9a84c" size="large" />
+      <View style={{ width: 220, marginTop: 28 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
+          <Text style={{ color: "#c9a84c", fontSize: 11 }}>{bootLabel}</Text>
+          <Text style={{ color: "#c9a84c", fontSize: 11, fontWeight: "600" }}>{bootPct}%</Text>
+        </View>
+        <View style={{ height: 4, backgroundColor: "#1a2e45", borderRadius: 2 }}>
+          <View style={{ width: (220 * bootPct) / 100, height: 4, backgroundColor: "#c9a84c", borderRadius: 2 }} />
+        </View>
+      </View>
     </View>
   );
 }
@@ -404,10 +414,19 @@ function RootLayout() {
     }
   }, [fontsReady]);
 
-  // Show a spinner while fonts are loading so the user can see the app is working.
+  // Show spinner + progress bar while fonts are loading (before AuthContext mounts).
   if (!fontsReady) return (
     <View style={{ flex: 1, backgroundColor: "#0d1b2a", alignItems: "center", justifyContent: "center" }}>
       <ActivityIndicator color="#c9a84c" size="large" />
+      <View style={{ width: 220, marginTop: 28 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
+          <Text style={{ color: "#c9a84c", fontSize: 11 }}>Carregando fontes…</Text>
+          <Text style={{ color: "#c9a84c", fontSize: 11, fontWeight: "600" }}>5%</Text>
+        </View>
+        <View style={{ height: 4, backgroundColor: "#1a2e45", borderRadius: 2 }}>
+          <View style={{ width: 11, height: 4, backgroundColor: "#c9a84c", borderRadius: 2 }} />
+        </View>
+      </View>
     </View>
   );
 
