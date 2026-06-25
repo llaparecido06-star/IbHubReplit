@@ -323,25 +323,14 @@ function RootLayoutNav() {
     router,
   ]);
 
-  // Whether the current route matches the correct area for the current auth
-  // state. While false we keep the navy overlay up so the user never sees a
-  // flash of the wrong screen during the (near-instant) redirect above. This is
-  // derived purely from current state + route, so it can never get permanently
-  // stuck: once the redirect lands the user in the right area it flips to true.
-  const onCorrectArea = (() => {
-    const root = segments[0] as string | undefined;
-    const inAuthGroup = root === "(auth)";
-    // The register screen owns its entire flow (the account is created mid-form,
-    // so the user is briefly authenticated while still on register). Never cover
-    // it with the overlay or we would hide register's own loading UI.
-    if (pathname.includes("register")) return true;
-    if (isRecovering || mustChangePassword) return pathname.includes("reset-password");
-    if (!session) return inAuthGroup || root === "auth" || root === "maintenance";
-    if (needsProfileCompletion) return root === "social-complete";
-    return !inAuthGroup; // authenticated: any non-auth screen is fine
-  })();
-
-  const showOverlay = !authReady || !onCorrectArea;
+  // iOS (New Architecture + buildReactNativeFromSource): useSegments() sometimes
+  // does NOT update after router.replace(), keeping any onCorrectArea check false
+  // forever and trapping the user on a blue loading screen permanently.
+  // The nav effect above still fires and navigates correctly on the native side.
+  // Removing the onCorrectArea guard means at most a single-frame (<16ms) flash
+  // of the wrong screen for cached-auth users during the in-flight redirect —
+  // imperceptible in practice, and far better than an infinite blue screen.
+  const showOverlay = !authReady;
   const showSidebar = isDesktop && !!session && !isRecovering && !mustChangePassword;
 
   return (
@@ -407,13 +396,20 @@ function RootLayout() {
 
   useEffect(() => {
     if (fontsReady) {
-      SplashScreen.hideAsync();
+      // Wrap in catch: on iOS (New Architecture + source build) hideAsync() can
+      // reject if the native ExpoSplashScreen module isn't fully ready yet.
+      SplashScreen.hideAsync().catch(() => {
+        try { SplashScreen.hide(); } catch { /* ignore — best-effort */ }
+      });
     }
   }, [fontsReady]);
 
-  // Return a dark background instead of null so that if SplashScreen fails to
-  // stay visible, the user sees navy instead of a white flash while fonts load.
-  if (!fontsReady) return <View style={{ flex: 1, backgroundColor: "#0d1b2a" }} />;
+  // Show a spinner while fonts are loading so the user can see the app is working.
+  if (!fontsReady) return (
+    <View style={{ flex: 1, backgroundColor: "#0d1b2a", alignItems: "center", justifyContent: "center" }}>
+      <ActivityIndicator color="#c9a84c" size="large" />
+    </View>
+  );
 
   return (
     <ErrorBoundary
