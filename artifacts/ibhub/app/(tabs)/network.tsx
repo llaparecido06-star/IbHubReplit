@@ -1457,10 +1457,9 @@ function IdealBISearchView({ colors, bottomPad, credits, creditsTotal, creditsLo
   const [suggestions, setSuggestions]   = useState<string[]>([]);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [suggestion, setSuggestion] = useState<string | null>(null);
+  const chipW = (Dimensions.get("window").width - 40) / 2;
 
   const exhausted = credits === 0;
-  const creditColor = (credits ?? 3) >= 2 ? "#16a34a" : (credits ?? 3) === 1 ? "#d97706" : "#dc2626";
-  const creditBg    = (credits ?? 3) >= 2 ? "#dcfce7" : (credits ?? 3) === 1 ? "#fef3c7" : "#fef2f2";
 
   const authHeader = (): HeadersInit =>
     session?.access_token
@@ -1576,9 +1575,8 @@ function IdealBISearchView({ colors, bottomPad, credits, creditsTotal, creditsLo
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
-      {/* ── Search Mode Selector ── */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 }}>
+      {/* ── Search Mode Selector — 2-column grid ── */}
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
         {([
           { key: "exportador",   icon: "🌐", label: t("mercado_screen.bi_search_exportadores") },
           { key: "marca",        icon: "🔍", label: t("mercado_screen.bi_search_rotulo") },
@@ -1589,13 +1587,13 @@ function IdealBISearchView({ colors, bottomPad, credits, creditsTotal, creditsLo
           const active = searchMode === m.key;
           return (
             <TouchableOpacity key={m.key} onPress={() => setSearchMode(m.key)}
-              style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: active ? colors.navy : colors.border, backgroundColor: active ? colors.navy : "#fff" }}>
-              <Text style={{ fontSize: 13 }}>{m.icon}</Text>
+              style={{ width: chipW, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 11, borderRadius: 12, borderWidth: 1, borderColor: active ? colors.navy : colors.border, backgroundColor: active ? colors.navy : "#fff" }}>
+              <Text style={{ fontSize: 14 }}>{m.icon}</Text>
               <Text style={{ fontSize: 13, fontWeight: active ? "700" : "500", color: active ? "#fff" : colors.mutedForeground }}>{m.label}</Text>
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </View>
 
       {searchMode === "exportador"   && <BiMobileExportadorSearch   colors={colors} onCreditsUpdate={setCredits} />}
       {searchMode === "importadores" && <BiMobileImportadoresSearch colors={colors} onCreditsUpdate={setCredits} />}
@@ -1603,37 +1601,6 @@ function IdealBISearchView({ colors, bottomPad, credits, creditsTotal, creditsLo
       {searchMode === "precos"       && <BiMobilePrecosRotuloSearch colors={colors} />}
 
       {searchMode === "marca" && (<>
-      {/* ── Credits KPI card — same style as Visão Geral KPIs ── */}
-      <View style={[styles.kpiList, { paddingTop: 12 }]}>
-        <View style={[styles.kpiCard, { backgroundColor: "#fff", borderColor: colors.border }]}>
-          <View style={styles.kpiLeft}>
-            <View style={[styles.kpiIconBox, { backgroundColor: colors.gold + "18" }]}>
-              {creditsLoading
-                ? <ActivityIndicator size="small" color={colors.gold} />
-                : <Feather name="zap" size={20} color={colors.gold} />
-              }
-            </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>{t("mercado_screen.bi_marca_credits_label")}</Text>
-              <Text style={[styles.kpiPeriod, { color: colors.mutedForeground }]}>
-                {t("mercado_screen.bi_marca_credits_period", { total: creditsTotal })}
-              </Text>
-              <Text style={[styles.kpiValue, { color: exhausted ? "#dc2626" : colors.navy }]}>
-                {creditsLoading ? "—" : String(credits ?? "—")}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.kpiRight}>
-            {!creditsLoading && (
-              <View style={{ backgroundColor: creditBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
-                <Text style={{ fontSize: 12, fontWeight: "700", color: creditColor }}>
-                  {exhausted ? t("mercado_screen.bi_marca_exhausted_badge") : credits === 1 ? t("mercado_screen.bi_marca_critical_badge") : t("mercado_screen.bi_marca_active_badge")}
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-      </View>
 
       {/* ── Paywall (only visible when exhausted) ── */}
       {exhausted && (
@@ -3309,19 +3276,28 @@ function InteligenciaView({ colors, bottomPad, session, isAdmin }: {
             {(() => {
               const c = credits;
               const total = creditsTotal;
-              const pillColor = c === null || c >= 2 ? "#16a34a" : c === 1 ? "#d97706" : "#dc2626";
-              const pillBg    = c === null || c >= 2 ? "#dcfce7" : c === 1 ? "#fef3c7" : "#fef2f2";
+              const extra = c !== null ? Math.max(0, c - total) : 0;
+              const monthly = c !== null ? Math.min(c, total) : null;
+              const pillColor = monthly === null || monthly >= 2 ? "#16a34a" : monthly === 1 ? "#d97706" : "#dc2626";
+              const pillBg    = monthly === null || monthly >= 2 ? "#dcfce7" : monthly === 1 ? "#fef3c7" : "#fef2f2";
               return (
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 2 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 2, gap: 8 }}>
                   {creditsLoading ? (
                     <ActivityIndicator size="small" color={colors.gold} />
                   ) : (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: pillBg, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 }}>
-                      <Feather name="zap" size={13} color={pillColor} />
-                      <Text style={{ fontSize: 12, fontWeight: "700", color: pillColor }}>
-                        {c ?? "—"}/{total} {t("mercado_screen.bi_credits_pill_label")}
-                      </Text>
-                    </View>
+                    <>
+                      {extra > 0 && (
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#fffbeb", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: "#fcd34d" }}>
+                          <Text style={{ fontSize: 11, fontWeight: "700", color: "#d97706" }}>⭐ {extra} especiai{extra === 1 ? "" : "s"}</Text>
+                        </View>
+                      )}
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: pillBg, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 }}>
+                        <Feather name="zap" size={13} color={pillColor} />
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: pillColor }}>
+                          {monthly ?? "—"}/{total} {t("mercado_screen.bi_credits_pill_label")}
+                        </Text>
+                      </View>
+                    </>
                   )}
                 </View>
               );
