@@ -852,21 +852,9 @@ export default function ProfileScreen() {
   const handleBusinessPage = async () => {
     if (!profile?.id) return;
     if (companyPages.length === 0) {
-      router.push("/manage-business-page" as any);
-    } else if (companyPages.length === 1) {
-      router.push(`/empresa/${companyPages[0].id}` as any);
+      router.push("/create-company" as any);
     } else {
-      Alert.alert(
-        t("profile.your_pages"),
-        t("profile.select_page"),
-        [
-          ...companyPages.map((p) => ({
-            text: p.name,
-            onPress: () => router.push(`/empresa/${p.id}` as any),
-          })),
-          { text: t("common.cancel"), style: "cancel" as const },
-        ],
-      );
+      router.push("/my-companies" as any);
     }
   };
 
@@ -1166,7 +1154,11 @@ export default function ProfileScreen() {
               {t("profile.company_card_label")}
             </Text>
             <Text style={[styles.actionCardSub, { color: colors.mutedForeground }]}>
-              {companyPages.length === 0 ? t("profile.company_create") : t("profile.company_my_page")}
+              {companyPages.length === 0
+                ? t("profile.company_create")
+                : companyPages.length === 1
+                  ? t("profile.company_my_page")
+                  : `${companyPages.length} páginas`}
             </Text>
           </TouchableOpacity>
 
