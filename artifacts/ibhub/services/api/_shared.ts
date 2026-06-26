@@ -111,7 +111,7 @@ export function normalizePollIndices(userVotes: Record<string, number | number[]
 
 // Base post select WITHOUT the broken profiles FK join (posts.user_id → auth.users, not profiles)
 export const POST_SELECT_BASE = `id, user_id, company_page_id, content, image_url, image_urls, video_url,
-  likes_count, comments_count, shares_count, view_count, location, hashtags, poll, created_at`;
+  likes_count, comments_count, shares_count, view_count, location, hashtags, poll, created_at, is_pinned`;
 export const COMMENT_SELECT_BASE = `id, post_id, parent_comment_id, user_id, company_page_id, content, created_at, likes_count`;
 
 // Fetch profiles by IDs (workaround: avoids broken FK join posts→auth.users)

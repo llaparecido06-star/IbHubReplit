@@ -45,6 +45,7 @@ export interface Post {
   view_count?: number;
   is_liked?: boolean;
   is_bookmarked?: boolean;
+  is_pinned?: boolean;
   reaction_type?: ReactionType | null;
   created_at: string;
   hashtags?: string[];
@@ -374,6 +375,13 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
         </TouchableOpacity>
       )}
 
+      {post.is_pinned && (
+        <View style={styles.pinnedBadge}>
+          <Feather name="bookmark" size={12} color="#9ca3af" />
+          <Text style={styles.pinnedBadgeText}>Post fixado</Text>
+        </View>
+      )}
+
       <View style={styles.header}>
         <Pressable
           style={styles.authorRow}
@@ -666,6 +674,17 @@ const styles = StyleSheet.create({
   },
   wineBadgeIcon:  { fontSize: 13 },
   wineBadgeText:  { fontSize: 12, fontWeight: "700", letterSpacing: 0.3 },
+
+  pinnedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#e5e7eb40",
+  },
+  pinnedBadgeText: { fontSize: 11, fontWeight: "600", color: "#9ca3af", letterSpacing: 0.2 },
 
   header: {
     flexDirection: "row",
