@@ -117,6 +117,8 @@ export async function fetchOpportunitiesPage(
   offset = 0,
   limit = 15,
   category?: string,
+  contractType?: string,
+  modalidade?: string,
 ): Promise<AppOpportunity[]> {
   try {
     let query = supabase
@@ -136,6 +138,20 @@ export async function fetchOpportunitiesPage(
     }
     if (category && category !== "Todos") {
       query = query.eq("category", category);
+    }
+    if (contractType && contractType !== "Todos") {
+      query = query.eq("contract_type", contractType);
+    }
+    if (modalidade === "Remoto") {
+      query = query.or("location.ilike.%remot%,location.ilike.%online%");
+    } else if (modalidade === "Híbrido") {
+      query = query.or("location.ilike.%híbri%,location.ilike.%hibri%");
+    } else if (modalidade === "Presencial") {
+      query = query
+        .not("location", "ilike", "%remot%")
+        .not("location", "ilike", "%online%")
+        .not("location", "ilike", "%híbri%")
+        .not("location", "ilike", "%hibri%");
     }
 
     const { data, error } = await query;

@@ -44,10 +44,12 @@ export default function OpportunitiesScreen() {
   const topPad    = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
-  const [subTab, setSubTab]       = useState<SubTab>("vagas");
-  const [search, setSearch]       = useState("");
-  const [catFilter, setCatFilter] = useState("Todos");
-  const [refreshing, setRefreshing] = useState(false);
+  const [subTab, setSubTab]             = useState<SubTab>("vagas");
+  const [search, setSearch]             = useState("");
+  const [catFilter, setCatFilter]       = useState("Todos");
+  const [contractFilter, setContractFilter] = useState("Todos");
+  const [modalidadeFilter, setModalidadeFilter] = useState("Todos");
+  const [refreshing, setRefreshing]     = useState(false);
 
   const searchRef = useRef<TextInput>(null);
   const listRef   = useRef<FlatList<AppOpportunity>>(null);
@@ -55,9 +57,18 @@ export default function OpportunitiesScreen() {
   const fetcher = useCallback(
     (offset: number, limit: number) =>
       user?.id
-        ? fetchOpportunitiesPage(subTab === "vagas" ? "vaga" : "marketplace", search, user.id, offset, limit, catFilter)
+        ? fetchOpportunitiesPage(
+            subTab === "vagas" ? "vaga" : "marketplace",
+            search,
+            user.id,
+            offset,
+            limit,
+            catFilter,
+            subTab === "vagas" ? contractFilter : undefined,
+            subTab === "vagas" ? modalidadeFilter : undefined,
+          )
         : Promise.resolve([]),
-    [subTab, search, user?.id, catFilter],
+    [subTab, search, user?.id, catFilter, contractFilter, modalidadeFilter],
   );
 
   const { items, loading, loadingMore, hasMore, loadMore, refresh } =
@@ -65,13 +76,15 @@ export default function OpportunitiesScreen() {
 
   useEffect(() => {
     setCatFilter("Todos");
+    setContractFilter("Todos");
+    setModalidadeFilter("Todos");
   }, [subTab]);
 
   useEffect(() => {
     refresh().then(() => {
       listRef.current?.scrollToOffset({ offset: 0, animated: false });
     });
-  }, [subTab, catFilter]);
+  }, [subTab, catFilter, contractFilter, modalidadeFilter]);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -235,6 +248,50 @@ export default function OpportunitiesScreen() {
         contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 8, rowGap: 8 }}
         showsHorizontalScrollIndicator={false}
       />
+
+      {/* Vagas extra filters: Modalidade + Contrato */}
+      {subTab === "vagas" && (
+        <View style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}>
+          <FlatList
+            horizontal
+            data={["Todos", "Remoto", "Presencial", "Híbrido"]}
+            keyExtractor={(c) => `mod-${c}`}
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item: c }) => (
+              <Pressable
+                style={[styles.chip, { backgroundColor: modalidadeFilter === c ? colors.gold + "33" : colors.secondary, borderWidth: 1, borderColor: modalidadeFilter === c ? colors.gold : "transparent" }]}
+                onPress={() => setModalidadeFilter(c)}
+              >
+                <Text style={{ color: modalidadeFilter === c ? colors.gold : colors.mutedForeground, fontSize: 11, fontWeight: modalidadeFilter === c ? "700" : "400" }}>
+                  {c === "Todos" ? t("opportunities_screen.filter_all_modalidade") : c}
+                </Text>
+              </Pressable>
+            )}
+            style={{ maxHeight: 40, flexShrink: 0 }}
+            contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 6, gap: 6 }}
+            showsHorizontalScrollIndicator={false}
+          />
+          <FlatList
+            horizontal
+            data={["Todos", "CLT", "PJ", "Freelancer", "Estágio"]}
+            keyExtractor={(c) => `ctr-${c}`}
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item: c }) => (
+              <Pressable
+                style={[styles.chip, { backgroundColor: contractFilter === c ? colors.navy + "22" : colors.secondary, borderWidth: 1, borderColor: contractFilter === c ? colors.navy : "transparent" }]}
+                onPress={() => setContractFilter(c)}
+              >
+                <Text style={{ color: contractFilter === c ? colors.navy : colors.mutedForeground, fontSize: 11, fontWeight: contractFilter === c ? "700" : "400" }}>
+                  {c === "Todos" ? t("opportunities_screen.filter_all_contract") : c}
+                </Text>
+              </Pressable>
+            )}
+            style={{ maxHeight: 40, flexShrink: 0 }}
+            contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 6, gap: 6 }}
+            showsHorizontalScrollIndicator={false}
+          />
+        </View>
+      )}
 
       {/* List */}
       {loading && !refreshing ? (

@@ -817,6 +817,8 @@ const es = {
     empty_title_no_search_market: "No hay anuncios publicados aún",
     empty_sub_default: "¡Sé el primero en publicar!",
     publish_now_btn: "+ Publicar ahora",
+    filter_all_modalidade: "Modalidad",
+    filter_all_contract: "Contrato",
   },
   job_screen: {
     apply: "Postularme",

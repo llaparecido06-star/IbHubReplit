@@ -812,6 +812,8 @@ const ptBR = {
     empty_title_no_search_market: "Nenhum anúncio publicado ainda",
     empty_sub_default: "Seja o primeiro a publicar!",
     publish_now_btn: "+ Publicar agora",
+    filter_all_modalidade: "Modalidade",
+    filter_all_contract: "Contrato",
   },
   job_screen: {
     apply: "Candidatar-se",

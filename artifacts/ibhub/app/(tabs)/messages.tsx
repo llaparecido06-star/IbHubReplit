@@ -3,6 +3,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Platform,
   RefreshControl,
@@ -258,6 +259,24 @@ export default function MessagesScreen() {
     setConvos((prev) => prev.filter((c) => c.id !== conv.id));
   };
 
+  const handleDeleteConvo = (conv: AppConversation) => {
+    Alert.alert(
+      t("messages.delete_conv_title"),
+      t("messages.delete_conv_msg"),
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("messages.delete_conv_btn"),
+          style: "destructive",
+          onPress: async () => {
+            const ok = await API.deleteDirectConversation(conv.id);
+            if (ok) setConvos((prev) => prev.filter((c) => c.id !== conv.id));
+          },
+        },
+      ],
+    );
+  };
+
   const accepted  = convos.filter((c) => c.accepted !== false);
   const requests  = convos.filter((c) => c.accepted === false);
 
@@ -440,6 +459,7 @@ export default function MessagesScreen() {
                 tOverdue={t("messages.followup_overdue")}
                 tToday={t("messages.followup_today")}
                 tTomorrow={t("messages.followup_tomorrow")}
+                onDelete={() => handleDeleteConvo(item)}
               />
             )
           }
@@ -532,6 +552,7 @@ function ConversationRow({
   tOverdue,
   tToday,
   tTomorrow,
+  onDelete,
 }: {
   conversation: AppConversation;
   currentUserId: string | null;
@@ -542,6 +563,7 @@ function ConversationRow({
   tOverdue: string;
   tToday: string;
   tTomorrow: string;
+  onDelete?: () => void;
 }) {
   const router   = useRouter();
   const hasUnread = (conv.unread_count ?? 0) > 0;
@@ -576,6 +598,8 @@ function ConversationRow({
           router.push((companyId ? `/chat/${conv.id}?companyId=${companyId}` : `/chat/${conv.id}`) as any);
         }
       }}
+      onLongPress={onDelete}
+      delayLongPress={500}
       activeOpacity={0.7}
     >
       <Avatar uri={avatarUri} name={name} size={52} />
