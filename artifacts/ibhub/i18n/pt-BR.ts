@@ -2000,6 +2000,8 @@ const ptBR = {
     field_notes: "📝 Notas adicionais sobre o vinho...",
     error_publish_title: "Erro de Conexão",
     error_publish_msg: "Não foi possível publicar. Verifique sua conexão e tente novamente.",
+    perm_title: "Permissão necessária",
+    perm_gallery_msg: "Precisamos de acesso à galeria para selecionar arquivos. Ative nas configurações do dispositivo.",
     gps_denied_title: "Permissão negada",
     gps_denied_msg: "Para usar o GPS, ative a permissão de localização nas configurações do seu dispositivo.",
     location_not_found_title: "Localização não encontrada",

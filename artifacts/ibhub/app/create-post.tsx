@@ -110,6 +110,13 @@ export default function CreatePostScreen() {
 
   const handleAddImage = async () => {
     if (videoUri) return;
+    if (Platform.OS !== "web") {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(t("create_post_screen.perm_title"), t("create_post_screen.perm_gallery_msg"));
+        return;
+      }
+    }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsMultipleSelection: true,
@@ -126,6 +133,13 @@ export default function CreatePostScreen() {
 
   const handleAddVideo = async () => {
     if (imageUris.length > 0) return;
+    if (Platform.OS !== "web") {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(t("create_post_screen.perm_title"), t("create_post_screen.perm_gallery_msg"));
+        return;
+      }
+    }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Videos,
       allowsMultipleSelection: false,

@@ -2000,6 +2000,8 @@ const es = {
     field_notes: "📝 Notas adicionales sobre el vino...",
     error_publish_title: "Error de Conexión",
     error_publish_msg: "No se pudo publicar. Verifica tu conexión e inténtalo de nuevo.",
+    perm_title: "Permiso necesario",
+    perm_gallery_msg: "Necesitamos acceso a la galería para seleccionar archivos. Actívalo en la configuración del dispositivo.",
     gps_denied_title: "Permiso denegado",
     gps_denied_msg: "Para usar el GPS, activa el permiso de ubicación en la configuración de tu dispositivo.",
     location_not_found_title: "Ubicación no encontrada",
