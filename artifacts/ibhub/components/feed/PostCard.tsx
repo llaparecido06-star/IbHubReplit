@@ -453,7 +453,7 @@ export function PostCard({ post, currentUserId, isVisible = false, onLike, onRea
         {post.hashtags && post.hashtags.length > 0 && (
           <View style={styles.hashtags}>
             {post.hashtags.slice(0, 5).map((tag) => (
-              <TouchableOpacity key={tag}>
+              <TouchableOpacity key={tag} onPress={() => router.push({ pathname: "/search" as any, params: { q: `#${tag}` } })}>
                 <Text style={[styles.hashtag, { color: "#3498db" }]}>#{tag}</Text>
               </TouchableOpacity>
             ))}

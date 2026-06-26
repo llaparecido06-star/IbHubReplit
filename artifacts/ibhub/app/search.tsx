@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -96,8 +96,9 @@ export default function SearchScreen() {
   const insets   = useSafeAreaInsets();
   const inputRef = useRef<TextInput>(null);
   const { t } = useTranslation();
+  const { q: initialQ } = useLocalSearchParams<{ q?: string }>();
 
-  const [query,          setQuery]          = useState("");
+  const [query,          setQuery]          = useState(initialQ ?? "");
   const [filter,         setFilter]         = useState<Filter>("todos");
   const [loading,        setLoading]        = useState(false);
   const [results,        setResults]        = useState<SearchResults>(EMPTY);

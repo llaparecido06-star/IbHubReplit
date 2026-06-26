@@ -893,42 +893,46 @@ export default function FeedScreen() {
     };
     setPosts(prev => [tempPost, ...prev]);
 
-    const saved = await API.createPost({
-      user_id: user.id,
-      content,
-      image_url: uploadedImageUrl,
-      image_urls: uploadedImageUrl ? [uploadedImageUrl] : null,
-      company_page_id: activeCompany?.id ?? null,
-    });
-    if (saved) {
-      setPosts(prev => prev.map(p => p.id === tempPost.id ? saved : p));
-    } else {
+    try {
+      const saved = await API.createPost({
+        user_id: user.id,
+        content,
+        image_url: uploadedImageUrl,
+        image_urls: uploadedImageUrl ? [uploadedImageUrl] : null,
+        company_page_id: activeCompany?.id ?? null,
+      });
+      if (saved) {
+        setPosts(prev => prev.map(p => p.id === tempPost.id ? saved : p));
+        // Save to wine_cellar (is_private=false → contribui para o ranking comunitário por EAN)
+        API.addWineEntry({
+          user_id: user.id,
+          name: wineName.trim(),
+          vintage: wineSafra.trim() || null,
+          ean: wineEan.trim() || null,
+          grape: wineGrape.trim() || null,
+          region: wineRegion.trim() || null,
+          producer: wineProducer.trim() || null,
+          country: wineCountry.trim() || null,
+          rating: wineStars,
+          score_100: wineScore,
+          harmonizacao: wineHarmonizacao.trim() || null,
+          notes: wineObs.trim() || null,
+          qty: 1,
+          status: "consumido",
+          is_private: false,
+        }).catch(() => { /* silently ignore — post already created */ });
+      } else {
+        setPosts(prev => prev.filter(p => p.id !== tempPost.id));
+        Alert.alert("Erro ao publicar", "Não foi possível criar o post. Verifique sua conexão e tente novamente.");
+      }
+    } catch {
       setPosts(prev => prev.filter(p => p.id !== tempPost.id));
-      Alert.alert("Erro ao publicar", "Não foi possível criar o post. Verifique sua conexão e tente novamente.");
+      Alert.alert("Erro ao publicar", "Verifique sua conexão e tente novamente.");
+    } finally {
+      setWineName(""); setWineSafra(""); setWineEan(""); setWineGrape(""); setWineRegion("");
+      setWineProducer(""); setWineCountry(""); setWineStars(4); setWineScore(85);
+      setSelectedTags([]); setWineHarmonizacao(""); setWineObs(""); setWineImageUri(null);
     }
-
-    // Save to wine_cellar (is_private=false → contribui para o ranking comunitário por EAN)
-    API.addWineEntry({
-      user_id: user.id,
-      name: wineName.trim(),
-      vintage: wineSafra.trim() || null,
-      ean: wineEan.trim() || null,
-      grape: wineGrape.trim() || null,
-      region: wineRegion.trim() || null,
-      producer: wineProducer.trim() || null,
-      country: wineCountry.trim() || null,
-      rating: wineStars,
-      score_100: wineScore,
-      harmonizacao: wineHarmonizacao.trim() || null,
-      notes: wineObs.trim() || null,
-      qty: 1,
-      status: "consumido",
-      is_private: false,
-    }).catch(() => { /* silently ignore — post already created */ });
-
-    setWineName(""); setWineSafra(""); setWineEan(""); setWineGrape(""); setWineRegion("");
-    setWineProducer(""); setWineCountry(""); setWineStars(4); setWineScore(85);
-    setSelectedTags([]); setWineHarmonizacao(""); setWineObs(""); setWineImageUri(null);
   };
 
   const toggleTag = (tag: string) =>
