@@ -13,6 +13,9 @@ const en = {
     empty_sub: "Search people, jobs, events, posts and more.",
     no_results: "No results",
     no_results_sub: "Try different search terms.",
+    recent_searches: "Recent searches",
+    clear_all: "Clear",
+    popular_tags: "Popular hashtags",
     filters: {
       all: "All",
       people: "People",

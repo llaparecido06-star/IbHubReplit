@@ -3341,11 +3341,16 @@ export default function MercadoScreen() {
   const loadPeriod = useCallback(async (p: Period) => {
     if (cache.current[p]) { setData(cache.current[p]!); return; }
     setLoading(true);
-    const result = await API.fetchMarketOverview(p);
-    const resolved = result ?? FALLBACK[p];
-    cache.current[p] = resolved;
-    setData(resolved);
-    setLoading(false);
+    try {
+      const result = await API.fetchMarketOverview(p);
+      const resolved = result ?? FALLBACK[p];
+      cache.current[p] = resolved;
+      setData(resolved);
+    } catch {
+      // Network/API error: keep showing FALLBACK data already in state
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { loadPeriod(period); }, [period, loadPeriod]);

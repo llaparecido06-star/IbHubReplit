@@ -13,6 +13,9 @@ const es = {
     empty_sub: "Busca personas, trabajos, eventos, publicaciones y mucho más.",
     no_results: "Sin resultados",
     no_results_sub: "Intenta con otros términos.",
+    recent_searches: "Búsquedas recientes",
+    clear_all: "Borrar",
+    popular_tags: "Hashtags populares",
     filters: {
       all: "Todo",
       people: "Personas",

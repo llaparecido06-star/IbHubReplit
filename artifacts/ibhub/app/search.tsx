@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather } from "@/components/ui/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/context/AuthContext";
@@ -19,6 +20,15 @@ import { supabase } from "@/context/AuthContext";
 import { fetchProfilesForIds } from "@/services/api";
 import { useTranslation } from "react-i18next";
 import { LowCreditsCard } from "@/components/ui/LowCreditsCard";
+
+const RECENT_SEARCHES_KEY = "@ibhub_recent_searches";
+const MAX_RECENT = 6;
+
+const POPULAR_HASHTAGS = [
+  "vinho", "sommelier", "degustação", "harmonização", "vinícola",
+  "espumante", "barolo", "borgonha", "malbec", "cabernetsauvignon",
+  "rioja", "portowine", "naturalwine", "vinhonatural", "enoturismo",
+];
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 
@@ -87,11 +97,42 @@ export default function SearchScreen() {
   const inputRef = useRef<TextInput>(null);
   const { t } = useTranslation();
 
-  const [query,     setQuery]     = useState("");
-  const [filter,    setFilter]    = useState<Filter>("todos");
-  const [loading,   setLoading]   = useState(false);
-  const [results,   setResults]   = useState<SearchResults>(EMPTY);
-  const [aiCredits, setAiCredits] = useState<number | null>(null);
+  const [query,          setQuery]          = useState("");
+  const [filter,         setFilter]         = useState<Filter>("todos");
+  const [loading,        setLoading]        = useState(false);
+  const [results,        setResults]        = useState<SearchResults>(EMPTY);
+  const [aiCredits,      setAiCredits]      = useState<number | null>(null);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+
+  // Load recent searches from storage on mount
+  useEffect(() => {
+    AsyncStorage.getItem(RECENT_SEARCHES_KEY)
+      .then(raw => { if (raw) setRecentSearches(JSON.parse(raw) as string[]); })
+      .catch(() => {});
+  }, []);
+
+  const saveRecentSearch = useCallback((term: string) => {
+    const trimmed = term.trim();
+    if (!trimmed) return;
+    setRecentSearches(prev => {
+      const next = [trimmed, ...prev.filter(s => s !== trimmed)].slice(0, MAX_RECENT);
+      AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const removeRecentSearch = useCallback((term: string) => {
+    setRecentSearches(prev => {
+      const next = prev.filter(s => s !== term);
+      AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const applyQuery = useCallback((term: string) => {
+    setQuery(term);
+    saveRecentSearch(term);
+  }, [saveRecentSearch]);
 
   useEffect(() => {
     if (!session?.access_token) return;
@@ -121,6 +162,7 @@ export default function SearchScreen() {
   const runSearch = useCallback(async (q: string, f: Filter) => {
     const trimmed = q.trim();
     if (!trimmed) { setResults(EMPTY); return; }
+    saveRecentSearch(trimmed);
     setLoading(true);
     const myId  = user?.id ?? "";
     const isAll = f === "todos";
@@ -398,13 +440,57 @@ export default function SearchScreen() {
 
   // ── Render helpers ───────────────────────────────────────────────────────────
 
-  const renderEmpty = () => (
-    <View style={styles.emptyWrap}>
-      <Feather name="search" size={48} color={colors.border} />
-      <Text style={[styles.emptyTitle, { color: colors.mutedForeground }]}>{t("search.empty_title")}</Text>
-      <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-        {t("search.empty_sub")}
-      </Text>
+  const renderSuggestions = () => (
+    <View style={styles.suggestionsWrap}>
+      {recentSearches.length > 0 && (
+        <View style={styles.suggestSection}>
+          <View style={styles.suggestHeader}>
+            <Text style={[styles.suggestLabel, { color: colors.foreground }]}>
+              {t("search.recent_searches")}
+            </Text>
+            <TouchableOpacity onPress={() => {
+              setRecentSearches([]);
+              AsyncStorage.removeItem(RECENT_SEARCHES_KEY).catch(() => {});
+            }}>
+              <Text style={[styles.clearAll, { color: colors.mutedForeground }]}>{t("search.clear_all")}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.chipsWrap}>
+            {recentSearches.map(term => (
+              <TouchableOpacity
+                key={term}
+                style={[styles.suggestChip, { backgroundColor: colors.secondary, borderColor: colors.border }]}
+                onPress={() => applyQuery(term)}
+              >
+                <Feather name="clock" size={12} color={colors.mutedForeground} />
+                <Text style={[styles.suggestChipText, { color: colors.foreground }]} numberOfLines={1}>{term}</Text>
+                <TouchableOpacity hitSlop={8} onPress={() => removeRecentSearch(term)}>
+                  <Feather name="x" size={12} color={colors.mutedForeground} />
+                </TouchableOpacity>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+
+      <View style={styles.suggestSection}>
+        <View style={styles.suggestHeader}>
+          <Text style={[styles.suggestLabel, { color: colors.foreground }]}>
+            {t("search.popular_tags")}
+          </Text>
+        </View>
+        <View style={styles.chipsWrap}>
+          {POPULAR_HASHTAGS.map(tag => (
+            <TouchableOpacity
+              key={tag}
+              style={[styles.hashtagChip, { backgroundColor: colors.gold + "14", borderColor: colors.gold + "40" }]}
+              onPress={() => applyQuery(`#${tag}`)}
+            >
+              <Text style={[styles.hashtagChipText, { color: colors.gold }]}>#{tag}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
     </View>
   );
 
@@ -416,7 +502,7 @@ export default function SearchScreen() {
   );
 
   const renderGlobal = () => {
-    if (!query.trim()) return renderEmpty();
+    if (!query.trim()) return renderSuggestions();
     if (loading) return <ActivityIndicator color={colors.gold} style={{ marginTop: 40 }} />;
     if (totalResults === 0) return renderNoResults();
 
@@ -475,7 +561,7 @@ export default function SearchScreen() {
   };
 
   const renderFiltered = () => {
-    if (!query.trim()) return renderEmpty();
+    if (!query.trim()) return renderSuggestions();
     if (loading) return <ActivityIndicator color={colors.gold} style={{ marginTop: 40 }} />;
 
     if (filter === "pessoas")     return results.pessoas.length    ? <>{results.pessoas.map(p    => <PersonRow  key={p.id} item={p} />)}</> : renderNoResults();
@@ -620,4 +706,22 @@ const styles = StyleSheet.create({
   emptyWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 },
   emptyTitle: { fontSize: 16, fontWeight: "700" },
   emptySub: { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  suggestionsWrap: { paddingTop: 8 },
+  suggestSection: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 4 },
+  suggestHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  suggestLabel: { fontSize: 13, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
+  clearAll: { fontSize: 12, fontWeight: "600" },
+  chipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  suggestChip: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 10, paddingVertical: 7,
+    borderRadius: 20, borderWidth: 1,
+    maxWidth: 180,
+  },
+  suggestChipText: { fontSize: 13, flex: 1 },
+  hashtagChip: {
+    paddingHorizontal: 10, paddingVertical: 7,
+    borderRadius: 20, borderWidth: 1,
+  },
+  hashtagChipText: { fontSize: 13, fontWeight: "600" },
 });

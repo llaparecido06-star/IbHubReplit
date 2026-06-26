@@ -660,25 +660,31 @@ export default function ProfileScreen() {
     // Skip heavy personal data when in company mode (we show EmpresaProfileProxy anyway)
     if (isCompany) { setLoadingData(false); setRefreshing(false); return; }
     const areas = profile?.areas_of_expertise ?? [];
-    const [p, saved, wines, fr, fg, sg, ls] = await Promise.all([
-      fetchUserPosts(user.id, user.id),
-      fetchBookmarkedPosts(user.id),
-      fetchWineCellar(user.id),
-      fetchFollowers(user.id),
-      fetchFollowing(user.id),
-      fetchSuggestedConnections(user.id, areas, profile?.company ?? null, 8),
-      fetchProfileStats(user.id),
-    ]);
-    setPosts(p);
-    setSavedPosts(saved);
-    setWineEntries(wines);
-    setFollowers(fr);
-    setFollowing(fg);
-    setFollowingSet(new Set(fg.map((f) => f.id)));
-    setSuggestions(sg);
-    setLiveStats(ls);
-    setLoadingData(false);
-    setRefreshing(false);
+    try {
+      const [p, saved, wines, fr, fg, sg, ls] = await Promise.all([
+        fetchUserPosts(user.id, user.id),
+        fetchBookmarkedPosts(user.id),
+        fetchWineCellar(user.id),
+        fetchFollowers(user.id),
+        fetchFollowing(user.id),
+        fetchSuggestedConnections(user.id, areas, profile?.company ?? null, 8),
+        fetchProfileStats(user.id),
+      ]);
+      setPosts(p);
+      setSavedPosts(saved);
+      setWineEntries(wines);
+      setFollowers(fr);
+      setFollowing(fg);
+      setFollowingSet(new Set(fg.map((f) => f.id)));
+      setSuggestions(sg);
+      setLiveStats(ls);
+    } catch {
+      // Each service function logs its own errors; this guard ensures
+      // setLoadingData(false) always runs even on unexpected throws.
+    } finally {
+      setLoadingData(false);
+      setRefreshing(false);
+    }
   }, [user?.id, isCompany, refreshCompanyPages]);
 
   const loadEngagement = useCallback(async () => {

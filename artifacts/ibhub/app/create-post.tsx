@@ -239,6 +239,13 @@ export default function CreatePostScreen() {
         company_page_id: effectiveCompanyId,
       });
 
+      // createPost returns null on error (it logs internally and doesn't throw).
+      // Without this check the modal would close silently even though nothing was saved.
+      if (!newPost) {
+        Alert.alert(t("create_post_screen.error_publish_title"), t("create_post_screen.error_publish_msg"));
+        return;
+      }
+
       // Fire mention notifications (best-effort, non-blocking)
       if (newPost?.id && finalContent.includes("@")) {
         const actorName = activeCompany?.name ?? profile?.full_name ?? t("common.user_fallback");

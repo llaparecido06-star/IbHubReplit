@@ -13,6 +13,9 @@ const ptBR = {
     empty_sub: "Pesquise pessoas, vagas, eventos, publicações e muito mais.",
     no_results: "Nenhum resultado",
     no_results_sub: "Tente outros termos de busca.",
+    recent_searches: "Buscas recentes",
+    clear_all: "Limpar",
+    popular_tags: "Hashtags populares",
     filters: {
       all: "Tudo",
       people: "Pessoas",
