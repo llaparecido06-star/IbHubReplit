@@ -42,6 +42,7 @@ import { friendlyErrorMessage } from "@/hooks/useAsyncAction";
 import * as API from "@/services/api";
 import type { SuggestedProfile } from "@/services/api";
 import { supabase } from "@/context/AuthContext";
+import { MentionInput } from "@/components/ui/MentionInput";
 
 const STORAGE_KEY = "ibhub_feed_posts_v3";
 const MAX_CHARS = 350;
@@ -804,6 +805,7 @@ export default function FeedScreen() {
       });
       if (saved) {
         setPosts(prev => prev.map(p => p.id === tempPost.id ? saved : p));
+        API.sendMentionNotifications(content.trim(), user.id, profile?.full_name ?? "Você", saved.id);
       } else {
         setPosts(prev => prev.filter(p => p.id !== tempPost.id));
         Alert.alert("Erro ao publicar", "Não foi possível criar o post. Verifique sua conexão e tente novamente.");
@@ -1418,12 +1420,13 @@ export default function FeedScreen() {
 
               {postMode !== "poll" ? (
                 <>
-                  <TextInput
+                  <MentionInput
                     style={[styles.postInput, { color: colors.foreground }]}
                     placeholder={postMode === "video" ? t("feed.caption_video") : t("feed.caption_photo")}
                     placeholderTextColor={colors.mutedForeground}
                     multiline maxLength={MAX_CHARS} value={postContent}
                     onChangeText={setPostContent}
+                    suggestionsPlacement="above"
                   />
                   <Text style={[styles.charCounter, { color: colors.mutedForeground }]}>
                     {t("feed.chars_remaining", { count: MAX_CHARS - postContent.length })}
