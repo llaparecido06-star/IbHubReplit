@@ -1,4 +1,4 @@
-import { Tabs } from "expo-router";
+import { Redirect, Tabs } from "expo-router";
 import { Feather } from "@/components/ui/Icon";
 import { useIsDesktop } from "@/components/ui/SidebarNav";
 import React from "react";
@@ -6,19 +6,54 @@ import { Platform, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { useFeatureFlags } from "@/context/FeatureFlagsContext";
 import { useUnread } from "@/context/UnreadContext";
 import { useMarketFeedBadge } from "@/context/MarketFeedBadgeContext";
 import { useTranslation } from "react-i18next";
 
 export default function TabLayout() {
   const colors    = useColors();
-  const { profile, activeCompany } = useAuth();
+  const {
+    profile,
+    activeCompany,
+    session,
+    loading,
+    isRecovering,
+    mustChangePassword,
+    needsProfileCompletion,
+    profileChecked,
+  } = useAuth();
   const isCompany = !!activeCompany || profile?.profile_type === "empresa";
   const insets    = useSafeAreaInsets();
   const { unreadCount } = useUnread();
   const { hasNewPost } = useMarketFeedBadge();
   const isDesktop = useIsDesktop();
   const { t } = useTranslation();
+  const { isEnabled } = useFeatureFlags();
+  const manutencao = isEnabled("manutencao");
+
+  // ── Auth-driven redirect guard for the tab group ──────────────────────────
+  // "/" resolves to (tabs)/index, so a COLD START mounts this layout first. The
+  // root layout (_layout.tsx) also redirects imperatively via router.replace(),
+  // but on iOS (New Architecture + buildReactNativeFromSource) that imperative
+  // call can silently no-op at the very first mount — leaving a logged-out user
+  // stranded on the empty navy tabs route with no visible screen (no overlay,
+  // because authReady is already true). A DECLARATIVE <Redirect> from THIS
+  // mounted route resolves reliably (it runs as part of route resolution, after
+  // the navigator exists). Branches mirror the root effect exactly so the two
+  // can never ping-pong. While !authReady the root LoadingOverlay covers the UI.
+  const authReady = !loading && !(session && !profileChecked);
+  if (authReady) {
+    if (isRecovering || mustChangePassword) {
+      return <Redirect href="/(auth)/reset-password" />;
+    }
+    if (!session) {
+      return <Redirect href={manutencao ? "/maintenance" : "/(auth)/login"} />;
+    }
+    if (needsProfileCompletion) {
+      return <Redirect href="/social-complete" />;
+    }
+  }
 
   // Both iOS and Android run edge-to-edge, so the tab bar must reserve space for
   // the device's bottom safe-area inset (home indicator on iOS, system nav bar on
