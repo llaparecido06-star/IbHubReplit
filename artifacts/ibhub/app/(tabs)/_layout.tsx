@@ -10,6 +10,7 @@ import { useFeatureFlags } from "@/context/FeatureFlagsContext";
 import { useUnread } from "@/context/UnreadContext";
 import { useMarketFeedBadge } from "@/context/MarketFeedBadgeContext";
 import { useTranslation } from "react-i18next";
+import LoginScreen from "../(auth)/login";
 
 export default function TabLayout() {
   const colors    = useColors();
@@ -48,7 +49,17 @@ export default function TabLayout() {
       return <Redirect href="/(auth)/reset-password" />;
     }
     if (!session) {
-      return <Redirect href={manutencao ? "/maintenance" : "/(auth)/login"} />;
+      // Maintenance mode is rare/admin-toggled — a redirect is acceptable there.
+      if (manutencao) return <Redirect href="/maintenance" />;
+      // iOS (New Arch + source build) silently no-ops BOTH router.replace() and
+      // <Redirect> at the very first cold-start mount, stranding logged-out users
+      // on an EMPTY navy screen (no overlay, because authReady is already true).
+      // So instead of NAVIGATING to the login route, render it DIRECTLY here —
+      // zero navigation dependency. When the user signs in, `session` becomes
+      // non-null and this layout re-renders into <Tabs> on its own. signIn never
+      // flips the global `loading` flag, so a failed attempt keeps LoginScreen
+      // mounted and its inline error message visible.
+      return <LoginScreen />;
     }
     if (needsProfileCompletion) {
       return <Redirect href="/social-complete" />;

@@ -9,8 +9,9 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, usePathname, useSegments, type Href } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import Constants from "expo-constants";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -195,6 +196,59 @@ function LoadingOverlay() {
   );
 }
 
+// ── TEMPORARY boot diagnostic ────────────────────────────────────────────────
+// A thin always-on-top strip (iOS only) that prints the running version+build and
+// the live auth/boot state. It exists ONLY to diagnose the "empty navy screen at
+// cold start" issue directly on device: if the screen ever looks blank again, this
+// strip still reports WHY (authReady/session/route). pointerEvents="none" so it
+// never blocks taps on the login form underneath. Set SHOW_BOOT_HUD=false (or
+// delete this block + its render site) once the boot path is confirmed healthy.
+const SHOW_BOOT_HUD = true;
+
+function BootHUD(props: {
+  loading: boolean;
+  authReady: boolean;
+  hasSession: boolean;
+  profileChecked: boolean;
+  needsProfileCompletion: boolean;
+  isRecovering: boolean;
+  mustChangePassword: boolean;
+  segments: string[];
+  pathname: string;
+}) {
+  const ver = Constants.expoConfig?.version ?? "?";
+  const build =
+    Constants.expoConfig?.ios?.buildNumber ??
+    String(Constants.expoConfig?.android?.versionCode ?? "?");
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: "rgba(0,0,0,0.82)",
+        paddingTop: 46,
+        paddingBottom: 6,
+        paddingHorizontal: 8,
+        zIndex: 99999,
+      }}
+    >
+      <Text style={{ color: "#c9a84c", fontSize: 9.5, fontWeight: "700" }}>
+        ibhub v{ver} ({build}) · loading={String(props.loading)} authReady=
+        {String(props.authReady)} session={String(props.hasSession)} profChk=
+        {String(props.profileChecked)}
+      </Text>
+      <Text style={{ color: "#8fa3b8", fontSize: 9.5 }}>
+        needsCompl={String(props.needsProfileCompletion)} recov=
+        {String(props.isRecovering)} mustChg={String(props.mustChangePassword)} ·
+        path={props.pathname} seg=[{props.segments.join("/")}]
+      </Text>
+    </View>
+  );
+}
+
 // ── Single permanent navigator ──────────────────────────────────────────────
 // Every route — auth screens AND authenticated screens — is registered here and
 // the Stack is ALWAYS mounted, regardless of auth state. This is the core of the
@@ -361,6 +415,20 @@ function RootLayoutNav() {
       </View>
 
       {showOverlay && <LoadingOverlay />}
+
+      {SHOW_BOOT_HUD && Platform.OS === "ios" && (
+        <BootHUD
+          loading={loading}
+          authReady={authReady}
+          hasSession={!!session}
+          profileChecked={profileChecked}
+          needsProfileCompletion={needsProfileCompletion}
+          isRecovering={isRecovering}
+          mustChangePassword={mustChangePassword}
+          segments={segments as string[]}
+          pathname={pathname}
+        />
+      )}
     </>
   );
 }
