@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient, Session, User } from "@supabase/supabase-js";
-import { setCachedSession } from "@/services/api/_session";
+import { getCachedSession, setCachedSession } from "@/services/api/_session";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
@@ -166,6 +166,39 @@ async function clearAuthCache(): Promise<void> {
   try {
     await AsyncStorage.multiRemove([SESSION_CACHE_KEY, PROFILE_CACHE_KEY]);
   } catch {}
+}
+
+// ── Hang-proof getSession ────────────────────────────────────────────────────
+// On React Native, supabase.auth.getSession() can stall indefinitely when an
+// in-flight token refresh holds the auth lock (autoRefreshToken: true). Any
+// awaited call during boot then freezes the app on the navy LoadingOverlay
+// forever. This races the real call against a timeout that RESOLVES with the
+// last cached session, so init() can never hang on it. Mirrors getSessionSafe()
+// in services/api/_shared.ts but lives here to avoid an import cycle (that
+// module imports `supabase` from this file).
+const GET_SESSION_TIMEOUT_MS = 4000;
+
+function isSessionExpired(s: Session | null): boolean {
+  if (!s) return true;
+  if (!s.expires_at) return false; // unknown expiry → treat as usable
+  return Date.now() >= s.expires_at * 1000; // expires_at is epoch SECONDS
+}
+
+async function getSessionWithTimeout(): Promise<{ data: { session: Session | null } }> {
+  const fallback = (): { data: { session: Session | null } } => {
+    const cached = getCachedSession();
+    return { data: { session: isSessionExpired(cached) ? null : cached } };
+  };
+  try {
+    const timeout = new Promise<{ data: { session: Session | null } }>((resolve) => {
+      setTimeout(() => resolve(fallback()), GET_SESSION_TIMEOUT_MS);
+    });
+    const res = await Promise.race([supabase.auth.getSession(), timeout]);
+    if (res.data.session) setCachedSession(res.data.session);
+    return { data: { session: res.data.session ?? fallback().data.session } };
+  } catch {
+    return fallback();
+  }
 }
 
 /** Parses `access_token`, `refresh_token`, and `type` from a deep link URL fragment */
@@ -413,6 +446,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfileChecked(true);
     }, 3_000);
 
+    // Absolute watchdog — the ultimate guarantee that the navy LoadingOverlay can
+    // NEVER persist forever. Unlike initTimeoutId (which a code path could clear
+    // before a stalled await), this is only ever cleared on unmount. No matter
+    // which branch runs or what stalls (auth lock, native bridge, etc.), the UI
+    // is force-unblocked here. If even this never fires, the JS event loop itself
+    // is blocked — a problem no JS timer can recover from.
+    const watchdogId = setTimeout(() => {
+      console.warn("[AuthInit] 7s absolute watchdog fired — forcing UI unblock.");
+      setBootStep(92, "Watchdog (7s) — liberando UI…");
+      resolveLoading();
+      setProfileChecked(true);
+    }, 7_000);
+
     const init = async () => {
       try {
         // ── Deep link must be resolved first to avoid session-state races ──────
@@ -447,13 +493,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setProfileChecked(true);
           }
 
-          clearTimeout(initTimeoutId);
+          // NOTE: do NOT clear initTimeoutId here. The background getSession()
+          // below (even though now bounded) runs AFTER this point — if the early
+          // clear stayed and that call stalled with no cachedProfile to seed
+          // profileChecked, the navy overlay would persist forever. Keeping the
+          // net armed (cleared only in finally) forces profileChecked within 3s.
           resolveLoading();
           setBootStep(70, "Carregando perfil…");
 
           // Background validation: confirm the session is still valid and
           // refresh profile data. This updates the UI without blocking it.
-          const { data: { session: freshSession } } = await supabase.auth.getSession();
+          // Bounded (timeout-raced) so a stalled auth lock can never strand the
+          // user on the navy overlay when there was no cached profile to seed
+          // profileChecked above.
+          const { data: { session: freshSession } } = await getSessionWithTimeout();
           if (freshSession) {
             setSession(freshSession);
             setCachedSession(freshSession);
@@ -475,7 +528,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           // No cache (first install, after explicit sign-out) → normal blocking flow.
           setBootStep(55, "Verificando sessão com servidor…");
-          const { data: { session } } = await supabase.auth.getSession();
+          const { data: { session } } = await getSessionWithTimeout();
           setSession(session);
           setCachedSession(session);
           setUser(session?.user ?? null);
@@ -509,7 +562,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfileChecked(true);
       } finally {
         // resolveLoading is idempotent — safe to call again as a fallback in
-        // case an exception was thrown before the explicit call above.
+        // case an exception was thrown before the explicit call above. The init
+        // safety net is cleared here (not in the cache-hit branch) so it stays
+        // armed across every awaited call and only stands down once init() has
+        // fully settled. The absolute watchdog remains until unmount.
+        clearTimeout(initTimeoutId);
         setBootStep(90, "Preparando navegação…");
         resolveLoading();
       }
@@ -517,7 +574,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     init();
 
     // 2. Auth state changes (including PASSWORD_RECOVERY and OAuth SIGNED_IN)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log(`[AuthState] event=${event} userId=${session?.user?.id ?? "null"}`);
       // Checkpoint de diagnóstico iOS: se o overlay ainda estiver visível
       // quando INITIAL_SESSION chega, ele avança para 95% antes de sumir.
@@ -548,6 +605,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session?.user) {
         writeSessionCache(session);
 
+        // Defer ALL Supabase reads/writes OUT of this auth-change callback.
+        // supabase-js holds its auth lock for the duration of the (now
+        // synchronous) callback; awaiting getSession or any query inside it can
+        // deadlock an in-flight token refresh on RN/iOS and freeze the app on
+        // the navy overlay forever. A 0ms timer lets the lock release first.
+        // The `if (!session?.user) return` re-narrows `session` to non-null
+        // inside this deferred closure (TS drops the outer narrowing).
+        setTimeout(() => { void (async () => {
+        if (!session?.user) return;
         try {
           await fetchProfile(session.user.id);
         } catch (e: any) {
@@ -627,6 +693,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           } catch {}
         }
+        })(); }, 0);
       } else {
         setProfile(null);
         setNeedsProfileCompletion(false);
@@ -645,6 +712,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const linkSub = Linking.addEventListener("url", ({ url }) => handleDeepLink(url));
 
     return () => {
+      clearTimeout(initTimeoutId);
+      clearTimeout(watchdogId);
       subscription.unsubscribe();
       linkSub.remove();
     };

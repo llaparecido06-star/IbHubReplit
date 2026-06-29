@@ -39,3 +39,34 @@ like this needs a fresh EAS build to reach an already-installed binary. Remainin
 raw `getSession()` sites outside `services/api` (admin-api, notificationPrefs,
 some `app/*` screens) are on user-action paths and still susceptible — migrate
 them if they ever exhibit the same freeze.
+
+# Boot freeze: navy LoadingOverlay that never goes away (iOS)
+
+A *frozen* navy overlay at startup (app open, unresponsive — NOT a <1s crash) is
+an `authReady`-never-true bug, not a native crash. `authReady = !loading &&
+!(session && !profileChecked)`, so it stays forever if a cached session makes
+`session` truthy while `profileChecked` is never forced true.
+
+**Two root causes that combine to cause it:**
+1. **async `onAuthStateChange` callback = auth-lock deadlock.** supabase-js holds
+   its auth lock for the *entire* duration of the callback. An `async` callback
+   that `await`s `getSession()`/`.from()` inside can deadlock the in-flight token
+   refresh — which is exactly what makes a *later* `getSession()` hang forever.
+   This is a documented supabase-js gotcha. Fix: keep the callback synchronous
+   (set immediate auth state only) and schedule all Supabase reads/writes
+   (`fetchProfile`, profile safety-net, referral) AFTER it via
+   `setTimeout(() => void run(...), 0)`. Re-narrow `session` inside the deferred
+   closure (`if (!session?.user) return;`) — TS drops the outer narrowing.
+2. **A code path that clears the boot safety-net BEFORE a risky await.** The
+   cache-hit init branch used to `clearTimeout(initTimeoutId)` *before* the
+   background `getSession()`; if that stalled and there was no cached profile to
+   seed `profileChecked`, the net was disarmed and the overlay stayed forever.
+   Fix: clear the net only in init()'s `finally` (after all awaits), and keep the
+   `getSession()` bounded (timeout-raced) so `finally` always runs.
+
+**Belt-and-suspenders:** an absolute boot watchdog (~7s) armed at effect start
+and cleared ONLY on unmount that forces `loading=false` + `profileChecked=true`.
+It can never be defeated by a branch clearing it early. Forcing
+`profileChecked=true` is acceptable fail-open (RLS is the real control); do NOT
+also set `needsProfileCompletion=false` on a fetch error. If even this watchdog
+never fires, the JS event loop itself is blocked — no JS timer can recover that.
