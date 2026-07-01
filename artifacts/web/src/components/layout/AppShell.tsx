@@ -309,14 +309,26 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
       poll = { options: opts.map(t => ({ text: t, votes: 0 })), total_votes: 0, closed: false, expires_at: expiresAt, allow_multiple: pollAllowMultiple };
     }
     const finalContent = buildContent();
-    const newPost = await createWebPost({
-      user_id: userId,
-      content: finalContent,
-      image_url: image_url ?? null,
-      video_url: video_url ?? null,
-      company_page_id: companyPageId ?? null,
-      poll,
-    });
+    let newPost: Awaited<ReturnType<typeof createWebPost>> = null;
+    try {
+      newPost = await createWebPost({
+        user_id: userId,
+        content: finalContent,
+        image_url: image_url ?? null,
+        video_url: video_url ?? null,
+        company_page_id: companyPageId ?? null,
+        poll,
+      });
+    } catch (err) {
+      setSubmitting(false);
+      alert(err instanceof Error ? err.message : "Erro ao publicar. Verifique sua conexão e tente novamente.");
+      return;
+    }
+    if (!newPost) {
+      setSubmitting(false);
+      alert("Erro ao publicar. Verifique sua conexão e tente novamente.");
+      return;
+    }
     if (finalContent.includes("@") && userId) {
       const actorName = companyPageId ? (companyName ?? "Empresa") : (profile.full_name ?? "Usuário");
       sendMentionNotifications(finalContent, userId, actorName, (newPost as any)?.id);
@@ -338,11 +350,6 @@ function CreatePostModal({ profile, userId, companyPageId, companyName, companyA
         status: "consumido",
         is_private: false,
       }).catch(() => {});
-    }
-    if (!newPost) {
-      setSubmitting(false);
-      alert("Erro ao publicar. Verifique sua conexão e tente novamente.");
-      return;
     }
     setSubmitting(false);
     onCreated();

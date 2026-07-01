@@ -167,6 +167,7 @@ export async function fetchFeedPosts(currentUserId: string, offset = 0): Promise
 
 export async function uploadWebPostImage(file: File, userId: string): Promise<string | null> {
   try {
+    await getCachedSession(); // refresh a stale in-memory token before the RLS-guarded storage write
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
     const path = `${userId}/${Date.now()}.${ext}`;
     const { data, error } = await supabase.storage
@@ -183,6 +184,7 @@ export async function uploadWebPostImage(file: File, userId: string): Promise<st
 
 export async function uploadWineImage(file: File, userId: string): Promise<string | null> {
   try {
+    await getCachedSession(); // refresh a stale in-memory token before the RLS-guarded storage write
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
     const path = `${userId}/wines/${Date.now()}.${ext}`;
     const { data, error } = await supabase.storage
@@ -199,6 +201,7 @@ export async function uploadWineImage(file: File, userId: string): Promise<strin
 
 export async function uploadWebPostVideo(file: File, userId: string): Promise<string | null> {
   try {
+    await getCachedSession(); // refresh a stale in-memory token before the RLS-guarded storage write
     const ext = file.name.split(".").pop() ?? "mp4";
     const path = `${userId}/${Date.now()}.${ext}`;
 
@@ -220,6 +223,24 @@ export async function uploadWebPostVideo(file: File, userId: string): Promise<st
   }
 }
 
+/** Turn a raw Supabase/PostgREST error into a clear, user-facing message. */
+function friendlyPostError(error: { message?: string; code?: string; details?: string } | null): string {
+  const msg = (error?.message ?? "").toLowerCase();
+  const code = error?.code ?? "";
+  if (code === "42501" || msg.includes("row-level security") || msg.includes("row level security")) {
+    return "Sua sessão expirou ou você não tem permissão para publicar. Faça login novamente.";
+  }
+  if (msg.includes("jwt") || msg.includes("expired") || (msg.includes("token") && msg.includes("invalid"))) {
+    return "Sua sessão expirou. Faça login novamente para publicar.";
+  }
+  if (code === "23502" || msg.includes("null value")) {
+    return "Faltam informações obrigatórias para publicar. Tente novamente.";
+  }
+  return error?.message
+    ? `Não foi possível publicar: ${error.message}`
+    : "Não foi possível publicar. Verifique sua conexão e tente novamente.";
+}
+
 export async function createWebPost(params: {
   user_id: string;
   content: string;
@@ -228,16 +249,42 @@ export async function createWebPost(params: {
   company_page_id?: string | null;
   poll?: Poll | null;
 }): Promise<Post | null> {
+  // The feed is READ through the API server (service-role), so a stale/expired
+  // client session doesn't break reading. But creating a post is a DIRECT
+  // Supabase insert that relies on the user's JWT for RLS
+  // (posts_insert: auth.uid() = user_id). Refreshing the session here fixes the
+  // common "feed loads but publishing fails" case (a stale in-memory token).
+  const session = await getCachedSession();
+  if (!session?.access_token) {
+    throw new Error("Sua sessão expirou. Faça login novamente para publicar.");
+  }
+
+  const { poll, ...rest } = params;
+  const insertData: Record<string, unknown> = { ...rest, likes_count: 0, comments_count: 0, shares_count: 0, view_count: 0 };
+  // RLS on posts is `auth.uid() = user_id`. Always write the authenticated
+  // user's id (this is what the working mobile app does via `user.id`) instead
+  // of trusting the caller-provided profile id. On the web the caller passes
+  // `profile.id`, which can diverge from `auth.uid()` and then silently fail
+  // the RLS check — the core reason publishing failed while the feed still read.
+  insertData.user_id = session.user.id;
+  if (poll) insertData.poll = poll;
+
+  const { data, error } = await supabase
+    .from("posts")
+    .insert(insertData)
+    .select(POST_SELECT)
+    .single();
+  // Surface the real cause instead of silently returning null.
+  if (error) {
+    console.error("createWebPost insert error:", error);
+    throw new Error(friendlyPostError(error));
+  }
+  if (!data) {
+    throw new Error("Não foi possível publicar. Tente novamente.");
+  }
+
+  // The row is now committed; never fail the publish over enrichment issues.
   try {
-    const { poll, ...rest } = params;
-    const insertData: Record<string, unknown> = { ...rest, likes_count: 0, comments_count: 0, shares_count: 0, view_count: 0 };
-    if (poll) insertData.poll = poll;
-    const { data, error } = await supabase
-      .from("posts")
-      .insert(insertData)
-      .select(POST_SELECT)
-      .single();
-    if (error || !data) return null;
     const cpId = (data as any).company_page_id ?? null;
     const [profileMap, companyPageMap] = await Promise.all([
       _fetchProfilesMap([data.user_id]),
@@ -247,8 +294,8 @@ export async function createWebPost(params: {
     if (post.poll && poll) post.poll = { ...post.poll, user_voted_index: null };
     return post;
   } catch (e) {
-    console.warn("createWebPost:", e);
-    return null;
+    console.warn("createWebPost enrichment:", e);
+    return _normalisePost(data, new Map(), new Map()) as Post;
   }
 }
 
