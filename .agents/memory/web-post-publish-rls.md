@@ -28,3 +28,15 @@ auth.uid()` is what both the mobile insert and the feed author-enrichment
 `session.user.id` is a no-op for standard users and only corrects the divergent
 case. Do NOT try to "fix" legacy `profiles.id != auth.uid()` rows in code; that
 would need a data migration (ask the user first).
+
+**Same divergence breaks image/video uploads.** Storage RLS on the `post-images`
+and `post-videos` buckets is `bucket_id = '...' AND auth.uid()::text =
+(storage.foldername(name))[1]` — i.e. the FIRST path folder must be the auth uid.
+The web upload helpers (`uploadWebPostImage`/`uploadWineImage`/
+`uploadWebPostVideo`) were building the path from the passed `userId`
+(= profile.id), so for a divergent account the upload was rejected with "Erro ao
+enviar imagem" even after the post-insert fix. Fix: derive the folder from
+`session.user.id` (fallback to the param), like the mobile app. Reads still work
+because `post_images_select` is public (`USING (bucket_id = 'post-images')`), so
+the folder only matters for the INSERT policy. Symptom of a divergent account:
+posting text works but any media upload fails.

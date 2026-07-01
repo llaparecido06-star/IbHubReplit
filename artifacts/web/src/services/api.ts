@@ -167,9 +167,14 @@ export async function fetchFeedPosts(currentUserId: string, offset = 0): Promise
 
 export async function uploadWebPostImage(file: File, userId: string): Promise<string | null> {
   try {
-    await getCachedSession(); // refresh a stale in-memory token before the RLS-guarded storage write
+    // Storage RLS on `post-images` requires the first path segment to equal
+    // auth.uid() (auth.uid()::text = foldername(name)[1]). Use the authenticated
+    // session id — the caller passes profile.id, which can diverge from
+    // auth.uid() and then the upload is rejected. Mirrors createWebPost.
+    const session = await getCachedSession();
+    const folderId = session?.user?.id ?? userId;
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-    const path = `${userId}/${Date.now()}.${ext}`;
+    const path = `${folderId}/${Date.now()}.${ext}`;
     const { data, error } = await supabase.storage
       .from("post-images")
       .upload(path, file, { contentType: file.type, upsert: false });
@@ -184,9 +189,10 @@ export async function uploadWebPostImage(file: File, userId: string): Promise<st
 
 export async function uploadWineImage(file: File, userId: string): Promise<string | null> {
   try {
-    await getCachedSession(); // refresh a stale in-memory token before the RLS-guarded storage write
+    const session = await getCachedSession();
+    const folderId = session?.user?.id ?? userId; // storage RLS requires auth.uid() as first folder
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-    const path = `${userId}/wines/${Date.now()}.${ext}`;
+    const path = `${folderId}/wines/${Date.now()}.${ext}`;
     const { data, error } = await supabase.storage
       .from("post-images")
       .upload(path, file, { contentType: file.type, upsert: false });
@@ -201,9 +207,10 @@ export async function uploadWineImage(file: File, userId: string): Promise<strin
 
 export async function uploadWebPostVideo(file: File, userId: string): Promise<string | null> {
   try {
-    await getCachedSession(); // refresh a stale in-memory token before the RLS-guarded storage write
+    const session = await getCachedSession();
+    const folderId = session?.user?.id ?? userId; // storage RLS requires auth.uid() as first folder
     const ext = file.name.split(".").pop() ?? "mp4";
-    const path = `${userId}/${Date.now()}.${ext}`;
+    const path = `${folderId}/${Date.now()}.${ext}`;
 
     const uploadPromise = supabase.storage
       .from("post-videos")
