@@ -2701,6 +2701,8 @@ const ptBR = {
     bi_prod_count_other: "{{count}} produtores encontrados",
     bi_prod_no_result_sub: "Tente buscar por outro nome ou região.",
     bi_credits_pill_label: "créditos",
+    bi_credits_monthly_label: "Créditos",
+    bi_credits_special_label: "Especiais",
     bi_marca_credits_label: "Consultas Restantes",
     bi_marca_credits_period: "Ideal.BI · Busca com IA · {{total}}/mês",
     bi_marca_exhausted_badge: "Esgotado",

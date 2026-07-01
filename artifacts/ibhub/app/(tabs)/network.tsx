@@ -3272,30 +3272,37 @@ function InteligenciaView({ colors, bottomPad, session, isAdmin }: {
           </View>
         ) : (
           <>
-            {/* Credits pill */}
+            {/* Credits: two separate boxes — monthly (resets) vs special/avulso (counter) */}
             {(() => {
               const c = credits;
               const total = creditsTotal;
               const extra = c !== null ? Math.max(0, c - total) : 0;
               const monthly = c !== null ? Math.min(c, total) : null;
-              const pillColor = monthly === null || monthly >= 2 ? "#16a34a" : monthly === 1 ? "#d97706" : "#dc2626";
-              const pillBg    = monthly === null || monthly >= 2 ? "#dcfce7" : monthly === 1 ? "#fef3c7" : "#fef2f2";
+              const monColor  = monthly === null || monthly >= 2 ? "#16a34a" : monthly === 1 ? "#d97706" : "#dc2626";
+              const monBg     = monthly === null || monthly >= 2 ? "#dcfce7" : monthly === 1 ? "#fef3c7" : "#fef2f2";
+              const monBorder = monthly === null || monthly >= 2 ? "#bbf7d0" : monthly === 1 ? "#fde68a" : "#fecaca";
+              const hasExtra  = extra > 0;
               return (
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 2, gap: 8 }}>
                   {creditsLoading ? (
                     <ActivityIndicator size="small" color={colors.gold} />
                   ) : (
                     <>
-                      {extra > 0 && (
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#fffbeb", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: "#fcd34d" }}>
-                          <Text style={{ fontSize: 11, fontWeight: "700", color: "#d97706" }}>⭐ {extra} especiai{extra === 1 ? "" : "s"}</Text>
+                      {/* Monthly credits (reset every billing cycle) */}
+                      <View style={{ minWidth: 92, backgroundColor: monBg, borderWidth: 1, borderColor: monBorder, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                          <Feather name="zap" size={13} color={monColor} />
+                          <Text style={{ fontSize: 14, fontWeight: "800", color: monColor }}>{monthly ?? "—"}/{total}</Text>
                         </View>
-                      )}
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: pillBg, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 }}>
-                        <Feather name="zap" size={13} color={pillColor} />
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: pillColor }}>
-                          {monthly ?? "—"}/{total} {t("mercado_screen.bi_credits_pill_label")}
-                        </Text>
+                        <Text style={{ fontSize: 10, fontWeight: "600", color: monColor, opacity: 0.85, marginTop: 1 }}>{t("mercado_screen.bi_credits_monthly_label")}</Text>
+                      </View>
+                      {/* Special (avulso) credits — counter, no monthly quota */}
+                      <View style={{ minWidth: 92, backgroundColor: hasExtra ? "#fffbeb" : "#f3f4f6", borderWidth: 1, borderColor: hasExtra ? "#fcd34d" : "#e5e7eb", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                          <Text style={{ fontSize: 13 }}>⭐</Text>
+                          <Text style={{ fontSize: 14, fontWeight: "800", color: hasExtra ? "#d97706" : "#9ca3af" }}>{extra}</Text>
+                        </View>
+                        <Text style={{ fontSize: 10, fontWeight: "600", color: hasExtra ? "#d97706" : "#9ca3af", opacity: 0.9, marginTop: 1 }}>{t("mercado_screen.bi_credits_special_label")}</Text>
                       </View>
                     </>
                   )}
