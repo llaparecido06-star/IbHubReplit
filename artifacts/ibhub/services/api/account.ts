@@ -1,8 +1,8 @@
-import { API_URL } from "./_shared";
+import { API_URL, guardedFetch } from "./_shared";
 
 export async function deleteAccount(token: string): Promise<{ success: boolean; warnings?: string[]; error?: string }> {
   try {
-    const res = await fetch(`${API_URL}/users/me`, {
+    const res = await guardedFetch(`${API_URL}/users/me`, {
       method: "DELETE",
       headers: {
         Authorization: `Bearer ${token}`,

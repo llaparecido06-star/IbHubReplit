@@ -22,6 +22,7 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/context/AuthContext";
 import { uploadGroupAvatar, leaveGroup, approveGroupMember, rejectGroupMember, inviteToGroup } from "@/services/api";
+import { getSessionSafe } from "@/services/api/_shared";
 
 type Tab = "membros" | "pendentes" | "convidar" | "link";
 
@@ -328,7 +329,7 @@ export default function GroupSettingsScreen() {
     try {
       // Use the API endpoint (service role) so that RLS cannot block writing
       // group_members / conversation_participants rows for another user.
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await getSessionSafe();
       const token = session?.access_token;
       if (!token) throw new Error("no session");
       const ok = await inviteToGroup(id, person.id, token);

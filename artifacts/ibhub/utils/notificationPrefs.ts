@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/context/AuthContext";
+import { getSessionSafe } from "@/services/api/_shared";
 
 export const PREF_KEYS = {
   followers: "followers",
@@ -25,7 +26,7 @@ export const DEFAULT_PREFS: Record<PrefKey, boolean> = {
 
 export async function loadPrefs(): Promise<Record<PrefKey, boolean>> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await getSessionSafe();
     if (session?.user?.id) {
       const { data } = await supabase
         .from("profiles")
@@ -59,7 +60,7 @@ export async function loadPrefs(): Promise<Record<PrefKey, boolean>> {
 export async function savePrefs(prefs: Record<PrefKey, boolean>): Promise<void> {
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await getSessionSafe();
     if (session?.user?.id) {
       const uid = session.user.id;
       const dbUpdate = {

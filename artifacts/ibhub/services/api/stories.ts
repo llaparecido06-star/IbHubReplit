@@ -1,5 +1,5 @@
 import { supabase } from "@/context/AuthContext";
-import { getSessionSafe, fetchCommentProfilesForIds, fetchCompanyPagesForIds, API_URL } from "./_shared";
+import { getSessionSafe, fetchCommentProfilesForIds, fetchCompanyPagesForIds, API_URL, guardedFetch } from "./_shared";
 import type { AppStory, StoryGroup } from "./types";
 import type { Group } from "./groups";
 
@@ -276,7 +276,7 @@ export async function createStory(
       if (API_URL) {
         const { data: { session } } = await getSessionSafe();
         if (session?.access_token) {
-          fetch(`${API_URL}/push/story-tag`, {
+          guardedFetch(`${API_URL}/push/story-tag`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
             body: JSON.stringify({ taggedUserIds: taggedIds, actorName, storyId }),
@@ -354,7 +354,7 @@ export async function createVideoStoryParts(
       if (API_URL) {
         const { data: { session } } = await getSessionSafe();
         if (session?.access_token) {
-          fetch(`${API_URL}/push/story-tag`, {
+          guardedFetch(`${API_URL}/push/story-tag`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
             body: JSON.stringify({ taggedUserIds: taggedIds, actorName, storyId: firstId }),

@@ -43,6 +43,7 @@ import { AdaptiveImage, ReactionPicker, REACTIONS, type ReactionType } from "@/c
 import { LinkText } from "@/components/LinkText";
 import * as API from "@/services/api";
 import { API_URL } from "@/services/api";
+import { guardedFetch } from "@/services/api/_shared";
 import { compressPostImage } from "@/utils/compressImage";
 import { usePaginatedQuery } from "@/hooks/usePaginatedQuery";
 import { useMarketFeedBadge } from "@/context/MarketFeedBadgeContext";
@@ -801,7 +802,7 @@ function BiMobileExportadorSearch({ colors, onCreditsUpdate }: { colors: ReturnT
     if (val.length < 2) { setSuggestions([]); return; }
     suggestTimer.current = setTimeout(async () => {
       try {
-        const res = await fetch(`${API_URL}/wine-imports/bi-suggestions/exportadores?q=${encodeURIComponent(val)}`, { headers: authH() });
+        const res = await guardedFetch(`${API_URL}/wine-imports/bi-suggestions/exportadores?q=${encodeURIComponent(val)}`, { headers: authH() });
         if (!res.ok) return;
         const json = await res.json() as { suggestions: string[] };
         setSuggestions(json.suggestions ?? []);
@@ -812,7 +813,7 @@ function BiMobileExportadorSearch({ colors, onCreditsUpdate }: { colors: ReturnT
 
   const spellCheck = async (sq: string) => {
     try {
-      const res = await fetch(`${API_URL}/wine-imports/spell-correct`, {
+      const res = await guardedFetch(`${API_URL}/wine-imports/spell-correct`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authH() },
         body: JSON.stringify({ query: sq, context: "exportador" }),
@@ -831,7 +832,7 @@ function BiMobileExportadorSearch({ colors, onCreditsUpdate }: { colors: ReturnT
     void spellCheck(sq);
     try {
       const params = new URLSearchParams({ q: sq, limit: "20", offset: "0" });
-      const res = await fetch(`${API_URL}/wine-imports/bi-search/exportadores?${params}`, { headers: authH() });
+      const res = await guardedFetch(`${API_URL}/wine-imports/bi-search/exportadores?${params}`, { headers: authH() });
       if (!res.ok) { setError(t("mercado_screen.bi_error_search")); }
       else {
         const data = await res.json() as { items: BiExpItem[]; total: number; credits_remaining: number; credits_total: number };
@@ -846,7 +847,7 @@ function BiMobileExportadorSearch({ colors, onCreditsUpdate }: { colors: ReturnT
     if (importadoresMap[id]) return;
     setImpLoadingSet(prev => new Set(prev).add(id));
     try {
-      const res = await fetch(`${API_URL}/wine-imports/exportador-importadores?nome=${encodeURIComponent(name)}`, { headers: authH() });
+      const res = await guardedFetch(`${API_URL}/wine-imports/exportador-importadores?nome=${encodeURIComponent(name)}`, { headers: authH() });
       if (res.ok) {
         const data = await res.json() as { importadores: { name: string; company_page_id: string | null }[] };
         setImportadoresMap(prev => ({ ...prev, [id]: data.importadores }));
@@ -858,7 +859,7 @@ function BiMobileExportadorSearch({ colors, onCreditsUpdate }: { colors: ReturnT
   const revealData = async (name: string) => {
     setRevealingId(name);
     try {
-      const res = await fetch(`${API_URL}/wine-imports/bi/exportadores/reveal`, {
+      const res = await guardedFetch(`${API_URL}/wine-imports/bi/exportadores/reveal`, {
         method: "POST",
         headers: { ...(authH() as Record<string, string>), "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
@@ -1070,7 +1071,7 @@ function BiMobileImportadoresSearch({ colors, onCreditsUpdate }: { colors: Retur
     if (val.length < 2) { setSuggestions([]); return; }
     suggestTimer.current = setTimeout(async () => {
       try {
-        const res = await fetch(`${API_URL}/wine-imports/bi-suggestions/importadores?q=${encodeURIComponent(val)}`, { headers: authH() });
+        const res = await guardedFetch(`${API_URL}/wine-imports/bi-suggestions/importadores?q=${encodeURIComponent(val)}`, { headers: authH() });
         if (!res.ok) return;
         const json = await res.json() as { suggestions: string[] };
         setSuggestions(json.suggestions ?? []);
@@ -1081,7 +1082,7 @@ function BiMobileImportadoresSearch({ colors, onCreditsUpdate }: { colors: Retur
 
   const spellCheck = async (sq: string) => {
     try {
-      const res = await fetch(`${API_URL}/wine-imports/spell-correct`, {
+      const res = await guardedFetch(`${API_URL}/wine-imports/spell-correct`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authH() },
         body: JSON.stringify({ query: sq, context: "importador" }),
@@ -1100,7 +1101,7 @@ function BiMobileImportadoresSearch({ colors, onCreditsUpdate }: { colors: Retur
     void spellCheck(sq);
     try {
       const params = new URLSearchParams({ q: sq, limit: "20", offset: "0" });
-      const res = await fetch(`${API_URL}/wine-imports/bi-search/importadores?${params}`, { headers: authH() });
+      const res = await guardedFetch(`${API_URL}/wine-imports/bi-search/importadores?${params}`, { headers: authH() });
       if (!res.ok) { setError(t("mercado_screen.bi_error_search")); }
       else {
         const data = await res.json() as { items: BiImpItem[]; total: number; credits_remaining: number; credits_total: number };
@@ -1115,7 +1116,7 @@ function BiMobileImportadoresSearch({ colors, onCreditsUpdate }: { colors: Retur
     if (revealedMap[importadorId] || revealingId === importadorId) return;
     setRevealingId(importadorId);
     try {
-      const res = await fetch(`${API_URL}/wine-imports/bi/importadores/reveal`, {
+      const res = await guardedFetch(`${API_URL}/wine-imports/bi/importadores/reveal`, {
         method: "POST",
         headers: { ...(authH() as Record<string, string>), "Content-Type": "application/json" },
         body: JSON.stringify({ importador_name: importadorName }),
@@ -1289,7 +1290,7 @@ function BiMobileProdutoresSearch({ colors, onCreditsUpdate }: { colors: ReturnT
     if (val.length < 2) { setSuggestions([]); return; }
     suggestTimer.current = setTimeout(async () => {
       try {
-        const res = await fetch(`${API_URL}/wine-imports/bi-suggestions/produtores?q=${encodeURIComponent(val)}`, { headers: authH() });
+        const res = await guardedFetch(`${API_URL}/wine-imports/bi-suggestions/produtores?q=${encodeURIComponent(val)}`, { headers: authH() });
         if (!res.ok) return;
         const json = await res.json() as { suggestions: string[] };
         setSuggestions(json.suggestions ?? []);
@@ -1300,7 +1301,7 @@ function BiMobileProdutoresSearch({ colors, onCreditsUpdate }: { colors: ReturnT
 
   const spellCheck = async (sq: string) => {
     try {
-      const res = await fetch(`${API_URL}/wine-imports/spell-correct`, {
+      const res = await guardedFetch(`${API_URL}/wine-imports/spell-correct`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authH() },
         body: JSON.stringify({ query: sq, context: "produtor" }),
@@ -1319,7 +1320,7 @@ function BiMobileProdutoresSearch({ colors, onCreditsUpdate }: { colors: ReturnT
     void spellCheck(sq);
     try {
       const params = new URLSearchParams({ q: sq, limit: "20", offset: "0" });
-      const res = await fetch(`${API_URL}/wine-imports/bi-search/produtores?${params}`, { headers: authH() });
+      const res = await guardedFetch(`${API_URL}/wine-imports/bi-search/produtores?${params}`, { headers: authH() });
       if (res.status === 402) { setCredits(0); setError(t("mercado_screen.bi_error_exhausted")); }
       else if (!res.ok) { setError(t("mercado_screen.bi_error_search")); }
       else {
@@ -1473,7 +1474,7 @@ function IdealBISearchView({ colors, bottomPad, credits, creditsTotal, creditsLo
     if (suggestTimer.current) clearTimeout(suggestTimer.current);
     suggestTimer.current = setTimeout(async () => {
       try {
-        const res = await fetch(
+        const res = await guardedFetch(
           `${API_URL}/wine-imports/suggestions?q=${encodeURIComponent(q)}`,
           { headers: authHeader() },
         );
@@ -1487,7 +1488,7 @@ function IdealBISearchView({ colors, bottomPad, credits, creditsTotal, creditsLo
 
   const spellCheck = async (sq: string) => {
     try {
-      const res = await fetch(`${API_URL}/wine-imports/spell-correct`, {
+      const res = await guardedFetch(`${API_URL}/wine-imports/spell-correct`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeader() },
         body: JSON.stringify({ query: sq, context: "marca" }),
@@ -1509,7 +1510,7 @@ function IdealBISearchView({ colors, bottomPad, credits, creditsTotal, creditsLo
     void spellCheck(q);
     try {
       const directParam = opts?.direct ? "&direct=true" : "";
-      const res = await fetch(
+      const res = await guardedFetch(
         `${API_URL}/wine-imports/search?q=${encodeURIComponent(q)}${directParam}`,
         { headers: authHeader() }
       );
@@ -1925,7 +1926,7 @@ function BiMobilePrecosRotuloSearch({ colors, onCreditsUpdate }: { colors: Retur
     if (revealingId || revealCreditsExhausted) return;
     setRevealingId(id);
     try {
-      const res = await fetch(`${API_URL}/wine-imports/bi/retail-prices/reveal`, {
+      const res = await guardedFetch(`${API_URL}/wine-imports/bi/retail-prices/reveal`, {
         method: "POST",
         headers: { ...(authH() as Record<string, string>), "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
@@ -3220,7 +3221,7 @@ function InteligenciaView({ colors, bottomPad, session, isAdmin }: {
   const fetchCredits = useCallback(async () => {
     if (!session?.access_token) return;
     try {
-      const res = await fetch(`${API_URL}/wine-imports/credits`, {
+      const res = await guardedFetch(`${API_URL}/wine-imports/credits`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (!res.ok) return;

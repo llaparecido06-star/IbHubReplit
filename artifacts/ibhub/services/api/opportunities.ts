@@ -324,7 +324,7 @@ export async function getCvSignedUrl(
     const { data: sessionData } = await getSessionSafe();
     const token = sessionData?.session?.access_token;
     if (!token) return null;
-    const res = await fetch(`${API_URL}/cv/signed-url`, {
+    const res = await guardedFetch(`${API_URL}/cv/signed-url`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ path: storagePath, application_id: opts?.applicationId }),
@@ -374,7 +374,7 @@ export async function applyToJob(
     const { data: sessionData } = await getSessionSafe();
     const token = sessionData?.session?.access_token;
 
-    const res = await fetch(`${API_URL}/community/opportunities/${opportunityId}/apply`, {
+    const res = await guardedFetch(`${API_URL}/community/opportunities/${opportunityId}/apply`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -405,7 +405,7 @@ export async function expressInterest(
     const { data: sessionData } = await getSessionSafe();
     const token = sessionData?.session?.access_token;
 
-    const res = await fetch(`${API_URL}/community/opportunities/${opportunityId}/interest`, {
+    const res = await guardedFetch(`${API_URL}/community/opportunities/${opportunityId}/interest`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

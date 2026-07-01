@@ -1,7 +1,7 @@
 import { supabase } from "@/context/AuthContext";
 import { Post } from "@/components/feed/PostCard";
 import { compressAvatar } from "@/utils/compressImage";
-import { getSessionSafe, API_URL, POST_SELECT_BASE, attachAuthorsToPosts, fetchCompanyPagesForIds, fetchProfilesForIds, isNetworkError, isValidUUID } from "./_shared";
+import { getSessionSafe, API_URL, POST_SELECT_BASE, attachAuthorsToPosts, fetchCompanyPagesForIds, fetchProfilesForIds, guardedFetch, isNetworkError, isValidUUID } from "./_shared";
 
 /**
  * Fire-and-forget helper that calls a server-side push route.
@@ -13,7 +13,7 @@ async function _dispatchPush(path: string, body: Record<string, string>): Promis
     const { data: { session } } = await getSessionSafe();
     const token = session?.access_token;
     if (!token || !API_URL) return;
-    await fetch(`${API_URL}${path}`, {
+    await guardedFetch(`${API_URL}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify(body),

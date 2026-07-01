@@ -1,5 +1,5 @@
 import { supabase } from "@/context/AuthContext";
-import { getSessionSafe, API_URL } from "./_shared";
+import { getSessionSafe, API_URL, guardedFetch } from "./_shared";
 
 // ─── Groups ───────────────────────────────────────────────────────────────────
 
@@ -108,7 +108,7 @@ export async function createGroup(params: {
       token = session?.access_token;
     }
     if (!token) return null;
-    const res = await fetch(`${API_URL}/community/groups`, {
+    const res = await guardedFetch(`${API_URL}/community/groups`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(params),
@@ -168,7 +168,7 @@ export async function fetchGroupHistoryClearedAt(groupId: string, userId: string
 
 export async function inviteToGroup(groupId: string, targetUserId: string, accessToken: string): Promise<boolean> {
   try {
-    const res = await fetch(`${API_URL}/community/groups/${groupId}/invite`, {
+    const res = await guardedFetch(`${API_URL}/community/groups/${groupId}/invite`, {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({ user_id: targetUserId }),
@@ -229,7 +229,7 @@ export async function approveGroupMember(groupId: string, memberId: string): Pro
     const { data: sessionData } = await getSessionSafe();
     const token = sessionData?.session?.access_token;
     if (!token) return false;
-    const res = await fetch(`${API_URL}/community/groups/${groupId}/members/${memberId}/approve`, {
+    const res = await guardedFetch(`${API_URL}/community/groups/${groupId}/members/${memberId}/approve`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     });
@@ -244,7 +244,7 @@ export async function rejectGroupMember(groupId: string, memberId: string): Prom
     const { data: sessionData } = await getSessionSafe();
     const token = sessionData?.session?.access_token;
     if (!token) return false;
-    const res = await fetch(`${API_URL}/community/groups/${groupId}/members/${memberId}/reject`, {
+    const res = await guardedFetch(`${API_URL}/community/groups/${groupId}/members/${memberId}/reject`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     });
@@ -258,7 +258,7 @@ export async function notifyGroupJoinRequest(groupId: string): Promise<void> {
     const { data: sessionData } = await getSessionSafe();
     const token = sessionData?.session?.access_token;
     if (!token) return;
-    await fetch(`${API_URL}/community/groups/${groupId}/notify-request`, {
+    await guardedFetch(`${API_URL}/community/groups/${groupId}/notify-request`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     });

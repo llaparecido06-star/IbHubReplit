@@ -1,5 +1,5 @@
 import { supabase } from "@/context/AuthContext";
-import { getSessionSafe, API_URL, fetchCommentProfilesForIds } from "./_shared";
+import { getSessionSafe, API_URL, fetchCommentProfilesForIds, guardedFetch } from "./_shared";
 import type { AppNotification } from "./types";
 import { extractWineName } from "@/utils/winePost";
 
@@ -221,7 +221,7 @@ export async function dispatchPushToConversation(
 
     // Server verifies caller is a participant, resolves recipients, and looks up
     // push tokens via service role. Client supplies conversationId only.
-    await fetch(`${API_URL}/push/send`, {
+    await guardedFetch(`${API_URL}/push/send`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

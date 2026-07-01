@@ -16,6 +16,7 @@ import { Feather } from "@/components/ui/Icon";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { getCanonicalWebBaseUrl } from "@/utils/canonicalUrl";
+import { guardedFetch } from "@/services/api/_shared";
 
 interface CreditPackage {
   id: string;
@@ -48,7 +49,7 @@ export default function CreditShopScreen() {
   const [error, setError]         = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${apiUrl}/stripe/credit-packages`)
+    guardedFetch(`${apiUrl}/stripe/credit-packages`)
       .then(r => r.json())
       .then((data: CreditPackage[]) => setPackages(data))
       .catch(() => setError("Não foi possível carregar os pacotes."))
@@ -63,7 +64,7 @@ export default function CreditShopScreen() {
     setBuying(pkg.id);
     setError(null);
     try {
-      const res = await fetch(`${apiUrl}/stripe/create-credit-checkout-session`, {
+      const res = await guardedFetch(`${apiUrl}/stripe/create-credit-checkout-session`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -1,7 +1,7 @@
 import { supabase } from "@/context/AuthContext";
 import { Post } from "@/components/feed/PostCard";
 import { compressLogoImage } from "@/utils/compressImage";
-import { getSessionSafe, API_URL, POST_SELECT_BASE, attachAuthorsToPosts, fetchCommentProfilesForIds, fetchCompanyPagesForIds, fetchProfilesForIds, isNetworkError } from "./_shared";
+import { getSessionSafe, API_URL, POST_SELECT_BASE, attachAuthorsToPosts, fetchCommentProfilesForIds, fetchCompanyPagesForIds, fetchProfilesForIds, guardedFetch, isNetworkError } from "./_shared";
 import type { AppStory } from "./types";
 import type { AppEvent } from "./events";
 import type { AppOpportunity } from "./opportunities";
@@ -118,7 +118,7 @@ export async function createCompanyPage(params: {
   try {
     const { data: { session } } = await getSessionSafe();
     if (!session?.access_token) return null;
-    const res = await fetch(`${API_URL}/community/companies`, {
+    const res = await guardedFetch(`${API_URL}/community/companies`, {
       method: "POST",
       headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
       body: JSON.stringify(params),
@@ -559,7 +559,7 @@ async function _dispatchCompanyPush(path: string, body: Record<string, string>):
     const { data: { session } } = await getSessionSafe();
     const token = session?.access_token;
     if (!token) return;
-    await fetch(`${API_URL}${path}`, {
+    await guardedFetch(`${API_URL}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify(body),

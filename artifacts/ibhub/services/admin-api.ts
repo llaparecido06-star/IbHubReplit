@@ -1,9 +1,9 @@
-import { supabase } from "@/context/AuthContext";
+import { guardedFetch, getSessionSafe } from "./api/_shared";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 
 async function getAdminHeaders(): Promise<Record<string, string>> {
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await getSessionSafe();
   const token = session?.access_token ?? "";
   return {
     Authorization: `Bearer ${token}`,
@@ -28,7 +28,7 @@ export async function fetchAdminUsers(search?: string): Promise<AdminUser[]> {
   const headers = await getAdminHeaders();
   const params = new URLSearchParams({ limit: "200" });
   if (search) params.set("search", search);
-  const res = await fetch(`${API_URL}/admin/users?${params.toString()}`, { headers });
+  const res = await guardedFetch(`${API_URL}/admin/users?${params.toString()}`, { headers });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: "Unknown error" }));
     throw new Error(body.error ?? `HTTP ${res.status}`);
@@ -39,7 +39,7 @@ export async function fetchAdminUsers(search?: string): Promise<AdminUser[]> {
 
 export async function generateResetLink(userId: string): Promise<string> {
   const headers = await getAdminHeaders();
-  const res = await fetch(`${API_URL}/admin/reset-password`, {
+  const res = await guardedFetch(`${API_URL}/admin/reset-password`, {
     method: "POST",
     headers,
     body: JSON.stringify({ userId }),
@@ -63,7 +63,7 @@ export interface AdminUserByEmail {
 
 export async function fetchUserByEmail(email: string): Promise<AdminUserByEmail> {
   const headers = await getAdminHeaders();
-  const res = await fetch(
+  const res = await guardedFetch(
     `${API_URL}/admin/user-by-email?email=${encodeURIComponent(email)}`,
     { headers }
   );
@@ -77,7 +77,7 @@ export async function fetchUserByEmail(email: string): Promise<AdminUserByEmail>
 
 export async function banUser(userId: string, ban: boolean): Promise<void> {
   const headers = await getAdminHeaders();
-  const res = await fetch(`${API_URL}/admin/ban-user`, {
+  const res = await guardedFetch(`${API_URL}/admin/ban-user`, {
     method: "POST",
     headers,
     body: JSON.stringify({ userId, ban }),
@@ -90,7 +90,7 @@ export async function banUser(userId: string, ban: boolean): Promise<void> {
 
 export async function shadowbanUser(userId: string, shadowban: boolean): Promise<void> {
   const headers = await getAdminHeaders();
-  const res = await fetch(`${API_URL}/admin/shadowban-user`, {
+  const res = await guardedFetch(`${API_URL}/admin/shadowban-user`, {
     method: "POST",
     headers,
     body: JSON.stringify({ userId, shadowban }),
@@ -103,7 +103,7 @@ export async function shadowbanUser(userId: string, shadowban: boolean): Promise
 
 export async function changeUserPlan(userId: string, plan: string, isCourtesy?: boolean): Promise<void> {
   const headers = await getAdminHeaders();
-  const res = await fetch(`${API_URL}/admin/change-plan`, {
+  const res = await guardedFetch(`${API_URL}/admin/change-plan`, {
     method: "POST",
     headers,
     body: JSON.stringify({ userId, plan, isCourtesy }),
@@ -121,7 +121,7 @@ export interface UserCredits {
 
 export async function getUserCredits(userId: string): Promise<UserCredits> {
   const headers = await getAdminHeaders();
-  const res = await fetch(`${API_URL}/admin/users/${userId}/credits`, { headers });
+  const res = await guardedFetch(`${API_URL}/admin/users/${userId}/credits`, { headers });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: "Unknown error" }));
     throw new Error(body.error ?? `HTTP ${res.status}`);
@@ -131,7 +131,7 @@ export async function getUserCredits(userId: string): Promise<UserCredits> {
 
 export async function addUserCredits(userId: string, amount: number): Promise<UserCredits> {
   const headers = await getAdminHeaders();
-  const res = await fetch(`${API_URL}/admin/users/${userId}/credits`, {
+  const res = await guardedFetch(`${API_URL}/admin/users/${userId}/credits`, {
     method: "POST",
     headers,
     body: JSON.stringify({ amount }),
@@ -148,7 +148,7 @@ export interface UserRevealCredits {
 
 export async function getUserRevealCredits(userId: string): Promise<UserRevealCredits> {
   const headers = await getAdminHeaders();
-  const res = await fetch(`${API_URL}/admin/users/${userId}/reveal-credits`, { headers });
+  const res = await guardedFetch(`${API_URL}/admin/users/${userId}/reveal-credits`, { headers });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: "Unknown error" }));
     throw new Error(body.error ?? `HTTP ${res.status}`);
@@ -158,7 +158,7 @@ export async function getUserRevealCredits(userId: string): Promise<UserRevealCr
 
 export async function addUserRevealCredits(userId: string, amount: number): Promise<UserRevealCredits> {
   const headers = await getAdminHeaders();
-  const res = await fetch(`${API_URL}/admin/users/${userId}/reveal-credits`, {
+  const res = await guardedFetch(`${API_URL}/admin/users/${userId}/reveal-credits`, {
     method: "POST",
     headers,
     body: JSON.stringify({ amount }),
@@ -170,7 +170,7 @@ export async function addUserRevealCredits(userId: string, amount: number): Prom
 
 export async function deleteUser(userId: string): Promise<void> {
   const headers = await getAdminHeaders();
-  const res = await fetch(`${API_URL}/admin/delete-user`, {
+  const res = await guardedFetch(`${API_URL}/admin/delete-user`, {
     method: "DELETE",
     headers,
     body: JSON.stringify({ userId }),
@@ -189,7 +189,7 @@ export async function broadcastPushNotification(params: {
   logId?: string;
 }): Promise<{ sent: number; total: number }> {
   const headers = await getAdminHeaders();
-  const res = await fetch(`${API_URL}/admin/broadcast-push`, {
+  const res = await guardedFetch(`${API_URL}/admin/broadcast-push`, {
     method: "POST",
     headers,
     body: JSON.stringify({

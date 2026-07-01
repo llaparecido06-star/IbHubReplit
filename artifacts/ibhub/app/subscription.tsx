@@ -22,6 +22,7 @@ import { useAuth } from "@/context/AuthContext";
 import { getEntitlementStatus } from "@/utils/entitlement";
 import { usePlans, formatPlanPrice, formatOriginalPrice, calcDiscount } from "@/hooks/usePlans";
 import { getCanonicalWebBaseUrl } from "@/utils/canonicalUrl";
+import { guardedFetch } from "@/services/api/_shared";
 
 function getWebBaseUrl(): string {
   return getCanonicalWebBaseUrl();
@@ -109,7 +110,7 @@ export default function SubscriptionScreen() {
     const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? "";
     setOpeningBrowser(true);
     try {
-      const res = await fetch(`${apiUrl}/stripe/create-portal-session`, {
+      const res = await guardedFetch(`${apiUrl}/stripe/create-portal-session`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

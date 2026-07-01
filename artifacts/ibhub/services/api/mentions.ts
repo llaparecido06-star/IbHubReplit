@@ -1,5 +1,5 @@
 import { supabase } from "@/context/AuthContext";
-import { getSessionSafe, API_URL } from "./_shared";
+import { getSessionSafe, API_URL, guardedFetch } from "./_shared";
 
 // ─── MENTIONS ────────────────────────────────────────────────────────────────
 
@@ -92,7 +92,7 @@ export async function sendMentionNotifications(
     if (API_URL && mentionedUserIds.length) {
       const { data: { session } } = await getSessionSafe();
       if (session?.access_token) {
-        fetch(`${API_URL}/push/mention`, {
+        guardedFetch(`${API_URL}/push/mention`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
           body: JSON.stringify({ mentionedUserIds, actorName, postId, commentId, contextText: text.slice(0, 100) }),

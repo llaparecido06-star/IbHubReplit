@@ -1,5 +1,5 @@
 import { supabase } from "@/context/AuthContext";
-import { getSessionSafe, API_URL, fetchCommentProfilesForIds } from "./_shared";
+import { getSessionSafe, API_URL, fetchCommentProfilesForIds, guardedFetch } from "./_shared";
 import type { AppConversation, AppMessage, AppMessageReaction } from "./types";
 import type { Group } from "./groups";
 import { sendMediaMessage } from "./moderation";
@@ -142,7 +142,7 @@ export async function sendMessage(
     if (opts?.metadata)      body.metadata             = opts.metadata;
     if (opts?.companyPageId) body.from_company_page_id = opts.companyPageId;
 
-    const res = await fetch(`${API_URL}/messages/send`, {
+    const res = await guardedFetch(`${API_URL}/messages/send`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

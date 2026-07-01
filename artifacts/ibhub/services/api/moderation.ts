@@ -1,7 +1,7 @@
 import { supabase } from "@/context/AuthContext";
 import * as FileSystem from "expo-file-system";
 import { Platform } from "react-native";
-import { getSessionSafe, API_URL, fetchCommentProfilesForIds, fetchProfilesForIds } from "./_shared";
+import { getSessionSafe, API_URL, fetchCommentProfilesForIds, fetchProfilesForIds, guardedFetch, VIDEO_UPLOAD_FETCH_TIMEOUT_MS } from "./_shared";
 import type { AppMessage } from "./types";
 
 // ─── REPORTS ─────────────────────────────────────────────────────────────────
@@ -267,7 +267,7 @@ export async function getOrCreateDirectConversation(
     const token = sessionData?.session?.access_token;
     if (!token) { console.error("getOrCreateDirectConversation: no session token"); return null; }
 
-    const res = await fetch(`${API_URL}/conversations/direct`, {
+    const res = await guardedFetch(`${API_URL}/conversations/direct`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -347,14 +347,14 @@ export async function uploadChatMedia(
       formData.append("file", { uri: localUri, name: fileName, type: safeMime } as any);
     }
 
-    const res = await fetch(`${apiUrl}/uploads/chat-form`, {
+    const res = await guardedFetch(`${apiUrl}/uploads/chat-form`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
         // Do NOT set Content-Type — let fetch set multipart/form-data with boundary
       },
       body: formData,
-    });
+    }, VIDEO_UPLOAD_FETCH_TIMEOUT_MS);
 
     if (!res.ok) {
       const text = await res.text().catch(() => res.status.toString());
@@ -395,7 +395,7 @@ export async function sendMediaMessage(
     };
     if (companyPageId) body.from_company_page_id = companyPageId;
 
-    const res = await fetch(`${API_URL}/messages/send`, {
+    const res = await guardedFetch(`${API_URL}/messages/send`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

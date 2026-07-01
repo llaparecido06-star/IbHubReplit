@@ -52,6 +52,39 @@ raw `getSession()` sites outside `services/api` (admin-api, notificationPrefs,
 some `app/*` screens) are on user-action paths and still susceptible — migrate
 them if they ever exhibit the same freeze.
 
+## Bounding `getSession()` is NOT enough — bound the fetch too
+
+The infinite-spinner class has TWO independent stall points, not one. Fixing
+`getSession()` still leaves the raw `fetch()` to the API server unbounded. If the
+fetch itself stalls (slow network, server sleeping, or — for a dev-client build —
+the API pointing at the ephemeral workspace dev domain that is slow/unreachable
+while Supabase stays up), the non-feed screen hangs forever exactly as before.
+
+**Rule:** EVERY fetch whose URL targets the API server (template literal starting
+with `${API_URL}`/`${apiUrl}`) must go through `guardedFetch()` so a stall becomes
+a thrown, catchable error → error+retry UI instead of an eternal spinner. Leave
+`fetch()` calls that read a LOCAL file URI (`fetch(uri)`, `fetch(localUri)`,
+`fetch(compressed)`, `fetch(asset.uri)`, `fetch(processedUri)`, etc.) as raw
+`fetch` — guardedFetch's network-error message and abort semantics are wrong for
+local reads. Fire-and-forget calls (`void guardedFetch(...)`, unawaited push/*)
+MUST end with `.catch(() => {})` since guardedFetch THROWS on timeout — otherwise
+you convert an eternal spinner into an unhandled promise rejection.
+
+**Why:** the feed uses direct `supabase.from()` and stayed fast, masking that the
+real defect was the *whole* API path (getSession AND fetch). Only bounding both
+kills the class.
+
+## `guardedFetch` overwrites `init.signal` — upload timeout tiering
+
+`guardedFetch` spreads `init` then sets `signal: controller.signal` from its OWN
+AbortController, so ANY `signal` you pass in `init` is silently overwritten and a
+caller-side `AbortController` + `setTimeout` becomes dead code. Control the
+timeout ONLY via the 3rd arg. Three tiers exist in `_shared.ts`: default 15s
+(`DEFAULT_FETCH_TIMEOUT_MS`) for data reads, 60s (`UPLOAD_FETCH_TIMEOUT_MS`) for
+small/image uploads, and 10min (`VIDEO_UPLOAD_FETCH_TIMEOUT_MS`) for video/large
+FormData uploads (`/uploads/post-video`, `/uploads/chat-form`). Giving a big
+video upload the default/60s ceiling aborts legitimate slow-network uploads.
+
 # Boot freeze: navy LoadingOverlay that never goes away (iOS)
 
 A *frozen* navy overlay at startup (app open, unresponsive — NOT a <1s crash) is

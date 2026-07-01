@@ -3,7 +3,7 @@ import { Post } from "@/components/feed/PostCard";
 import { compressPostImage } from "@/utils/compressImage";
 import * as FileSystem from "expo-file-system";
 import { Platform } from "react-native";
-import { getSessionSafe, API_URL, COMMENT_SELECT_BASE, POST_SELECT_BASE, attachAuthorsToPosts, fetchCommentProfilesForIds, fetchCompanyPagesForIds, fetchProfilesForIds, guardedFetch, isNetworkError, normaliseAuthor, normalizePollIndices } from "./_shared";
+import { getSessionSafe, API_URL, COMMENT_SELECT_BASE, POST_SELECT_BASE, attachAuthorsToPosts, fetchCommentProfilesForIds, fetchCompanyPagesForIds, fetchProfilesForIds, guardedFetch, VIDEO_UPLOAD_FETCH_TIMEOUT_MS, isNetworkError, normaliseAuthor, normalizePollIndices } from "./_shared";
 import type { AppComment, RawPostRow } from "./types";
 
 type LikeRow = { post_id: string; reaction_type?: string | null };
@@ -44,7 +44,7 @@ async function _dispatchSocialPush(opts: {
       actorName = (profileRow?.full_name as string | undefined)?.trim() || "Alguém";
     }
 
-    await fetch(`${API_URL}/push/social`, {
+    await guardedFetch(`${API_URL}/push/social`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({
@@ -69,7 +69,7 @@ async function _dispatchPush(path: string, body: Record<string, string>): Promis
     const { data: { session } } = await getSessionSafe();
     const token = session?.access_token;
     if (!token) return;
-    await fetch(`${API_URL}${path}`, {
+    await guardedFetch(`${API_URL}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify(body),
@@ -202,14 +202,11 @@ export async function uploadPostVideo(videoUri: string, userId: string): Promise
     }
 
     const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? "";
-    const controller = new AbortController();
-    const uploadTimeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 minutes
-    const res = await fetch(`${apiUrl}/uploads/post-video`, {
+    const res = await guardedFetch(`${apiUrl}/uploads/post-video`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       body: formData,
-      signal: controller.signal,
-    }).finally(() => clearTimeout(uploadTimeoutId));
+    }, VIDEO_UPLOAD_FETCH_TIMEOUT_MS);
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
@@ -649,7 +646,7 @@ export async function voteOnPoll(
   try {
     const { data: { session } } = await getSessionSafe();
     if (!session?.access_token) return null;
-    const res = await fetch(`${API_URL}/posts/${postId}/poll/vote`, {
+    const res = await guardedFetch(`${API_URL}/posts/${postId}/poll/vote`, {
       method: "POST",
       headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ optionIndex }),

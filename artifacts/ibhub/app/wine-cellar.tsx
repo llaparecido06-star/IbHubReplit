@@ -23,6 +23,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import * as API from "@/services/api";
 import { LowCreditsCard } from "@/components/ui/LowCreditsCard";
+import { guardedFetch } from "@/services/api/_shared";
 
 const PRODUCT_CATEGORIES = ["Vinho Tinto", "Vinho Branco", "Vinho Rosé", "Espumante", "Licoroso", "Destilado", "Acessório", "Outro"];
 
@@ -195,7 +196,7 @@ export default function WineCellarScreen() {
   useEffect(() => {
     if (!session?.access_token) return;
     const token = session.access_token;
-    void fetch(`${apiUrl}/wine-imports/credits`, {
+    void guardedFetch(`${apiUrl}/wine-imports/credits`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.ok ? r.json() : null)
@@ -203,7 +204,7 @@ export default function WineCellarScreen() {
         if (d?.credits_remaining !== undefined) setAiCredits(d.credits_remaining);
       })
       .catch(() => {});
-    void fetch(`${apiUrl}/wine-imports/bi/reveal-credits`, {
+    void guardedFetch(`${apiUrl}/wine-imports/bi/reveal-credits`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.ok ? r.json() : null)

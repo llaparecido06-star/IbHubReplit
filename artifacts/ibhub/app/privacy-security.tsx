@@ -19,6 +19,7 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/context/AuthContext";
 import { updateProfile, deleteAccount } from "@/services/api";
+import { getSessionSafe } from "@/services/api/_shared";
 import { useTranslation } from "react-i18next";
 
 export default function PrivacySecurityScreen() {
@@ -126,7 +127,7 @@ export default function PrivacySecurityScreen() {
                   onPress: async () => {
                     setDeletingAccount(true);
                     try {
-                      const { data: sessionData } = await supabase.auth.getSession();
+                      const { data: sessionData } = await getSessionSafe();
                       const token = sessionData?.session?.access_token;
                       if (!token) {
                         Alert.alert(t("common.error"), t("privacy.session_invalid"));

@@ -20,6 +20,7 @@ import { supabase } from "@/context/AuthContext";
 import { fetchProfilesForIds } from "@/services/api";
 import { useTranslation } from "react-i18next";
 import { LowCreditsCard } from "@/components/ui/LowCreditsCard";
+import { guardedFetch, getSessionSafe } from "@/services/api/_shared";
 
 const RECENT_SEARCHES_KEY = "@ibhub_recent_searches";
 const MAX_RECENT = 6;
@@ -137,7 +138,7 @@ export default function SearchScreen() {
 
   useEffect(() => {
     if (!session?.access_token) return;
-    void fetch(`${API_URL}/wine-imports/credits`, {
+    void guardedFetch(`${API_URL}/wine-imports/credits`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
     })
       .then(r => r.ok ? r.json() : null)
@@ -173,10 +174,10 @@ export default function SearchScreen() {
       // Authoritative post search: call API server so shadowban is enforced server-side.
       const searchPostsViaApi = async (): Promise<{ data: any[] }> => {
         if (!trimmed) return { data: [] };
-        const session = (await supabase.auth.getSession()).data.session;
+        const session = (await getSessionSafe()).data.session;
         if (!session?.access_token) return { data: [] };
         const params = new URLSearchParams({ q: trimmed, limit: String(lim(20)) });
-        const res = await fetch(`${API_URL}/search/posts?${params.toString()}`, {
+        const res = await guardedFetch(`${API_URL}/search/posts?${params.toString()}`, {
           headers: { Authorization: `Bearer ${session.access_token}` },
         });
         if (!res.ok) return { data: [] };

@@ -1,6 +1,6 @@
 import { supabase } from "@/context/AuthContext";
 import { compressPostImage } from "@/utils/compressImage";
-import { getSessionSafe, API_URL, fetchProfilesForIds } from "./_shared";
+import { getSessionSafe, API_URL, fetchProfilesForIds, guardedFetch } from "./_shared";
 
 async function _dispatchEventPush(path: string, body: Record<string, string>): Promise<void> {
   if (!API_URL) return;
@@ -8,7 +8,7 @@ async function _dispatchEventPush(path: string, body: Record<string, string>): P
     const { data: { session } } = await getSessionSafe();
     const token = session?.access_token;
     if (!token) return;
-    await fetch(`${API_URL}${path}`, {
+    await guardedFetch(`${API_URL}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify(body),

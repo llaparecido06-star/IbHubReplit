@@ -24,9 +24,23 @@ export function isNetworkError(e: unknown): boolean {
   );
 }
 
-export async function guardedFetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
+// Default ceiling for normal data requests. Uploads pass a longer value.
+// The point is that NO request may hang forever: a stalled fetch (slow network,
+// sleeping server, unreachable dev domain) must surface as a catchable error so
+// the screen shows an error+retry instead of an infinite loading spinner.
+export const DEFAULT_FETCH_TIMEOUT_MS = 15000;
+export const UPLOAD_FETCH_TIMEOUT_MS = 60000;
+// Large video/file uploads over slow mobile networks can legitimately take
+// several minutes — give them a much longer ceiling than normal uploads.
+export const VIDEO_UPLOAD_FETCH_TIMEOUT_MS = 10 * 60 * 1000;
+
+export async function guardedFetch(
+  input: RequestInfo,
+  init?: RequestInit,
+  timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS,
+): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(input, { ...init, signal: controller.signal });
   } catch (e: unknown) {

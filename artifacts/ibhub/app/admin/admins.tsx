@@ -16,6 +16,7 @@ import { Feather } from "@/components/ui/Icon";
 import AdminDrawer from "@/components/AdminDrawer";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { guardedFetch } from "@/services/api/_shared";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 
@@ -80,7 +81,7 @@ export default function AdminAdminsScreen() {
     setLoadingAdmins(true);
     setFetchError(null);
     try {
-      const res = await fetch(`${API_URL}/admin/admin-list`, { headers: authHeader() });
+      const res = await guardedFetch(`${API_URL}/admin/admin-list`, { headers: authHeader() });
       if (res.ok) {
         const json = await res.json();
         setAdmins(json.admins ?? []);
@@ -100,7 +101,7 @@ export default function AdminAdminsScreen() {
     if (q.trim().length < 2) { setSearchResults([]); return; }
     setSearching(true);
     try {
-      const res = await fetch(`${API_URL}/admin/search-users?q=${encodeURIComponent(q.trim())}`, { headers: authHeader() });
+      const res = await guardedFetch(`${API_URL}/admin/search-users?q=${encodeURIComponent(q.trim())}`, { headers: authHeader() });
       if (res.ok) {
         const json = await res.json();
         setSearchResults(json.users ?? []);
@@ -127,7 +128,7 @@ export default function AdminAdminsScreen() {
           onPress: async () => {
             setGranting(user.id);
             try {
-              const res = await fetch(`${API_URL}/admin/grant-admin`, {
+              const res = await guardedFetch(`${API_URL}/admin/grant-admin`, {
                 method: "POST",
                 headers: authHeader(),
                 body: JSON.stringify({ userId: user.id }),
@@ -164,7 +165,7 @@ export default function AdminAdminsScreen() {
           onPress: async () => {
             setRevoking(user.id);
             try {
-              const res = await fetch(`${API_URL}/admin/revoke-admin`, {
+              const res = await guardedFetch(`${API_URL}/admin/revoke-admin`, {
                 method: "POST",
                 headers: authHeader(),
                 body: JSON.stringify({ userId: user.id }),

@@ -1,5 +1,5 @@
 import { supabase } from "@/context/AuthContext";
-import { getSessionSafe, API_URL } from "./_shared";
+import { getSessionSafe, API_URL, guardedFetch, UPLOAD_FETCH_TIMEOUT_MS } from "./_shared";
 
 // ─── MARKET PRESENTATIONS ────────────────────────────────────────────────────
 
@@ -91,7 +91,7 @@ export async function fetchPresentationSlides(
   token: string,
 ): Promise<PresentationSlidesResult> {
   try {
-    const res = await fetch(`${API_URL}/presentations/${presentationId}/slides`, {
+    const res = await guardedFetch(`${API_URL}/presentations/${presentationId}/slides`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return { slides: [], total: 0, unlocked: 0 };
@@ -112,7 +112,7 @@ export async function triggerPresentationAccess(
   token: string,
 ): Promise<void> {
   try {
-    await fetch(`${API_URL}/presentations/${presentationId}/access`, {
+    await guardedFetch(`${API_URL}/presentations/${presentationId}/access`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -371,7 +371,7 @@ export async function fetchMarketPosts(userId?: string, offset = 0, limit = 15):
     const { data: { session } } = await getSessionSafe();
     if (!session?.access_token) return [];
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-    const res = await fetch(`${API_URL}/market/posts?${params}`, {
+    const res = await guardedFetch(`${API_URL}/market/posts?${params}`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
     });
     if (!res.ok) return [];
@@ -444,7 +444,7 @@ export async function createMarketPost(
   try {
     const { data: { session } } = await getSessionSafe();
     if (!session?.access_token) return null;
-    const res = await fetch(`${API_URL}/market/posts`, {
+    const res = await guardedFetch(`${API_URL}/market/posts`, {
       method: "POST",
       headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -484,7 +484,7 @@ export async function voteOnMarketPoll(
   try {
     const { data: { session } } = await getSessionSafe();
     if (!session?.access_token) return null;
-    const res = await fetch(`${API_URL}/market-posts/${postId}/poll/vote`, {
+    const res = await guardedFetch(`${API_URL}/market-posts/${postId}/poll/vote`, {
       method: "POST",
       headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ optionId }),
@@ -532,11 +532,11 @@ export async function uploadMarketPostMediaBase64(
     const token = sessionData?.session?.access_token;
     if (!token) return null;
 
-    const res = await fetch(`${apiUrl}/uploads/chat`, {
+    const res = await guardedFetch(`${apiUrl}/uploads/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ fileBase64, fileName, mimeType, userId }),
-    });
+    }, UPLOAD_FETCH_TIMEOUT_MS);
     if (!res.ok) return null;
     const json = await res.json();
     return json.url ?? null;
@@ -560,7 +560,7 @@ export async function toggleMarketPostReaction(
   try {
     const { data: { session } } = await getSessionSafe();
     if (!session?.access_token) return { user_liked: !!currentReaction, reaction_type: currentReaction, likes_count: currentCount };
-    const res = await fetch(`${API_URL}/market/posts/${postId}/like`, {
+    const res = await guardedFetch(`${API_URL}/market/posts/${postId}/like`, {
       method: "POST",
       headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ reaction_type: reactionType }),
@@ -653,7 +653,7 @@ export async function toggleMarketCommentLike(
   try {
     const { data: { session } } = await getSessionSafe();
     if (!session?.access_token) return null;
-    const res = await fetch(`${API_URL}/market/comments/${commentId}/like`, {
+    const res = await guardedFetch(`${API_URL}/market/comments/${commentId}/like`, {
       method: "POST",
       headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
     });
@@ -709,7 +709,7 @@ export async function addMarketComment(
   try {
     const { data: { session } } = await getSessionSafe();
     if (!session?.access_token) return null;
-    const res = await fetch(`${API_URL}/market/posts/${postId}/comments`, {
+    const res = await guardedFetch(`${API_URL}/market/posts/${postId}/comments`, {
       method: "POST",
       headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ content, reply_to_id: replyToId ?? null }),
