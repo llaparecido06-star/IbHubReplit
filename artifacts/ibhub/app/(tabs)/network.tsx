@@ -3116,6 +3116,12 @@ function IdealBIFeedMobile({ userId, isAdmin, colors, bottomPad }: {
           keyboardShouldPersistTaps="handled"
           onScroll={e => { scrollOffset.current = e.nativeEvent.contentOffset.y; }}
           scrollEventThrottle={32}
+          // Feed cards are heavy (media/video/gestures). Render fewer up front and
+          // keep a smaller virtualization window so the first paint is fast on
+          // Android instead of mounting the RN defaults (10 rows / windowSize 21).
+          initialNumToRender={4}
+          maxToRenderPerBatch={4}
+          windowSize={7}
           ListHeaderComponent={AdminHeader}
           ListEmptyComponent={loading ? (
             <ActivityIndicator size="large" color={colors.gold} style={{ marginTop: 60 }} />
@@ -3360,7 +3366,13 @@ export default function MercadoScreen() {
     }
   }, []);
 
-  useEffect(() => { loadPeriod(period); }, [period, loadPeriod]);
+  // Lazy-load the "Visão" market overview: only fetch when that tab is actually
+  // viewed. The screen opens on the "idealbi" feed tab by default, so fetching
+  // the overview on mount was a redundant network round-trip competing with the
+  // feed load (noticeably slow on Android). Results stay cached per period.
+  useEffect(() => {
+    if (mainTab === "visao") loadPeriod(period);
+  }, [mainTab, period, loadPeriod]);
 
   const can = useCallback((_key: string): boolean => {
     return hasFeature("mercado:idealbi") || hasFeature(`mercado:${period}`);
