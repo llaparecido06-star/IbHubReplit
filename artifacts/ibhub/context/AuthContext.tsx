@@ -996,6 +996,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setActiveCompany(null);
     setNeedsProfileCompletion(false);
     setProfileChecked(false);
+    // Clear the in-memory session cache synchronously so getSessionSafe()'s
+    // fast path can't hand out the old token during the brief window before
+    // onAuthStateChange(SIGNED_OUT) fires. clearAuthCache() only clears the
+    // persisted AsyncStorage copy.
+    setCachedSession(null);
     clearAuthCache();
     await supabase.auth.signOut();
   };

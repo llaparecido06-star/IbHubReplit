@@ -47,6 +47,9 @@ export async function guardedFetch(input: RequestInfo, init?: RequestInit): Prom
 // falls back to the last session captured by AuthContext, so it ALWAYS resolves.
 // Returns the same `{ data: { session } }` shape as the real method.
 const GET_SESSION_TIMEOUT_MS = 4000;
+// When the cached token expires within this window we take the slow path so
+// getSession() can refresh it, instead of handing out a near-expired JWT.
+const SESSION_FRESH_BUFFER_MS = 60_000;
 
 // `expires_at` is a Unix epoch in SECONDS. Unknown expiry → treat as usable.
 // We never want the stalled-getSession fallback to hand out an already-expired
@@ -57,11 +60,34 @@ function isSessionExpired(s: Session | null): boolean {
   return Date.now() >= s.expires_at * 1000;
 }
 
+// True when the cached token is comfortably valid (outside the refresh buffer),
+// so it's safe to use immediately without touching the hang-prone getSession().
+function isSessionFresh(s: Session | null): boolean {
+  if (!s) return false;
+  if (!s.expires_at) return true;
+  return Date.now() < s.expires_at * 1000 - SESSION_FRESH_BUFFER_MS;
+}
+
 export async function getSessionSafe(): Promise<{ data: { session: Session | null } }> {
   const fallback = (): { data: { session: Session | null } } => {
     const cached = getCachedSession();
     return { data: { session: isSessionExpired(cached) ? null : cached } };
   };
+
+  // Fast path: AuthContext keeps a valid session in memory (boot seed +
+  // onAuthStateChange / TOKEN_REFRESHED). When that cached token is still fresh,
+  // return it immediately. Awaiting supabase.auth.getSession() on every API call
+  // reads AsyncStorage each time and can stall for seconds during a token refresh
+  // on React Native — that stall is why every API-backed screen loaded slowly
+  // while the feed (direct supabase.from() queries) stayed fast.
+  const cached = getCachedSession();
+  if (isSessionFresh(cached)) {
+    return { data: { session: cached } };
+  }
+
+  // Slow path: no fresh cached session — race the real call against a timeout so
+  // we still never hang, and refresh the in-memory cache on success (subsequent
+  // calls then hit the fast path again).
   try {
     const timeout = new Promise<{ data: { session: Session | null } }>((resolve) => {
       setTimeout(() => resolve(fallback()), GET_SESSION_TIMEOUT_MS);

@@ -20,9 +20,21 @@ that gates on `getSession()` freezes.
 
 **Fix pattern (in this repo):**
 - `services/api/_shared.ts` `getSessionSafe()` — drop-in returning the same
-  `{ data: { session } }` shape, racing the real call against a ~4s timeout that
-  RESOLVES with a cached session; drops the cached session if its `expires_at`
-  (epoch seconds) is in the past so it never hands out an expired JWT.
+  `{ data: { session } }` shape. **Fast path FIRST:** if the in-memory cached
+  session is *fresh* (has `expires_at` and expiry is >60s away, or no `expires_at`),
+  return it immediately WITHOUT awaiting `getSession()`. Only when the cache is
+  absent / expired / within the 60s buffer does it take the slow path (race the
+  real call against a ~4s timeout that RESOLVES with the cached session; drops an
+  already-expired session so it never hands out a dead JWT).
+  **Why the fast path matters:** even when `getSession()` doesn't fully hang, it
+  reads AsyncStorage on EVERY call, so awaiting it on every API fetch made *all*
+  API-backed screens feel slow (the feed was fine only because it uses direct
+  `supabase.from()`). The cache is kept current by AuthContext + `autoRefreshToken`,
+  and the slow path self-heals the cache, so fast-path is safe.
+- `signOut()` in AuthContext must call `setCachedSession(null)` SYNCHRONOUSLY
+  (not just `clearAuthCache()`, which only wipes the persisted AsyncStorage copy)
+  or the fast path can hand out the old token during the brief window before
+  `onAuthStateChange(SIGNED_OUT)` fires.
 - `services/api/_session.ts` — dependency-cycle-free leaf holding the cached
   `Session` (`set/getCachedSession`).
 - `context/AuthContext.tsx` seeds the cache via `setCachedSession()` in init
