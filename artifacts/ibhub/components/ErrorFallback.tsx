@@ -99,6 +99,24 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
             Tentar novamente
           </Text>
         </Pressable>
+
+        {/* Always-visible (production too) error details so a device without a
+            Mac can be photographed for diagnosis. */}
+        <ScrollView
+          style={styles.prodErrorScroll}
+          contentContainerStyle={styles.prodErrorContent}
+          showsVerticalScrollIndicator
+        >
+          <Text
+            selectable
+            style={[
+              styles.prodErrorText,
+              { color: colors.mutedForeground, fontFamily: monoFont },
+            ]}
+          >
+            {formatErrorDetails()}
+          </Text>
+        </ScrollView>
       </View>
 
       {__DEV__ ? (
@@ -276,5 +294,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     width: "100%",
+  },
+  prodErrorScroll: {
+    alignSelf: "stretch",
+    maxHeight: 240,
+    marginTop: 8,
+  },
+  prodErrorContent: {
+    paddingVertical: 8,
+  },
+  prodErrorText: {
+    fontSize: 11,
+    lineHeight: 16,
   },
 });
