@@ -14,3 +14,4 @@
 - [Making the iOS RN .mm patch land](ios-prebuilt-rncore-defeats-patch.md) — needs BOTH: source-built core (RCT_USE_PREBUILT_RNCORE=0 + ios.buildReactNativeFromSource:true) AND delivery via config plugin (npm hook doesn't fire in pnpm monorepo).
 - [iOS empty-navy = first-mount nav no-op](ios-empty-navy-redirect-noop.md) — empty navy (NO logo/spinner/text) = overlay cleared + route has no content; BOTH router.replace AND <Redirect> no-op at first mount; fix = RENDER login in place in (tabs)/_layout, don't navigate.
 - [Web post publish RLS](web-post-publish-rls.md) — feed READS via API server (service-role) but post CREATE is a direct insert; write posts.user_id = auth session id (like mobile), not profile.id, or RLS auth.uid()=user_id silently fails.
+- [AI credit pools (Mercado)](ai-credit-pools-mobile.md) — two separate pools (common vs special/reveal); track/display separately; exportador "Ver" spends COMMON, reveals spend SPECIAL.

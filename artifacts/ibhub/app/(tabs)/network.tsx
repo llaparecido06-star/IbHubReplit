@@ -770,7 +770,7 @@ function ApresentacoesView({ colors, bottomPad, session, isAdmin }: { colors: an
 // ─── Ideal.BI Busca com IA ────────────────────────────────────────────────────
 
 // ── BiMobileExportadorSearch ───────────────────────────────────────────────────
-function BiMobileExportadorSearch({ colors, onCreditsUpdate }: { colors: ReturnType<typeof useColors>; onCreditsUpdate?: (remaining: number) => void }) {
+function BiMobileExportadorSearch({ colors, onCreditsUpdate, onSpecialCreditsUpdate, specialCredits }: { colors: ReturnType<typeof useColors>; onCreditsUpdate?: (remaining: number) => void; onSpecialCreditsUpdate?: (remaining: number) => void; specialCredits?: number | null }) {
   const { t } = useTranslation();
   const router = useRouter();
   const { session } = useAuth();
@@ -782,10 +782,10 @@ function BiMobileExportadorSearch({ colors, onCreditsUpdate }: { colors: ReturnT
   const [items, setItems]           = useState<BiExpItem[]>([]);
   const [total, setTotal]           = useState(0);
   const [searched, setSearched]     = useState(false);
-  const [credits, setCredits]       = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [importadoresMap, setImportadoresMap] = useState<Record<string, { name: string; company_page_id: string | null }[]>>({});
   const [impLoadingSet, setImpLoadingSet]     = useState<Set<string>>(new Set());
+  const [impNoCreditsSet, setImpNoCreditsSet] = useState<Set<string>>(new Set());
   type RevealedKpisExp = { fob_usd: string | null; cx9l: string | null; usd_por_cx9l: string | null; periodo: string | null };
   const [revealedMap, setRevealedMap]         = useState<Record<string, RevealedKpisExp>>({});
   const [revealingId, setRevealingId]         = useState<string | null>(null);
@@ -793,7 +793,7 @@ function BiMobileExportadorSearch({ colors, onCreditsUpdate }: { colors: ReturnT
   const searchingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<string | null>(null);
-  const exhausted = credits !== null && credits <= 0;
+  const specialExhausted = specialCredits != null && specialCredits <= 0;
 
 
   useEffect(() => {
@@ -837,7 +837,7 @@ function BiMobileExportadorSearch({ colors, onCreditsUpdate }: { colors: ReturnT
       else {
         const data = await res.json() as { items: BiExpItem[]; total: number; credits_remaining: number; credits_total: number };
         setItems(data.items); setTotal(data.total); setSearched(true);
-        if (data.credits_remaining !== undefined) setCredits(data.credits_remaining);
+        if (data.credits_remaining !== undefined) onCreditsUpdate?.(data.credits_remaining);
       }
     } catch { setError(t("mercado_screen.bi_error_connection")); }
     finally { setSearching(false); searchingRef.current = false; }
@@ -848,9 +848,14 @@ function BiMobileExportadorSearch({ colors, onCreditsUpdate }: { colors: ReturnT
     setImpLoadingSet(prev => new Set(prev).add(id));
     try {
       const res = await guardedFetch(`${API_URL}/wine-imports/exportador-importadores?nome=${encodeURIComponent(name)}`, { headers: authH() });
-      if (res.ok) {
-        const data = await res.json() as { importadores: { name: string; company_page_id: string | null }[] };
+      if (res.status === 402) {
+        onCreditsUpdate?.(0);
+        setImpNoCreditsSet(prev => new Set(prev).add(id));
+      } else if (res.ok) {
+        const data = await res.json() as { importadores: { name: string; company_page_id: string | null }[]; credits_remaining: number | null };
         setImportadoresMap(prev => ({ ...prev, [id]: data.importadores }));
+        setImpNoCreditsSet(prev => { const s = new Set(prev); s.delete(id); return s; });
+        if (data.credits_remaining !== null && data.credits_remaining !== undefined) onCreditsUpdate?.(data.credits_remaining);
       }
     } catch {}
     setImpLoadingSet(prev => { const s = new Set(prev); s.delete(id); return s; });
@@ -864,11 +869,11 @@ function BiMobileExportadorSearch({ colors, onCreditsUpdate }: { colors: ReturnT
         headers: { ...(authH() as Record<string, string>), "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       });
-      if (res.status === 402) { setCredits(0); }
+      if (res.status === 402) { onSpecialCreditsUpdate?.(0); }
       else if (res.ok) {
         const data = await res.json() as { kpis: RevealedKpisExp; credits_remaining: number | null; credits_total: number };
         setRevealedMap(prev => ({ ...prev, [name]: data.kpis }));
-        if (data.credits_remaining !== null) { setCredits(data.credits_remaining); onCreditsUpdate?.(data.credits_remaining); }
+        if (data.credits_remaining !== null) { onSpecialCreditsUpdate?.(data.credits_remaining); }
       }
     } catch {}
     setRevealingId(null);
@@ -958,6 +963,7 @@ function BiMobileExportadorSearch({ colors, onCreditsUpdate }: { colors: ReturnT
           const isOpen    = expandedId === m.id;
           const imps      = importadoresMap[m.id];
           const impLoading = impLoadingSet.has(m.id);
+          const impNoCredits = impNoCreditsSet.has(m.id);
           const revealed  = revealedMap[m.name];
           return (
             <View key={m.id} style={{ backgroundColor: "#fff", borderWidth: 1.5, borderColor: isOpen ? colors.gold : colors.border, borderRadius: 16, overflow: "hidden" }}>
@@ -986,6 +992,8 @@ function BiMobileExportadorSearch({ colors, onCreditsUpdate }: { colors: ReturnT
                   <Text style={{ fontSize: 11, fontWeight: "700", color: colors.gold, letterSpacing: 0.7, marginBottom: 8 }}>{t("mercado_screen.bi_exp_who_imports")}</Text>
                   {impLoading
                     ? <ActivityIndicator size="small" color={colors.gold} />
+                    : impNoCredits
+                    ? <Text style={{ fontSize: 12, fontWeight: "700", color: colors.wine }}>{t("mercado_screen.bi_exp_no_credits")}</Text>
                     : !imps || imps.length === 0
                       ? <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{t("mercado_screen.bi_exp_no_importers")}</Text>
                       : <View style={{ gap: 6 }}>
@@ -1026,10 +1034,10 @@ function BiMobileExportadorSearch({ colors, onCreditsUpdate }: { colors: ReturnT
                     {!revealed && (
                       <TouchableOpacity
                         onPress={() => void revealData(m.name)}
-                        disabled={revealingId === m.name || exhausted}
-                        style={{ paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10, alignItems: "center", backgroundColor: exhausted ? "#e5e7eb" : colors.navy, opacity: revealingId === m.name ? 0.7 : 1 }}>
-                        <Text style={{ fontSize: 13, fontWeight: "700", color: exhausted ? colors.mutedForeground : "#fff" }}>
-                          {revealingId === m.name ? t("mercado_screen.bi_exp_revealing") : exhausted ? t("mercado_screen.bi_exp_no_credits") : t("mercado_screen.bi_exp_reveal_btn")}
+                        disabled={revealingId === m.name || specialExhausted}
+                        style={{ paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10, alignItems: "center", backgroundColor: specialExhausted ? "#e5e7eb" : colors.navy, opacity: revealingId === m.name ? 0.7 : 1 }}>
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: specialExhausted ? colors.mutedForeground : "#fff" }}>
+                          {revealingId === m.name ? t("mercado_screen.bi_exp_revealing") : specialExhausted ? t("mercado_screen.bi_exp_no_credits") : t("mercado_screen.bi_exp_reveal_btn")}
                         </Text>
                       </TouchableOpacity>
                     )}
@@ -1440,10 +1448,11 @@ function BiMobileProdutoresSearch({ colors, onCreditsUpdate }: { colors: ReturnT
 }
 
 // ── IdealBISearchView (main) ───────────────────────────────────────────────────
-function IdealBISearchView({ colors, bottomPad, credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal }: {
+function IdealBISearchView({ colors, bottomPad, credits, creditsTotal, creditsLoading, setCredits, setCreditsTotal, specialCredits, setSpecialCredits }: {
   colors: ReturnType<typeof useColors>; bottomPad: number;
   credits: number | null; creditsTotal: number; creditsLoading: boolean;
   setCredits: (n: number) => void; setCreditsTotal: (n: number) => void;
+  specialCredits: number | null; setSpecialCredits: (n: number) => void;
 }) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -1596,10 +1605,10 @@ function IdealBISearchView({ colors, bottomPad, credits, creditsTotal, creditsLo
         })}
       </View>
 
-      {searchMode === "exportador"   && <BiMobileExportadorSearch   colors={colors} onCreditsUpdate={setCredits} />}
+      {searchMode === "exportador"   && <BiMobileExportadorSearch   colors={colors} onCreditsUpdate={setCredits} onSpecialCreditsUpdate={setSpecialCredits} specialCredits={specialCredits} />}
       {searchMode === "importadores" && <BiMobileImportadoresSearch colors={colors} onCreditsUpdate={setCredits} />}
       {searchMode === "produtores"   && <BiMobileProdutoresSearch   colors={colors} onCreditsUpdate={setCredits} />}
-      {searchMode === "precos"       && <BiMobilePrecosRotuloSearch colors={colors} />}
+      {searchMode === "precos"       && <BiMobilePrecosRotuloSearch colors={colors} onSpecialCreditsUpdate={setSpecialCredits} specialCredits={specialCredits} />}
 
       {searchMode === "marca" && (<>
 
@@ -1884,7 +1893,7 @@ interface WinePriceRevealedData {
   fonte: string | null;
 }
 
-function BiMobilePrecosRotuloSearch({ colors, onCreditsUpdate }: { colors: ReturnType<typeof useColors>; onCreditsUpdate?: (remaining: number) => void }) {
+function BiMobilePrecosRotuloSearch({ colors, onSpecialCreditsUpdate, specialCredits }: { colors: ReturnType<typeof useColors>; onSpecialCreditsUpdate?: (remaining: number) => void; specialCredits?: number | null }) {
   const { session } = useAuth();
   const authH = (): HeadersInit => session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 
@@ -1897,10 +1906,42 @@ function BiMobilePrecosRotuloSearch({ colors, onCreditsUpdate }: { colors: Retur
   const [revealedMap, setRevealedMap]               = React.useState<Record<string, WinePriceRevealedData>>({});
   const [revealingId, setRevealingId]               = React.useState<string | null>(null);
   const [revealCreditsExhausted, setRevealCreditsExhausted] = React.useState(false);
+  const [suggestions, setSuggestions] = React.useState<string[]>([]);
+  const suggestTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suggestReqRef = React.useRef(0);
+  const lastSubmittedRef = React.useRef<string>("");
 
-  const handleSearch = async () => {
-    const q = query.trim();
+  React.useEffect(() => {
+    const val = query.trim();
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    // Don't re-open suggestions for a term we just searched/selected.
+    if (val.length < 2 || val === lastSubmittedRef.current) { setSuggestions([]); return; }
+    const reqId = ++suggestReqRef.current;
+    suggestTimer.current = setTimeout(async () => {
+      try {
+        const { data } = await supabase
+          .from("wine_price_list")
+          .select("marca_completa")
+          .ilike("marca_completa", `%${val}%`)
+          .limit(20);
+        if (reqId !== suggestReqRef.current) return; // ignore stale response
+        const uniq = Array.from(new Set(((data ?? []) as { marca_completa: string | null }[])
+          .map(r => r.marca_completa)
+          .filter((n): n is string => !!n)))
+          .slice(0, 8);
+        setSuggestions(uniq);
+      } catch {}
+    }, 300);
+    return () => { if (suggestTimer.current) clearTimeout(suggestTimer.current); };
+  }, [query]);
+
+  const handleSearch = async (overrideQ?: string) => {
+    const q = (overrideQ ?? query).trim();
     if (!q || searching) return;
+    lastSubmittedRef.current = q;
+    suggestReqRef.current++;
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    setSuggestions([]);
     setSearching(true);
     setErr(false);
     setSearched(false);
@@ -1933,10 +1974,11 @@ function BiMobilePrecosRotuloSearch({ colors, onCreditsUpdate }: { colors: Retur
       });
       if (res.status === 402) {
         setRevealCreditsExhausted(true);
+        onSpecialCreditsUpdate?.(0);
       } else if (res.ok) {
         const data = await res.json() as { data: WinePriceRevealedData; credits_remaining: number | null; credits_total: number };
         setRevealedMap(prev => ({ ...prev, [id]: data.data }));
-        if (data.credits_remaining !== null) { onCreditsUpdate?.(data.credits_remaining); }
+        if (data.credits_remaining !== null) { onSpecialCreditsUpdate?.(data.credits_remaining); }
       }
     } catch {}
     setRevealingId(null);
@@ -1958,7 +2000,7 @@ function BiMobilePrecosRotuloSearch({ colors, onCreditsUpdate }: { colors: Retur
             style={{ flex: 1, fontSize: 14, color: colors.foreground, paddingVertical: 12 }}
           />
           {!!query && (
-            <TouchableOpacity onPress={() => { setQuery(""); setItems([]); setSearched(false); setExpandedId(null); }} style={{ padding: 8 }}>
+            <TouchableOpacity onPress={() => { setQuery(""); setItems([]); setSearched(false); setExpandedId(null); setSuggestions([]); }} style={{ padding: 8 }}>
               <Feather name="x" size={16} color={colors.mutedForeground} />
             </TouchableOpacity>
           )}
@@ -1974,6 +2016,19 @@ function BiMobilePrecosRotuloSearch({ colors, onCreditsUpdate }: { colors: Retur
           }
         </TouchableOpacity>
       </View>
+
+      {/* Autocomplete suggestions by wine name */}
+      {suggestions.length > 0 && !searching && (
+        <View style={{ backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: colors.border, overflow: "hidden" }}>
+          {suggestions.map((s, i) => (
+            <TouchableOpacity key={s} onPress={() => { setQuery(s); setSuggestions([]); void handleSearch(s); }} activeOpacity={0.7}
+              style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: i < suggestions.length - 1 ? 1 : 0, borderBottomColor: colors.border }}>
+              <Text style={{ fontSize: 15 }}>🏷️</Text>
+              <Text style={{ flex: 1, fontSize: 14, color: colors.navy, fontWeight: "500" }} numberOfLines={1}>{s}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       {/* Error */}
       {err && (
@@ -2024,7 +2079,7 @@ function BiMobilePrecosRotuloSearch({ colors, onCreditsUpdate }: { colors: Retur
           const isOpen     = expandedId === item.id;
           const revealed   = revealedMap[item.id];
           const isRevealing = revealingId === item.id;
-          const exhausted  = revealCreditsExhausted;
+          const exhausted  = revealCreditsExhausted || (specialCredits != null && specialCredits <= 0);
           return (
             <View key={item.id} style={{ backgroundColor: "#fff", borderWidth: 1.5, borderColor: isOpen ? colors.gold : colors.border, borderRadius: 16, overflow: "hidden" }}>
               {/* Card header */}
@@ -3216,18 +3271,28 @@ function InteligenciaView({ colors, bottomPad, session, isAdmin }: {
   /* ── Shared credits state for the Busca (IA) sub-tab ── */
   const [credits, setCredits]           = useState<number | null>(null);
   const [creditsTotal, setCreditsTotal] = useState(3);
+  const [specialCredits, setSpecialCredits]           = useState<number | null>(null);
+  const [specialCreditsTotal, setSpecialCreditsTotal] = useState(0);
   const [creditsLoading, setCreditsLoading] = useState(true);
 
   const fetchCredits = useCallback(async () => {
     if (!session?.access_token) return;
+    const headers = { Authorization: `Bearer ${session.access_token}` };
     try {
-      const res = await guardedFetch(`${API_URL}/wine-imports/credits`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (!res.ok) return;
-      const json = await res.json() as { credits_remaining: number; credits_total: number };
-      setCredits(json.credits_remaining);
-      setCreditsTotal(json.credits_total);
+      const [commonRes, specialRes] = await Promise.all([
+        guardedFetch(`${API_URL}/wine-imports/credits`, { headers }),
+        guardedFetch(`${API_URL}/wine-imports/bi/reveal-credits`, { headers }),
+      ]);
+      if (commonRes.ok) {
+        const json = await commonRes.json() as { credits_remaining: number; credits_total: number };
+        setCredits(json.credits_remaining);
+        setCreditsTotal(json.credits_total);
+      }
+      if (specialRes.ok) {
+        const json = await specialRes.json() as { credits_remaining: number; credits_total: number };
+        setSpecialCredits(json.credits_remaining);
+        setSpecialCreditsTotal(json.credits_total);
+      }
     } catch {} finally {
       setCreditsLoading(false);
     }
@@ -3283,8 +3348,8 @@ function InteligenciaView({ colors, bottomPad, session, isAdmin }: {
             {(() => {
               const c = credits;
               const total = creditsTotal;
-              const extra = c !== null ? Math.max(0, c - total) : 0;
-              const monthly = c !== null ? Math.min(c, total) : null;
+              const extra = specialCredits ?? 0;
+              const monthly = c;
               const monColor  = monthly === null || monthly >= 2 ? "#16a34a" : monthly === 1 ? "#d97706" : "#dc2626";
               const monBg     = monthly === null || monthly >= 2 ? "#dcfce7" : monthly === 1 ? "#fef3c7" : "#fef2f2";
               const monBorder = monthly === null || monthly >= 2 ? "#bbf7d0" : monthly === 1 ? "#fde68a" : "#fecaca";
@@ -3307,7 +3372,7 @@ function InteligenciaView({ colors, bottomPad, session, isAdmin }: {
                       <View style={{ minWidth: 92, backgroundColor: hasExtra ? "#fffbeb" : "#f3f4f6", borderWidth: 1, borderColor: hasExtra ? "#fcd34d" : "#e5e7eb", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
                           <Text style={{ fontSize: 13 }}>⭐</Text>
-                          <Text style={{ fontSize: 14, fontWeight: "800", color: hasExtra ? "#d97706" : "#9ca3af" }}>{extra}</Text>
+                          <Text style={{ fontSize: 14, fontWeight: "800", color: hasExtra ? "#d97706" : "#9ca3af" }}>{extra}{specialCreditsTotal > 0 ? `/${specialCreditsTotal}` : ""}</Text>
                         </View>
                         <Text style={{ fontSize: 10, fontWeight: "600", color: hasExtra ? "#d97706" : "#9ca3af", opacity: 0.9, marginTop: 1 }}>{t("mercado_screen.bi_credits_special_label")}</Text>
                       </View>
@@ -3324,6 +3389,8 @@ function InteligenciaView({ colors, bottomPad, session, isAdmin }: {
               creditsLoading={creditsLoading}
               setCredits={setCredits}
               setCreditsTotal={setCreditsTotal}
+              specialCredits={specialCredits}
+              setSpecialCredits={setSpecialCredits}
             />
           </>
         )
