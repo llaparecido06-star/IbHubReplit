@@ -69,6 +69,17 @@ submission, so a higher build number does NOT mean "newer than your latest code"
   JS crash, not a render error (ErrorBoundary would show "Algo deu errado"), not a
   provider gate (all providers pass `{children}`) — it is a pre-fix binary. Tell the
   user to cut a fresh EAS build; do not touch code.
+- BUILD NUMBER PROVES NOTHING; VERSION STRING IS TRUTH. With appVersionSource=local +
+  autoIncrement, a stale pre-fix clone auto-increments 22→23→24 while still shipping
+  OLD code — so "build 24" can be fully pre-fix. To identify the installed binary use
+  the version STRING (e.g. 1.2.1), visible in the TestFlight app AND in the on-screen
+  HUD. Also: a real `eas build` from THIS repo bumps app.json buildNumber locally; if
+  the working tree still shows the old number, no build was cut here → binary is stale.
+- NATIVE-vs-JS SPLASH DISAMBIGUATOR (intentional): native splash bg is WINE (#722f37)
+  in app.json while ALL JS loading screens stay NAVY (#0d1b2a). WINE on screen = stuck
+  on native splash = JS never executed (native boot failure / Hermes bundle-eval fail,
+  not fixable in JS). NAVY (with/without gold HUD/spinner) = JS is running. This ends
+  the "is JS even running?" guessing; keep bumping the version string every fix build.
 
 Related: `ios-notifications-void-crash.md` (the actual void-TurboModule fix being shipped),
 `ios-empty-navy-redirect-noop.md` (the render-login-in-place fix this build must contain).
