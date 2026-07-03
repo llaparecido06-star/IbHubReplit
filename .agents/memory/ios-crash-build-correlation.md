@@ -57,6 +57,14 @@ submission, so a higher build number does NOT mean "newer than your latest code"
 - "Published your App" commits are WEB/API deploys — they do NOT rebuild the Expo
   mobile binary. Only `eas build -p ios` + TestFlight/App Store install ships new
   mobile code. Never treat a web publish as evidence the phone has the fix.
+- USER-WORKFLOW TRAP (cost this whole saga): users conflate Replit "Publish" with a
+  mobile build. Pattern: they click Publish, then RE-INSTALL from TestFlight, and
+  believe the app updated — but TestFlight still serves the LAST `eas build`, i.e.
+  the old binary. Reinstalling from TestFlight does NOT fetch new code; only a new
+  `eas build` puts a new build there. BEFORE any deeper mobile debugging, ask two
+  things: (1) "did you run `eas build -p ios`, or click Publish/Deploy?" and (2)
+  "what version does the on-screen strip show?" If Publish + no version strip, the
+  phone is on old code — stop debugging, have them run `eas build`.
 - `crash_reports` table empty + blank navy + no HUD + splash already hidden ⇒ not a
   JS crash, not a render error (ErrorBoundary would show "Algo deu errado"), not a
   provider gate (all providers pass `{children}`) — it is a pre-fix binary. Tell the
