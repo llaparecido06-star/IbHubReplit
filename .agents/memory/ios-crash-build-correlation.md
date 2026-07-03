@@ -34,4 +34,19 @@ submission, so a higher build number does NOT mean "newer than your latest code"
 - Only after a build that provably contains the fix still crashes should you
   treat the fix as incomplete and hunt for another cause.
 
-Related: `ios-notifications-void-crash.md` (the actual void-TurboModule fix being shipped).
+## Same principle for a "still blank/broken" boot (not just crashes)
+- A missing on-device diagnostic is a hard tell: if the code renders something
+  UNCONDITIONALLY on iOS (e.g. the temporary `SHOW_BOOT_HUD` strip in
+  `RootLayoutNav`, `SHOW_BOOT_HUD && Platform.OS==="ios"`) and the user reports it
+  is absent, the installed binary predates the commit that added it — full stop.
+  Correlate with git: `git log -S "SHOW_BOOT_HUD" --oneline -- <file>`.
+- "Published your App" commits are WEB/API deploys — they do NOT rebuild the Expo
+  mobile binary. Only `eas build -p ios` + TestFlight/App Store install ships new
+  mobile code. Never treat a web publish as evidence the phone has the fix.
+- `crash_reports` table empty + blank navy + no HUD + splash already hidden ⇒ not a
+  JS crash, not a render error (ErrorBoundary would show "Algo deu errado"), not a
+  provider gate (all providers pass `{children}`) — it is a pre-fix binary. Tell the
+  user to cut a fresh EAS build; do not touch code.
+
+Related: `ios-notifications-void-crash.md` (the actual void-TurboModule fix being shipped),
+`ios-empty-navy-redirect-noop.md` (the render-login-in-place fix this build must contain).
