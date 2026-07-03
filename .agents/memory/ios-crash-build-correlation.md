@@ -34,6 +34,20 @@ submission, so a higher build number does NOT mean "newer than your latest code"
 - Only after a build that provably contains the fix still crashes should you
   treat the fix as incomplete and hunt for another cause.
 
+## Build NUMBER can COLLIDE across pre/post-fix — trust the version STRING
+- `autoIncrement:true` + `appVersionSource:"local"` bumps ONLY the iOS
+  `buildNumber` at build time, never the `version` string. So a build cut from a
+  pre-fix checkout at local `buildNumber` N ships as build **N+1** — which can equal
+  the `buildNumber` a later fix commit hardcoded. Real example: a fix commit set
+  `version 1.1.8→1.1.9` AND `buildNumber 22→23` together; a pre-fix (1.1.8/22)
+  build auto-increments to **23**, colliding with the fix's number, while a genuine
+  post-fix (1.1.9/23) build auto-increments to **24**. Seeing "build 23" is thus
+  MORE consistent with pre-fix code than post-fix.
+- **Build number never proves code recency.** The `version` STRING does, because it
+  only changes by explicit commit. Always: (a) bump `version` in the SAME commit as
+  a boot/crash fix, and (b) ask the user to read the on-device version STRING (not
+  the build number) in TestFlight. If it shows the pre-fix version, debate over.
+
 ## Same principle for a "still blank/broken" boot (not just crashes)
 - A missing on-device diagnostic is a hard tell: if the code renders something
   UNCONDITIONALLY on iOS (e.g. the temporary `SHOW_BOOT_HUD` strip in
