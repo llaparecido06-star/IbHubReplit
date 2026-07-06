@@ -19,3 +19,4 @@
 - [AI credit pools (Mercado)](ai-credit-pools-mobile.md) — two separate pools (common vs special/reveal); track/display separately; exportador "Ver" spends COMMON, reveals spend SPECIAL.
 - [schema.sql is stale past v80](supabase-schema-sql-stale.md) — don't trust it as current; grep actual migration files instead; new migrations must be applied manually by the user (no DB runner/credentials).
 - [Email sweep retroactive backfill](email-sweep-retroactive-backfill.md) — a new "col IS NULL = pending" sweep cron fires for the WHOLE existing user base on first run unless existing rows are backfilled in the same deploy step.
+- [Unanchored gitignore drops nested native dir](gitignore-unanchored-nested-native-dir.md) — unanchored `ios/`/`android/` in .gitignore/.easignore also matches `modules/<name>/ios/`; silently ships builds missing a custom native module, zero error anywhere.

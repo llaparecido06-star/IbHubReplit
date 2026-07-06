@@ -11,9 +11,10 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Native
-ios/
-android/
+# Native (root-anchored: only the generated prebuild output at the project
+# root, NOT nested native-source dirs like modules/<name>/ios/)
+/ios/
+/android/
 *.orig.*
 *.jks
 *.p8
