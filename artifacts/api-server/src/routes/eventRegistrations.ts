@@ -1,34 +1,20 @@
 import { Router } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { BrevoClient } from "@getbrevo/brevo";
 import { logger } from "../lib/logger.js";
 import { config } from "../lib/config.js";
+import { getBrevoClient } from "../lib/brevo.js";
+import { escapeHtml } from "../lib/emailTemplates.js";
 
 const router = Router();
 
-const supabase = createClient(
-  process.env.EXPO_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } },
-);
+const supabase = createClient(config.EXPO_PUBLIC_SUPABASE_URL, config.SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { autoRefreshToken: false, persistSession: false },
+});
 
-// Lazy so the BrevoClient is only built once the config has been parsed and
-// the BREVO_API_KEY value is confirmed non-empty.  A module-level `new
-// BrevoClient({ apiKey: process.env.BREVO_API_KEY })` runs before the config
-// module has a chance to throw on missing vars, meaning `apiKey` can be
-// `undefined` and the Fern SDK silently stores it — then throws at send time.
-let _brevo: BrevoClient | null = null;
-function getBrevoClient(): BrevoClient | null {
-  if (!config.BREVO_API_KEY) {
-    logger.warn("BREVO_API_KEY is not set — skipping confirmation email");
-    return null;
-  }
-  if (!_brevo) {
-    _brevo = new BrevoClient({ apiKey: config.BREVO_API_KEY });
-  }
-  return _brevo;
-}
+// This landing page has its own event-specific branding, distinct from the
+// shared BREVO_SENDER used for ibhub product emails (welcome/digest).
+const EVENT_SENDER = { name: "ibhub | IDEAL.BI", email: "atendimento@idealbi.com.br" };
 
 const registrationSchema = z.object({
   name: z.string().min(2).max(200).transform((s) => s.trim()),
@@ -36,14 +22,6 @@ const registrationSchema = z.object({
   whatsapp: z.string().min(8).max(30).transform((s) => s.trim()),
   company: z.string().max(200).transform((s) => s.trim()).optional().nullable(),
 });
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
 router.post("/event-registrations", async (req, res) => {
   try {
@@ -79,7 +57,7 @@ router.post("/event-registrations", async (req, res) => {
     if (brevo) {
       try {
         await brevo.transactionalEmails.sendTransacEmail({
-          sender: { name: "ibhub | IDEAL.BI", email: "atendimento@idealbi.com.br" },
+          sender: EVENT_SENDER,
           to: [{ email, name }],
           subject: "Inscrição confirmada — O Futuro no Mercado de Vinhos",
           htmlContent: buildConfirmationEmail(name),

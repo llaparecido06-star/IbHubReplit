@@ -125,7 +125,7 @@ export default function MinhaContaPage() {
   const [notifFeed,    setNotifFeed]    = useState((profile as any)?.notif_feed    ?? true);
   const [notifMsgs,    setNotifMsgs]    = useState((profile as any)?.notif_msgs    ?? true);
   const [notifOport,   setNotifOport]   = useState((profile as any)?.notif_oport   ?? true);
-  const [notifEmail,   setNotifEmail]   = useState((profile as any)?.notif_email   ?? false);
+  const [notifEmail,   setNotifEmail]   = useState((profile as any)?.notif_email   ?? true);
 
   // Privacy
   const [pubPerfil,    setPubPerfil]    = useState((profile as any)?.is_public        ?? true);
@@ -142,7 +142,7 @@ export default function MinhaContaPage() {
       setNotifFeed((profile as any).notif_feed ?? true);
       setNotifMsgs((profile as any).notif_msgs ?? true);
       setNotifOport((profile as any).notif_oport ?? true);
-      setNotifEmail((profile as any).notif_email ?? false);
+      setNotifEmail((profile as any).notif_email ?? true);
       setPubPerfil((profile as any).is_public ?? true);
       setShowConex((profile as any).show_connections ?? true);
       setAllowMsg((profile as any).allow_messages ?? true);
