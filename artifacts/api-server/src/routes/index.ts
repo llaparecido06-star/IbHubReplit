@@ -15,7 +15,6 @@ import messagesRouter from "./messages";
 import eventRegistrationsRouter from "./eventRegistrations";
 import crashReportsRouter from "./crashReports";
 import emailPreferencesRouter from "./emailPreferences";
-import devTestEmailRouter from "./_devTestEmail";
 
 const router: IRouter = Router();
 
@@ -35,6 +34,5 @@ router.use(messagesRouter);
 router.use(eventRegistrationsRouter);
 router.use(crashReportsRouter);
 router.use(emailPreferencesRouter);
-router.use(devTestEmailRouter);
 
 export default router;
